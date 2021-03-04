@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -139,7 +138,7 @@ func setRedirectHandler(h http.Handler) http.Handler {
 		// to any other online servers to avoid 503 for any incoming
 		// API calls.
 		if idx := getOnlineProxyEndpointIdx(); idx >= 0 {
-			proxyRequest(context.TODO(), w, r, globalProxyEndpoints[idx])
+			proxyRequest(r.Context(), w, r, globalProxyEndpoints[idx])
 			return
 		}
 		h.ServeHTTP(w, r)

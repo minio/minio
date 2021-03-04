@@ -241,7 +241,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
 			if err != nil {

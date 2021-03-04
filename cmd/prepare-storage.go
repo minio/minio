@@ -283,7 +283,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	}
 
 	// Mark all root disks down
-	markRootDisksAsDown(storageDisks, sErrs)
+	markRootDisksAsDown(GlobalContext, storageDisks, sErrs)
 
 	// Following function is added to fix a regressions which was introduced
 	// in release RELEASE.2018-03-16T22-52-12Z after migrating v1 to v2 to v3.

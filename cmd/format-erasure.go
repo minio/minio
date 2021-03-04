@@ -873,7 +873,7 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 	}
 
 	// Mark all root disks down
-	markRootDisksAsDown(storageDisks, sErrs)
+	markRootDisksAsDown(ctx, storageDisks, sErrs)
 
 	// Save formats `format.json` across all disks.
 	if err := saveFormatErasureAll(ctx, storageDisks, formats); err != nil {

@@ -128,7 +128,7 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
-func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
+func connectEndpoint(ctx context.Context, endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	disk, err := newStorageAPIWithoutHealthCheck(endpoint)
 	if err != nil {
 		return nil, nil, err
@@ -137,7 +137,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	format, err := loadFormatErasure(disk)
 	if err != nil {
 		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo(context.TODO())
+			info, derr := disk.DiskInfo(ctx)
 			if derr != nil && info.RootDisk {
 				return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, derr) // make sure to '%w' to wrap the error
 			}
@@ -193,7 +193,7 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
-func (s *erasureSets) connectDisks() {
+func (s *erasureSets) connectDisks(ctx context.Context) {
 	var wg sync.WaitGroup
 	diskMap := s.getDiskMap()
 	for _, endpoint := range s.endpoints {
@@ -207,7 +207,10 @@ func (s *erasureSets) connectDisks() {
 		wg.Add(1)
 		go func(endpoint Endpoint) {
 			defer wg.Done()
-			disk, format, err := connectEndpoint(endpoint)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+
+			disk, format, err := connectEndpoint(ctx, endpoint)
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
@@ -273,7 +276,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
 
 	// Pre-emptively connect the disks if possible.
-	s.connectDisks()
+	s.connectDisks(ctx)
 
 	monitor := time.NewTimer(monitorInterval)
 	defer monitor.Stop()
@@ -290,7 +293,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 				console.Debugln("running disk monitoring")
 			}
 
-			s.connectDisks()
+			s.connectDisks(ctx)
 		}
 	}
 }
@@ -1274,7 +1277,7 @@ func isTestSetup(infos []DiskInfo, errs []error) bool {
 	return rootDiskCount >= len(infos)/2+1
 }
 
-func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
+func getHealDiskInfos(ctx context.Context, storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
@@ -1286,8 +1289,10 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 			if storageDisks[index] == nil {
 				return errDiskNotFound
 			}
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
 			var err error
-			infos[index], err = storageDisks[index].DiskInfo(context.TODO())
+			infos[index], err = storageDisks[index].DiskInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1295,9 +1300,9 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 }
 
 // Mark root disks as down so as not to heal them.
-func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
+func markRootDisksAsDown(ctx context.Context, storageDisks []StorageAPI, errs []error) {
 	var infos []DiskInfo
-	infos, errs = getHealDiskInfos(storageDisks, errs)
+	infos, errs = getHealDiskInfos(ctx, storageDisks, errs)
 	if !isTestSetup(infos, errs) {
 		for i := range storageDisks {
 			if storageDisks[i] != nil && infos[i].RootDisk {
@@ -1333,7 +1338,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	}
 
 	// Mark all root disks down
-	markRootDisksAsDown(storageDisks, sErrs)
+	markRootDisksAsDown(ctx, storageDisks, sErrs)
 
 	refFormat, err := getFormatErasureInQuorum(formats)
 	if err != nil {

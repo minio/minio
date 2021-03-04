@@ -284,7 +284,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 			}
 			// Try to connect to the current endpoint
 			// and reformat if the current disk is not formatted
-			disk, _, err := connectEndpoint(endpoint)
+			disk, _, err := connectEndpoint(GlobalContext, endpoint)
 			if errors.Is(err, errUnformattedDisk) {
 				disksToHeal = append(disksToHeal, endpoint)
 			} else if err == nil && disk != nil && disk.Healing() != nil {
@@ -345,7 +345,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 
 			// heal only if new disks found.
 			for _, endpoint := range healDisks {
-				disk, format, err := connectEndpoint(endpoint)
+				disk, format, err := connectEndpoint(ctx, endpoint)
 				if err != nil {
 					printEndpointError(endpoint, err, true)
 					continue

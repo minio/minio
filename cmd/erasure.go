@@ -169,7 +169,7 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error) {
+func getDisksInfo(ctx context.Context, disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -177,7 +177,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		index := index
 		g.Go(func() error {
 			if disks[index] == OfflineDisk {
-				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
+				logger.LogIf(ctx, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
 					Endpoint: endpoints[index],
@@ -185,7 +185,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
 			}
-			info, err := disks[index].DiskInfo(context.TODO())
+			info, err := disks[index].DiskInfo(ctx)
 			di := madmin.Disk{
 				Endpoint:       info.Endpoint,
 				DrivePath:      info.MountPath,
@@ -216,8 +216,8 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
-	disksInfo, errs := getDisksInfo(disks, endpoints)
+func getStorageInfo(ctx context.Context, disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
+	disksInfo, errs := getDisksInfo(ctx, disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -234,7 +234,7 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
-	return getStorageInfo(disks, endpoints)
+	return getStorageInfo(ctx, disks, endpoints)
 }
 
 // LocalStorageInfo - returns underlying local storage statistics.
@@ -246,7 +246,7 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []e
 			endpoints[i] = disk.String()
 		}
 	}
-	return getStorageInfo(disks, endpoints)
+	return getStorageInfo(ctx, disks, endpoints)
 }
 
 func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {
