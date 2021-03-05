@@ -27,7 +27,8 @@ jobs:
           CGO_ENABLED: 0
           GO111MODULE: on
         run: |
-          make test
+          make
+          make test-race
       - name: Build on ${{ matrix.os }}
         if: matrix.os == 'windows-latest'
         env:

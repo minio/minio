@@ -44,7 +44,7 @@ type Action int
 //go:generate stringer -type Action $GOFILE
 
 const (
-	// NoneAction means no action required after evaluting lifecycle rules
+	// NoneAction means no action required after evaluating lifecycle rules
 	NoneAction Action = iota
 	// DeleteAction means the object needs to be removed after evaluating lifecycle rules
 	DeleteAction
