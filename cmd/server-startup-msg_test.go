@@ -38,7 +38,7 @@ func TestStorageInfoMsg(t *testing.T) {
 		{Endpoint: "http://127.0.0.1:9001/data/3/", State: madmin.DriveStateOk},
 		{Endpoint: "http://127.0.0.1:9001/data/4/", State: madmin.DriveStateOffline},
 	}
-	infoStorage.Backend.Type = BackendErasure
+	infoStorage.Backend.Type = madmin.Erasure
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)

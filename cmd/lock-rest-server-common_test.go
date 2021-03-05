@@ -55,18 +55,18 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 	defer os.RemoveAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
-		Owner:         "owner",
-		Writer:        true,
-		UID:           "0123-4567",
-		Timestamp:     UTCNow(),
-		TimeLastCheck: UTCNow(),
+		Owner:           "owner",
+		Writer:          true,
+		UID:             "0123-4567",
+		Timestamp:       UTCNow(),
+		TimeLastRefresh: UTCNow(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
-		Owner:         "owner",
-		Writer:        true,
-		UID:           "89ab-cdef",
-		Timestamp:     UTCNow(),
-		TimeLastCheck: UTCNow(),
+		Owner:           "owner",
+		Writer:          true,
+		UID:             "89ab-cdef",
+		Timestamp:       UTCNow(),
+		TimeLastRefresh: UTCNow(),
 	}
 
 	locker.ll.lockMap["name"] = []lockRequesterInfo{

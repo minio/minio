@@ -22,6 +22,7 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 func init() {
@@ -106,8 +107,8 @@ func (n *nasObjects) IsListenSupported() bool {
 
 func (n *nasObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si, errs := n.ObjectLayer.StorageInfo(ctx)
-	si.Backend.GatewayOnline = si.Backend.Type == minio.BackendFS
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = si.Backend.Type == madmin.FS
+	si.Backend.Type = madmin.Gateway
 	return si, errs
 }
 

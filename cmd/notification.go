@@ -1218,6 +1218,21 @@ func (sys *NotificationSys) ProcInfo(ctx context.Context) []madmin.ServerProcInf
 	return reply
 }
 
+func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin.Disk {
+	var offlineDisks []madmin.Disk
+	for _, pool := range endpoints {
+		for _, ep := range pool.Endpoints {
+			if offlineHost == ep.Host {
+				offlineDisks = append(offlineDisks, madmin.Disk{
+					Endpoint: ep.String(),
+					State:    string(madmin.ItemOffline),
+				})
+			}
+		}
+	}
+	return offlineDisks
+}
+
 // ServerInfo - calls ServerInfo RPC call on all peers.
 func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	reply := make([]madmin.ServerProperties, len(sys.peerClients))
@@ -1233,6 +1248,7 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 			if err != nil {
 				info.Endpoint = client.host.String()
 				info.State = string(madmin.ItemOffline)
+				info.Disks = getOfflineDisks(info.Endpoint, globalEndpoints)
 			} else {
 				info.State = string(madmin.ItemOnline)
 			}
