@@ -84,7 +84,7 @@ func (d *Destination) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) (er
 		switch dest.StorageClass {
 		case "STANDARD", "REDUCED_REDUNDANCY":
 		default:
-			return fmt.Errorf("unknown storage class %v", dest.StorageClass)
+			return fmt.Errorf("unknown storage class %s", dest.StorageClass)
 		}
 	}
 	parsedDest.StorageClass = dest.StorageClass
@@ -107,7 +107,7 @@ func (d Destination) Validate(bucketName string) error {
 // parseDestination - parses string to Destination.
 func parseDestination(s string) (Destination, error) {
 	if !strings.HasPrefix(s, DestinationARNPrefix) {
-		return Destination{}, Errorf("invalid destination '%v'", s)
+		return Destination{}, Errorf("invalid destination '%s'", s)
 	}
 
 	bucketName := strings.TrimPrefix(s, DestinationARNPrefix)
