@@ -280,8 +280,8 @@ func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue,
 func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
-	//we retrieve all keys and values to avoid too many calls to etcd in case of
-	//a large number of policies
+	//  Retrieve all keys and values to avoid too many calls to etcd in case of
+	//  a large number of policies
 	r, err := ies.client.Get(ctx, iamConfigPoliciesPrefix, etcd.WithPrefix())
 	if err != nil {
 		return err
