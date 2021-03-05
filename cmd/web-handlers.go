@@ -2177,6 +2177,7 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	query.Set(xhttp.AmzCredential, credential)
 	query.Set(xhttp.AmzDate, dateStr)
 	query.Set(xhttp.AmzExpires, expiryStr)
+	query.Set(xhttp.ContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", object))
 	// Set session token if available.
 	if sessionToken != "" {
 		query.Set(xhttp.AmzSecurityToken, sessionToken)
