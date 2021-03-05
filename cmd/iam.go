@@ -561,6 +561,7 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	default:
 		close(sys.configLoaded)
 	}
+	logger.Info("IAM initialization complete")
 	return nil
 }
 
