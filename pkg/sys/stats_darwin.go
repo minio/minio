@@ -1,7 +1,7 @@
 // +build darwin
 
 /*
- * MinIO Cloud Storage, (C) 2016,2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,7 @@ func getHwMemsize() (uint64, error) {
 	// removes the last byte of the result if it's 0 :/
 	totalString += "\x00"
 
-	total := uint64(binary.LittleEndian.Uint64([]byte(totalString)))
-
-	return total, nil
+	return binary.LittleEndian.Uint64([]byte(totalString)), nil
 }
 
 // GetStats - return system statistics for macOS.

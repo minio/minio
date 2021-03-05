@@ -17,6 +17,8 @@ linters:
     - gosimple
     - deadcode
     - structcheck
+    - gomodguard
+    - gofmt
 
 issues:
   exclude-use-default: false

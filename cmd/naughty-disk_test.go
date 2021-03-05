@@ -66,7 +66,7 @@ func (d *naughtyDisk) Hostname() string {
 	return d.disk.Hostname()
 }
 
-func (d *naughtyDisk) Healing() bool {
+func (d *naughtyDisk) Healing() *healingTracker {
 	return d.disk.Healing()
 }
 
@@ -89,6 +89,12 @@ func (d *naughtyDisk) calcError() (err error) {
 	}
 	return nil
 }
+
+func (d *naughtyDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return -1, -1, -1
+}
+
+func (d *naughtyDisk) SetDiskLoc(poolIdx, setIdx, diskIdx int) {}
 
 func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()

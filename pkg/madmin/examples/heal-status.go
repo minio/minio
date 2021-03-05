@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -41,6 +42,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	js, _ := json.MarshalIndent(healStatusResult, "", "  ")
 
-	log.Printf("Heal status result: %+v\n", healStatusResult)
+	log.Printf("Heal status result: %s\n", string(js))
 }

@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 )
 
@@ -47,6 +48,7 @@ type HealOpts struct {
 	DryRun    bool         `json:"dryRun"`
 	Remove    bool         `json:"remove"`
 	Recreate  bool         `json:"recreate"` // only used when bucket needs to be healed
+	NoLock    bool         `json:"-"`        // only used internally.
 	ScanMode  HealScanMode `json:"scanMode"`
 }
 
@@ -298,9 +300,96 @@ func (adm *AdminClient) Heal(ctx context.Context, bucket, prefix string,
 // BgHealState represents the status of the background heal
 type BgHealState struct {
 	ScannedItemsCount int64
-	LastHealActivity  time.Time
-	NextHealRound     time.Time
-	HealDisks         []string
+
+	HealDisks []string
+
+	// SetStatus contains information for each set.
+	Sets []SetStatus `json:"sets"`
+}
+
+// SetStatus contains information about the heal status of a set.
+type SetStatus struct {
+	ID           string `json:"id"`
+	PoolIndex    int    `json:"pool_index"`
+	SetIndex     int    `json:"set_index"`
+	HealStatus   string `json:"heal_status"`
+	HealPriority string `json:"heal_priority"`
+	Disks        []Disk `json:"disks"`
+}
+
+// HealingDisk contains information about
+type HealingDisk struct {
+	// Copied from cmd/background-newdisks-heal-ops.go
+	// When adding new field, update (*healingTracker).toHealingDisk
+
+	ID            string    `json:"id"`
+	PoolIndex     int       `json:"pool_index"`
+	SetIndex      int       `json:"set_index"`
+	DiskIndex     int       `json:"disk_index"`
+	Endpoint      string    `json:"endpoint"`
+	Path          string    `json:"path"`
+	Started       time.Time `json:"started"`
+	LastUpdate    time.Time `json:"last_update"`
+	ObjectsHealed uint64    `json:"objects_healed"`
+	ObjectsFailed uint64    `json:"objects_failed"`
+	BytesDone     uint64    `json:"bytes_done"`
+	BytesFailed   uint64    `json:"bytes_failed"`
+
+	// Last object scanned.
+	Bucket string `json:"current_bucket"`
+	Object string `json:"current_object"`
+
+	// Filled on startup/restarts.
+	QueuedBuckets []string `json:"queued_buckets"`
+
+	// Filled during heal.
+	HealedBuckets []string `json:"healed_buckets"`
+	// future add more tracking capabilities
+}
+
+// Merge others into b.
+func (b *BgHealState) Merge(others ...BgHealState) {
+	for _, other := range others {
+		b.ScannedItemsCount += other.ScannedItemsCount
+		if len(b.Sets) == 0 {
+			b.Sets = make([]SetStatus, len(other.Sets))
+			copy(b.Sets, other.Sets)
+			continue
+		}
+
+		// Add disk if not present.
+		// If present select the one with latest lastupdate.
+		addSet := func(set SetStatus) {
+			for eSetIdx, existing := range b.Sets {
+				if existing.ID != set.ID {
+					continue
+				}
+				if len(existing.Disks) < len(set.Disks) {
+					b.Sets[eSetIdx].Disks = set.Disks
+				}
+				if len(existing.Disks) < len(set.Disks) {
+					return
+				}
+				for i, disk := range set.Disks {
+					// Disks should be the same.
+					if disk.HealInfo != nil {
+						existing.Disks[i].HealInfo = disk.HealInfo
+					}
+				}
+				return
+			}
+			b.Sets = append(b.Sets, set)
+		}
+		for _, disk := range other.Sets {
+			addSet(disk)
+		}
+	}
+	sort.Slice(b.Sets, func(i, j int) bool {
+		if b.Sets[i].PoolIndex != b.Sets[j].PoolIndex {
+			return b.Sets[i].PoolIndex < b.Sets[j].PoolIndex
+		}
+		return b.Sets[i].SetIndex < b.Sets[j].SetIndex
+	})
 }
 
 // BackgroundHealStatus returns the background heal status of the

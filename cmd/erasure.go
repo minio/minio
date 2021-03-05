@@ -53,7 +53,8 @@ type erasureObjects struct {
 	setDriveCount      int
 	defaultParityCount int
 
-	setNumber int
+	setIndex  int
+	poolIndex int
 
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
@@ -186,7 +187,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
 			di := madmin.Disk{
-				Endpoint:       endpoints[index],
+				Endpoint:       info.Endpoint,
 				DrivePath:      info.MountPath,
 				TotalSpace:     info.Total,
 				UsedSpace:      info.Used,
@@ -195,6 +196,13 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				RootDisk:       info.RootDisk,
 				Healing:        info.Healing,
 				State:          diskErrToDriveState(err),
+			}
+			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
+			if info.Healing {
+				if hi := disks[index].Healing(); hi != nil {
+					hd := hi.toHealingDisk()
+					di.HealInfo = &hd
+				}
 			}
 			if info.Total > 0 {
 				di.Utilization = float64(info.Used / info.Total * 100)
@@ -218,7 +226,7 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 		Disks: disksInfo,
 	}
 
-	storageInfo.Backend.Type = BackendErasure
+	storageInfo.Backend.Type = madmin.Erasure
 	return storageInfo, errs
 }
 

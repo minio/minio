@@ -89,7 +89,7 @@ type ObjectLayer interface {
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
 
-	BackendInfo() BackendInfo
+	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)
 	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
 
