@@ -896,7 +896,11 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 	}
 
 	if applied {
-		return 0
+		switch action {
+		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+		default: // for all lifecycle actions that remove data
+			return 0
+		}
 	}
 	return size
 }
@@ -1039,7 +1043,7 @@ func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, 
 	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj, applyOnVersion)
 }
 
-// Perform actions (removal of transitioning of objects), return true the action is successfully performed
+// Perform actions (removal or transitioning of objects), return true the action is successfully performed
 func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
