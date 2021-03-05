@@ -220,6 +220,13 @@ type ObjectOpts struct {
 	RestoreExpires   time.Time
 }
 
+// ExpiredObjectDeleteMarker returns true if an object version referred to by o
+// is the only version remaining and is a delete marker. It returns false
+// otherwise.
+func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
+	return o.DeleteMarker && o.NumVersions == 1
+}
+
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
@@ -229,7 +236,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 	}
 
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if obj.DeleteMarker && obj.NumVersions == 1 && rule.Expiration.DeleteMarker.val {
+		if obj.ExpiredObjectDeleteMarker() && rule.Expiration.DeleteMarker.val {
 			// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
 			// Only latest marker is removed. If set to true, the delete marker will be expired;
 			// if set to false the policy takes no action. This cannot be specified with Days or
@@ -246,7 +253,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				}
 			}
 
-			if obj.VersionID != "" && obj.DeleteMarker && obj.NumVersions == 1 {
+			if obj.VersionID != "" && obj.ExpiredObjectDeleteMarker() {
 				// From https: //docs.aws.amazon.com/AmazonS3/latest/dev/lifecycle-configuration-examples.html :
 				//   The NoncurrentVersionExpiration action in the same Lifecycle configuration removes noncurrent objects X days
 				//   after they become noncurrent. Thus, in this example, all object versions are permanently removed X days after
@@ -259,7 +266,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 		}
 
 		if !rule.NoncurrentVersionTransition.IsDaysNull() {
-			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && obj.TransitionStatus != TransitionComplete {
+			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && !obj.DeleteMarker && obj.TransitionStatus != TransitionComplete {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionTransition.NoncurrentDays))) {
@@ -273,34 +280,34 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
-					action = DeleteAction
+					return DeleteAction
 				}
 			case !rule.Expiration.IsDaysNull():
 				if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
-					action = DeleteAction
+					return DeleteAction
 				}
 			}
-			if action == NoneAction {
-				if obj.TransitionStatus != TransitionComplete {
-					switch {
-					case !rule.Transition.IsDateNull():
-						if time.Now().UTC().After(rule.Transition.Date.Time) {
-							action = TransitionAction
-						}
-					case !rule.Transition.IsDaysNull():
-						if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
-							action = TransitionAction
-						}
+
+			if obj.TransitionStatus != TransitionComplete {
+				switch {
+				case !rule.Transition.IsDateNull():
+					if time.Now().UTC().After(rule.Transition.Date.Time) {
+						action = TransitionAction
 					}
-				}
-				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
-					if obj.VersionID != "" {
-						action = DeleteRestoredVersionAction
-					} else {
-						action = DeleteRestoredAction
+				case !rule.Transition.IsDaysNull():
+					if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
+						action = TransitionAction
 					}
 				}
 			}
+			if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+				if obj.VersionID != "" {
+					action = DeleteRestoredVersionAction
+				} else {
+					action = DeleteRestoredAction
+				}
+			}
+
 		}
 	}
 	return action
