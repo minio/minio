@@ -36,19 +36,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/env"
-
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
-
-	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -545,7 +544,7 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo - Not relevant to Azure backend.
 func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	host := a.endpoint.Host
 	if a.endpoint.Port() == "" {
 		host = a.endpoint.Host + ":" + a.endpoint.Scheme

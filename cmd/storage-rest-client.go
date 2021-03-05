@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -119,6 +120,24 @@ type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
 	diskID     string
+
+	// Indexes, will be -1 until assigned a set.
+	poolIndex, setIndex, diskIndex int
+
+	diskInfoCache timedValue
+	diskHealCache timedValue
+}
+
+// Retrieve location indexes.
+func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return client.poolIndex, client.setIndex, client.diskIndex
+}
+
+// Set location indexes.
+func (client *storageRESTClient) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	client.poolIndex = poolIdx
+	client.setIndex = setIdx
+	client.diskIndex = diskIdx
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -160,14 +179,26 @@ func (client *storageRESTClient) Endpoint() Endpoint {
 	return client.endpoint
 }
 
-func (client *storageRESTClient) Healing() bool {
-	// This call should never be called over the network
-	// this function should always return 'false'
-	//
-	// To know if a remote disk is being healed
-	// perform DiskInfo() call which would return
-	// back the correct data if disk is being healed.
-	return false
+func (client *storageRESTClient) Healing() *healingTracker {
+	client.diskHealCache.Once.Do(func() {
+		// Update at least every second.
+		client.diskHealCache.TTL = time.Second
+		client.diskHealCache.Update = func() (interface{}, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			b, err := client.ReadAll(ctx, minioMetaBucket,
+				pathJoin(bucketMetaPrefix, healingTrackerFilename))
+			if err != nil {
+				// If error, likely not healing.
+				return (*healingTracker)(nil), nil
+			}
+			var h healingTracker
+			_, err = h.UnmarshalMsg(b)
+			return &h, err
+		}
+	})
+	val, _ := client.diskHealCache.Get()
+	return val.(*healingTracker)
 }
 
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
@@ -207,18 +238,31 @@ func (client *storageRESTClient) SetDiskID(id string) {
 
 // DiskInfo - fetch disk information for a remote disk.
 func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
-	respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
-	if err != nil {
-		return info, err
+	client.diskInfoCache.Once.Do(func() {
+		client.diskInfoCache.TTL = time.Second
+		client.diskInfoCache.Update = func() (interface{}, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
+			if err != nil {
+				return info, err
+			}
+			defer http.DrainBody(respBody)
+			if err = msgp.Decode(respBody, &info); err != nil {
+				return info, err
+			}
+			if info.Error != "" {
+				return info, toStorageErr(errors.New(info.Error))
+			}
+			return info, nil
+		}
+	})
+	val, err := client.diskInfoCache.Get()
+	if err == nil {
+		info = val.(DiskInfo)
 	}
-	defer http.DrainBody(respBody)
-	if err = msgp.Decode(respBody, &info); err != nil {
-		return info, err
-	}
-	if info.Error != "" {
-		return info, toStorageErr(errors.New(info.Error))
-	}
-	return info, nil
+
+	return info, err
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -651,5 +695,5 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		}
 	}
 
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1}
 }

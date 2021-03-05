@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -64,7 +66,8 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
+// getBackgroundHealStatus will return the
+func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
 		return madmin.BgHealState{}, false
 	}
@@ -78,24 +81,51 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
 	}
-
-	for _, ep := range globalBackgroundHealState.getHealLocalDisks() {
-		if _, ok := healDisksMap[ep.String()]; !ok {
-			healDisksMap[ep.String()] = struct{}{}
-		}
-	}
-
-	var healDisks []string
-	for disk := range healDisksMap {
-		healDisks = append(healDisks, disk)
-	}
-
-	return madmin.BgHealState{
+	status := madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
-		LastHealActivity:  bgSeq.lastHealActivity,
-		HealDisks:         healDisks,
-		NextHealRound:     UTCNow(),
-	}, true
+	}
+
+	if o == nil {
+		healing := globalBackgroundHealState.getLocalHealingDisks()
+		for _, disk := range healing {
+			status.HealDisks = append(status.HealDisks, disk.Endpoint)
+		}
+
+		return status, true
+	}
+
+	// ignores any errors here.
+	si, _ := o.StorageInfo(ctx)
+
+	indexed := make(map[string][]madmin.Disk)
+	for _, disk := range si.Disks {
+		setIdx := fmt.Sprintf("%d-%d", disk.PoolIndex, disk.SetIndex)
+		indexed[setIdx] = append(indexed[setIdx], disk)
+	}
+
+	for id, disks := range indexed {
+		ss := madmin.SetStatus{
+			ID:        id,
+			SetIndex:  disks[0].SetIndex,
+			PoolIndex: disks[0].PoolIndex,
+		}
+		for _, disk := range disks {
+			ss.Disks = append(ss.Disks, disk)
+			if disk.Healing {
+				ss.HealStatus = "Healing"
+				ss.HealPriority = "high"
+				status.HealDisks = append(status.HealDisks, disk.Endpoint)
+			}
+		}
+		sortDisks(ss.Disks)
+		status.Sets = append(status.Sets, ss)
+	}
+	sort.Slice(status.Sets, func(i, j int) bool {
+		return status.Sets[i].ID < status.Sets[j].ID
+	})
+
+	return status, true
+
 }
 
 func mustGetHealSequence(ctx context.Context) *healSequence {
@@ -120,7 +150,7 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketInfo) error {
+func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketInfo, tracker *healingTracker) error {
 	bgSeq := mustGetHealSequence(ctx)
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
@@ -135,6 +165,21 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
+		if tracker.isHealed(bucket.Name) {
+			continue
+		}
+		var forwardTo string
+		// If we resume to the same bucket, forward to last known item.
+		if tracker.Bucket != "" {
+			if tracker.Bucket == bucket.Name {
+				forwardTo = tracker.Bucket
+			} else {
+				// Reset to where last bucket ended if resuming.
+				tracker.resume()
+			}
+		}
+		tracker.Object = ""
+		tracker.Bucket = bucket.Name
 		// Heal current bucket
 		if _, err := er.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
 			if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -143,7 +188,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		}
 
 		if serverDebugLog {
-			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, er.setNumber+1)
+			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, tracker.SetIndex+1)
 		}
 
 		disks, _ := er.getOnlineDisksWithHealing()
@@ -167,17 +212,27 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			for _, version := range fivs.Versions {
 				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+						// If not deleted, assume they failed.
+						tracker.ObjectsFailed++
+						tracker.BytesFailed += uint64(version.Size)
 						logger.LogIf(ctx, err)
 					}
+				} else {
+					tracker.ObjectsHealed++
+					tracker.BytesDone += uint64(version.Size)
 				}
 				bgSeq.logHeal(madmin.HealItemObject)
+			}
+			tracker.Object = entry.name
+			if time.Since(tracker.LastUpdate) > time.Minute {
+				logger.LogIf(ctx, tracker.update(ctx))
 			}
 		}
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			bucket:         bucket.Name,
 			recursive:      true,
-			forwardTo:      "", //TODO(klauspost): Set this to last known offset when resuming.
+			forwardTo:      forwardTo,
 			minDisks:       1,
 			reportNotFound: false,
 			agreed:         healEntry,
@@ -189,8 +244,18 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			},
 			finished: nil,
 		})
-		logger.LogIf(ctx, err)
+		select {
+		// If context is canceled don't mark as done...
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			logger.LogIf(ctx, err)
+			tracker.bucketDone(bucket.Name)
+			logger.LogIf(ctx, tracker.update(ctx))
+		}
 	}
+	tracker.Object = ""
+	tracker.Bucket = ""
 
 	return nil
 }

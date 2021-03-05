@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -180,10 +181,16 @@ func getGroups(conn *ldap.Conn, sreq *ldap.SearchRequest) ([]string, error) {
 }
 
 func (l *Config) lookupBind(conn *ldap.Conn) error {
+	var err error
 	if l.LookupBindPassword == "" {
-		return conn.UnauthenticatedBind(l.LookupBindDN)
+		err = conn.UnauthenticatedBind(l.LookupBindDN)
+	} else {
+		err = conn.Bind(l.LookupBindDN, l.LookupBindPassword)
 	}
-	return conn.Bind(l.LookupBindDN, l.LookupBindPassword)
+	if ldap.IsErrorWithCode(err, 49) {
+		return fmt.Errorf("LDAP Lookup Bind user invalid credentials error: %v", err)
+	}
+	return err
 }
 
 // usernameFormatsBind - Iterates over all given username formats and expects
@@ -205,6 +212,8 @@ func (l *Config) usernameFormatsBind(conn *ldap.Conn, username, password string)
 		if errs[i] == nil {
 			bindDistNames = append(bindDistNames, bindDN)
 			successCount++
+		} else if !ldap.IsErrorWithCode(errs[i], 49) {
+			return "", fmt.Errorf("LDAP Bind request failed with unexpected error: %v", errs[i])
 		}
 	}
 	if successCount == 0 {
@@ -214,7 +223,7 @@ func (l *Config) usernameFormatsBind(conn *ldap.Conn, username, password string)
 				errStrings = append(errStrings, err.Error())
 			}
 		}
-		outErr := fmt.Sprintf("All username formats failed with: %s", strings.Join(errStrings, "; "))
+		outErr := fmt.Sprintf("All username formats failed due to invalid credentials: %s", strings.Join(errStrings, "; "))
 		return "", errors.New(outErr)
 	}
 	if successCount > 1 {
@@ -366,6 +375,38 @@ func (l Config) GetExpiryDuration() time.Duration {
 	return l.stsExpiryDuration
 }
 
+func (l Config) testConnection() error {
+	conn, err := l.Connect()
+	if err != nil {
+		return fmt.Errorf("Error creating connection to LDAP server: %v", err)
+	}
+	defer conn.Close()
+	if l.isUsingLookupBind {
+		if err = l.lookupBind(conn); err != nil {
+			return fmt.Errorf("Error connecting as LDAP Lookup Bind user: %v", err)
+		}
+		return nil
+	}
+
+	// Generate some random user credentials for username formats mode test.
+	username := fmt.Sprintf("sometestuser%09d", rand.Int31n(1000000000))
+	charset := []byte("abcdefghijklmnopqrstuvwxyz" +
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	rand.Shuffle(len(charset), func(i, j int) {
+		charset[i], charset[j] = charset[j], charset[i]
+	})
+	password := string(charset[:20])
+	_, err = l.usernameFormatsBind(conn, username, password)
+	if err == nil {
+		// We don't expect to successfully guess a credential in this
+		// way.
+		return fmt.Errorf("Unexpected random credentials success for user=%s password=%s", username, password)
+	} else if strings.HasPrefix(err.Error(), "All username formats failed due to invalid credentials: ") {
+		return nil
+	}
+	return fmt.Errorf("LDAP connection test error: %v", err)
+}
+
 // Enabled returns if jwks is enabled.
 func Enabled(kvs config.KVS) bool {
 	return kvs.Get(ServerAddr) != ""
@@ -457,6 +498,11 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	// At least one of bind mode or username format must be used.
 	if !l.isUsingLookupBind && len(l.UsernameFormats) == 0 {
 		return l, errors.New("Either Lookup Bind mode or Username Format mode is required.")
+	}
+
+	// Test connection to LDAP server.
+	if err := l.testConnection(); err != nil {
+		return l, fmt.Errorf("Connection test for LDAP server failed: %v", err)
 	}
 
 	// Group search params configuration

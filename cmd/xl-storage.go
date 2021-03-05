@@ -105,6 +105,9 @@ type xlStorage struct {
 
 	diskID string
 
+	// Indexes, will be -1 until assigned a set.
+	poolIndex, setIndex, diskIndex int
+
 	formatFileInfo  os.FileInfo
 	formatLegacy    bool
 	formatLastCheck time.Time
@@ -268,6 +271,9 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		ctx:                  GlobalContext,
 		rootDisk:             rootDisk,
 		readODirectSupported: true,
+		poolIndex:            -1,
+		setIndex:             -1,
+		diskIndex:            -1,
 	}
 
 	// Create all necessary bucket folders if possible.
@@ -346,11 +352,33 @@ func (s *xlStorage) IsLocal() bool {
 	return true
 }
 
-func (s *xlStorage) Healing() bool {
+// Retrieve location indexes.
+func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	// If unset, see if we can locate it.
+	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
+		return getXLDiskLoc(s.diskID)
+	}
+	return s.poolIndex, s.setIndex, s.diskIndex
+}
+
+// Set location indexes.
+func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	s.poolIndex = poolIdx
+	s.setIndex = setIdx
+	s.diskIndex = diskIdx
+}
+
+func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.diskPath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
-	_, err := os.Lstat(healingFile)
-	return err == nil
+	b, err := ioutil.ReadFile(healingFile)
+	if err != nil {
+		return nil
+	}
+	var h healingTracker
+	_, err = h.UnmarshalMsg(b)
+	logger.LogIf(GlobalContext, err)
+	return &h
 }
 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
@@ -461,7 +489,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			} else {
 				// Check if the disk is being healed if GetDiskID
 				// returned any error other than fresh disk
-				dcinfo.Healing = s.Healing()
+				dcinfo.Healing = s.Healing() != nil
 			}
 
 			dcinfo.ID = diskID
