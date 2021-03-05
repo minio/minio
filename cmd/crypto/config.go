@@ -18,6 +18,7 @@ import (
 	"errors"
 	"math/rand"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -410,6 +411,9 @@ func NewKMS(cfg KMSConfig) (kms KMS, err error) {
 	} else if cfg.Vault.Enabled && cfg.Kes.Enabled {
 		return kms, errors.New("Ambiguous KMS configuration: vault configuration and kes configuration are provided at the same time")
 	} else if cfg.Vault.Enabled {
+		if v, ok := os.LookupEnv("MINIO_KMS_VAULT_DEPRECATION"); !ok || v != "off" { // TODO(aead): Remove once Vault support has been removed
+			return kms, errors.New("Hashicorp Vault is deprecated and will be removed Oct. 2021. To temporarily enable Hashicorp Vault support, set MINIO_KMS_VAULT_DEPRECATION=off")
+		}
 		kms, err = NewVault(cfg.Vault)
 		if err != nil {
 			return kms, err
