@@ -42,19 +42,19 @@ var defaultContextTimeout = 30 * time.Second
 func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 	users := set.NewStringSet()
 	for _, kv := range kvs {
-		user := extractPrefixAndSuffix(string(kv.Key), prefix, path.Base(string(kv.Key)))
+		user := extractPathPrefixAndSuffix(string(kv.Key), prefix, path.Base(string(kv.Key)))
 		users.Add(user)
 	}
 	return users
 }
 
-// Extract string by stripping off the `prefix` value and the suffix,
+// Extract path string by stripping off the `prefix` value and the suffix,
 // value, usually in the following form.
 //  s := "config/iam/users/foo/config.json"
 //  prefix := "config/iam/users/"
 //  suffix := "config.json"
 //  result is foo
-func extractPrefixAndSuffix(s string, prefix string, suffix string) string {
+func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
 	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
 }
 
@@ -272,7 +272,7 @@ func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue,
 		}
 		return err
 	}
-	policy := extractPrefixAndSuffix(string(kvs.Key), iamConfigPoliciesPrefix, path.Base(string(kvs.Key)))
+	policy := extractPathPrefixAndSuffix(string(kvs.Key), iamConfigPoliciesPrefix, path.Base(string(kvs.Key)))
 	m[policy] = p
 	return nil
 }
@@ -287,7 +287,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 		return err
 	}
 
-	// parse all values to construct the policies data model.
+	// Parse all values to construct the policies data model.
 	for _, kvs := range r.Kvs {
 		if err = ies.getPolicyDoc(ctx, kvs, m); err != nil && err != errNoSuchPolicy {
 			return err
@@ -305,11 +305,11 @@ func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, u
 		}
 		return err
 	}
-	user := extractPrefixAndSuffix(string(userkv.Key), basePrefix, path.Base(string(userkv.Key)))
-	return ies.setupUser(ctx, user, userType, u, m)
+	user := extractPathPrefixAndSuffix(string(userkv.Key), basePrefix, path.Base(string(userkv.Key)))
+	return ies.addUser(ctx, user, userType, u, m)
 }
 
-func (ies *IAMEtcdStore) setupUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]auth.Credentials) error {
+func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]auth.Credentials) error {
 	if u.Credentials.IsExpired() {
 		// Delete expired identity.
 		deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
@@ -353,7 +353,7 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 		}
 		return err
 	}
-	return ies.setupUser(ctx, user, userType, u, m)
+	return ies.addUser(ctx, user, userType, u, m)
 }
 
 func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
@@ -370,14 +370,14 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 	cctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
-	//we retrieve all keys and values to avoid too many calls to etcd in case of
-	//a large number of users
+	// Retrieve all keys and values to avoid too many calls to etcd in case of
+	// a large number of users
 	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
 	if err != nil {
 		return err
 	}
 
-	//parse all users values to create the proper data model
+	// Parse all users values to create the proper data model
 	for _, userKv := range r.Kvs {
 		if err = ies.getUser(ctx, userKv, userType, m, basePrefix); err != nil && err != errNoSuchUser {
 			return err
@@ -443,7 +443,7 @@ func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserT
 		}
 		return err
 	}
-	name := extractPrefixAndSuffix(string(kv.Key), basePrefix, ".json")
+	name := extractPathPrefixAndSuffix(string(kv.Key), basePrefix, ".json")
 	m[name] = p
 	return nil
 }
@@ -464,14 +464,14 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 			basePrefix = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	//we retrieve all keys and values to avoid too many calls to etcd in case of
-	//a large number of policy mappings
+	// Retrieve all keys and values to avoid too many calls to etcd in case of
+	// a large number of policy mappings
 	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
 	if err != nil {
 		return err
 	}
 
-	//parse all policies mapping to create the proper data model
+	// Parse all policies mapping to create the proper data model
 	for _, kv := range r.Kvs {
 		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, basePrefix); err != nil && err != errNoSuchPolicy {
 			return err
