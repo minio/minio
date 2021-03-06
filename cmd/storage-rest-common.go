@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v28" // Renamed crawl -> scanner
+	storageRESTVersion       = "v29" // Removed WalkVersions()
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -45,7 +45,6 @@ const (
 	storageRESTMethodReadFile       = "/readfile"
 	storageRESTMethodReadFileStream = "/readfilestream"
 	storageRESTMethodListDir        = "/listdir"
-	storageRESTMethodWalkVersions   = "/walkversions"
 	storageRESTMethodDeleteFile     = "/deletefile"
 	storageRESTMethodDeleteVersions = "/deleteverions"
 	storageRESTMethodRenameFile     = "/renamefile"
@@ -70,7 +69,6 @@ const (
 	storageRESTOffset         = "offset"
 	storageRESTLength         = "length"
 	storageRESTCount          = "count"
-	storageRESTMarkerPath     = "marker"
 	storageRESTPrefixFilter   = "prefix"
 	storageRESTForwardFilter  = "forward"
 	storageRESTRecursive      = "recursive"

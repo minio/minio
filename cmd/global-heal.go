@@ -195,10 +195,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		if len(disks) == 0 {
 			return errors.New("healErasureSet: No non-healing disks found")
 		}
+
 		// Limit listing to 3 drives.
 		if len(disks) > 3 {
 			disks = disks[:3]
 		}
+
 		healEntry := func(entry metaCacheEntry) {
 			if entry.isDir() {
 				return
@@ -210,7 +212,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			}
 			waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
 			for _, version := range fivs.Versions {
-				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}); err != nil {
+				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{
+					ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						// If not deleted, assume they failed.
 						tracker.ObjectsFailed++
@@ -228,6 +231,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 				logger.LogIf(ctx, tracker.update(ctx))
 			}
 		}
+
+		// How to resolve partial results.
+		resolver := metadataResolutionParams{
+			dirQuorum: 1,
+			objQuorum: 1,
+			bucket:    bucket.Name,
+		}
+
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			bucket:         bucket.Name,
@@ -237,13 +248,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			reportNotFound: false,
 			agreed:         healEntry,
 			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
-				entry, _ := entries.firstFound()
-				if entry != nil && !entry.isDir() {
+				entry, ok := entries.resolve(&resolver)
+				if ok {
 					healEntry(*entry)
 				}
 			},
 			finished: nil,
 		})
+
 		select {
 		// If context is canceled don't mark as done...
 		case <-ctx.Done():

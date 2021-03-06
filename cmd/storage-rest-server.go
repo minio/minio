@@ -537,35 +537,6 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	w.(http.Flusher).Flush()
 }
 
-// WalkVersionsHandler - remote caller to start walking at a requested directory path.
-func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	dirPath := vars[storageRESTDirPath]
-	markerPath := vars[storageRESTMarkerPath]
-	recursive, err := strconv.ParseBool(vars[storageRESTRecursive])
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	setEventStreamHeaders(w)
-
-	fch, err := s.storage.WalkVersions(r.Context(), volume, dirPath, markerPath, recursive, r.Context().Done())
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	encoder := msgp.NewWriter(w)
-	for fi := range fch {
-		logger.LogIf(r.Context(), fi.EncodeMsg(encoder))
-	}
-	logger.LogIf(r.Context(), encoder.Flush())
-}
-
 // ListDirHandler - list a directory.
 func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1071,8 +1042,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount)...)
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkVersions).HandlerFunc(httpTraceHdrs(server.WalkVersionsHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(httpTraceHdrs(server.DeleteVersionsHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTTotalVersions)...)
