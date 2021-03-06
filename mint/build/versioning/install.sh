@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-#  Minio Cloud Storage, (C) 2017 Minio, Inc.
+#  Mint (C) 2017-2021 Minio, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,19 +15,7 @@
 #  limitations under the License.
 #
 
-export MINT_ROOT_DIR=${MINT_ROOT_DIR:-/mint}
-export MINT_RUN_CORE_DIR="$MINT_ROOT_DIR/run/core"
-export MINT_RUN_BUILD_DIR="$MINT_ROOT_DIR/build"
-export MINT_RUN_SECURITY_DIR="$MINT_ROOT_DIR/run/security"
-export WGET="wget --quiet --no-check-certificate"
+test_run_dir="$MINT_RUN_CORE_DIR/versioning"
+test_build_dir="$MINT_RUN_BUILD_DIR/versioning"
 
-"${MINT_ROOT_DIR}"/create-data-files.sh
-"${MINT_ROOT_DIR}"/preinstall.sh
-
-# install mint app packages
-for pkg in "$MINT_ROOT_DIR/build"/*/install.sh; do
-    echo "Running $pkg"
-    $pkg
-done
-
-"${MINT_ROOT_DIR}"/postinstall.sh
+(cd "$test_build_dir" && GO111MODULE=on CGO_ENABLED=0 go build --ldflags "-s -w" -o "$test_run_dir/tests")
