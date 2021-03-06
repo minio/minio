@@ -561,7 +561,6 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	default:
 		close(sys.configLoaded)
 	}
-	logger.Info("IAM initialization complete")
 	return nil
 }
 
@@ -662,6 +661,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	// Invalidate the old cred always, even upon error to avoid any leakage.
 	globalOldCred = auth.Credentials{}
 	go sys.store.watch(ctx, sys)
+
+	logger.Info("IAM initialization complete")
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
