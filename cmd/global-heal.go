@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 const (
@@ -204,6 +205,20 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		healEntry := func(entry metaCacheEntry) {
 			if entry.isDir() {
 				return
+			}
+			// We might land at .metacache, .trash, .multipart
+			// no need to heal them skip, only when bucket
+			// is '.minio.sys'
+			if bucket.Name == minioMetaBucket {
+				if wildcard.Match("buckets/*/.metacache/*", entry.name) {
+					return
+				}
+				if wildcard.Match("tmp/.trash/*", entry.name) {
+					return
+				}
+				if wildcard.Match("multipart/*", entry.name) {
+					return
+				}
 			}
 			fivs, err := entry.fileInfoVersions(bucket.Name)
 			if err != nil {

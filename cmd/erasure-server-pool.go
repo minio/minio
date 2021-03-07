@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 type erasureServerPools struct {
@@ -1474,6 +1475,20 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 					healEntry := func(entry metaCacheEntry) {
 						if entry.isDir() {
 							return
+						}
+						// We might land at .metacache, .trash, .multipart
+						// no need to heal them skip, only when bucket
+						// is '.minio.sys'
+						if bucket == minioMetaBucket {
+							if wildcard.Match("buckets/*/.metacache/*", entry.name) {
+								return
+							}
+							if wildcard.Match("tmp/.trash/*", entry.name) {
+								return
+							}
+							if wildcard.Match("multipart/*", entry.name) {
+								return
+							}
 						}
 						fivs, err := entry.fileInfoVersions(bucket)
 						if err != nil {
