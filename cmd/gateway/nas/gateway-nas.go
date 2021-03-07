@@ -18,6 +18,11 @@ package nas
 
 import (
 	"context"
+	"errors"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lock"
+	"golang.org/x/sys/unix"
+	"os"
 
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
@@ -87,11 +92,33 @@ func (g *NAS) Name() string {
 // NewGatewayLayer returns nas gatewaylayer.
 func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
+
+	minio.GlobalIsFastFS = isFastFS(g.path)
+	minio.GlobalFSOTmpfile = minio.GlobalIsFastFS && isOTmpfileSupported()
+	logger.Info("fastfs: %s, tmpfile: %s", minio.GlobalIsFastFS, minio.GlobalFSOTmpfile)
 	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
 	}
 	return &nasObjects{newObject}, nil
+}
+
+func isFastFS(fsPath string) bool {
+	if err := minio.WekaDeleteFileFast(fsPath, ".fastfs.test"); err != nil {
+		if errors.Is(err, unix.ENOTTY) || errors.Is(err, unix.ENOTSUP) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isOTmpfileSupported() bool {
+	flags := os.O_WRONLY | unix.O_TMPFILE
+	var writer, err = lock.Open(os.TempDir(), flags, 0666)
+	defer writer.Close()
+
+	return err == nil
 }
 
 // Production - nas gateway is production ready.

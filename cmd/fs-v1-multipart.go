@@ -323,7 +323,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	var file os.File
 	var tmpPartPath string
 
-	if globalFSOTmpfile {
+	if GlobalFSOTmpfile {
 		tmpPartDir := pathJoin(fs.fsPath, minioMetaTmpBucket)
 		bytesWritten, err, file = fsCreateAndGetFile(ctx, tmpPartDir, data, buf, data.Size())
 
@@ -365,7 +365,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
-	if globalFSOTmpfile {
+	if GlobalFSOTmpfile {
 		filename := fmt.Sprintf("/proc/self/fd/%d", file.Fd())
 		err = fsLinkat(ctx, AT_FDCWD, filename, AT_FDCWD, partPath, AT_SYMLINK_FOLLOW);
 	} else {

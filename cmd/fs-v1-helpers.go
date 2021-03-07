@@ -38,7 +38,6 @@ const(
 	AT_FDCWD = -100
 )
 
-var globalIsFastFS = true
 
 type makefileParam struct
 {
@@ -54,7 +53,7 @@ func ioctl(fd uintptr, operation int32, param uintptr) (result uintptr, err erro
 }
 
 func wekaIoctl(operation int32, root string, filename string, mode int32) (err error){
-	if !globalIsFastFS {
+	if !GlobalIsFastFS {
 		return fmt.Errorf("the specific ioctl operation is unsupported on the current filesystem")
 	}
 
@@ -72,7 +71,7 @@ func wekaIoctl(operation int32, root string, filename string, mode int32) (err e
 	_, err = ioctl(fd, operation, uintptr(unsafe.Pointer(&param)))
 
 	if errors.Is(err, unix.ENOTTY) || errors.Is(err, unix.ENOTSUP) {
-		globalIsFastFS = false
+		GlobalIsFastFS = false
 	}
 
 	return err
@@ -84,7 +83,7 @@ func wekaLinkFileFast(fullPath string, file os.File) (err error) {
 
 	dirname, filename := pathutil.Split(fullPath)
 
-	if !globalIsFastFS {
+	if !GlobalIsFastFS {
 		return fmt.Errorf("the specific ioctl operation is unsupported on the current filesystem")
 	}
 
@@ -100,7 +99,7 @@ func wekaLinkFileFast(fullPath string, file os.File) (err error) {
 	// STAT fills dir inode data in makefile param
 	_, err = ioctl(fd, STAT, uintptr(unsafe.Pointer(&param)))
 
-	// No reason to check error + set globalIsFastFS flag:
+	// No reason to check error + set GlobalIsFastFS flag:
 	// no way link is the first op in the sequence, if fast op not supported
 	// we're not supposed to get here.
 	param.Mode = 0
@@ -110,13 +109,13 @@ func wekaLinkFileFast(fullPath string, file os.File) (err error) {
 	return nil
 }
 
-func wekaMakeInodeFast(root string, filename string, mode int32) (err error) {
+func WekaMakeInodeFast(root string, filename string, mode int32) (err error) {
 	var MKND = int32(0x4D4B4E44) // = 'MKND'
 	err = wekaIoctl(MKND, root, filename, mode)
 	return err
 }
 
-func wekaDeleteFileFast(root string, filename string) (err error) {
+func WekaDeleteFileFast(root string, filename string) (err error) {
 	var ULNK = int32(0x554C4E4B) // = 'ULNK'
 	err = wekaIoctl(ULNK, root, filename, 0)
 	return err
@@ -124,13 +123,13 @@ func wekaDeleteFileFast(root string, filename string) (err error) {
 
 func fsMakeInodeFast(filePath string, mode int32) (err error) {
 	dir, file := pathutil.Split(filePath)
-	err = wekaMakeInodeFast(dir, file, mode)
+	err = WekaMakeInodeFast(dir, file, mode)
 	return err
 }
 
 func fsDeleteFileFast(filePath string) (err error) {
 	dir, file := pathutil.Split(filePath)
-	err = wekaDeleteFileFast(dir, file)
+	err = WekaDeleteFileFast(dir, file)
 	return err
 }
 
@@ -424,7 +423,7 @@ func createFile(ctx context.Context, filePath string, reader io.Reader, buf []by
 		flags = flags | syscall.O_DIRECT
 	}
   
-	if getFile && globalFSOTmpfile {
+	if getFile && GlobalFSOTmpfile {
 		flags = flags | os.O_WRONLY | unix.O_TMPFILE
 		writer, err = lock.Open(filePath, flags, 0666)
 		if err != nil {
