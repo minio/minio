@@ -528,10 +528,12 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				}
 			}
 		}
-		if hasMultipleAuth(r) {
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
-			return
-		}
+		/*
+			if hasMultipleAuth(r) {
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
+				return
+			}
+		*/
 		h.ServeHTTP(w, r)
 	})
 }

@@ -100,20 +100,20 @@ const (
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if isRequestSignatureV2(r) {
-		return authTypeSignedV2
-	} else if isRequestPresignedSignatureV2(r) {
-		return authTypePresignedV2
+	if isRequestJWT(r) {
+		return authTypeJWT
 	} else if isRequestSignStreamingV4(r) {
 		return authTypeStreamingSigned
 	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
 	} else if isRequestPresignedSignatureV4(r) {
 		return authTypePresigned
-	} else if isRequestJWT(r) {
-		return authTypeJWT
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
+	} else if isRequestSignatureV2(r) {
+		return authTypeSignedV2
+	} else if isRequestPresignedSignatureV2(r) {
+		return authTypePresignedV2
 	} else if _, ok := r.URL.Query()[xhttp.Action]; ok {
 		return authTypeSTS
 	} else if _, ok := r.Header[xhttp.Authorization]; !ok {

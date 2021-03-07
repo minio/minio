@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -88,6 +89,13 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
+	s3router := router.MatcherFunc(func(r *http.Request, _ *mux.RouteMatch) bool {
+		return !strings.HasPrefix(r.URL.Path, "/minio/")
+	}).Subrouter()
+
+	// Add API router
+	registerAPIRouter(s3router)
+
 	// Initialize distributed NS lock.
 	if globalIsDistErasure {
 		registerDistErasureRouters(router, endpointServerPools)
@@ -111,9 +119,6 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 
 	// Add STS router always.
 	registerSTSRouter(router)
-
-	// Add API router
-	registerAPIRouter(router)
 
 	router.Use(globalHandlers...)
 
