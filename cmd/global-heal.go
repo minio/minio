@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 	"time"
@@ -162,6 +163,7 @@ func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int,
 					}
 					entryCh, err := disk.WalkVersions(ctx, bucket.Name, prefix, "", true, ctx.Done())
 					if err != nil {
+						logger.LogIf(ctx, fmt.Errorf("%s returned %w - disk will be ignored and continued further", disk, err))
 						// Disk walk returned error, ignore it.
 						return
 					}

@@ -792,9 +792,9 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 		delete(a.healSetsMap, opts.taskUUID)
 		a.mu.Unlock()
 		if vars[healSetsPrefix] != "" {
-			logger.Info("Healing finished for %v at %s", vars[healSetsList], vars[healSetsPrefix])
+			logger.Info("Healing finished for set '%v' at %s", vars[healSetsList], vars[healSetsPrefix])
 		} else {
-			logger.Info("Healing finished for %v", vars[healSetsList])
+			logger.Info("Healing finished for set '%v'", vars[healSetsList])
 		}
 	}()
 
