@@ -18,11 +18,12 @@ package cmd
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 
-	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	jsonrpc "github.com/minio/minio/pkg/rpc"
@@ -46,15 +47,6 @@ func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 const assetPrefix = "production"
-
-func assetFS() *assetfs.AssetFS {
-	return &assetfs.AssetFS{
-		Asset:     browser.Asset,
-		AssetDir:  browser.AssetDir,
-		AssetInfo: browser.AssetInfo,
-		Prefix:    assetPrefix,
-	}
-}
 
 // specialAssets are files which are unique files not embedded inside index_bundle.js.
 const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon-16x16.png|favicon-32x32.png|favicon-96x96.png"
@@ -108,7 +100,11 @@ func registerWebRouter(router *mux.Router) error {
 	webBrowserRouter.Methods(http.MethodPost).Path("/zip").Queries("token", "{token:.*}").HandlerFunc(httpTraceHdrs(web.DownloadZip))
 
 	// Create compressed assets handler
-	compressAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))
+	assetFS, err := fs.Sub(browser.GetStaticAssets(), assetPrefix)
+	if err != nil {
+		panic(err)
+	}
+	compressAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(http.FS(assetFS))))
 
 	// Serve javascript files and favicon from assets.
 	webBrowserRouter.Path(fmt.Sprintf("/{assets:%s}", specialAssets)).Handler(compressAssets)
