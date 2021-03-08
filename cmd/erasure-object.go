@@ -692,12 +692,22 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
 			buffer = make([]byte, data.ActualSize()+256, data.ActualSize()*2+512)
 		} else {
+			if fi.Erasure.BlockSize == blockSizeV1 {
+				buffer = er.bpLegacy.Get()
+				defer er.bpLegacy.Put(buffer)
+			} else {
+				buffer = er.bp.Get()
+				defer er.bp.Put(buffer)
+			}
+		}
+	case size >= fi.Erasure.BlockSize:
+		if fi.Erasure.BlockSize == blockSizeV1 {
+			buffer = er.bpLegacy.Get()
+			defer er.bpLegacy.Put(buffer)
+		} else {
 			buffer = er.bp.Get()
 			defer er.bp.Put(buffer)
 		}
-	case size >= fi.Erasure.BlockSize:
-		buffer = er.bp.Get()
-		defer er.bp.Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))

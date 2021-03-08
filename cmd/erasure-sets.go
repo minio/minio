@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -360,12 +359,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	// Number of buffers, max 2GB
-	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)
+	// Number of buffers, max 2GiB for blockSizeV2
+	bp := bpool.NewBytePoolCap(1000, blockSizeV2, blockSizeV2*2)
 
-	// Initialize byte pool once for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV2.
-	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
+	// Number of buffers, max 2GiB for blockSizeV1 (existing content)
+	bpLegacy := bpool.NewBytePoolCap(100, blockSizeV1, blockSizeV1*2)
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
@@ -416,12 +414,13 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			deletedCleanupSleeper: newDynamicSleeper(10, 10*time.Second),
 			nsMutex:               mutex,
 			bp:                    bp,
+			bpLegacy:              bpLegacy,
 			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 	}
 
-	// cleanup ".trash/" folder every 30 minutes with sufficient sleep cycles.
-	const deletedObjectsCleanupInterval = 30 * time.Minute
+	// cleanup ".trash/" folder every 10 minutes with sufficient sleep cycles.
+	const deletedObjectsCleanupInterval = 10 * time.Minute
 
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)

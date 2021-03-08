@@ -69,8 +69,11 @@ type erasureObjects struct {
 	// Locker mutex map.
 	nsMutex *nsLockMap
 
-	// Byte pools used for temporary i/o buffers.
+	// Byte pools used for temporary i/o buffers
 	bp *bpool.BytePoolCap
+
+	// Byte pools used for temporary i/o buffers (existing objects)
+	bpLegacy *bpool.BytePoolCap
 
 	mrfOpCh chan partialOperation
 
