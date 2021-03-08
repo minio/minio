@@ -6,7 +6,7 @@
     "test": "jest",
     "dev": "NODE_ENV=dev webpack-dev-server --devtool cheap-module-eval-source-map --progress --colors --hot --content-base dev",
     "build": "NODE_ENV=dev node build.js",
-    "release": "NODE_ENV=production MINIO_UI_BUILD=RELEASE node build.js",
+    "release": "NODE_ENV=production node build.js",
     "format": "esformatter -i 'app/**/*.js'"
   },
   "jest": {
