@@ -1076,10 +1076,10 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	switch oi.ReplicationStatus {
 	case replication.Pending:
 		sizeS.pendingSize += oi.Size
-		globalReplicationState.queueReplicaTask(oi)
+		globalReplicationPool.queueReplicaTask(oi)
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
-		globalReplicationState.queueReplicaTask(oi)
+		globalReplicationPool.queueReplicaTask(oi)
 	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
@@ -1098,7 +1098,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 		} else {
 			versionID = oi.VersionID
 		}
-		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+		globalReplicationPool.queueReplicaDeleteTask(DeletedObjectVersionInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    oi.Name,
 				DeleteMarkerVersionID:         dmVersionID,

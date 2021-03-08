@@ -80,6 +80,10 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
 	t.extendListLife = cfg.ExtendListLife
+	if globalReplicationPool != nil &&
+		cfg.ReplicationWorkers != t.replicationWorkers {
+		globalReplicationPool.Resize(cfg.ReplicationWorkers)
+	}
 	t.replicationWorkers = cfg.ReplicationWorkers
 }
 
