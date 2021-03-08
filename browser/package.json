@@ -84,6 +84,7 @@
     "react-dropzone": "^11.0.1",
     "react-infinite-scroller": "^1.2.4",
     "react-onclickout": "^2.0.8",
+    "react-qr-code": "^1.1.1",
     "react-redux": "^5.1.2",
     "react-router-dom": "^5.2.0",
     "redux": "^4.0.5",
