@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -359,14 +360,12 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	// Number of buffers, max 2GB.
-	n := setCount * setDriveCount
-	if n > 100 {
-		n = 100
-	}
+	// Number of buffers, max 2GB
+	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)
+
 	// Initialize byte pool once for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV1.
-	bp := bpool.NewBytePoolCap(n, blockSizeV1, blockSizeV1*2)
+	// setCount * setDriveCount with each memory upto blockSizeV2.
+	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
@@ -971,150 +970,6 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	}
 
 	return dstSet.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
-}
-
-// FileInfoVersionsCh - file info versions channel
-type FileInfoVersionsCh struct {
-	Ch    chan FileInfoVersions
-	Prev  FileInfoVersions
-	Valid bool
-}
-
-// Pop - pops a cached entry if any, or from the cached channel.
-func (f *FileInfoVersionsCh) Pop() (fi FileInfoVersions, ok bool) {
-	if f.Valid {
-		f.Valid = false
-		return f.Prev, true
-	} // No cached entries found, read from channel
-	f.Prev, ok = <-f.Ch
-	return f.Prev, ok
-}
-
-// Push - cache an entry, for Pop() later.
-func (f *FileInfoVersionsCh) Push(fi FileInfoVersions) {
-	f.Prev = fi
-	f.Valid = true
-}
-
-// FileInfoCh - file info channel
-type FileInfoCh struct {
-	Ch    chan FileInfo
-	Prev  FileInfo
-	Valid bool
-}
-
-// Pop - pops a cached entry if any, or from the cached channel.
-func (f *FileInfoCh) Pop() (fi FileInfo, ok bool) {
-	if f.Valid {
-		f.Valid = false
-		return f.Prev, true
-	} // No cached entries found, read from channel
-	f.Prev, ok = <-f.Ch
-	return f.Prev, ok
-}
-
-// Push - cache an entry, for Pop() later.
-func (f *FileInfoCh) Push(fi FileInfo) {
-	f.Prev = fi
-	f.Valid = true
-}
-
-// Calculate lexically least entry across multiple FileInfo channels,
-// returns the lexically common entry and the total number of times
-// we found this entry. Additionally also returns a boolean
-// to indicate if the caller needs to call this function
-// again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call lexicallySortedEntry
-// N times until this boolean is 'false'.
-func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileInfoVersions, entriesValid []bool) (FileInfoVersions, int, bool) {
-	for j := range entryChs {
-		entries[j], entriesValid[j] = entryChs[j].Pop()
-	}
-
-	var isTruncated = false
-	for _, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		isTruncated = true
-		break
-	}
-
-	var lentry FileInfoVersions
-	var found bool
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		if !found {
-			lentry = entries[i]
-			found = true
-			continue
-		}
-		if entries[i].Name < lentry.Name {
-			lentry = entries[i]
-		}
-	}
-
-	// We haven't been able to find any lexically least entry,
-	// this would mean that we don't have valid entry.
-	if !found {
-		return lentry, 0, isTruncated
-	}
-
-	lexicallySortedEntryCount := 0
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-
-		// Entries are duplicated across disks,
-		// we should simply skip such entries.
-		if lentry.Name == entries[i].Name && lentry.LatestModTime.Equal(entries[i].LatestModTime) {
-			lexicallySortedEntryCount++
-			continue
-		}
-
-		// Push all entries which are lexically higher
-		// and will be returned later in Pop()
-		entryChs[i].Push(entries[i])
-	}
-
-	return lentry, lexicallySortedEntryCount, isTruncated
-}
-
-func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
-	return s.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
-}
-
-// Starts a walk versions channel across N number of disks and returns a slice.
-// FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoVersionsCh {
-	var entryChs []FileInfoVersionsCh
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	for _, set := range s.sets {
-		// Reset for the next erasure set.
-		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-
-				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
-				if err != nil {
-					return
-				}
-
-				mutex.Lock()
-				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch: entryCh,
-				})
-				mutex.Unlock()
-			}(disk)
-		}
-	}
-	wg.Wait()
-	return entryChs
 }
 
 func (s *erasureSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {

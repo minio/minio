@@ -29,7 +29,16 @@ import (
 
 const (
 	// Block size used for all internal operations version 1.
+
+	// TLDR..
+	// Not used anymore xl.meta captures the right blockSize
+	// so blockSizeV2 should be used for all future purposes.
+	// this value is kept here to calculate the max API
+	// requests based on RAM size for existing content.
 	blockSizeV1 = 10 * humanize.MiByte
+
+	// Block size used in erasure coding version 2.
+	blockSizeV2 = 1 * humanize.MiByte
 
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"

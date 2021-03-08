@@ -561,7 +561,6 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	default:
 		close(sys.configLoaded)
 	}
-	logger.Info("IAM initialization complete")
 	return nil
 }
 
@@ -662,6 +661,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	// Invalidate the old cred always, even upon error to avoid any leakage.
 	globalOldCred = auth.Credentials{}
 	go sys.store.watch(ctx, sys)
+
+	logger.Info("IAM initialization complete")
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -1563,11 +1564,7 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 		return gd, err
 	}
 
-	// A group may be mapped to at most one policy.
-	policy := ""
-	if len(ps) > 0 {
-		policy = ps[0]
-	}
+	policy := strings.Join(ps, ",")
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return madmin.GroupDesc{
@@ -1681,7 +1678,7 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 
 // PolicyDBGet - gets policy set on a user or group. Since a user may
 // be a member of multiple groups, this function returns an array of
-// applicable policies (each group is mapped to at most one policy).
+// applicable policies
 func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
@@ -1739,17 +1736,6 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 	policies = append(policies, mp.toSlice()...)
 
 	for _, group := range sys.iamUserGroupMemberships[name].ToSlice() {
-		// Skip missing or disabled groups
-		gi, ok := sys.iamGroupsMap[group]
-		if !ok || gi.Status == statusDisabled {
-			continue
-		}
-
-		p := sys.iamGroupPolicyMap[group]
-		policies = append(policies, p.toSlice()...)
-	}
-
-	for _, group := range u.Groups {
 		// Skip missing or disabled groups
 		gi, ok := sys.iamGroupsMap[group]
 		if !ok || gi.Status == statusDisabled {

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -881,11 +880,6 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 		return objAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string) error {
 			if h.isQuitting() {
 				return errHealStopSignalled
-			}
-
-			// Skip metacache entries healing
-			if strings.HasPrefix(object, "buckets/.minio.sys/.metacache/") {
-				return nil
 			}
 
 			err := h.queueHealTask(healSource{

@@ -51,9 +51,6 @@ type StorageAPI interface {
 	// WalkDir will walk a directory on disk and return a metacache stream on wr.
 	WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error
 
-	// WalkVersions in sorted order directly on disk.
-	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
-
 	// Metadata operations
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error
 	DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error

@@ -544,6 +544,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			foundObjs := false
 			dangling := false
 			ctx, cancel := context.WithCancel(ctx)
+
 			err := listPathRaw(ctx, listPathRawOptions{
 				disks:          f.disks,
 				bucket:         bucket,
