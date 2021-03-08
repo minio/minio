@@ -1051,26 +1051,29 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	// Check if either the source is encrypted or the destination will be encrypted.
+	_, objectEncryption := crypto.IsRequested(r.Header)
+	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
+
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := objectAPI.IsCompressionSupported() &&
 		isCompressible(r.Header, dstObject) &&
-		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame
+		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame && !objectEncryption
 	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
-		// Remove all source encrypted related metadata to
-		// avoid copying them in target object.
-		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
 		s2c := newS2CompressReader(reader, actualSize)
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
 	} else {
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"compression")
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"actual-size")
 		reader = gr
 	}
 
@@ -1082,9 +1085,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	pReader := NewPutObjReader(srcInfo.Reader)
 
-	// Check if either the source is encrypted or the destination will be encrypted.
-	_, objectEncryption := crypto.IsRequested(r.Header)
-	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
+	// Handle encryption
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
@@ -1269,6 +1270,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(srcInfo.UserDefined)
+
 	// Check if x-amz-metadata-directive or x-amz-tagging-directive was not set to REPLACE and source,
 	// destination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
