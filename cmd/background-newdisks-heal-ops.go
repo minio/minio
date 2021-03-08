@@ -375,12 +375,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 				Name: pathJoin(minioMetaBucket, minioConfigPrefix),
 			})
 
-			// Buckets data are dispersed in multiple zones/sets, make
-			// sure to heal all bucket metadata configuration.
-			buckets = append(buckets, []BucketInfo{
-				{Name: pathJoin(minioMetaBucket, bucketMetaPrefix)},
-			}...)
-
 			// Heal latest buckets first.
 			sort.Slice(buckets, func(i, j int) bool {
 				a, b := strings.HasPrefix(buckets[i].Name, minioMetaBucket), strings.HasPrefix(buckets[j].Name, minioMetaBucket)
