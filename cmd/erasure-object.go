@@ -624,10 +624,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	storageDisks := er.getDisks()
 
-	// Get parity and data drive count based on storage class metadata
-	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
-	if parityDrives <= 0 {
-		parityDrives = er.defaultParityCount
+	parityDrives := len(storageDisks) / 2
+	if !opts.MaxParity {
+		// Get parity and data drive count based on storage class metadata
+		parityDrives = globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+		if parityDrives <= 0 {
+			parityDrives = er.defaultParityCount
+		}
 	}
 	dataDrives := len(storageDisks) - parityDrives
 
