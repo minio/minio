@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -80,6 +81,17 @@ func (r *recordRequest) Data() []byte {
 	return logger.BodyPlaceHolder
 }
 
+var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
+
+// redact LDAP password if part of string
+func redactLDAPPwd(s string) string {
+	parts := ldapPwdRegex.FindStringSubmatch(s)
+	if len(parts) > 0 {
+		return parts[1] + "LDAPPassword=*REDACTED*" + parts[3]
+	}
+	return s
+}
+
 // getOpName sanitizes the operation name for mc
 func getOpName(name string) (op string) {
 	op = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
@@ -129,7 +141,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 		Proto:    r.Proto,
 		Method:   r.Method,
 		Path:     SlashSeparator + pathJoin(vars["bucket"], vars["object"]),
-		RawQuery: r.URL.RawQuery,
+		RawQuery: redactLDAPPwd(r.URL.RawQuery),
 		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 	}
