@@ -1107,7 +1107,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1353,7 +1353,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return

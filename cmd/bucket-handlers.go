@@ -855,6 +855,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	object := formValues.Get("Key")
 
+	object, err = unescapePath(object)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	successRedirect := formValues.Get("success_action_redirect")
 	successStatus := formValues.Get("success_action_status")
 	var redirectURL *url.URL

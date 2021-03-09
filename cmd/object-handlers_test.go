@@ -2983,7 +2983,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		}
 
 		if actualError.Key != objectName {
-			t.Errorf("MinIO %s: error response object name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response object name (%s) differs from expected value (%s)", instanceType, actualError.Key, objectName)
 		}
 	}
 
