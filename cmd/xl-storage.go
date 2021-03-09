@@ -1619,7 +1619,7 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b 
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY)
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
 	}
