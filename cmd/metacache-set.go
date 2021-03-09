@@ -812,10 +812,6 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		return fmt.Errorf("listPathRaw: 0 drives provided")
 	}
 
-	// Disconnect from call above, but cancel on exit.
-	ctx, cancel := context.WithCancel(GlobalContext)
-	defer cancel()
-
 	askDisks := len(disks)
 	readers := make([]*metacacheReader, askDisks)
 	for i := range disks {

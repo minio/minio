@@ -156,13 +156,6 @@ func (d *naughtyDisk) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Wr
 	return d.disk.WalkDir(ctx, opts, wr)
 }
 
-func (d *naughtyDisk) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
-	if err := d.calcError(); err != nil {
-		return nil, err
-	}
-	return d.disk.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
-}
-
 func (d *naughtyDisk) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err

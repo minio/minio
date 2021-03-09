@@ -508,45 +508,6 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 	return int64(n), err
 }
 
-func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTDirPath, dirPath)
-	values.Set(storageRESTMarkerPath, marker)
-	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(ctx, storageRESTMethodWalkVersions, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan FileInfoVersions)
-	go func() {
-		defer close(ch)
-		defer http.DrainBody(respBody)
-
-		dec := msgpNewReader(respBody)
-		defer readMsgpReaderPool.Put(dec)
-
-		for {
-			var fi FileInfoVersions
-			if gerr := fi.DecodeMsg(dec); gerr != nil {
-				// Upon error return
-				if msgp.Cause(gerr) != io.EOF {
-					logger.LogIf(GlobalContext, gerr)
-				}
-				return
-			}
-			select {
-			case ch <- fi:
-			case <-endWalkCh:
-				return
-			}
-		}
-	}()
-
-	return ch, nil
-}
-
 // ListDir - lists a directory.
 func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
 	values := make(url.Values)

@@ -62,26 +62,26 @@ var erasureEncodeTests = []struct {
 	algorithm                    BitrotAlgorithm
 	shouldFail, shouldFailQuorum bool
 }{
-	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                             // 0
-	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 1, algorithm: SHA256, shouldFail: false, shouldFailQuorum: false},                                 // 1
-	{dataBlocks: 4, onDisks: 8, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                 // 2
-	{dataBlocks: 5, onDisks: 10, offDisks: 3, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                    // 3
-	{dataBlocks: 6, onDisks: 12, offDisks: 4, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                    // 4
-	{dataBlocks: 7, onDisks: 14, offDisks: 5, blocksize: int64(blockSizeV1), data: 0, offset: 0, shouldFail: false, algorithm: SHA256, shouldFailQuorum: false},                                        // 5
-	{dataBlocks: 8, onDisks: 16, offDisks: 7, blocksize: int64(blockSizeV1), data: 0, offset: 0, shouldFail: false, algorithm: DefaultBitrotAlgorithm, shouldFailQuorum: false},                        // 6
-	{dataBlocks: 2, onDisks: 4, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: true},                              // 7
-	{dataBlocks: 4, onDisks: 8, offDisks: 4, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: SHA256, shouldFail: false, shouldFailQuorum: true},                                  // 8
-	{dataBlocks: 7, onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 9
-	{dataBlocks: 8, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 10
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                             // 0
+	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 1, algorithm: SHA256, shouldFail: false, shouldFailQuorum: false},                                 // 1
+	{dataBlocks: 4, onDisks: 8, offDisks: 2, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                 // 2
+	{dataBlocks: 5, onDisks: 10, offDisks: 3, blocksize: int64(blockSizeV2), data: oneMiByte, offset: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                    // 3
+	{dataBlocks: 6, onDisks: 12, offDisks: 4, blocksize: int64(blockSizeV2), data: oneMiByte, offset: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                    // 4
+	{dataBlocks: 7, onDisks: 14, offDisks: 5, blocksize: int64(blockSizeV2), data: 0, offset: 0, shouldFail: false, algorithm: SHA256, shouldFailQuorum: false},                                        // 5
+	{dataBlocks: 8, onDisks: 16, offDisks: 7, blocksize: int64(blockSizeV2), data: 0, offset: 0, shouldFail: false, algorithm: DefaultBitrotAlgorithm, shouldFailQuorum: false},                        // 6
+	{dataBlocks: 2, onDisks: 4, offDisks: 2, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: true},                              // 7
+	{dataBlocks: 4, onDisks: 8, offDisks: 4, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: SHA256, shouldFail: false, shouldFailQuorum: true},                                  // 8
+	{dataBlocks: 7, onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 9
+	{dataBlocks: 8, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 10
 	{dataBlocks: 5, onDisks: 10, offDisks: 3, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                  // 11
-	{dataBlocks: 3, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},     // 12
+	{dataBlocks: 3, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV2), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},     // 12
 	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(oneMiByte / 2), data: oneMiByte, offset: oneMiByte/2 + 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 13
 	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(oneMiByte - 1), data: oneMiByte, offset: oneMiByte - 1, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},               // 14
-	{dataBlocks: 8, onDisks: 12, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 15
-	{dataBlocks: 8, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 16
-	{dataBlocks: 10, onDisks: 14, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 17, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},              // 17
+	{dataBlocks: 8, onDisks: 12, offDisks: 2, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 15
+	{dataBlocks: 8, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 16
+	{dataBlocks: 10, onDisks: 14, offDisks: 0, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 17, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},              // 17
 	{dataBlocks: 2, onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},       // 18
-	{dataBlocks: 10, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                // 19
+	{dataBlocks: 10, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV2), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                // 19
 }
 
 func TestErasureEncode(t *testing.T) {
@@ -166,17 +166,17 @@ func TestErasureEncode(t *testing.T) {
 // Benchmarks
 
 func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
-	setup, err := newErasureTestSetup(data, parity, blockSizeV1)
+	setup, err := newErasureTestSetup(data, parity, blockSizeV2)
 	if err != nil {
 		b.Fatalf("failed to create test setup: %v", err)
 	}
 	defer setup.Remove()
-	erasure, err := NewErasure(context.Background(), data, parity, blockSizeV1)
+	erasure, err := NewErasure(context.Background(), data, parity, blockSizeV2)
 	if err != nil {
 		b.Fatalf("failed to create ErasureStorage: %v", err)
 	}
 	disks := setup.disks
-	buffer := make([]byte, blockSizeV1, 2*blockSizeV1)
+	buffer := make([]byte, blockSizeV2, 2*blockSizeV2)
 	content := make([]byte, size)
 
 	for i := 0; i < dataDown; i++ {

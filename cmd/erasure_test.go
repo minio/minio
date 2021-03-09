@@ -52,7 +52,7 @@ func TestErasureEncodeDecode(t *testing.T) {
 		buffer := make([]byte, len(data), 2*len(data))
 		copy(buffer, data)
 
-		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.parityBlocks, blockSizeV1)
+		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.parityBlocks, blockSizeV2)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create erasure: %v", i, err)
 		}
