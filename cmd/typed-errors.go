@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"errors"
+
+	"github.com/minio/minio/pkg/s3v4"
 )
 
 // errInvalidArgument means that input argument is invalid.
@@ -27,7 +29,7 @@ var errInvalidArgument = errors.New("Invalid arguments specified")
 var errMethodNotAllowed = errors.New("Method not allowed")
 
 // errSignatureMismatch means signature did not match.
-var errSignatureMismatch = errors.New("Signature does not match")
+var errSignatureMismatch = s3v4.ErrInvalidSignature
 
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")

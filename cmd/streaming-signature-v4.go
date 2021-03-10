@@ -21,7 +21,6 @@ package cmd
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"hash"
@@ -32,6 +31,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/s3v4"
 )
 
 // Streaming AWS Signature Version '4' constants.
@@ -158,16 +158,9 @@ func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
 	if errCode != ErrNone {
 		return nil, errCode
 	}
-
-	return &s3ChunkedReader{
-		reader:            bufio.NewReader(req.Body),
-		cred:              cred,
-		seedSignature:     seedSignature,
-		seedDate:          seedDate,
-		region:            region,
-		chunkSHA256Writer: sha256.New(),
-		state:             readChunkHeader,
-	}, ErrNone
+	prevSignature, _ := hex.DecodeString(seedSignature)
+	signingKey := getSigningKey(cred.SecretKey, seedDate, region, serviceS3)
+	return s3v4.NewChunkReader(req.Body, signingKey, region, seedDate, prevSignature), ErrNone
 }
 
 // Represents the overall state that is required for decoding a
