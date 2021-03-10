@@ -198,11 +198,12 @@ func TestExpectedExpiryTime(t *testing.T) {
 
 func TestComputeActions(t *testing.T) {
 	testCases := []struct {
-		inputConfig    string
-		objectName     string
-		objectTags     string
-		objectModTime  time.Time
-		expectedAction Action
+		inputConfig          string
+		objectName           string
+		objectTags           string
+		objectModTime        time.Time
+		expectedAction       Action
+		expectedStorageClass string
 	}{
 		// Empty object name (unexpected case) should always return NoneAction
 		{
@@ -336,6 +337,15 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: DeleteAction,
 		},
+		// Should transition - empty prefix, tags match, object is transitioned based on specified Days
+		{
+			inputConfig:          `<LifecycleConfiguration><Rule><Filter><And><Prefix></Prefix><Tag><Key>tag1</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Transition><Days>1</Days><StorageClass>MINIO-TIER</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			objectName:           "foxdir/fooobject",
+			objectTags:           "tag1=value1",
+			objectModTime:        time.Now().UTC().Add(-48 * time.Hour), // Created 2 day ago
+			expectedAction:       TransitionAction,
+			expectedStorageClass: "MINIO-TIER",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -345,13 +355,17 @@ func TestComputeActions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
-			if resultAction := lc.ComputeAction(ObjectOpts{
+			storageClass, resultAction := lc.ComputeAction(ObjectOpts{
 				Name:     tc.objectName,
 				UserTags: tc.objectTags,
 				ModTime:  tc.objectModTime,
 				IsLatest: true,
-			}); resultAction != tc.expectedAction {
+			})
+			if resultAction != tc.expectedAction {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
+			}
+			if storageClass != tc.expectedStorageClass {
+				t.Fatalf("Expected storageClass: `%v`, got: `%v`", tc.expectedStorageClass, storageClass)
 			}
 		})
 

@@ -105,14 +105,18 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	}()
 }
 
+type transitionInfo struct {
+	ObjectInfo
+	Tier string
+}
 type transitionState struct {
 	// add future metrics here
-	transitionCh chan ObjectInfo
+	transitionCh chan transitionInfo
 }
 
-func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
+func (t *transitionState) queueTransitionTask(ti transitionInfo) {
 	select {
-	case t.transitionCh <- oi:
+	case t.transitionCh <- ti:
 	default:
 	}
 }
@@ -129,7 +133,7 @@ func newTransitionState() *transitionState {
 		globalTransitionConcurrent = 1
 	}
 	ts := &transitionState{
-		transitionCh: make(chan ObjectInfo, 10000),
+		transitionCh: make(chan transitionInfo, 10000),
 	}
 	go func() {
 		<-GlobalContext.Done()
@@ -146,11 +150,11 @@ func (t *transitionState) addWorker(ctx context.Context, objectAPI ObjectLayer) 
 			select {
 			case <-ctx.Done():
 				return
-			case oi, ok := <-t.transitionCh:
+			case ti, ok := <-t.transitionCh:
 				if !ok {
 					return
 				}
-				if err := transitionObject(ctx, objectAPI, oi); err != nil {
+				if err := transitionObject(ctx, objectAPI, ti); err != nil {
 					logger.LogIf(ctx, err)
 				}
 			}
@@ -362,26 +366,19 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 // storage specified by the transition ARN, the metadata is left behind on source cluster and original content
 // is moved to the transition tier. Note that in the case of encrypted objects, entire encrypted stream is moved
 // to the transition tier without decrypting or re-encrypting.
-func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo ObjectInfo) error {
-	lc, err := globalLifecycleSys.Get(objInfo.Bucket)
-	if err != nil {
-		return err
-	}
-	lcOpts := lifecycle.ObjectOpts{
-		Name:     objInfo.Name,
-		UserTags: objInfo.UserTags,
-	}
-	arn := getLifecycleTransitionTargetArn(ctx, lc, objInfo.Bucket, lcOpts)
+func transitionObject(ctx context.Context, objectAPI ObjectLayer, info transitionInfo) error {
+	arn := globalBucketTargetSys.GetRemoteArnWithLabel(ctx, info.Bucket, info.Tier)
 	if arn == nil {
 		return fmt.Errorf("remote target not configured")
 	}
+
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, arn.String())
 	if tgt == nil {
 		return fmt.Errorf("remote target not configured")
 	}
 
-	gr, err := objectAPI.GetObjectNInfo(ctx, objInfo.Bucket, objInfo.Name, nil, http.Header{}, readLock, ObjectOptions{
-		VersionID:        objInfo.VersionID,
+	gr, err := objectAPI.GetObjectNInfo(ctx, info.Bucket, info.Name, nil, http.Header{}, readLock, ObjectOptions{
+		VersionID:        info.VersionID,
 		TransitionStatus: lifecycle.TransitionPending,
 	})
 	if err != nil {
@@ -411,7 +408,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 	opts.TransitionStatus = lifecycle.TransitionComplete
 	eventName := event.ObjectTransitionComplete
 
-	objInfo, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
+	objInfo, err := objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
 	if err != nil {
 		eventName = event.ObjectTransitionFailed
 	}

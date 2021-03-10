@@ -836,7 +836,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 	}
 
 	versionID := meta.oi.VersionID
-	action := i.lifeCycle.ComputeAction(
+	_, action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
 			Name:             i.objectPath(),
 			UserTags:         meta.oi.UserTags,
@@ -891,9 +891,10 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 	}
 
 	var applied bool
-	action = evalActionFromLifecycle(ctx, *i.lifeCycle, obj, i.debug)
+	var tier string
+	tier, action = evalActionFromLifecycle(ctx, *i.lifeCycle, obj, i.debug)
 	if action != lifecycle.NoneAction {
-		applied = applyLifecycleAction(ctx, action, o, obj)
+		applied = applyLifecycleAction(ctx, action, tier, o, obj)
 	}
 
 	if applied {
@@ -906,7 +907,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 	return size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (tier string, action lifecycle.Action) {
 	lcOpts := lifecycle.ObjectOpts{
 		Name:             obj.Name,
 		UserTags:         obj.UserTags,
@@ -921,20 +922,20 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 		TransitionStatus: obj.TransitionStatus,
 	}
 
-	action = lc.ComputeAction(lcOpts)
+	tier, action = lc.ComputeAction(lcOpts)
 	if debug {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
 	}
 
 	if action == lifecycle.NoneAction {
-		return action
+		return tier, action
 	}
 
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
 		if obj.VersionID == "" {
-			return lifecycle.NoneAction
+			return tier, lifecycle.NoneAction
 		}
 		if rcfg, _ := globalBucketObjectLockSys.Get(obj.Bucket); rcfg.LockEnabled {
 			locked := enforceRetentionForDeletion(ctx, obj)
@@ -946,15 +947,15 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 						console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 					}
 				}
-				return lifecycle.NoneAction
+				return tier, lifecycle.NoneAction
 			}
 		}
 	}
 
-	return action
+	return tier, action
 }
 
-func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
+func applyTransitionAction(ctx context.Context, action lifecycle.Action, tier string, objLayer ObjectLayer, obj ObjectInfo) bool {
 	opts := ObjectOptions{}
 	if obj.TransitionStatus == "" {
 		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
@@ -969,7 +970,7 @@ func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLaye
 			return false
 		}
 	}
-	globalTransitionState.queueTransitionTask(obj)
+	globalTransitionState.queueTransitionTask(transitionInfo{obj, tier})
 	return true
 
 }
@@ -1045,14 +1046,14 @@ func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, 
 }
 
 // Perform actions (removal or transitioning of objects), return true the action is successfully performed
-func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
+func applyLifecycleAction(ctx context.Context, action lifecycle.Action, tier string, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 		success = applyExpiryRule(ctx, objLayer, obj, false, action == lifecycle.DeleteVersionAction)
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 		success = applyExpiryRule(ctx, objLayer, obj, true, action == lifecycle.DeleteRestoredVersionAction)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		success = applyTransitionAction(ctx, action, objLayer, obj)
+		success = applyTransitionAction(ctx, action, tier, objLayer, obj)
 	}
 	return
 }

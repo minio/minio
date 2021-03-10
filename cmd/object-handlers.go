@@ -457,7 +457,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		_, action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
 			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -646,7 +646,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		_, action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
 			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))

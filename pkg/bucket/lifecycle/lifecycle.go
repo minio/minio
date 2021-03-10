@@ -229,10 +229,9 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
-func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
-	var action = NoneAction
+func (lc Lifecycle) ComputeAction(obj ObjectOpts) (tier string, action Action) {
 	if obj.ModTime.IsZero() {
-		return action
+		return tier, action
 	}
 
 	for _, rule := range lc.FilterActionableRules(obj) {
@@ -241,7 +240,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			// Only latest marker is removed. If set to true, the delete marker will be expired;
 			// if set to false the policy takes no action. This cannot be specified with Days or
 			// Date in a Lifecycle Expiration Policy.
-			return DeleteVersionAction
+			return tier, DeleteVersionAction
 		}
 
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
@@ -249,7 +248,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
-					return DeleteVersionAction
+					return tier, DeleteVersionAction
 				}
 			}
 
@@ -260,7 +259,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				//   object creation. You will have expired object delete markers, but Amazon S3 detects and removes the expired
 				//   object delete markers for you.
 				if time.Now().After(ExpectedExpiryTime(obj.ModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
-					return DeleteVersionAction
+					return tier, DeleteVersionAction
 				}
 			}
 		}
@@ -270,7 +269,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionTransition.NoncurrentDays))) {
-					return TransitionVersionAction
+					return rule.NoncurrentVersionTransition.StorageClass, TransitionVersionAction
 				}
 			}
 		}
@@ -280,11 +279,11 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
-					return DeleteAction
+					return tier, DeleteAction
 				}
 			case !rule.Expiration.IsDaysNull():
 				if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
-					return DeleteAction
+					return tier, DeleteAction
 				}
 			}
 
@@ -293,10 +292,12 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				case !rule.Transition.IsDateNull():
 					if time.Now().UTC().After(rule.Transition.Date.Time) {
 						action = TransitionAction
+						tier = rule.Transition.StorageClass
 					}
 				case !rule.Transition.IsDaysNull():
 					if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
 						action = TransitionAction
+						tier = rule.Transition.StorageClass
 					}
 				}
 			}
@@ -310,7 +311,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 
 		}
 	}
-	return action
+	return tier, action
 }
 
 // ExpectedExpiryTime calculates the expiry, transition or restore date/time based on a object modtime.
