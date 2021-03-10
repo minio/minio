@@ -433,7 +433,7 @@ func (x *xlMetaInlineData) rename(oldKey, newKey string) bool {
 		if err != nil {
 			break
 		}
-		plSize += len(foundKey) + len(foundVal) + msgp.StringPrefixSize + msgp.ArrayHeaderSize
+		plSize += len(foundVal) + msgp.StringPrefixSize + msgp.ArrayHeaderSize
 		vals = append(vals, foundVal)
 		if string(foundKey) != oldKey {
 			keys = append(keys, foundKey)
@@ -484,7 +484,7 @@ func (x *xlMetaInlineData) remove(key string) bool {
 			break
 		}
 		if string(foundKey) != key {
-			plSize += len(foundKey) + msgp.StringPrefixSize + msgp.ArrayHeaderSize + len(foundKey) + len(foundVal)
+			plSize += msgp.StringPrefixSize + msgp.ArrayHeaderSize + len(foundKey) + len(foundVal)
 			keys = append(keys, foundKey)
 			vals = append(vals, foundVal)
 		} else {
