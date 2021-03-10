@@ -1483,10 +1483,13 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 							if wildcard.Match("buckets/*/.metacache/*", entry.name) {
 								return
 							}
-							if wildcard.Match("tmp/.trash/*", entry.name) {
+							if wildcard.Match("tmp/*", entry.name) {
 								return
 							}
 							if wildcard.Match("multipart/*", entry.name) {
+								return
+							}
+							if wildcard.Match("tmp-old/*", entry.name) {
 								return
 							}
 						}
