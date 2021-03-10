@@ -93,27 +93,27 @@ var kmsParseHTTPTests = []struct {
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"{}"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"e30="},
 	}, ShouldFail: false}, // 3
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQifQ=="},
 	}, ShouldFail: false}, // 4
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQifQ=="},
 	}, ShouldFail: false}, // 5
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"AES256"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQifQ=="},
 	}, ShouldFail: true}, // 6
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\""}, // invalid JSON
+		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQi"}, // invalid JSON
 	}, ShouldFail: true}, // 7
 
 }
