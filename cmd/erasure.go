@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -64,6 +65,8 @@ type erasureObjects struct {
 
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
+
+	deletedCleanupSleeper *dynamicSleeper
 
 	mrfOpCh chan partialOperation
 }
@@ -236,6 +239,31 @@ func (er erasureObjects) StorageInfo(ctx context.Context, local bool) (StorageIn
 		endpoints = localEndpoints
 	}
 	return getStorageInfo(disks, endpoints)
+}
+
+// Clean-up previously deleted objects. from .minio.sys/tmp/.trash/
+func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
+	// run multiple cleanup's local to this server.
+	var wg sync.WaitGroup
+	for _, disk := range er.getLoadBalancedLocalDisks() {
+		if disk != nil {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				diskPath := disk.Endpoint().Path
+				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
+					wait := er.deletedCleanupSleeper.Timer(ctx)
+					if intDataUpdateTracker != nil && intDataUpdateTracker.debug {
+						logger.Info("cleanupDeletedObjects: %s/%s", minioMetaTmpDeletedBucket, ddir)
+					}
+					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+					wait()
+					return nil
+				})
+			}(disk)
+		}
+	}
+	wg.Wait()
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.

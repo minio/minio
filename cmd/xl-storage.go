@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	pathutil "path"
 	slashpath "path"
 	"path/filepath"
 	"runtime"
@@ -1171,7 +1172,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if !isXL2V1Format(buf) {
 		// Delete the meta file, if there are no more versions the
 		// top level parent is automatically removed.
-		return deleteFile(volumeDir, pathJoin(volumeDir, path), true)
+		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
 	var xlMeta xlMetaV2
@@ -1196,7 +1197,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		if err = removeAll(filePath); err != nil {
+		tmpuuid := mustGetUUID()
+		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
 			return err
 		}
 	}
@@ -1212,7 +1214,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	return deleteFile(volumeDir, filePath, false)
+	return s.deleteFile(volumeDir, filePath, false)
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
@@ -1930,7 +1932,7 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 // move up the tree, deleting empty parent directories until it finds one
 // with files in it. Returns nil for a non-empty directory even when
 // recursive is set to false.
-func deleteFile(basePath, deletePath string, recursive bool) error {
+func (s *xlStorage) deleteFile(basePath, deletePath string, recursive bool) error {
 	if basePath == "" || deletePath == "" {
 		return nil
 	}
@@ -1943,7 +1945,8 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 
 	var err error
 	if recursive {
-		err = os.RemoveAll(deletePath)
+		tmpuuid := mustGetUUID()
+		err = renameAll(deletePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 	} else {
 		err = os.Remove(deletePath)
 	}
@@ -1974,7 +1977,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 
 	// Delete parent directory obviously not recursively. Errors for
 	// parent directories shouldn't trickle down.
-	deleteFile(basePath, deletePath, false)
+	s.deleteFile(basePath, deletePath, false)
 
 	return nil
 }
@@ -2012,7 +2015,7 @@ func (s *xlStorage) DeleteFile(ctx context.Context, volume string, path string) 
 	}
 
 	// Delete file and delete parent directory as well if its empty.
-	return deleteFile(volumeDir, filePath, false)
+	return s.deleteFile(volumeDir, filePath, false)
 }
 
 func (s *xlStorage) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
@@ -2049,7 +2052,7 @@ func (s *xlStorage) DeleteFileBulk(volume string, paths []string) (errs []error,
 			continue
 		}
 		// Delete file and delete parent directory as well if its empty.
-		errs[idx] = deleteFile(volumeDir, filePath, false)
+		errs[idx] = s.deleteFile(volumeDir, filePath, false)
 	}
 	return
 }
@@ -2243,8 +2246,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 	// Commit data
 	if srcDataPath != "" {
-		removeAll(oldDstDataPath)
-		removeAll(dstDataPath)
+		tmpuuid := mustGetUUID()
+		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
+		tmpuuid = mustGetUUID()
+		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
 			return osErrToFileErr(err)
 		}
@@ -2257,12 +2262,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 	// Remove parent dir of the source file if empty
 	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
-		deleteFile(srcVolumeDir, parentDir, false)
+		s.deleteFile(srcVolumeDir, parentDir, false)
 	}
 
 	if srcDataPath != "" {
 		if parentDir := slashpath.Dir(srcDataPath); isDirEmpty(parentDir) {
-			deleteFile(srcVolumeDir, parentDir, false)
+			s.deleteFile(srcVolumeDir, parentDir, false)
 		}
 	}
 

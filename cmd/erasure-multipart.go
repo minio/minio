@@ -142,6 +142,9 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		return
 	}
 	for _, tmpDir := range tmpDirs {
+		if tmpDir == ".trash/" { // do not remove .trash/ here, it has its own routines
+			continue
+		}
 		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "", false)
 		if err != nil {
 			continue

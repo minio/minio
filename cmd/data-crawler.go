@@ -21,11 +21,13 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/rand"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
@@ -56,6 +58,129 @@ var (
 	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 )
+
+type dynamicSleeper struct {
+	mu sync.RWMutex
+
+	// Sleep factor
+	factor float64
+
+	// maximum sleep cap,
+	// set to <= 0 to disable.
+	maxSleep time.Duration
+
+	// Don't sleep at all, if time taken is below this value.
+	// This is to avoid too small costly sleeps.
+	minSleep time.Duration
+
+	// cycle will be closed
+	cycle chan struct{}
+}
+
+// newDynamicSleeper
+func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
+	return &dynamicSleeper{
+		factor:   factor,
+		cycle:    make(chan struct{}),
+		maxSleep: maxWait,
+		minSleep: 100 * time.Microsecond,
+	}
+}
+
+// Timer returns a timer that has started.
+// When the returned function is called it will wait.
+func (d *dynamicSleeper) Timer(ctx context.Context) func() {
+	t := time.Now()
+	return func() {
+		doneAt := time.Now()
+		for {
+			// Grab current values
+			d.mu.RLock()
+			minWait, maxWait := d.minSleep, d.maxSleep
+			factor := d.factor
+			cycle := d.cycle
+			d.mu.RUnlock()
+			elapsed := doneAt.Sub(t)
+			// Don't sleep for really small amount of time
+			wantSleep := time.Duration(float64(elapsed) * factor)
+			if wantSleep <= minWait {
+				return
+			}
+			if maxWait > 0 && wantSleep > maxWait {
+				wantSleep = maxWait
+			}
+			timer := time.NewTimer(wantSleep)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case <-timer.C:
+				return
+			case <-cycle:
+				if !timer.Stop() {
+					// We expired.
+					<-timer.C
+					return
+				}
+			}
+		}
+	}
+}
+
+// Sleep sleeps the specified time multiplied by the sleep factor.
+// If the factor is updated the sleep will be done again with the new factor.
+func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
+	for {
+		// Grab current values
+		d.mu.RLock()
+		minWait, maxWait := d.minSleep, d.maxSleep
+		factor := d.factor
+		cycle := d.cycle
+		d.mu.RUnlock()
+		// Don't sleep for really small amount of time
+		wantSleep := time.Duration(float64(base) * factor)
+		if wantSleep <= minWait {
+			return
+		}
+		if maxWait > 0 && wantSleep > maxWait {
+			wantSleep = maxWait
+		}
+		timer := time.NewTimer(wantSleep)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		case <-timer.C:
+			return
+		case <-cycle:
+			if !timer.Stop() {
+				// We expired.
+				<-timer.C
+				return
+			}
+		}
+	}
+}
+
+// Update the current settings and cycle all waiting.
+// Parameters are the same as in the contructor.
+func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if math.Abs(d.factor-factor) < 1e-10 && d.maxSleep == maxWait {
+		return nil
+	}
+	// Update values and cycle waiting.
+	close(d.cycle)
+	d.factor = factor
+	d.maxSleep = maxWait
+	d.cycle = make(chan struct{})
+	return nil
+}
 
 // initDataCrawler will start the crawler unless disabled.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {

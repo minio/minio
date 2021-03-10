@@ -412,20 +412,30 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 		// Initialize erasure objects for a given set.
 		s.sets[i] = &erasureObjects{
-			getDisks:     s.GetDisks(i),
-			getLockers:   s.GetLockers(i),
-			getEndpoints: s.GetEndpoints(i),
-			nsMutex:      mutex,
-			bp:           bp,
-			mrfOpCh:      make(chan partialOperation, 10000),
+			getDisks:              s.GetDisks(i),
+			getLockers:            s.GetLockers(i),
+			getEndpoints:          s.GetEndpoints(i),
+			deletedCleanupSleeper: newDynamicSleeper(10, 10*time.Second),
+			nsMutex:               mutex,
+			bp:                    bp,
+			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 
 		go s.sets[i].cleanupStaleUploads(ctx,
 			GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	}
 
+	// cleanup ".trash/" folder every 10 minutes with sufficient sleep cycles.
+	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get("MINIO_DELETE_CLEANUP_INTERVAL", "10m"))
+	if err != nil {
+		return nil, err
+	}
+
 	mctx, mctxCancel := context.WithCancel(ctx)
 	s.monitorContextCancel = mctxCancel
+
+	// start cleanup of deleted objects.
+	go s.cleanupDeletedObjects(ctx, deletedObjectsCleanupInterval)
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
@@ -433,6 +443,25 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	go s.healMRFRoutine()
 
 	return s, nil
+}
+
+func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval time.Duration) {
+	timer := time.NewTimer(cleanupInterval)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			// Reset for the next interval
+			timer.Reset(cleanupInterval)
+
+			for _, set := range s.sets {
+				set.cleanupDeletedObjects(ctx)
+			}
+		}
+	}
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

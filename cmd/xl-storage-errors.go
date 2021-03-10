@@ -68,6 +68,14 @@ func isSysErrTooManySymlinks(err error) bool {
 	return errors.Is(err, syscall.ELOOP)
 }
 
+func osIsNotExist(err error) bool {
+	return errors.Is(err, os.ErrNotExist)
+}
+
+func osIsPermission(err error) bool {
+	return errors.Is(err, os.ErrPermission)
+}
+
 // Check if the given error corresponds to ENOTEMPTY for unix,
 // EEXIST for solaris variants,
 // and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
