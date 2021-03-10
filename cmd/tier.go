@@ -29,7 +29,9 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/kms"
 )
 
 //go:generate msgp -file $GOFILE
@@ -236,9 +238,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	// Encrypt json encoded tier configurations
 	metadata := make(map[string]string)
-	sseS3 := true
-	var extKey [32]byte
-	encBr, oek, err := newEncryptReader(hr, extKey[:], minioMetaBucket, tierConfigPath, metadata, sseS3)
+	encBr, oek, err := newEncryptReader(hr, crypto.S3, "", nil, minioMetaBucket, tierConfigPath, metadata, kms.Context{})
 	if err != nil {
 		return nil, nil, err
 	}
