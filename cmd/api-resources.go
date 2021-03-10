@@ -36,19 +36,8 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 		maxkeys = maxObjectList
 	}
 
-	var err error
-	prefix, err = unescapePath(values.Get("prefix"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
-	marker, err = unescapePath(values.Get("marker"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
+	prefix = trimLeadingSlash(values.Get("prefix"))
+	marker = trimLeadingSlash(values.Get("marker"))
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
 	return
@@ -67,19 +56,8 @@ func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimit
 		maxkeys = maxObjectList
 	}
 
-	var err error
-	prefix, err = unescapePath(values.Get("prefix"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
-	marker, err = unescapePath(values.Get("key-marker"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
+	prefix = trimLeadingSlash(values.Get("prefix"))
+	marker = trimLeadingSlash(values.Get("key-marker"))
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
 	versionIDMarker = values.Get("version-id-marker")
@@ -108,19 +86,8 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 		maxkeys = maxObjectList
 	}
 
-	var err error
-	prefix, err = unescapePath(values.Get("prefix"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
-	startAfter, err = unescapePath(values.Get("start-after"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
+	prefix = trimLeadingSlash(values.Get("prefix"))
+	startAfter = trimLeadingSlash(values.Get("start-after"))
 	delimiter = values.Get("delimiter")
 	fetchOwner = values.Get("fetch-owner") == "true"
 	encodingType = values.Get("encoding-type")
@@ -150,19 +117,8 @@ func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadID
 		maxUploads = maxUploadsList
 	}
 
-	var err error
-	prefix, err = unescapePath(values.Get("prefix"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
-	keyMarker, err = unescapePath(values.Get("key-marker"))
-	if err != nil {
-		errCode = ErrInvalidRequest
-		return
-	}
-
+	prefix = trimLeadingSlash(values.Get("prefix"))
+	keyMarker = trimLeadingSlash(values.Get("key-marker"))
 	uploadIDMarker = values.Get("upload-id-marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")

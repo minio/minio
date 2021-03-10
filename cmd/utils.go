@@ -687,6 +687,20 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	return
 }
 
+func trimLeadingSlash(ep string) string {
+	if len(ep) > 0 && ep[0] == '/' {
+		// Path ends with '/' preserve it
+		if ep[len(ep)-1] == '/' && len(ep) > 1 {
+			ep = path.Clean(ep)
+			ep += slashSeparator
+		} else {
+			ep = path.Clean(ep)
+		}
+		ep = ep[1:]
+	}
+	return ep
+}
+
 // unescapeGeneric is similar to url.PathUnescape or url.QueryUnescape
 // depending on input, additionally also handles situations such as
 // `//` are normalized as `/`, also removes any `/` prefix before
@@ -696,17 +710,7 @@ func unescapeGeneric(p string, escapeFn func(string) (string, error)) (string, e
 	if err != nil {
 		return "", err
 	}
-	if len(ep) > 0 && ep[0] == '/' {
-		// Path ends with '/' preserve it
-		if ep[len(ep)-1] == '/' {
-			ep = path.Clean(ep)
-			ep += slashSeparator
-		} else {
-			ep = path.Clean(ep)
-		}
-		ep = ep[1:]
-	}
-	return ep, nil
+	return trimLeadingSlash(ep), nil
 }
 
 // unescapePath is similar to unescapeGeneric but for specifically
