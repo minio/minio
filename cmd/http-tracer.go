@@ -197,13 +197,12 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
 		t.NodeName = host
 	}
-
 	rq := trace.RequestInfo{
 		Time:     time.Now().UTC(),
 		Proto:    r.Proto,
 		Method:   r.Method,
 		Path:     r.URL.Path,
-		RawQuery: r.URL.RawQuery,
+		RawQuery: redactLDAPPwd(r.URL.RawQuery),
 		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 	}
