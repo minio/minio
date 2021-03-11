@@ -100,7 +100,7 @@ func TestMain(m *testing.M) {
 		logger.Disable = true
 	}
 	// Uncomment the following line to see trace logs during unit tests.
-	//logger.AddTarget(console.New())
+	// logger.AddTarget(console.New())
 
 	// Set system resources to maximum.
 	setMaxResources()

@@ -2251,63 +2251,13 @@ func (s *xlStorage) bitrotVerify(partPath string, partSize int64, algo BitrotAlg
 
 	// Close the file descriptor.
 	defer file.Close()
-
-	if algo != HighwayHash256S {
-		h := algo.New()
-		if _, err = io.Copy(h, file); err != nil {
-			// Premature failure in reading the object,file is corrupt.
-			return errFileCorrupt
-		}
-		if !bytes.Equal(h.Sum(nil), sum) {
-			return errFileCorrupt
-		}
-		return nil
-	}
-
-	buf := make([]byte, shardSize)
-	h := algo.New()
-	hashBuf := make([]byte, h.Size())
 	fi, err := file.Stat()
 	if err != nil {
 		// Unable to stat on the file, return an expected error
 		// for healing code to fix this file.
 		return err
 	}
-
-	size := fi.Size()
-
-	// Calculate the size of the bitrot file and compare
-	// it with the actual file size.
-	if size != bitrotShardFileSize(partSize, shardSize, algo) {
-		return errFileCorrupt
-	}
-
-	var n int
-	for {
-		if size == 0 {
-			return nil
-		}
-		h.Reset()
-		n, err = file.Read(hashBuf)
-		if err != nil {
-			// Read's failed for object with right size, file is corrupt.
-			return err
-		}
-		size -= int64(n)
-		if size < int64(len(buf)) {
-			buf = buf[:size]
-		}
-		n, err = file.Read(buf)
-		if err != nil {
-			// Read's failed for object with right size, at different offsets.
-			return err
-		}
-		size -= int64(n)
-		h.Write(buf)
-		if !bytes.Equal(h.Sum(nil), hashBuf) {
-			return errFileCorrupt
-		}
-	}
+	return bitrotVerify(file, fi.Size(), partSize, algo, sum, shardSize)
 }
 
 func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (err error) {
