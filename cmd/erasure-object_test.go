@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
@@ -462,7 +463,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	object := "object"
 	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{'a'}, smallFileThreshold*2)), smallFileThreshold*2, "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,8 +471,8 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	// Make 9 disks offline, which leaves less than quorum number of disks
 	// in a 16 disk Erasure setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
-	// invocations, where f - [0,3)
-	for f := 0; f < 3; f++ {
+	// invocations, where f - [0,4)
+	for f := 0; f < 4; f++ {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
@@ -491,10 +492,75 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Upload new content to same object "object"
-		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{byte(f)}, smallFileThreshold*2)), smallFileThreshold*2, "", ""), opts)
 		if !errors.Is(err, errErasureWriteQuorum) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 		}
+	}
+}
+
+func TestPutObjectNoQuorumSmall(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	opts := ObjectOptions{}
+	// Create "object" under "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{'a'}, smallFileThreshold/2)), smallFileThreshold/2, "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make 9 disks offline, which leaves less than quorum number of disks
+	// in a 16 disk Erasure setup. The original disks are 'replaced' with
+	// naughtyDisks that fail after 'f' successful StorageAPI method
+	// invocations, where f - [0,2)
+	for f := 0; f < 2; f++ {
+		t.Run("exec-"+strconv.Itoa(f), func(t *testing.T) {
+			diskErrors := make(map[int]error)
+			for i := 0; i <= f; i++ {
+				diskErrors[i] = nil
+			}
+			erasureDisks := xl.getDisks()
+			for i := range erasureDisks[:9] {
+				switch diskType := erasureDisks[i].(type) {
+				case *naughtyDisk:
+					erasureDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
+				default:
+					erasureDisks[i] = newNaughtyDisk(erasureDisks[i], diskErrors, errFaultyDisk)
+				}
+			}
+			z.serverPools[0].erasureDisksMu.Lock()
+			xl.getDisks = func() []StorageAPI {
+				return erasureDisks
+			}
+			z.serverPools[0].erasureDisksMu.Unlock()
+			// Upload new content to same object "object"
+			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{byte(f)}, smallFileThreshold/2)), smallFileThreshold/2, "", ""), opts)
+			if !errors.Is(err, errErasureWriteQuorum) {
+				t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+			}
+		})
 	}
 }
 
