@@ -26,6 +26,7 @@ import {
   SHARE_OBJECT_EXPIRY_HOURS,
   SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
+import QRCode from "react-qr-code";
 
 export class ShareObjectModal extends React.Component {
   constructor(props) {
@@ -89,6 +90,7 @@ export class ShareObjectModal extends React.Component {
         <ModalHeader>Share Object</ModalHeader>
         <ModalBody>
           <div className="input-group copy-text">
+            <QRCode value={url} size={128}/>
             <label>Shareable Link</label>
             <input
               type="text"
