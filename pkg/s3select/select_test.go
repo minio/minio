@@ -22,14 +22,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/klauspost/cpuid"
+	"github.com/klauspost/cpuid/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/simdjson-go"
 )
@@ -363,11 +362,13 @@ func TestJSONQueries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Hack cpuid to the CPU doesn't appear to support AVX2.
 			// Restore whatever happens.
-			defer func(f cpuid.Flags) {
-				cpuid.CPU.Features = f
-			}(cpuid.CPU.Features)
-			cpuid.CPU.Features &= math.MaxUint64 - cpuid.AVX2
-
+			if cpuid.CPU.Supports(cpuid.AVX2) {
+				cpuid.CPU.Disable(cpuid.AVX2)
+				defer cpuid.CPU.Enable(cpuid.AVX2)
+			}
+			if simdjson.SupportedCPU() {
+				t.Fatal("setup error: expected cpu to be unsupported")
+			}
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
 				var escaped bytes.Buffer

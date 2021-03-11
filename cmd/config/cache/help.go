@@ -40,19 +40,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         Exclude,
-			Description: `comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"`,
+			Description: `exclude cache for following patterns e.g. "bucket/*.tmp,*.exe"`,
 			Optional:    true,
 			Type:        "csv",
 		},
 		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
-			Optional:    true,
-			Type:        "sentence",
-		},
-		config.HelpKV{
 			Key:         After,
-			Description: `minimum accesses before caching an object`,
+			Description: `minimum number of access before caching an object`,
 			Optional:    true,
 			Type:        "number",
 		},
@@ -79,6 +73,12 @@ var (
 			Description: `set to control cache commit behavior, defaults to "writethrough"`,
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: config.DefaultComment,
+			Optional:    true,
+			Type:        "sentence",
 		},
 	}
 )

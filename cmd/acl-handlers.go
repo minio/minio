@@ -20,7 +20,6 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"net/url"
 
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -180,7 +179,7 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -244,7 +243,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

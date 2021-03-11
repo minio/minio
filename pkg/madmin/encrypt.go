@@ -51,7 +51,7 @@ func EncryptData(password string, data []byte) ([]byte, error) {
 		err    error
 		stream *sio.Stream
 	)
-	if sioutil.NativeAES() { // Only use AES-GCM if we can use an optimized implementation
+	if useAES() { // Only use AES-GCM if we can use an optimized implementation
 		id = aesGcm
 		stream, err = sio.AES_256_GCM.Stream(key)
 	} else {

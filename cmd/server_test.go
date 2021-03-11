@@ -1267,20 +1267,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	c.Assert(response.StatusCode, http.StatusBadRequest)
 	verifyError(c, response, "KeyTooLongError", "Your key is too long", http.StatusBadRequest)
 
-	// make object name with prefix as slash
-	longObjName = fmt.Sprintf("/%0255d/%0255d", 1, 1)
-	buffer = bytes.NewReader([]byte("hello world"))
-	// create new HTTP request to insert the object.
-	request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, longObjName),
-		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	// execute the HTTP request.
-	response, err = s.client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusBadRequest)
-	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains a leading slash.", http.StatusBadRequest)
-
-	//make object name as unsupported
+	// make object name as unsupported
 	longObjName = fmt.Sprintf("%0256d", 1)
 	buffer = bytes.NewReader([]byte("hello world"))
 	request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, longObjName),
@@ -1595,14 +1582,14 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
-				"<Owner><ID></ID><DisplayName></DisplayName></Owner>",
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
-				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>", globalMinioDefaultOwnerID),
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},

@@ -421,7 +421,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	}
 
 	// cleanup ".trash/" folder every 30 minutes with sufficient sleep cycles.
-	const deletedObjectsCleanupInterval = 30 * time.Minute
+	const deletedObjectsCleanupInterval = 10 * time.Minute
 
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)

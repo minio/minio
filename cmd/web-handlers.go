@@ -39,7 +39,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
-	"github.com/minio/minio/browser"
+
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/crypto"
@@ -132,7 +132,7 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -155,7 +155,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 	}
 	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
 	reply.Used = dataUsageInfo.ObjectsTotalSize
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -211,7 +211,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 					return toJSONError(ctx, err)
 				}
 
-				reply.UIVersion = browser.UIVersion
+				reply.UIVersion = Version
 				return nil
 			}
 			return toJSONError(ctx, err)
@@ -223,7 +223,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 
 	sendEvent(eventArgs{
 		EventName:  event.BucketCreated,
@@ -270,7 +270,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -399,7 +399,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		}
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -432,7 +432,7 @@ type WebObjectInfo struct {
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
 	ctx := newWebContext(r, args, "WebListObjects")
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -671,7 +671,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
 		if err != nil {
@@ -977,7 +977,7 @@ func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginR
 	}
 
 	reply.Token = token
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -1047,7 +1047,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(ctx, err)
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 
 	return nil
 }
@@ -1086,7 +1086,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 		reply.Token = token
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -1107,7 +1107,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1353,7 +1353,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
+	object, err := unescapePath(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1841,7 +1841,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		}
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	reply.Policy = miniogopolicy.GetPolicy(policyInfo.Statements, args.BucketName, args.Prefix)
 
 	return nil
@@ -1933,7 +1933,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		}
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	for prefix, policy := range miniogopolicy.GetPolicies(policyInfo.Statements, args.BucketName, "") {
 		bucketName, objectPrefix := path2BucketObject(prefix)
 		objectPrefix = strings.TrimSuffix(objectPrefix, "*")
@@ -1958,7 +1958,7 @@ type SetBucketPolicyWebArgs struct {
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyWebArgs, reply *WebGenericRep) error {
 	ctx := newWebContext(r, args, "WebSetBucketPolicy")
 	objectAPI := web.ObjectAPI()
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -2152,7 +2152,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return toJSONError(ctx, errPresignedNotAllowed)
 	}
 
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry, creds, region)
 	return nil
 }
@@ -2210,7 +2210,7 @@ func (web *webAPIHandlers) GetDiscoveryDoc(r *http.Request, args *WebGenericArgs
 		reply.DiscoveryDoc = globalOpenIDConfig.DiscoveryDoc
 		reply.ClientID = globalOpenIDConfig.ClientID
 	}
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 
@@ -2274,7 +2274,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	}
 
 	reply.Token = cred.SessionToken
-	reply.UIVersion = browser.UIVersion
+	reply.UIVersion = Version
 	return nil
 }
 

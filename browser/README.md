@@ -17,24 +17,13 @@ nvm install stable
 npm install
 ```
 
-### Install `go-bindata` and `go-bindata-assetfs`
-
-If you do not have a working Golang environment, please follow [Install Golang](https://golang.org/doc/install)
-
-```sh
-go get github.com/go-bindata/go-bindata/go-bindata
-go get github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs
-```
-
 ## Generating Assets
-
-### Generate ui-assets.go
 
 ```sh
 npm run release
 ```
 
-This generates ui-assets.go in the current directory. Now do `make` in the parent directory to build the minio binary with the newly generated ``ui-assets.go``
+This generates `production` in the current directory. 
 
 
 ## Run MinIO Browser with live reload

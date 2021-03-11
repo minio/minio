@@ -73,7 +73,6 @@ func init() {
 		},
 	})
 
-	globalReplicationState = newReplicationState()
 	globalTransitionState = newTransitionState()
 
 	console.SetColor("Debug", color.New())

@@ -22,7 +22,6 @@ require (
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.0
-	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.10.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-ldap/ldap/v3 v3.2.4
@@ -34,8 +33,8 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.10
-	github.com/klauspost/compress v1.11.7
-	github.com/klauspost/cpuid v1.3.1
+	github.com/klauspost/compress v1.11.12
+	github.com/klauspost/cpuid/v2 v2.0.4
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.11
@@ -68,7 +67,6 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.2.0
-	github.com/quasilyte/go-ruleguard v0.2.1 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1

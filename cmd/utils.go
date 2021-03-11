@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -686,18 +687,51 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	return
 }
 
+// unescapeGeneric is similar to url.PathUnescape or url.QueryUnescape
+// depending on input, additionally also handles situations such as
+// `//` are normalized as `/`, also removes any `/` prefix before
+// returning.
+func unescapeGeneric(p string, escapeFn func(string) (string, error)) (string, error) {
+	ep, err := escapeFn(p)
+	if err != nil {
+		return "", err
+	}
+	if len(ep) > 0 && ep[0] == '/' {
+		// Path ends with '/' preserve it
+		if ep[len(ep)-1] == '/' {
+			ep = path.Clean(ep)
+			ep += slashSeparator
+		} else {
+			ep = path.Clean(ep)
+		}
+		ep = ep[1:]
+	}
+	return ep, nil
+}
+
+// unescapePath is similar to unescapeGeneric but for specifically
+// path unescaping.
+func unescapePath(p string) (string, error) {
+	return unescapeGeneric(p, url.PathUnescape)
+}
+
+// similar to unescapeGeneric but never returns any error if the unescaping
+// fails, returns the input as is in such occasion, not meant to be
+// used where strict validation is expected.
+func likelyUnescapeGeneric(p string, escapeFn func(string) (string, error)) string {
+	ep, err := unescapeGeneric(p, escapeFn)
+	if err != nil {
+		return p
+	}
+	return ep
+}
+
 // Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
-	if err != nil {
-		object = vars["object"]
-	}
-	prefix, err := url.QueryUnescape(vars["prefix"])
-	if err != nil {
-		prefix = vars["prefix"]
-	}
+	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
+	prefix := likelyUnescapeGeneric(vars["prefix"], url.QueryUnescape)
 	if prefix != "" {
 		object = prefix
 	}

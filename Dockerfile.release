@@ -2,11 +2,13 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
 
 ARG TARGETARCH
 
+ARG RELEASE
+
 LABEL name="MinIO" \
       vendor="MinIO Inc <dev@min.io>" \
       maintainer="MinIO Inc <dev@min.io>" \
-      version="RELEASE.2021-03-04T00-53-13Z" \
-      release="RELEASE.2021-03-04T00-53-13Z" \
+      version="${RELEASE}" \
+      release="${RELEASE}" \
       summary="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service." \
       description="MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads."
 
@@ -28,9 +30,9 @@ RUN \
      microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
      microdnf install minisign --nodocs && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio -o /usr/bin/minio && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.sha256sum -o /usr/bin/minio.sha256sum && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.minisig -o /usr/bin/minio.minisig && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE} -o /usr/bin/minio && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.sha256sum -o /usr/bin/minio.sha256sum && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.minisig -o /usr/bin/minio.minisig && \
      microdnf clean all && \
      chmod +x /usr/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
