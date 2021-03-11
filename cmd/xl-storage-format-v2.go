@@ -236,8 +236,12 @@ type xlMetaV2 struct {
 	data xlMetaInlineData `msg:"-"`
 }
 
+// xlMetaInlineData is serialized data in [string][]byte pairs.
+//
+//msgp:ignore xlMetaInlineData
 type xlMetaInlineData []byte
 
+// xlMetaInlineDataVer indicates the vesrion of the inline data structure.
 const xlMetaInlineDataVer = 1
 
 // versionOK returns whether the version is ok.
