@@ -923,14 +923,13 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Delete the meta file, if there are no more versions the
-	// top level parent is automatically removed.
-	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
+	// Move the folder to trash.
+	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
 
-	return s.deleteFile(volumeDir, filePath, false)
+	return renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
