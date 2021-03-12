@@ -512,6 +512,7 @@ func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, mark
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 	respBody, err := client.call(ctx, storageRESTMethodWalk, values, nil, -1)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return nil, err
 	}
 
@@ -525,6 +526,9 @@ func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, mark
 			var fi FileInfo
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
+				if gerr != io.EOF {
+					logger.LogIf(ctx, gerr)
+				}
 				return
 			}
 			select {
