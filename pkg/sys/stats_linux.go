@@ -1,4 +1,4 @@
-// +build linux,!arm,!386
+// +build linux,!arm,!386,!mips,!mipsle
 
 /*
  * MinIO Cloud Storage, (C) 2016,2017 MinIO, Inc.
