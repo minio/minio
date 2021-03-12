@@ -18,6 +18,7 @@ package iampolicy
 
 import (
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
 
 // Policy claim constants
@@ -77,6 +78,26 @@ var AdminDiagnostics = Policy{
 				ServerInfoAdminAction, TopLocksAdminAction,
 				HealthInfoAdminAction, BandwidthMonitorAction),
 			Resources: NewResourceSet(NewResource("*", "")),
+		},
+	},
+}
+
+var ConsoleAdmin = Policy{
+	Version: DefaultVersion,
+	Statements: []Statement{
+		{
+			SID:        policy.ID(""),
+			Effect:     policy.Allow,
+			Actions:    NewActionSet(AllAdminActions),
+			Resources:  NewResourceSet(),
+			Conditions: condition.NewFunctions(),
+		},
+		{
+			SID:        policy.ID(""),
+			Effect:     policy.Allow,
+			Actions:    NewActionSet(AllActions),
+			Resources:  NewResourceSet(NewResource("*", "")),
+			Conditions: condition.NewFunctions(),
 		},
 	},
 }

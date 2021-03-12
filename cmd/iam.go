@@ -2089,6 +2089,10 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	if !ok {
 		policies["diagnostics"] = iampolicy.AdminDiagnostics
 	}
+	_, ok = policies["consoleAdmin"]
+	if !ok {
+		policies["consoleAdmin"] = iampolicy.ConsoleAdmin
+	}
 }
 
 // buildUserGroupMemberships - builds the memberships map. IMPORTANT:
