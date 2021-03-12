@@ -82,6 +82,7 @@ var AdminDiagnostics = Policy{
 	},
 }
 
+// Admin - provides admin access for console and mc users.
 var Admin = Policy{
 	Version: DefaultVersion,
 	Statements: []Statement{
