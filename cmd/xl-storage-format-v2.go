@@ -703,7 +703,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			}
 		}
 		// If asked to save data.
-		if fi.Data != nil || fi.Size == 0 {
+		if len(fi.Data) > 0 || fi.Size == 0 {
 			z.data.replace(dd.String(), fi.Data)
 		}
 	}
@@ -726,7 +726,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 				return nil
 			}
 		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
+			if version.ObjectV2.VersionID == uv {
 				z.Versions[i] = ventry
 				return nil
 			}
@@ -734,7 +734,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			// Allowing delete marker to replaced with an proper
 			// object data type as well, this is not S3 complaint
 			// behavior but kept here for future flexibility.
-			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
+			if version.DeleteMarker.VersionID == uv {
 				z.Versions[i] = ventry
 				return nil
 			}
@@ -754,7 +754,7 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	versionID := ""
 	var uv uuid.UUID
 	// check if the version is not "null"
-	if !bytes.Equal(j.VersionID[:], uv[:]) {
+	if j.VersionID != uv {
 		versionID = uuid.UUID(j.VersionID).String()
 	}
 	fi := FileInfo{
@@ -918,7 +918,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 				return version.ObjectV1.DataDir, len(z.Versions) == 0, nil
 			}
 		case DeleteType:
-			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
+			if version.DeleteMarker.VersionID == uv {
 				if updateVersion {
 					if len(z.Versions[i].DeleteMarker.MetaSys) == 0 {
 						z.Versions[i].DeleteMarker.MetaSys = make(map[string][]byte)
@@ -940,9 +940,9 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 				return "", len(z.Versions) == 0, nil
 			}
 		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) && updateVersion {
+			if version.ObjectV2.VersionID == uv && updateVersion {
 				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
-				return "", len(z.Versions) == 0, nil
+				return "", false, nil
 			}
 		}
 	}
