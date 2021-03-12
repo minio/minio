@@ -123,8 +123,10 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),
 				r.URL, guessIsBrowserReq(r))
+			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():
+			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		}
 	}
