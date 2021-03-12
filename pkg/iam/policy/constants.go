@@ -82,7 +82,7 @@ var AdminDiagnostics = Policy{
 	},
 }
 
-var ConsoleAdmin = Policy{
+var Admin = Policy{
 	Version: DefaultVersion,
 	Statements: []Statement{
 		{
