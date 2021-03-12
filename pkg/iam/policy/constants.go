@@ -82,7 +82,7 @@ var AdminDiagnostics = Policy{
 	},
 }
 
-// Admin - provides admin access for console and mc users.
+// Admin - provides admin all-access canned policy
 var Admin = Policy{
 	Version: DefaultVersion,
 	Statements: []Statement{
