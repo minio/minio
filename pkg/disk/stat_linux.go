@@ -36,7 +36,7 @@ func GetInfo(path string) (info Info, err error) {
 		Free:   uint64(s.Frsize) * s.Bavail,
 		Files:  s.Files,
 		Ffree:  s.Ffree,
-		FSType: getFSType(s.Type),
+		FSType: getFSType(int64(s.Type)),
 	}
 	// Check for overflows.
 	// https://github.com/minio/minio/issues/8035
