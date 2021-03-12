@@ -2091,7 +2091,7 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	}
 	_, ok = policies["consoleAdmin"]
 	if !ok {
-		policies["consoleAdmin"] = iampolicy.ConsoleAdmin
+		policies["consoleAdmin"] = iampolicy.Admin
 	}
 }
 
