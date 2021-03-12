@@ -288,6 +288,15 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 	httpStats := globalHTTPStats.toServerHTTPStats()
 
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("s3", "requests", "queue"),
+			"Total number of s3 requests waiting in the queue in the current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(httpStats.TotalClientsInQueue),
+	)
+
 	for api, value := range httpStats.CurrentS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
