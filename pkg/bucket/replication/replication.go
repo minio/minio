@@ -211,7 +211,7 @@ func (c Config) HasActiveRules(prefix string, recursive bool) bool {
 			}
 			// If recursive, we can skip this rule if it doesn't match the tested prefix or level below prefix
 			// does not match
-			if recursive && !strings.HasPrefix(rule.Filter.Prefix, prefix) && !strings.HasPrefix(prefix, rule.Prefix()) {
+			if recursive && !strings.HasPrefix(rule.Prefix(), prefix) && !strings.HasPrefix(prefix, rule.Prefix()) {
 				continue
 			}
 		}
