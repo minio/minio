@@ -126,7 +126,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 						isSysErrTooManySymlinks(err) {
 						continue
 					}
-					return err
+					return nil, err
 				}
 
 				// Ignore symlinked directories.
