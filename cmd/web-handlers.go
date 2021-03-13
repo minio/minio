@@ -225,10 +225,13 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	reply.UIVersion = Version
 
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+
 	sendEvent(eventArgs{
 		EventName:  event.BucketCreated,
 		BucketName: args.BucketName,
-		ReqParams:  extractReqParams(r),
+		ReqParams:  reqParams,
 		UserAgent:  r.UserAgent(),
 		Host:       handlers.GetSourceIP(r),
 	})
@@ -307,10 +310,13 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		}
 	}
 
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+
 	sendEvent(eventArgs{
 		EventName:  event.BucketRemoved,
 		BucketName: args.BucketName,
-		ReqParams:  extractReqParams(r),
+		ReqParams:  reqParams,
 		UserAgent:  r.UserAgent(),
 		Host:       handlers.GetSourceIP(r),
 	})
@@ -715,6 +721,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		err           error
 		replicateSync bool
 	)
+
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+	sourceIP := handlers.GetSourceIP(r)
+
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
@@ -756,7 +767,10 @@ next:
 			}
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
-				if _, replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName, VersionID: goi.VersionID}, goi, gerr); replicateDel {
+				if _, replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{
+					ObjectName: objectName,
+					VersionID:  goi.VersionID,
+				}, goi, gerr); replicateDel {
 					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 					opts.DeleteMarker = true
 				}
@@ -789,9 +803,9 @@ next:
 				EventName:  eventName,
 				BucketName: args.BucketName,
 				Object:     oi,
-				ReqParams:  extractReqParams(r),
+				ReqParams:  reqParams,
 				UserAgent:  r.UserAgent(),
-				Host:       handlers.GetSourceIP(r),
+				Host:       sourceIP,
 			})
 
 			if replicateDel {
@@ -933,9 +947,9 @@ next:
 					EventName:  event.ObjectRemovedDelete,
 					BucketName: args.BucketName,
 					Object:     objInfo,
-					ReqParams:  extractReqParams(r),
+					ReqParams:  reqParams,
 					UserAgent:  r.UserAgent(),
-					Host:       handlers.GetSourceIP(r),
+					Host:       sourceIP,
 				})
 				if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
 					dv := DeletedObjectVersionInfo{
@@ -1325,12 +1339,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,
 		BucketName:   bucket,
 		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
+		ReqParams:    reqParams,
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
@@ -1511,12 +1528,15 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedGet,
 		BucketName:   bucket,
 		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
+		ReqParams:    reqParams,
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
@@ -1663,6 +1683,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	archive := zip.NewWriter(w)
 	defer archive.Close()
 
+	reqParams := extractReqParams(r)
+	reqParams["accessKey"] = claims.AccessKey
+	respElements := extractRespElements(w)
+
 	for i, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
@@ -1719,8 +1743,8 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				EventName:    event.ObjectAccessedGet,
 				BucketName:   args.BucketName,
 				Object:       info,
-				ReqParams:    extractReqParams(r),
-				RespElements: extractRespElements(w),
+				ReqParams:    reqParams,
+				RespElements: respElements,
 				UserAgent:    r.UserAgent(),
 				Host:         host,
 			})
