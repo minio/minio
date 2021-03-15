@@ -135,10 +135,6 @@ func dateAdd(timePart string, qty float64, t time.Time) (*Value, error) {
 	return FromTimestamp(t.Add(duration)), nil
 }
 
-const (
-	dayInNanoseconds = time.Hour * 24
-)
-
 // dateDiff computes the difference between two times in terms of the
 // `timePart` which can be years, months, days, hours, minutes or
 // seconds. For difference in years, months or days, the time part,
