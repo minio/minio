@@ -146,42 +146,30 @@ const (
 func dateDiff(timePart string, ts1, ts2 time.Time) (*Value, error) {
 	if ts2.Before(ts1) {
 		v, err := dateDiff(timePart, ts2, ts1)
-		v.negate()
+		if err == nil {
+			v.negate()
+		}
 		return v, err
 	}
 
 	duration := ts2.Sub(ts1)
 	y1, m1, d1 := ts1.Date()
 	y2, m2, d2 := ts2.Date()
-	dy, dm := int64(y2-y1), int64(m2-m1)
 
 	switch timePart {
 	case timePartYear:
+		dy := int64(y2 - y1)
 		if m2 > m1 || (m2 == m1 && d2 >= d1) {
 			return FromInt(dy), nil
 		}
 		return FromInt(dy - 1), nil
 	case timePartMonth:
-		months := 12 * dy
-		if m2 >= m1 {
-			months += dm
-		} else {
-			months += 12 + dm
-		}
-		if d2 < d1 {
-			months--
-		}
-		return FromInt(months), nil
+		m1 += time.Month(12 * y1)
+		m2 += time.Month(12 * y2)
+
+		return FromInt(int64(m2 - m1)), nil
 	case timePartDay:
-		// To compute the number of days between two times
-		// using the time package, zero out the time portions
-		// of the timestamps, compute the difference duration
-		// and then divide by the length of a day.
-		d1 := time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)
-		d2 := time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC)
-		diff := d2.Sub(d1)
-		days := diff / dayInNanoseconds
-		return FromInt(int64(days)), nil
+		return FromInt(int64(duration / (24 * time.Hour))), nil
 	case timePartHour:
 		hours := duration / time.Hour
 		return FromInt(int64(hours)), nil
