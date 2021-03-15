@@ -899,7 +899,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	// api call to mark object as deleted. When object is pending transition,
 	// just update the metadata and avoid deleting data dir.
 	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-		if !xlMeta.data.remove(dataDir) {
+		if !xlMeta.data.remove(dataDir) || true {
 			filePath := pathJoin(volumeDir, path, dataDir)
 			if err = checkPathLength(filePath); err != nil {
 				return err

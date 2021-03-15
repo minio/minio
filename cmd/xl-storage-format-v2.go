@@ -942,7 +942,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		case ObjectType:
 			if version.ObjectV2.VersionID == uv && updateVersion {
 				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
-				return "", false, nil
+				return "", len(z.Versions) == 0, nil
 			}
 		}
 	}
