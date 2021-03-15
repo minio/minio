@@ -33,7 +33,7 @@ func NewBucketSSEConfigSys() *BucketSSEConfigSys {
 
 // Get - gets bucket encryption config for the given bucket.
 func (sys *BucketSSEConfigSys) Get(bucket string) (*bucketsse.BucketSSEConfig, error) {
-	if globalIsGateway {
+	if GlobalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized

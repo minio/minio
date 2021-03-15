@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -40,7 +39,7 @@ func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil, cred
 	}
@@ -69,7 +68,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 
-	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	ok, _, err := GlobalIAMSys.IsTempUser(accessKey)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -79,13 +78,13 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
+	if err := GlobalIAMSys.DeleteUser(accessKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other MinIO peers to delete user.
-	for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
+	for _, nerr := range GlobalNotificationSys.DeleteUser(accessKey) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -106,7 +105,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	password := cred.SecretKey
 
-	allCredentials, err := globalIAMSys.ListUsers()
+	allCredentials, err := GlobalIAMSys.ListUsers()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -138,7 +137,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -156,7 +155,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 
 	implicitPerm := name == accessKey
 	if !implicitPerm {
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !GlobalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     accessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.GetUserAdminAction,
@@ -169,7 +168,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userInfo, err := globalIAMSys.GetUserInfo(name)
+	userInfo, err := GlobalIAMSys.GetUserInfo(name)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -210,9 +209,9 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	}
 
 	if updReq.IsRemove {
-		err = globalIAMSys.RemoveUsersFromGroup(updReq.Group, updReq.Members)
+		err = GlobalIAMSys.RemoveUsersFromGroup(updReq.Group, updReq.Members)
 	} else {
-		err = globalIAMSys.AddUsersToGroup(updReq.Group, updReq.Members)
+		err = GlobalIAMSys.AddUsersToGroup(updReq.Group, updReq.Members)
 	}
 
 	if err != nil {
@@ -221,7 +220,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Notify all other MinIO peers to load group.
-	for _, nerr := range globalNotificationSys.LoadGroup(updReq.Group) {
+	for _, nerr := range GlobalNotificationSys.LoadGroup(updReq.Group) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -243,7 +242,7 @@ func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	group := vars["group"]
 
-	gdesc, err := globalIAMSys.GetGroupDescription(group)
+	gdesc, err := GlobalIAMSys.GetGroupDescription(group)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -269,7 +268,7 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := globalIAMSys.ListGroups()
+	groups, err := GlobalIAMSys.ListGroups()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -301,9 +300,9 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 
 	var err error
 	if status == statusEnabled {
-		err = globalIAMSys.SetGroupStatus(group, true)
+		err = GlobalIAMSys.SetGroupStatus(group, true)
 	} else if status == statusDisabled {
-		err = globalIAMSys.SetGroupStatus(group, false)
+		err = GlobalIAMSys.SetGroupStatus(group, false)
 	} else {
 		err = errInvalidArgument
 	}
@@ -313,7 +312,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Notify all other MinIO peers to reload user.
-	for _, nerr := range globalNotificationSys.LoadGroup(group) {
+	for _, nerr := range GlobalNotificationSys.LoadGroup(group) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -342,13 +341,13 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.SetUserStatus(accessKey, madmin.AccountStatus(status)); err != nil {
+	if err := GlobalIAMSys.SetUserStatus(accessKey, madmin.AccountStatus(status)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other MinIO peers to reload user.
-	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
+	for _, nerr := range GlobalNotificationSys.LoadUser(accessKey, false) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -367,7 +366,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -397,7 +396,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		if parentUser == "" {
 			parentUser = cred.AccessKey
 		}
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !GlobalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     parentUser,
 			Groups:          cred.Groups,
 			Action:          iampolicy.CreateUserAdminAction,
@@ -410,7 +409,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if implicitPerm && !globalIAMSys.IsAllowed(iampolicy.Args{
+	if implicitPerm && !GlobalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     accessKey,
 		Groups:          cred.Groups,
 		Action:          iampolicy.CreateUserAdminAction,
@@ -444,13 +443,13 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = globalIAMSys.CreateUser(accessKey, uinfo); err != nil {
+	if err = GlobalIAMSys.CreateUser(accessKey, uinfo); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other Minio peers to reload user
-	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
+	for _, nerr := range GlobalNotificationSys.LoadUser(accessKey, false) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -466,7 +465,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -501,14 +500,14 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		parentUser = cred.ParentUser
 	}
 
-	newCred, err := globalIAMSys.NewServiceAccount(ctx, parentUser, cred.Groups, createReq.Policy)
+	newCred, err := GlobalIAMSys.NewServiceAccount(ctx, parentUser, cred.Groups, createReq.Policy)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other Minio peers to reload user the service account
-	for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
+	for _, nerr := range GlobalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -545,7 +544,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -567,7 +566,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		parentUser = cred.ParentUser
 	}
 
-	serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, parentUser)
+	serviceAccounts, err := GlobalIAMSys.ListServiceAccounts(ctx, parentUser)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -600,7 +599,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -623,7 +622,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	user, err := globalIAMSys.GetServiceAccountParent(ctx, serviceAccount)
+	user, err := GlobalIAMSys.GetServiceAccountParent(ctx, serviceAccount)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -642,7 +641,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
+	err = GlobalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -659,7 +658,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -679,7 +678,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if GlobalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
@@ -692,7 +691,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			rd = true
 		}
 
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if GlobalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.PutObjectAction,
@@ -743,19 +742,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	accountName := cred.AccessKey
-	var policies []string
-	switch globalIAMSys.usersSysType {
-	case MinIOUsersSysType:
-		policies, err = globalIAMSys.PolicyDBGet(accountName, false)
-	case LDAPUsersSysType:
-		parentUser := accountName
-		if cred.ParentUser != "" {
-			parentUser = cred.ParentUser
-		}
-		policies, err = globalIAMSys.PolicyDBGet(parentUser, false, cred.Groups...)
-	default:
-		err = errors.New("should not happen!")
-	}
+	policies, err := GlobalIAMSys.PolicyDBGet(accountName, false)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -764,7 +751,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	acctInfo := madmin.AccountInfo{
 		AccountName: accountName,
-		Policy:      globalIAMSys.GetCombinedPolicy(policies...),
+		Policy:      GlobalIAMSys.GetCombinedPolicy(policies...),
 	}
 
 	for _, bucket := range buckets {
@@ -807,7 +794,7 @@ func (a adminAPIHandlers) InfoCannedPolicyV2(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	policy, err := GlobalIAMSys.InfoPolicy(mux.Vars(r)["name"])
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -834,7 +821,7 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	policy, err := GlobalIAMSys.InfoPolicy(mux.Vars(r)["name"])
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -858,7 +845,7 @@ func (a adminAPIHandlers) ListCannedPoliciesV2(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	policies, err := globalIAMSys.ListPolicies()
+	policies, err := GlobalIAMSys.ListPolicies()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -892,7 +879,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	policies, err := globalIAMSys.ListPolicies()
+	policies, err := GlobalIAMSys.ListPolicies()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -929,13 +916,13 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	policyName := vars["name"]
 
-	if err := globalIAMSys.DeletePolicy(policyName); err != nil {
+	if err := GlobalIAMSys.DeletePolicy(policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other MinIO peers to delete policy
-	for _, nerr := range globalNotificationSys.DeletePolicy(policyName) {
+	for _, nerr := range GlobalNotificationSys.DeletePolicy(policyName) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -981,13 +968,13 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = globalIAMSys.SetPolicy(policyName, *iamPolicy); err != nil {
+	if err = GlobalIAMSys.SetPolicy(policyName, *iamPolicy); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other MinIO peers to reload policy
-	for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
+	for _, nerr := range GlobalNotificationSys.LoadPolicy(policyName) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1012,7 +999,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	isGroup := vars["isGroup"] == "true"
 
 	if !isGroup {
-		ok, _, err := globalIAMSys.IsTempUser(entityName)
+		ok, _, err := GlobalIAMSys.IsTempUser(entityName)
 		if err != nil && err != errNoSuchUser {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -1023,13 +1010,13 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := globalIAMSys.PolicyDBSet(entityName, policyName, isGroup); err != nil {
+	if err := GlobalIAMSys.PolicyDBSet(entityName, policyName, isGroup); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Notify all other MinIO peers to reload policy
-	for _, nerr := range globalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
+	for _, nerr := range GlobalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)

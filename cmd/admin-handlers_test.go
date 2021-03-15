@@ -68,13 +68,13 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 
 	globalEndpoints = mustGetPoolEndpoints(erasureDirs...)
 
-	newAllSubsystems()
+	NewAllSubsystems()
 
 	initAllSubsystems(ctx, objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
-	registerAdminRouter(adminRouter, true, true)
+	RegisterAdminRouter(adminRouter, true, true)
 
 	return &adminErasureTestBed{
 		erasureDirs: erasureDirs,
@@ -91,7 +91,7 @@ func (atb *adminErasureTestBed) TearDown() {
 }
 
 // initTestObjLayer - Helper function to initialize an Erasure-based object
-// layer and set globalObjectAPI.
+// layer and set GlobalObjectAPI.
 func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error) {
 	erasureDirs, err := getRandomDisks(16)
 	if err != nil {
@@ -104,10 +104,10 @@ func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error)
 		return nil, nil, err
 	}
 
-	// Make objLayer available to all internal services via globalObjectAPI.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
+	// Make objLayer available to all internal services via GlobalObjectAPI.
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = objLayer
+	GlobalObjLayerMutex.Unlock()
 	return objLayer, erasureDirs, nil
 }
 
@@ -186,7 +186,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	globalMinioAddr = "127.0.0.1:9000"
+	GlobalMinioAddr = "127.0.0.1:9000"
 
 	var wg sync.WaitGroup
 
@@ -256,7 +256,7 @@ func TestAdminServerInfo(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
+	GlobalMinioAddr = "127.0.0.1:9000"
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}

@@ -119,9 +119,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.Create {
 		o.CurrentCycle = intDataUpdateTracker.current()
-		o.OldestCycle = globalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
+		o.OldestCycle = GlobalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
 		var cache metacache
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+		rpc := GlobalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
 			rpc = nil
 			o.Transient = true
@@ -211,7 +211,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 			// Update master cache with that information.
 			cache.status = scanStateSuccess
 			cache.fileNotFound = true
-			o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
+			o.updateMetacacheListing(cache, GlobalNotificationSys.restClientFromHash(o.Bucket))
 		}()
 		// cache returned not found, entries truncated.
 		return entries, io.EOF

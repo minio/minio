@@ -52,7 +52,7 @@ var defaultEtag = "00000000000000000000000000000000-1"
 
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
-	GatewayUnsupported
+	ObjectLayerUnsupported
 
 	// The count of concurrent calls on FSObjects API
 	activeIOCount int64
@@ -80,7 +80,7 @@ type FSObjects struct {
 	appendFileMapMu sync.Mutex
 
 	// To manage the appendRoutine go-routines
-	nsMutex *nsLockMap
+	nsMutex *NSLockMap
 }
 
 // Represents the background append file.
@@ -163,7 +163,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
-		nsMutex:       newNSLock(false),
+		nsMutex:       NewNSLock(false),
 		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),

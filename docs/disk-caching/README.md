@@ -26,7 +26,7 @@ export MINIO_CACHE_AFTER=3
 export MINIO_CACHE_WATERMARK_LOW=70
 export MINIO_CACHE_WATERMARK_HIGH=90
 
-minio gateway s3
+ming s3
 ```
 
 The `CACHE_WATERMARK` numbers are percentages of `CACHE_QUOTA`. 

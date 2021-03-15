@@ -44,7 +44,7 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func initHelp() {
+func InitHelp() {
 	var kvs = map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
@@ -224,9 +224,9 @@ func initHelp() {
 }
 
 var (
-	// globalServerConfig server config.
-	globalServerConfig   config.Config
-	globalServerConfigMu sync.RWMutex
+	// GlobalServerConfig server config.
+	GlobalServerConfig   config.Config
+	GlobalServerConfigMu sync.RWMutex
 )
 
 func validateConfig(s config.Config, setDriveCounts []int) error {
@@ -283,7 +283,7 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 	}
 
 	{
-		etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+		etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], GlobalRootCAs)
 		if err != nil {
 			return err
 		}
@@ -296,9 +296,9 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 		}
 	}
 	{
-		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
+		kmsCfg, err := crypto.LookupConfig(s, GlobalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
 			&tls.Config{
-				RootCAs: globalRootCAs,
+				RootCAs: GlobalRootCAs,
 			}, defaultDialTimeout)())
 		if err != nil {
 			return err
@@ -323,7 +323,7 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 
 	{
 		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-			globalRootCAs)
+			GlobalRootCAs)
 		if err != nil {
 			return err
 		}
@@ -345,10 +345,10 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
+	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), GlobalNotificationSys.ConfiguredTargetIDs())
 }
 
-func lookupConfigs(s config.Config, setDriveCounts []int) {
+func LookupConfigs(s config.Config, setDriveCounts []int) {
 	ctx := GlobalContext
 
 	var err error
@@ -363,9 +363,9 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
 		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
-			dns.RootCAs(globalRootCAs))
+			dns.RootCAs(GlobalRootCAs))
 		if err != nil {
-			if globalIsGateway {
+			if GlobalIsGateway {
 				logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
 			} else {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
@@ -373,9 +373,9 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		}
 	}
 
-	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], GlobalRootCAs)
 	if err != nil {
-		if globalIsGateway {
+		if GlobalIsGateway {
 			logger.FatalIf(err, "Unable to initialize etcd config")
 		} else {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
@@ -386,7 +386,7 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		if globalEtcdClient == nil {
 			globalEtcdClient, err = etcd.New(etcdCfg)
 			if err != nil {
-				if globalIsGateway {
+				if GlobalIsGateway {
 					logger.FatalIf(err, "Unable to initialize etcd config")
 				} else {
 					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
@@ -403,11 +403,11 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
 					dns.DomainIPs(globalDomainIPs),
-					dns.DomainPort(globalMinioPort),
+					dns.DomainPort(GlobalMinioPort),
 					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
 				)
 				if err != nil {
-					if globalIsGateway {
+					if GlobalIsGateway {
 						logger.FatalIf(err, "Unable to initialize DNS config")
 					} else {
 						logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
@@ -459,7 +459,7 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
-		if globalIsGateway {
+		if GlobalIsGateway {
 			logger.FatalIf(err, "Unable to setup cache")
 		} else {
 			logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
@@ -475,9 +475,9 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		}
 	}
 
-	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
+	kmsCfg, err := crypto.LookupConfig(s, GlobalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
 		&tls.Config{
-			RootCAs: globalRootCAs,
+			RootCAs: GlobalRootCAs,
 		}, defaultDialTimeout)())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
@@ -512,7 +512,7 @@ If you need help to migrate smoothly visit: https://min.io/pricing`
 	globalPolicyOPA = opa.New(opaCfg)
 
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-		globalRootCAs)
+		GlobalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
@@ -566,7 +566,7 @@ If you need help to migrate smoothly visit: https://min.io/pricing`
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), NewGatewayHTTPTransport(), true)
+	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, NewServerConfig(), NewGatewayHTTPTransport(), true)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
@@ -629,11 +629,11 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 
 	// Update all dynamic config values in memory.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-	if globalServerConfig != nil {
+	GlobalServerConfigMu.Lock()
+	defer GlobalServerConfigMu.Unlock()
+	if GlobalServerConfig != nil {
 		for k := range config.SubSystemsDynamic {
-			globalServerConfig[k] = s[k]
+			GlobalServerConfig[k] = s[k]
 		}
 	}
 	return nil
@@ -715,7 +715,7 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 	}, nil
 }
 
-func newServerConfig() config.Config {
+func NewServerConfig() config.Config {
 	return config.New()
 }
 
@@ -723,15 +723,15 @@ func newServerConfig() config.Config {
 // found, otherwise use default parameters
 func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
-	srvCfg := newServerConfig()
+	srvCfg := NewServerConfig()
 
 	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
+	GlobalServerConfigMu.Lock()
+	GlobalServerConfig = srvCfg
+	GlobalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(GlobalContext, objAPI, globalServerConfig)
+	return saveServerConfig(GlobalContext, objAPI, GlobalServerConfig)
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
@@ -747,12 +747,12 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg, objAPI.SetDriveCounts())
+	LookupConfigs(srvCfg, objAPI.SetDriveCounts())
 
 	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
+	GlobalServerConfigMu.Lock()
+	GlobalServerConfig = srvCfg
+	GlobalServerConfigMu.Unlock()
 
 	return nil
 }

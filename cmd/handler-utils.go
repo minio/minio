@@ -218,7 +218,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 			return globalActiveCred
 		}
 		if claims != nil {
-			cred, _ = globalIAMSys.GetUser(claims.AccessKey)
+			cred, _ = GlobalIAMSys.GetUser(claims.AccessKey)
 		}
 	}
 	return cred
@@ -570,7 +570,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 	})
 
 	r.URL.Scheme = "http"
-	if globalIsTLS {
+	if GlobalIsTLS {
 		r.URL.Scheme = "https"
 	}
 

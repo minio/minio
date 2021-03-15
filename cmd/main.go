@@ -87,6 +87,15 @@ VERSION:
   {{.Version}}
 `
 
+var (
+	gatewayCmd = cli.Command{
+		Name:            "gateway",
+		Usage:           "start object storage gateway [DEPRECATED]",
+		Flags:           append(ServerFlags, GlobalFlags...),
+		HideHelpCommand: true,
+	}
+)
+
 func newApp(name string) *cli.App {
 	// Collection of minio commands currently supported are.
 	commands := []cli.Command{}

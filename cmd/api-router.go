@@ -27,39 +27,39 @@ import (
 )
 
 func newHTTPServerFn() *xhttp.Server {
-	globalObjLayerMutex.RLock()
-	defer globalObjLayerMutex.RUnlock()
-	return globalHTTPServer
+	GlobalObjLayerMutex.RLock()
+	defer GlobalObjLayerMutex.RUnlock()
+	return GlobalHTTPServer
 }
 
 func setHTTPServer(h *xhttp.Server) {
-	globalObjLayerMutex.Lock()
-	globalHTTPServer = h
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalHTTPServer = h
+	GlobalObjLayerMutex.Unlock()
 }
 
 func newObjectLayerFn() ObjectLayer {
-	globalObjLayerMutex.RLock()
-	defer globalObjLayerMutex.RUnlock()
-	return globalObjectAPI
+	GlobalObjLayerMutex.RLock()
+	defer GlobalObjLayerMutex.RUnlock()
+	return GlobalObjectAPI
 }
 
-func newCachedObjectLayerFn() CacheObjectLayer {
-	globalObjLayerMutex.RLock()
-	defer globalObjLayerMutex.RUnlock()
-	return globalCacheObjectAPI
+func NewCachedObjectLayerFn() CacheObjectLayer {
+	GlobalObjLayerMutex.RLock()
+	defer GlobalObjLayerMutex.RUnlock()
+	return GlobalCacheObjectAPI
 }
 
 func setCacheObjectLayer(c CacheObjectLayer) {
-	globalObjLayerMutex.Lock()
-	globalCacheObjectAPI = c
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalCacheObjectAPI = c
+	GlobalObjLayerMutex.Unlock()
 }
 
 func setObjectLayer(o ObjectLayer) {
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = o
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = o
+	GlobalObjLayerMutex.Unlock()
 }
 
 // objectAPIHandler implements and provides http handlers for S3 API.
@@ -175,12 +175,12 @@ func rejectUnsupportedAPIs(router *mux.Router) {
 	}
 }
 
-// registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(router *mux.Router) {
+// RegisterAPIRouter - registers S3 compatible APIs.
+func RegisterAPIRouter(router *mux.Router) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
-		CacheAPI:  newCachedObjectLayerFn,
+		CacheAPI:  NewCachedObjectLayerFn,
 	}
 
 	// API Router
@@ -453,8 +453,8 @@ func registerAPIRouter(router *mux.Router) {
 
 }
 
-// corsHandler handler for CORS (Cross Origin Resource Sharing)
-func corsHandler(handler http.Handler) http.Handler {
+// CorsHandler handler for CORS (Cross Origin Resource Sharing)
+func CorsHandler(handler http.Handler) http.Handler {
 	commonS3Headers := []string{
 		xhttp.Date,
 		xhttp.ETag,

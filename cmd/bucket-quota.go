@@ -34,7 +34,7 @@ type BucketQuotaSys struct {
 
 // Get - Get quota configuration.
 func (sys *BucketQuotaSys) Get(bucketName string) (*madmin.BucketQuota, error) {
-	if globalIsGateway {
+	if GlobalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized

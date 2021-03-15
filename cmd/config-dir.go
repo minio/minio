@@ -72,8 +72,10 @@ var (
 	globalConfigDir = defaultConfigDir
 	// Points to current certs directory set by user with --certs-dir
 	globalCertsDir = defaultCertsDir
-	// Points to relative path to certs directory and is <value-of-certs-dir>/CAs
-	globalCertsCADir = defaultCertsCADir
+	// GlobalCertsCADir points to relative path to certs directory and is <value-of-certs-dir>/CAs
+	GlobalCertsCADir = defaultCertsCADir
+	// GlobalCertsDir points to current certs directory set by user with --certs-dir
+	GlobalCertsDir = defaultCertsDir
 )
 
 // Get - returns current directory.

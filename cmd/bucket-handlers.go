@@ -343,7 +343,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		for _, bucketInfo := range bucketsInfo {
-			if globalIAMSys.IsAllowed(iampolicy.Args{
+			if GlobalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
@@ -713,7 +713,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				// Load updated bucket metadata into memory.
-				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
+				GlobalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 				// Make sure to add Location information here only for bucket
 				w.Header().Set(xhttp.Location,
@@ -756,7 +756,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Load updated bucket metadata into memory.
-	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
+	GlobalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Make sure to add Location information here only for bucket
 	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
@@ -907,7 +907,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			return
 		}
 
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !GlobalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Action:          iampolicy.PutObjectAction,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
@@ -1234,7 +1234,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
+	GlobalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {

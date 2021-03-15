@@ -72,7 +72,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 	config.SetRegion(globalServerRegion)
-	if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+	if err = config.Validate(globalServerRegion, GlobalNotificationSys.targetList); err != nil {
 		arnErr, ok := err.(*event.ErrARNNotFound)
 		if ok {
 			for i, queue := range config.QueueList {
@@ -144,7 +144,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	config, err := event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerRegion, globalNotificationSys.targetList)
+	config, err := event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerRegion, GlobalNotificationSys.targetList)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		if event.IsEventError(err) {
@@ -166,7 +166,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	rulesMap := config.ToRulesMap()
-	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
+	GlobalNotificationSys.AddRulesMap(bucketName, rulesMap)
 
 	writeSuccessResponseHeadersOnly(w)
 }

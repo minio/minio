@@ -105,7 +105,7 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 	return data, err
 }
 
-func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
+func MigrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
 	encrypted, err := checkBackendEtcdEncrypted(ctx, client)
 	if err != nil {
 		return err

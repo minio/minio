@@ -378,8 +378,8 @@ type PostResponse struct {
 	Location string
 }
 
-// returns "https" if the tls boolean is true, "http" otherwise.
-func getURLScheme(tls bool) string {
+// GetURLScheme returns "https" if the tls boolean is true, "http" otherwise.
+func GetURLScheme(tls bool) string {
 	if tls {
 		return httpsScheme
 	}
@@ -394,7 +394,7 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	}
 	proto := handlers.GetSourceScheme(r)
 	if proto == "" {
-		proto = getURLScheme(globalIsTLS)
+		proto = GetURLScheme(GlobalIsTLS)
 	}
 	u := &url.URL{
 		Host:   r.Host,

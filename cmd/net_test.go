@@ -41,7 +41,7 @@ func TestMustSplitHostPort(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		host, port := mustSplitHostPort(testCase.hostPort)
+		host, port := MustSplitHostPort(testCase.hostPort)
 		if testCase.expectedHost != host {
 			t.Fatalf("host: expected = %v, got = %v", testCase.expectedHost, host)
 		}
@@ -103,7 +103,7 @@ func TestSortIPs(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		gotIPList := sortIPs(testCase.ipList)
+		gotIPList := SortIPs(testCase.ipList)
 		if !reflect.DeepEqual(testCase.sortedIPList, gotIPList) {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.sortedIPList, gotIPList)
 		}
@@ -155,9 +155,9 @@ func TestGetHostIP(t *testing.T) {
 
 // Tests finalize api endpoints.
 func TestGetAPIEndpoints(t *testing.T) {
-	host, port := globalMinioHost, globalMinioAddr
+	host, port := GlobalMinioHost, GlobalMinioAddr
 	defer func() {
-		globalMinioHost, globalMinioAddr = host, port
+		GlobalMinioHost, GlobalMinioAddr = host, port
 	}()
 	testCases := []struct {
 		host, port     string
@@ -169,8 +169,8 @@ func TestGetAPIEndpoints(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		globalMinioHost, globalMinioPort = testCase.host, testCase.port
-		apiEndpoints := getAPIEndpoints()
+		GlobalMinioHost, GlobalMinioPort = testCase.host, testCase.port
+		apiEndpoints := GetAPIEndpoints()
 		apiEndpointSet := set.CreateStringSet(apiEndpoints...)
 		if !apiEndpointSet.Contains(testCase.expectedResult) {
 			t.Fatalf("test %d: expected: Found, got: Not Found", i+1)
@@ -219,7 +219,7 @@ func TestCheckPortAvailability(t *testing.T) {
 			continue
 		}
 
-		err := checkPortAvailability(testCase.host, testCase.port)
+		err := CheckPortAvailability(testCase.host, testCase.port)
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
@@ -321,7 +321,7 @@ func TestSameLocalAddrs(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
+			sameAddr, err := SameLocalAddrs(testCase.addr1, testCase.addr2)
 			if testCase.expectedErr != nil && err == nil {
 				t.Errorf("should fail but succeeded")
 			}

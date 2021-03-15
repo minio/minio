@@ -25,12 +25,12 @@ Example 1: Start MinIO instance on a shared backend mounted and available at `/p
 
 On linux server1
 ```shell
-minio gateway nas /path/to/nfs-volume
+ming nas /path/to/nfs-volume
 ```
 
 On linux server2
 ```shell
-minio gateway nas /path/to/nfs-volume
+ming nas /path/to/nfs-volume
 ```
 
 ### Windows 2012 Server

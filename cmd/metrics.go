@@ -186,7 +186,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects gateway specific metrics for MinIO instance in Prometheus specific format
 // and sends to given channel
 func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
-	if !globalIsGateway || (globalGatewayName != S3BackendGateway && globalGatewayName != AzureBackendGateway && globalGatewayName != GCSBackendGateway) {
+	if !GlobalIsGateway || (GlobalGatewayName != "s3" && GlobalGatewayName != "azure" && GlobalGatewayName != "gcs") {
 		return
 	}
 
@@ -203,16 +203,16 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "bytes_received"),
-			"Total number of bytes received by current MinIO Gateway "+globalGatewayName+" backend",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "bytes_received"),
+			"Total number of bytes received by current MinIO Gateway "+GlobalGatewayName+" backend",
 			nil, nil),
 		prometheus.CounterValue,
 		float64(m.GetBytesReceived()),
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "bytes_sent"),
-			"Total number of bytes sent by current MinIO Gateway to "+globalGatewayName+" backend",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "bytes_sent"),
+			"Total number of bytes sent by current MinIO Gateway to "+GlobalGatewayName+" backend",
 			nil, nil),
 		prometheus.CounterValue,
 		float64(m.GetBytesSent()),
@@ -220,8 +220,8 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	s := m.GetRequests()
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
-			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "requests"),
+			"Total number of requests made to "+GlobalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
 		float64(atomic.LoadUint64(&s.Get)),
@@ -229,8 +229,8 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
-			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "requests"),
+			"Total number of requests made to "+GlobalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
 		float64(atomic.LoadUint64(&s.Head)),
@@ -238,8 +238,8 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
-			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "requests"),
+			"Total number of requests made to "+GlobalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
 		float64(atomic.LoadUint64(&s.Put)),
@@ -247,8 +247,8 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
-			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			prometheus.BuildFQName(gatewayNamespace, GlobalGatewayName, "requests"),
+			"Total number of requests made to "+GlobalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
 		float64(atomic.LoadUint64(&s.Post)),
@@ -259,7 +259,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects cache metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
-	cacheObjLayer := newCachedObjectLayerFn()
+	cacheObjLayer := NewCachedObjectLayerFn()
 	// Service not initialized yet
 	if cacheObjLayer == nil {
 		return
@@ -439,7 +439,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	if globalIsGateway {
+	if GlobalIsGateway {
 		return
 	}
 
@@ -533,7 +533,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	if globalIsGateway {
+	if GlobalIsGateway {
 		return
 	}
 

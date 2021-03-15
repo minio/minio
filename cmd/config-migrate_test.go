@@ -43,9 +43,9 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 	globalConfigDir = &ConfigDir{path: rootPath}
 
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = objLayer
+	GlobalObjLayerMutex.Unlock()
 
 	// Create a V1 config json file and store it
 	configJSON := "{ \"version\":\"1\", \"accessKeyId\":\"abcde\", \"secretAccessKey\":\"abcdefgh\"}"
@@ -220,12 +220,12 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
+	caccessKey := GlobalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
 	if caccessKey != accessKey {
 		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
 	}
 
-	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
+	csecretKey := GlobalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
 	if csecretKey != secretKey {
 		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}

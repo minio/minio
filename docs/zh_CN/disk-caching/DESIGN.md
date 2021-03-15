@@ -5,7 +5,7 @@
 ## 命令行
 
 ```
-minio gateway <name> -h
+ming <name> -h
 ...
 ...
   CACHE:
@@ -30,7 +30,7 @@ minio gateway <name> -h
      $ export MINIO_CACHE_WATERMARK_LOW=70
      $ export MINIO_CACHE_WATERMARK_HIGH=90
 
-     $ minio gateway s3
+     $ ming s3
 ```
 
 ### 在Docker容器上运行具有缓存的MinIO网关

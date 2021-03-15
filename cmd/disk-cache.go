@@ -585,7 +585,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 }
 
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
-	logStartupMessage(color.Blue("Cache migration initiated ...."))
+	LogStartupMessage(color.Blue("Cache migration initiated ...."))
 
 	g := errgroup.WithNErrs(len(c.cache))
 	for index, dc := range c.cache {
@@ -616,7 +616,7 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	c.migMutex.Lock()
 	defer c.migMutex.Unlock()
 	c.migrating = false
-	logStartupMessage(color.Blue("Cache migration completed successfully."))
+	LogStartupMessage(color.Blue("Cache migration completed successfully."))
 }
 
 // PutObject - caches the uploaded object for single Put operations
@@ -745,8 +745,8 @@ func (c *cacheObjects) queueWritebackRetry(oi ObjectInfo) {
 	}
 }
 
-// Returns cacheObjects for use by Server.
-func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjectLayer, error) {
+// NewServerCacheObjects returns cacheObjects for use by Server.
+func NewServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjectLayer, error) {
 	// list of disk caches for cache "drives" specified in config.json or MINIO_CACHE_DRIVES env var.
 	cache, migrateSw, err := newCache(config)
 	if err != nil {

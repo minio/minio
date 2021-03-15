@@ -40,8 +40,8 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Set new region and verify.
-	config.SetRegion(globalServerConfig, "us-west-1")
-	region, err := config.LookupRegion(globalServerConfig[config.RegionSubSys][config.Default])
+	config.SetRegion(GlobalServerConfig, "us-west-1")
+	region, err := config.LookupRegion(GlobalServerConfig[config.RegionSubSys][config.Default])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting region `us-west-1` found %s", globalServerRegion)
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
+	if err := saveServerConfig(context.Background(), objLayer, GlobalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 
