@@ -1,4 +1,4 @@
-// +build !windows,!darwin
+// +build !windows,!darwin,!freebsd
 
 /*
  * MinIO Cloud Storage, (C) 2021 MinIO, Inc.
