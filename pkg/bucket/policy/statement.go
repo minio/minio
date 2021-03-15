@@ -33,6 +33,26 @@ type Statement struct {
 	Conditions condition.Functions `json:"Condition,omitempty"`
 }
 
+// Equals checks if two statements are equal
+func (statement Statement) Equals(st Statement) bool {
+	if statement.Effect != st.Effect {
+		return false
+	}
+	if !statement.Principal.Equals(st.Principal) {
+		return false
+	}
+	if !statement.Actions.Equals(st.Actions) {
+		return false
+	}
+	if !statement.Resources.Equals(st.Resources) {
+		return false
+	}
+	if !statement.Conditions.Equals(st.Conditions) {
+		return false
+	}
+	return true
+}
+
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (statement Statement) IsAllowed(args Args) bool {
 	check := func() bool {
@@ -141,6 +161,12 @@ func (statement Statement) Validate(bucketName string) error {
 	}
 
 	return statement.Resources.Validate(bucketName)
+}
+
+// Clone clones Statement structure
+func (statement Statement) Clone() Statement {
+	return NewStatement(statement.Effect, statement.Principal.Clone(),
+		statement.Actions.Clone(), statement.Resources.Clone(), statement.Conditions.Clone())
 }
 
 // NewStatement - creates new statement.
