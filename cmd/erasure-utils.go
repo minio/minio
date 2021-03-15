@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/klauspost/reedsolomon"
@@ -46,13 +47,13 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
-		logger.LogIf(ctx, reedsolomon.ErrTooFewShards)
+		logger.LogIf(ctx, fmt.Errorf("diskBlocks(%d)/dataBlocks(%d) - %w", len(enBlocks), dataBlocks, reedsolomon.ErrTooFewShards))
 		return 0, reedsolomon.ErrTooFewShards
 	}
 
 	// Do we have enough data?
 	if int64(getDataBlockLen(enBlocks, dataBlocks)) < length {
-		logger.LogIf(ctx, reedsolomon.ErrShortData)
+		logger.LogIf(ctx, fmt.Errorf("getDataBlockLen(enBlocks, dataBlocks)(%d)/length(%d) - %w", getDataBlockLen(enBlocks, dataBlocks), length, reedsolomon.ErrShortData))
 		return 0, reedsolomon.ErrShortData
 	}
 
