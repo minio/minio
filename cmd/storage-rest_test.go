@@ -416,9 +416,9 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 }
 
 func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRESTClient, config.Config, string) {
-	prevHost, prevPort := globalMinioHost, globalMinioPort
+	prevHost, prevPort := GlobalMinioHost, GlobalMinioPort
 	defer func() {
-		globalMinioHost, globalMinioPort = prevHost, prevPort
+		GlobalMinioHost, GlobalMinioPort = prevHost, prevPort
 	}()
 
 	endpointPath, err := ioutil.TempDir("", ".TestStorageREST.")
@@ -435,7 +435,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	}
 	url.Path = endpointPath
 
-	globalMinioHost, globalMinioPort = mustSplitHostPort(url.Host)
+	GlobalMinioHost, GlobalMinioPort = MustSplitHostPort(url.Host)
 
 	endpoint, err := NewEndpoint(url.String())
 	if err != nil {
@@ -450,9 +450,9 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 		Endpoints: Endpoints{endpoint},
 	}})
 
-	prevGlobalServerConfig := globalServerConfig
-	globalServerConfig = newServerConfig()
-	lookupConfigs(globalServerConfig, nil)
+	prevGlobalServerConfig := GlobalServerConfig
+	GlobalServerConfig = NewServerConfig()
+	LookupConfigs(GlobalServerConfig, nil)
 
 	restClient := newStorageRESTClient(endpoint, false)
 
@@ -463,7 +463,7 @@ func TestStorageRESTClientDiskInfo(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -474,7 +474,7 @@ func TestStorageRESTClientMakeVol(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -485,7 +485,7 @@ func TestStorageRESTClientListVols(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -496,7 +496,7 @@ func TestStorageRESTClientStatVol(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -507,7 +507,7 @@ func TestStorageRESTClientDeleteVol(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -518,7 +518,7 @@ func TestStorageRESTClientCheckFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -529,7 +529,7 @@ func TestStorageRESTClientListDir(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -540,7 +540,7 @@ func TestStorageRESTClientReadAll(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -551,7 +551,7 @@ func TestStorageRESTClientReadFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -562,7 +562,7 @@ func TestStorageRESTClientAppendFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -573,7 +573,7 @@ func TestStorageRESTClientDeleteFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 
@@ -584,7 +584,7 @@ func TestStorageRESTClientRenameFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
-		globalServerConfig = prevGlobalServerConfig
+		GlobalServerConfig = prevGlobalServerConfig
 	}()
 	defer os.RemoveAll(endpointPath)
 

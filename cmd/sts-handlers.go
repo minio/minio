@@ -67,8 +67,8 @@ const (
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
 type stsAPIHandlers struct{}
 
-// registerSTSRouter - registers AWS STS compatible APIs.
-func registerSTSRouter(router *mux.Router) {
+// RegisterSTSRouter - registers AWS STS compatible APIs.
+func RegisterSTSRouter(router *mux.Router) {
 	// Initialize STS.
 	sts := &stsAPIHandlers{}
 
@@ -206,7 +206,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
+	policies, err := GlobalIAMSys.PolicyDBGet(user.AccessKey, false)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
@@ -235,13 +235,13 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+	if err = GlobalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
 
 	// Notify all other MinIO peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+	for _, nerr := range GlobalNotificationSys.LoadUser(cred.AccessKey, true) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -328,7 +328,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	var policyName string
 	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
 	if ok {
-		policyName = globalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
+		policyName = GlobalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
 	}
 
 	if policyName == "" && globalPolicyOPA == nil {
@@ -376,13 +376,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+	if err = GlobalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
 
 	// Notify all other MinIO peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+	for _, nerr := range GlobalNotificationSys.LoadUser(cred.AccessKey, true) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -498,7 +498,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
+	ldapPolicies, _ := GlobalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
 	if len(ldapPolicies) == 0 {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
@@ -534,13 +534,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups
 	// mapping.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, ""); err != nil {
+	if err = GlobalIAMSys.SetTempUser(cred.AccessKey, cred, ""); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
 
 	// Notify all other MinIO peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+	for _, nerr := range GlobalNotificationSys.LoadUser(cred.AccessKey, true) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)

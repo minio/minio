@@ -41,8 +41,8 @@ const (
 	prometheusPublic prometheusAuthType = "public"
 )
 
-// registerMetricsRouter - add handler functions for metrics.
-func registerMetricsRouter(router *mux.Router) {
+// RegisterMetricsRouter - add handler functions for metrics.
+func RegisterMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	authType := strings.ToLower(os.Getenv(EnvPrometheusAuthType))

@@ -168,7 +168,7 @@ func shouldProxy() bool {
 	if newObjectLayerFn() == nil {
 		return true
 	}
-	return !globalIAMSys.Initialized()
+	return !GlobalIAMSys.Initialized()
 }
 
 // Fetch redirect location if urlPath satisfies certain
@@ -489,7 +489,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 			}
 			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
 				r.URL.Scheme = "http"
-				if globalIsTLS {
+				if GlobalIsTLS {
 					r.URL.Scheme = "https"
 				}
 				r.URL.Host = getHostFromSrv(sr)
@@ -544,7 +544,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 		}
 		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
 			r.URL.Scheme = "http"
-			if globalIsTLS {
+			if GlobalIsTLS {
 				r.URL.Scheme = "https"
 			}
 			r.URL.Host = getHostFromSrv(sr)
@@ -582,29 +582,29 @@ func addSecurityHeaders(h http.Handler) http.Handler {
 	})
 }
 
-// criticalErrorHandler handles critical server failures caused by
+// SetCriticalErrorHandler handles critical server failures caused by
 // `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
 //
 // It should be always the first / highest HTTP handler.
-type criticalErrorHandler struct{ handler http.Handler }
-
-func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if err := recover(); err == logger.ErrCritical { // handle
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
-			return
-		} else if err != nil {
-			panic(err) // forward other panic calls
-		}
-	}()
-	h.handler.ServeHTTP(w, r)
+func SetCriticalErrorHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err == logger.ErrCritical { // handle
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+				return
+			} else if err != nil {
+				panic(err) // forward other panic calls
+			}
+		}()
+		h.ServeHTTP(w, r)
+	})
 }
 
 // sseTLSHandler enforces certain rules for SSE requests which are made / must be made over TLS.
 func setSSETLSHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Deny SSE-C requests if not made over TLS
-		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+		if !GlobalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 			if r.Method == http.MethodHead {
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {

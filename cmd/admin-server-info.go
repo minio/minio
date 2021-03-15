@@ -71,7 +71,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	runtime.ReadMemStats(&props.MemStats)
 
 	objLayer := newObjectLayerFn()
-	if objLayer != nil && !globalIsGateway {
+	if objLayer != nil && !GlobalIsGateway {
 		// only need Disks information in server mode.
 		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
 		props.State = string(madmin.ItemOnline)

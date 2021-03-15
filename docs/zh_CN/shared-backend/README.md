@@ -35,7 +35,7 @@ MinIO共享模式是为了解决在真实场景中存在的一些问题，而且
 ```sh
 export MINIO_ROOT_USER=<ACCESS_KEY>
 export MINIO_ROOT_PASSWORD=<SECRET_KEY>
-minio gateway nas /path/to/nfs-volume
+ming nas /path/to/nfs-volume
 ```
 
 #### MinIO shared mode on Windows 2012 Server

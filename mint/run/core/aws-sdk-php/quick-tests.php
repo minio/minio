@@ -310,7 +310,7 @@ function testListMultipartUploads($s3Client, $params) {
         }
 
         // ListMultipartUploads and ListParts may return empty
-        // responses in the case of minio gateway gcs and minio server
+        // responses in the case of ming gcs and minio server
         // FS mode. So, the following tests don't make assumptions on
         // result response.
         $paginator = $s3Client->getPaginator('ListMultipartUploads',

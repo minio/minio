@@ -16,33 +16,34 @@
 
 package cmd
 
-type gatewaySSE []string
+// GatewaySSE captures gateway configuration for SSE types
+type GatewaySSE []string
 
 const (
 	// GatewaySSES3 is set when SSE-S3 encryption needed on both gateway and backend
-	gatewaySSES3 = "S3"
+	GatewaySSES3 = "S3"
 	// GatewaySSEC is set when SSE-C encryption needed on both gateway and backend
-	gatewaySSEC = "C"
+	GatewaySSEC = "C"
 )
 
-func (sse gatewaySSE) SSES3() bool {
+func (sse GatewaySSE) SSES3() bool {
 	for _, v := range sse {
-		if v == gatewaySSES3 {
+		if v == GatewaySSES3 {
 			return true
 		}
 	}
 	return false
 }
 
-func (sse gatewaySSE) SSEC() bool {
+func (sse GatewaySSE) SSEC() bool {
 	for _, v := range sse {
-		if v == gatewaySSEC {
+		if v == GatewaySSEC {
 			return true
 		}
 	}
 	return false
 }
 
-func (sse gatewaySSE) IsSet() bool {
+func (sse GatewaySSE) IsSet() bool {
 	return sse.SSES3() || sse.SSEC()
 }

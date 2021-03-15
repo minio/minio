@@ -44,9 +44,9 @@ type RWLocker interface {
 	RUnlock()
 }
 
-// newNSLock - return a new name space lock map.
-func newNSLock(isDistErasure bool) *nsLockMap {
-	nsMutex := nsLockMap{
+// NewNSLock - return a new name space lock map.
+func NewNSLock(isDistErasure bool) *NSLockMap {
+	nsMutex := NSLockMap{
 		isDistErasure: isDistErasure,
 	}
 	if isDistErasure {
@@ -62,9 +62,9 @@ type nsLock struct {
 	*lsync.LRWMutex
 }
 
-// nsLockMap - namespace lock map, provides primitives to Lock,
+// NSLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
-type nsLockMap struct {
+type NSLockMap struct {
 	// Indicates if namespace is part of a distributed setup.
 	isDistErasure bool
 	lockMap       map[string]*nsLock
@@ -72,7 +72,7 @@ type nsLockMap struct {
 }
 
 // Lock the namespace resource.
-func (n *nsLockMap) lock(ctx context.Context, volume string, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
+func (n *NSLockMap) lock(ctx context.Context, volume string, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
 	resource := pathJoin(volume, path)
 
 	n.lockMapMutex.Lock()
@@ -112,7 +112,7 @@ func (n *nsLockMap) lock(ctx context.Context, volume string, path string, lockSo
 }
 
 // Unlock the namespace resource.
-func (n *nsLockMap) unlock(volume string, path string, readLock bool) {
+func (n *NSLockMap) unlock(volume string, path string, readLock bool) {
 	resource := pathJoin(volume, path)
 
 	n.lockMapMutex.Lock()
@@ -185,16 +185,16 @@ func (di *distLockInstance) RUnlock() {
 
 // localLockInstance - frontend/top-level interface for namespace locks.
 type localLockInstance struct {
-	ns     *nsLockMap
+	ns     *NSLockMap
 	volume string
 	paths  []string
 	opsID  string
 }
 
 // NewNSLock - returns a lock instance for a given volume and
-// path. The returned lockInstance object encapsulates the nsLockMap,
+// path. The returned lockInstance object encapsulates the NSLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(lockers func() ([]dsync.NetLocker, string), volume string, paths ...string) RWLocker {
+func (n *NSLockMap) NewNSLock(lockers func() ([]dsync.NetLocker, string), volume string, paths ...string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistErasure {
 		drwmutex := dsync.NewDRWMutex(&dsync.Dsync{

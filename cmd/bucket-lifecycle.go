@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/s3select"
 )
 
@@ -48,7 +49,7 @@ type LifecycleSys struct{}
 
 // Get - gets lifecycle config associated to a given bucket name.
 func (sys *LifecycleSys) Get(bucketName string) (lc *lifecycle.Lifecycle, err error) {
-	if globalIsGateway {
+	if GlobalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized
@@ -205,7 +206,7 @@ func validateTransitionDestination(ctx context.Context, bucket string, targetLab
 	if found, _ := clnt.BucketExists(ctx, arn.Bucket); !found {
 		return false, "", BucketRemoteDestinationNotFound{Bucket: arn.Bucket}
 	}
-	sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
+	sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), GlobalMinioPort)
 	return sameTarget, arn.Bucket, nil
 }
 
@@ -437,6 +438,71 @@ func getLifecycleTransitionTargetArn(ctx context.Context, lc *lifecycle.Lifecycl
 	return nil
 }
 
+// minioGoToMinIOErr converts MinIO client errors to minio object layer errors.
+func minioGoToMinIOErr(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
+
+	bucket := ""
+	object := ""
+	if len(params) >= 1 {
+		bucket = params[0]
+	}
+	if len(params) == 2 {
+		object = params[1]
+	}
+
+	if xnet.IsNetworkOrHostDown(err, false) {
+		return BackendDown{}
+	}
+
+	minioErr, ok := err.(miniogo.ErrorResponse)
+	if !ok {
+		// We don't interpret non MinIO errors. As minio errors will
+		// have StatusCode to help to convert to object errors.
+		return err
+	}
+
+	switch minioErr.Code {
+	case "BucketAlreadyOwnedByYou":
+		err = BucketAlreadyOwnedByYou{}
+	case "BucketNotEmpty":
+		err = BucketNotEmpty{}
+	case "NoSuchBucketPolicy":
+		err = BucketPolicyNotFound{}
+	case "NoSuchLifecycleConfiguration":
+		err = BucketLifecycleNotFound{}
+	case "InvalidBucketName":
+		err = BucketNameInvalid{Bucket: bucket}
+	case "InvalidPart":
+		err = InvalidPart{}
+	case "NoSuchBucket":
+		err = BucketNotFound{Bucket: bucket}
+	case "NoSuchKey":
+		if object != "" {
+			err = ObjectNotFound{Bucket: bucket, Object: object}
+		} else {
+			err = BucketNotFound{Bucket: bucket}
+		}
+	case "XMinioInvalidObjectName":
+		err = ObjectNameInvalid{}
+	case "AccessDenied":
+		err = PrefixAccessDenied{
+			Bucket: bucket,
+			Object: object,
+		}
+	case "XAmzContentSHA256Mismatch":
+		err = hash.SHA256Mismatch{}
+	case "NoSuchUpload":
+		err = InvalidUploadID{}
+	case "EntityTooSmall":
+		err = PartTooSmall{}
+	}
+
+	return err
+}
+
 // getTransitionedObjectReader returns a reader from the transitioned tier.
 func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, oi ObjectInfo, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var lc *lifecycle.Lifecycle
@@ -462,14 +528,14 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 	}
 	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
 	if err != nil {
-		return nil, ErrorRespToObjectError(err, bucket, object)
+		return nil, minioGoToMinIOErr(err, bucket, object)
 	}
 	gopts := miniogo.GetObjectOptions{VersionID: opts.VersionID}
 
 	// get correct offsets for encrypted object
 	if off >= 0 && length >= 0 {
 		if err := gopts.SetRange(off, off+length-1); err != nil {
-			return nil, ErrorRespToObjectError(err, bucket, object)
+			return nil, minioGoToMinIOErr(err, bucket, object)
 		}
 	}
 

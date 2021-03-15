@@ -20,13 +20,9 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
 
@@ -54,6 +50,27 @@ var (
 
 	// IsStringEqual is string equal.
 	IsStringEqual = isStringEqual
+
+	// GlobalActiveCred exported currently active root credential
+	GlobalActiveCred = &globalActiveCred
+
+	// GlobalEtcdClient exposed etcd client
+	GlobalEtcdClient = globalEtcdClient
+
+	// GlobalCacheConfig exposed cache config
+	GlobalCacheConfig = &globalCacheConfig
+
+	// GlobalDNSConfig exposed DNS config
+	GlobalDNSConfig = globalDNSConfig
+
+	// GlobalBrowserEnabled browser enabled
+	GlobalBrowserEnabled = globalBrowserEnabled
+
+	// InitFederatorBackend initialize federated backend
+	InitFederatorBackend = initFederatorBackend
+
+	// ErrUnexpected error unexpected
+	ErrUnexpected = errUnexpected
 )
 
 // FromMinioClientMetadata converts minio metadata to map[string]string
@@ -338,47 +355,6 @@ func ErrorRespToObjectError(err error, params ...string) error {
 // ComputeCompleteMultipartMD5 calculates MD5 ETag for complete multipart responses
 func ComputeCompleteMultipartMD5(parts []CompletePart) string {
 	return getCompleteMultipartMD5(parts)
-}
-
-// parse gateway sse env variable
-func parseGatewaySSE(s string) (gatewaySSE, error) {
-	l := strings.Split(s, ";")
-	var gwSlice gatewaySSE
-	for _, val := range l {
-		v := strings.ToUpper(val)
-		switch v {
-		case "":
-			continue
-		case gatewaySSES3:
-			fallthrough
-		case gatewaySSEC:
-			gwSlice = append(gwSlice, v)
-			continue
-		default:
-			return nil, config.ErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
-		}
-	}
-	return gwSlice, nil
-}
-
-// handle gateway env vars
-func gatewayHandleEnvVars() {
-	// Handle common env vars.
-	handleCommonEnvVars()
-
-	if !globalActiveCred.IsValid() {
-		logger.Fatal(config.ErrInvalidCredentials(nil),
-			"Unable to validate credentials inherited from the shell environment")
-	}
-
-	gwsseVal := env.Get("MINIO_GATEWAY_SSE", "")
-	if gwsseVal != "" {
-		var err error
-		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
-		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
-		}
-	}
 }
 
 // shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics

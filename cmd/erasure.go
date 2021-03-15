@@ -48,7 +48,7 @@ type partialOperation struct {
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
-	GatewayUnsupported
+	ObjectLayerUnsupported
 
 	setDriveCount      int
 	defaultParityCount int
@@ -67,7 +67,7 @@ type erasureObjects struct {
 	getEndpoints func() []string
 
 	// Locker mutex map.
-	nsMutex *nsLockMap
+	nsMutex *NSLockMap
 
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap

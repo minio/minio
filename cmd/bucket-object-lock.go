@@ -34,7 +34,7 @@ type BucketObjectLockSys struct{}
 
 // Get - Get retention configuration.
 func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, err error) {
-	if globalIsGateway {
+	if GlobalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return r, errServerNotInitialized

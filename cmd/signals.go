@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-func handleSignals() {
+func HandleSignals() {
 	// Custom exit function
 	exit := func(success bool) {
 		// If global profiler is set stop before we exit.
@@ -49,8 +49,8 @@ func handleSignals() {
 		// send signal to various go-routines that they need to quit.
 		cancelGlobalContext()
 
-		if globalNotificationSys != nil {
-			globalNotificationSys.RemoveAllRemoteTargets()
+		if GlobalNotificationSys != nil {
+			GlobalNotificationSys.RemoveAllRemoteTargets()
 		}
 
 		if httpServer := newHTTPServerFn(); httpServer != nil {
@@ -70,9 +70,9 @@ func handleSignals() {
 
 	for {
 		select {
-		case <-globalHTTPServerErrorCh:
+		case <-GlobalHTTPServerErrorCh:
 			exit(stopProcess())
-		case osSignal := <-globalOSSignalCh:
+		case osSignal := <-GlobalOSSignalCh:
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:

@@ -39,7 +39,7 @@ import (
 )
 
 type erasureServerPools struct {
-	GatewayUnsupported
+	ObjectLayerUnsupported
 
 	serverPools []*erasureSets
 
@@ -1665,7 +1665,7 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
 	}
 
-	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+	diskIDs := GlobalNotificationSys.GetLocalDiskIDs(ctx)
 	diskIDs = append(diskIDs, getLocalDiskIDs(z))
 
 	for _, localDiskIDs := range diskIDs {
@@ -1702,7 +1702,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
 	}
 
-	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+	diskIDs := GlobalNotificationSys.GetLocalDiskIDs(ctx)
 	if !opts.Maintenance {
 		diskIDs = append(diskIDs, getLocalDiskIDs(z))
 	}

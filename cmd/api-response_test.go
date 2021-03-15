@@ -109,15 +109,15 @@ func TestObjectLocation(t *testing.T) {
 	}
 }
 
-// Tests getURLScheme function behavior.
+// Tests GetURLScheme function behavior.
 func TestGetURLScheme(t *testing.T) {
 	tls := false
-	gotScheme := getURLScheme(tls)
+	gotScheme := GetURLScheme(tls)
 	if gotScheme != httpScheme {
 		t.Errorf("Expected %s, got %s", httpScheme, gotScheme)
 	}
 	tls = true
-	gotScheme = getURLScheme(tls)
+	gotScheme = GetURLScheme(tls)
 	if gotScheme != httpsScheme {
 		t.Errorf("Expected %s, got %s", httpsScheme, gotScheme)
 	}

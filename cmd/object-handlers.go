@@ -813,7 +813,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	// and hence expected to have same credentials.
 	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
-		Secure:    globalIsTLS,
+		Secure:    GlobalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
 	if err != nil {
@@ -1232,7 +1232,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if globalIsGateway {
+		if GlobalIsGateway {
 			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 		}
 	}

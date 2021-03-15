@@ -901,7 +901,7 @@ func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
 }
 
 // CleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
-// encryption metadata that was sent by minio gateway
+// encryption metadata that was sent by ming
 func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
 	var newMeta = make(map[string]string, len(metadata))
 	for k, v := range metadata {
