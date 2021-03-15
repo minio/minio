@@ -108,7 +108,7 @@ var (
 	errInvalidRuleStatus                    = Errorf("Status must be set to either Enabled or Disabled")
 	errDeleteMarkerReplicationMissing       = Errorf("DeleteMarkerReplication must be specified")
 	errPriorityMissing                      = Errorf("Priority must be specified")
-	errInvalidDeleteMarkerReplicationStatus = Errorf("Delete marker replication is currently not supported")
+	errInvalidDeleteMarkerReplicationStatus = Errorf("Delete marker replication status is invalid")
 	errDestinationSourceIdentical           = Errorf("Destination bucket cannot be the same as the source bucket.")
 	errDeleteReplicationMissing             = Errorf("Delete replication must be specified")
 	errInvalidDeleteReplicationStatus       = Errorf("Delete replication is either enable|disable")

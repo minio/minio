@@ -186,6 +186,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		UserTags:     oi.UserTags,
 		DeleteMarker: oi.DeleteMarker,
 		VersionID:    dobj.VersionID,
+		OpType:       replication.DeleteReplicationType,
 	}
 	replicate = rcfg.Replicate(opts)
 	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
