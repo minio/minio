@@ -37,6 +37,11 @@ func TestParseMasterKey(t *testing.T) {
 		{
 			envValue:      "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574",
 			expectedKeyID: "my-minio-key",
+			success:       false,
+		},
+		{
+			envValue:      "my-minio-key:/NOfnXyb9Qcx1slCYULcHfxeD60pMF1lfM/E3DFpYvo=",
+			expectedKeyID: "my-minio-key",
 			success:       true,
 		},
 	}

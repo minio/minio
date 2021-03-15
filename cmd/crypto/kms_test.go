@@ -16,6 +16,7 @@ package crypto
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"path"
 	"testing"
@@ -56,6 +57,53 @@ func TestMasterKeyKMS(t *testing.T) {
 		}
 		if !test.ShouldFail && !bytes.Equal(key[:], unsealedKey[:]) {
 			t.Errorf("Test %d: The generated and unsealed key differ", i)
+		}
+	}
+}
+
+var masterKeyCompatibleWithKESTests = []struct {
+	SealedKey string
+	Context   Context
+	Plaintext string
+}{
+	{
+		SealedKey: "eyJhZWFkIjoiQ2hhQ2hhMjBQb2x5MTMwNSIsIml2IjoiVjQ1SGV1Vm0rb0RrYUdjdkY3dU9LZz09Iiwibm9uY2UiOiJhYkFZL2M2OGEwU3RKbHdGIiwiYnl0ZXMiOiJUbktBOXhpWmlmaS9obE5hMENzZjM2b3JBTTJKaitRU2g4eCtKV3lqajNKZEVzK2hLbjM1dXljTEhLcU9GSG45In0=",
+		Plaintext: "pDdhxcXGiMscyy0mlFVU+gG8nREO8nsyjjG+q1j3ltg=",
+	},
+	{
+		SealedKey: "eyJhZWFkIjoiQ2hhQ2hhMjBQb2x5MTMwNSIsIml2IjoiS0lVcmEwdklRUmlDd0tVWXVWcUFUUT09Iiwibm9uY2UiOiJnY1F3ZHBNazREbUE0M1NLIiwiYnl0ZXMiOiJTOUV4cVBXL2FGL3E1SE1SdE5samRaQ2pTWUhZQUhhZHYwS2t4NGpRa2tIbzd0cy9QNWllVVE1OTVNRTZxSHFSIn0=",
+		Context:   Context{"Hello": "World"},
+		Plaintext: "BvRPJq5vMoFmnHqOfHoZr+pxDlmW1US9bFczlLglj4g=",
+	},
+	{
+		SealedKey: "eyJhZWFkIjoiQ2hhQ2hhMjBQb2x5MTMwNSIsIml2IjoiMnpkaVJOWGZ1ZDE0bTh5SzhtRlZMQT09Iiwibm9uY2UiOiJFcXhVQm0zZnQ1clpxKzJtIiwiYnl0ZXMiOiI3aTBqK1VzVnU0U2ZvdlUrS28zWFloNFpLaG1qaFdPVFltM3ExTHVQRDlHZUQrZ2VhN0kzWm94R1pnOWdZdXlYIn0=",
+		Context:   Context{"bucket": "object", "Hello": "World"},
+		Plaintext: "dZ0aKnlDIbgcH/+4/dmfgNq5mY4Vb0b43zWkVqBRE5M=",
+	},
+}
+
+func TestMasterKeyCompatibleWithKES(t *testing.T) {
+	kms, err := ParseMasterKey("my-key:5vXJlAUre5g+5K1zmENckYpCjiWQNvQLhBz5IC0bF4A=")
+	if err != nil {
+		t.Fatalf("Failed to create KMS from master key: %v", err)
+	}
+
+	for i, test := range masterKeyCompatibleWithKESTests {
+		sealedKey, err := base64.StdEncoding.DecodeString(test.SealedKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to decode sealed key: %v", i, err)
+		}
+		plaintext, err := base64.StdEncoding.DecodeString(test.Plaintext)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to decode plaintext: %v", i, err)
+		}
+
+		key, err := kms.UnsealKey("my-key", sealedKey, test.Context)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to decrypt sealed key: %v", i, err)
+		}
+		if !bytes.Equal(plaintext, key[:]) {
+			t.Fatalf("Test %d: Plaintext mismatch: got '%x' - want '%x'", i, key[:], plaintext)
 		}
 	}
 }

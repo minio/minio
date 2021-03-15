@@ -16,16 +16,16 @@ package crypto
 
 import (
 	"bytes"
-	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"io"
 	"sort"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/sio"
+	"github.com/secure-io/sio-go/sioutil"
+	"golang.org/x/crypto/chacha20"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // Context is a list of key-value pairs cryptographically
@@ -37,7 +37,7 @@ type Context map[string]string
 
 // MarshalText sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object. The sort order
-// is based on the un-escaped keys.
+// is based on the un-escaped keys. It never returns an error.
 func (c Context) MarshalText() ([]byte, error) {
 	if len(c) == 0 {
 		return []byte{'{', '}'}, nil
@@ -140,19 +140,74 @@ func (kms *masterKeyKMS) CreateKey(keyID string) error {
 }
 
 func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
-		logger.CriticalIf(context.Background(), errOutOfEntropy)
+	k, err := sioutil.Random(32)
+	if err != nil {
+		return key, sealedKey, err
+	}
+	copy(key[:], k)
+
+	iv, err := sioutil.Random(16)
+	if err != nil {
+		return key, sealedKey, err
 	}
 
-	var (
-		buffer     bytes.Buffer
-		derivedKey = kms.deriveKey(keyID, ctx)
-	)
-	if n, err := sio.Encrypt(&buffer, bytes.NewReader(key[:]), sio.Config{Key: derivedKey[:]}); err != nil || n != 64 {
-		logger.CriticalIf(context.Background(), errors.New("KMS: unable to encrypt data key"))
+	var algorithm string
+	if sioutil.NativeAES() {
+		algorithm = "AES-256-GCM-HMAC-SHA-256"
+	} else {
+		algorithm = "ChaCha20Poly1305"
 	}
-	sealedKey = buffer.Bytes()
-	return key, sealedKey, nil
+
+	var aead cipher.AEAD
+	switch algorithm {
+	case "AES-256-GCM-HMAC-SHA-256":
+		mac := hmac.New(sha256.New, kms.masterKey[:])
+		mac.Write(iv)
+		sealingKey := mac.Sum(nil)
+
+		var block cipher.Block
+		block, err = aes.NewCipher(sealingKey)
+		if err != nil {
+			return key, sealedKey, err
+		}
+		aead, err = cipher.NewGCM(block)
+		if err != nil {
+			return key, sealedKey, err
+		}
+	case "ChaCha20Poly1305":
+		var sealingKey []byte
+		sealingKey, err = chacha20.HChaCha20(kms.masterKey[:], iv)
+		if err != nil {
+			return key, sealedKey, err
+		}
+		aead, err = chacha20poly1305.New(sealingKey)
+		if err != nil {
+			return key, sealedKey, err
+		}
+	default:
+		return key, sealedKey, errors.New("invalid algorithm: " + algorithm)
+	}
+
+	nonce, err := sioutil.Random(aead.NonceSize())
+	if err != nil {
+		return key, sealedKey, err
+	}
+	associatedData, _ := ctx.MarshalText()
+	ciphertext := aead.Seal(nil, nonce, key[:], associatedData)
+
+	type SealedKey struct {
+		Algorithm string `json:"aead"`
+		IV        []byte `json:"iv"`
+		Nonce     []byte `json:"nonce"`
+		Bytes     []byte `json:"bytes"`
+	}
+	sealedKey, err = json.Marshal(SealedKey{
+		Algorithm: algorithm,
+		IV:        iv,
+		Nonce:     nonce,
+		Bytes:     ciphertext,
+	})
+	return key, sealedKey, err
 }
 
 // KMS is configured directly using master key
@@ -164,26 +219,65 @@ func (kms *masterKeyKMS) Info() (info KMSInfo) {
 	}
 }
 
-func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
-	var (
-		derivedKey = kms.deriveKey(keyID, ctx)
-	)
-	out, err := sio.DecryptBuffer(key[:0], sealedKey, sio.Config{Key: derivedKey[:]})
-	if err != nil || len(out) != 32 {
-		return key, err // TODO(aead): upgrade sio to use sio.Error
+func (kms *masterKeyKMS) UnsealKey(keyID string, encryptedKey []byte, ctx Context) (key [32]byte, err error) {
+	if keyID != kms.keyID {
+		return key, Errorf("crypto: key %q does not exist", keyID)
 	}
+
+	type SealedKey struct {
+		Algorithm string `json:"aead"`
+		IV        []byte `json:"iv"`
+		Nonce     []byte `json:"nonce"`
+		Bytes     []byte `json:"bytes"`
+	}
+	var sealedKey SealedKey
+	if err := json.Unmarshal(encryptedKey, &sealedKey); err != nil {
+		return key, err
+	}
+	if n := len(sealedKey.IV); n != 16 {
+		return key, Errorf("crypto: invalid iv size")
+	}
+
+	var aead cipher.AEAD
+	switch sealedKey.Algorithm {
+	case "AES-256-GCM-HMAC-SHA-256":
+		mac := hmac.New(sha256.New, kms.masterKey[:])
+		mac.Write(sealedKey.IV)
+		sealingKey := mac.Sum(nil)
+
+		block, err := aes.NewCipher(sealingKey[:])
+		if err != nil {
+			return key, err
+		}
+		aead, err = cipher.NewGCM(block)
+		if err != nil {
+			return key, err
+		}
+	case "ChaCha20Poly1305":
+		sealingKey, err := chacha20.HChaCha20(kms.masterKey[:], sealedKey.IV)
+		if err != nil {
+			return key, err
+		}
+		aead, err = chacha20poly1305.New(sealingKey)
+		if err != nil {
+			return key, err
+		}
+	default:
+		return key, Errorf("crypto: invalid algorithm: %q", sealedKey.Algorithm)
+	}
+
+	if n := len(sealedKey.Nonce); n != aead.NonceSize() {
+		return key, Errorf("crypto: invalid nonce size %d", n)
+	}
+
+	associatedData, _ := ctx.MarshalText()
+	plaintext, err := aead.Open(nil, sealedKey.Nonce, sealedKey.Bytes, associatedData)
+	if err != nil {
+		return key, Errorf("crypto: sealed key is not authentic")
+	}
+	if len(plaintext) != 32 {
+		return key, Errorf("crypto: invalid plaintext key length %d", len(plaintext))
+	}
+	copy(key[:], plaintext)
 	return key, nil
-}
-
-func (kms *masterKeyKMS) deriveKey(keyID string, context Context) (key [32]byte) {
-	if context == nil {
-		context = Context{}
-	}
-	ctxBytes, _ := context.MarshalText()
-
-	mac := hmac.New(sha256.New, kms.masterKey[:])
-	mac.Write([]byte(keyID))
-	mac.Write(ctxBytes)
-	mac.Sum(key[:0])
-	return key
 }

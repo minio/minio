@@ -121,7 +121,7 @@ var (
 const (
 	// EnvKMSMasterKey is the environment variable used to specify
 	// a KMS master key used to protect SSE-S3 per-object keys.
-	// Valid values must be of the from: "KEY_ID:32_BYTE_HEX_VALUE".
+	// Valid values must be of the from: "KEY_ID:32_BYTE_BASE64_VALUE".
 	EnvKMSMasterKey = "MINIO_KMS_MASTER_KEY"
 
 	// EnvKMSAutoEncryption is the environment variable used to en/disable
@@ -385,19 +385,7 @@ func LookupVaultConfig(kvs config.KVS) (VaultConfig, error) {
 
 // NewKMS - initialize a new KMS.
 func NewKMS(cfg KMSConfig) (kms KMS, err error) {
-	// Lookup KMS master kes - only available through ENV.
-	if masterKeyLegacy := env.Get(EnvKMSMasterKeyLegacy, ""); len(masterKeyLegacy) != 0 {
-		if cfg.Vault.Enabled { // Vault and KMS master key provided
-			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
-		}
-		if cfg.Kes.Enabled {
-			return kms, errors.New("Ambiguous KMS configuration: kes configuration and a master key are provided at the same time")
-		}
-		kms, err = ParseMasterKey(masterKeyLegacy)
-		if err != nil {
-			return kms, err
-		}
-	} else if masterKey := env.Get(EnvKMSMasterKey, ""); len(masterKey) != 0 {
+	if masterKey := env.Get(EnvKMSMasterKey, ""); len(masterKey) != 0 {
 		if cfg.Vault.Enabled { // Vault and KMS master key provided
 			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}

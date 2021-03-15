@@ -94,6 +94,9 @@ func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, ob
 		return key, err
 	}
 	if _, ok := ctx[bucket]; !ok {
+		if ctx == nil {
+			ctx = Context{}
+		}
 		ctx[bucket] = path.Join(bucket, object)
 	}
 	unsealKey, err := kms.UnsealKey(keyID, kmsKey, ctx)

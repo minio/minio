@@ -15,12 +15,16 @@
 package crypto
 
 import (
-	"encoding/hex"
+	"encoding/base64"
 	"strings"
 )
 
-// ParseMasterKey parses the value of the environment variable
-// `EnvKMSMasterKey` and returns a key-ID and a master-key KMS on success.
+// ParseMasterKey parses a KMS master key that has been specified
+// as env. variable and returns KMS on success.
+//
+// The KMS uses key specified as env. variable to generate new and
+// decrypt existing data encryption keys. The keys prodcued by this
+// KMS are compatible to keys produced by KES.
 func ParseMasterKey(envArg string) (KMS, error) {
 	values := strings.SplitN(envArg, ":", 2)
 	if len(values) != 2 {
@@ -28,14 +32,17 @@ func ParseMasterKey(envArg string) (KMS, error) {
 	}
 	var (
 		keyID  = values[0]
-		hexKey = values[1]
+		b64Key = values[1]
 	)
-	if len(hexKey) != 64 { // 2 hex bytes = 1 byte
-		return nil, Errorf("Invalid KMS master key: %s not a 32 bytes long HEX value", hexKey)
-	}
-	var masterKey [32]byte
-	if _, err := hex.Decode(masterKey[:], []byte(hexKey)); err != nil {
+	b, err := base64.StdEncoding.DecodeString(b64Key)
+	if err != nil {
 		return nil, Errorf("Invalid KMS master key: %v", err)
 	}
+	if len(b) != 32 {
+		return nil, Errorf("Invalid KMS master key: %s not a 32 bytes long base64 value", b64Key)
+	}
+
+	var masterKey [32]byte
+	copy(masterKey[:], b)
 	return NewMasterKey(keyID, masterKey), nil
 }

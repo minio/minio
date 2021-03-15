@@ -85,17 +85,6 @@ docker_kms_encryption_env() {
     fi
 }
 
-## Legacy
-## Set SSE_MASTER_KEY from docker secrets if provided
-docker_sse_encryption_env() {
-    SSE_MASTER_KEY_FILE="/run/secrets/$MINIO_SSE_MASTER_KEY_FILE"
-
-    if [ -f "$SSE_MASTER_KEY_FILE" ]; then
-        MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
-        export MINIO_SSE_MASTER_KEY
-    fi
-}
-
 # su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
     if [ ! -z "${MINIO_USERNAME}" ] && [ ! -z "${MINIO_GROUPNAME}" ]; then
@@ -120,9 +109,6 @@ docker_secrets_env
 
 ## Set kms encryption from secrets if necessary.
 docker_kms_encryption_env
-
-## Set sse encryption from secrets if necessary. Legacy
-docker_sse_encryption_env
 
 ## Switch to user if applicable.
 docker_switch_user "$@"

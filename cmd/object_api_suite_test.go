@@ -518,7 +518,7 @@ func enableCompression(t *testing.T, encrypt bool) {
 	globalCompressConfigMu.Unlock()
 	if encrypt {
 		globalAutoEncryption = encrypt
-		os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
+		os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:Y2hhbmdlIHRoaXMgcGFzc3dvcmQgdG8gYSBzZWNyZXQ=")
 		defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
 		var err error
 		GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
@@ -535,7 +535,7 @@ func enableEncrytion(t *testing.T) {
 	globalCompressConfigMu.Unlock()
 
 	globalAutoEncryption = true
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
+	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:Y2hhbmdlIHRoaXMgcGFzc3dvcmQgdG8gYSBzZWNyZXQ=")
 	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
 	var err error
 	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})

@@ -26,11 +26,6 @@ import (
 )
 
 const (
-	// EnvKMSMasterKeyLegacy is the environment variable used to specify
-	// a KMS master key used to protect SSE-S3 per-object keys.
-	// Valid values must be of the from: "KEY_ID:32_BYTE_HEX_VALUE".
-	EnvKMSMasterKeyLegacy = "MINIO_SSE_MASTER_KEY"
-
 	// EnvAutoEncryptionLegacy is the environment variable used to en/disable
 	// SSE-S3 auto-encryption. SSE-S3 auto-encryption, if enabled,
 	// requires a valid KMS configuration and turns any non-SSE-C
