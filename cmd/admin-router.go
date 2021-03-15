@@ -34,8 +34,8 @@ const (
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
 type adminAPIHandlers struct{}
 
-// registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
+// RegisterAdminRouter - Add handler functions for each service REST API routes.
+func RegisterAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
@@ -207,7 +207,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/kms/key/create").HandlerFunc(httpTraceAll(adminAPI.KMSCreateKeyHandler)).Queries("key-id", "{key-id:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
-		if !globalIsGateway {
+		if !GlobalIsGateway {
 			// Keep obdinfo for backward compatibility with mc
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
 				HandlerFunc(httpTraceHdrs(adminAPI.HealthInfoHandler))

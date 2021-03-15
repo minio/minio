@@ -58,8 +58,8 @@ var encryptRequestTests = []struct {
 }
 
 func TestEncryptRequest(t *testing.T) {
-	defer func(flag bool) { globalIsTLS = flag }(globalIsTLS)
-	globalIsTLS = true
+	defer func(flag bool) { GlobalIsTLS = flag }(GlobalIsTLS)
+	GlobalIsTLS = true
 	for i, test := range encryptRequestTests {
 		content := bytes.NewReader(make([]byte, 64))
 		req := &http.Request{Header: http.Header{}}

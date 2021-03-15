@@ -84,7 +84,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		config.SetRegion(globalServerConfig, testCase.serverConfigRegion)
+		config.SetRegion(GlobalServerConfig, testCase.serverConfigRegion)
 		_, actualCode := parseLocationConstraint(testCase.request)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)

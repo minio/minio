@@ -165,7 +165,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		globalNotificationSys.SignalService(serviceReloadDynamic)
+		GlobalNotificationSys.SignalService(serviceReloadDynamic)
 		// If all values were dynamic, tell the client.
 		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 	}
@@ -183,7 +183,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg := globalServerConfig
+	cfg := GlobalServerConfig
 	if newObjectLayerFn() == nil {
 		var err error
 		cfg, err = getValidConfig(objectAPI)
@@ -388,7 +388,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cfg := newServerConfig()
+	cfg := NewServerConfig()
 	if _, err = cfg.ReadConfig(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

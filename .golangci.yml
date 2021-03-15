@@ -25,6 +25,8 @@ issues:
   exclude:
       - should have a package comment
       - error strings should not be capitalized or end with punctuation or a newline
+      - should have comment   # TODO(y4m4): Remove once all exported ident. have comments!
+      - comment on exported   # TODO(y4m4): Remove once all comments have been fixed!
 
 run:
   skip-dirs:

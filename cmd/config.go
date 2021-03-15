@@ -151,7 +151,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		// Config not found for some reason, allow things to continue
 		// by initializing a new fresh config in safe mode.
 		if err == errConfigNotFound && newObjectLayerFn() == nil {
-			return newServerConfig(), nil
+			return NewServerConfig(), nil
 		}
 		return nil, err
 	}

@@ -45,7 +45,7 @@ func (setupType SetupType) String() string {
 	case DistErasureSetupType:
 		return globalMinioModeDistErasure
 	case GatewaySetupType:
-		return globalMinioModeGatewayPrefix
+		return GlobalMinioModeGatewayPrefix
 	}
 
 	return "unknown"

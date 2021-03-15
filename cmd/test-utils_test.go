@@ -103,16 +103,16 @@ func TestMain(m *testing.M) {
 	// logger.AddTarget(console.New())
 
 	// Set system resources to maximum.
-	setMaxResources()
+	SetMaxResources()
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second, logger.LogOnceIf)
+	GlobalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second, logger.LogOnceIf)
 
 	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
 
-	initHelp()
+	InitHelp()
 
 	resetTestGlobals()
 
@@ -336,19 +336,19 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewUnstartedServer(criticalErrorHandler{corsHandler(httpHandler)})
+	testServer.Server = httptest.NewUnstartedServer(SetCriticalErrorHandler(CorsHandler(httpHandler)))
 
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = objLayer
+	GlobalObjLayerMutex.Unlock()
 
 	// initialize peer rpc
-	host, port := mustSplitHostPort(testServer.Server.Listener.Addr().String())
-	globalMinioHost = host
-	globalMinioPort = port
-	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
+	host, port := MustSplitHostPort(testServer.Server.Listener.Addr().String())
+	GlobalMinioHost = host
+	GlobalMinioPort = port
+	GlobalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	newAllSubsystems()
+	NewAllSubsystems()
 
 	initAllSubsystems(ctx, objLayer)
 
@@ -394,21 +394,21 @@ func resetGlobalConfigPath() {
 	globalConfigDir = &ConfigDir{path: ""}
 }
 
-// sets globalObjectAPI to `nil`.
+// sets GlobalObjectAPI to `nil`.
 func resetGlobalObjectAPI() {
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = nil
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = nil
+	GlobalObjLayerMutex.Unlock()
 }
 
 // reset the value of the Global server config.
 // set it to `nil`.
 func resetGlobalConfig() {
 	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
+	GlobalServerConfigMu.Lock()
 	// Save the loaded config globally.
-	globalServerConfig = nil
-	globalServerConfigMu.Unlock()
+	GlobalServerConfig = nil
+	GlobalServerConfigMu.Unlock()
 }
 
 func resetGlobalEndpoints() {
@@ -448,15 +448,15 @@ func resetGlobalHealState() {
 	}
 }
 
-// sets globalIAMSys to `nil`.
+// sets GlobalIAMSys to `nil`.
 func resetGlobalIAMSys() {
-	globalIAMSys = nil
+	GlobalIAMSys = nil
 }
 
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
-	// set globalObjectAPI to `nil`.
+	// set GlobalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.
 	resetGlobalConfigPath()
@@ -468,7 +468,7 @@ func resetTestGlobals() {
 	resetGlobalIsErasure()
 	// Reset global heal state
 	resetGlobalHealState()
-	// Reset globalIAMSys to `nil`
+	// Reset GlobalIAMSys to `nil`
 	resetGlobalIAMSys()
 }
 
@@ -480,10 +480,10 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	}
 
 	// Set a default region.
-	config.SetRegion(globalServerConfig, bucketLocation)
+	config.SetRegion(GlobalServerConfig, bucketLocation)
 
 	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig)
+	return saveServerConfig(context.Background(), obj, GlobalServerConfig)
 }
 
 // Deleting the temporary backend and stopping the server.
@@ -1567,7 +1567,7 @@ func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerP
 		return nil, err
 	}
 
-	newAllSubsystems()
+	NewAllSubsystems()
 
 	initAllSubsystems(ctx, z)
 
@@ -1613,7 +1613,7 @@ func removeDiskN(disks []string, n int) {
 // initialies the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
-	newAllSubsystems()
+	NewAllSubsystems()
 
 	initAllSubsystems(context.Background(), obj)
 
@@ -1775,9 +1775,9 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 
 	// The  API handler gets the referece to the object layer via the global object Layer,
 	// setting it to `nil` in order test for handlers response for uninitialized object layer.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = nil
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = nil
+	GlobalObjLayerMutex.Unlock()
 
 	// call the HTTP handler.
 	apiRouter.ServeHTTP(rec, req)
@@ -1899,7 +1899,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	}
 	setObjectLayer(objLayer)
 
-	newAllSubsystems()
+	NewAllSubsystems()
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
@@ -1917,7 +1917,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	}
 	defer setObjectLayer(newObjectLayerFn())
 
-	newAllSubsystems()
+	NewAllSubsystems()
 	objLayer, fsDirs, err := prepareErasureSets32(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
@@ -2091,7 +2091,7 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFunctions ...string) {
 	if len(apiFunctions) == 0 {
 		// Register all api endpoints by default.
-		registerAPIRouter(muxRouter)
+		RegisterAPIRouter(muxRouter)
 		return
 	}
 	// API Router.
@@ -2101,19 +2101,19 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
 	// When the handlers get a HTTP request they use the underlying ObjectLayer to perform operations.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = objLayer
+	GlobalObjLayerMutex.Unlock()
 
 	// When cache is enabled, Put and Get operations are passed
 	// to underlying cache layer to manage object layer operation and disk caching
 	// operation
 	api := objectAPIHandlers{
 		ObjectAPI: func() ObjectLayer {
-			return globalObjectAPI
+			return GlobalObjectAPI
 		},
 		CacheAPI: func() CacheObjectLayer {
-			return globalCacheObjectAPI
+			return GlobalCacheObjectAPI
 		},
 	}
 
@@ -2135,19 +2135,19 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
 		return muxRouter
 	}
-	registerAPIRouter(muxRouter)
+	RegisterAPIRouter(muxRouter)
 	return muxRouter
 }
 
 // Initialize Web RPC Handlers for testing
 func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
+	GlobalObjLayerMutex.Lock()
+	GlobalObjectAPI = objLayer
+	GlobalObjLayerMutex.Unlock()
 
 	// Initialize router.
 	muxRouter := mux.NewRouter().SkipClean(true)
-	registerWebRouter(muxRouter)
+	RegisterWebRouter(muxRouter)
 	return muxRouter
 }
 
@@ -2275,7 +2275,7 @@ func getEndpointsLocalAddr(endpointServerPools EndpointServerPools) string {
 		}
 	}
 
-	return net.JoinHostPort(globalMinioHost, globalMinioPort)
+	return net.JoinHostPort(GlobalMinioHost, GlobalMinioPort)
 }
 
 // fetches a random number between range min-max.

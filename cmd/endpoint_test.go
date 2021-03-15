@@ -130,7 +130,7 @@ func TestNewEndpoints(t *testing.T) {
 
 func TestCreateEndpoints(t *testing.T) {
 	// Filter ipList by IPs those do not start with '127.'.
-	nonLoopBackIPs := localIP4.FuncMatch(func(ip string, matchString string) bool {
+	nonLoopBackIPs := LocalIP4.FuncMatch(func(ip string, matchString string) bool {
 		return !net.ParseIP(ip).IsLoopback()
 	}, "")
 	if len(nonLoopBackIPs) == 0 {
@@ -362,11 +362,11 @@ func TestGetLocalPeer(t *testing.T) {
 }
 
 func TestGetRemotePeers(t *testing.T) {
-	tempGlobalMinioPort := globalMinioPort
+	tempGlobalMinioPort := GlobalMinioPort
 	defer func() {
-		globalMinioPort = tempGlobalMinioPort
+		GlobalMinioPort = tempGlobalMinioPort
 	}()
-	globalMinioPort = "9000"
+	GlobalMinioPort = "9000"
 
 	testCases := []struct {
 		endpointArgs   []string
@@ -398,11 +398,11 @@ func TestGetRemotePeers(t *testing.T) {
 }
 
 func TestUpdateDomainIPs(t *testing.T) {
-	tempGlobalMinioPort := globalMinioPort
+	tempGlobalMinioPort := GlobalMinioPort
 	defer func() {
-		globalMinioPort = tempGlobalMinioPort
+		GlobalMinioPort = tempGlobalMinioPort
 	}()
-	globalMinioPort = "9000"
+	GlobalMinioPort = "9000"
 
 	tempGlobalDomainIPs := globalDomainIPs
 	defer func() {

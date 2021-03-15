@@ -165,9 +165,9 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	}
 
 	var tlsConfig *tls.Config
-	if globalIsTLS {
+	if GlobalIsTLS {
 		tlsConfig = &tls.Config{
-			RootCAs: globalRootCAs,
+			RootCAs: GlobalRootCAs,
 		}
 	}
 
@@ -380,7 +380,7 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 				}
 			}
 			return storageDisks, format, nil
-		case <-globalOSSignalCh:
+		case <-GlobalOSSignalCh:
 			return nil, nil, fmt.Errorf("Initializing data volumes gracefully stopped")
 		}
 	}

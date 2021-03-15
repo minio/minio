@@ -51,7 +51,7 @@ const envMinioDeleteCleanupInterval = "MINIO_DELETE_CLEANUP_INTERVAL"
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type erasureSets struct {
-	GatewayUnsupported
+	ObjectLayerUnsupported
 
 	sets []*erasureObjects
 
@@ -369,7 +369,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		poolIndex:          poolIdx,
 	}
 
-	mutex := newNSLock(globalIsDistErasure)
+	mutex := NewNSLock(globalIsDistErasure)
 
 	// Number of buffers, max 2GB
 	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)

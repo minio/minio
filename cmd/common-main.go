@@ -59,7 +59,7 @@ func init() {
 	config.Logger.Info = logger.Info
 	config.Logger.LogIf = logger.LogIf
 
-	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second, logger.LogOnceIf)
+	GlobalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second, logger.LogOnceIf)
 
 	initGlobalContext()
 
@@ -80,7 +80,8 @@ func init() {
 	gob.Register(StorageErr(""))
 }
 
-func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
+// VerifyObjectLayerFeatures verify object layer features available
+func VerifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Encryption support is requested but '%s' does not support encryption", name)
@@ -101,8 +102,8 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 	globalCompressConfigMu.Unlock()
 }
 
-// Check for updates and print a notification message
-func checkUpdate(mode string) {
+// CheckUpdate Check for updates and print a notification message
+func CheckUpdate(mode string) {
 	updateURL := minioReleaseInfoURL
 	if runtime.GOOS == globalWindowsOSName {
 		updateURL = minioReleaseWindowsInfoURL
@@ -136,7 +137,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	logStartupMessage(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
+	LogStartupMessage(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
@@ -180,37 +181,37 @@ func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() s
 	return &ConfigDir{path: dirAbs}, dirSet
 }
 
-func handleCommonCmdArgs(ctx *cli.Context) {
-
+// HandleCommonCmdArgs common function for client input args parsing.
+func HandleCommonCmdArgs(ctx *cli.Context) {
 	// Get "json" flag from command line argument and
 	// enable json and quite modes if json flag is turned on.
-	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
-	if globalCLIContext.JSON {
+	GlobalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
+	if GlobalCLIContext.JSON {
 		logger.EnableJSON()
 	}
 
 	// Get quiet flag from command line argument.
-	globalCLIContext.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
-	if globalCLIContext.Quiet {
+	GlobalCLIContext.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
+	if GlobalCLIContext.Quiet {
 		logger.EnableQuiet()
 	}
 
 	// Get anonymous flag from command line argument.
-	globalCLIContext.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
-	if globalCLIContext.Anonymous {
+	GlobalCLIContext.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
+	if GlobalCLIContext.Anonymous {
 		logger.EnableAnonymous()
 	}
 
 	// Fetch address option
-	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
-		globalCLIContext.Addr = ctx.String("address")
+	GlobalCLIContext.Addr = ctx.GlobalString("address")
+	if GlobalCLIContext.Addr == "" || GlobalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
+		GlobalCLIContext.Addr = ctx.String("address")
 	}
 
 	// Check "no-compat" flag from command line argument.
-	globalCLIContext.StrictS3Compat = true
+	GlobalCLIContext.StrictS3Compat = true
 	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
-		globalCLIContext.StrictS3Compat = false
+		GlobalCLIContext.StrictS3Compat = false
 	}
 
 	// Set all config, certs and CAs directories.
@@ -225,12 +226,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		globalCertsDir = &ConfigDir{path: filepath.Join(globalConfigDir.Get(), certsDir)}
 	}
 
-	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
+	GlobalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
-	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
+	logger.FatalIf(mkdirAllIgnorePerm(GlobalCertsCADir.Get()), "Unable to create certs CA directory at %s", GlobalCertsCADir.Get())
 }
 
-func handleCommonEnvVars() {
+func HandleCommonEnvVars() {
 	wormEnabled, err := config.LookupWorm()
 	if err != nil {
 		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
@@ -344,14 +345,15 @@ func handleCommonEnvVars() {
 	}
 }
 
-func logStartupMessage(msg string) {
+func LogStartupMessage(msg string) {
 	if globalConsoleSys != nil {
 		globalConsoleSys.Send(msg, string(logger.All))
 	}
 	logger.StartupMessage(msg)
 }
 
-func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
+// GetTLSConfig returns TLS configuration
+func GetTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, false, nil
 	}

@@ -2725,7 +2725,7 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 		return err
 	}
 
-	newCfg := newServerConfig()
+	newCfg := NewServerConfig()
 
 	config.SetCredentials(newCfg, cfg.Credential)
 	config.SetRegion(newCfg, cfg.Region)

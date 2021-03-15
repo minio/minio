@@ -46,13 +46,13 @@ const (
 )
 
 // Global object layer mutex, used for safely updating object layer.
-var globalObjLayerMutex sync.RWMutex
+var GlobalObjLayerMutex sync.RWMutex
 
-// Global object layer, only accessed by globalObjectAPI.
-var globalObjectAPI ObjectLayer
+// Global object layer, only accessed by GlobalObjectAPI.
+var GlobalObjectAPI ObjectLayer
 
 //Global cacheObjects, only accessed by newCacheObjectsFn().
-var globalCacheObjectAPI CacheObjectLayer
+var GlobalCacheObjectAPI CacheObjectLayer
 
 // Checks if the object is a directory, this logic uses
 // if size == 0 and object ends with SlashSeparator then

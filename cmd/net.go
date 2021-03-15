@@ -31,10 +31,10 @@ import (
 )
 
 // IPv4 addresses of local host.
-var localIP4 = mustGetLocalIP4()
+var LocalIP4 = mustGetLocalIP4()
 
-// mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
-func mustSplitHostPort(hostPort string) (host, port string) {
+// MustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
+func MustSplitHostPort(hostPort string) (host, port string) {
 	xh, err := xnet.ParseHost(hostPort)
 	if err != nil {
 		logger.FatalIf(err, "Unable to split host port %s", hostPort)
@@ -123,13 +123,13 @@ func (n byLastOctetValue) Less(i, j int) bool {
 	return []byte(n[i].To4())[3] > []byte(n[j].To4())[3]
 }
 
-// sortIPs - sort ips based on higher octects.
+// SortIPs - sort ips based on higher octects.
 // The logic to sort by last octet is implemented to
 // prefer CIDRs with higher octects, this in-turn skips the
 // localhost/loopback address to be not preferred as the
 // first ip on the list. Subsequently this list helps us print
 // a user friendly message with appropriate values.
-func sortIPs(ipList []string) []string {
+func SortIPs(ipList []string) []string {
 	if len(ipList) == 1 {
 		return ipList
 	}
@@ -155,17 +155,17 @@ func sortIPs(ipList []string) []string {
 	return append(nonIPs, ips...)
 }
 
-func getAPIEndpoints() (apiEndpoints []string) {
+func GetAPIEndpoints() (apiEndpoints []string) {
 	var ipList []string
-	if globalMinioHost == "" {
-		ipList = sortIPs(mustGetLocalIP4().ToSlice())
+	if GlobalMinioHost == "" {
+		ipList = SortIPs(mustGetLocalIP4().ToSlice())
 		ipList = append(ipList, mustGetLocalIP6().ToSlice()...)
 	} else {
-		ipList = []string{globalMinioHost}
+		ipList = []string{GlobalMinioHost}
 	}
 
 	for _, ip := range ipList {
-		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(ip, globalMinioPort))
+		endpoint := fmt.Sprintf("%s://%s", GetURLScheme(GlobalIsTLS), net.JoinHostPort(ip, GlobalMinioPort))
 		apiEndpoints = append(apiEndpoints, endpoint)
 	}
 
@@ -185,10 +185,10 @@ func isHostIP(ipAddress string) bool {
 	return net.ParseIP(host) != nil
 }
 
-// checkPortAvailability - check if given host and port is already in use.
+// CheckPortAvailability - check if given host and port is already in use.
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
-func checkPortAvailability(host, port string) (err error) {
+func CheckPortAvailability(host, port string) (err error) {
 	l, err := net.Listen("tcp", net.JoinHostPort(host, port))
 	if err != nil {
 		return err
@@ -286,10 +286,10 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 	return isLocalv4 || isLocalv6, nil
 }
 
-// sameLocalAddrs - returns true if two addresses, even with different
+// SameLocalAddrs - returns true if two addresses, even with different
 // formats, point to the same machine, e.g:
 //  ':9000' and 'http://localhost:9000/' will return true
-func sameLocalAddrs(addr1, addr2 string) (bool, error) {
+func SameLocalAddrs(addr1, addr2 string) (bool, error) {
 
 	// Extract host & port from given parameters
 	host1, port1, err := extractHostPort(addr1)

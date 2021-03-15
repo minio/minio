@@ -67,7 +67,7 @@ const (
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
-	globalMinioModeGatewayPrefix   = "mode-gateway-"
+	GlobalMinioModeGatewayPrefix   = "mode-gateway-"
 	globalDirSuffix                = "__XLDIR__"
 	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
 
@@ -108,7 +108,8 @@ const (
 	diskFillFraction = 0.95
 )
 
-var globalCLIContext = struct {
+// GlobalCLIContext holds the current evaluated config params
+var GlobalCLIContext = struct {
 	JSON, Quiet    bool
 	Anonymous      bool
 	Addr           string
@@ -116,17 +117,40 @@ var globalCLIContext = struct {
 }{}
 
 var (
+	// GlobalIsGateway indicates if the running minio is in gateway mode.
+	GlobalIsGateway = false
+
+	// GlobalGatewayName name of gateway server, e.g S3, GCS, Azure, etc
+	GlobalGatewayName = ""
+
+	// GlobalMinioAddr MinIO local server address (in `host:port` format)
+	GlobalMinioAddr = ""
+	// GlobalMinioPort MinIO default port, can be changed through command line.
+	GlobalMinioPort = GlobalMinioDefaultPort
+	// GlobalMinioHost Holds the host that was passed using --address
+	GlobalMinioHost = ""
+	// GlobalMinioEndpoint Holds the possible host endpoint.
+	GlobalMinioEndpoint = ""
+
+	// GlobalGatewaySSE sse options
+	GlobalGatewaySSE GatewaySSE
+
+	// GlobalRootCAs CA root certificates, a nil value means system certs pool will be used
+	GlobalRootCAs *x509.CertPool
+
+	// GlobalIsTLS indicates if the server is configured with TLS.
+	GlobalIsTLS bool
+
+	// GlobalTLSCerts manages certificates per instance
+	GlobalTLSCerts *certs.Manager
+)
+
+var (
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsErasure = false
-
-	// Indicates if the running minio is in gateway mode.
-	globalIsGateway = false
-
-	// Name of gateway server, e.g S3, GCS, Azure, etc
-	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
@@ -137,19 +161,10 @@ var (
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
 
-	// MinIO local server address (in `host:port` format)
-	globalMinioAddr = ""
-	// MinIO default port, can be changed through command line.
-	globalMinioPort = GlobalMinioDefaultPort
-	// Holds the host that was passed using --address
-	globalMinioHost = ""
-	// Holds the possible host endpoint.
-	globalMinioEndpoint = ""
-
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
 
-	globalNotificationSys  *NotificationSys
+	GlobalNotificationSys  *NotificationSys
 	globalConfigTargetList *event.TargetList
 	// globalEnvTargetList has list of targets configured via env.
 	globalEnvTargetList *event.TargetList
@@ -157,7 +172,7 @@ var (
 	globalBucketMetadataSys *BucketMetadataSys
 	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
-	globalIAMSys            *IAMSys
+	GlobalIAMSys            *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
@@ -170,17 +185,9 @@ var (
 	globalLDAPConfig   xldap.Config
 	globalOpenIDConfig openid.Config
 
-	// CA root certificates, a nil value means system certs pool will be used
-	globalRootCAs *x509.CertPool
-
-	// IsSSL indicates if the server is configured with SSL.
-	globalIsTLS bool
-
-	globalTLSCerts *certs.Manager
-
-	globalHTTPServer        *xhttp.Server
-	globalHTTPServerErrorCh = make(chan error)
-	globalOSSignalCh        = make(chan os.Signal, 1)
+	GlobalHTTPServer        *xhttp.Server
+	GlobalHTTPServerErrorCh = make(chan error)
+	GlobalOSSignalCh        = make(chan os.Signal, 1)
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.
@@ -217,7 +224,7 @@ var (
 	// Indicates if config is to be encrypted
 	globalConfigEncrypted bool
 
-	globalPublicCerts []*x509.Certificate
+	GlobalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
@@ -272,9 +279,6 @@ var (
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
 
-	// GlobalGatewaySSE sse options
-	GlobalGatewaySSE gatewaySSE
-
 	globalAllHealState *allHealState
 
 	// The always present healing routine ready to heal objects
@@ -290,7 +294,7 @@ var (
 
 	globalProxyTransport http.RoundTripper
 
-	globalDNSCache *xhttp.DNSCache
+	GlobalDNSCache *xhttp.DNSCache
 
 	globalForwarder *handlers.Forwarder
 	// Add new variable global values here.

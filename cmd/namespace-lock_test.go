@@ -46,7 +46,7 @@ func TestNSLockRace(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 10000; i++ {
-		nsLk := newNSLock(false)
+		nsLk := NewNSLock(false)
 
 		// lk1; ref=1
 		if !nsLk.lock(ctx, "volume", "path", "source", "opsID", false, time.Second) {

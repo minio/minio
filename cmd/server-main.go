@@ -113,36 +113,35 @@ func serverCmdArgs(ctx *cli.Context) []string {
 
 func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
-	handleCommonCmdArgs(ctx)
+	HandleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(GlobalCLIContext.Addr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
 
 	// Check and load TLS certificates.
-	globalPublicCerts, globalTLSCerts, globalIsTLS, err = getTLSConfig()
+	GlobalPublicCerts, GlobalTLSCerts, GlobalIsTLS, err = GetTLSConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = certs.GetRootCAs(globalCertsCADir.Get())
+	GlobalRootCAs, err = certs.GetRootCAs(GlobalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Add the global public crts as part of global root CAs
-	for _, publicCrt := range globalPublicCerts {
-		globalRootCAs.AddCert(publicCrt)
+	for _, publicCrt := range GlobalPublicCerts {
+		GlobalRootCAs.AddCert(publicCrt)
 	}
 
 	// Register root CAs for remote ENVs
-	env.RegisterGlobalCAs(globalRootCAs)
+	env.RegisterGlobalCAs(GlobalRootCAs)
 
-	globalMinioAddr = globalCLIContext.Addr
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	GlobalMinioAddr = GlobalCLIContext.Addr
+	GlobalMinioHost, GlobalMinioPort = MustSplitHostPort(GlobalMinioAddr)
+	globalEndpoints, setupType, err = createServerEndpoints(GlobalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
+	globalLocalNodeName = GetLocalPeer(globalEndpoints, GlobalMinioHost, GlobalMinioPort)
 
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
@@ -157,18 +156,18 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs: GlobalRootCAs,
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs: GlobalRootCAs,
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
+	logger.FatalIf(CheckPortAvailability(GlobalMinioHost, GlobalMinioPort), "Unable to start the server")
 
 	globalIsErasure = (setupType == ErasureSetupType)
 	globalIsDistErasure = (setupType == DistErasureSetupType)
@@ -179,12 +178,12 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 func serverHandleEnvVars() {
 	// Handle common environment variables.
-	handleCommonEnvVars()
+	HandleCommonEnvVars()
 }
 
 var globalHealStateLK sync.RWMutex
 
-func newAllSubsystems() {
+func NewAllSubsystems() {
 	if globalIsErasure {
 		globalHealStateLK.Lock()
 		// New global heal state
@@ -194,7 +193,7 @@ func newAllSubsystems() {
 	}
 
 	// Create new notification system and initialize notification targets
-	globalNotificationSys = NewNotificationSys(globalEndpoints)
+	GlobalNotificationSys = NewNotificationSys(globalEndpoints)
 
 	// Create new bucket metadata system.
 	if globalBucketMetadataSys == nil {
@@ -211,7 +210,7 @@ func newAllSubsystems() {
 	globalConfigSys = NewConfigSys()
 
 	// Create new IAM system.
-	globalIAMSys = NewIAMSys()
+	GlobalIAMSys = NewIAMSys()
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
@@ -390,7 +389,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	globalBucketMetadataSys.Init(ctx, buckets, newObject)
 
 	// Initialize notification system.
-	globalNotificationSys.Init(ctx, buckets, newObject)
+	GlobalNotificationSys.Init(ctx, buckets, newObject)
 
 	// Initialize bucket targets sub-system.
 	globalBucketTargetSys.Init(ctx, buckets, newObject)
@@ -400,11 +399,11 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	defer globalDNSCache.Stop()
+	defer GlobalDNSCache.Stop()
 
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(GlobalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
-	go handleSignals()
+	go HandleSignals()
 
 	setDefaultProfilerRates()
 
@@ -426,32 +425,32 @@ func serverMain(ctx *cli.Context) {
 	globalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
-	initHelp()
+	InitHelp()
 
 	// Initialize all sub-systems
-	newAllSubsystems()
+	NewAllSubsystems()
 
-	globalMinioEndpoint = func() string {
-		host := globalMinioHost
+	GlobalMinioEndpoint = func() string {
+		host := GlobalMinioHost
 		if host == "" {
-			host = sortIPs(localIP4.ToSlice())[0]
+			host = SortIPs(LocalIP4.ToSlice())[0]
 		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
+		return fmt.Sprintf("%s://%s", GetURLScheme(GlobalIsTLS), net.JoinHostPort(host, GlobalMinioPort))
 	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
-		if globalEndpoints.HTTPS() && !globalIsTLS {
+		if globalEndpoints.HTTPS() && !GlobalIsTLS {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
-		if !globalEndpoints.HTTPS() && globalIsTLS {
+		if !globalEndpoints.HTTPS() && GlobalIsTLS {
 			logger.Fatal(config.ErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}
 
-	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+	if !GlobalCLIContext.Quiet && !globalInplaceUpdateDisabled {
 		// Check for new updates from dl.min.io.
-		checkUpdate(getMinioMode())
+		CheckUpdate(getMinioMode())
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
@@ -460,7 +459,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Set system resources to maximum.
-	setMaxResources()
+	SetMaxResources()
 
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
@@ -469,16 +468,16 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	var getCert certs.GetCertificateFunc
-	if globalTLSCerts != nil {
-		getCert = globalTLSCerts.GetCertificate
+	if GlobalTLSCerts != nil {
+		getCert = GlobalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{corsHandler(handler)}, getCert)
+	httpServer := xhttp.NewServer([]string{GlobalMinioAddr}, SetCriticalErrorHandler(CorsHandler(handler)), getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
 	go func() {
-		globalHTTPServerErrorCh <- httpServer.Start()
+		GlobalHTTPServerErrorCh <- httpServer.Start()
 	}()
 
 	setHTTPServer(httpServer)
@@ -535,24 +534,24 @@ func serverMain(ctx *cli.Context) {
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
+		cacheAPI, err = NewServerCacheObjects(GlobalContext, globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
 		setCacheObjectLayer(cacheAPI)
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject)
+	go GlobalIAMSys.Init(GlobalContext, newObject)
 
 	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
-	printStartupMessage(getAPIEndpoints(), err)
+	printStartupMessage(GetAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
 		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
 		logger.StartupMessage(color.RedBold(msg))
 	}
 
-	<-globalOSSignalCh
+	<-GlobalOSSignalCh
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

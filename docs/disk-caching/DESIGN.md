@@ -5,7 +5,7 @@ This document explains some basic assumptions and design approach, limits of the
 ## Command-line
 
 ```
-minio gateway <name> -h
+ming <name> -h
 ...
 ...
   CACHE:
@@ -30,7 +30,7 @@ minio gateway <name> -h
      $ export MINIO_CACHE_WATERMARK_LOW=70
      $ export MINIO_CACHE_WATERMARK_HIGH=90
 
-     $ minio gateway s3
+     $ ming s3
 ```
 
 ### Run MinIO gateway with cache on Docker Container
@@ -81,7 +81,7 @@ master key to automatically encrypt all cached content.
 
 ### Crash Recovery
 
-Upon restart of minio gateway after a running minio process is killed or crashes, disk caching resumes automatically. The garbage collection cycle resumes and any previously cached entries are served from cache.
+Upon restart of ming after a running minio process is killed or crashes, disk caching resumes automatically. The garbage collection cycle resumes and any previously cached entries are served from cache.
 
 ## Limits
 

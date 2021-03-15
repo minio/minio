@@ -146,7 +146,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime) {
+	for _, nerr := range GlobalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -173,7 +173,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseJSON(w, jsonBytes)
 
 	// Notify all other MinIO peers signal service.
-	for _, nerr := range globalNotificationSys.SignalService(serviceRestart) {
+	for _, nerr := range GlobalNotificationSys.SignalService(serviceRestart) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -218,7 +218,7 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Notify all other MinIO peers signal service.
-	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
+	for _, nerr := range GlobalNotificationSys.SignalService(serviceSig) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -472,7 +472,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	}
 	stale := r.URL.Query().Get("stale") == "true" // list also stale locks
 
-	peerLocks := globalNotificationSys.GetLocks(ctx, r)
+	peerLocks := GlobalNotificationSys.GetLocks(ctx, r)
 
 	topLocks := topLockEntries(peerLocks, stale)
 
@@ -515,7 +515,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if globalNotificationSys == nil {
+	if GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
@@ -548,7 +548,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	// Start profiling on remote servers.
 	var hostErrs []NotificationPeerErr
 	for _, profiler := range profiles {
-		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(profiler)...)
+		hostErrs = append(hostErrs, GlobalNotificationSys.StartProfiling(profiler)...)
 
 		// Start profiling locally as well.
 		prof, err := startProfiler(profiler)
@@ -620,12 +620,12 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if globalNotificationSys == nil {
+	if GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
-	if !globalNotificationSys.DownloadProfilingData(ctx, w) {
+	if !GlobalNotificationSys.DownloadProfilingData(ctx, w) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminProfilerNotEnabled), r.URL)
 		return
 	}
@@ -878,7 +878,7 @@ func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmi
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
-		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus()
+		peersHealStates, nerrs := GlobalNotificationSys.BackgroundHealStatus()
 		var errCount int
 		for _, nerr := range nerrs {
 			if nerr.Err != nil {
@@ -930,7 +930,7 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	var adminAPIErr APIErrorCode
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
+	if objectAPI == nil || GlobalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil, cred
 	}
@@ -1397,7 +1397,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			cpuInfo := getLocalCPUInfo(deadlinedCtx, r)
 
 			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, cpuInfo)
-			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, globalNotificationSys.CPUInfo(deadlinedCtx)...)
+			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, GlobalNotificationSys.CPUInfo(deadlinedCtx)...)
 			partialWrite(healthInfo)
 		}
 
@@ -1405,7 +1405,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			diskHwInfo := getLocalDiskHwInfo(deadlinedCtx, r)
 
 			healthInfo.Sys.DiskHwInfo = append(healthInfo.Sys.DiskHwInfo, diskHwInfo)
-			healthInfo.Sys.DiskHwInfo = append(healthInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwInfo(deadlinedCtx)...)
+			healthInfo.Sys.DiskHwInfo = append(healthInfo.Sys.DiskHwInfo, GlobalNotificationSys.DiskHwInfo(deadlinedCtx)...)
 			partialWrite(healthInfo)
 		}
 
@@ -1413,7 +1413,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			osInfo := getLocalOsInfo(deadlinedCtx, r)
 
 			healthInfo.Sys.OsInfo = append(healthInfo.Sys.OsInfo, osInfo)
-			healthInfo.Sys.OsInfo = append(healthInfo.Sys.OsInfo, globalNotificationSys.OsInfo(deadlinedCtx)...)
+			healthInfo.Sys.OsInfo = append(healthInfo.Sys.OsInfo, GlobalNotificationSys.OsInfo(deadlinedCtx)...)
 			partialWrite(healthInfo)
 		}
 
@@ -1421,7 +1421,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			memInfo := getLocalMemInfo(deadlinedCtx, r)
 
 			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, memInfo)
-			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, globalNotificationSys.MemInfo(deadlinedCtx)...)
+			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, GlobalNotificationSys.MemInfo(deadlinedCtx)...)
 			partialWrite(healthInfo)
 		}
 
@@ -1429,7 +1429,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			procInfo := getLocalProcInfo(deadlinedCtx, r)
 
 			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, procInfo)
-			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, globalNotificationSys.ProcInfo(deadlinedCtx)...)
+			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, GlobalNotificationSys.ProcInfo(deadlinedCtx)...)
 			partialWrite(healthInfo)
 		}
 
@@ -1463,7 +1463,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			partialWrite(healthInfo)
 
 			// Notify all other MinIO peers to report drive perf numbers
-			driveInfos := globalNotificationSys.DrivePerfInfoChan(deadlinedCtx)
+			driveInfos := GlobalNotificationSys.DrivePerfInfoChan(deadlinedCtx)
 			for obd := range driveInfos {
 				healthInfo.Perf.DriveInfo = append(healthInfo.Perf.DriveInfo, obd)
 				partialWrite(healthInfo)
@@ -1472,17 +1472,17 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 
 		if net := query.Get("perfnet"); net == "true" && globalIsDistErasure {
-			healthInfo.Perf.Net = append(healthInfo.Perf.Net, globalNotificationSys.NetInfo(deadlinedCtx))
+			healthInfo.Perf.Net = append(healthInfo.Perf.Net, GlobalNotificationSys.NetInfo(deadlinedCtx))
 			partialWrite(healthInfo)
 
-			netInfos := globalNotificationSys.DispatchNetPerfChan(deadlinedCtx)
+			netInfos := GlobalNotificationSys.DispatchNetPerfChan(deadlinedCtx)
 			for netInfo := range netInfos {
 				healthInfo.Perf.Net = append(healthInfo.Perf.Net, netInfo)
 				partialWrite(healthInfo)
 			}
 			partialWrite(healthInfo)
 
-			healthInfo.Perf.NetParallel = globalNotificationSys.NetPerfParallelInfo(deadlinedCtx)
+			healthInfo.Perf.NetParallel = GlobalNotificationSys.NetPerfParallelInfo(deadlinedCtx)
 			partialWrite(healthInfo)
 		}
 
@@ -1541,7 +1541,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 			select {
 			case <-ctx.Done():
 				return
-			case reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...):
+			case reportCh <- GlobalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...):
 				time.Sleep(time.Duration(rnd.Float64() * float64(2*time.Second)))
 			}
 		}
@@ -1605,7 +1605,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	notifyTarget := fetchLambdaInfo()
 
 	local := getLocalServerProperty(globalEndpoints, r)
-	servers := globalNotificationSys.ServerInfo()
+	servers := GlobalNotificationSys.ServerInfo()
 	servers = append(servers, local)
 
 	assignPoolNumbers(servers)
@@ -1670,7 +1670,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Mode:         string(mode),
 		Domain:       domain,
 		Region:       globalServerRegion,
-		SQSARN:       globalNotificationSys.GetARNList(false),
+		SQSARN:       GlobalNotificationSys.GetARNList(false),
 		DeploymentID: globalDeploymentID,
 		Buckets:      buckets,
 		Objects:      objects,
@@ -1843,7 +1843,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 		ResponseHeaderTimeout: 5 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 5 * time.Second,
-		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
+		TLSClientConfig:       &tls.Config{RootCAs: GlobalRootCAs},
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
 		// in raw stream.

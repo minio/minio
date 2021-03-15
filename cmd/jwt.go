@@ -63,7 +63,7 @@ func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt
 	serverCred := globalActiveCred
 	if serverCred.AccessKey != credentials.AccessKey {
 		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(credentials.AccessKey)
+		serverCred, ok = GlobalIAMSys.GetUser(credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
@@ -104,7 +104,7 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 	if claims.AccessKey == globalActiveCred.AccessKey {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-	ok, _, err := globalIAMSys.IsTempUser(claims.AccessKey)
+	ok, _, err := GlobalIAMSys.IsTempUser(claims.AccessKey)
 	if err != nil {
 		if err == errNoSuchUser {
 			return nil, errInvalidAccessKeyID
@@ -114,7 +114,7 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 	if ok {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-	cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+	cred, ok := GlobalIAMSys.GetUser(claims.AccessKey)
 	if !ok {
 		return nil, errInvalidAccessKeyID
 	}

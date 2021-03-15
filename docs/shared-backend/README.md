@@ -36,7 +36,7 @@ You'll need the path to the shared volume, e.g. `/path/to/nfs-volume`. Then run 
 ```sh
 export MINIO_ROOT_USER=<ACCESS_KEY>
 export MINIO_ROOT_PASSWORD=<SECRET_KEY>
-minio gateway nas /path/to/nfs-volume
+ming nas /path/to/nfs-volume
 ```
 
 #### MinIO shared mode on Windows 2012 Server

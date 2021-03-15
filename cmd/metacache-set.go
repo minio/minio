@@ -348,7 +348,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	rpc := GlobalNotificationSys.restClientFromHash(o.Bucket)
 
 	for {
 		select {
@@ -555,7 +555,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	}
 
 	meta := o.newMetacache()
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	rpc := GlobalNotificationSys.restClientFromHash(o.Bucket)
 	var metaMu sync.Mutex
 
 	o.debugln(color.Green("listPath:")+" scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)

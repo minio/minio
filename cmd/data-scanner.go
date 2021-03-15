@@ -136,7 +136,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan madmin.DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
+			bf, err := GlobalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
 			err = objAPI.NSScanner(ctx, bf, results)
 			close(results)

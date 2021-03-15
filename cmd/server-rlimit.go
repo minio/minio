@@ -22,7 +22,7 @@ import (
 	"github.com/minio/minio/pkg/sys"
 )
 
-func setMaxResources() (err error) {
+func SetMaxResources() (err error) {
 	// Set the Go runtime max threads threshold to 90% of kernel setting.
 	sysMaxThreads, mErr := sys.GetMaxThreads()
 	if mErr == nil {

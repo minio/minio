@@ -31,8 +31,8 @@ const (
 	healthCheckPathPrefix      = minioReservedBucketPath + healthCheckPath
 )
 
-// registerHealthCheckRouter - add handler functions for liveness and readiness routes.
-func registerHealthCheckRouter(router *mux.Router) {
+// RegisterHealthCheckRouter - add handler functions for liveness and readiness routes.
+func RegisterHealthCheckRouter(router *mux.Router) {
 
 	// Healthcheck router
 	healthRouter := router.PathPrefix(healthCheckPathPrefix).Subrouter()

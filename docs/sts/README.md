@@ -61,7 +61,7 @@ export MINIO_ROOT_PASSWORD=aws_secret_key
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 export MINIO_ETCD_ENDPOINTS=http://localhost:2379
-minio gateway s3
+ming s3
 ```
 
 ### Using WebIdentiy API
