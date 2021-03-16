@@ -27,6 +27,11 @@ import (
 // ActionSet - set of actions.
 type ActionSet map[Action]struct{}
 
+// Clone clones ActionSet structure
+func (actionSet ActionSet) Clone() ActionSet {
+	return NewActionSet(actionSet.ToSlice()...)
+}
+
 // Add - add action to the set.
 func (actionSet ActionSet) Add(action Action) {
 	actionSet[action] = struct{}{}
