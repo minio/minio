@@ -110,6 +110,10 @@ func TestErasureDeleteObjectBasic(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run("", func(t *testing.T) {
+			_, err := xl.GetObjectInfo(ctx, "bucket", "dir/obj", ObjectOptions{})
+			if err != nil {
+				t.Fatal("dir/obj not found before last test")
+			}
 			_, actualErr := xl.DeleteObject(ctx, test.bucket, test.object, ObjectOptions{})
 			if test.expectedErr != nil && actualErr != test.expectedErr {
 				t.Errorf("Expected to fail with %s, but failed with %s", test.expectedErr, actualErr)

@@ -895,11 +895,14 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	// when data-dir is specified. Transition leverages existing DeleteObject
-	// api call to mark object as deleted. When object is pending transition,
-	// just update the metadata and avoid deleting data dir.
-	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-		if !xlMeta.data.remove(dataDir) || true {
+	// transitioned objects maintains metadata on the source cluster. When transition
+	// status is set, update the metadata to disk.
+	if !lastVersion || fi.TransitionStatus != "" {
+		// when data-dir is specified. Transition leverages existing DeleteObject
+		// api call to mark object as deleted. When object is pending transition,
+		// just update the metadata and avoid deleting data dir.
+		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
+			xlMeta.data.remove(dataDir)
 			filePath := pathJoin(volumeDir, path, dataDir)
 			if err = checkPathLength(filePath); err != nil {
 				return err
@@ -907,14 +910,12 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 
 			tmpuuid := mustGetUUID()
 			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-				return err
+				if err != errFileNotFound {
+					return err
+				}
 			}
 		}
-	}
 
-	// transitioned objects maintains metadata on the source cluster. When transition
-	// status is set, update the metadata to disk.
-	if !lastVersion || fi.TransitionStatus != "" {
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			return err
@@ -923,8 +924,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Move the folder to trash.
-	filePath := pathJoin(volumeDir, path)
+	// Move everything to trash.
+	filePath := retainSlash(pathJoin(volumeDir, path))
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
