@@ -271,9 +271,18 @@ func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, obj
 		if err == nil {
 			return i, nil
 		}
-		if !isErrObjectNotFound(err) {
-			return -1, err
+		if isErrObjectNotFound(err) {
+			// No object exists or its a delete marker,
+			// check objInfo to confirm.
+			if objInfos[i].DeleteMarker && objInfos[i].Name != "" {
+				return i, nil
+			}
+
+			// objInfo is not valid, truly the object doesn't
+			// exist proceed to next pool.
+			continue
 		}
+		return -1, err
 	}
 
 	return -1, toObjectErr(errFileNotFound, bucket, object)
