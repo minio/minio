@@ -21,6 +21,10 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
 func TestXLV2FormatData(t *testing.T) {
@@ -142,10 +146,227 @@ func TestXLV2FormatData(t *testing.T) {
 	failOnErr(xl2.Load(trimmed))
 	if len(xl2.data) != 0 {
 		t.Fatal("data, was not trimmed, bytes left:", len(xl2.data))
+
 	}
 	// Corrupt metadata, last 5 bytes is the checksum, so go a bit further back.
 	trimmed[len(trimmed)-10] += 10
 	if err := xl2.Load(trimmed); err == nil {
 		t.Fatal("metadata corruption not detected")
+	}
+}
+
+// TestUsesDataDir tests xlMetaV2.UsesDataDir
+func TestUsesDataDir(t *testing.T) {
+	vID := uuid.New()
+	dataDir := uuid.New()
+	transitioned := make(map[string][]byte)
+	transitioned[ReservedMetadataPrefixLower+TransitionStatus] = []byte(lifecycle.TransitionComplete)
+
+	toBeRestored := make(map[string]string)
+	toBeRestored[xhttp.AmzRestore] = ongoingRestoreObj().String()
+
+	restored := make(map[string]string)
+	restored[xhttp.AmzRestore] = completedRestoreObj(time.Now().UTC().Add(time.Hour)).String()
+
+	restoredExpired := make(map[string]string)
+	restoredExpired[xhttp.AmzRestore] = completedRestoreObj(time.Now().UTC().Add(-time.Hour)).String()
+
+	testCases := []struct {
+		xlmeta xlMetaV2Object
+		uses   bool
+	}{
+		{ // transitioned object version
+			xlmeta: xlMetaV2Object{
+				VersionID: vID,
+				DataDir:   dataDir,
+				MetaSys:   transitioned,
+			},
+			uses: false,
+		},
+		{ // to be restored (requires object version to be transitioned)
+			xlmeta: xlMetaV2Object{
+				VersionID: vID,
+				DataDir:   dataDir,
+				MetaSys:   transitioned,
+				MetaUser:  toBeRestored,
+			},
+			uses: false,
+		},
+		{ // restored object version (requires object version to be transitioned)
+			xlmeta: xlMetaV2Object{
+				VersionID: vID,
+				DataDir:   dataDir,
+				MetaSys:   transitioned,
+				MetaUser:  restored,
+			},
+			uses: true,
+		},
+		{ // restored object version expired an hour back (requires object version to be transitioned)
+			xlmeta: xlMetaV2Object{
+				VersionID: vID,
+				DataDir:   dataDir,
+				MetaSys:   transitioned,
+				MetaUser:  restoredExpired,
+			},
+			uses: false,
+		},
+		{ // object version with no ILM applied
+			xlmeta: xlMetaV2Object{
+				VersionID: vID,
+				DataDir:   dataDir,
+			},
+			uses: true,
+		},
+	}
+	for i, tc := range testCases {
+		if got := tc.xlmeta.UsesDataDir(); got != tc.uses {
+			t.Fatalf("Test %d: Expected %v but got %v for %v", i+1, tc.uses, got, tc.xlmeta)
+		}
+	}
+}
+
+func TestDeleteVersionWithSharedDataDir(t *testing.T) {
+	failOnErr := func(i int, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("Test %d: failed with %v", i, err)
+		}
+	}
+
+	data := []byte("some object data")
+	data2 := []byte("some other object data")
+
+	xl := xlMetaV2{}
+	fi := FileInfo{
+		Volume:           "volume",
+		Name:             "object-name",
+		VersionID:        "756100c6-b393-4981-928a-d49bbc164741",
+		IsLatest:         true,
+		Deleted:          false,
+		TransitionStatus: "",
+		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",
+		XLV1:             false,
+		ModTime:          time.Now(),
+		Size:             0,
+		Mode:             0,
+		Metadata:         nil,
+		Parts:            nil,
+		Erasure: ErasureInfo{
+			Algorithm:    ReedSolomon.String(),
+			DataBlocks:   4,
+			ParityBlocks: 2,
+			BlockSize:    10000,
+			Index:        1,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8},
+			Checksums: []ChecksumInfo{{
+				PartNumber: 1,
+				Algorithm:  HighwayHash256S,
+				Hash:       nil,
+			}},
+		},
+		MarkDeleted:                   false,
+		DeleteMarkerReplicationStatus: "",
+		VersionPurgeStatus:            "",
+		Data:                          data,
+		NumVersions:                   1,
+		SuccessorModTime:              time.Time{},
+	}
+
+	d0, d1, d2 := mustGetUUID(), mustGetUUID(), mustGetUUID()
+	testCases := []struct {
+		versionID        string
+		dataDir          string
+		data             []byte
+		shares           int
+		transitionStatus string
+		restoreObjStatus string
+		expireRestored   bool
+		expectedDataDir  string
+	}{
+		{ // object versions with inlined data don't count towards shared data directory
+			versionID: mustGetUUID(),
+			dataDir:   d0,
+			data:      data,
+			shares:    0,
+		},
+		{ // object versions with inlined data don't count towards shared data directory
+			versionID: mustGetUUID(),
+			dataDir:   d1,
+			data:      data2,
+			shares:    0,
+		},
+		{ // transitioned object version don't count towards shared data directory
+			versionID:        mustGetUUID(),
+			dataDir:          d2,
+			shares:           3,
+			transitionStatus: lifecycle.TransitionComplete,
+		},
+		{ // transitioned object version with an ongoing restore-object request.
+			versionID:        mustGetUUID(),
+			dataDir:          d2,
+			shares:           3,
+			transitionStatus: lifecycle.TransitionComplete,
+			restoreObjStatus: ongoingRestoreObj().String(),
+		},
+		// The following versions are on-disk.
+		{ // restored object version expiring 10 hours from now.
+			versionID:        mustGetUUID(),
+			dataDir:          d2,
+			shares:           2,
+			transitionStatus: lifecycle.TransitionComplete,
+			restoreObjStatus: completedRestoreObj(time.Now().Add(10 * time.Hour)).String(),
+			expireRestored:   true,
+		},
+		{
+			versionID: mustGetUUID(),
+			dataDir:   d2,
+			shares:    2,
+		},
+		{
+			versionID:       mustGetUUID(),
+			dataDir:         d2,
+			shares:          2,
+			expectedDataDir: d2,
+		},
+	}
+
+	var fileInfos []FileInfo
+	for i, tc := range testCases {
+		fi := fi
+		fi.VersionID = tc.versionID
+		fi.DataDir = tc.dataDir
+		fi.Data = tc.data
+		if tc.data == nil {
+			fi.Size = 42 // to prevent inlining of data
+		}
+		if tc.restoreObjStatus != "" {
+			fi.Metadata = map[string]string{
+				xhttp.AmzRestore: tc.restoreObjStatus,
+			}
+		}
+		fi.TransitionStatus = tc.transitionStatus
+		failOnErr(i+1, xl.AddVersion(fi))
+		fi.ExpireRestored = tc.expireRestored
+		fileInfos = append(fileInfos, fi)
+	}
+
+	for i, tc := range testCases {
+		version := xl.Versions[i]
+		if actual := xl.SharedDataDirCount(version.ObjectV2.VersionID, version.ObjectV2.DataDir); actual != tc.shares {
+			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2, tc.shares, actual)
+		}
+	}
+
+	// Deleting fileInfos[4].VersionID, fileInfos[5].VersionID should return empty data dir; there are other object version sharing the data dir.
+	// Subsequently deleting fileInfos[6].versionID should return fileInfos[6].dataDir since there are no other object versions sharing this data dir.
+	count := len(testCases)
+	for i := 4; i < len(testCases); i++ {
+		tc := testCases[i]
+		dataDir, _, err := xl.DeleteVersion(fileInfos[i])
+		failOnErr(count+1, err)
+		if dataDir != tc.expectedDataDir {
+			t.Fatalf("Expected %s but got %s", tc.expectedDataDir, dataDir)
+		}
+		count++
 	}
 }

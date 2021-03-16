@@ -850,6 +850,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
+		xlMeta.data.remove(versionID)
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch

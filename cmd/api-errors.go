@@ -1989,6 +1989,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationSourceNotVersionedError
 	case TransitionStorageClassNotFound:
 		apiErr = ErrTransitionStorageClassNotFoundError
+	case InvalidObjectState:
+		apiErr = ErrInvalidObjectState
 
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded

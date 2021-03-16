@@ -256,12 +256,8 @@ func (j *tierJournal) OpenRO() (io.ReadCloser, error) {
 
 	// read journal version header
 	var data [tierJournalHdrLen]byte
-	n, err := file.Read(data[:])
-	if err != nil {
+	if _, err := io.ReadFull(file, data[:]); err != nil {
 		return nil, err
-	}
-	if n < 2 {
-		return nil, errors.New("invalid pending deletes journal format")
 	}
 
 	switch binary.LittleEndian.Uint16(data[:]) {

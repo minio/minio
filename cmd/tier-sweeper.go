@@ -63,9 +63,9 @@ func newObjSweeper(bucket, object string) *objSweeper {
 	}
 }
 
-// versionID interface is used to fetch object versionID from disparate sources
+// versionIDer interface is used to fetch object versionIDer from disparate sources
 // like http.Request and ObjectToDelete.
-type versionID interface {
+type versionIDer interface {
 	GetVersionID() string
 }
 
@@ -90,8 +90,8 @@ func (sd singleDelete) GetVersionID() string {
 	return strings.TrimSpace(sd.URL.Query().Get(xhttp.VersionID))
 }
 
-// ForDelete sets the version ID from v
-func (os *objSweeper) ForDelete(v versionID) *objSweeper {
+// WithVersion sets the version ID from v
+func (os *objSweeper) WithVersion(v versionIDer) *objSweeper {
 	os.ReqVersion = v.GetVersionID()
 	return os
 }

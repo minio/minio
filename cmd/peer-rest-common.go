@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v14" // Add GetBucketStats API
+	peerRESTVersion       = "v15" // Add LoadTransitionTierConfig
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix

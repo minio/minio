@@ -487,7 +487,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 		}
 
-		oss[index] = newObjSweeper(bucket, object.ObjectName).ForDelete(multiDelete(object))
+		oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(multiDelete(object))
 		// Mutations of objects on versioning suspended buckets
 		// affect its null version. Through opts below we select
 		// the null version's remote object to delete if
@@ -565,7 +565,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			VersionID:                     dObjects[i].VersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
-			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
 		}
 		dindex := objectsToDelete[objToDel]
 		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {

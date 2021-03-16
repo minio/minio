@@ -204,8 +204,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		if objInfo.TransitionStatus == lifecycle.TransitionComplete {
 			// Check if object is being restored. For more information on x-amz-restore header see
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
-			restoreHdr, ok := objInfo.UserDefined[xhttp.AmzRestore]
-			if !ok || !strings.HasPrefix(restoreHdr, "ongoing-request=false") || (!objInfo.RestoreExpires.IsZero() && time.Now().After(objInfo.RestoreExpires)) {
+			if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
 				w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionTier}
 			}
 		}

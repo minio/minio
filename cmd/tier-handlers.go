@@ -96,7 +96,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = globalTierConfigMgr.Add(cfg)
+	err = globalTierConfigMgr.Add(ctx, cfg)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -175,7 +175,7 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := globalTierConfigMgr.Edit(scName, creds); err != nil {
+	if err := globalTierConfigMgr.Edit(ctx, scName, creds); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
