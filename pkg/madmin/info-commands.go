@@ -189,7 +189,7 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 // the number of calls of each API and the moving average of
 // the duration of each API.
 type DiskMetrics struct {
-	StorageAPILatency map[string]float64
+	StorageAPILatency map[string]time.Duration
 	StorageAPICalls   map[string]uint64
 }
 

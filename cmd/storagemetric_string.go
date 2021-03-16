@@ -8,40 +8,38 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[storageMetricIsOnline-0]
-	_ = x[storageMetricHealing-1]
-	_ = x[storageMetricGetDiskID-2]
-	_ = x[storageMetricDiskInfo-3]
-	_ = x[storageMetricMakeVolBulk-4]
-	_ = x[storageMetricMakeVol-5]
-	_ = x[storageMetricListVols-6]
-	_ = x[storageMetricStatVol-7]
-	_ = x[storageMetricDeleteVol-8]
-	_ = x[storageMetricWalkVersions-9]
-	_ = x[storageMetricWalkDir-10]
-	_ = x[storageMetricListDir-11]
-	_ = x[storageMetricReadFile-12]
-	_ = x[storageMetricAppendFile-13]
-	_ = x[storageMetricCreateFile-14]
-	_ = x[storageMetricReadFileStream-15]
-	_ = x[storageMetricRenameFile-16]
-	_ = x[storageMetricRenameData-17]
-	_ = x[storageMetricCheckParts-18]
-	_ = x[storageMetricCheckFile-19]
-	_ = x[storageMetricDelete-20]
-	_ = x[storageMetricDeleteVersions-21]
-	_ = x[storageMetricVerifyFile-22]
-	_ = x[storageMetricWriteAll-23]
-	_ = x[storageMetricDeleteVersion-24]
-	_ = x[storageMetricWriteMetadata-25]
-	_ = x[storageMetricReadVersion-26]
-	_ = x[storageMetricReadAll-27]
-	_ = x[metricLast-28]
+	_ = x[storageMetricGetDiskID-0]
+	_ = x[storageMetricDiskInfo-1]
+	_ = x[storageMetricMakeVolBulk-2]
+	_ = x[storageMetricMakeVol-3]
+	_ = x[storageMetricListVols-4]
+	_ = x[storageMetricStatVol-5]
+	_ = x[storageMetricDeleteVol-6]
+	_ = x[storageMetricWalkVersions-7]
+	_ = x[storageMetricWalkDir-8]
+	_ = x[storageMetricListDir-9]
+	_ = x[storageMetricReadFile-10]
+	_ = x[storageMetricAppendFile-11]
+	_ = x[storageMetricCreateFile-12]
+	_ = x[storageMetricReadFileStream-13]
+	_ = x[storageMetricRenameFile-14]
+	_ = x[storageMetricRenameData-15]
+	_ = x[storageMetricCheckParts-16]
+	_ = x[storageMetricCheckFile-17]
+	_ = x[storageMetricDelete-18]
+	_ = x[storageMetricDeleteVersions-19]
+	_ = x[storageMetricVerifyFile-20]
+	_ = x[storageMetricWriteAll-21]
+	_ = x[storageMetricDeleteVersion-22]
+	_ = x[storageMetricWriteMetadata-23]
+	_ = x[storageMetricReadVersion-24]
+	_ = x[storageMetricReadAll-25]
+	_ = x[metricLast-26]
 }
 
-const _storageMetric_name = "IsOnlineHealingGetDiskIDDiskInfoMakeVolBulkMakeVolListVolsStatVolDeleteVolWalkVersionsWalkDirListDirReadFileAppendFileCreateFileReadFileStreamRenameFileRenameDataCheckPartsCheckFileDeleteDeleteVersionsVerifyFileWriteAllDeleteVersionWriteMetadataReadVersionReadAllmetricLast"
+const _storageMetric_name = "GetDiskIDDiskInfoMakeVolBulkMakeVolListVolsStatVolDeleteVolWalkVersionsWalkDirListDirReadFileAppendFileCreateFileReadFileStreamRenameFileRenameDataCheckPartsCheckFileDeleteDeleteVersionsVerifyFileWriteAllDeleteVersionWriteMetadataReadVersionReadAllmetricLast"
 
-var _storageMetric_index = [...]uint16{0, 8, 15, 24, 32, 43, 50, 58, 65, 74, 86, 93, 100, 108, 118, 128, 142, 152, 162, 172, 181, 187, 201, 211, 219, 232, 245, 256, 263, 273}
+var _storageMetric_index = [...]uint16{0, 9, 17, 28, 35, 43, 50, 59, 71, 78, 85, 93, 103, 113, 127, 137, 147, 157, 166, 172, 186, 196, 204, 217, 230, 241, 248, 258}
 
 func (i storageMetric) String() string {
 	if i >= storageMetric(len(_storageMetric_index)-1) {
