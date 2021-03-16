@@ -260,6 +260,63 @@ func (l *Config) lookupUserDN(conn *ldap.Conn, username string) (string, error) 
 	return searchResult.Entries[0].DN, nil
 }
 
+func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) ([]string, error) {
+	// User groups lookup.
+	var groups []string
+	if l.GroupSearchFilter != "" {
+		for _, groupSearchBase := range l.GroupSearchBaseDistNames {
+			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(username), -1)
+			filter = strings.Replace(filter, "%d", ldap.EscapeFilter(bindDN), -1)
+			searchRequest := ldap.NewSearchRequest(
+				groupSearchBase,
+				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+				filter,
+				nil,
+				nil,
+			)
+
+			var newGroups []string
+			newGroups, err := getGroups(conn, searchRequest)
+			if err != nil {
+				errRet := fmt.Errorf("Error finding groups of %s: %v", bindDN, err)
+				return nil, errRet
+			}
+
+			groups = append(groups, newGroups...)
+		}
+	}
+
+	return groups, nil
+}
+
+// LookupUserDN searches for the full DN ang groups of a given username
+func (l *Config) LookupUserDN(username string) (string, []string, error) {
+	conn, err := l.Connect()
+	if err != nil {
+		return "", nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.lookupBind(conn); err != nil {
+		return "", nil, err
+	}
+
+	// Lookup user DN
+	bindDN, err := l.lookupUserDN(conn, username)
+	if err != nil {
+		errRet := fmt.Errorf("Unable to find user DN: %w", err)
+		return "", nil, errRet
+	}
+
+	groups, err := l.searchForUserGroups(conn, username, bindDN)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return bindDN, groups, nil
+}
+
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
 // user and the list of groups.
 func (l *Config) Bind(username, password string) (string, []string, error) {
@@ -310,28 +367,9 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 	}
 
 	// User groups lookup.
-	var groups []string
-	if l.GroupSearchFilter != "" {
-		for _, groupSearchBase := range l.GroupSearchBaseDistNames {
-			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(username), -1)
-			filter = strings.Replace(filter, "%d", ldap.EscapeFilter(bindDN), -1)
-			searchRequest := ldap.NewSearchRequest(
-				groupSearchBase,
-				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-				filter,
-				nil,
-				nil,
-			)
-
-			var newGroups []string
-			newGroups, err = getGroups(conn, searchRequest)
-			if err != nil {
-				errRet := fmt.Errorf("Error finding groups of %s: %v", bindDN, err)
-				return "", nil, errRet
-			}
-
-			groups = append(groups, newGroups...)
-		}
+	groups, err := l.searchForUserGroups(conn, username, bindDN)
+	if err != nil {
+		return "", nil, err
 	}
 
 	return bindDN, groups, nil

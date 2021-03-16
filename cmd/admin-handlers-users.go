@@ -471,15 +471,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
 	if s3Err != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
-		return
-	}
-
-	// Disallow creating service accounts by root user.
-	if owner {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
 		return
 	}
 
@@ -496,12 +490,60 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	parentUser := cred.AccessKey
-	if cred.ParentUser != "" {
-		parentUser = cred.ParentUser
+	// Disallow creating service accounts by root user.
+	if createReq.TargetUser == globalActiveCred.AccessKey {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
 	}
 
-	newCred, err := globalIAMSys.NewServiceAccount(ctx, parentUser, cred.Groups, createReq.Policy)
+	var (
+		targetUser   string
+		targetGroups []string
+	)
+
+	targetUser = createReq.TargetUser
+
+	// Need permission if we are creating a service acccount
+	// for a user <> to the request sender
+	if targetUser != "" && targetUser != cred.AccessKey {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          iampolicy.CreateServiceAccountAdminAction,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			IsOwner:         owner,
+			Claims:          claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	}
+
+	if globalLDAPConfig.Enabled {
+		if targetUser == "" {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+			return
+		}
+
+		// If LDAP enabled, service accounts need
+		// to be created only for LDAP users.
+		var err error
+		_, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	} else {
+		if targetUser == "" {
+			targetUser = cred.AccessKey
+		}
+		if cred.ParentUser != "" {
+			targetUser = cred.ParentUser
+		}
+		targetGroups = cred.Groups
+	}
+
+	opts := newServiceAccountOpts{sessionPolicy: createReq.Policy, accessKey: createReq.AccessKey, secretKey: createReq.SecretKey}
+	newCred, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -537,6 +579,191 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, encryptedData)
 }
 
+// EditServiceAccount - POST /minio/admin/v3/edit-service-account
+func (a adminAPIHandlers) EditServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "EditServiceAccount")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	accessKey := mux.Vars(r)["accessKey"]
+	if accessKey == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	// Disallow editing service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
+	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          iampolicy.EditServiceAccountAdminAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+	}) {
+		requestUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			requestUser = cred.ParentUser
+		}
+
+		if requestUser != svcAccount.ParentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	}
+
+	password := cred.SecretKey
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	var editReq madmin.EditServiceAccountReq
+	if err = json.Unmarshal(reqBytes, &editReq); err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	opts := editServiceAccountOpts{sessionPolicy: editReq.NewPolicy, secretKey: editReq.NewSecretKey, status: editReq.NewStatus}
+	err = globalIAMSys.EditServiceAccount(ctx, accessKey, opts)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Notify all other Minio peers to reload user the service account
+	for _, nerr := range globalNotificationSys.LoadServiceAccount(accessKey) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	writeSuccessNoContent(w)
+}
+
+// InfoServiceAccount - GET /minio/admin/v3/info-service-account
+func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InfoServiceAccount")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
+	accessKey := mux.Vars(r)["accessKey"]
+	if accessKey == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	svcAccount, policy, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          iampolicy.ListServiceAccountsAdminAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+	}) {
+		requestUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			requestUser = cred.ParentUser
+		}
+
+		if requestUser != svcAccount.ParentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	}
+
+	var svcAccountPolicy iampolicy.Policy
+
+	impliedPolicy := policy == nil
+
+	// If policy is empty, check for policy of the parent user
+	if !impliedPolicy {
+		svcAccountPolicy.Merge(*policy)
+	} else {
+		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.AccessKey, false)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
+	}
+
+	policyJSON, err := json.Marshal(svcAccountPolicy)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	var infoResp = madmin.InfoServiceAccountResp{
+		ParentUser:    svcAccount.ParentUser,
+		AccountStatus: svcAccount.Status,
+		ImpliedPolicy: impliedPolicy,
+		Policy:        string(policyJSON),
+	}
+
+	data, err := json.Marshal(infoResp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
 // ListServiceAccounts - GET /minio/admin/v3/list-service-accounts
 func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListServiceAccounts")
@@ -550,7 +777,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
 	if s3Err != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
@@ -562,19 +789,42 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	parentUser := cred.AccessKey
-	if cred.ParentUser != "" {
-		parentUser = cred.ParentUser
+	var targetAccount string
+
+	user := mux.Vars(r)["user"]
+	if user != "" {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          iampolicy.ListServiceAccountsAdminAction,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			IsOwner:         owner,
+			Claims:          claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+		targetAccount = user
+	} else {
+		targetAccount = cred.AccessKey
+		if cred.ParentUser != "" {
+			targetAccount = cred.ParentUser
+		}
 	}
 
-	serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, parentUser)
+	serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, targetAccount)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
+	var serviceAccountsNames []string
+
+	for _, svc := range serviceAccounts {
+		serviceAccountsNames = append(serviceAccountsNames, svc.AccessKey)
+	}
+
 	var listResp = madmin.ListServiceAccountsResp{
-		Accounts: serviceAccounts,
+		Accounts: serviceAccountsNames,
 	}
 
 	data, err := json.Marshal(listResp)
@@ -605,7 +855,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
 	if s3Err != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
@@ -623,23 +873,32 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	user, err := globalIAMSys.GetServiceAccountParent(ctx, serviceAccount)
+	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	parentUser := cred.AccessKey
-	if cred.ParentUser != "" {
-		parentUser = cred.ParentUser
-	}
+	adminPrivilege := globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          iampolicy.RemoveServiceAccountAdminAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+	})
 
-	if parentUser != user || user == "" {
-		// The service account belongs to another user but return not
-		// found error to mitigate brute force attacks. or the
-		// serviceAccount doesn't exist.
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServiceAccountNotFound), r.URL)
-		return
+	if !adminPrivilege {
+		parentUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			parentUser = cred.ParentUser
+		}
+		if parentUser != svcAccount.ParentUser {
+			// The service account belongs to another user but return not
+			// found error to mitigate brute force attacks. or the
+			// serviceAccount doesn't exist.
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminServiceAccountNotFound), r.URL)
+			return
+		}
 	}
 
 	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
