@@ -87,7 +87,7 @@ func (p *xlStorageDiskIDCheck) String() string {
 }
 
 func (p *xlStorageDiskIDCheck) IsOnline() bool {
-	defer p.storageMetrics(storageMetricIsOnline)()
+	defer p.updateStorageMetrics(storageMetricIsOnline)()
 	storedDiskID, err := p.storage.GetDiskID()
 	if err != nil {
 		return false
@@ -108,7 +108,7 @@ func (p *xlStorageDiskIDCheck) Hostname() string {
 }
 
 func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
-	defer p.storageMetrics(storageMetricHealing)()
+	defer p.updateStorageMetrics(storageMetricHealing)()
 	return p.storage.Healing()
 }
 
@@ -138,7 +138,7 @@ func (p *xlStorageDiskIDCheck) Close() error {
 }
 
 func (p *xlStorageDiskIDCheck) GetDiskID() (string, error) {
-	defer p.storageMetrics(storageMetricGetDiskID)()
+	defer p.updateStorageMetrics(storageMetricGetDiskID)()
 	return p.storage.GetDiskID()
 }
 
@@ -171,7 +171,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricDiskInfo)()
+	defer p.updateStorageMetrics(storageMetricDiskInfo)()
 	info, err = p.storage.DiskInfo(ctx)
 	if err != nil {
 		return info, err
@@ -193,7 +193,7 @@ func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...strin
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricMakeVolBulk)()
+	defer p.updateStorageMetrics(storageMetricMakeVolBulk)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err 
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricMakeVol)()
+	defer p.updateStorageMetrics(storageMetricMakeVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) 
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricListVols)()
+	defer p.updateStorageMetrics(storageMetricListVols)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol 
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricStatVol)()
+	defer p.updateStorageMetrics(storageMetricStatVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return vol, err
 	}
@@ -249,7 +249,7 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricDeleteVol)()
+	defer p.updateStorageMetrics(storageMetricDeleteVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath stri
 		return nil, ctx.Err()
 	default:
 	}
-	defer p.storageMetrics(storageMetricListDir)()
+	defer p.updateStorageMetrics(storageMetricListDir)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricReadFile)()
+	defer p.updateStorageMetrics(storageMetricReadFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return 0, err
 	}
@@ -292,7 +292,7 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricAppendFile)()
+	defer p.updateStorageMetrics(storageMetricAppendFile)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -307,7 +307,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricCreateFile)()
+	defer p.updateStorageMetrics(storageMetricCreateFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -322,7 +322,7 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricReadFileStream)()
+	defer p.updateStorageMetrics(storageMetricReadFileStream)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricRenameFile)()
+	defer p.updateStorageMetrics(storageMetricRenameFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -352,7 +352,7 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricRenameData)()
+	defer p.updateStorageMetrics(storageMetricRenameData)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricCheckParts)()
+	defer p.updateStorageMetrics(storageMetricCheckParts)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -382,7 +382,7 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricCheckFile)()
+	defer p.updateStorageMetrics(storageMetricCheckFile)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -397,7 +397,7 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricDelete)()
+	defer p.updateStorageMetrics(storageMetricDelete)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
-	defer p.storageMetrics(storageMetricDeleteVersions)()
+	defer p.updateStorageMetrics(storageMetricDeleteVersions)()
 	if err := p.checkDiskStale(); err != nil {
 		errs = make([]error, len(versions))
 		for i := range errs {
@@ -424,7 +424,7 @@ func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path stri
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricVerifyFile)()
+	defer p.updateStorageMetrics(storageMetricVerifyFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -439,7 +439,7 @@ func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricWriteAll)()
+	defer p.updateStorageMetrics(storageMetricWriteAll)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -454,7 +454,7 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricDeleteVersion)()
+	defer p.updateStorageMetrics(storageMetricDeleteVersion)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -469,7 +469,7 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricWriteMetadata)()
+	defer p.updateStorageMetrics(storageMetricWriteMetadata)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -484,7 +484,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricReadVersion)()
+	defer p.updateStorageMetrics(storageMetricReadVersion)()
 	if err = p.checkDiskStale(); err != nil {
 		return fi, err
 	}
@@ -499,7 +499,7 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	default:
 	}
 
-	defer p.storageMetrics(storageMetricReadAll)()
+	defer p.updateStorageMetrics(storageMetricReadAll)()
 	if err = p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -508,7 +508,7 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 }
 
 // Update storage metrics
-func (p *xlStorageDiskIDCheck) storageMetrics(s storageMetric) func() {
+func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric) func() {
 	startTime := time.Now()
 	return func() {
 		p.apisCount[s]++
