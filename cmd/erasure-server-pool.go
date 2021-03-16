@@ -783,8 +783,8 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	if !z.SinglePool() {
 		for j, obj := range objects {
 			idx, err := z.getPoolIdxExisting(ctx, bucket, obj.ObjectName)
-			if err == errFileNotFound {
-				derrs[j] = toObjectErr(err)
+			if isErrObjectNotFound(err) {
+				derrs[j] = err
 				continue
 			}
 			if err != nil {
