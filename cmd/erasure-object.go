@@ -796,18 +796,14 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Write unique `xl.meta` for each disk.
-	if len(inlineBuffers) == 0 || true {
+	if len(inlineBuffers) == 0 {
 		if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
 		// Rename the successfully written temporary object to final location.
-		dd := fi.DataDir
-		if len(inlineBuffers) > 0 {
-			dd = ""
-		}
-		if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, dd, bucket, object, writeQuorum, nil); err != nil {
+		if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
 			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
