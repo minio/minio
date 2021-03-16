@@ -185,14 +185,6 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 	return dataUsageInfo, nil
 }
 
-// DiskMetrics has the information about XL Storage APIs
-// the number of calls of each API and the moving average of
-// the duration of each API.
-type DiskMetrics struct {
-	StorageAPILatency map[string]time.Duration
-	StorageAPICalls   map[string]uint64
-}
-
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
 	Mode         string             `json:"mode,omitempty"`
@@ -206,8 +198,6 @@ type InfoMessage struct {
 	Services     Services           `json:"services,omitempty"`
 	Backend      interface{}        `json:"backend,omitempty"`
 	Servers      []ServerProperties `json:"servers,omitempty"`
-
-	DisksMetrics []DiskMetrics `json:"disksMetrics"`
 }
 
 // Services contains different services information
@@ -301,6 +291,14 @@ type ServerProperties struct {
 	PoolNumber int               `json:"poolNumber,omitempty"`
 }
 
+// DiskMetrics has the information about XL Storage APIs
+// the number of calls of each API and the moving average of
+// the duration of each API.
+type DiskMetrics struct {
+	APILatencies map[string]string `json:"apiLatencies,omitempty"`
+	APICalls     map[string]uint64 `json:"apiCalls,omitempty"`
+}
+
 // Disk holds Disk information
 type Disk struct {
 	Endpoint        string       `json:"endpoint,omitempty"`
@@ -318,6 +316,7 @@ type Disk struct {
 	ReadLatency     float64      `json:"readlatency,omitempty"`
 	WriteLatency    float64      `json:"writelatency,omitempty"`
 	Utilization     float64      `json:"utilization,omitempty"`
+	Metrics         *DiskMetrics `json:"metrics,omitempty"`
 	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
 
 	// Indexes, will be -1 until assigned a set.

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	ewma "github.com/VividCortex/ewma"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -31,14 +30,11 @@ import (
 type storageMetric uint8
 
 const (
-	storageMetricGetDiskID storageMetric = iota
-	storageMetricDiskInfo
-	storageMetricMakeVolBulk
+	storageMetricMakeVolBulk storageMetric = iota
 	storageMetricMakeVol
 	storageMetricListVols
 	storageMetricStatVol
 	storageMetricDeleteVol
-	storageMetricWalkVersions
 	storageMetricWalkDir
 	storageMetricListDir
 	storageMetricReadFile
@@ -68,23 +64,23 @@ type xlStorageDiskIDCheck struct {
 	storage *xlStorage
 	diskID  string
 
-	updateMu    sync.RWMutex
-	apisCount   [metricLast]uint64
-	apisLatency [metricLast]ewma.MovingAverage
+	updateMu     sync.RWMutex
+	apiCalls     [metricLast]uint64
+	apiLatencies [metricLast]ewma.MovingAverage
 }
 
-func (p *xlStorageDiskIDCheck) GetMetrics() madmin.DiskMetrics {
-	diskMetric := madmin.DiskMetrics{
-		StorageAPILatency: make(map[string]time.Duration),
-		StorageAPICalls:   make(map[string]uint64),
+func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
+	diskMetric := DiskMetrics{
+		APILatencies: make(map[string]string),
+		APICalls:     make(map[string]uint64),
 	}
 	p.updateMu.RLock()
 	defer p.updateMu.RUnlock()
-	for i, v := range p.apisLatency {
-		diskMetric.StorageAPILatency[storageMetric(i).String()] = time.Duration(v.Value())
+	for i, v := range p.apiLatencies {
+		diskMetric.APILatencies[storageMetric(i).String()] = time.Duration(v.Value()).String()
 	}
-	for i, v := range p.apisCount {
-		diskMetric.StorageAPICalls[storageMetric(i).String()] = v
+	for i, v := range p.apiCalls {
+		diskMetric.APICalls[storageMetric(i).String()] = v
 	}
 	return diskMetric
 }
@@ -93,8 +89,8 @@ func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
 	xl := xlStorageDiskIDCheck{
 		storage: storage,
 	}
-	for i := range xl.apisLatency[:] {
-		xl.apisLatency[i] = ewma.NewMovingAverage()
+	for i := range xl.apiLatencies[:] {
+		xl.apiLatencies[i] = ewma.NewMovingAverage()
 	}
 	return &xl
 }
@@ -179,8 +175,6 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 }
 
 func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
-	defer p.updateStorageMetrics(storageMetricDiskInfo)()
-
 	select {
 	case <-ctx.Done():
 		return DiskInfo{}, ctx.Err()
@@ -191,6 +185,8 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	if err != nil {
 		return info, err
 	}
+
+	info.Metrics = p.getMetrics()
 	// check cached diskID against backend
 	// only if its non-empty.
 	if p.diskID != "" {
@@ -560,8 +556,8 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric) func() {
 	startTime := time.Now()
 	return func() {
 		p.updateMu.Lock()
-		p.apisCount[s]++
-		p.apisLatency[s].Add(float64(time.Since(startTime)))
+		p.apiCalls[s]++
+		p.apiLatencies[s].Add(float64(time.Since(startTime)))
 		p.updateMu.Unlock()
 	}
 }
