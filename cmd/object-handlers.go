@@ -3182,7 +3182,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	)
 
 	var goiOpts ObjectOptions
-	os := newObjSweeper(bucket, object).ForDelete(singleDelete(*r))
+	os := newObjSweeper(bucket, object).WithVersion(singleDelete(*r))
 	// Mutations of objects on versioning suspended buckets
 	// affect its null version. Through opts below we select
 	// the null version's remote object to delete if
@@ -3885,8 +3885,12 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEmptyRequestBody), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	objInfo, err := getObjectInfo(ctx, bucket, object, ObjectOptions{})
+	opts, err := postOpts(ctx, r, bucket, object)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -3930,16 +3934,12 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 	// update self with restore metadata
 	if rreq.Type != SelectRestoreRequest {
 		objInfo.metadataOnly = true // Perform only metadata updates.
-		ongoingReq := true
-		if alreadyRestored {
-			ongoingReq = false
-		}
 		metadata[xhttp.AmzRestoreExpiryDays] = strconv.Itoa(rreq.Days)
 		metadata[xhttp.AmzRestoreRequestDate] = time.Now().UTC().Format(http.TimeFormat)
 		if alreadyRestored {
-			metadata[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t, expiry-date=%s", ongoingReq, restoreExpiry.Format(http.TimeFormat))
+			metadata[xhttp.AmzRestore] = completedRestoreObj(restoreExpiry).String()
 		} else {
-			metadata[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t", ongoingReq)
+			metadata[xhttp.AmzRestore] = ongoingRestoreObj().String()
 		}
 		objInfo.UserDefined = metadata
 		if _, err := objectAPI.CopyObject(GlobalContext, bucket, object, bucket, object, objInfo, ObjectOptions{
@@ -4024,6 +4024,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}
 		if err := objectAPI.RestoreTransitionedObject(rctx, bucket, object, opts); err != nil {
+			logger.LogIf(ctx, err)
 			return
 		}
 

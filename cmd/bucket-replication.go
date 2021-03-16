@@ -29,6 +29,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -351,7 +352,6 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
-
 		meta[k] = v
 	}
 
@@ -372,9 +372,11 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 	if sc == "" {
 		sc = oi.StorageClass
 	}
-	if sc != "" {
+	// drop non standard storage classes for tiering from replication
+	if sc != "" && (sc == storageclass.RRS || sc == storageclass.STANDARD) {
 		meta[xhttp.AmzStorageClass] = sc
 	}
+
 	meta[xhttp.MinIOSourceETag] = oi.ETag
 	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
 	meta[xhttp.AmzBucketReplicationStatus] = replication.Replica.String()
@@ -414,7 +416,7 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 	}
 
 	sc := dest.StorageClass
-	if sc == "" {
+	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
 		sc = objInfo.StorageClass
 	}
 	putOpts = miniogo.PutObjectOptions{
@@ -611,6 +613,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		return
 	}
+
 	defer gr.Close() // hold write lock for entire transaction
 
 	objInfo = gr.ObjInfo

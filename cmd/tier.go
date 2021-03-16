@@ -77,7 +77,7 @@ func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, 
 }
 
 // Add adds tier to config if it passes all validations.
-func (config *TierConfigMgr) Add(tier madmin.TierConfig) error {
+func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) error {
 	config.Lock()
 	defer config.Unlock()
 
@@ -93,12 +93,12 @@ func (config *TierConfigMgr) Add(tier madmin.TierConfig) error {
 		return errTierAlreadyExists
 	}
 
-	d, err := newWarmBackend(context.TODO(), tier)
+	d, err := newWarmBackend(ctx, tier)
 	if err != nil {
 		return err
 	}
 	// Check if warmbackend is in use by other MinIO tenants
-	inUse, err := d.InUse(context.TODO())
+	inUse, err := d.InUse(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (config *TierConfigMgr) ListTiers() []madmin.TierConfig {
 }
 
 // Edit replaces the credentials of the remote tier specified by tierName with creds.
-func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error {
+func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds madmin.TierCreds) error {
 	config.Lock()
 	defer config.Unlock()
 
@@ -161,7 +161,7 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 		newCfg.GCS.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
 	}
 
-	d, err := newWarmBackend(context.TODO(), newCfg)
+	d, err := newWarmBackend(ctx, newCfg)
 	if err != nil {
 		return err
 	}

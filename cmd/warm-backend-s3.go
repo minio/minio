@@ -25,6 +25,7 @@ import (
 	"time"
 
 	minio "github.com/minio/minio-go/v7"
+	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -67,13 +68,10 @@ func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts warmBacken
 			return nil, s3.ToObjectError(err, object)
 		}
 	}
-
-	r, err := s3.client.GetObject(ctx, s3.Bucket, s3.getDest(object), gopts)
+	c := &miniogo.Core{Client: s3.client}
+	// Important to use core primitives here to pass range get options as is.
+	r, _, _, err := c.GetObject(ctx, s3.Bucket, s3.getDest(object), gopts)
 	if err != nil {
-		return nil, s3.ToObjectError(err, object)
-	}
-	if _, err = r.Stat(); err != nil {
-		r.Close()
 		return nil, s3.ToObjectError(err, object)
 	}
 	return r, nil

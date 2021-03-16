@@ -352,9 +352,6 @@ func handleCommonEnvVars() {
 	}
 	if tiers := env.Get("_MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY", ""); tiers != "" {
 		globalDebugRemoteTiersImmediately = strings.Split(tiers, ",")
-		if len(globalDebugRemoteTiersImmediately) == 0 {
-			logger.LogIf(context.Background(), fmt.Errorf("Invalid setting: _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY expects tier name(s) separated by commas"))
-		}
 	}
 }
 

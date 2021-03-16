@@ -102,11 +102,13 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	if err := json.Unmarshal(xlMetaBuf, xlMeta); err != nil {
 		return FileInfo{}, errFileCorrupt
 	}
+
 	fi, err := xlMeta.ToFileInfo(volume, path)
 	if err == errFileNotFound && versionID != "" {
 		return fi, errFileVersionNotFound
 	}
-	fi.XLV1 = true // indicates older version
+	fi.IsLatest = true // No versions so current version is latest.
+	fi.XLV1 = true     // indicates older version
 	return fi, err
 }
 

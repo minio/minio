@@ -44,7 +44,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/trie"
@@ -613,8 +612,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		return nil, 0, 0, err
 	}
 
-	// if object is encrypted, transition content without decrypting.
-	if opts.Transition.Status == lifecycle.TransitionPending && (isEncrypted || isCompressed) {
+	// if object is encrypted and it is a restore request, fetch content without decrypting.
+	if opts.Transition.RestoreRequest != nil {
 		isEncrypted = false
 		isCompressed = false
 	}

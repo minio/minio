@@ -251,11 +251,13 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
 
-	lk := er.NewNSLock(bucket, object)
-	if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
-		return result, err
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
+			return result, err
+		}
+		defer lk.Unlock()
 	}
-	defer lk.Unlock()
 
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
@@ -500,12 +502,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	// Rename from tmp location to the actual location.
-	for _, disk := range outDatedDisks {
+	for i, disk := range outDatedDisks {
 		if disk == OfflineDisk {
 			continue
 		}
 
-		dataDir := latestMeta.DataDir
+		dataDir := partsMetadata[i].DataDir
 		if latestMeta.TransitionStatus == lifecycle.TransitionComplete {
 			dataDir = ""
 		}

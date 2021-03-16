@@ -184,16 +184,6 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	if !m.valid() {
 		return FileInfo{}, errFileCorrupt
 	}
-	var transitionStatus, transitionedObj, transitionTier string
-	if st, ok := m.Meta[ReservedMetadataPrefixLower+TransitionStatus]; ok {
-		transitionStatus = st
-	}
-	if o, ok := m.Meta[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
-		transitionedObj = o
-	}
-	if t, ok := m.Meta[ReservedMetadataPrefixLower+TransitionTier]; ok {
-		transitionTier = t
-	}
 
 	fi := FileInfo{
 		Volume:    volume,
@@ -205,11 +195,6 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		Erasure:   m.Erasure,
 		VersionID: m.VersionID,
 		DataDir:   m.DataDir,
-	}
-	if transitionStatus != "" {
-		fi.TransitionStatus = transitionStatus
-		fi.TransitionedObjName = transitionedObj
-		fi.TransitionTier = transitionTier
 	}
 	return fi, nil
 }
