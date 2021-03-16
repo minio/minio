@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	ewma "github.com/VividCortex/ewma"
@@ -64,7 +65,6 @@ type xlStorageDiskIDCheck struct {
 	storage *xlStorage
 	diskID  string
 
-	updateMu     sync.RWMutex
 	apiCalls     [metricLast]uint64
 	apiLatencies [metricLast]ewma.MovingAverage
 }
@@ -74,15 +74,37 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 		APILatencies: make(map[string]string),
 		APICalls:     make(map[string]uint64),
 	}
-	p.updateMu.RLock()
-	defer p.updateMu.RUnlock()
 	for i, v := range p.apiLatencies {
 		diskMetric.APILatencies[storageMetric(i).String()] = time.Duration(v.Value()).String()
 	}
-	for i, v := range p.apiCalls {
-		diskMetric.APICalls[storageMetric(i).String()] = v
+	for i := range p.apiCalls {
+		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
 	}
 	return diskMetric
+}
+
+type lockedSimpleEWMA struct {
+	sync.RWMutex
+	*ewma.SimpleEWMA
+}
+
+func (e *lockedSimpleEWMA) Add(value float64) {
+	e.Lock()
+	defer e.Unlock()
+	e.SimpleEWMA.Add(value)
+}
+
+func (e *lockedSimpleEWMA) Set(value float64) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.SimpleEWMA.Set(value)
+}
+
+func (e *lockedSimpleEWMA) Value() float64 {
+	e.RLock()
+	defer e.RUnlock()
+	return e.SimpleEWMA.Value()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
@@ -90,7 +112,9 @@ func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
 		storage: storage,
 	}
 	for i := range xl.apiLatencies[:] {
-		xl.apiLatencies[i] = ewma.NewMovingAverage()
+		xl.apiLatencies[i] = &lockedSimpleEWMA{
+			SimpleEWMA: new(ewma.SimpleEWMA),
+		}
 	}
 	return &xl
 }
@@ -555,9 +579,7 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric) func() {
 	startTime := time.Now()
 	return func() {
-		p.updateMu.Lock()
-		p.apiCalls[s]++
+		atomic.AddUint64(&p.apiCalls[s], 1)
 		p.apiLatencies[s].Add(float64(time.Since(startTime)))
-		p.updateMu.Unlock()
 	}
 }
