@@ -81,8 +81,6 @@ var (
 
 	errInvalidInternalIV            = Errorf("The internal encryption IV is malformed")
 	errInvalidInternalSealAlgorithm = Errorf("The internal seal algorithm is invalid and not supported")
-
-	errMissingUpdatedKey = Errorf("The key update returned no error but also no sealed key")
 )
 
 var (
