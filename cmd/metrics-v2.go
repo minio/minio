@@ -1265,9 +1265,13 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 		}
 	}
 
+	peerDeadlineCtx, pCancel := context.WithTimeout(GlobalContext, 5*time.Second)
+	defer pCancel()
+	reportDeadlineCtx, rCancel := context.WithTimeout(GlobalContext, 5*time.Second)
+	defer rCancel()
 	// Call peer api to fetch metrics
-	peerCh := globalNotificationSys.GetClusterMetrics(GlobalContext)
-	selfCh := ReportMetrics(GlobalContext, GetAllGenerators)
+	peerCh := globalNotificationSys.GetClusterMetrics(peerDeadlineCtx)
+	selfCh := ReportMetrics(reportDeadlineCtx, GetAllGenerators)
 	wg.Add(2)
 	go publish(peerCh)
 	go publish(selfCh)
