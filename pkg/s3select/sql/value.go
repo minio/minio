@@ -306,15 +306,6 @@ func (v Value) CSVString() string {
 	}
 }
 
-// floatToValue converts a float into int representation if needed.
-func floatToValue(f float64) *Value {
-	intPart, fracPart := math.Modf(f)
-	if fracPart == 0 && intPart < math.MaxInt64 && intPart > math.MinInt64 {
-		return FromInt(int64(intPart))
-	}
-	return FromFloat(f)
-}
-
 // negate negates a numeric value
 func (v *Value) negate() {
 	switch x := v.value.(type) {
