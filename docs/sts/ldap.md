@@ -239,7 +239,9 @@ $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedo
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=%s))'
 $ minio server ~/test
 ```
-You can make sure it works appropriately using our [example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):
+You can make sure it works appropriately using [node example program](https://github.com/minio/minio/samples/sts-ldap-node.js/README.md)
+
+Our GO sample is not [actively maintained](https://github.com/minio/minio/issues/11806) for a moment [go example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):
 ```
 $ go run ldap.go -u foouser -p foopassword
 
@@ -258,3 +260,6 @@ $ go run ldap.go -u foouser -p foopassword
 ## Explore Further
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
 - [The MinIO documentation website](https://docs.min.io)
+
+
+[../../samples/sts-ldap-node.js/README.md]: ../.go

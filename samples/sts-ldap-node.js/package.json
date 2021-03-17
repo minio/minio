@@ -1,0 +1,14 @@
+{
+  "name": "minio-ldap",
+  "version": "1.0.0",
+  "description": "minio ldap repository",
+  "scripts": {
+    "run-docker-ldap-service": "docker, run --rm -p 10389:10389 -p 10636:10636 rroemhild/test-openldap",
+    "enable-minio-identity-ldap": "mc admin config set myminio identity_ldap server_addr=127.0.0.1:10389 username_format='uid=%s,ou=service,dc=planetexpress,dc=com' group_search_filter='(&(objectclass=account)(uid=%s))' group_search_base_dn=\"dc=planetexpress,dc=com\" sts_expiry=60h tls_skip_verify=on server_insecure=on server_starttls=off user_dn_search_base_dn= user_dn_search_filter= lookup_bind_dn= lookup_bind_password="
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "minio": "^7.0.18",
+    "xml2js": "^0.4.23"
+  }
+}
