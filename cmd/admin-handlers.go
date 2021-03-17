@@ -1559,6 +1559,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	objectAPI := newObjectLayerFn()
 	if objectAPI != nil {
 		mode = madmin.ItemOnline
+
 		// Load data usage
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err == nil {

@@ -291,6 +291,14 @@ type ServerProperties struct {
 	PoolNumber int               `json:"poolNumber,omitempty"`
 }
 
+// DiskMetrics has the information about XL Storage APIs
+// the number of calls of each API and the moving average of
+// the duration of each API.
+type DiskMetrics struct {
+	APILatencies map[string]string `json:"apiLatencies,omitempty"`
+	APICalls     map[string]uint64 `json:"apiCalls,omitempty"`
+}
+
 // Disk holds Disk information
 type Disk struct {
 	Endpoint        string       `json:"endpoint,omitempty"`
@@ -308,6 +316,7 @@ type Disk struct {
 	ReadLatency     float64      `json:"readlatency,omitempty"`
 	WriteLatency    float64      `json:"writelatency,omitempty"`
 	Utilization     float64      `json:"utilization,omitempty"`
+	Metrics         *DiskMetrics `json:"metrics,omitempty"`
 	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
 
 	// Indexes, will be -1 until assigned a set.

@@ -204,6 +204,16 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 					di.HealInfo = &hd
 				}
 			}
+			di.Metrics = &madmin.DiskMetrics{
+				APILatencies: make(map[string]string),
+				APICalls:     make(map[string]uint64),
+			}
+			for k, v := range info.Metrics.APILatencies {
+				di.Metrics.APILatencies[k] = v
+			}
+			for k, v := range info.Metrics.APICalls {
+				di.Metrics.APICalls[k] = v
+			}
 			if info.Total > 0 {
 				di.Utilization = float64(info.Used / info.Total * 100)
 			}

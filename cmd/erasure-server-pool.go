@@ -1618,7 +1618,7 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 	}
 }
 
-// GetMetrics - no op
+// GetMetrics - returns metrics of local disks
 func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &BackendMetrics{}, NotImplemented{}
