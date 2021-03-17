@@ -154,6 +154,21 @@ func (resourceSet ResourceSet) Validate(bucketName string) error {
 	return nil
 }
 
+// ToSlice - returns slice of resources from the resource set.
+func (resourceSet ResourceSet) ToSlice() []Resource {
+	resources := []Resource{}
+	for resource := range resourceSet {
+		resources = append(resources, resource)
+	}
+
+	return resources
+}
+
+// Clone clones ResourceSet structure
+func (resourceSet ResourceSet) Clone() ResourceSet {
+	return NewResourceSet(resourceSet.ToSlice()...)
+}
+
 // NewResourceSet - creates new resource set.
 func NewResourceSet(resources ...Resource) ResourceSet {
 	resourceSet := make(ResourceSet)

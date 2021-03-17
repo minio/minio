@@ -86,7 +86,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
 
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
 
 	versionID := srcInfo.VersionID
 	if srcInfo.versionOnly {
@@ -239,7 +239,7 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
 	// Reorder online disks based on erasure distribution order.
 	// Reorder parts metadata based on erasure distribution order.
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
 
 	// For negative length read everything.
 	if length < 0 {
@@ -1218,7 +1218,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
 	for i, metaFi := range metaArr {
 		if metaFi.IsValid() {
 			// clean fi.Meta of tag key, before updating the new tags

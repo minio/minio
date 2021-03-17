@@ -9,6 +9,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect
 	github.com/Shopify/sarama v1.27.2
+	github.com/VividCortex/ewma v1.1.1
 	github.com/alecthomas/participle v0.2.1
 	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
@@ -76,7 +77,6 @@ require (
 	github.com/tidwall/gjson v1.6.7
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible

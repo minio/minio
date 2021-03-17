@@ -1144,3 +1144,97 @@ func TestPolicyValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestPolicyMerge(t *testing.T) {
+	testCases := []struct {
+		policy string
+	}{
+		{`{
+    "Version": "2012-10-17",
+    "Id": "S3PolicyId1",
+    "Statement": [
+        {
+            "Sid": "statement1",
+            "Effect": "Deny",
+            "Principal": "*",
+	    "Action":["s3:GetObject", "s3:PutObject"],
+	    "Resource": "arn:aws:s3:::awsexamplebucket1/*"
+        }
+    ]
+}`},
+		{`{
+    "Version": "2012-10-17",
+    "Id": "S3PolicyId1",
+    "Statement": [
+        {
+            "Sid": "statement1",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action":"s3:GetObject",
+            "Resource": "arn:aws:s3:::awsexamplebucket1/*",
+            "Condition" : {
+                "IpAddress" : {
+                    "aws:SourceIp": "192.0.2.0/24"
+                },
+                "NotIpAddress" : {
+                    "aws:SourceIp": "192.0.2.188/32"
+                }
+            }
+        }
+    ]
+}`},
+		{`{
+    "Version": "2012-10-17",
+    "Statement": [
+       {
+            "Sid": "cross-account permission to user in your own account",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::123456789012:user/Dave"
+            },
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::awsexamplebucket1/*"
+        },
+        {
+            "Sid": "Deny your user permission to upload object if copy source is not /bucket/folder",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "arn:aws:iam::123456789012:user/Dave"
+            },
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::awsexamplebucket1/*",
+            "Condition": {
+                "StringNotLike": {
+                    "s3:x-amz-copy-source": "awsexamplebucket1/public/*"
+                }
+            }
+        }
+    ]
+}`},
+	}
+
+	for i, testCase := range testCases {
+		var p Policy
+		err := json.Unmarshal([]byte(testCase.policy), &p)
+		if err != nil {
+			t.Fatalf("case %v: unexpected error: %v", i+1, err)
+		}
+
+		var clonedPolicy Policy
+		clonedPolicy = clonedPolicy.Merge(p)
+
+		j, err := json.Marshal(clonedPolicy)
+		if err != nil {
+			t.Fatalf("case %v: unexpected error: %v", i+1, err)
+		}
+
+		err = json.Unmarshal(j, &clonedPolicy)
+		if err != nil {
+			t.Fatalf("case %v: unexpected error: %v", i+1, err)
+		}
+
+		if !clonedPolicy.Statements[0].Equals(p.Statements[0]) {
+			t.Fatalf("case %v: different policy outcome", i+1)
+		}
+	}
+}

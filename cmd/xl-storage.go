@@ -33,7 +33,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -89,8 +88,6 @@ func isValidVolname(volname string) bool {
 
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
-	activeIOCount int32
-
 	diskPath string
 	endpoint Endpoint
 
@@ -458,11 +455,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -630,11 +622,6 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 		return errInvalidArgument
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -660,11 +647,6 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 
 // ListVols - list volumes.
 func (s *xlStorage) ListVols(context.Context) (volsInfo []VolInfo, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	return listVols(s.diskPath)
 }
 
@@ -692,11 +674,6 @@ func listVols(dirPath string) ([]VolInfo, error) {
 
 // StatVol - get volume info.
 func (s *xlStorage) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -728,11 +705,6 @@ func (s *xlStorage) StatVol(ctx context.Context, volume string) (vol VolInfo, er
 
 // DeleteVol - delete a volume.
 func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -794,11 +766,6 @@ func (s *xlStorage) isLeafDir(volume, leafPath string) bool {
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -869,11 +836,6 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return errFileNotFound
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -942,11 +904,6 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
 		xlMeta, err = newXLMetaV2(fi)
@@ -992,11 +949,6 @@ func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
 		// a no-op always returns errFileNotFound
 		return errFileNotFound
 	}
-
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
 
 	// Validate file path length, before reading.
 	filePath := pathJoin(volumeDir, path)
@@ -1149,20 +1101,10 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 		return nil, err
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
 	or := &odirectReader{f, nil, nil, true, true, s, nil}
-	rd := struct {
-		io.Reader
-		io.Closer
-	}{Reader: or, Closer: closeWrapper(func() error {
-		defer func() {
-			atomic.AddInt32(&s.activeIOCount, -1)
-		}()
-		return or.Close()
-	})}
-	defer rd.Close() // activeIOCount is decremented in Close()
+	defer or.Close()
 
-	buf, err = ioutil.ReadAll(rd)
+	buf, err = ioutil.ReadAll(or)
 	if err != nil {
 		err = osErrToFileErr(err)
 	}
@@ -1208,11 +1150,6 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 	if offset < 0 {
 		return 0, errInvalidArgument
 	}
-
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1456,7 +1393,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported {
 		or := &odirectReader{file, nil, nil, true, false, s, nil}
 		if length <= smallFileThreshold {
@@ -1466,9 +1402,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 			io.Reader
 			io.Closer
 		}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
-			defer func() {
-				atomic.AddInt32(&s.activeIOCount, -1)
-			}()
 			return or.Close()
 		})}
 		return r, nil
@@ -1478,9 +1411,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
-		defer func() {
-			atomic.AddInt32(&s.activeIOCount, -1)
-		}()
 		return file.Close()
 	})}
 
@@ -1519,11 +1449,6 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	if fileSize < -1 {
 		return errInvalidArgument
 	}
-
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1632,11 +1557,6 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
@@ -1658,11 +1578,6 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b 
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1699,11 +1614,6 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 
 // CheckParts check if path has necessary parts available.
 func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1750,11 +1660,6 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 // - "a/b/"
 // - "a/"
 func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) error {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1860,11 +1765,6 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive bool) erro
 
 // DeleteFile - delete a file at path.
 func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1896,11 +1796,6 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -2160,11 +2055,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 // RenameFile - rename source path to destination path atomically.
 func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -2263,11 +2153,6 @@ func (s *xlStorage) bitrotVerify(partPath string, partSize int64, algo BitrotAlg
 }
 
 func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err

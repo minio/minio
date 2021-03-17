@@ -93,8 +93,12 @@ func (actionSet ActionSet) ToSlice() []Action {
 	for action := range actionSet {
 		actions = append(actions, action)
 	}
-
 	return actions
+}
+
+// Clone clones ActionSet structure
+func (actionSet ActionSet) Clone() ActionSet {
+	return NewActionSet(actionSet.ToSlice()...)
 }
 
 // UnmarshalJSON - decodes JSON data to ActionSet.

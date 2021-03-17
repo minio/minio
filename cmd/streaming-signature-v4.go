@@ -166,72 +166,23 @@ func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
 		seedDate:          seedDate,
 		region:            region,
 		chunkSHA256Writer: sha256.New(),
-		state:             readChunkHeader,
+		buffer:            make([]byte, 64*1024),
 	}, ErrNone
 }
 
 // Represents the overall state that is required for decoding a
 // AWS Signature V4 chunked reader.
 type s3ChunkedReader struct {
-	reader            *bufio.Reader
-	cred              auth.Credentials
-	seedSignature     string
-	seedDate          time.Time
-	region            string
-	state             chunkState
-	lastChunk         bool
-	chunkSignature    string
+	reader        *bufio.Reader
+	cred          auth.Credentials
+	seedSignature string
+	seedDate      time.Time
+	region        string
+
 	chunkSHA256Writer hash.Hash // Calculates sha256 of chunk data.
-	n                 uint64    // Unread bytes in chunk
+	buffer            []byte
+	offset            int
 	err               error
-}
-
-// Read chunk reads the chunk token signature portion.
-func (cr *s3ChunkedReader) readS3ChunkHeader() {
-	// Read the first chunk line until CRLF.
-	var hexChunkSize, hexChunkSignature []byte
-	hexChunkSize, hexChunkSignature, cr.err = readChunkLine(cr.reader)
-	if cr.err != nil {
-		return
-	}
-	// <hex>;token=value - converts the hex into its uint64 form.
-	cr.n, cr.err = parseHexUint(hexChunkSize)
-	if cr.err != nil {
-		return
-	}
-	if cr.n == 0 {
-		cr.err = io.EOF
-	}
-	// Save the incoming chunk signature.
-	cr.chunkSignature = string(hexChunkSignature)
-}
-
-type chunkState int
-
-const (
-	readChunkHeader chunkState = iota
-	readChunkTrailer
-	readChunk
-	verifyChunk
-	eofChunk
-)
-
-func (cs chunkState) String() string {
-	stateString := ""
-	switch cs {
-	case readChunkHeader:
-		stateString = "readChunkHeader"
-	case readChunkTrailer:
-		stateString = "readChunkTrailer"
-	case readChunk:
-		stateString = "readChunk"
-	case verifyChunk:
-		stateString = "verifyChunk"
-	case eofChunk:
-		stateString = "eofChunk"
-
-	}
-	return stateString
 }
 
 func (cr *s3ChunkedReader) Close() (err error) {
@@ -241,83 +192,165 @@ func (cr *s3ChunkedReader) Close() (err error) {
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
+	// First, if there is any unread data, copy it to the client
+	// provided buffer.
+	if cr.offset > 0 {
+		n = copy(buf, cr.buffer[cr.offset:])
+		if n == len(buf) {
+			cr.offset += n
+			return n, nil
+		}
+		cr.offset = 0
+		buf = buf[n:]
+	}
+
+	// Now, we read one chunk from the underlying reader.
+	// A chunk has the following format:
+	//   <chunk-size-as-hex> + ";chunk-signature=" + <signature-as-hex> + "\r\n" + <payload> + "\r\n"
+	//
+	// Frist, we read the chunk size but fail if it is larger
+	// than 1 MB. We must not accept arbitrary large chunks.
+	// One 1 MB is a reasonable max limit.
+	//
+	// Then we read the signature and payload data. We compute the SHA256 checksum
+	// of the payload and verify that it matches the expected signature value.
+	//
+	// The last chunk is *always* 0-sized. So, we must only return io.EOF if we have encountered
+	// a chunk with a chunk size = 0. However, this chunk still has a signature and we must
+	// verify it.
+	const MaxSize = 1 << 20 // 1 MB
+	var size int
 	for {
-		switch cr.state {
-		case readChunkHeader:
-			cr.readS3ChunkHeader()
-			// If we're at the end of a chunk.
-			if cr.n == 0 && cr.err == io.EOF {
-				cr.state = readChunkTrailer
-				cr.lastChunk = true
-				continue
-			}
-			if cr.err != nil {
-				return 0, cr.err
-			}
-			cr.state = readChunk
-		case readChunkTrailer:
-			cr.err = readCRLF(cr.reader)
-			if cr.err != nil {
-				return 0, errMalformedEncoding
-			}
-			cr.state = verifyChunk
-		case readChunk:
-			// There is no more space left in the request buffer.
-			if len(buf) == 0 {
-				return n, nil
-			}
-			rbuf := buf
-			// The request buffer is larger than the current chunk size.
-			// Read only the current chunk from the underlying reader.
-			if uint64(len(rbuf)) > cr.n {
-				rbuf = rbuf[:cr.n]
-			}
-			var n0 int
-			n0, cr.err = cr.reader.Read(rbuf)
-			if cr.err != nil {
-				// We have lesser than chunk size advertised in chunkHeader, this is 'unexpected'.
-				if cr.err == io.EOF {
-					cr.err = io.ErrUnexpectedEOF
-				}
-				return 0, cr.err
-			}
+		b, err := cr.reader.ReadByte()
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		if err != nil {
+			cr.err = err
+			return n, cr.err
+		}
+		if b == ';' { // separating character
+			break
+		}
 
-			// Calculate sha256.
-			cr.chunkSHA256Writer.Write(rbuf[:n0])
-			// Update the bytes read into request buffer so far.
-			n += n0
-			buf = buf[n0:]
-			// Update bytes to be read of the current chunk before verifying chunk's signature.
-			cr.n -= uint64(n0)
-
-			// If we're at the end of a chunk.
-			if cr.n == 0 {
-				cr.state = readChunkTrailer
-				continue
-			}
-		case verifyChunk:
-			// Calculate the hashed chunk.
-			hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
-			// Calculate the chunk signature.
-			newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
-			if !compareSignatureV4(cr.chunkSignature, newSignature) {
-				// Chunk signature doesn't match we return signature does not match.
-				cr.err = errSignatureMismatch
-				return 0, cr.err
-			}
-			// Newly calculated signature becomes the seed for the next chunk
-			// this follows the chaining.
-			cr.seedSignature = newSignature
-			cr.chunkSHA256Writer.Reset()
-			if cr.lastChunk {
-				cr.state = eofChunk
-			} else {
-				cr.state = readChunkHeader
-			}
-		case eofChunk:
-			return n, io.EOF
+		// Manually deserialize the size since AWS specified
+		// the chunk size to be of variable width. In particular,
+		// a size of 16 is encoded as `10` while a size of 64 KB
+		// is `10000`.
+		switch {
+		case b >= '0' && b <= '9':
+			size = size<<4 | int(b-'0')
+		case b >= 'a' && b <= 'f':
+			size = size<<4 | int(b-('a'-10))
+		case b >= 'A' && b <= 'F':
+			size = size<<4 | int(b-('A'-10))
+		default:
+			cr.err = errMalformedEncoding
+			return n, cr.err
+		}
+		if size > MaxSize {
+			cr.err = errMalformedEncoding
+			return n, cr.err
 		}
 	}
+
+	// Now, we read the signature of the following payload and expect:
+	//   chunk-signature=" + <signature-as-hex> + "\r\n"
+	//
+	// The signature is 64 bytes long (hex-encoded SHA256 hash) and
+	// starts with a 16 byte header: len("chunk-signature=") + 64 == 80.
+	var signature [80]byte
+	_, err = io.ReadFull(cr.reader, signature[:])
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if !bytes.HasPrefix(signature[:], []byte("chunk-signature=")) {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err := cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\r' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\n' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+
+	if cap(cr.buffer) < size {
+		cr.buffer = make([]byte, size)
+	} else {
+		cr.buffer = cr.buffer[:size]
+	}
+
+	// Now, we read the payload and compute its SHA-256 hash.
+	_, err = io.ReadFull(cr.reader, cr.buffer)
+	if err == io.EOF && size != 0 {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil && err != io.EOF {
+		cr.err = err
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if b != '\r' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\n' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+
+	// Once we have read the entire chunk successfully, we verify
+	// that the received signature matches our computed signature.
+	cr.chunkSHA256Writer.Write(cr.buffer)
+	newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil)))
+	if !compareSignatureV4(string(signature[16:]), newSignature) {
+		cr.err = errSignatureMismatch
+		return n, cr.err
+	}
+	cr.seedSignature = newSignature
+	cr.chunkSHA256Writer.Reset()
+
+	// If the chunk size is zero we return io.EOF. As specified by AWS,
+	// only the last chunk is zero-sized.
+	if size == 0 {
+		cr.err = io.EOF
+		return n, cr.err
+	}
+
+	cr.offset = copy(buf, cr.buffer)
+	n += cr.offset
+	return n, err
 }
 
 // readCRLF - check if reader only has '\r\n' CRLF character.

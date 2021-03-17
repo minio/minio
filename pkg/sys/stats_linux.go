@@ -69,7 +69,7 @@ func getSysinfoMemoryLimit() (limit uint64, err error) {
 
 	// Total RAM is always the multiplicative value
 	// of unit size and total ram.
-	return uint64(unit) * totalRAM, nil
+	return uint64(unit) * uint64(totalRAM), nil
 }
 
 // GetStats - return system statistics, currently only

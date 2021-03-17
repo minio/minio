@@ -145,10 +145,11 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 	return metadataArray, g.Wait()
 }
 
-func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo, distribution []int) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
+func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo, fi FileInfo) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
 	shuffledDisks = make([]StorageAPI, len(disks))
 	shuffledPartsMetadata = make([]FileInfo, len(disks))
 	var inconsistent int
+	distribution := fi.Erasure.Distribution
 	for i, meta := range metaArr {
 		if disks[i] == nil {
 			// Assuming offline drives as inconsistent,
@@ -171,7 +172,7 @@ func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo,
 	// Inconsistent meta info is with in the limit of
 	// expected quorum, proceed with EcIndex based
 	// disk order.
-	if inconsistent < len(disks)/2 {
+	if inconsistent < fi.Erasure.ParityBlocks {
 		return shuffledDisks, shuffledPartsMetadata
 	}
 
