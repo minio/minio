@@ -224,17 +224,17 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 			// is emphemeral and we should treat it
 			// as root disk from the baremetal
 			// terminology.
-			rootDisk, err = disk.IsRootDisk(path, "/")
+			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
 			if err != nil {
 				return nil, err
 			}
 			if !rootDisk {
 				// No root disk was found, its possible that
-				// path is referenced at "/data" which has
+				// path is referenced at "/etc/hosts" which has
 				// different device ID that points to the original
 				// "/" on the host system, fall back to that instead
 				// to verify of the device id is same.
-				rootDisk, err = disk.IsRootDisk(path, "/data")
+				rootDisk, err = disk.IsRootDisk(path, "/etc/hosts")
 				if err != nil {
 					return nil, err
 				}
@@ -242,7 +242,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 
 		} else {
 			// On baremetal setups its always "/" is the root disk.
-			rootDisk, err = disk.IsRootDisk(path, "/")
+			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
 			if err != nil {
 				return nil, err
 			}
@@ -1233,7 +1233,7 @@ func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err err
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
-		return nil, err
+		return nil, osErrToFileErr(err)
 	}
 
 	w, err := os.OpenFile(filePath, mode|writeMode, 0666)
@@ -1432,82 +1432,42 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		return errInvalidArgument
 	}
 
+	if fileSize <= smallFileThreshold {
+		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
+		// and not O_DIRECT to avoid the complexities of aligned I/O.
+		w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		if err != nil {
+			return err
+		}
+		defer w.Close()
+
+		written, err := io.Copy(w, r)
+		if err != nil {
+			return osErrToFileErr(err)
+		}
+
+		if written > fileSize {
+			return errMoreData
+		}
+
+		return nil
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
 
-	// Stat a volume entry.
-	_, err = os.Lstat(volumeDir)
-	if err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
-	}
-
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
-		return err
-	}
-
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
-		switch {
-		case osIsPermission(err):
-			return errFileAccessDenied
-		case osIsExist(err):
-			return errFileAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		case isSysErrInvalidArg(err):
-			return errUnsupportedDisk
-		case isSysErrNoSpace(err):
-			return errDiskFull
-		}
-		return err
+		return osErrToFileErr(err)
 	}
 
 	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
-		switch {
-		case osIsPermission(err):
-			return errFileAccessDenied
-		case osIsExist(err):
-			return errFileAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		case isSysErrInvalidArg(err):
-			return errUnsupportedDisk
-		case isSysErrNoSpace(err):
-			return errDiskFull
-		default:
-			return err
-		}
-	}
-
-	var e error
-	if fileSize > 0 {
-		// Allocate needed disk space to append data
-		e = Fallocate(int(w.Fd()), 0, fileSize)
-	}
-
-	// Ignore errors when Fallocate is not supported in the current system
-	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
-		switch {
-		case isSysErrNoSpace(e):
-			err = errDiskFull
-		case isSysErrIO(e):
-			err = errFaultyDisk
-		default:
-			// For errors: EBADF, EINTR, EINVAL, ENODEV, EPERM, ESPIPE  and ETXTBSY
-			// Appending was failed anyway, returns unexpected error
-			err = errUnexpected
-		}
-		return err
+		return osErrToFileErr(err)
 	}
 
 	defer func() {
@@ -1515,14 +1475,8 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		w.Close()
 	}()
 
-	var bufp *[]byte
-	if fileSize <= smallFileThreshold {
-		bufp = s.poolSmall.Get().(*[]byte)
-		defer s.poolSmall.Put(bufp)
-	} else {
-		bufp = s.poolLarge.Get().(*[]byte)
-		defer s.poolLarge.Put(bufp)
-	}
+	bufp := s.poolLarge.Get().(*[]byte)
+	defer s.poolLarge.Put(bufp)
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
