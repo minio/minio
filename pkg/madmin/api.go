@@ -340,7 +340,6 @@ var successStatus = []int{
 // delayed manner using a standard back off algorithm.
 func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData requestData) (res *http.Response, err error) {
 	var reqRetry = MaxRetry // Indicates how many times we can retry the request
-
 	defer func() {
 		if err != nil {
 			// close idle connections before returning, upon error.
@@ -365,6 +364,10 @@ func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData
 		// Initiate the request.
 		res, err = adm.do(req)
 		if err != nil {
+			// Give up right away if it is a connection refused problem
+			if strings.HasSuffix(err.Error(), "connect: connection refused") {
+				return nil, err
+			}
 			if err == context.Canceled || err == context.DeadlineExceeded {
 				return nil, err
 			}
