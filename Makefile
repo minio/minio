@@ -38,7 +38,7 @@ lint:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GOGC=25 GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
 test-race: verifiers build
 	@echo "Running unit tests under -race"
