@@ -422,7 +422,8 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					continue
 				}
 				partPath := pathJoin(tmpID, dataDir, fmt.Sprintf("part.%d", partNumber))
-				writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath, tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+				writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
+					tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize(), true)
 			}
 			err = erasure.Heal(ctx, readers, writers, partSize)
 			closeBitrotReaders(readers)

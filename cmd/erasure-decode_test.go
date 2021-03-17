@@ -108,7 +108,8 @@ func TestErasureDecode(t *testing.T) {
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(test.data), writeAlgorithm, erasure.ShardSize())
+			writers[i] = newBitrotWriter(disk, "testbucket", "object",
+				erasure.ShardFileSize(test.data), writeAlgorithm, erasure.ShardSize(), false)
 		}
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[:]), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -234,7 +235,8 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(length), DefaultBitrotAlgorithm, erasure.ShardSize())
+		writers[i] = newBitrotWriter(disk, "testbucket", "object",
+			erasure.ShardFileSize(length), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 	}
 
 	// 10000 iterations with random offsets and lengths.
@@ -304,7 +306,8 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
+		writers[i] = newBitrotWriter(disk, "testbucket", "object",
+			erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 	}
 
 	content := make([]byte, size)
