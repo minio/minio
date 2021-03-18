@@ -108,7 +108,7 @@ func TestErasureEncode(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize())
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize(), false)
 		}
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -132,14 +132,14 @@ func TestErasureEncode(t *testing.T) {
 				if disk == nil {
 					continue
 				}
-				writers[i] = newBitrotWriter(disk, "testbucket", "object2", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize())
+				writers[i] = newBitrotWriter(disk, "testbucket", "object2", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize(), false)
 			}
 			for j := range disks[:test.offDisks] {
 				switch w := writers[j].(type) {
 				case *wholeBitrotWriter:
 					w.disk = badDisk{nil}
 				case *streamingBitrotWriter:
-					w.iow.CloseWithError(errFaultyDisk)
+					w.iow.(*io.PipeWriter).CloseWithError(errFaultyDisk)
 				}
 			}
 			if test.offDisks > 0 {
@@ -196,7 +196,8 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 				continue
 			}
 			disk.Delete(context.Background(), "testbucket", "object", false)
-			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
+			writers[i] = newBitrotWriter(disk, "testbucket", "object",
+				erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 		}
 		_, err := erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)

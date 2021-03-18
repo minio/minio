@@ -71,6 +71,13 @@ const (
 	xlStorageFormatFile = "xl.meta"
 )
 
+var alignedBuf []byte
+
+func init() {
+	alignedBuf = disk.AlignedBlock(4096)
+	_, _ = rand.Read(alignedBuf)
+}
+
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
@@ -282,10 +289,17 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
 	tmpFile := ".writable-check-" + hex.EncodeToString(rnd[:]) + ".tmp"
-	if err = p.CreateFile(GlobalContext, minioMetaTmpBucket, tmpFile, 1, strings.NewReader("0")); err != nil {
+	filePath := pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile)
+	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	if err != nil {
 		return p, err
 	}
-	defer os.Remove(pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile))
+	if _, err = w.Write(alignedBuf[:]); err != nil {
+		w.Close()
+		return p, err
+	}
+	w.Close()
+	defer os.Remove(filePath)
 
 	volumeDir, err := p.getVolDir(minioMetaTmpBucket)
 	if err != nil {
@@ -294,7 +308,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 
 	// Check if backend is readable, and optionally supports O_DIRECT.
 	if _, err = p.readAllData(volumeDir, pathJoin(volumeDir, tmpFile), true); err != nil {
-		if err != errUnsupportedDisk {
+		if !errors.Is(err, errUnsupportedDisk) {
 			return p, err
 		}
 		// error is unsupported disk, turn-off directIO for reads
@@ -1432,7 +1446,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		return errInvalidArgument
 	}
 
-	if fileSize <= smallFileThreshold {
+	if fileSize >= 0 && fileSize <= smallFileThreshold {
 		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
 		// and not O_DIRECT to avoid the complexities of aligned I/O.
 		w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
@@ -1483,9 +1497,9 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		return err
 	}
 
-	if written < fileSize {
+	if written < fileSize && fileSize >= 0 {
 		return errLessData
-	} else if written > fileSize {
+	} else if written > fileSize && fileSize >= 0 {
 		return errMoreData
 	}
 

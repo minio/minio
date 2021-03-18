@@ -20,8 +20,10 @@ package ioutil
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -62,6 +64,56 @@ func (w *WriteOnCloser) HasWritten() bool { return w.hasWritten }
 // WriteOnClose takes an io.Writer and returns an ioutil.WriteOnCloser.
 func WriteOnClose(w io.Writer) *WriteOnCloser {
 	return &WriteOnCloser{w, false}
+}
+
+type ioret struct {
+	n   int
+	err error
+}
+
+// DeadlineWriter deadline writer with context
+type DeadlineWriter struct {
+	io.WriteCloser
+	timeout time.Duration
+	err     error
+}
+
+// NewDeadlineWriter wraps a writer to make it respect given deadline
+// value per Write(). If there is a blocking write, the returned Writer
+// will return whenever the timer hits (the return values are n=0
+// and err=context.Canceled.)
+func NewDeadlineWriter(w io.WriteCloser, timeout time.Duration) io.WriteCloser {
+	return &DeadlineWriter{WriteCloser: w, timeout: timeout}
+}
+
+func (w *DeadlineWriter) Write(buf []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+
+	c := make(chan ioret, 1)
+	t := time.NewTimer(w.timeout)
+	defer t.Stop()
+
+	go func() {
+		n, err := w.WriteCloser.Write(buf)
+		c <- ioret{n, err}
+		close(c)
+	}()
+
+	select {
+	case r := <-c:
+		w.err = r.err
+		return r.n, r.err
+	case <-t.C:
+		w.err = context.Canceled
+		return 0, context.Canceled
+	}
+}
+
+// Close closer interface to close the underlying closer
+func (w *DeadlineWriter) Close() error {
+	return w.WriteCloser.Close()
 }
 
 // LimitWriter implements io.WriteCloser.
