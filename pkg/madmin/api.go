@@ -34,6 +34,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -365,7 +366,7 @@ func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData
 		res, err = adm.do(req)
 		if err != nil {
 			// Give up right away if it is a connection refused problem
-			if strings.HasSuffix(err.Error(), "connect: connection refused") {
+			if errors.Is(err, syscall.ECONNREFUSED) {
 				return nil, err
 			}
 			if err == context.Canceled || err == context.DeadlineExceeded {
