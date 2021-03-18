@@ -891,10 +891,15 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
-	logger.LogIf(ctx, renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())))
+	err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 
 	// Delete parents if needed.
-	return s.deleteFile(volumeDir, pathutil.Dir(path), false)
+	filePath = retainSlash(pathutil.Dir(pathJoin(volumeDir, path)))
+	if filePath == retainSlash(volumeDir) {
+		return err
+	}
+	logger.LogIf(ctx, s.deleteFile(volumeDir, filePath, false))
+	return err
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
