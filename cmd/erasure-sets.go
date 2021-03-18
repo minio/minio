@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -48,6 +49,8 @@ type setsDsyncLockers [][]dsync.NetLocker
 type diskConnectInfo struct {
 	setIndex int
 }
+
+const envMinioDeleteCleanupInterval = "MINIO_DELETE_CLEANUP_INTERVAL"
 
 // erasureSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
@@ -413,15 +416,18 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			getDisks:              s.GetDisks(i),
 			getLockers:            s.GetLockers(i),
 			getEndpoints:          s.GetEndpoints(i),
-			deletedCleanupSleeper: newDynamicSleeper(10, 10*time.Second),
+			deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
 			nsMutex:               mutex,
 			bp:                    bp,
 			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 	}
 
-	// cleanup ".trash/" folder every 30 minutes with sufficient sleep cycles.
-	const deletedObjectsCleanupInterval = 10 * time.Minute
+	// cleanup ".trash/" folder every 10 minutes with sufficient sleep cycles.
+	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get(envMinioDeleteCleanupInterval, "10m"))
+	if err != nil {
+		return nil, err
+	}
 
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
