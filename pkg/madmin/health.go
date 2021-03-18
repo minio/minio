@@ -256,18 +256,6 @@ func (adm *AdminClient) ServerHealthInfo(ctx context.Context, healthDataTypes []
 		var healthInfoMessage HealthInfo
 		healthInfoMessage.TimeStamp = time.Now()
 
-		if v.Get(string(HealthDataTypeMinioInfo)) == "true" {
-			info, err := adm.ServerInfo(ctx)
-			if err != nil {
-				respChan <- HealthInfo{
-					Error: err.Error(),
-				}
-				return
-			}
-			healthInfoMessage.Minio.Info = info
-			respChan <- healthInfoMessage
-		}
-
 		resp, err := adm.executeMethod(ctx, "GET", requestData{
 			relPath:     adminAPIPrefix + "/healthinfo",
 			queryValues: v,
@@ -308,10 +296,22 @@ func (adm *AdminClient) ServerHealthInfo(ctx context.Context, healthDataTypes []
 		}
 
 		respChan <- healthInfoMessage
+
+		if v.Get(string(HealthDataTypeMinioInfo)) == "true" {
+			info, err := adm.ServerInfo(ctx)
+			if err != nil {
+				respChan <- HealthInfo{
+					Error: err.Error(),
+				}
+				return
+			}
+			healthInfoMessage.Minio.Info = info
+			respChan <- healthInfoMessage
+		}
+
 		close(respChan)
 	}()
 	return respChan
-
 }
 
 // GetTotalCapacity gets the total capacity a server holds.
