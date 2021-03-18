@@ -220,11 +220,17 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 
 	go func() {
 		defer cancel()
+
+		refreshTimer := time.NewTimer(drwMutexRefreshInterval)
+		defer refreshTimer.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.NewTimer(drwMutexRefreshInterval).C:
+			case <-refreshTimer.C:
+				refreshTimer.Reset(drwMutexRefreshInterval)
+
 				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum, dm.Names...)
 				if err == nil && !refreshed {
 					if lockLossCallback != nil {

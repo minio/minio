@@ -37,7 +37,16 @@ type DiskInfo struct {
 	Endpoint   string
 	MountPath  string
 	ID         string
+	Metrics    DiskMetrics
 	Error      string // carries the error over the network
+}
+
+// DiskMetrics has the information about XL Storage APIs
+// the number of calls of each API and the moving average of
+// the duration of each API.
+type DiskMetrics struct {
+	APILatencies map[string]string `json:"apiLatencies,omitempty"`
+	APICalls     map[string]uint64 `json:"apiCalls,omitempty"`
 }
 
 // VolsInfo is a collection of volume(bucket) information

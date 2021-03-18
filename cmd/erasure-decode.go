@@ -161,7 +161,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			// For the last shard, the shardsize might be less than previous shard sizes.
 			// Hence the following statement ensures that the buffer size is reset to the right size.
 			p.buf[bufIdx] = p.buf[bufIdx][:p.shardSize]
-			_, err := rr.ReadAt(p.buf[bufIdx], p.offset)
+			n, err := rr.ReadAt(p.buf[bufIdx], p.offset)
 			if err != nil {
 				if errors.Is(err, errFileNotFound) {
 					atomic.StoreInt32(&missingPartsHeal, 1)
@@ -179,7 +179,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 				return
 			}
 			newBufLK.Lock()
-			newBuf[bufIdx] = p.buf[bufIdx]
+			newBuf[bufIdx] = p.buf[bufIdx][:n]
 			newBufLK.Unlock()
 			// Since ReadAt returned success, there is no need to trigger another read.
 			readTriggerCh <- false

@@ -337,6 +337,47 @@ func TestJSONQueries(t *testing.T) {
 }`,
 			wantResult: `{"element_type":"__elem__merfu","element_id":"d868aefe-ef9a-4be2-b9b2-c9fd89cc43eb","attributes":{"__attr__image_dpi":300,"__attr__image_size":[2550,3299],"__attr__image_index":2,"__attr__image_format":"JPEG","__attr__file_extension":"jpg","__attr__data":null}}`,
 		},
+		{
+			name:       "date_diff_month",
+			query:      `SELECT date_diff(MONTH, '2019-10-20T', '2020-01-20T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":3}`,
+		},
+		{
+			name:       "date_diff_month_neg",
+			query:      `SELECT date_diff(MONTH, '2020-01-20T', '2019-10-20T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":-3}`,
+		},
+		// Examples from https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-glacier-select-sql-reference-date.html#s3-glacier-select-sql-reference-date-diff
+		{
+			name:       "date_diff_year",
+			query:      `SELECT date_diff(year, '2010-01-01T', '2011-01-01T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":1}`,
+		},
+		{
+			name:       "date_diff_year",
+			query:      `SELECT date_diff(month, '2010-01-01T', '2010-05T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":4}`,
+		},
+		{
+			name:       "date_diff_month_oney",
+			query:      `SELECT date_diff(month, '2010T', '2011T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":12}`,
+		},
+		{
+			name:       "date_diff_month_neg",
+			query:      `SELECT date_diff(month, '2011T', '2010T') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":-12}`,
+		},
+		{
+			name:       "date_diff_days",
+			query:      `SELECT date_diff(day, '2010-01-01T23:00:00Z', '2010-01-02T01:00:00Z') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":0}`,
+		},
+		{
+			name:       "date_diff_days_one",
+			query:      `SELECT date_diff(day, '2010-01-01T23:00:00Z', '2010-01-02T23:00:00Z') FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":1}`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>

@@ -66,6 +66,42 @@ func (functions Functions) Keys() KeySet {
 	return keySet
 }
 
+// Clone clones Functions structure
+func (functions Functions) Clone() Functions {
+	funcs := []Function{}
+
+	for _, f := range functions {
+		vfn := conditionFuncMap[f.name()]
+		for key, values := range f.toMap() {
+			function, _ := vfn(key, values.Clone())
+			funcs = append(funcs, function)
+		}
+	}
+
+	return funcs
+}
+
+// Equals returns true if two Functions structures are equal
+func (functions Functions) Equals(funcs Functions) bool {
+	if len(functions) != len(funcs) {
+		return false
+	}
+	for _, fi := range functions {
+		fistr := fi.String()
+		found := false
+		for _, fj := range funcs {
+			if fistr == fj.String() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // MarshalJSON - encodes Functions to  JSON data.
 func (functions Functions) MarshalJSON() ([]byte, error) {
 	nm := make(map[name]map[Key]ValueSet)
