@@ -66,6 +66,40 @@ type Lifecycle struct {
 	Rules   []Rule   `xml:"Rule"`
 }
 
+// UnmarshalXML - decodes XML data.
+func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	switch start.Name.Local {
+	case "LifecycleConfiguration", "BucketLifecycleConfiguration":
+	default:
+		return errUnknownXMLTag
+	}
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := d.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			switch se.Name.Local {
+			case "Rule":
+				var r Rule
+				if err = d.DecodeElement(&r, &se); err != nil {
+					return err
+				}
+				lc.Rules = append(lc.Rules, r)
+			default:
+				return errUnknownXMLTag
+			}
+		}
+	}
+	return nil
+}
+
 // HasActiveRules - returns whether policy has active rules for.
 // Optionally a prefix can be supplied.
 // If recursive is specified the function will also return true if any level below the
