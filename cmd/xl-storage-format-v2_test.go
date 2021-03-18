@@ -17,18 +17,21 @@
 package cmd
 
 import (
-	"encoding/json"
+	"bytes"
 	"testing"
 	"time"
 )
 
-func TestXLV2Format(t *testing.T) {
+func TestXLV2FormatData(t *testing.T) {
 	failOnErr := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
+	data := []byte("some object data")
+	data2 := []byte("some other object data")
+
 	xl := xlMetaV2{}
 	fi := FileInfo{
 		Volume:           "volume",
@@ -60,27 +63,82 @@ func TestXLV2Format(t *testing.T) {
 		MarkDeleted:                   false,
 		DeleteMarkerReplicationStatus: "",
 		VersionPurgeStatus:            "",
-		Data:                          []byte("some object data"),
+		Data:                          data,
 		NumVersions:                   1,
 		SuccessorModTime:              time.Time{},
 	}
 
 	failOnErr(xl.AddVersion(fi))
+
+	fi.VersionID = mustGetUUID()
+	fi.DataDir = mustGetUUID()
+	fi.Data = data2
 	failOnErr(xl.AddVersion(fi))
+
 	serialized, err := xl.AppendTo(nil)
 	failOnErr(err)
+	// Roundtrip data
 	var xl2 xlMetaV2
 	failOnErr(xl2.Load(serialized))
-	b, err := json.MarshalIndent(xl2, "", "  ")
+
+	// We should have one data entry
+	list, err := xl2.data.list()
 	failOnErr(err)
-	t.Log(string(b))
-	t.Log(len(xl2.data))
-	t.Log(xl2.data.list())
-	t.Log(string(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef")))
-	t.Log(string(xl.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef")))
+	if len(list) != 2 {
+		t.Fatalf("want 1 entry, got %d", len(list))
+	}
+
+	if !bytes.Equal(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"), data) {
+		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+	}
+	if !bytes.Equal(xl2.data.find(fi.DataDir), data2) {
+		t.Fatal("Find data returned", xl2.data.find(fi.DataDir))
+	}
+
+	// Remove entry
+	xl2.data.remove(fi.DataDir)
+	failOnErr(xl2.data.validate())
+	if xl2.data.find(fi.DataDir) != nil {
+		t.Fatal("Data was not removed:", xl2.data.find(fi.DataDir))
+	}
+	if xl2.data.entries() != 1 {
+		t.Fatal("want 1 entry, got", xl2.data.entries())
+	}
+	// Re-add
+	xl2.data.replace(fi.DataDir, fi.Data)
+	failOnErr(xl2.data.validate())
+	if xl2.data.entries() != 2 {
+		t.Fatal("want 2 entries, got", xl2.data.entries())
+	}
+
+	// Replace entry
+	xl2.data.replace("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef", data2)
+	failOnErr(xl2.data.validate())
+	if xl2.data.entries() != 2 {
+		t.Fatal("want 2 entries, got", xl2.data.entries())
+	}
+	if !bytes.Equal(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"), data2) {
+		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+	}
+
+	if !xl2.data.rename("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef", "new-key") {
+		t.Fatal("old key was not found")
+	}
+	failOnErr(xl2.data.validate())
+	if !bytes.Equal(xl2.data.find("new-key"), data2) {
+		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+	}
+	if xl2.data.entries() != 2 {
+		t.Fatal("want 2 entries, got", xl2.data.entries())
+	}
+	if !bytes.Equal(xl2.data.find(fi.DataDir), data2) {
+		t.Fatal("Find data returned", xl2.data.find(fi.DataDir))
+	}
+
+	// Test trimmed
 	xl2 = xlMetaV2{}
 	failOnErr(xl2.Load(xlMetaV2TrimData(serialized)))
-	t.Log(len(xl2.data))
-	t.Log(xl2.data.list())
-	t.Log(string(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef")))
+	if len(xl2.data) != 0 {
+		t.Fatal("data, was not trimmed, bytes left:", len(xl2.data))
+	}
 }
