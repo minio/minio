@@ -1977,12 +1977,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		s.deleteFile(srcVolumeDir, parentDir, false)
 	}
 
-	if srcDataPath != "" {
-		if parentDir := pathutil.Dir(srcDataPath); isDirEmpty(parentDir) {
-			s.deleteFile(srcVolumeDir, parentDir, false)
-		}
-	}
-
 	return nil
 }
 
