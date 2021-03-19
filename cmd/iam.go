@@ -577,15 +577,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	// Hold the lock for migration only.
 	txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
 
-	// Initializing IAM sub-system needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	//  - Write quorum not met when upgrading configuration
-	//    version is needed, migration is needed etc.
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
-
 	// allocate dynamic timeout once before the loop
 	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
@@ -620,12 +611,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		// Migrate IAM configuration, if necessary.
 		if err := sys.doIAMConfigMigration(ctx); err != nil {
 			txnLk.Unlock()
-			if errors.Is(err, errDiskNotFound) ||
-				errors.Is(err, errConfigNotFound) ||
-				errors.Is(err, context.DeadlineExceeded) ||
-				errors.As(err, &rquorum) ||
-				errors.As(err, &wquorum) ||
-				isErrBucketNotFound(err) {
+			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				continue
 			}
@@ -641,12 +627,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 
 	for {
 		if err := sys.store.loadAll(ctx, sys); err != nil {
-			if errors.Is(err, errDiskNotFound) ||
-				errors.Is(err, errConfigNotFound) ||
-				errors.Is(err, context.DeadlineExceeded) ||
-				errors.As(err, &rquorum) ||
-				errors.As(err, &wquorum) ||
-				isErrBucketNotFound(err) {
+			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 				continue

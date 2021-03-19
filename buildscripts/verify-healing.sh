@@ -28,6 +28,8 @@ WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
 
+export GOGC=25
+
 function start_minio_3_node() {
     export MINIO_ROOT_USER=minio
     export MINIO_ROOT_PASSWORD=minio123

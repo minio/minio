@@ -41,7 +41,7 @@ func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 
 	disk.MakeVol(context.Background(), volume)
 
-	writer := newBitrotWriter(disk, volume, filePath, 35, bitrotAlgo, 10)
+	writer := newBitrotWriter(disk, volume, filePath, 35, bitrotAlgo, 10, false)
 
 	_, err = writer.Write([]byte("aaaaaaaaaa"))
 	if err != nil {
