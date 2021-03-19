@@ -750,15 +750,6 @@ func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
 	return false
 }
 
-func (s *xlStorage) isLeafDir(volume, leafPath string) bool {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return false
-	}
-
-	return isDirEmpty(pathJoin(volumeDir, leafPath))
-}
-
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
@@ -1973,10 +1964,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := pathutil.Dir(srcFilePath); isDirEmpty(parentDir) {
-		s.deleteFile(srcVolumeDir, parentDir, false)
-	}
-
+	parentDir := pathutil.Dir(srcFilePath)
+	s.deleteFile(srcVolumeDir, parentDir, false)
 	return nil
 }
 
@@ -2028,18 +2017,18 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 		// If source is a directory, we expect the destination to be non-existent but we
 		// we still need to allow overwriting an empty directory since it represents
 		// an object empty directory.
-		_, err = os.Lstat(dstFilePath)
+		dirInfo, err := os.Lstat(dstFilePath)
 		if isSysErrIO(err) {
 			return errFaultyDisk
 		}
-		if err == nil && !isDirEmpty(dstFilePath) {
-			return errFileAccessDenied
-		}
-		if err != nil && !osIsNotExist(err) {
-			return err
-		}
-		// Empty destination remove it before rename.
-		if isDirEmpty(dstFilePath) {
+		if err != nil {
+			if !osIsNotExist(err) {
+				return err
+			}
+		} else {
+			if !dirInfo.IsDir() {
+				return errFileAccessDenied
+			}
 			if err = os.Remove(dstFilePath); err != nil {
 				if isSysErrNotEmpty(err) {
 					return errFileAccessDenied
@@ -2054,9 +2043,8 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := pathutil.Dir(srcFilePath); isDirEmpty(parentDir) {
-		s.deleteFile(srcVolumeDir, parentDir, false)
-	}
+	parentDir := pathutil.Dir(srcFilePath)
+	s.deleteFile(srcVolumeDir, parentDir, false)
 
 	return nil
 }
