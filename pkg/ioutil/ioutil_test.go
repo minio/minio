@@ -18,11 +18,48 @@ package ioutil
 
 import (
 	"bytes"
+	"context"
 	"io"
 	goioutil "io/ioutil"
 	"os"
 	"testing"
+	"time"
 )
+
+type sleepWriter struct {
+	timeout time.Duration
+}
+
+func (w *sleepWriter) Write(p []byte) (n int, err error) {
+	time.Sleep(w.timeout)
+	return len(p), nil
+}
+
+func (w *sleepWriter) Close() error {
+	return nil
+}
+
+func TestDeadlineWriter(t *testing.T) {
+	w := NewDeadlineWriter(&sleepWriter{timeout: 500 * time.Millisecond}, 450*time.Millisecond)
+	_, err := w.Write([]byte("1"))
+	w.Close()
+	if err != context.Canceled {
+		t.Error("DeadlineWriter shouldn't be successful - should return context.Canceled")
+	}
+	_, err = w.Write([]byte("1"))
+	if err != context.Canceled {
+		t.Error("DeadlineWriter shouldn't be successful - should return context.Canceled")
+	}
+	w = NewDeadlineWriter(&sleepWriter{timeout: 100 * time.Millisecond}, 600*time.Millisecond)
+	n, err := w.Write([]byte("abcd"))
+	w.Close()
+	if err != nil {
+		t.Errorf("DeadlineWriter should succeed but failed with %s", err)
+	}
+	if n != 4 {
+		t.Errorf("DeadlineWriter should succeed but should have only written 4 bytes, but returned %d instead", n)
+	}
+}
 
 func TestCloseOnWriter(t *testing.T) {
 	writer := WriteOnClose(goioutil.Discard)

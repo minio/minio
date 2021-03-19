@@ -23,9 +23,12 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/ioutil"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 )
 
 type errHashMismatch struct {
@@ -79,19 +82,27 @@ func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize
 	return &streamingBitrotWriter{iow: ioutil.NopCloser(w), h: algo.New(), shardSize: shardSize, canClose: nil}
 }
 
+var (
+	ioDeadline, _ = time.ParseDuration(env.Get("MINIO_IO_DEADLINE", ""))
+)
+
 // Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
+func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64, heal bool) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
+
 	bw := &streamingBitrotWriter{iow: w, closeWithErr: w.CloseWithError, h: h, shardSize: shardSize, canClose: make(chan struct{})}
+	if ioDeadline > 0 && !heal {
+		bw.iow = xioutil.NewDeadlineWriter(w, ioDeadline)
+	}
+
 	go func() {
 		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
 		if length != -1 {
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
-		err := disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r)
-		r.CloseWithError(err)
+		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
 		close(bw.canClose)
 	}()
 	return bw

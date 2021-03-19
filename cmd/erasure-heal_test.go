@@ -87,7 +87,8 @@ func TestErasureHeal(t *testing.T) {
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
+			writers[i] = newBitrotWriter(disk, "testbucket", "testobject",
+				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
 		}
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -130,7 +131,8 @@ func TestErasureHeal(t *testing.T) {
 				continue
 			}
 			os.Remove(pathJoin(disk.String(), "testbucket", "testobject"))
-			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
+			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject",
+				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
 		}
 
 		// test case setup is complete - now call Heal()

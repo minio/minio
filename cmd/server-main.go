@@ -237,6 +237,28 @@ func newAllSubsystems() {
 	globalBucketTargetSys = NewBucketTargetSys()
 }
 
+func configRetriableErrors(err error) bool {
+	// Initializing sub-systems needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+
+	// One of these retriable errors shall be retried.
+	return errors.Is(err, errDiskNotFound) ||
+		errors.Is(err, errConfigNotFound) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, errErasureWriteQuorum) ||
+		errors.Is(err, errErasureReadQuorum) ||
+		errors.As(err, &rquorum) ||
+		errors.As(err, &wquorum) ||
+		isErrBucketNotFound(err) ||
+		errors.Is(err, os.ErrDeadlineExceeded)
+}
+
 func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
@@ -251,15 +273,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
-	// Initializing sub-systems needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	//  - Write quorum not met when upgrading configuration
-	//    version is needed, migration is needed etc.
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -307,15 +320,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 		txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
 
-		// One of these retriable errors shall be retried.
-		if errors.Is(err, errDiskNotFound) ||
-			errors.Is(err, errConfigNotFound) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			errors.Is(err, errErasureWriteQuorum) ||
-			errors.Is(err, errErasureReadQuorum) ||
-			errors.As(err, &rquorum) ||
-			errors.As(err, &wquorum) ||
-			isErrBucketNotFound(err) {
+		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
@@ -333,8 +338,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
 	// List buckets to heal, and be re-used for loading configs.
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
 
 	buckets, err := newObject.ListBuckets(ctx)
 	if err != nil {
@@ -368,14 +371,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
-		if errors.Is(err, errDiskNotFound) ||
-			errors.Is(err, errConfigNotFound) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			errors.Is(err, errErasureWriteQuorum) ||
-			errors.Is(err, errErasureReadQuorum) ||
-			errors.As(err, &rquorum) ||
-			errors.As(err, &wquorum) ||
-			isErrBucketNotFound(err) {
+		if configRetriableErrors(err) {
 			return fmt.Errorf("Unable to initialize config system: %w", err)
 		}
 		// Any other config errors we simply print a message and proceed forward.

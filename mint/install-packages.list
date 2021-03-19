@@ -2,6 +2,7 @@ git
 python3-pip
 nodejs
 openjdk-8-jdk
+openjdk-8-jdk-headless
 dirmngr
 apt-transport-https
 dotnet-sdk-2.1
