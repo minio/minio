@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash/crc32"
 
 	"github.com/minio/minio/cmd/logger"
@@ -134,7 +135,8 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 					errFileVersionNotFound,
 					errDiskNotFound,
 				}...) {
-					logger.LogOnceIf(ctx, err, disks[index].String())
+					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s returned an error (%w)", disks[index], err),
+						disks[index].String())
 				}
 			}
 			return err
