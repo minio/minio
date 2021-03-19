@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
@@ -375,14 +376,12 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	// Number of buffers, max 2GB.
-	n := setCount * setDriveCount
-	if n > 100 {
-		n = 100
-	}
+	// Number of buffers, max 2GB
+	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)
+
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV1.
-	bp := bpool.NewBytePoolCap(n, blockSizeV1, blockSizeV1*2)
+	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)

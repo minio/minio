@@ -53,7 +53,7 @@ import (
 const (
 	nullVersionID     = "null"
 	diskMinTotalSpace = 900 * humanize.MiByte // Min 900MiB total space.
-	readBlockSize     = 4 * humanize.MiByte   // Default read block size 4MiB.
+	readBlockSize     = 2 * humanize.MiByte   // Default read block size 2MiB.
 
 	// On regular files bigger than this;
 	readAheadSize = 16 << 20

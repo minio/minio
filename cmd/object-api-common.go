@@ -31,6 +31,9 @@ const (
 	// Block size used for all internal operations version 1.
 	blockSizeV1 = 10 * humanize.MiByte
 
+	// Block size used for all internal operations version 2
+	blockSizeV2 = 1 * humanize.MiByte
+
 	// Staging buffer read size for all internal operations version 1.
 	readSizeV1 = 1 * humanize.MiByte
 
