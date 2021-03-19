@@ -124,8 +124,7 @@ var (
 
 	// Colorize prints message in a colorized form, dictated by the corresponding tag argument.
 	Colorize = func(tag string, data interface{}) string {
-		colorized, _ := Theme[tag]
-		return colorized.SprintFunc()(data)
+		return Theme[tag].SprintFunc()(data)
 	}
 
 	// Eraseline Print in new line and adjust to top so that we don't print over the ongoing progress bar.
