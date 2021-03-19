@@ -105,8 +105,6 @@ type xlStorage struct {
 
 	rootDisk bool
 
-	readODirectSupported bool
-
 	diskID string
 
 	// Indexes, will be -1 until assigned a set.
@@ -271,13 +269,12 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 				return &b
 			},
 		},
-		globalSync:           env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
-		ctx:                  GlobalContext,
-		rootDisk:             rootDisk,
-		readODirectSupported: true,
-		poolIndex:            -1,
-		setIndex:             -1,
-		diskIndex:            -1,
+		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
+		ctx:        GlobalContext,
+		rootDisk:   rootDisk,
+		poolIndex:  -1,
+		setIndex:   -1,
+		diskIndex:  -1,
 	}
 
 	// Create all necessary bucket folders if possible.
@@ -300,21 +297,6 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	}
 	w.Close()
 	defer os.Remove(filePath)
-
-	volumeDir, err := p.getVolDir(minioMetaTmpBucket)
-	if err != nil {
-		return p, err
-	}
-
-	// Check if backend is readable, and optionally supports O_DIRECT.
-	if _, err = p.readAllData(volumeDir, pathJoin(volumeDir, tmpFile), true); err != nil {
-		if !errors.Is(err, errUnsupportedDisk) {
-			return p, err
-		}
-		// error is unsupported disk, turn-off directIO for reads
-		logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive %s does not support O_DIRECT for reads, proceeding to use the drive without O_DIRECT", ep), ep.String())
-		p.readODirectSupported = false
-	}
 
 	// Success.
 	return p, nil
@@ -1045,7 +1027,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		// - object has maximum of 1 parts
 		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
 			// Enable O_DIRECT optionally only if drive supports it.
-			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported
+			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			fi.Data, err = s.readAllData(volumeDir, pathJoin(volumeDir, path, fi.DataDir, partPath), requireDirectIO)
 			if err != nil {
@@ -1125,7 +1107,7 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported
+	requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
 	return s.readAllData(volumeDir, filePath, requireDirectIO)
 }
 
@@ -1297,8 +1279,17 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 		o.buf = *o.bufp
 		n, err = o.f.Read(o.buf)
 		if err != nil && err != io.EOF {
-			o.err = err
-			return n, err
+			if isSysErrInvalidArg(err) {
+				if err = disk.DisableDirectIO(o.f); err != nil {
+					o.err = err
+					return n, err
+				}
+				n, err = o.f.Read(o.buf)
+			}
+			if err != nil && err != io.EOF {
+				o.err = err
+				return n, err
+			}
 		}
 		if n == 0 {
 			// err is io.EOF
@@ -1347,7 +1338,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 
 	var file *os.File
 	// O_DIRECT only supported if offset is zero
-	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported {
+	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
 		file, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
 		// Open the file for reading.
@@ -1389,7 +1380,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
-	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported {
+	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
 		or := &odirectReader{file, nil, nil, true, false, s, nil}
 		if length <= smallFileThreshold {
 			or = &odirectReader{file, nil, nil, true, true, s, nil}
