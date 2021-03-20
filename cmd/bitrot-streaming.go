@@ -23,11 +23,8 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
-	xioutil "github.com/minio/minio/pkg/ioutil"
 )
 
 type errHashMismatch struct {
@@ -73,21 +70,12 @@ func (b *streamingBitrotWriter) Close() error {
 	return err
 }
 
-var (
-	ioDeadline, _ = time.ParseDuration(env.Get("MINIO_IO_DEADLINE", ""))
-)
-
 // Returns streaming bitrot writer implementation.
 func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64, heal bool) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
 
-	var wc io.WriteCloser = w
-	if ioDeadline > 0 && !heal {
-		wc = xioutil.NewDeadlineWriter(w, ioDeadline)
-	}
-
-	bw := &streamingBitrotWriter{wc, h, shardSize, make(chan struct{})}
+	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{})}
 	go func() {
 		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
 		if length != -1 {
