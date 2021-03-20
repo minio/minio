@@ -110,6 +110,7 @@ const (
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
+	upTime           = "uptime_seconds"
 )
 
 const (
@@ -724,7 +725,16 @@ func getMinIOProcessStartTimeMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: processSubsystem,
 		Name:      startTime,
-		Help:      "Start time for MinIO process per node in seconds.",
+		Help:      "Start time for MinIO process per node, time in seconds since Unix epoc.",
+		Type:      gaugeMetric,
+	}
+}
+func getMinIOProcessUptimeMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      upTime,
+		Help:      "Uptime for MinIO process per node in seconds.",
 		Type:      gaugeMetric,
 	}
 }
@@ -811,6 +821,11 @@ func getMinioProcMetrics() MetricsGroup {
 				Metric{
 					Description: getMinIOProcessStartTimeMD(),
 					Value:       startTime,
+				})
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessUptimeMD(),
+					Value:       time.Since(globalBootTime).Seconds(),
 				})
 			return
 		},
