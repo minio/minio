@@ -173,8 +173,10 @@ type MetricsGroup struct {
 	read          func(ctx context.Context) []Metric
 }
 
-var metricsGroupCache = make(map[string]*timedValue)
-var cacheLock sync.Mutex
+var (
+	metricsGroupCache = make(map[string]*timedValue)
+	cacheLock         sync.Mutex
+)
 
 func cachedRead(ctx context.Context, mg *MetricsGroup) (metrics []Metric) {
 	cacheLock.Lock()
@@ -733,7 +735,6 @@ func getMinioProcMetrics() MetricsGroup {
 		id:         "MinioProcMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			p, err := procfs.Self()
 			if err != nil {
 				logger.LogOnceIf(ctx, err, nodeMetricNamespace)
@@ -812,7 +813,6 @@ func getMinioProcMetrics() MetricsGroup {
 					Description: getMinIOProcessStartTimeMD(),
 					Value:       startTime,
 				})
-			return
 		},
 	}
 }
@@ -825,7 +825,6 @@ func getGoMetrics() MetricsGroup {
 				Description: getMinIOGORoutineCountMD(),
 				Value:       float64(runtime.NumGoroutine()),
 			})
-			return
 		},
 	}
 }
@@ -871,7 +870,6 @@ func getS3TTFBMetric() MetricsGroup {
 			httpRequestsDuration.Collect(ch)
 			close(ch)
 			wg.Wait()
-			return
 		},
 	}
 }
@@ -889,7 +887,6 @@ func getMinioVersionMetrics() MetricsGroup {
 				Description:    getMinIOVersionMD(),
 				VariableLabels: map[string]string{"version": Version},
 			})
-			return
 		},
 	}
 }
@@ -908,7 +905,6 @@ func getNodeHealthMetrics() MetricsGroup {
 				Description: getNodeOfflineTotalMD(),
 				Value:       float64(nodesDown),
 			})
-			return
 		},
 	}
 }
@@ -918,7 +914,6 @@ func getMinioHealingMetrics() MetricsGroup {
 		id:         "minioHealingMetrics",
 		cachedRead: cachedRead,
 		read: func(_ context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			if !globalIsErasure {
 				return
 			}
@@ -937,13 +932,11 @@ func getMinioHealingMetrics() MetricsGroup {
 			metrics = append(metrics, getObjectsScanned(bgSeq)...)
 			metrics = append(metrics, getScannedItems(bgSeq)...)
 			metrics = append(metrics, getFailedItems(bgSeq)...)
-			return
 		},
 	}
 }
 
 func getFailedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
 	for k, v := range seq.gethealFailedItemsMap() {
 		s := strings.Split(k, ",")
 		m = append(m, Metric{
@@ -959,7 +952,6 @@ func getFailedItems(seq *healSequence) (m []Metric) {
 }
 
 func getScannedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
 	for k, v := range seq.getHealedItemsMap() {
 		m = append(m, Metric{
 			Description:    getHealObjectsHealTotalMD(),
@@ -971,7 +963,6 @@ func getScannedItems(seq *healSequence) (m []Metric) {
 }
 
 func getObjectsScanned(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
 	for k, v := range seq.getScannedItemsMap() {
 		m = append(m, Metric{
 			Description:    getHealObjectsTotalMD(),
@@ -986,7 +977,6 @@ func getCacheMetrics() MetricsGroup {
 		id:         "CacheMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			cacheObjLayer := newCachedObjectLayerFn()
 			// Service not initialized yet
 			if cacheObjLayer == nil {
@@ -1026,7 +1016,6 @@ func getCacheMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"disk": cdStats.Dir},
 				})
 			}
-			return
 		},
 	}
 }
@@ -1062,7 +1051,6 @@ func getHTTPMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
-			return
 		},
 	}
 }
@@ -1093,7 +1081,6 @@ func getNetworkMetrics() MetricsGroup {
 				Description: getS3ReceivedBytesMD(),
 				Value:       float64(connStats.S3InputBytes),
 			})
-			return
 		},
 	}
 }
@@ -1103,7 +1090,6 @@ func getBucketUsageMetrics() MetricsGroup {
 		id:         "BucketUsageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1168,7 +1154,6 @@ func getBucketUsageMetrics() MetricsGroup {
 				})
 
 			}
-			return
 		},
 	}
 }
@@ -1177,7 +1162,6 @@ func getLocalStorageMetrics() MetricsGroup {
 		id:         "localStorageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1208,7 +1192,6 @@ func getLocalStorageMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"disk": disk.DrivePath},
 				})
 			}
-			return
 		},
 	}
 }
@@ -1217,7 +1200,6 @@ func getClusterStorageMetrics() MetricsGroup {
 		id:         "ClusterStorageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1267,7 +1249,6 @@ func getClusterStorageMetrics() MetricsGroup {
 				Description: getClusterDisksTotalMD(),
 				Value:       float64(totalDisks.Sum()),
 			})
-			return
 		},
 	}
 }
