@@ -17,14 +17,18 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bcicen/jstream"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -110,8 +114,32 @@ type PostPolicyForm struct {
 	}
 }
 
+// implemented to ensure that duplicate keys in JSON
+// are merged together into a single JSON key, also
+// to remove any extraneous JSON bodies.
+//
+// Go stdlib doesn't support parsing JSON with duplicate
+// keys, so we need to use this technique to merge the
+// keys.
+func sanitizePolicy(policy string) (io.Reader, error) {
+	var buf bytes.Buffer
+	e := json.NewEncoder(&buf)
+	d := jstream.NewDecoder(strings.NewReader(policy), 0)
+	for mv := range d.Stream() {
+		e.Encode(mv.Value)
+	}
+	return &buf, d.Err()
+}
+
 // parsePostPolicyForm - Parse JSON policy string into typed PostPolicyForm structure.
-func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
+func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
+	preader, err := sanitizePolicy(policy)
+	if err != nil {
+		return PostPolicyForm{}, err
+	}
+
+	d := json.NewDecoder(preader)
+
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
@@ -119,9 +147,9 @@ func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 		Conditions []interface{} `json:"conditions"`
 	}
 
-	err := json.Unmarshal([]byte(policy), &rawPolicy)
-	if err != nil {
-		return ppf, err
+	d.DisallowUnknownFields()
+	if err := d.Decode(&rawPolicy); err != nil {
+		return PostPolicyForm{}, err
 	}
 
 	parsedPolicy := PostPolicyForm{}
@@ -129,7 +157,7 @@ func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 	// Parse expiry time.
 	parsedPolicy.Expiration, err = time.Parse(time.RFC3339Nano, rawPolicy.Expiration)
 	if err != nil {
-		return ppf, err
+		return PostPolicyForm{}, err
 	}
 
 	// Parse conditions.

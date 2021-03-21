@@ -71,8 +71,8 @@ require (
 	github.com/secure-io/sio-go v0.3.0
 	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
-	github.com/tidwall/gjson v1.3.5
+	github.com/streadway/amqp v1.0.0
+	github.com/tidwall/gjson v1.6.8
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.2
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
