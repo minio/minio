@@ -178,9 +178,14 @@ func registerAPIRouter(router *mux.Router) {
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("putobjectlegalhold", maxClients(httpTraceAll(api.PutObjectLegalHoldHandler)))).Queries("legal-hold", "")
 
+		// PutObject with auto-extract support for zip
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzSnowballExtract, "true").HandlerFunc(
+			collectAPIStats("putobject", maxClients(httpTraceHdrs(api.PutObjectExtractHandler))))
+
 		// PutObject
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("putobject", maxClients(httpTraceHdrs(api.PutObjectHandler))))
+
 		// DeleteObject
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("deleteobject", maxClients(httpTraceAll(api.DeleteObjectHandler))))
