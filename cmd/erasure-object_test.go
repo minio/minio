@@ -232,8 +232,151 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
-	// quorum is available, we remove disks leaving quorum disks behind.
+
+	erasureDisks := xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		for i := range erasureDisks[:6] {
+			erasureDisks[i] = newNaughtyDisk(erasureDisks[i], nil, errFaultyDisk)
+		}
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Fatal(err)
+	}
+
+	// Create "obj" under "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove one more disk to 'lose' quorum, by taking 2 more drives offline.
+	erasureDisks = xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		erasureDisks[7] = nil
+		erasureDisks[8] = nil
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	}
+}
+
+func TestErasureDeleteObjectDiskNotFoundErasure4(t *testing.T) {
+	restoreGlobalStorageClass := globalStorageClass
+	defer func() {
+		globalStorageClass = restoreGlobalStorageClass
+	}()
+
+	globalStorageClass = storageclass.Config{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup backend directories
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	opts := ObjectOptions{}
+	// Create object "obj" under bucket "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Upload a good object
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create "obj" under "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove disks to 'lose' quorum for object, by setting 5 to nil.
+	erasureDisks := xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		for i := range erasureDisks[:5] {
+			erasureDisks[i] = newNaughtyDisk(erasureDisks[i], nil, errFaultyDisk)
+		}
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	}
+}
+
+func TestErasureDeleteObjectDiskNotFoundErr(t *testing.T) {
+	restoreGlobalStorageClass := globalStorageClass
+	defer func() {
+		globalStorageClass = restoreGlobalStorageClass
+	}()
+
+	globalStorageClass = storageclass.Config{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup backend directories
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	opts := ObjectOptions{}
+	// Create object "obj" under bucket "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// for a 16 disk setup, EC is 4, but will be upgraded up to 8.
+	// Remove 4 disks.
 	erasureDisks := xl.getDisks()
 	z.serverPools[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
@@ -255,20 +398,21 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Remove one more disk to 'lose' quorum, by setting it to nil.
+	// Object was uploaded with 4 known bad drives, so we should still be able to lose 3 drives and still write to the object.
 	erasureDisks = xl.getDisks()
 	z.serverPools[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		erasureDisks[7] = nil
 		erasureDisks[8] = nil
+		erasureDisks[9] = nil
 		return erasureDisks
 	}
 
 	z.serverPools[0].erasureDisksMu.Unlock()
 	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
-	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
-	if !errors.Is(err, errErasureWriteQuorum) {
-		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	// since majority of disks are available, metaquorum achieved.
+	if err != nil {
+		t.Errorf("Expected deleteObject to not fail, but failed with %v", err)
 	}
 }
 

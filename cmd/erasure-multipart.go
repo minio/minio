@@ -283,6 +283,17 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityBlocks = er.defaultParityCount
 	}
 
+	ecOrg := parityBlocks
+	for _, disk := range onlineDisks {
+		di, err := disk.DiskInfo(ctx)
+		if (err != nil || di.ID == "") && parityBlocks < len(onlineDisks)/2 {
+			parityBlocks++
+		}
+	}
+	if ecOrg != parityBlocks {
+		opts.UserDefined[xhttp.MinIOErasureUpgraded] = fmt.Sprintf("%d->%d", ecOrg, parityBlocks)
+	}
+
 	dataBlocks := len(onlineDisks) - parityBlocks
 	fi := newFileInfo(pathJoin(bucket, object), dataBlocks, parityBlocks)
 

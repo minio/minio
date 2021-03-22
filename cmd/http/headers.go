@@ -153,6 +153,9 @@ const (
 	// Reports number of drives currently healing
 	MinIOHealingDrives = "x-minio-healing-drives"
 
+	// Object was stored with additional erasure codes due to degraded system at upload time
+	MinIOErasureUpgraded = "x-minio-erasure-upgraded"
+
 	// Header indicates if the delete marker should be preserved by client
 	MinIOSourceDeleteMarker = "x-minio-source-deletemarker"
 
