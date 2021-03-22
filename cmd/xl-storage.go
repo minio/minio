@@ -2288,16 +2288,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
-		deleteFile(srcVolumeDir, parentDir, false)
-	}
-
-	if srcDataPath != "" {
-		if parentDir := slashpath.Dir(srcDataPath); isDirEmpty(parentDir) {
-			deleteFile(srcVolumeDir, parentDir, false)
-		}
-	}
-
+	parentDir := slashpath.Dir(srcFilePath)
+	deleteFile(srcVolumeDir, parentDir, false)
 	return nil
 }
 
@@ -2354,18 +2346,18 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 		// If source is a directory, we expect the destination to be non-existent but we
 		// we still need to allow overwriting an empty directory since it represents
 		// an object empty directory.
-		_, err = os.Stat(dstFilePath)
-		if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		if err == nil && !isDirEmpty(dstFilePath) {
-			return errFileAccessDenied
-		}
-		if err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		// Empty destination remove it before rename.
-		if isDirEmpty(dstFilePath) {
+		dirInfo, err := os.Stat(dstFilePath)
+		if err != nil {
+			if isSysErrIO(err) {
+				return errFaultyDisk
+			}
+			if !os.IsNotExist(err) {
+				return err
+			}
+		} else {
+			if !dirInfo.IsDir() {
+				return errFileAccessDenied
+			}
 			if err = os.Remove(dstFilePath); err != nil {
 				if isSysErrNotEmpty(err) {
 					return errFileAccessDenied
@@ -2380,10 +2372,8 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
-		deleteFile(srcVolumeDir, parentDir, false)
-	}
-
+	parentDir := slashpath.Dir(srcFilePath)
+	deleteFile(srcVolumeDir, parentDir, false)
 	return nil
 }
 
