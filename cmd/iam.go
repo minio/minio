@@ -444,6 +444,18 @@ func (sys *IAMSys) Initialized() bool {
 	return sys.store != nil
 }
 
+func (sys *IAMSys) isConfigLoaded() bool {
+	if !sys.Initialized() {
+		return false
+	}
+	select {
+	case <-sys.configLoaded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Load - loads all credentials
 func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	iamUsersMap := make(map[string]auth.Credentials)

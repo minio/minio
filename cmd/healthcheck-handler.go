@@ -89,9 +89,11 @@ func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if shouldProxy() {
+	if shouldProxy() || !globalIAMSys.isConfigLoaded() {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
 	}
 
 	writeResponse(w, http.StatusOK, nil, mimeNone)
