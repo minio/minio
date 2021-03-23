@@ -162,6 +162,7 @@ func checkAdminRequestAuth(ctx context.Context, r *http.Request, action iampolic
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.Action(action),
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 		IsOwner:         owner,
