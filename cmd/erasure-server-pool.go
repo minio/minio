@@ -1563,10 +1563,15 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						bucket:    bucket,
 					}
 
+					path := baseDirFromPrefix(prefix)
+					if path == "" {
+						path = prefix
+					}
+
 					if err := listPathRaw(ctx, listPathRawOptions{
 						disks:          disks,
 						bucket:         bucket,
-						path:           baseDirFromPrefix(prefix),
+						path:           path,
 						recursive:      true,
 						forwardTo:      "",
 						minDisks:       1,
