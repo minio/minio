@@ -223,7 +223,10 @@ func (v *vaultService) CreateKey(keyID string) error {
 // named key referenced by keyID. It also binds the generated key
 // cryptographically to the provided context.
 func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	context := ctx.AppendTo(make([]byte, 0, 128))
+	context, err := ctx.MarshalText()
+	if err != nil {
+		return key, sealedKey, err
+	}
 
 	payload := map[string]interface{}{
 		"context": base64.StdEncoding.EncodeToString(context),
@@ -258,7 +261,10 @@ func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 // The context must be same context as the one provided while
 // generating the plaintext key / sealedKey.
 func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
-	context := ctx.AppendTo(make([]byte, 0, 128))
+	context, err := ctx.MarshalText()
+	if err != nil {
+		return key, err
+	}
 
 	payload := map[string]interface{}{
 		"ciphertext": string(sealedKey),
@@ -281,30 +287,4 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 	}
 	copy(key[:], plainKey)
 	return key, nil
-}
-
-// UpdateKey re-wraps the sealedKey if the master key referenced by the keyID
-// has been changed by the KMS operator - i.e. the master key has been rotated.
-// If the master key hasn't changed since the sealedKey has been created / updated
-// it may return the same sealedKey as rotatedKey.
-//
-// The context must be same context as the one provided while
-// generating the plaintext key / sealedKey.
-func (v *vaultService) UpdateKey(keyID string, sealedKey []byte, ctx Context) (rotatedKey []byte, err error) {
-	context := ctx.AppendTo(make([]byte, 0, 128))
-
-	payload := map[string]interface{}{
-		"ciphertext": string(sealedKey),
-		"context":    base64.StdEncoding.EncodeToString(context),
-	}
-	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/rewrap/%s", keyID), payload)
-	if err != nil {
-		return nil, Errorf("crypto: client error %w", err)
-	}
-	ciphertext, ok := s.Data["ciphertext"]
-	if !ok {
-		return nil, errMissingUpdatedKey
-	}
-	rotatedKey = []byte(ciphertext.(string))
-	return rotatedKey, nil
 }

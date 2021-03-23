@@ -1602,6 +1602,10 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
+	if sys.usersSysType == LDAPUsersSysType {
+		return sys.policyDBSet(name, policy, stsUser, isGroup)
+	}
+
 	return sys.policyDBSet(name, policy, regularUser, isGroup)
 }
 
@@ -1678,15 +1682,17 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 // This call assumes that caller has the sys.RLock()
 func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 	if isGroup {
-		g, ok := sys.iamGroupsMap[name]
-		if !ok {
-			return nil, errNoSuchGroup
-		}
+		if sys.usersSysType == MinIOUsersSysType {
+			g, ok := sys.iamGroupsMap[name]
+			if !ok {
+				return nil, errNoSuchGroup
+			}
 
-		// Group is disabled, so we return no policy - this
-		// ensures the request is denied.
-		if g.Status == statusDisabled {
-			return nil, nil
+			// Group is disabled, so we return no policy - this
+			// ensures the request is denied.
+			if g.Status == statusDisabled {
+				return nil, nil
+			}
 		}
 
 		mp := sys.iamGroupPolicyMap[name]
@@ -1695,13 +1701,17 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 
 	// When looking for a user's policies, we also check if the
 	// user and the groups they are member of are enabled.
-	u, ok := sys.iamUsersMap[name]
-	if !ok {
-		return nil, errNoSuchUser
-	}
 
-	if !u.IsValid() {
-		return nil, nil
+	var u auth.Credentials
+	var ok bool
+	if sys.usersSysType == MinIOUsersSysType {
+		u, ok = sys.iamUsersMap[name]
+		if !ok {
+			return nil, errNoSuchUser
+		}
+		if !u.IsValid() {
+			return nil, nil
+		}
 	}
 
 	var policies []string

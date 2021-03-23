@@ -25,6 +25,48 @@ import (
 	minio "github.com/minio/minio-go/v7"
 )
 
+func TestParsePostPolicyForm(t *testing.T) {
+	testCases := []struct {
+		policy  string
+		success bool
+	}{
+		// missing expiration, will fail.
+		{
+			policy:  `{"conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: false,
+		},
+		// invalid json.
+		{
+			policy:  `{"conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]`,
+			success: false,
+		},
+		// duplicate conditions, shall be parsed properly
+		{
+			policy:  `{"expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: true,
+		},
+		// no duplicates, shall be parsed properly.
+		{
+			policy:  `{"expiration":"2021-03-27T20:35:28.458Z","conditions":[["eq","$bucket","testbucket"],["eq","$key","wtf.txt"],["eq","$x-amz-date","20210320T203528Z"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210320/us-east-1/s3/aws4_request"]]}`,
+			success: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			_, err := parsePostPolicyForm(testCase.policy)
+			fmt.Println(err)
+			if testCase.success && err != nil {
+				t.Errorf("Expected success but failed with %s", err)
+			}
+			if !testCase.success && err == nil {
+				t.Errorf("Expected failed but succeeded")
+			}
+		})
+	}
+}
+
 // Test Post Policy parsing and checking conditions
 func TestPostPolicyForm(t *testing.T) {
 	pp := minio.NewPostPolicy()

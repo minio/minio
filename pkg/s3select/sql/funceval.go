@@ -492,7 +492,7 @@ func floatCast(v *Value) (float64, error) {
 	switch x := v.value.(type) {
 	case float64:
 		return x, nil
-	case int:
+	case int64:
 		return float64(x), nil
 	case string:
 		f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)

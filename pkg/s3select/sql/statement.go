@@ -127,10 +127,10 @@ func parseLimit(v *LitValue) (int64, error) {
 	switch {
 	case v == nil:
 		return -1, nil
-	case v.Number == nil:
+	case v.Int == nil:
 		return -1, errBadLimitSpecified
 	default:
-		r := int64(*v.Number)
+		r := int64(*v.Int)
 		if r < 0 {
 			return -1, errBadLimitSpecified
 		}

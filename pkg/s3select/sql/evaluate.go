@@ -476,8 +476,13 @@ func (e *FuncExpr) evalNode(r Record) (res *Value, err error) {
 // aggregation or a row function - it always returns a value.
 func (e *LitValue) evalNode(_ Record) (res *Value, err error) {
 	switch {
-	case e.Number != nil:
-		return floatToValue(*e.Number), nil
+	case e.Int != nil:
+		if *e.Int < math.MaxInt64 && *e.Int > math.MinInt64 {
+			return FromInt(int64(*e.Int)), nil
+		}
+		return FromFloat(*e.Int), nil
+	case e.Float != nil:
+		return FromFloat(*e.Float), nil
 	case e.String != nil:
 		return FromString(string(*e.String)), nil
 	case e.Boolean != nil:

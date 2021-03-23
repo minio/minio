@@ -378,6 +378,31 @@ func TestJSONQueries(t *testing.T) {
 			query:      `SELECT date_diff(day, '2010-01-01T23:00:00Z', '2010-01-02T23:00:00Z') FROM S3Object LIMIT 1`,
 			wantResult: `{"_1":1}`,
 		},
+		{
+			name:       "cast_from_int_to_float",
+			query:      `SELECT cast(1 as float) FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":1}`,
+		},
+		{
+			name:       "cast_from_float_to_float",
+			query:      `SELECT cast(1.0 as float) FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":1}`,
+		},
+		{
+			name:       "arithmetic_integer_operand",
+			query:      `SELECT 1 / 2 FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":0}`,
+		},
+		{
+			name:       "arithmetic_float_operand",
+			query:      `SELECT 1.0 / 2.0 * .3 FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":0.15}`,
+		},
+		{
+			name:       "arithmetic_integer_float_operand",
+			query:      `SELECT 3.0 / 2, 5 / 2.0 FROM S3Object LIMIT 1`,
+			wantResult: `{"_1":1.5,"_2":2.5}`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>

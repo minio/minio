@@ -106,10 +106,10 @@ type TableExpression struct {
 
 // JSONPathElement represents a keypath component
 type JSONPathElement struct {
-	Key            *ObjectKey `parser:"  @@"`                  // ['name'] and .name forms
-	Index          *int       `parser:"| \"[\" @Number \"]\""` // [3] form
-	ObjectWildcard bool       `parser:"| @\".*\""`             // .* form
-	ArrayWildcard  bool       `parser:"| @\"[*]\""`            // [*] form
+	Key            *ObjectKey `parser:"  @@"`               // ['name'] and .name forms
+	Index          *int       `parser:"| \"[\" @Int \"]\""` // [3] form
+	ObjectWildcard bool       `parser:"| @\".*\""`          // .* form
+	ArrayWildcard  bool       `parser:"| @\"[*]\""`         // [*] form
 }
 
 // JSONPath represents a keypath.
@@ -333,7 +333,8 @@ type DateDiffFunc struct {
 
 // LitValue represents a literal value parsed from the sql
 type LitValue struct {
-	Number  *float64       `parser:"(  @Number"`
+	Float   *float64       `parser:"(  @Float"`
+	Int     *float64       `parser:" | @Int"` // To avoid value out of range, use float64 instead
 	String  *LiteralString `parser:" | @LitString"`
 	Boolean *Boolean       `parser:" | @(\"TRUE\" | \"FALSE\")"`
 	Null    bool           `parser:" | @\"NULL\")"`
@@ -351,7 +352,8 @@ var (
 		`|(?P<Keyword>(?i)\b(?:SELECT|FROM|TOP|DISTINCT|ALL|WHERE|GROUP|BY|HAVING|UNION|MINUS|EXCEPT|INTERSECT|ORDER|LIMIT|OFFSET|TRUE|FALSE|NULL|IS|NOT|ANY|SOME|BETWEEN|AND|OR|LIKE|ESCAPE|AS|IN|BOOL|INT|INTEGER|STRING|FLOAT|DECIMAL|NUMERIC|TIMESTAMP|AVG|COUNT|MAX|MIN|SUM|COALESCE|NULLIF|CAST|DATE_ADD|DATE_DIFF|EXTRACT|TO_STRING|TO_TIMESTAMP|UTCNOW|CHAR_LENGTH|CHARACTER_LENGTH|LOWER|SUBSTRING|TRIM|UPPER|LEADING|TRAILING|BOTH|FOR)\b)` +
 		`|(?P<Ident>[a-zA-Z_][a-zA-Z0-9_]*)` +
 		`|(?P<QuotIdent>"([^"]*("")?)*")` +
-		`|(?P<Number>\d*\.?\d+([eE][-+]?\d+)?)` +
+		`|(?P<Float>\d*\.\d+([eE][-+]?\d+)?)` +
+		`|(?P<Int>\d+)` +
 		`|(?P<LitString>'([^']*('')?)*')` +
 		`|(?P<Operators><>|!=|<=|>=|\.\*|\[\*\]|[-+*/%,.()=<>\[\]])`,
 	))
