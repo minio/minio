@@ -157,6 +157,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	if !implicitPerm {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     accessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.GetUserAdminAction,
 			ConditionValues: getConditionValues(r, "", accessKey, claims),
 			IsOwner:         owner,
@@ -397,6 +398,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		}
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     parentUser,
+			Groups:          cred.Groups,
 			Action:          iampolicy.CreateUserAdminAction,
 			ConditionValues: getConditionValues(r, "", parentUser, claims),
 			IsOwner:         owner,
@@ -409,6 +411,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	if implicitPerm && !globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     accessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.CreateUserAdminAction,
 		ConditionValues: getConditionValues(r, "", accessKey, claims),
 		IsOwner:         owner,
@@ -677,6 +680,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
@@ -689,6 +693,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),

@@ -31,6 +31,7 @@ const DefaultVersion = "2012-10-17"
 // Args - arguments to policy to check whether it is allowed
 type Args struct {
 	AccountName     string                 `json:"account"`
+	Groups          []string               `json:"groups"`
 	Action          Action                 `json:"action"`
 	BucketName      string                 `json:"bucket"`
 	ConditionValues map[string][]string    `json:"conditions"`
