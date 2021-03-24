@@ -124,7 +124,8 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 		reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
 	}
 
-	t := trace.Info{FuncName: name}
+	now := time.Now().UTC()
+	t := trace.Info{TraceType: trace.HTTP, FuncName: name, Time: now}
 	t.NodeName = r.Host
 	if globalIsDistErasure {
 		t.NodeName = globalLocalNodeName
@@ -137,7 +138,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 
 	vars := mux.Vars(r)
 	rq := trace.RequestInfo{
-		Time:     time.Now().UTC(),
+		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
 		Path:     SlashSeparator + pathJoin(vars["bucket"], vars["object"]),
@@ -185,10 +186,12 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
 	}
 
-	var reqBodyRecorder *recordRequest
-	t := trace.Info{FuncName: name}
-	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
+	reqBodyRecorder := &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
+
+	now := time.Now().UTC()
+	t := trace.Info{TraceType: trace.HTTP, FuncName: name, Time: now}
+
 	t.NodeName = r.Host
 	if globalIsDistErasure {
 		t.NodeName = globalLocalNodeName
@@ -197,8 +200,9 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
 		t.NodeName = host
 	}
+
 	rq := trace.RequestInfo{
-		Time:     time.Now().UTC(),
+		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
 		Path:     r.URL.Path,

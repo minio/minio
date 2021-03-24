@@ -21,14 +21,45 @@ import (
 	"time"
 )
 
+// Type indicates the type of the tracing Info
+type Type int
+
+const (
+	// OS tracing (Golang os package calls)
+	OS Type = iota
+	// Storage tracing (XL storage)
+	Storage
+	// HTTP tracing (S3 & internode)
+	HTTP
+)
+
 // Info - represents a trace record, additionally
 // also reports errors if any while listening on trace.
 type Info struct {
-	NodeName  string       `json:"nodename"`
-	FuncName  string       `json:"funcname"`
+	TraceType Type `json:"type"`
+
+	NodeName string    `json:"nodename"`
+	FuncName string    `json:"funcname"`
+	Time     time.Time `json:"time"`
+
 	ReqInfo   RequestInfo  `json:"request"`
 	RespInfo  ResponseInfo `json:"response"`
 	CallStats CallStats    `json:"stats"`
+
+	StorageStats StorageStats `json:"storageStats"`
+	OSStats      OSStats      `json:"osStats"`
+}
+
+// StorageStats has information of a XL STORAGE call
+type StorageStats struct {
+	Path     string        `json:"path"`
+	Duration time.Duration `json:"duration"`
+}
+
+// OSStats has information of a OS call
+type OSStats struct {
+	Path     string        `json:"path"`
+	Duration time.Duration `json:"duration"`
 }
 
 // CallStats records request stats
