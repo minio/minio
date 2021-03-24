@@ -57,7 +57,7 @@ func reliableRemoveAll(dirPath string) (err error) {
 	i := 0
 	for {
 		// Removes all the directories and files.
-		if err = os.RemoveAll(dirPath); err != nil {
+		if err = RemoveAll(dirPath); err != nil {
 			// Retry only for the first retryable error.
 			if isSysErrNotEmpty(err) && i == 0 {
 				i++
@@ -101,7 +101,7 @@ func reliableMkdirAll(dirPath string, mode os.FileMode) (err error) {
 	i := 0
 	for {
 		// Creates all the parent directories, with mode 0777 mkdir honors system umask.
-		if err = os.MkdirAll(dirPath, mode); err != nil {
+		if err = MkdirAll(dirPath, mode); err != nil {
 			// Retry only for the first retryable error.
 			if osIsNotExist(err) && i == 0 {
 				i++
@@ -166,7 +166,7 @@ func reliableRename(srcFilePath, dstFilePath string) (err error) {
 	i := 0
 	for {
 		// After a successful parent directory create attempt a renameAll.
-		if err = os.Rename(srcFilePath, dstFilePath); err != nil {
+		if err = Rename(srcFilePath, dstFilePath); err != nil {
 			// Retry only for the first retryable error.
 			if osIsNotExist(err) && i == 0 {
 				i++
