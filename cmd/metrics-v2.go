@@ -474,7 +474,7 @@ func getS3RequestsInQueueMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      waitingTotal,
 		Help:      "Number of S3 requests in the waiting queue",
-		Type:      counterMetric,
+		Type:      gaugeMetric,
 	}
 }
 func getS3RequestsTotalMD() MetricDescription {
