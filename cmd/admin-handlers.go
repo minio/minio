@@ -263,6 +263,7 @@ type ServerHTTPStats struct {
 	CurrentS3Requests ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests   ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors     ServerHTTPAPIStats `json:"totalS3Errors"`
+	TotalS3Canceled   ServerHTTPAPIStats `json:"totalS3Canceled"`
 }
 
 // ServerInfoData holds storage, connections and other

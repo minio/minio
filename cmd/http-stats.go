@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -141,6 +142,7 @@ type HTTPStats struct {
 	currentS3Requests HTTPAPIStats
 	totalS3Requests   HTTPAPIStats
 	totalS3Errors     HTTPAPIStats
+	totalS3Canceled   HTTPAPIStats
 }
 
 func (st *HTTPStats) addRequestsInQueue(i int32) {
@@ -160,6 +162,9 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
 		APIStats: st.totalS3Errors.Load(),
 	}
+	serverStats.TotalS3Canceled = ServerHTTPAPIStats{
+		APIStats: st.totalS3Canceled.Load(),
+	}
 	return serverStats
 }
 
@@ -174,6 +179,13 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		st.totalS3Requests.Inc(api)
 		if !successReq && w.StatusCode != 0 {
 			st.totalS3Errors.Inc(api)
+		}
+		select {
+		case <-r.Context().Done():
+			if err := r.Context().Err(); err == context.Canceled {
+				st.totalS3Canceled.Inc(api)
+			}
+		default:
 		}
 	}
 

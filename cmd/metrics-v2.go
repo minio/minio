@@ -74,6 +74,7 @@ type MetricName string
 const (
 	total         MetricName = "total"
 	errorsTotal   MetricName = "error_total"
+	canceledTotal MetricName = "canceled_total"
 	healTotal     MetricName = "heal_total"
 	hitsTotal     MetricName = "hits_total"
 	inflightTotal MetricName = "inflight_total"
@@ -495,6 +496,15 @@ func getS3RequestsErrorsMD() MetricDescription {
 		Type:      counterMetric,
 	}
 }
+func getS3RequestsCanceledMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      canceledTotal,
+		Help:      "Total number S3 requests that were canceled from the client while processing",
+		Type:      counterMetric,
+	}
+}
 func getCacheHitsTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: minioNamespace,
@@ -576,6 +586,7 @@ func getHealObjectsHealTotalMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+
 func getHealObjectsFailTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: healMetricNamespace,
@@ -1073,6 +1084,13 @@ func getHTTPMetrics() MetricsGroup {
 			for api, value := range httpStats.TotalS3Errors.APIStats {
 				metrics = append(metrics, Metric{
 					Description:    getS3RequestsErrorsMD(),
+					Value:          float64(value),
+					VariableLabels: map[string]string{"api": api},
+				})
+			}
+			for api, value := range httpStats.TotalS3Canceled.APIStats {
+				metrics = append(metrics, Metric{
+					Description:    getS3RequestsCanceledMD(),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
