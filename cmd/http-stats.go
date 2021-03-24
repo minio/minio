@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -181,7 +182,9 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		}
 		select {
 		case <-r.Context().Done():
-			st.totalS3Canceled.Inc(api)
+			if err := r.Context().Err(); err == context.Canceled {
+				st.totalS3Canceled.Inc(api)
+			}
 		default:
 		}
 	}
