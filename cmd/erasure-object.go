@@ -881,7 +881,7 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
+			return disks[index].Delete(ctx, minioMetaTmpBucket, tmpObj, true)
 		}, index)
 	}
 
