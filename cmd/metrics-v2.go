@@ -107,7 +107,7 @@ const (
 	versionInfo MetricName = "version_info"
 
 	sizeDistribution = "size_distribution"
-	ttfbDistribution = "ttbf_seconds_distribution"
+	ttfbDistribution = "ttfb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"

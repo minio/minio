@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -177,15 +176,15 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.StatusCode != 0 {
-			st.totalS3Errors.Inc(api)
-		}
-		select {
-		case <-r.Context().Done():
-			if err := r.Context().Err(); err == context.Canceled {
+		if !successReq {
+			switch w.StatusCode {
+			case 0:
+			case 499:
+				// 499 is a good error, shall be counted at canceled.
 				st.totalS3Canceled.Inc(api)
+			default:
+				st.totalS3Errors.Inc(api)
 			}
-		default:
 		}
 	}
 
