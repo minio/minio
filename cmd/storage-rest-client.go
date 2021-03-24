@@ -337,7 +337,12 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
-	defer http.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	waitReader, err := waitForHTTPResponse(respBody)
+	defer http.DrainBody(ioutil.NopCloser(waitReader))
+	defer respBody.Close()
 	return err
 }
 
