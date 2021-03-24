@@ -41,17 +41,9 @@ func init() {
 	threshold = time.Duration(t) * time.Millisecond
 }
 
-func getThreshold() time.Duration {
-	return threshold
-}
-
-func collectLogTime() bool {
-	return logTime
-}
-
 func reportTime(name *strings.Builder, startTime time.Time) {
 	delta := time.Since(startTime)
-	if delta > getThreshold() {
+	if delta > threshold {
 		name.WriteString(" ")
 		name.WriteString(delta.String())
 		fmt.Println(name.String())
@@ -60,7 +52,7 @@ func reportTime(name *strings.Builder, startTime time.Time) {
 
 // RemoveAll captures time taken to call the underlying os.RemoveAll
 func RemoveAll(dirPath string) error {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.RemoveAll: ")
@@ -72,7 +64,7 @@ func RemoveAll(dirPath string) error {
 
 // MkdirAll captures time taken to call os.MkdirAll
 func MkdirAll(dirPath string, mode os.FileMode) error {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.MkdirAll: ")
@@ -84,7 +76,7 @@ func MkdirAll(dirPath string, mode os.FileMode) error {
 
 // Rename captures time taken to call os.Rename
 func Rename(src, dst string) error {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.Rename: ")
@@ -98,7 +90,7 @@ func Rename(src, dst string) error {
 
 // OpenFile captures time taken to call os.OpenFile
 func OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.OpenFile: ")
@@ -110,7 +102,7 @@ func OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 
 // Open captures time taken to call os.Open
 func Open(name string) (*os.File, error) {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.Open: ")
@@ -122,7 +114,7 @@ func Open(name string) (*os.File, error) {
 
 // OpenFileDirectIO captures time taken to call disk.OpenFileDirectIO
 func OpenFileDirectIO(name string, flag int, perm os.FileMode) (*os.File, error) {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("disk.OpenFileDirectIO: ")
@@ -134,7 +126,7 @@ func OpenFileDirectIO(name string, flag int, perm os.FileMode) (*os.File, error)
 
 // Lstat captures time taken to call os.Lstat
 func Lstat(name string) (os.FileInfo, error) {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.Lstat: ")
@@ -146,7 +138,7 @@ func Lstat(name string) (os.FileInfo, error) {
 
 // Remove captures time taken to call os.Remove
 func Remove(deletePath string) error {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.Remove: ")
@@ -158,7 +150,7 @@ func Remove(deletePath string) error {
 
 // Stat captures time taken to call os.Stat
 func Stat(name string) (os.FileInfo, error) {
-	if collectLogTime() {
+	if logTime {
 		startTime := time.Now()
 		var s strings.Builder
 		s.WriteString("os.Stat: ")
