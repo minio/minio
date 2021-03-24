@@ -1661,38 +1661,10 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 	return nil
 }
 
-// PolicyDBGetLDAP is only used by LDAP code, it is similar to PolicyDBGet
-func (sys *IAMSys) PolicyDBGetLDAP(name string, groups ...string) ([]string, error) {
-	if !sys.Initialized() {
-		return nil, errServerNotInitialized
-	}
-
-	if name == "" {
-		return nil, errInvalidArgument
-	}
-
-	sys.store.rlock()
-	defer sys.store.runlock()
-
-	var policies []string
-	mp, ok := sys.iamUserPolicyMap[name]
-	if ok {
-		// returned policy could be empty
-		policies = append(policies, mp.toSlice()...)
-	}
-
-	for _, group := range groups {
-		p := sys.iamGroupPolicyMap[group]
-		policies = append(policies, p.toSlice()...)
-	}
-
-	return policies, nil
-}
-
 // PolicyDBGet - gets policy set on a user or group. Since a user may
 // be a member of multiple groups, this function returns an array of
 // applicable policies
-func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
+func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1703,6 +1675,22 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 
 	sys.store.rlock()
 	defer sys.store.runlock()
+
+	if sys.usersSysType == LDAPUsersSysType {
+		var policies []string
+		mp, ok := sys.iamUserPolicyMap[name]
+		if ok {
+			// returned policy could be empty
+			policies = append(policies, mp.toSlice()...)
+		}
+
+		for _, group := range groups {
+			p := sys.iamGroupPolicyMap[group]
+			policies = append(policies, p.toSlice()...)
+		}
+
+		return policies, nil
+	}
 
 	return sys.policyDBGet(name, isGroup)
 }
@@ -1891,7 +1879,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool
 	}
 
 	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGetLDAP(args.AccountName, args.Groups...)
+	ldapPolicies, err := sys.PolicyDBGet(args.AccountName, false, args.Groups...)
 	if err != nil {
 		return false
 	}
