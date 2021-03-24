@@ -129,7 +129,7 @@ var (
 		if err != nil {
 			log.Fatal(err)
 		}
-		// check if it is a terminal or a pipe/redirection
+		// Check if Stdout is a terminal device or a pipe/redirection
 		if isatty.IsTerminal(os.Stdout.Fd()) || fi.Mode()&os.ModeCharDevice == 0 {
 			colorized, ok := Theme[tag]
 			if ok {
