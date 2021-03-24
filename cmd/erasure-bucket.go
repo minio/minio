@@ -144,12 +144,12 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 		if err == errVolumeNotEmpty {
 			// Attempt to delete bucket again.
 			if derr := storageDisks[index].DeleteVol(ctx, bucket, false); derr == errVolumeNotEmpty {
-				_ = cleanupDir(ctx, storageDisks[index], bucket, "")
+				_ = storageDisks[index].Delete(ctx, bucket, "", true)
 
 				_ = storageDisks[index].DeleteVol(ctx, bucket, false)
 
 				// Cleanup all the previously incomplete multiparts.
-				_ = cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
+				_ = storageDisks[index].Delete(ctx, minioMetaMultipartBucket, bucket, true)
 			}
 		}
 	}
@@ -170,8 +170,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 				if err := storageDisks[index].DeleteVol(ctx, bucket, forceDelete); err != nil {
 					return err
 				}
-				err := cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
-				if err != nil && err != errVolumeNotFound {
+				if err := storageDisks[index].Delete(ctx, minioMetaMultipartBucket, bucket, true); err != errFileNotFound {
 					return err
 				}
 				return nil
