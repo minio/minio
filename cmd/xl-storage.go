@@ -1432,7 +1432,9 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	parentFilePath := pathutil.Dir(filePath)
 	defer func() {
 		if err != nil {
-			removeAll(parentFilePath)
+			if volume == minioMetaTmpBucket {
+				removeAll(parentFilePath)
+			}
 		}
 	}()
 
