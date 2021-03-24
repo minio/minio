@@ -19,6 +19,7 @@ package console
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,7 +125,18 @@ var (
 
 	// Colorize prints message in a colorized form, dictated by the corresponding tag argument.
 	Colorize = func(tag string, data interface{}) string {
-		return Theme[tag].SprintFunc()(data)
+		fi, err := os.Stdout.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
+		// check if it is a terminal or a pipe/redirection
+		if isatty.IsTerminal(os.Stdout.Fd()) || fi.Mode()&os.ModeCharDevice == 0 {
+			colorized, ok := Theme[tag]
+			if ok {
+				return colorized.SprintFunc()(data)
+			} // else: No theme found. Return as string.
+		}
+		return fmt.Sprint(data)
 	}
 
 	// Eraseline Print in new line and adjust to top so that we don't print over the ongoing progress bar.
