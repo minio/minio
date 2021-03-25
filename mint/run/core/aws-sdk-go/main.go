@@ -1046,6 +1046,12 @@ func main() {
 	accessKey := os.Getenv("ACCESS_KEY")
 	secretKey := os.Getenv("SECRET_KEY")
 	secure := os.Getenv("ENABLE_HTTPS")
+	if strings.HasSuffix(endpoint, ":443") {
+		endpoint = strings.ReplaceAll(endpoint, ":443", "")
+	}
+	if strings.HasSuffix(endpoint, ":80") {
+		endpoint = strings.ReplaceAll(endpoint, ":80", "")
+	}
 	sdkEndpoint := "http://" + endpoint
 	if secure == "1" {
 		sdkEndpoint = "https://" + endpoint
