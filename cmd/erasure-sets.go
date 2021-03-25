@@ -43,11 +43,6 @@ import (
 // setsDsyncLockers is encapsulated type for Close()
 type setsDsyncLockers [][]dsync.NetLocker
 
-// Information of a new disk connection
-type diskConnectInfo struct {
-	setIndex int
-}
-
 // erasureSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
@@ -84,7 +79,10 @@ type erasureSets struct {
 	listTolerancePerSet     int
 
 	monitorContextCancel context.CancelFunc
-	disksConnectEvent    chan diskConnectInfo
+
+	// A channel to send the set index to the MRF when
+	// any disk belonging to that set is connected
+	setReconnectEvent chan int
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
@@ -201,6 +199,7 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {
 	var wg sync.WaitGroup
+	var setsJustConnected = make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
 	for _, endpoint := range s.endpoints {
 		diskPath := endpoint.String()
@@ -254,16 +253,29 @@ func (s *erasureSets) connectDisks() {
 			}
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
-			go func(setIndex int) {
-				// Send a new disk connect event with a timeout
-				select {
-				case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
-				case <-time.After(100 * time.Millisecond):
-				}
-			}(setIndex)
+			setsJustConnected[setIndex] = true
 		}(endpoint)
 	}
+
 	wg.Wait()
+
+	go func() {
+		idler := time.NewTimer(100 * time.Millisecond)
+		defer idler.Stop()
+
+		for setIndex, justConnected := range setsJustConnected {
+			if !justConnected {
+				continue
+			}
+
+			// Send a new set connect event with a timeout
+			idler.Reset(100 * time.Millisecond)
+			select {
+			case s.setReconnectEvent <- setIndex:
+			case <-idler.C:
+			}
+		}
+	}()
 }
 
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
@@ -366,7 +378,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		setDriveCount:       setDriveCount,
 		listTolerancePerSet: listTolerancePerSet,
 		format:              format,
-		disksConnectEvent:   make(chan diskConnectInfo),
+		setReconnectEvent:   make(chan int),
 		distributionAlgo:    format.Erasure.DistributionAlgo,
 		deploymentID:        uuid.MustParse(format.ID),
 		pool:                NewMergeWalkPool(globalMergeLookupTimeout),
@@ -545,12 +557,12 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 		}
 	}
 	select {
-	case _, ok := <-s.disksConnectEvent:
+	case _, ok := <-s.setReconnectEvent:
 		if ok {
-			close(s.disksConnectEvent)
+			close(s.setReconnectEvent)
 		}
 	default:
-		close(s.disksConnectEvent)
+		close(s.setReconnectEvent)
 	}
 	return nil
 }
@@ -1406,6 +1418,7 @@ func (s *erasureSets) maintainMRFList() {
 			bucket:    fOp.bucket,
 			object:    fOp.object,
 			versionID: fOp.versionID,
+			opts:      &madmin.HealOpts{Remove: true},
 		}] = fOp.failedSet
 		s.mrfMU.Unlock()
 	}
@@ -1429,13 +1442,13 @@ func (s *erasureSets) healMRFRoutine() {
 		time.Sleep(time.Second)
 	}
 
-	for e := range s.disksConnectEvent {
+	for setIndex := range s.setReconnectEvent {
 		// Get the list of objects related the er.set
 		// to which the connected disk belongs.
 		var mrfOperations []healSource
 		s.mrfMU.Lock()
 		for k, v := range s.mrfOperations {
-			if v == e.setIndex {
+			if v == setIndex {
 				mrfOperations = append(mrfOperations, k)
 			}
 		}
