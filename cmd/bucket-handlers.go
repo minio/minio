@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -758,10 +759,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
-
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat), r.URL, guessIsBrowserReq(r))
+			errAPI := errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat)
+			errAPI.Description = fmt.Sprintf("%s '(%s)'", errAPI.Description, err)
+			writeErrorResponse(ctx, w, errAPI, r.URL, guessIsBrowserReq(r))
 			return
 		}
 

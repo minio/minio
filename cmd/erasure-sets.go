@@ -425,7 +425,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	}
 
 	// cleanup ".trash/" folder every 10 minutes with sufficient sleep cycles.
-	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get("MINIO_DELETE_CLEANUP_INTERVAL", "10m"))
+	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get("MINIO_DELETE_CLEANUP_INTERVAL", "5m"))
 	if err != nil {
 		return nil, err
 	}
