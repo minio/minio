@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/minio-go/v7/pkg/set"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -121,24 +122,37 @@ type PostPolicyForm struct {
 // Go stdlib doesn't support parsing JSON with duplicate
 // keys, so we need to use this technique to merge the
 // keys.
-func sanitizePolicy(policy string) (io.Reader, error) {
+func sanitizePolicy(r io.Reader) (io.Reader, error) {
 	var buf bytes.Buffer
 	e := json.NewEncoder(&buf)
-	d := jstream.NewDecoder(strings.NewReader(policy), 0)
+	d := jstream.NewDecoder(r, 0).ObjectAsKVS()
+	sset := set.NewStringSet()
 	for mv := range d.Stream() {
-		e.Encode(mv.Value)
+		var kvs jstream.KVS
+		if mv.ValueType == jstream.Object {
+			// This is a JSON object type (that preserves key order)
+			kvs = mv.Value.(jstream.KVS)
+			for _, kv := range kvs {
+				if sset.Contains(kv.Key) {
+					// Reject duplicate conditions or expiration.
+					return nil, fmt.Errorf("input policy has multiple %s, please fix your client code", kv.Key)
+				}
+				sset.Add(kv.Key)
+			}
+			e.Encode(kvs)
+		}
 	}
 	return &buf, d.Err()
 }
 
 // parsePostPolicyForm - Parse JSON policy string into typed PostPolicyForm structure.
-func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
-	preader, err := sanitizePolicy(policy)
+func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
+	reader, err := sanitizePolicy(r)
 	if err != nil {
 		return PostPolicyForm{}, err
 	}
 
-	d := json.NewDecoder(preader)
+	d := json.NewDecoder(reader)
 
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
