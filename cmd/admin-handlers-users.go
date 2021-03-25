@@ -748,7 +748,11 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	case MinIOUsersSysType:
 		policies, err = globalIAMSys.PolicyDBGet(accountName, false)
 	case LDAPUsersSysType:
-		policies, err = globalIAMSys.PolicyDBGetLDAP(cred.ParentUser, cred.Groups...)
+		parentUser := accountName
+		if cred.ParentUser != "" {
+			parentUser = cred.ParentUser
+		}
+		policies, err = globalIAMSys.PolicyDBGet(parentUser, false, cred.Groups...)
 	default:
 		err = errors.New("should not happen!")
 	}

@@ -498,7 +498,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGetLDAP(ldapUserDN, groupDistNames...)
+	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
 	if len(ldapPolicies) == 0 {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
