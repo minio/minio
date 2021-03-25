@@ -754,7 +754,10 @@ func getMinioProcMetrics() MetricsGroup {
 		id:         "MinioProcMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
+			if runtime.GOOS == "windows" {
+				return nil
+			}
+			metrics = make([]Metric, 0, 20)
 			p, err := procfs.Self()
 			if err != nil {
 				logger.LogOnceIf(ctx, err, nodeMetricNamespace)
@@ -944,7 +947,7 @@ func getMinioHealingMetrics() MetricsGroup {
 		id:         "minioHealingMetrics",
 		cachedRead: cachedRead,
 		read: func(_ context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
+			metrics = make([]Metric, 0, 5)
 			if !globalIsErasure {
 				return
 			}
@@ -969,7 +972,7 @@ func getMinioHealingMetrics() MetricsGroup {
 }
 
 func getFailedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
+	m = make([]Metric, 0, 1)
 	for k, v := range seq.gethealFailedItemsMap() {
 		s := strings.Split(k, ",")
 		m = append(m, Metric{
@@ -985,8 +988,9 @@ func getFailedItems(seq *healSequence) (m []Metric) {
 }
 
 func getScannedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
-	for k, v := range seq.getHealedItemsMap() {
+	items := seq.getHealedItemsMap()
+	m = make([]Metric, 0, len(items))
+	for k, v := range items {
 		m = append(m, Metric{
 			Description:    getHealObjectsHealTotalMD(),
 			VariableLabels: map[string]string{"type": string(k)},
@@ -997,7 +1001,8 @@ func getScannedItems(seq *healSequence) (m []Metric) {
 }
 
 func getObjectsScanned(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0)
+	items := seq.getHealedItemsMap()
+	m = make([]Metric, 0, len(items))
 	for k, v := range seq.getScannedItemsMap() {
 		m = append(m, Metric{
 			Description:    getHealObjectsTotalMD(),
@@ -1012,7 +1017,7 @@ func getCacheMetrics() MetricsGroup {
 		id:         "CacheMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
+			metrics = make([]Metric, 0, 20)
 			cacheObjLayer := newCachedObjectLayerFn()
 			// Service not initialized yet
 			if cacheObjLayer == nil {
@@ -1063,6 +1068,10 @@ func getHTTPMetrics() MetricsGroup {
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
 			httpStats := globalHTTPStats.toServerHTTPStats()
+			metrics = make([]Metric, 0, 3+
+				len(httpStats.CurrentS3Requests.APIStats)+
+				len(httpStats.TotalS3Requests.APIStats)+
+				len(httpStats.TotalS3Errors.APIStats))
 			metrics = append(metrics, Metric{
 				Description: getS3RequestsInQueueMD(),
 				Value:       float64(httpStats.S3RequestsInQueue),
@@ -1105,6 +1114,7 @@ func getNetworkMetrics() MetricsGroup {
 		id:         "networkMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
+			metrics = make([]Metric, 0, 10)
 			metrics = append(metrics, Metric{
 				Description: getInternodeFailedRequests(),
 				Value:       float64(loadAndResetRPCNetworkErrsCounter()),
@@ -1136,7 +1146,7 @@ func getBucketUsageMetrics() MetricsGroup {
 		id:         "BucketUsageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
+			metrics = make([]Metric, 0, 50)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1210,7 +1220,6 @@ func getLocalStorageMetrics() MetricsGroup {
 		id:         "localStorageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1221,6 +1230,7 @@ func getLocalStorageMetrics() MetricsGroup {
 				return
 			}
 
+			metrics = make([]Metric, 0, 50)
 			storageInfo, _ := objLayer.LocalStorageInfo(ctx)
 			for _, disk := range storageInfo.Disks {
 				metrics = append(metrics, Metric{
@@ -1250,7 +1260,6 @@ func getClusterStorageMetrics() MetricsGroup {
 		id:         "ClusterStorageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
@@ -1262,6 +1271,7 @@ func getClusterStorageMetrics() MetricsGroup {
 			}
 
 			// Fetch disk space info, ignore errors
+			metrics = make([]Metric, 0, 10)
 			storageInfo, _ := objLayer.StorageInfo(ctx)
 			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
 			totalDisks := onlineDisks.Merge(offlineDisks)
