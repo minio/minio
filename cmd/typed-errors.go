@@ -98,3 +98,6 @@ var errAccessDenied = errors.New("Do not have enough permissions to access this 
 
 // error returned when object is locked.
 var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")
+
+// error returned when upload id not found
+var errUploadIDNotFound = errors.New("Specified Upload ID is not found")

@@ -44,7 +44,13 @@ func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
 }
 
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
-func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
+func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) (err error) {
+	defer func() {
+		if err == errFileNotFound {
+			err = errUploadIDNotFound
+		}
+	}()
+
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -56,7 +62,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket, object)
+		return reducedErr
 	}
 
 	// List all online disks.
