@@ -34,7 +34,7 @@ import (
 func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	srvrOsInfo := madmin.ServerOsInfo{Addr: addr}
@@ -65,7 +65,7 @@ func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskHwInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	parts, err := diskhw.PartitionsWithContext(ctx, true)

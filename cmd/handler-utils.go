@@ -541,7 +541,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 // gets host name for current node
 func getHostName(r *http.Request) (hostName string) {
 	if globalIsDistErasure {
-		hostName = GetLocalPeer(globalEndpoints)
+		hostName = globalLocalNodeName
 	} else {
 		hostName = r.Host
 	}

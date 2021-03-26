@@ -35,7 +35,7 @@ import (
 func getLocalCPUInfo(ctx context.Context, r *http.Request) madmin.ServerCPUInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	info, err := cpuhw.InfoWithContext(ctx)
@@ -106,7 +106,7 @@ func getLocalDrives(ctx context.Context, parallel bool, endpointServerPools Endp
 
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointServerPools)
+		addr = globalLocalNodeName
 	}
 	if parallel {
 		return madmin.ServerDrivesInfo{
@@ -123,7 +123,7 @@ func getLocalDrives(ctx context.Context, parallel bool, endpointServerPools Endp
 func getLocalMemInfo(ctx context.Context, r *http.Request) madmin.ServerMemInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	swap, err := memhw.SwapMemoryWithContext(ctx)
@@ -152,7 +152,7 @@ func getLocalMemInfo(ctx context.Context, r *http.Request) madmin.ServerMemInfo 
 func getLocalProcInfo(ctx context.Context, r *http.Request) madmin.ServerProcInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	errProcInfo := func(tag string, err error) madmin.ServerProcInfo {

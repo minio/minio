@@ -354,7 +354,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	}
 
 	// Local host
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, err := xnet.ParseHost(globalLocalNodeName)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return profilingDataFound
@@ -889,7 +889,7 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 	}
 
 	for i := 0; i < len(sortedGlobalEndpoints); i++ {
-		if sortedGlobalEndpoints[i] != GetLocalPeer(globalEndpoints) {
+		if sortedGlobalEndpoints[i] != globalLocalNodeName {
 			continue
 		}
 		for j := 0; j < len(sortedGlobalEndpoints); j++ {
@@ -922,7 +922,7 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 	}
 	return madmin.ServerNetHealthInfo{
 		Net:  netInfos,
-		Addr: GetLocalPeer(globalEndpoints),
+		Addr: globalLocalNodeName,
 	}
 }
 
@@ -997,7 +997,7 @@ func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.Serv
 	wg.Wait()
 	return madmin.ServerNetHealthInfo{
 		Net:  netInfos,
-		Addr: GetLocalPeer(globalEndpoints),
+		Addr: globalLocalNodeName,
 	}
 
 }

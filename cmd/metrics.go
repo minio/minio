@@ -538,7 +538,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	server := getLocalServerProperty(globalEndpoints, &http.Request{
-		Host: GetLocalPeer(globalEndpoints),
+		Host: globalLocalNodeName,
 	})
 
 	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)

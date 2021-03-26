@@ -194,6 +194,9 @@ var (
 
 	globalEndpoints EndpointServerPools
 
+	// The name of this local node, fetched from arguments
+	globalLocalNodeName string
+
 	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
