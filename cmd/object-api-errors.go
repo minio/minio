@@ -426,7 +426,7 @@ func (e BucketRemoteTargetNotFound) Error() string {
 type BucketRemoteConnectionErr GenericError
 
 func (e BucketRemoteConnectionErr) Error() string {
-	return "Remote service endpoint or target bucket not available: " + e.Bucket
+	return fmt.Sprintf("Remote service endpoint or target bucket not available: %s \n\t%s", e.Bucket, e.Err.Error())
 }
 
 // BucketRemoteAlreadyExists remote already exists for this target type.
