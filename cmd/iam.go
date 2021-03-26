@@ -1661,10 +1661,9 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 	return nil
 }
 
-// PolicyDBGet - gets policy set on a user or group. Since a user may
-// be a member of multiple groups, this function returns an array of
-// applicable policies
-func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
+// PolicyDBGet - gets policy set on a user or group. If a list of groups is
+// given, policies associated with them are included as well.
+func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1676,10 +1675,35 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	return sys.policyDBGet(name, isGroup)
+	policies, err := sys.policyDBGet(name, isGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isGroup {
+		for _, group := range groups {
+			ps, err := sys.policyDBGet(group, true)
+			if err != nil {
+				return nil, err
+			}
+			policies = append(policies, ps...)
+		}
+	}
+
+	return policies, nil
 }
 
-// This call assumes that caller has the sys.RLock()
+// This call assumes that caller has the sys.RLock().
+//
+// If a group is passed, it returns policies associated with the group.
+//
+// If a user is passed, it returns policies of the user along with any groups
+// that the server knows the user is a member of.
+//
+// In LDAP users mode, the server does not store any group membership
+// information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
+// generated credentials. Thus we skip looking up group memberships, user map,
+// and group map and check the appropriate policy maps directly.
 func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 	if isGroup {
 		if sys.usersSysType == MinIOUsersSysType {
@@ -1699,12 +1723,12 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 		return mp.toSlice(), nil
 	}
 
-	// When looking for a user's policies, we also check if the
-	// user and the groups they are member of are enabled.
-
 	var u auth.Credentials
 	var ok bool
 	if sys.usersSysType == MinIOUsersSysType {
+		// When looking for a user's policies, we also check if the user
+		// and the groups they are member of are enabled.
+
 		u, ok = sys.iamUsersMap[name]
 		if !ok {
 			return nil, errNoSuchUser
@@ -1863,7 +1887,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool
 	}
 
 	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	ldapPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
 	if err != nil {
 		return false
 	}

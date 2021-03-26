@@ -290,7 +290,6 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 
 	done := keepHTTPResponseAlive(w)
 	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body))
-	w.(http.Flusher).Flush()
 }
 
 // DeleteVersion delete updated metadata.

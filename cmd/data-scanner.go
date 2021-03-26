@@ -44,7 +44,7 @@ import (
 
 const (
 	dataScannerSleepPerFolder = time.Millisecond // Time to wait between folders.
-	dataScannerStartDelay     = 5 * time.Minute  // Time to wait on startup and between cycles.
+	dataScannerStartDelay     = 1 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles  = 16               // Visit all folders every n cycles.
 
 	healDeleteDangling    = true

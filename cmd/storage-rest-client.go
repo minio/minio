@@ -340,7 +340,10 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	if err != nil {
 		return err
 	}
-	return waitForHTTPStream(respBody, ioutil.Discard)
+	waitReader, err := waitForHTTPResponse(respBody)
+	defer http.DrainBody(ioutil.NopCloser(waitReader))
+	defer respBody.Close()
+	return err
 }
 
 func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {

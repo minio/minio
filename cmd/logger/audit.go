@@ -49,7 +49,7 @@ type ResponseWriter struct {
 }
 
 // NewResponseWriter - returns a wrapped response writer to trap
-// http status codes for auditiing purposes.
+// http status codes for auditing purposes.
 func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
 	return &ResponseWriter{
 		ResponseWriter: w,

@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	minio "github.com/minio/minio-go/v7"
@@ -40,10 +42,19 @@ func TestParsePostPolicyForm(t *testing.T) {
 			policy:  `{"conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]`,
 			success: false,
 		},
-		// duplicate conditions, shall be parsed properly
+		// duplicate 'expiration' reject
+		{
+			policy: `{"expiration":"2021-03-22T09:16:21.310Z","expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","evil"],["eq","$key","hello.txt"],["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+		},
+		// duplicate '$bucket' reject
+		{
+			policy:  `{"expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","good"],["eq","$key","hello.txt"]],"conditions":[["eq","$bucket","evil"],["eq","$key","hello.txt"],["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: false,
+		},
+		// duplicate conditions, reject
 		{
 			policy:  `{"expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
-			success: true,
+			success: false,
 		},
 		// no duplicates, shall be parsed properly.
 		{
@@ -55,8 +66,7 @@ func TestParsePostPolicyForm(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			_, err := parsePostPolicyForm(testCase.policy)
-			fmt.Println(err)
+			_, err := parsePostPolicyForm(strings.NewReader(testCase.policy))
 			if testCase.success && err != nil {
 				t.Errorf("Expected success but failed with %s", err)
 			}
@@ -136,7 +146,7 @@ func TestPostPolicyForm(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
 			t.Fatal(err)
 		}

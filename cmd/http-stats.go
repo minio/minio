@@ -141,6 +141,7 @@ type HTTPStats struct {
 	currentS3Requests HTTPAPIStats
 	totalS3Requests   HTTPAPIStats
 	totalS3Errors     HTTPAPIStats
+	totalS3Canceled   HTTPAPIStats
 }
 
 func (st *HTTPStats) addRequestsInQueue(i int32) {
@@ -160,6 +161,9 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
 		APIStats: st.totalS3Errors.Load(),
 	}
+	serverStats.TotalS3Canceled = ServerHTTPAPIStats{
+		APIStats: st.totalS3Canceled.Load(),
+	}
 	return serverStats
 }
 
@@ -172,8 +176,15 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.StatusCode != 0 {
-			st.totalS3Errors.Inc(api)
+		if !successReq {
+			switch w.StatusCode {
+			case 0:
+			case 499:
+				// 499 is a good error, shall be counted at canceled.
+				st.totalS3Canceled.Inc(api)
+			default:
+				st.totalS3Errors.Inc(api)
+			}
 		}
 	}
 

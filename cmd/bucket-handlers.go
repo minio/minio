@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/xml"
@@ -291,7 +292,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction, "", "")
 	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -343,10 +344,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		for _, bucketInfo := range bucketsInfo {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     accessKey,
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", accessKey, claims),
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims,
@@ -925,10 +927,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
-
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat), r.URL, guessIsBrowserReq(r))
+			errAPI := errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat)
+			errAPI.Description = fmt.Sprintf("%s '(%s)'", errAPI.Description, err)
+			writeErrorResponse(ctx, w, errAPI, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
