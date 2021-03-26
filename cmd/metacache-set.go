@@ -840,7 +840,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			if werr != io.EOF && werr != nil &&
 				werr.Error() != errFileNotFound.Error() &&
 				werr.Error() != errVolumeNotFound.Error() &&
-				!errors.Is(err, context.Canceled) {
+				!errors.Is(werr, context.Canceled) {
 				logger.LogIf(ctx, werr)
 			}
 		}()
