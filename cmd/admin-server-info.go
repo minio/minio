@@ -31,7 +31,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	var localEndpoints Endpoints
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointServerPools)
+		addr = globalLocalNodeName
 	}
 	network := make(map[string]string)
 	for _, ep := range endpointServerPools {

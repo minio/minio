@@ -1406,7 +1406,7 @@ func ReportMetrics(ctx context.Context, generators func() []MetricsGenerator) <-
 			if m.VariableLabels == nil {
 				m.VariableLabels = make(map[string]string)
 			}
-			m.VariableLabels[serverName] = GetLocalPeer(globalEndpoints)
+			m.VariableLabels[serverName] = globalLocalNodeName
 			for {
 				select {
 				case ch <- m:
@@ -1453,7 +1453,7 @@ func (c *minioCollectorV2) Collect(ch chan<- prometheus.Metric) {
 
 	populateAndPublish(c.generator, func(metric Metric) bool {
 		labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-		values = append(values, GetLocalPeer(globalEndpoints))
+		values = append(values, globalLocalNodeName)
 		labels = append(labels, serverName)
 
 		if metric.Description.Type == histogramMetric {

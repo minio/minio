@@ -127,7 +127,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 	t := trace.Info{FuncName: name}
 	t.NodeName = r.Host
 	if globalIsDistErasure {
-		t.NodeName = GetLocalPeer(globalEndpoints)
+		t.NodeName = globalLocalNodeName
 	}
 
 	// strip port from the host address
@@ -191,7 +191,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
 	t.NodeName = r.Host
 	if globalIsDistErasure {
-		t.NodeName = GetLocalPeer(globalEndpoints)
+		t.NodeName = globalLocalNodeName
 	}
 	// strip port from the host address
 	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
