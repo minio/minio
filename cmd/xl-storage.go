@@ -886,7 +886,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if filePath == retainSlash(volumeDir) {
 		return err
 	}
-	logger.LogIf(ctx, s.deleteFile(volumeDir, filePath, false))
+	s.deleteFile(volumeDir, filePath, false)
 	return err
 }
 
