@@ -49,7 +49,7 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 		TraceType: trace.OS,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  s.String(),
+		FuncName:  "os." + s.String(),
 		OSStats: trace.OSStats{
 			Duration: duration,
 			Path:     path,
