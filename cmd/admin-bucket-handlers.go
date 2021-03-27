@@ -172,7 +172,12 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 
 	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, update); err != nil {
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		switch err.(type) {
+		case BucketRemoteConnectionErr:
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationRemoteConnectionError, err), r.URL)
+		default:
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		}
 		return
 	}
 	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
