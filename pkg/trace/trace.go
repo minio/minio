@@ -27,9 +27,9 @@ type Type int
 const (
 	// OS tracing (Golang os package calls)
 	OS Type = iota
-	// Storage tracing (XL storage)
+	// Storage tracing (MinIO Storage Layer)
 	Storage
-	// HTTP tracing (S3 & internode)
+	// HTTP tracing (MinIO S3 & Internode)
 	HTTP
 )
 
@@ -50,13 +50,13 @@ type Info struct {
 	OSStats      OSStats      `json:"osStats"`
 }
 
-// StorageStats has information of a XL STORAGE call
+// StorageStats statistics on MinIO Storage layer calls
 type StorageStats struct {
 	Path     string        `json:"path"`
 	Duration time.Duration `json:"duration"`
 }
 
-// OSStats has information of a OS call
+// OSStats statistics on operating system specific calls.
 type OSStats struct {
 	Path     string        `json:"path"`
 	Duration time.Duration `json:"duration"`

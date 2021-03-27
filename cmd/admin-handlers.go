@@ -1072,11 +1072,7 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 		return true
 	}
 
-	if opts.OS && trcInfo.TraceType == trace.OS {
-		return true
-	}
-
-	return false
+	return opts.OS && trcInfo.TraceType == trace.OS
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
