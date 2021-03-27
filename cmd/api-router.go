@@ -283,6 +283,7 @@ func registerAPIRouter(router *mux.Router) {
 		// PutObject
 		router.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("putobject", maxClients(httpTraceHdrs(api.PutObjectHandler))))
+
 		// DeleteObject
 		router.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("deleteobject", maxClients(httpTraceAll(api.DeleteObjectHandler))))
