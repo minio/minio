@@ -591,7 +591,7 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 		TraceType: trace.Storage,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  s.String(),
+		FuncName:  "storage." + s.String(),
 		StorageStats: trace.StorageStats{
 			Duration: duration,
 			Path:     path,
