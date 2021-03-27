@@ -181,9 +181,9 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	// global Trace system to send HTTP request/response logs to
-	// registered listeners
-	globalHTTPTrace = pubsub.New()
+	// global Trace system to send HTTP request/response
+	// and Storage/OS calls info to registered listeners.
+	globalTrace = pubsub.New()
 
 	// global Listen system to send S3 API events to registered listeners
 	globalHTTPListen = pubsub.New()

@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v12"
+	peerRESTVersion       = "v13" // Add storage tracing
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -62,18 +62,22 @@ const (
 )
 
 const (
-	peerRESTBucket      = "bucket"
-	peerRESTBuckets     = "buckets"
-	peerRESTUser        = "user"
-	peerRESTGroup       = "group"
-	peerRESTUserTemp    = "user-temp"
-	peerRESTPolicy      = "policy"
-	peerRESTUserOrGroup = "user-or-group"
-	peerRESTIsGroup     = "is-group"
-	peerRESTSignal      = "signal"
-	peerRESTProfiler    = "profiler"
-	peerRESTTraceAll    = "all"
-	peerRESTTraceErr    = "err"
+	peerRESTBucket         = "bucket"
+	peerRESTBuckets        = "buckets"
+	peerRESTUser           = "user"
+	peerRESTGroup          = "group"
+	peerRESTUserTemp       = "user-temp"
+	peerRESTPolicy         = "policy"
+	peerRESTUserOrGroup    = "user-or-group"
+	peerRESTIsGroup        = "is-group"
+	peerRESTSignal         = "signal"
+	peerRESTProfiler       = "profiler"
+	peerRESTTraceErr       = "err"
+	peerRESTTraceInternal  = "internal"
+	peerRESTTraceStorage   = "storage"
+	peerRESTTraceS3        = "s3"
+	peerRESTTraceOS        = "os"
+	peerRESTTraceThreshold = "threshold"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

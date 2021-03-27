@@ -359,24 +359,24 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 // Log headers and body.
 func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if globalHTTPTrace.NumSubscribers() == 0 {
+		if globalTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
 		trace := Trace(f, true, w, r)
-		globalHTTPTrace.Publish(trace)
+		globalTrace.Publish(trace)
 	}
 }
 
 // Log only the headers.
 func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if globalHTTPTrace.NumSubscribers() == 0 {
+		if globalTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
 		trace := Trace(f, false, w, r)
-		globalHTTPTrace.Publish(trace)
+		globalTrace.Publish(trace)
 	}
 }
 
