@@ -25,7 +25,16 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
+
+func access(name string) error {
+	if err := unix.Access(name, unix.R_OK|unix.W_OK); err != nil {
+		return &os.PathError{Op: "lstat", Path: name, Err: err}
+	}
+	return nil
+}
 
 // The buffer must be at least a block long.
 // refer https://github.com/golang/go/issues/24015
