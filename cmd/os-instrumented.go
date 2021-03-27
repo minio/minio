@@ -66,7 +66,7 @@ func updateOSMetrics(s osMetric, paths ...string) func() {
 	return func() {
 		duration := time.Since(startTime)
 
-		globalTrace.Publish(osTrace(s, startTime, duration, strings.Join(paths, " ")))
+		globalTrace.Publish(osTrace(s, startTime, duration, strings.Join(paths, " -> ")))
 	}
 }
 

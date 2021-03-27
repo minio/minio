@@ -130,10 +130,15 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 	if globalIsDistErasure {
 		t.NodeName = globalLocalNodeName
 	}
+	if t.NodeName == "" {
+		t.NodeName = globalLocalNodeName
+	}
 
-	// strip port from the host address
-	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
-		t.NodeName = host
+	// strip only standard port from the host address
+	if host, port, err := net.SplitHostPort(t.NodeName); err == nil {
+		if port == "443" || port == "80" {
+			t.NodeName = host
+		}
 	}
 
 	vars := mux.Vars(r)
@@ -196,9 +201,16 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	if globalIsDistErasure {
 		t.NodeName = globalLocalNodeName
 	}
-	// strip port from the host address
-	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
-		t.NodeName = host
+
+	if t.NodeName == "" {
+		t.NodeName = globalLocalNodeName
+	}
+
+	// strip only standard port from the host address
+	if host, port, err := net.SplitHostPort(t.NodeName); err == nil {
+		if port == "443" || port == "80" {
+			t.NodeName = host
+		}
 	}
 
 	rq := trace.RequestInfo{
