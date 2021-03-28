@@ -125,7 +125,7 @@ func (r *nullReader) Read(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetPerfInfo, err error) {
+func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.PeerNetPerfInfo, err error) {
 	var mu sync.Mutex // mutex used to protect these slices in go-routines
 	latencies := []float64{}
 	throughputs := []float64{}
@@ -228,12 +228,24 @@ func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, thr
 	}
 
 	latency, throughput, err := xnet.ComputePerfStats(latencies, throughputs)
-	info = madmin.NetPerfInfo{
-		Latency:    latency,
-		Throughput: throughput,
-	}
-	return info, err
-
+	return madmin.PeerNetPerfInfo{
+		Latency: madmin.Latency{
+			Avg:          round(latency.Avg, 3),
+			Max:          round(latency.Max, 3),
+			Min:          round(latency.Min, 3),
+			Percentile50: round(latency.Percentile50, 3),
+			Percentile90: round(latency.Percentile90, 3),
+			Percentile99: round(latency.Percentile99, 3),
+		},
+		Throughput: madmin.Throughput{
+			Avg:          uint64(round(throughput.Avg, 0)),
+			Max:          uint64(round(throughput.Max, 0)),
+			Min:          uint64(round(throughput.Min, 0)),
+			Percentile50: uint64(round(throughput.Percentile50, 0)),
+			Percentile90: uint64(round(throughput.Percentile90, 0)),
+			Percentile99: uint64(round(throughput.Percentile99, 0)),
+		},
+	}, nil
 }
 
 func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
@@ -275,8 +287,8 @@ func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
 	return math.MaxFloat64
 }
 
-// NetInfo - fetch Net information for a remote node.
-func (client *peerRESTClient) NetInfo(ctx context.Context) (info madmin.NetPerfInfo, err error) {
+// GetNetPerfInfo - fetch network information for a remote node.
+func (client *peerRESTClient) GetNetPerfInfo(ctx context.Context) (info madmin.PeerNetPerfInfo, err error) {
 
 	// 100 Gbit ->  256 MiB  *  50 threads
 	// 40 Gbit  ->  256 MiB  *  20 threads
@@ -330,7 +342,7 @@ func (client *peerRESTClient) NetInfo(ctx context.Context) (info madmin.NetPerfI
 }
 
 // DispatchNetInfo - dispatch other nodes to run Net info.
-func (client *peerRESTClient) DispatchNetInfo(ctx context.Context) (info madmin.ServerNetHealthInfo, err error) {
+func (client *peerRESTClient) DispatchNetInfo(ctx context.Context) (info madmin.NetPerfInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDispatchNetInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -344,8 +356,8 @@ func (client *peerRESTClient) DispatchNetInfo(ctx context.Context) (info madmin.
 	return
 }
 
-// DriveInfo - fetch Drive information for a remote node.
-func (client *peerRESTClient) DriveInfo(ctx context.Context) (info madmin.ServerDrivesInfo, err error) {
+// GetDrivePerfInfos - fetch all disk's serial/parallal performance information for a remote node.
+func (client *peerRESTClient) GetDrivePerfInfos(ctx context.Context) (info madmin.DrivePerfInfos, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDriveInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -355,8 +367,8 @@ func (client *peerRESTClient) DriveInfo(ctx context.Context) (info madmin.Server
 	return info, err
 }
 
-// CPUInfo - fetch CPU information for a remote node.
-func (client *peerRESTClient) CPUInfo(ctx context.Context) (info madmin.ServerCPUInfo, err error) {
+// GetCPUs - fetch CPU information for a remote node.
+func (client *peerRESTClient) GetCPUs(ctx context.Context) (info madmin.CPUs, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodCPUInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -366,8 +378,8 @@ func (client *peerRESTClient) CPUInfo(ctx context.Context) (info madmin.ServerCP
 	return info, err
 }
 
-// DiskHwInfo - fetch Disk HW information for a remote node.
-func (client *peerRESTClient) DiskHwInfo(ctx context.Context) (info madmin.ServerDiskHwInfo, err error) {
+// GetPartitions - fetch disk partition information for a remote node.
+func (client *peerRESTClient) GetPartitions(ctx context.Context) (info madmin.Partitions, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDiskHwInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -377,8 +389,8 @@ func (client *peerRESTClient) DiskHwInfo(ctx context.Context) (info madmin.Serve
 	return info, err
 }
 
-// OsInfo - fetch OS information for a remote node.
-func (client *peerRESTClient) OsInfo(ctx context.Context) (info madmin.ServerOsInfo, err error) {
+// GetOSInfo - fetch OS information for a remote node.
+func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -388,8 +400,8 @@ func (client *peerRESTClient) OsInfo(ctx context.Context) (info madmin.ServerOsI
 	return info, err
 }
 
-// MemInfo - fetch Memory information for a remote node.
-func (client *peerRESTClient) MemInfo(ctx context.Context) (info madmin.ServerMemInfo, err error) {
+// GetMemInfo - fetch memory information for a remote node.
+func (client *peerRESTClient) GetMemInfo(ctx context.Context) (info madmin.MemInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodMemInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -399,8 +411,8 @@ func (client *peerRESTClient) MemInfo(ctx context.Context) (info madmin.ServerMe
 	return info, err
 }
 
-// ProcInfo - fetch Process information for a remote node.
-func (client *peerRESTClient) ProcInfo(ctx context.Context) (info madmin.ServerProcInfo, err error) {
+// GetProcInfo - fetch MinIO process information for a remote node.
+func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.ProcInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodProcInfo, nil, nil, -1)
 	if err != nil {
 		return

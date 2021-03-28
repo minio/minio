@@ -831,8 +831,8 @@ func (sys *NotificationSys) Send(args eventArgs) {
 	sys.targetList.Send(args.ToEvent(true), targetIDSet, sys.targetResCh)
 }
 
-// NetInfo - Net information
-func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthInfo {
+// GetNetPerfInfo - Net information
+func (sys *NotificationSys) GetNetPerfInfo(ctx context.Context) madmin.NetPerfInfo {
 	var sortedGlobalEndpoints []string
 
 	/*
@@ -889,14 +889,14 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 		}
 	}
 
-	netInfos := make([]madmin.NetPerfInfo, len(remoteTargets))
+	netInfos := make([]madmin.PeerNetPerfInfo, len(remoteTargets))
 
 	for index, client := range remoteTargets {
 		if client == nil {
 			continue
 		}
 		var err error
-		netInfos[index], err = client.NetInfo(ctx)
+		netInfos[index], err = client.GetNetPerfInfo(ctx)
 
 		addr := client.host.String()
 		reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
@@ -907,15 +907,15 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 			netInfos[index].Error = err.Error()
 		}
 	}
-	return madmin.ServerNetHealthInfo{
-		Net:  netInfos,
-		Addr: globalLocalNodeName,
+	return madmin.NetPerfInfo{
+		Addr:        globalLocalNodeName,
+		RemotePeers: netInfos,
 	}
 }
 
 // DispatchNetPerfInfo - Net perf information from other nodes
-func (sys *NotificationSys) DispatchNetPerfInfo(ctx context.Context) []madmin.ServerNetHealthInfo {
-	serverNetInfos := []madmin.ServerNetHealthInfo{}
+func (sys *NotificationSys) DispatchNetPerfInfo(ctx context.Context) []madmin.NetPerfInfo {
+	serverNetInfos := []madmin.NetPerfInfo{}
 
 	for index, client := range sys.peerClients {
 		if client == nil {
@@ -932,8 +932,8 @@ func (sys *NotificationSys) DispatchNetPerfInfo(ctx context.Context) []madmin.Se
 }
 
 // DispatchNetPerfChan - Net perf information from other nodes
-func (sys *NotificationSys) DispatchNetPerfChan(ctx context.Context) chan madmin.ServerNetHealthInfo {
-	serverNetInfos := make(chan madmin.ServerNetHealthInfo)
+func (sys *NotificationSys) DispatchNetPerfChan(ctx context.Context) chan madmin.NetPerfInfo {
+	serverNetInfos := make(chan madmin.NetPerfInfo)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -960,9 +960,9 @@ func (sys *NotificationSys) DispatchNetPerfChan(ctx context.Context) chan madmin
 	return serverNetInfos
 }
 
-// NetPerfParallelInfo - Performs Net parallel tests
-func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.ServerNetHealthInfo {
-	netInfos := []madmin.NetPerfInfo{}
+// GetParallelNetPerfInfo - Performs Net parallel tests
+func (sys *NotificationSys) GetParallelNetPerfInfo(ctx context.Context) madmin.NetPerfInfo {
+	netInfos := []madmin.PeerNetPerfInfo{}
 	wg := sync.WaitGroup{}
 
 	for index, client := range sys.peerClients {
@@ -972,7 +972,7 @@ func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.Serv
 
 		wg.Add(1)
 		go func(index int) {
-			netInfo, err := sys.peerClients[index].NetInfo(ctx)
+			netInfo, err := sys.peerClients[index].GetNetPerfInfo(ctx)
 			netInfo.Addr = sys.peerClients[index].host.String()
 			if err != nil {
 				netInfo.Error = err.Error()
@@ -982,46 +982,15 @@ func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.Serv
 		}(index)
 	}
 	wg.Wait()
-	return madmin.ServerNetHealthInfo{
-		Net:  netInfos,
-		Addr: globalLocalNodeName,
+	return madmin.NetPerfInfo{
+		Addr:        globalLocalNodeName,
+		RemotePeers: netInfos,
 	}
-
 }
 
-// DrivePerfInfo - Drive perf information
-func (sys *NotificationSys) DrivePerfInfo(ctx context.Context) []madmin.ServerDrivesInfo {
-	reply := make([]madmin.ServerDrivesInfo, len(sys.peerClients))
-
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			var err error
-			reply[index], err = sys.peerClients[index].DriveInfo(ctx)
-			return err
-		}, index)
-	}
-
-	for index, err := range g.Wait() {
-		if err != nil {
-			addr := sys.peerClients[index].host.String()
-			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
-			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
-			reply[index].Addr = addr
-			reply[index].Error = err.Error()
-		}
-	}
-	return reply
-}
-
-// DrivePerfInfoChan - Drive perf information
-func (sys *NotificationSys) DrivePerfInfoChan(ctx context.Context) chan madmin.ServerDrivesInfo {
-	updateChan := make(chan madmin.ServerDrivesInfo)
+// GetDrivePerfInfos - Drive performance information
+func (sys *NotificationSys) GetDrivePerfInfos(ctx context.Context) chan madmin.DrivePerfInfos {
+	updateChan := make(chan madmin.DrivePerfInfos)
 	wg := sync.WaitGroup{}
 
 	for _, client := range sys.peerClients {
@@ -1030,7 +999,7 @@ func (sys *NotificationSys) DrivePerfInfoChan(ctx context.Context) chan madmin.S
 		}
 		wg.Add(1)
 		go func(client *peerRESTClient) {
-			reply, err := client.DriveInfo(ctx)
+			reply, err := client.GetDrivePerfInfos(ctx)
 
 			addr := client.host.String()
 			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
@@ -1055,9 +1024,9 @@ func (sys *NotificationSys) DrivePerfInfoChan(ctx context.Context) chan madmin.S
 	return updateChan
 }
 
-// CPUInfo - CPU information
-func (sys *NotificationSys) CPUInfo(ctx context.Context) []madmin.ServerCPUInfo {
-	reply := make([]madmin.ServerCPUInfo, len(sys.peerClients))
+// GetCPUs - Get all CPU information.
+func (sys *NotificationSys) GetCPUs(ctx context.Context) []madmin.CPUs {
+	reply := make([]madmin.CPUs, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1067,7 +1036,7 @@ func (sys *NotificationSys) CPUInfo(ctx context.Context) []madmin.ServerCPUInfo 
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].CPUInfo(ctx)
+			reply[index], err = sys.peerClients[index].GetCPUs(ctx)
 			return err
 		}, index)
 	}
@@ -1085,9 +1054,9 @@ func (sys *NotificationSys) CPUInfo(ctx context.Context) []madmin.ServerCPUInfo 
 	return reply
 }
 
-// DiskHwInfo - Disk HW information
-func (sys *NotificationSys) DiskHwInfo(ctx context.Context) []madmin.ServerDiskHwInfo {
-	reply := make([]madmin.ServerDiskHwInfo, len(sys.peerClients))
+// GetPartitions - Disk partition information
+func (sys *NotificationSys) GetPartitions(ctx context.Context) []madmin.Partitions {
+	reply := make([]madmin.Partitions, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1097,7 +1066,7 @@ func (sys *NotificationSys) DiskHwInfo(ctx context.Context) []madmin.ServerDiskH
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].DiskHwInfo(ctx)
+			reply[index], err = sys.peerClients[index].GetPartitions(ctx)
 			return err
 		}, index)
 	}
@@ -1115,9 +1084,9 @@ func (sys *NotificationSys) DiskHwInfo(ctx context.Context) []madmin.ServerDiskH
 	return reply
 }
 
-// OsInfo - Os information
-func (sys *NotificationSys) OsInfo(ctx context.Context) []madmin.ServerOsInfo {
-	reply := make([]madmin.ServerOsInfo, len(sys.peerClients))
+// GetOSInfo - Get operating system's information
+func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
+	reply := make([]madmin.OSInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1127,7 +1096,7 @@ func (sys *NotificationSys) OsInfo(ctx context.Context) []madmin.ServerOsInfo {
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].OsInfo(ctx)
+			reply[index], err = sys.peerClients[index].GetOSInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1145,9 +1114,9 @@ func (sys *NotificationSys) OsInfo(ctx context.Context) []madmin.ServerOsInfo {
 	return reply
 }
 
-// MemInfo - Mem information
-func (sys *NotificationSys) MemInfo(ctx context.Context) []madmin.ServerMemInfo {
-	reply := make([]madmin.ServerMemInfo, len(sys.peerClients))
+// GetMemInfo - Memory information
+func (sys *NotificationSys) GetMemInfo(ctx context.Context) []madmin.MemInfo {
+	reply := make([]madmin.MemInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1157,7 +1126,7 @@ func (sys *NotificationSys) MemInfo(ctx context.Context) []madmin.ServerMemInfo 
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].MemInfo(ctx)
+			reply[index], err = sys.peerClients[index].GetMemInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1175,9 +1144,9 @@ func (sys *NotificationSys) MemInfo(ctx context.Context) []madmin.ServerMemInfo 
 	return reply
 }
 
-// ProcInfo - Process information
-func (sys *NotificationSys) ProcInfo(ctx context.Context) []madmin.ServerProcInfo {
-	reply := make([]madmin.ServerProcInfo, len(sys.peerClients))
+// GetProcInfo - Process information
+func (sys *NotificationSys) GetProcInfo(ctx context.Context) []madmin.ProcInfo {
+	reply := make([]madmin.ProcInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1187,7 +1156,7 @@ func (sys *NotificationSys) ProcInfo(ctx context.Context) []madmin.ServerProcInf
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].ProcInfo(ctx)
+			reply[index], err = sys.peerClients[index].GetProcInfo(ctx)
 			return err
 		}, index)
 	}
