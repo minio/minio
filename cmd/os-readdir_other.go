@@ -24,6 +24,11 @@ import (
 	"syscall"
 )
 
+func access(name string) error {
+	_, err := os.Lstat(name)
+	return err
+}
+
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
