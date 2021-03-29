@@ -865,6 +865,12 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	storageEndpoints := er.getEndpoints()
 
 	// Read metadata files from all the disks
+
+	// When versionID is empty, we read directly from the `null` versionID for healing.
+	if versionID == "" {
+		versionID = nullVersionID
+	}
+
 	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, true)
 
 	if isAllNotFound(errs) {
