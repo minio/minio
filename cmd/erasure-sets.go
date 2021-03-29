@@ -355,7 +355,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		sets:               make([]*erasureObjects, setCount),
 		erasureDisks:       make([][]StorageAPI, setCount),
 		erasureLockers:     make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:   GetLocalPeer(globalEndpoints),
+		erasureLockOwner:   globalLocalNodeName,
 		endpoints:          endpoints,
 		endpointStrings:    endpointStrings,
 		setCount:           setCount,

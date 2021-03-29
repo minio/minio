@@ -66,7 +66,7 @@ func waitForLowHTTPReq(maxIO int, maxWait time.Duration) {
 	// Bucket notification and http trace are not costly, it is okay to ignore them
 	// while counting the number of concurrent connections
 	maxIOFn := func() int {
-		return maxIO + int(globalHTTPListen.NumSubscribers()) + int(globalHTTPTrace.NumSubscribers())
+		return maxIO + int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
 	}
 
 	tmpMaxWait := maxWait

@@ -17,145 +17,109 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/env"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
-var (
-	logTime   bool = false
-	threshold time.Duration
+//go:generate stringer -type=osMetric -trimprefix=osMetric $GOFILE
+
+type osMetric uint8
+
+const (
+	osMetricRemoveAll osMetric = iota
+	osMetricMkdirAll
+	osMetricRename
+	osMetricOpenFile
+	osMetricOpen
+	osMetricOpenFileDirectIO
+	osMetricLstat
+	osMetricRemove
+	osMetricStat
+	// .... add more
+
+	osMetricLast
 )
 
-func init() {
-	logTime = env.IsSet(config.EnvLogPosixTimes)
-	t, _ := env.GetInt(
-		config.EnvLogPosixThresholdInMS,
-		100,
-	)
-	threshold = time.Duration(t) * time.Millisecond
+func osTrace(s osMetric, startTime time.Time, duration time.Duration, path string) trace.Info {
+	return trace.Info{
+		TraceType: trace.OS,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  "os." + s.String(),
+		OSStats: trace.OSStats{
+			Duration: duration,
+			Path:     path,
+		},
+	}
 }
 
-func reportTime(name *strings.Builder, startTime time.Time) {
-	delta := time.Since(startTime)
-	if delta > threshold {
-		name.WriteString(" ")
-		name.WriteString(delta.String())
-		fmt.Println(name.String())
+func updateOSMetrics(s osMetric, paths ...string) func() {
+	if globalTrace.NumSubscribers() == 0 {
+		return func() {}
+	}
+
+	startTime := time.Now()
+	return func() {
+		duration := time.Since(startTime)
+
+		globalTrace.Publish(osTrace(s, startTime, duration, strings.Join(paths, " -> ")))
 	}
 }
 
 // RemoveAll captures time taken to call the underlying os.RemoveAll
 func RemoveAll(dirPath string) error {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.RemoveAll: ")
-		s.WriteString(dirPath)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricRemoveAll, dirPath)()
 	return os.RemoveAll(dirPath)
 }
 
 // MkdirAll captures time taken to call os.MkdirAll
 func MkdirAll(dirPath string, mode os.FileMode) error {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.MkdirAll: ")
-		s.WriteString(dirPath)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricMkdirAll, dirPath)()
 	return os.MkdirAll(dirPath, mode)
 }
 
 // Rename captures time taken to call os.Rename
 func Rename(src, dst string) error {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.Rename: ")
-		s.WriteString(src)
-		s.WriteString(" to ")
-		s.WriteString(dst)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricRename, src, dst)()
 	return os.Rename(src, dst)
 }
 
 // OpenFile captures time taken to call os.OpenFile
 func OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.OpenFile: ")
-		s.WriteString(name)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricOpenFile, name)()
 	return os.OpenFile(name, flag, perm)
 }
 
 // Open captures time taken to call os.Open
 func Open(name string) (*os.File, error) {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.Open: ")
-		s.WriteString(name)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricOpen, name)()
 	return os.Open(name)
 }
 
 // OpenFileDirectIO captures time taken to call disk.OpenFileDirectIO
 func OpenFileDirectIO(name string, flag int, perm os.FileMode) (*os.File, error) {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("disk.OpenFileDirectIO: ")
-		s.WriteString(name)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricOpenFileDirectIO, name)()
 	return disk.OpenFileDirectIO(name, flag, perm)
 }
 
 // Lstat captures time taken to call os.Lstat
 func Lstat(name string) (os.FileInfo, error) {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.Lstat: ")
-		s.WriteString(name)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricLstat, name)()
 	return os.Lstat(name)
 }
 
 // Remove captures time taken to call os.Remove
 func Remove(deletePath string) error {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.Remove: ")
-		s.WriteString(deletePath)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricRemove, deletePath)()
 	return os.Remove(deletePath)
 }
 
 // Stat captures time taken to call os.Stat
 func Stat(name string) (os.FileInfo, error) {
-	if logTime {
-		startTime := time.Now()
-		var s strings.Builder
-		s.WriteString("os.Stat: ")
-		s.WriteString(name)
-		defer reportTime(&s, startTime)
-	}
+	defer updateOSMetrics(osMetricStat, name)()
 	return os.Stat(name)
 }

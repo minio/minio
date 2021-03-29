@@ -334,15 +334,6 @@ func TestCreateEndpoints(t *testing.T) {
 // So it means that if you have say localhost:9000 and localhost:9001 as endpointArgs then localhost:9001
 // is considered a remote service from localhost:9000 perspective.
 func TestGetLocalPeer(t *testing.T) {
-	tempGlobalMinioAddr := globalMinioAddr
-	tempGlobalMinioPort := globalMinioPort
-	defer func() {
-		globalMinioAddr = tempGlobalMinioAddr
-		globalMinioPort = tempGlobalMinioPort
-	}()
-	globalMinioAddr = ":9000"
-	globalMinioPort = "9000"
-
 	testCases := []struct {
 		endpointArgs   []string
 		expectedResult string
@@ -363,9 +354,9 @@ func TestGetLocalPeer(t *testing.T) {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		}
-		remotePeer := GetLocalPeer(zendpoints)
-		if remotePeer != testCase.expectedResult {
-			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, remotePeer)
+		localPeer := GetLocalPeer(zendpoints, "", "9000")
+		if localPeer != testCase.expectedResult {
+			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, localPeer)
 		}
 	}
 }

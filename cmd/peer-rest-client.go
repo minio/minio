@@ -682,10 +682,14 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
 	values := make(url.Values)
-	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
-	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
+	values.Set(peerRESTTraceErr, strconv.FormatBool(traceOpts.OnlyErrors))
+	values.Set(peerRESTTraceS3, strconv.FormatBool(traceOpts.S3))
+	values.Set(peerRESTTraceStorage, strconv.FormatBool(traceOpts.Storage))
+	values.Set(peerRESTTraceOS, strconv.FormatBool(traceOpts.OS))
+	values.Set(peerRESTTraceInternal, strconv.FormatBool(traceOpts.Internal))
+	values.Set(peerRESTTraceThreshold, traceOpts.Threshold.String())
 
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(GlobalContext)
@@ -779,10 +783,10 @@ func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh <-chan st
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
 	go func() {
 		for {
-			client.doTrace(traceCh, doneCh, trcAll, trcErr)
+			client.doTrace(traceCh, doneCh, traceOpts)
 			select {
 			case <-doneCh:
 				return

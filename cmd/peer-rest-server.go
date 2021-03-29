@@ -899,14 +899,37 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func extractTraceOptsFromPeerRequest(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+
+	q := r.URL.Query()
+	opts.OnlyErrors = q.Get(peerRESTTraceErr) == "true"
+	opts.Storage = q.Get(peerRESTTraceStorage) == "true"
+	opts.Internal = q.Get(peerRESTTraceInternal) == "true"
+	opts.S3 = q.Get(peerRESTTraceS3) == "true"
+	opts.OS = q.Get(peerRESTTraceOS) == "true"
+
+	if t := q.Get(peerRESTTraceThreshold); t != "" {
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return opts, err
+		}
+		opts.Threshold = d
+	}
+	return
+}
+
 // TraceHandler sends http trace messages back to peer rest client
 func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
-	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
-	trcErr := r.URL.Query().Get(peerRESTTraceErr) == "true"
+
+	traceOpts, err := extractTraceOptsFromPeerRequest(r)
+	if err != nil {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
@@ -918,8 +941,8 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalHTTPTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
-		return mustTrace(entry, trcAll, trcErr)
+	globalTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
+		return mustTrace(entry, traceOpts)
 	})
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)

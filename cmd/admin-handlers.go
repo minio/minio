@@ -517,7 +517,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 
 	vars := mux.Vars(r)
 	profiles := strings.Split(vars["profilerType"], ",")
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, err := xnet.ParseHost(globalLocalNodeName)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1031,26 +1031,75 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 // false if certain conditions are not met.
 // - input entry is not of the type *trace.Info*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
-// - all entries to be traced, if not trace only S3 API requests.
-func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
+// - trace.Info type is asked by opts
+func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
 	trcInfo, ok := entry.(trace.Info)
 	if !ok {
 		return false
 	}
 
-	// Handle browser requests separately filter them and return.
-	if HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+"/upload") {
-		if errOnly {
-			return trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	// Override shouldTrace decision with errOnly filtering
+	defer func() {
+		if shouldTrace && opts.OnlyErrors {
+			shouldTrace = trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
 		}
+	}()
+
+	if opts.Threshold > 0 {
+		var latency time.Duration
+		switch trcInfo.TraceType {
+		case trace.OS:
+			latency = trcInfo.OSStats.Duration
+		case trace.Storage:
+			latency = trcInfo.StorageStats.Duration
+		case trace.HTTP:
+			latency = trcInfo.CallStats.Latency
+		}
+		if latency < opts.Threshold {
+			return false
+		}
+	}
+
+	if opts.Internal && trcInfo.TraceType == trace.HTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
 		return true
 	}
 
-	trace := trcAll || !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
-	if errOnly {
-		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	if opts.S3 && trcInfo.TraceType == trace.HTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
+		return true
 	}
-	return trace
+
+	if opts.Storage && trcInfo.TraceType == trace.Storage {
+		return true
+	}
+
+	return opts.OS && trcInfo.TraceType == trace.OS
+}
+
+func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+	q := r.URL.Query()
+
+	opts.OnlyErrors = q.Get("err") == "true"
+	opts.S3 = q.Get("s3") == "true"
+	opts.Internal = q.Get("internal") == "true"
+	opts.Storage = q.Get("storage") == "true"
+	opts.OS = q.Get("os") == "true"
+
+	// Support deprecated 'all' query
+	if q.Get("all") == "true" {
+		opts.S3 = true
+		opts.Internal = true
+		opts.Storage = true
+		opts.OS = true
+	}
+
+	if t := q.Get("threshold"); t != "" {
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return opts, err
+		}
+		opts.Threshold = d
+	}
+	return
 }
 
 // TraceHandler - POST /minio/admin/v3/trace
@@ -1059,13 +1108,16 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 
-	trcAll := r.URL.Query().Get("all") == "true"
-	trcErr := r.URL.Query().Get("err") == "true"
-
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	traceOpts, err := extractTraceOptions(r)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
 
@@ -1077,15 +1129,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalHTTPTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
-		return mustTrace(entry, trcAll, trcErr)
+	globalTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
+		return mustTrace(entry, traceOpts)
 	})
 
 	for _, peer := range peers {
 		if peer == nil {
 			continue
 		}
-		peer.Trace(traceCh, ctx.Done(), trcAll, trcErr)
+		peer.Trace(traceCh, ctx.Done(), traceOpts)
 	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)

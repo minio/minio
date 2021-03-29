@@ -21,14 +21,45 @@ import (
 	"time"
 )
 
+// Type indicates the type of the tracing Info
+type Type int
+
+const (
+	// OS tracing (Golang os package calls)
+	OS Type = iota
+	// Storage tracing (MinIO Storage Layer)
+	Storage
+	// HTTP tracing (MinIO S3 & Internode)
+	HTTP
+)
+
 // Info - represents a trace record, additionally
 // also reports errors if any while listening on trace.
 type Info struct {
-	NodeName  string       `json:"nodename"`
-	FuncName  string       `json:"funcname"`
+	TraceType Type `json:"type"`
+
+	NodeName string    `json:"nodename"`
+	FuncName string    `json:"funcname"`
+	Time     time.Time `json:"time"`
+
 	ReqInfo   RequestInfo  `json:"request"`
 	RespInfo  ResponseInfo `json:"response"`
 	CallStats CallStats    `json:"stats"`
+
+	StorageStats StorageStats `json:"storageStats"`
+	OSStats      OSStats      `json:"osStats"`
+}
+
+// StorageStats statistics on MinIO Storage layer calls
+type StorageStats struct {
+	Path     string        `json:"path"`
+	Duration time.Duration `json:"duration"`
+}
+
+// OSStats statistics on operating system specific calls.
+type OSStats struct {
+	Path     string        `json:"path"`
+	Duration time.Duration `json:"duration"`
 }
 
 // CallStats records request stats

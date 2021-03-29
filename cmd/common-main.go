@@ -428,3 +428,13 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 	secureConn = true
 	return x509Certs, manager, secureConn, nil
 }
+
+// contextCanceled returns whether a context is canceled.
+func contextCanceled(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}

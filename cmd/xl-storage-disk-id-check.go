@@ -19,11 +19,13 @@ package cmd
 import (
 	"context"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	ewma "github.com/VividCortex/ewma"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -57,7 +59,7 @@ const (
 
 	// .... add more
 
-	metricLast
+	storageMetricLast
 )
 
 // Detects change in underlying disk.
@@ -65,8 +67,8 @@ type xlStorageDiskIDCheck struct {
 	storage StorageAPI
 	diskID  string
 
-	apiCalls     [metricLast]uint64
-	apiLatencies [metricLast]ewma.MovingAverage
+	apiCalls     [storageMetricLast]uint64
+	apiLatencies [storageMetricLast]ewma.MovingAverage
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
@@ -222,7 +224,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 }
 
 func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
-	defer p.updateStorageMetrics(storageMetricMakeVolBulk)()
+	defer p.updateStorageMetrics(storageMetricMakeVolBulk, volumes...)()
 
 	select {
 	case <-ctx.Done():
@@ -237,7 +239,7 @@ func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...strin
 }
 
 func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err error) {
-	defer p.updateStorageMetrics(storageMetricMakeVol)()
+	defer p.updateStorageMetrics(storageMetricMakeVol, volume)()
 
 	select {
 	case <-ctx.Done():
@@ -252,7 +254,7 @@ func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err 
 }
 
 func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) {
-	defer p.updateStorageMetrics(storageMetricListVols)()
+	defer p.updateStorageMetrics(storageMetricListVols, "/")()
 
 	select {
 	case <-ctx.Done():
@@ -267,7 +269,7 @@ func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) 
 }
 
 func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
-	defer p.updateStorageMetrics(storageMetricStatVol)()
+	defer p.updateStorageMetrics(storageMetricStatVol, volume)()
 
 	select {
 	case <-ctx.Done():
@@ -282,7 +284,7 @@ func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol 
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
-	defer p.updateStorageMetrics(storageMetricDeleteVol)()
+	defer p.updateStorageMetrics(storageMetricDeleteVol, volume)()
 
 	select {
 	case <-ctx.Done():
@@ -297,7 +299,7 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 }
 
 func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error) {
-	defer p.updateStorageMetrics(storageMetricListDir)()
+	defer p.updateStorageMetrics(storageMetricListDir, volume, dirPath)()
 
 	select {
 	case <-ctx.Done():
@@ -313,7 +315,7 @@ func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath stri
 }
 
 func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
-	defer p.updateStorageMetrics(storageMetricReadFile)()
+	defer p.updateStorageMetrics(storageMetricReadFile, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -329,7 +331,7 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 }
 
 func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error) {
-	defer p.updateStorageMetrics(storageMetricAppendFile)()
+	defer p.updateStorageMetrics(storageMetricAppendFile, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -345,7 +347,7 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 }
 
 func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
-	defer p.updateStorageMetrics(storageMetricCreateFile)()
+	defer p.updateStorageMetrics(storageMetricCreateFile, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -361,7 +363,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
-	defer p.updateStorageMetrics(storageMetricReadFileStream)()
+	defer p.updateStorageMetrics(storageMetricReadFileStream, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -377,7 +379,7 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 }
 
 func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {
-	defer p.updateStorageMetrics(storageMetricRenameFile)()
+	defer p.updateStorageMetrics(storageMetricRenameFile, srcVolume, srcPath, dstVolume, dstPath)()
 
 	select {
 	case <-ctx.Done():
@@ -393,7 +395,7 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 }
 
 func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
-	defer p.updateStorageMetrics(storageMetricRenameData)()
+	defer p.updateStorageMetrics(storageMetricRenameData, srcPath, dataDir, dstVolume, dstPath)()
 
 	select {
 	case <-ctx.Done():
@@ -409,7 +411,7 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 }
 
 func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
-	defer p.updateStorageMetrics(storageMetricCheckParts)()
+	defer p.updateStorageMetrics(storageMetricCheckParts, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -425,7 +427,7 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 }
 
 func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, path string) (err error) {
-	defer p.updateStorageMetrics(storageMetricCheckFile)()
+	defer p.updateStorageMetrics(storageMetricCheckFile, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -441,7 +443,7 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 }
 
 func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
-	defer p.updateStorageMetrics(storageMetricDelete)()
+	defer p.updateStorageMetrics(storageMetricDelete, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -456,12 +458,21 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 	return p.storage.Delete(ctx, volume, path, recursive)
 }
 
+// DeleteVersions deletes slice of versions, it can be same object
+// or multiple objects.
 func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
-	defer p.updateStorageMetrics(storageMetricDeleteVersions)()
+	// Mererly for tracing storage
+	path := ""
+	if len(versions) > 0 {
+		path = versions[0].Name
+	}
+
+	defer p.updateStorageMetrics(storageMetricDeleteVersions, volume, path)()
+
+	errs = make([]error, len(versions))
 
 	select {
 	case <-ctx.Done():
-		errs = make([]error, len(versions))
 		for i := range errs {
 			errs[i] = ctx.Err()
 		}
@@ -470,17 +481,17 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string
 	}
 
 	if err := p.checkDiskStale(); err != nil {
-		errs = make([]error, len(versions))
 		for i := range errs {
 			errs[i] = err
 		}
 		return errs
 	}
+
 	return p.storage.DeleteVersions(ctx, volume, versions)
 }
 
 func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
-	defer p.updateStorageMetrics(storageMetricVerifyFile)()
+	defer p.updateStorageMetrics(storageMetricVerifyFile, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -496,7 +507,7 @@ func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path stri
 }
 
 func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
-	defer p.updateStorageMetrics(storageMetricWriteAll)()
+	defer p.updateStorageMetrics(storageMetricWriteAll, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -512,7 +523,7 @@ func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
-	defer p.updateStorageMetrics(storageMetricDeleteVersion)()
+	defer p.updateStorageMetrics(storageMetricDeleteVersion, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -528,7 +539,7 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 }
 
 func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
-	defer p.updateStorageMetrics(storageMetricWriteMetadata)()
+	defer p.updateStorageMetrics(storageMetricWriteMetadata, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -544,7 +555,7 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 }
 
 func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
-	defer p.updateStorageMetrics(storageMetricReadVersion)()
+	defer p.updateStorageMetrics(storageMetricReadVersion, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -560,7 +571,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 }
 
 func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {
-	defer p.updateStorageMetrics(storageMetricReadAll)()
+	defer p.updateStorageMetrics(storageMetricReadAll, volume, path)()
 
 	select {
 	case <-ctx.Done():
@@ -575,11 +586,31 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	return p.storage.ReadAll(ctx, volume, path)
 }
 
+func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) trace.Info {
+	return trace.Info{
+		TraceType: trace.Storage,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  "storage." + s.String(),
+		StorageStats: trace.StorageStats{
+			Duration: duration,
+			Path:     path,
+		},
+	}
+}
+
 // Update storage metrics
-func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric) func() {
+func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...string) func() {
 	startTime := time.Now()
+	trace := globalTrace.NumSubscribers() > 0
 	return func() {
+		duration := time.Since(startTime)
+
 		atomic.AddUint64(&p.apiCalls[s], 1)
-		p.apiLatencies[s].Add(float64(time.Since(startTime)))
+		p.apiLatencies[s].Add(float64(duration))
+
+		if trace {
+			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " ")))
+		}
 	}
 }

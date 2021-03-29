@@ -140,18 +140,20 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	logger.FatalIf(err, "Invalid command line arguments")
+
+	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
 			if ep.IsLocal {
-				globalRemoteEndpoints[GetLocalPeer(globalEndpoints)] = ep
+				globalRemoteEndpoints[globalLocalNodeName] = ep
 			} else {
 				globalRemoteEndpoints[ep.Host] = ep
 			}
 		}
 	}
-	logger.FatalIf(err, "Invalid command line arguments")
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
@@ -417,7 +419,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Set node name, only set for distributed setup.
-	globalConsoleSys.SetNodeName(globalEndpoints)
+	globalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
 	initHelp()
