@@ -412,6 +412,10 @@ func serverMain(ctx *cli.Context) {
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
 	logger.AddTarget(globalConsoleSys)
 
+	// Perform any self-tests
+	erasureSelfTest()
+	compressSelfTest()
+
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
