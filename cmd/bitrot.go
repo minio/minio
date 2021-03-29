@@ -19,7 +19,9 @@ package cmd
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 
@@ -194,4 +196,43 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 		}
 	}
 	return nil
+}
+
+// bitrotSelfTest performs a self-test to ensure that bitrot
+// algorithms compute correct checksums. If any algorithm
+// produces an incorrect checksum it fails with a hard error.
+//
+// bitrotSelfTest tries to catch any issue in the bitrot implementation
+// early instead of silently corrupting data.
+func bitrotSelfTest() {
+	var checksums = map[BitrotAlgorithm]string{
+		SHA256:          "a7677ff19e0182e4d52e3a3db727804abc82a5818749336369552e54b838b004",
+		BLAKE2b512:      "e519b7d84b1c3c917985f544773a35cf265dcab10948be3550320d156bab612124a5ae2ae5a8c73c0eea360f68b0e28136f26e858756dbfe7375a7389f26c669",
+		HighwayHash256:  "39c0407ed3f01b18d22c85db4aeff11e060ca5f43131b0126731ca197cd42313",
+		HighwayHash256S: "39c0407ed3f01b18d22c85db4aeff11e060ca5f43131b0126731ca197cd42313",
+	}
+	for algorithm := range bitrotAlgorithms {
+		if !algorithm.Available() {
+			continue
+		}
+
+		checksum, err := hex.DecodeString(checksums[algorithm])
+		if err != nil {
+			logger.Fatal(errSelfTestFailure, fmt.Sprintf("bitrot: failed to decode %v checksum %s for selftest: %v", algorithm, checksums[algorithm], err))
+		}
+		var (
+			hash = algorithm.New()
+			msg  = make([]byte, 0, hash.Size()*hash.BlockSize())
+			sum  = make([]byte, 0, hash.Size())
+		)
+		for i := 0; i < hash.Size()*hash.BlockSize(); i += hash.Size() {
+			hash.Write(msg)
+			sum = hash.Sum(sum[:0])
+			msg = append(msg, sum...)
+			hash.Reset()
+		}
+		if !bytes.Equal(sum, checksum) {
+			logger.Fatal(errSelfTestFailure, fmt.Sprintf("bitrot: %v selftest checksum mismatch: got %x - want %x", algorithm, sum, checksum))
+		}
+	}
 }
