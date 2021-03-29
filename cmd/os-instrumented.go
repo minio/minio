@@ -39,6 +39,7 @@ const (
 	osMetricLstat
 	osMetricRemove
 	osMetricStat
+	osMetricAccess
 	// .... add more
 
 	osMetricLast
@@ -92,6 +93,14 @@ func Rename(src, dst string) error {
 func OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	defer updateOSMetrics(osMetricOpenFile, name)()
 	return os.OpenFile(name, flag, perm)
+}
+
+// Access captures time taken to call syscall.Access()
+// on windows, plan9 and solaris syscall.Access uses
+// os.Lstat()
+func Access(name string) error {
+	defer updateOSMetrics(osMetricAccess, name)()
+	return access(name)
 }
 
 // Open captures time taken to call os.Open
