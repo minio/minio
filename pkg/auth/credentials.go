@@ -83,6 +83,13 @@ var (
 	}
 )
 
+const (
+	// AccountOn indicates that credentials are enabled
+	AccountOn = "on"
+	// AccountOff indicates that credentials are disabled
+	AccountOff = "off"
+)
+
 // Credentials holds access and secret keys.
 type Credentials struct {
 	AccessKey    string    `xml:"AccessKeyId" json:"accessKey,omitempty"`
@@ -132,7 +139,7 @@ func (cred Credentials) IsServiceAccount() bool {
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
 	// Verify credentials if its enabled or not set.
-	if cred.Status == "off" {
+	if cred.Status == AccountOff {
 		return false
 	}
 	return IsAccessKeyValid(cred.AccessKey) && IsSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
@@ -212,7 +219,8 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	}
 	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
 		"/", "+", -1)
-	cred.Status = "on"
+
+	cred.Status = AccountOn
 
 	if tokenSecret == "" {
 		cred.Expiration = timeSentinel
@@ -253,6 +261,6 @@ func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error
 	cred.AccessKey = accessKey
 	cred.SecretKey = secretKey
 	cred.Expiration = timeSentinel
-	cred.Status = "on"
+	cred.Status = AccountOn
 	return cred, nil
 }
