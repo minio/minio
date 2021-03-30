@@ -67,7 +67,7 @@ func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 			if v.Schema != nil && v.Schema.ConvertedType != nil {
 				switch *v.Schema.ConvertedType {
 				case parquetgen.ConvertedType_DATE:
-					value = time.Unix(60*60*24*int64(v.Value.(int32)), 0)
+					value = time.Unix(60*60*24*int64(v.Value.(int32)), 0).UTC()
 				}
 			}
 		case parquetgen.Type_INT64:
@@ -76,9 +76,9 @@ func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 				switch *v.Schema.ConvertedType {
 				// Only UTC supported, add one NS to never be exactly midnight.
 				case parquetgen.ConvertedType_TIMESTAMP_MILLIS:
-					value = time.Unix(0, 0).Add(time.Duration(v.Value.(int64))*time.Millisecond + 1)
+					value = time.Unix(0, 0).Add(time.Duration(v.Value.(int64))*time.Millisecond + 1).UTC()
 				case parquetgen.ConvertedType_TIMESTAMP_MICROS:
-					value = time.Unix(0, 0).Add(time.Duration(v.Value.(int64))*time.Microsecond + 1)
+					value = time.Unix(0, 0).Add(time.Duration(v.Value.(int64))*time.Microsecond + 1).UTC()
 				}
 			}
 		case parquetgen.Type_FLOAT:

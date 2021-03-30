@@ -1154,11 +1154,11 @@ func TestParquetInputSchema(t *testing.T) {
         <Enabled>FALSE</Enabled>
     </RequestProgress>
 </SelectObjectContentRequest>
-`), wantResult: `{"shipdate":"1996-03-13T01:00:00+01:00"}
-{"shipdate":"1996-04-12T01:00:00+02:00"}
-{"shipdate":"1996-01-29T01:00:00+01:00"}
-{"shipdate":"1996-04-21T01:00:00+02:00"}
-{"shipdate":"1996-03-30T01:00:00+01:00"}`,
+`), wantResult: `{"shipdate":"1996-03-13T00:00:00Z"}
+{"shipdate":"1996-04-12T00:00:00Z"}
+{"shipdate":"1996-01-29T00:00:00Z"}
+{"shipdate":"1996-04-21T00:00:00Z"}
+{"shipdate":"1996-03-30T00:00:00Z"}`,
 		},
 	}
 
