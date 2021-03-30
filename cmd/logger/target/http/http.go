@@ -130,8 +130,8 @@ func (h *Target) startHTTPLogger() {
 			resp, err := h.client.Do(req)
 			cancel()
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration\n",
-					h.endpoint, err))
+				logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration",
+					h.endpoint, err), h.endpoint)
 				continue
 			}
 
@@ -141,11 +141,11 @@ func (h *Target) startHTTPLogger() {
 			if resp.StatusCode != http.StatusOK {
 				switch resp.StatusCode {
 				case http.StatusForbidden:
-					logger.LogIf(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
-						h.endpoint, resp.Status))
+					logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
+						h.endpoint, resp.Status), h.endpoint)
 				default:
-					logger.LogIf(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration",
-						h.endpoint, resp.Status))
+					logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration",
+						h.endpoint, resp.Status), h.endpoint)
 				}
 			}
 		}
