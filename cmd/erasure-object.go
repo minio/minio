@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -735,8 +736,19 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}()
 
 	writers := make([]io.Writer, len(onlineDisks))
+	dataSize := data.Size()
+	var inlineBuffers []*bytes.Buffer
+	if dataSize >= 0 && dataSize < smallFileThreshold {
+		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
+			continue
+		}
+
+		if len(inlineBuffers) > 0 {
+			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(data.Size())))
+			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj,
@@ -770,6 +782,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			onlineDisks[i] = nil
 			continue
 		}
+		if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
+			partsMetadata[i].Data = inlineBuffers[i].Bytes()
+		}
 		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
@@ -797,16 +812,29 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = opts.UserDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
+		if len(inlineBuffers) > 0 && inlineBuffers[index] != nil {
+			partsMetadata[index].Data = inlineBuffers[index].Bytes()
+		}
 	}
 
 	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
+	if len(inlineBuffers) == 0 {
+		if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 
-	// Rename the successfully written temporary object to final location.
-	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		// Rename the successfully written temporary object to final location.
+		if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	} else {
+		// Write directly...
+		if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, bucket, object, partsMetadata, writeQuorum); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 	}
 
 	// Whether a disk was initially or becomes offline

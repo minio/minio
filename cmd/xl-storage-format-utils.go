@@ -73,13 +73,18 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	}, nil
 }
 
-func getFileInfo(xlMetaBuf []byte, volume, path, versionID string) (FileInfo, error) {
+func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var xlMeta xlMetaV2
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
 			return FileInfo{}, err
 		}
-		return xlMeta.ToFileInfo(volume, path, versionID)
+		fi, err := xlMeta.ToFileInfo(volume, path, versionID)
+		if !data || err != nil {
+			return fi, err
+		}
+		fi.Data = xlMeta.data.find(fi.DataDir)
+		return fi, nil
 	}
 
 	xlMeta := &xlMetaV1Object{}

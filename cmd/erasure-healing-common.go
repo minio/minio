@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -198,8 +199,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			dataErrs[i] = errDiskNotFound
 			continue
 		}
+		meta := partsMetadata[i]
 		if erasureDistributionReliable {
-			meta := partsMetadata[i]
 			if !meta.IsValid() {
 				continue
 			}
@@ -219,6 +220,21 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 				dataErrs[i] = errFileCorrupt
 				continue
 			}
+		}
+
+		// Always check data, if we got it.
+		if len(meta.Data) > 0 || meta.Size == 0 {
+			checksumInfo := meta.Erasure.GetChecksumInfo(meta.Parts[0].Number)
+			dataErrs[i] = bitrotVerify(bytes.NewBuffer(meta.Data),
+				int64(len(meta.Data)),
+				meta.Erasure.ShardFileSize(meta.Size),
+				checksumInfo.Algorithm,
+				checksumInfo.Hash, meta.Erasure.ShardSize())
+			if dataErrs[i] == nil {
+				// All parts verified, mark it as all data available.
+				availableDisks[i] = onlineDisk
+			}
+			continue
 		}
 
 		switch scanMode {
