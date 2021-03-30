@@ -18,6 +18,7 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -71,7 +72,8 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 	switch start.Name.Local {
 	case "LifecycleConfiguration", "BucketLifecycleConfiguration":
 	default:
-		return errUnknownXMLTag
+		return xml.UnmarshalError(fmt.Sprintf("expected element type <LifecycleConfiguration>/<BucketLifecycleConfiguration> but have <%s>",
+			start.Name.Local))
 	}
 	for {
 		// Read tokens from the XML document in a stream.
@@ -93,7 +95,7 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 				}
 				lc.Rules = append(lc.Rules, r)
 			default:
-				return errUnknownXMLTag
+				return xml.UnmarshalError(fmt.Sprintf("expected element type <Rule> but have <%s>", se.Name.Local))
 			}
 		}
 	}
