@@ -223,7 +223,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 
 		// Always check data, if we got it.
-		if len(meta.Data) > 0 || meta.Size == 0 {
+		if (len(meta.Data) > 0 || meta.Size == 0) && len(meta.Parts) > 0 {
 			checksumInfo := meta.Erasure.GetChecksumInfo(meta.Parts[0].Number)
 			dataErrs[i] = bitrotVerify(bytes.NewBuffer(meta.Data),
 				int64(len(meta.Data)),
