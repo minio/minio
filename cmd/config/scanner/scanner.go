@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,10 @@ import (
 const (
 	Delay   = "delay"
 	MaxWait = "max_wait"
+	Cycle   = "cycle"
 
 	EnvDelay         = "MINIO_SCANNER_DELAY"
+	EnvCycle         = "MINIO_SCANNER_CYCLE"
 	EnvDelayLegacy   = "MINIO_CRAWLER_DELAY"
 	EnvMaxWait       = "MINIO_SCANNER_MAX_WAIT"
 	EnvMaxWaitLegacy = "MINIO_CRAWLER_MAX_WAIT"
@@ -41,6 +43,8 @@ type Config struct {
 	Delay float64 `json:"delay"`
 	// MaxWait is maximum wait time between operations
 	MaxWait time.Duration
+	// Cycle is the time.Duration between each scanner cycles
+	Cycle time.Duration
 }
 
 var (
@@ -53,6 +57,10 @@ var (
 		config.KV{
 			Key:   MaxWait,
 			Value: "15s",
+		},
+		config.KV{
+			Key:   Cycle,
+			Value: "1m",
 		},
 	}
 
@@ -67,6 +75,12 @@ var (
 		config.HelpKV{
 			Key:         MaxWait,
 			Description: `maximum wait time between operations, defaults to '15s'`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         Cycle,
+			Description: `time duration between scanner cycles, defaults to '1m'`,
 			Optional:    true,
 			Type:        "duration",
 		},
@@ -91,6 +105,11 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		maxWait = env.Get(EnvMaxWait, kvs.Get(MaxWait))
 	}
 	cfg.MaxWait, err = time.ParseDuration(maxWait)
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, kvs.Get(Cycle)))
 	if err != nil {
 		return cfg, err
 	}
