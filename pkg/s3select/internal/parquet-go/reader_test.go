@@ -59,9 +59,9 @@ func TestReader(t *testing.T) {
 	}
 
 	expectedRecords := []string{
-		`map[one:{-1 DOUBLE} three:{true BOOLEAN} two:{[102 111 111] BYTE_ARRAY}]`,
-		`map[one:{<nil> DOUBLE} three:{false BOOLEAN} two:{[98 97 114] BYTE_ARRAY}]`,
-		`map[one:{2.5 DOUBLE} three:{true BOOLEAN} two:{[98 97 122] BYTE_ARRAY}]`,
+		`map[one:{-1 DOUBLE SchemaElement({Type:DOUBLE TypeLength:<nil> RepetitionType:OPTIONAL Name:one NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} three:{true BOOLEAN SchemaElement({Type:BOOLEAN TypeLength:<nil> RepetitionType:OPTIONAL Name:three NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} two:{[102 111 111] BYTE_ARRAY SchemaElement({Type:BYTE_ARRAY TypeLength:<nil> RepetitionType:OPTIONAL Name:two NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})}]`,
+		`map[one:{<nil> DOUBLE SchemaElement({Type:DOUBLE TypeLength:<nil> RepetitionType:OPTIONAL Name:one NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} three:{false BOOLEAN SchemaElement({Type:BOOLEAN TypeLength:<nil> RepetitionType:OPTIONAL Name:three NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} two:{[98 97 114] BYTE_ARRAY SchemaElement({Type:BYTE_ARRAY TypeLength:<nil> RepetitionType:OPTIONAL Name:two NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})}]`,
+		`map[one:{2.5 DOUBLE SchemaElement({Type:DOUBLE TypeLength:<nil> RepetitionType:OPTIONAL Name:one NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} three:{true BOOLEAN SchemaElement({Type:BOOLEAN TypeLength:<nil> RepetitionType:OPTIONAL Name:three NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})} two:{[98 97 122] BYTE_ARRAY SchemaElement({Type:BYTE_ARRAY TypeLength:<nil> RepetitionType:OPTIONAL Name:two NumChildren:<nil> ConvertedType:<nil> Scale:<nil> Precision:<nil> FieldID:<nil> LogicalType:<nil>})}]`,
 	}
 
 	i := 0
@@ -76,11 +76,11 @@ func TestReader(t *testing.T) {
 		}
 
 		if i == len(expectedRecords) {
-			t.Fatalf("read more than expected record count %v", len(expectedRecords))
+			t.Errorf("read more than expected record count %v", len(expectedRecords))
 		}
 
 		if record.String() != expectedRecords[i] {
-			t.Fatalf("record%v: expected: %v, got: %v", i+1, expectedRecords[i], record.String())
+			t.Errorf("record%v: expected: %v, got: %v", i+1, expectedRecords[i], record.String())
 		}
 
 		i++

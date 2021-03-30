@@ -24,6 +24,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bcicen/jstream"
 	csv "github.com/minio/minio/pkg/csvparser"
@@ -129,6 +130,13 @@ func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 				return err
 			}
 			columnValue = string(b)
+		case time.Time:
+			if val.Round(24*time.Hour) == val {
+				// If exactly at midnight, output date only.
+				columnValue = val.Format("2006-01-02")
+			} else {
+				columnValue = val.Format(time.RFC3339)
+			}
 		default:
 			return fmt.Errorf("Cannot marshal unhandled type: %T", kv.Value)
 		}

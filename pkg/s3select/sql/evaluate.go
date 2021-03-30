@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/bcicen/jstream"
 	"github.com/minio/simdjson-go"
@@ -441,6 +442,8 @@ func jsonToValue(result interface{}) (*Value, error) {
 		return FromBytes(bs), nil
 	case []Value:
 		return FromArray(rval), nil
+	case time.Time:
+		return FromTimestamp(rval), nil
 	case nil:
 		return FromNull(), nil
 	}
