@@ -175,10 +175,10 @@ func isStandardHeader(matchHeaderKey string) bool {
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (dm, replicate, sync bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (replicate, sync bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		return false, false, sync
+		return false, sync
 	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,
@@ -198,19 +198,19 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			validReplStatus = true
 		}
 		if oi.DeleteMarker && (validReplStatus || replicate) {
-			return oi.DeleteMarker, true, sync
+			return true, sync
 		}
 		// can be the case that other cluster is down and duplicate `mc rm --vid`
 		// is issued - this still needs to be replicated back to the other target
-		return oi.DeleteMarker, oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
+		return oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
 	// the target online status should not be used here while deciding
 	// whether to replicate deletes as the target could be temporarily down
 	if tgt == nil {
-		return oi.DeleteMarker, false, false
+		return false, false
 	}
-	return oi.DeleteMarker, replicate, tgt.replicateSync
+	return replicate, tgt.replicateSync
 }
 
 // replicate deletes to the designated replication target if replication configuration
