@@ -18,6 +18,7 @@ package lock
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -466,6 +467,23 @@ func TestParseObjectLegalHold(t *testing.T) {
 			value:       `<?xml version="1.0" encoding="UTF-8"?><LegalHold xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>ON</Status></LegalHold>`,
 			expectedErr: nil,
 			expectErr:   false,
+		},
+		{
+			value:       `<?xml version="1.0" encoding="UTF-8"?><ObjectLockLegalHold xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>ON</Status></ObjectLockLegalHold>`,
+			expectedErr: nil,
+			expectErr:   false,
+		},
+		// invalid Status key
+		{
+			value:       `<?xml version="1.0" encoding="UTF-8"?><ObjectLockLegalHold xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><MyStatus>ON</MyStatus></ObjectLockLegalHold>`,
+			expectedErr: errors.New("expected element type <Status> but have <MyStatus>"),
+			expectErr:   true,
+		},
+		// invalid XML attr
+		{
+			value:       `<?xml version="1.0" encoding="UTF-8"?><UnknownLegalHold xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>ON</Status></UnknownLegalHold>`,
+			expectedErr: errors.New("expected element type <LegalHold>/<ObjectLockLegalHold> but have <UnknownLegalHold>"),
+			expectErr:   true,
 		},
 		{
 			value:       `<?xml version="1.0" encoding="UTF-8"?><LegalHold xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>On</Status></LegalHold>`,
