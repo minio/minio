@@ -407,6 +407,20 @@ func (l *s3EncObjects) DeleteObject(ctx context.Context, bucket string, object s
 	return l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
 }
 
+func (l *s3EncObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
+	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
+	for idx, object := range objects {
+		_, errs[idx] = l.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
+	}
+	return dobjects, errs
+}
+
 // ListMultipartUploads lists all multipart uploads.
 func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, e error) {
 
