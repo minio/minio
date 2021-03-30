@@ -843,40 +843,49 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
-	if err != nil {
-		return err
-	}
-
-	// when data-dir is specified. Transition leverages existing DeleteObject
-	// api call to mark object as deleted. When object is pending transition,
-	// just update the metadata and avoid deleting data dir.
-	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-		filePath := pathJoin(volumeDir, path, dataDir)
-		if err = checkPathLength(filePath); err != nil {
-			return err
-		}
-
-		tmpuuid := mustGetUUID()
-		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-			return err
-		}
-	}
-
 	// transitioned objects maintains metadata on the source cluster. When transition
 	// status is set, update the metadata to disk.
 	if !lastVersion || fi.TransitionStatus != "" {
+		// when data-dir is specified. Transition leverages existing DeleteObject
+		// api call to mark object as deleted. When object is pending transition,
+		// just update the metadata and avoid deleting data dir.
+		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
+			xlMeta.data.remove(dataDir)
+			filePath := pathJoin(volumeDir, path, dataDir)
+			if err = checkPathLength(filePath); err != nil {
+				return err
+			}
+
+			tmpuuid := mustGetUUID()
+			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
+				if err != errFileNotFound {
+					return err
+				}
+			}
+		}
+
+		buf, err = xlMeta.AppendTo(nil)
+		if err != nil {
+			return err
+		}
+
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Delete the meta file, if there are no more versions the
-	// top level parent is automatically removed.
-	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
+	// Move everything to trash.
+	filePath := retainSlash(pathJoin(volumeDir, path))
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
+	err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 
-	return s.deleteFile(volumeDir, filePath, false)
+	// Delete parents if needed.
+	filePath = retainSlash(pathutil.Dir(pathJoin(volumeDir, path)))
+	if filePath == retainSlash(volumeDir) {
+		return err
+	}
+	s.deleteFile(volumeDir, filePath, false)
+	return err
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
@@ -890,26 +899,36 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	if !isXL2V1Format(buf) {
 		xlMeta, err = newXLMetaV2(fi)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
+		}
+		if err := xlMeta.Load(buf); err != nil {
+			panic(err)
 		}
 	} else {
 		if err = xlMeta.Load(buf); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
 		if err = xlMeta.AddVersion(fi); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
+
 	}
 
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+
 }
 
 func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
@@ -1005,16 +1024,20 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID)
+	fi, err = getFileInfo(buf, volume, path, versionID, readData)
 	if err != nil {
 		return fi, err
 	}
 
 	if readData {
+		if len(fi.Data) > 0 || fi.Size == 0 {
+			return fi, nil
+		}
 		// Reading data for small objects when
 		// - object has not yet transitioned
 		// - object size lesser than 32KiB
 		// - object has maximum of 1 parts
+
 		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
 			// Enable O_DIRECT optionally only if drive supports it.
 			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
@@ -1801,8 +1824,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return osErrToFileErr(err)
 	}
 
-	fi, err := getFileInfo(srcBuf, dstVolume, dstPath, "")
+	fi, err := getFileInfo(srcBuf, dstVolume, dstPath, "", true)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 
@@ -1955,29 +1979,36 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	dstBuf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+	dstBuf, err = xlMeta.AppendTo(nil)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return errFileCorrupt
 	}
 
-	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-		return err
-	}
-
-	// Commit data
+	// Commit data, if any
 	if srcDataPath != "" {
+		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
+
 		tmpuuid := mustGetUUID()
 		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		tmpuuid = mustGetUUID()
 		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
+			logger.LogIf(ctx, err)
 			return osErrToFileErr(err)
 		}
-	}
 
-	// Commit meta-file
-	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		return osErrToFileErr(err)
+		// Commit meta-file
+		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+			return osErrToFileErr(err)
+		}
+	} else {
+		// Write meta-file directly, no data
+		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
 	}
 
 	// Remove parent dir of the source file if empty
@@ -2074,63 +2105,13 @@ func (s *xlStorage) bitrotVerify(partPath string, partSize int64, algo BitrotAlg
 
 	// Close the file descriptor.
 	defer file.Close()
-
-	if algo != HighwayHash256S {
-		h := algo.New()
-		if _, err = io.Copy(h, file); err != nil {
-			// Premature failure in reading the object,file is corrupt.
-			return errFileCorrupt
-		}
-		if !bytes.Equal(h.Sum(nil), sum) {
-			return errFileCorrupt
-		}
-		return nil
-	}
-
-	buf := make([]byte, shardSize)
-	h := algo.New()
-	hashBuf := make([]byte, h.Size())
 	fi, err := file.Stat()
 	if err != nil {
 		// Unable to stat on the file, return an expected error
 		// for healing code to fix this file.
 		return err
 	}
-
-	size := fi.Size()
-
-	// Calculate the size of the bitrot file and compare
-	// it with the actual file size.
-	if size != bitrotShardFileSize(partSize, shardSize, algo) {
-		return errFileCorrupt
-	}
-
-	var n int
-	for {
-		if size == 0 {
-			return nil
-		}
-		h.Reset()
-		n, err = file.Read(hashBuf)
-		if err != nil {
-			// Read's failed for object with right size, file is corrupt.
-			return err
-		}
-		size -= int64(n)
-		if size < int64(len(buf)) {
-			buf = buf[:size]
-		}
-		n, err = file.Read(buf)
-		if err != nil {
-			// Read's failed for object with right size, at different offsets.
-			return err
-		}
-		size -= int64(n)
-		h.Write(buf)
-		if !bytes.Equal(h.Sum(nil), hashBuf) {
-			return errFileCorrupt
-		}
-	}
+	return bitrotVerify(file, fi.Size(), partSize, algo, sum, shardSize)
 }
 
 func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (err error) {
