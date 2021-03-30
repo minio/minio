@@ -60,11 +60,31 @@ var (
 	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second)
+	scannerCycle   = &safeDuration{
+		t: dataScannerStartDelay,
+	}
 )
 
 // initDataScanner will start the scanner in the background.
 func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	go runDataScanner(ctx, objAPI)
+}
+
+type safeDuration struct {
+	sync.Mutex
+	t time.Duration
+}
+
+func (s *safeDuration) Update(t time.Duration) {
+	s.Lock()
+	defer s.Unlock()
+	s.t = t
+}
+
+func (s *safeDuration) Get() time.Duration {
+	s.Lock()
+	defer s.Unlock()
+	return s.t
 }
 
 // runDataScanner will start a data scanner.
@@ -78,7 +98,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		ctx, err = locker.GetLock(ctx, dataScannerLeaderLockTimeout)
 		if err != nil {
-			time.Sleep(time.Duration(r.Float64() * float64(dataScannerStartDelay)))
+			time.Sleep(time.Duration(r.Float64() * float64(scannerCycle.Get())))
 			continue
 		}
 		break
@@ -102,7 +122,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 		br.Close()
 	}
 
-	scannerTimer := time.NewTimer(dataScannerStartDelay)
+	scannerTimer := time.NewTimer(scannerCycle.Get())
 	defer scannerTimer.Stop()
 
 	for {
@@ -111,7 +131,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			return
 		case <-scannerTimer.C:
 			// Reset the timer for next cycle.
-			scannerTimer.Reset(dataScannerStartDelay)
+			scannerTimer.Reset(scannerCycle.Get())
 
 			if intDataUpdateTracker.debug {
 				console.Debugln("starting scanner cycle")
