@@ -200,10 +200,7 @@ func (c Config) Replicate(obj ObjectOpts) bool {
 				return rule.DeleteMarkerReplication.Status == Enabled
 			}
 		} // regular object/metadata replication
-		if !obj.Replica {
-			return true
-		}
-		return obj.Replica && rule.SourceSelectionCriteria.ReplicaModifications.Status == Enabled
+		return rule.MetadataReplicate(obj)
 	}
 	return false
 }

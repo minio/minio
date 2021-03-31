@@ -205,3 +205,12 @@ func (r Rule) Validate(bucket string, sameTarget bool) error {
 	}
 	return nil
 }
+
+// MetadataReplicate  returns true if object is not a replica or in the case of replicas,
+// replica modification sync is enabled.
+func (r Rule) MetadataReplicate(obj ObjectOpts) bool {
+	if !obj.Replica {
+		return true
+	}
+	return obj.Replica && r.SourceSelectionCriteria.ReplicaModifications.Status == Enabled
+}
