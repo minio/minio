@@ -624,6 +624,8 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	globalHealConfig = healCfg
 	globalHealConfigMu.Unlock()
 
+	// update dynamic scanner values.
+	scannerCycle.Update(scannerCfg.Cycle)
 	logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 
 	// Update all dynamic config values in memory.
