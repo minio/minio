@@ -340,9 +340,8 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	if err != nil {
 		return err
 	}
-	waitReader, err := waitForHTTPResponse(respBody)
-	defer http.DrainBody(ioutil.NopCloser(waitReader))
-	defer respBody.Close()
+	_, err = waitForHTTPResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
