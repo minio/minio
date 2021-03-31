@@ -177,7 +177,7 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 
 	object := "object"
-	data := bytes.Repeat([]byte("a"), smallFileThreshold*2)
+	data := bytes.Repeat([]byte("a"), smallFileThreshold*16)
 	z := obj.(*erasureServerPools)
 	erasureDisks := z.serverPools[0].sets[0].getDisks()
 	for i, test := range testCases {

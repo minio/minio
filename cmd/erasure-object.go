@@ -735,11 +735,15 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 	}()
 
+	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
-	dataSize := data.Size()
 	var inlineBuffers []*bytes.Buffer
-	if dataSize >= 0 && dataSize < smallFileThreshold {
-		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+	if shardFileSize >= 0 {
+		if !opts.Versioned && shardFileSize < smallFileThreshold {
+			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+		} else if shardFileSize < smallFileThreshold/8 {
+			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+		}
 	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
@@ -747,12 +751,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if len(inlineBuffers) > 0 {
-			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(data.Size())))
+			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj,
-			erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+			shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
