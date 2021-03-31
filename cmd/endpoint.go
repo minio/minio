@@ -761,7 +761,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 // the first element from the set of peers which indicate that
 // they are local. There is always one entry that is local
 // even with repeated server endpoints.
-func GetLocalPeer(endpointServerPools EndpointServerPools) (localPeer string) {
+func GetLocalPeer(endpointServerPools EndpointServerPools, host, port string) (localPeer string) {
 	peerSet := set.NewStringSet()
 	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
@@ -776,11 +776,11 @@ func GetLocalPeer(endpointServerPools EndpointServerPools) (localPeer string) {
 	if peerSet.IsEmpty() {
 		// Local peer can be empty in FS or Erasure coded mode.
 		// If so, return globalMinioHost + globalMinioPort value.
-		if globalMinioHost != "" {
-			return net.JoinHostPort(globalMinioHost, globalMinioPort)
+		if host != "" {
+			return net.JoinHostPort(host, port)
 		}
 
-		return net.JoinHostPort("127.0.0.1", globalMinioPort)
+		return net.JoinHostPort("127.0.0.1", port)
 	}
 	return peerSet.ToSlice()[0]
 }

@@ -44,7 +44,13 @@ func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
 }
 
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
-func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
+func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) (err error) {
+	defer func() {
+		if err == errFileNotFound {
+			err = errUploadIDNotFound
+		}
+	}()
+
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -56,7 +62,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket, object)
+		return reducedErr
 	}
 
 	// List all online disks.
@@ -276,7 +282,6 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
-
 	onlineDisks := er.getDisks()
 	parityBlocks := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 	if parityBlocks <= 0 {
@@ -317,7 +322,12 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// Delete the tmp path later in case we fail to commit (ignore
 	// returned errors) - this will be a no-op in case of a commit
 	// success.
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempUploadIDPath, writeQuorum)
+	var online int
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tempUploadIDPath, writeQuorum)
+		}
+	}()
 
 	var partsMetadata = make([]FileInfo, len(onlineDisks))
 	for i := range onlineDisks {
@@ -338,6 +348,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	if err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	// Return success.
 	return uploadID, nil
@@ -441,7 +453,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	tmpPartPath := pathJoin(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpPart, writeQuorum)
+	var online int
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tmpPart, writeQuorum)
+		}
+	}()
 
 	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
@@ -562,6 +579,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if _, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	// Return success.
 	return PartInfo{

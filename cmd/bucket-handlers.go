@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/xml"
@@ -291,7 +292,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction, "", "")
 	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -343,10 +344,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		for _, bucketInfo := range bucketsInfo {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     accessKey,
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", accessKey, claims),
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims,
@@ -494,7 +496,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			object.PurgeTransitioned = goi.TransitionStatus
 		}
 		if replicateDeletes {
-			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
 			}, goi, gerr)
@@ -509,9 +511,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 				if object.VersionID != "" {
 					object.VersionPurgeStatus = Pending
-					if delMarker {
-						object.DeleteMarkerVersionID = object.VersionID
-					}
 				} else {
 					object.DeleteMarkerReplicationStatus = string(replication.Pending)
 				}
@@ -555,13 +554,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	})
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[ObjectToDelete{
+		// DeleteMarkerVersionID is not used specifically to avoid
+		// lookup errors, since DeleteMarkerVersionID is only
+		// created during DeleteMarker creation when client didn't
+		// specify a versionID.
+		objToDel := ObjectToDelete{
 			ObjectName:                    dObjects[i].ObjectName,
 			VersionID:                     dObjects[i].VersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
-		}]
+		}
+		dindex := objectsToDelete[objToDel]
 		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
 			if replicateDeletes {
 				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
@@ -617,12 +621,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		eventName := event.ObjectRemovedDelete
 		objInfo := ObjectInfo{
-			Name:      dobj.ObjectName,
-			VersionID: dobj.VersionID,
+			Name:         dobj.ObjectName,
+			VersionID:    dobj.VersionID,
+			DeleteMarker: dobj.DeleteMarker,
 		}
 
-		if dobj.DeleteMarker {
-			objInfo.DeleteMarker = dobj.DeleteMarker
+		if objInfo.DeleteMarker {
 			objInfo.VersionID = dobj.DeleteMarkerVersionID
 			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
@@ -925,10 +929,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
-
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat), r.URL, guessIsBrowserReq(r))
+			errAPI := errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat)
+			errAPI.Description = fmt.Sprintf("%s '(%s)'", errAPI.Description, err)
+			writeErrorResponse(ctx, w, errAPI, r.URL, guessIsBrowserReq(r))
 			return
 		}
 

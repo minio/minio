@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -41,6 +42,15 @@ import (
 var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
 /// Object Operations
+
+func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
+	for _, onlineDisk := range onlineDisks {
+		if onlineDisk != nil && onlineDisk.IsOnline() {
+			online++
+		}
+	}
+	return online
+}
 
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
@@ -116,8 +126,13 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	tempObj := mustGetUUID()
 
+	var online int
 	// Cleanup in case of xl.meta writing failure
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+		}
+	}()
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
@@ -128,6 +143,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(srcBucket, srcObject), nil
 }
@@ -641,11 +658,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		writeQuorum++
 	}
 
-	// Delete temporary object in the event of failure.
-	// If PutObject succeeded there would be no temporary
-	// object to delete.
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
-
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument, logger.Application)
@@ -713,9 +725,30 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partName := "part.1"
 	tempErasureObj := pathJoin(uniqueID, fi.DataDir, partName)
 
+	// Delete temporary object in the event of failure.
+	// If PutObject succeeded there would be no temporary
+	// object to delete.
+	var online int
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+		}
+	}()
+
 	writers := make([]io.Writer, len(onlineDisks))
+	dataSize := data.Size()
+	var inlineBuffers []*bytes.Buffer
+	if dataSize >= 0 && dataSize < smallFileThreshold {
+		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
+			continue
+		}
+
+		if len(inlineBuffers) > 0 {
+			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(data.Size())))
+			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj,
@@ -749,6 +782,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			onlineDisks[i] = nil
 			continue
 		}
+		if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
+			partsMetadata[i].Data = inlineBuffers[i].Bytes()
+		}
 		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
@@ -776,16 +812,29 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = opts.UserDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
+		if len(inlineBuffers) > 0 && inlineBuffers[index] != nil {
+			partsMetadata[index].Data = inlineBuffers[index].Bytes()
+		}
 	}
 
 	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
+	if len(inlineBuffers) == 0 {
+		if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 
-	// Rename the successfully written temporary object to final location.
-	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		// Rename the successfully written temporary object to final location.
+		if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	} else {
+		// Write directly...
+		if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, bucket, object, partsMetadata, writeQuorum); err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 	}
 
 	// Whether a disk was initially or becomes offline
@@ -806,6 +855,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object), nil
 }
@@ -859,8 +909,8 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 	var err error
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 
-	tmpObj := mustGetUUID()
 	disks := er.getDisks()
+	tmpObj := mustGetUUID()
 	if bucket == minioMetaTmpBucket {
 		tmpObj = object
 	} else {
@@ -881,7 +931,7 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
+			return disks[index].Delete(ctx, minioMetaTmpBucket, tmpObj, true)
 		}, index)
 	}
 

@@ -869,7 +869,7 @@ func TestXLStorageListDir(t *testing.T) {
 		var dirList []string
 		dirList, err = xlStorage.ListDir(context.Background(), testCase.srcVol, testCase.srcPath, -1)
 		if err != testCase.expectedErr {
-			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 		if err == nil {
 			for _, expected := range testCase.expectedListDir {
@@ -900,8 +900,8 @@ func TestXLStorageListDir(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errVolumeAccessDenied {
+			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
 		}
 	}
 
@@ -915,6 +915,10 @@ func TestXLStorageListDir(t *testing.T) {
 
 // TestXLStorageDeleteFile - Series of test cases construct valid and invalid input data and validates the result and the error response.
 func TestXLStorageDeleteFile(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip()
+	}
+
 	// create xlStorage test setup
 	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
@@ -994,7 +998,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		{
 			srcVol:      "no-permissions",
 			srcPath:     "dir/file",
-			expectedErr: nil,
+			expectedErr: errVolumeAccessDenied,
 		},
 	}
 
@@ -1024,8 +1028,8 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errVolumeAccessDenied {
+			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
 		}
 	}
 
@@ -1401,8 +1405,8 @@ func TestXLStorageAppendFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
-			t.Fatalf("expected: Permission error, got: %s", err)
+		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errVolumeAccessDenied {
+			t.Fatalf("expected: errVolumeAccessDenied error, got: %s", err)
 		}
 	}
 

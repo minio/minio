@@ -55,6 +55,7 @@ type WalkDirOptions struct {
 
 // WalkDir will traverse a directory and return all entries found.
 // On success a sorted meta cache stream will be returned.
+// Metadata has data stripped, if any.
 func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(opts.Bucket)
@@ -94,7 +95,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// behavior.
 			out <- metaCacheEntry{
 				name:     opts.BaseDir,
-				metadata: metadata,
+				metadata: xlMetaV2TrimData(metadata),
 			}
 		} else {
 			if st, err := os.Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
@@ -107,6 +108,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	forward := opts.ForwardTo
 	var scanDir func(path string) error
 	scanDir = func(current string) error {
+		if contextCanceled(ctx) {
+			return ctx.Err()
+		}
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
 		if err != nil {
 			// Folder could have gone away in-between
@@ -142,6 +146,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Do do not retain the file.
 			entries[i] = ""
 
+			if contextCanceled(ctx) {
+				return ctx.Err()
+			}
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
@@ -150,6 +157,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					logger.LogIf(ctx, err)
 					continue
 				}
+				meta.metadata = xlMetaV2TrimData(meta.metadata)
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
@@ -182,6 +190,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		for _, entry := range entries {
 			if entry == "" {
 				continue
+			}
+			if contextCanceled(ctx) {
+				return ctx.Err()
 			}
 			meta := metaCacheEntry{name: PathJoin(current, entry)}
 

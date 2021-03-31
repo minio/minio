@@ -207,6 +207,9 @@ const SlashSeparator = "/"
 
 // retainSlash - retains slash from a path.
 func retainSlash(s string) string {
+	if s == "" {
+		return s
+	}
 	return strings.TrimSuffix(s, SlashSeparator) + SlashSeparator
 }
 

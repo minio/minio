@@ -100,7 +100,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 		}
-		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalIsErasure {
@@ -111,7 +111,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil {
-			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 		}
 		if vcfg.Status != string(versioning.Enabled) {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
@@ -124,7 +124,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 				if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 					return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 				}
-				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 			}
 			if vcfg.Status != string(versioning.Enabled) {
 				return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}

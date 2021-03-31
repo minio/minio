@@ -18,12 +18,10 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -86,72 +84,6 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	}
 
 	return newStorageRESTClient(endpoint, true), nil
-}
-
-// Cleanup a directory recursively.
-func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string) error {
-	var delFunc func(string) error
-	// Function to delete entries recursively.
-	delFunc = func(entryPath string) error {
-		if !HasSuffix(entryPath, SlashSeparator) {
-			// Delete the file entry.
-			err := storage.Delete(ctx, volume, entryPath, false)
-			if !IsErrIgnored(err, []error{
-				errDiskNotFound,
-				errUnformattedDisk,
-				errFileNotFound,
-			}...) {
-				logger.LogIf(ctx, err)
-			}
-			return err
-		}
-
-		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(ctx, volume, entryPath, -1)
-		// If entryPath prefix never existed, safe to ignore
-		if errors.Is(err, errFileNotFound) {
-			return nil
-		} else if err != nil { // For any other errors fail.
-			if !IsErrIgnored(err, []error{
-				errDiskNotFound,
-				errUnformattedDisk,
-				errFileNotFound,
-			}...) {
-				logger.LogIf(ctx, err)
-			}
-			return err
-		} // else on success..
-
-		// Entry path is empty, just delete it.
-		if len(entries) == 0 {
-			err = storage.Delete(ctx, volume, entryPath, false)
-			if !IsErrIgnored(err, []error{
-				errDiskNotFound,
-				errUnformattedDisk,
-				errFileNotFound,
-			}...) {
-				logger.LogIf(ctx, err)
-			}
-			return err
-		}
-
-		// Recurse and delete all other entries.
-		for _, entry := range entries {
-			if err = delFunc(pathJoin(entryPath, entry)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	err := delFunc(retainSlash(pathJoin(dirPath)))
-	if IsErrIgnored(err, []error{
-		errVolumeNotFound,
-		errVolumeAccessDenied,
-	}...) {
-		return nil
-	}
-	return err
 }
 
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {

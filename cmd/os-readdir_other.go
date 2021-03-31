@@ -24,6 +24,11 @@ import (
 	"syscall"
 )
 
+func access(name string) error {
+	_, err := os.Lstat(name)
+	return err
+}
+
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
@@ -33,7 +38,7 @@ func readDir(dirPath string) (entries []string, err error) {
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
 func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
-	d, err := os.Open(dirPath)
+	d, err := Open(dirPath)
 	if err != nil {
 		if osErrToFileErr(err) == errFileNotFound {
 			return nil
@@ -58,7 +63,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 		}
 		for _, fi := range fis {
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				fi, err = os.Stat(pathJoin(dirPath, fi.Name()))
+				fi, err = Stat(pathJoin(dirPath, fi.Name()))
 				if err != nil {
 					// It got deleted in the meantime, not found
 					// or returns too many symlinks ignore this
@@ -86,7 +91,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 
 // Return N entries at the directory dirPath. If count is -1, return all entries
 func readDirN(dirPath string, count int) (entries []string, err error) {
-	d, err := os.Open(dirPath)
+	d, err := Open(dirPath)
 	if err != nil {
 		return nil, osErrToFileErr(err)
 	}
@@ -117,7 +122,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		}
 		for _, fi := range fis {
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				fi, err = os.Stat(pathJoin(dirPath, fi.Name()))
+				fi, err = Stat(pathJoin(dirPath, fi.Name()))
 				if err != nil {
 					// It got deleted in the meantime, not found
 					// or returns too many symlinks ignore this

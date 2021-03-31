@@ -30,7 +30,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -1046,9 +1045,9 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		SecretKey: cred.SecretKey,
 		Status: func() string {
 			if status == madmin.AccountEnabled {
-				return config.EnableOn
+				return auth.AccountOn
 			}
-			return config.EnableOff
+			return auth.AccountOff
 		}(),
 	})
 
@@ -1231,7 +1230,12 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 	u := newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: uinfo.SecretKey,
-		Status:    string(uinfo.Status),
+		Status: func() string {
+			if uinfo.Status == madmin.AccountEnabled {
+				return auth.AccountOn
+			}
+			return auth.AccountOff
+		}(),
 	})
 
 	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regularUser, u); err != nil {
@@ -1661,10 +1665,9 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 	return nil
 }
 
-// PolicyDBGet - gets policy set on a user or group. Since a user may
-// be a member of multiple groups, this function returns an array of
-// applicable policies
-func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
+// PolicyDBGet - gets policy set on a user or group. If a list of groups is
+// given, policies associated with them are included as well.
+func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1676,11 +1679,36 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	return sys.policyDBGet(name, isGroup)
+	policies, err := sys.policyDBGet(name, isGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isGroup {
+		for _, group := range groups {
+			ps, err := sys.policyDBGet(group, true)
+			if err != nil {
+				return nil, err
+			}
+			policies = append(policies, ps...)
+		}
+	}
+
+	return policies, nil
 }
 
-// This call assumes that caller has the sys.RLock()
-func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
+// This call assumes that caller has the sys.RLock().
+//
+// If a group is passed, it returns policies associated with the group.
+//
+// If a user is passed, it returns policies of the user along with any groups
+// that the server knows the user is a member of.
+//
+// In LDAP users mode, the server does not store any group membership
+// information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
+// generated credentials. Thus we skip looking up group memberships, user map,
+// and group map and check the appropriate policy maps directly.
+func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, err error) {
 	if isGroup {
 		if sys.usersSysType == MinIOUsersSysType {
 			g, ok := sys.iamGroupsMap[name]
@@ -1695,16 +1723,15 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			}
 		}
 
-		mp := sys.iamGroupPolicyMap[name]
-		return mp.toSlice(), nil
+		return sys.iamGroupPolicyMap[name].toSlice(), nil
 	}
-
-	// When looking for a user's policies, we also check if the
-	// user and the groups they are member of are enabled.
 
 	var u auth.Credentials
 	var ok bool
 	if sys.usersSysType == MinIOUsersSysType {
+		// When looking for a user's policies, we also check if the user
+		// and the groups they are member of are enabled.
+
 		u, ok = sys.iamUsersMap[name]
 		if !ok {
 			return nil, errNoSuchUser
@@ -1713,8 +1740,6 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			return nil, nil
 		}
 	}
-
-	var policies []string
 
 	mp, ok := sys.iamUserPolicyMap[name]
 	if !ok {
@@ -1733,8 +1758,7 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			continue
 		}
 
-		p := sys.iamGroupPolicyMap[group]
-		policies = append(policies, p.toSlice()...)
+		policies = append(policies, sys.iamGroupPolicyMap[group].toSlice()...)
 	}
 
 	return policies, nil
@@ -1764,8 +1788,9 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	}
 
 	// Check policy for this service account.
-	svcPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	svcPolicies, err := sys.PolicyDBGet(parent, false, args.Groups...)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return false
 	}
 
@@ -1863,7 +1888,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool
 	}
 
 	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	ldapPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
 	if err != nil {
 		return false
 	}
@@ -2048,7 +2073,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	}
 
 	// Continue with the assumption of a regular user
-	policies, err := sys.PolicyDBGet(args.AccountName, false)
+	policies, err := sys.PolicyDBGet(args.AccountName, false, args.Groups...)
 	if err != nil {
 		return false
 	}

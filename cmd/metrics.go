@@ -372,6 +372,18 @@ func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 			api,
 		)
 	}
+
+	for api, value := range httpStats.TotalS3Canceled.APIStats {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName(s3Namespace, "canceled", "total"),
+				"Total number of client canceled s3 request in current MinIO server instance",
+				[]string{"api"}, nil),
+			prometheus.CounterValue,
+			float64(value),
+			api,
+		)
+	}
 }
 
 // collects network metrics for MinIO server in Prometheus specific format
@@ -526,7 +538,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	server := getLocalServerProperty(globalEndpoints, &http.Request{
-		Host: GetLocalPeer(globalEndpoints),
+		Host: globalLocalNodeName,
 	})
 
 	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)

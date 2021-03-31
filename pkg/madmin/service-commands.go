@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -77,16 +78,30 @@ type ServiceTraceInfo struct {
 	Err   error `json:"-"`
 }
 
+// ServiceTraceOpts holds tracing options
+type ServiceTraceOpts struct {
+	S3         bool
+	Internal   bool
+	Storage    bool
+	OS         bool
+	OnlyErrors bool
+	Threshold  time.Duration
+}
+
 // ServiceTrace - listen on http trace notifications.
-func (adm AdminClient) ServiceTrace(ctx context.Context, allTrace, errTrace bool) <-chan ServiceTraceInfo {
+func (adm AdminClient) ServiceTrace(ctx context.Context, opts ServiceTraceOpts) <-chan ServiceTraceInfo {
 	traceInfoCh := make(chan ServiceTraceInfo)
 	// Only success, start a routine to start reading line by line.
 	go func(traceInfoCh chan<- ServiceTraceInfo) {
 		defer close(traceInfoCh)
 		for {
 			urlValues := make(url.Values)
-			urlValues.Set("all", strconv.FormatBool(allTrace))
-			urlValues.Set("err", strconv.FormatBool(errTrace))
+			urlValues.Set("err", strconv.FormatBool(opts.OnlyErrors))
+			urlValues.Set("s3", strconv.FormatBool(opts.S3))
+			urlValues.Set("internal", strconv.FormatBool(opts.Internal))
+			urlValues.Set("storage", strconv.FormatBool(opts.Storage))
+			urlValues.Set("os", strconv.FormatBool(opts.OS))
+			urlValues.Set("threshold", opts.Threshold.String())
 			reqData := requestData{
 				relPath:     adminAPIPrefix + "/trace",
 				queryValues: urlValues,

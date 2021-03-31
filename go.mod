@@ -39,13 +39,13 @@ require (
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.11
-	github.com/lib/pq v1.8.0
+	github.com/lib/pq v1.9.0
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/highwayhash v1.0.1
+	github.com/minio/highwayhash v1.0.2
 	github.com/minio/md5-simd v1.1.1 // indirect
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
 	github.com/minio/selfupdate v0.3.1
@@ -55,10 +55,10 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/montanaflynn/stats v0.5.0
 	github.com/nats-io/nats-server/v2 v2.1.9
-	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
+	github.com/nats-io/nats-streaming-server v0.21.1 // indirect
 	github.com/nats-io/nats.go v1.10.0
 	github.com/nats-io/nkeys v0.2.0 // indirect
-	github.com/nats-io/stan.go v0.7.0
+	github.com/nats-io/stan.go v0.8.3
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8
 	github.com/olivere/elastic/v7 v7.0.22
@@ -67,7 +67,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/procfs v0.2.0
+	github.com/prometheus/procfs v0.6.0
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
@@ -83,9 +83,9 @@ require (
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.13.0
-	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/net v0.0.0-20201216054612-986b41b23924
-	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
+	golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073
 	golang.org/x/tools v0.1.0 // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/yaml.v2 v2.3.0
