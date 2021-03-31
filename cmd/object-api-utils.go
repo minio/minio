@@ -954,3 +954,40 @@ func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 	}()
 	return pr
 }
+
+// compressSelfTest performs a self-test to ensure that compression
+// algorithms completes a roundtrip. If any algorithm
+// produces an incorrect checksum it fails with a hard error.
+//
+// compressSelfTest tries to catch any issue in the compression implementation
+// early instead of silently corrupting data.
+func compressSelfTest() {
+	// 4 MB block.
+	// Approx runtime ~30ms
+	data := make([]byte, 4<<20)
+	rng := rand.New(rand.NewSource(0))
+	for i := range data {
+		// Generate compressible stream...
+		data[i] = byte(rng.Int63() & 3)
+	}
+	failOnErr := func(err error) {
+		if err != nil {
+			logger.Fatal(errSelfTestFailure, "compress: error on self-test: %v", err)
+		}
+	}
+	const skip = 2<<20 + 511
+	r := newS2CompressReader(bytes.NewBuffer(data), int64(len(data)))
+	b, err := io.ReadAll(r)
+	failOnErr(err)
+	failOnErr(r.Close())
+	// Decompression reader.
+	s2Reader := s2.NewReader(bytes.NewBuffer(b))
+	// Apply the skipLen on the decompressed stream.
+	failOnErr(s2Reader.Skip(skip))
+	got, err := io.ReadAll(s2Reader)
+	failOnErr(err)
+	if !bytes.Equal(got, data[skip:]) {
+		logger.Fatal(errSelfTestFailure, "compress: self-test roundtrip mismatch.")
+
+	}
+}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"errors"
 	"net/http"
 	"os"
 	"sync"
@@ -294,6 +295,8 @@ var (
 	globalForwarder *handlers.Forwarder
 	// Add new variable global values here.
 )
+
+var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
 
 // Returns minio global information, as a key value map.
 // returned list of global values is not an exhaustive
