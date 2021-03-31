@@ -20,6 +20,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -63,6 +64,7 @@ func setRequestHeaderSizeLimitHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isHTTPHeaderSizeTooLarge(r.Header) {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL, guessIsBrowserReq(r))
+			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
 			return
 		}
 		h.ServeHTTP(w, r)
@@ -344,6 +346,7 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 				// header, for all requests where Date header is not
 				// present we will reject such clients.
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
+				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
 				return
 			}
 			// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
@@ -351,108 +354,10 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 			curTime := UTCNow()
 			if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrRequestTimeTooSkewed), r.URL, guessIsBrowserReq(r))
+				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
 				return
 			}
 		}
-		h.ServeHTTP(w, r)
-	})
-}
-
-var supportedDummyBucketAPIs = map[string][]string{
-	"acl":            {http.MethodPut, http.MethodGet},
-	"cors":           {http.MethodGet},
-	"website":        {http.MethodGet, http.MethodDelete},
-	"logging":        {http.MethodGet},
-	"accelerate":     {http.MethodGet},
-	"requestPayment": {http.MethodGet},
-}
-
-// List of not implemented bucket queries
-var notImplementedBucketResourceNames = map[string]struct{}{
-	"cors":                {},
-	"metrics":             {},
-	"website":             {},
-	"logging":             {},
-	"inventory":           {},
-	"accelerate":          {},
-	"requestPayment":      {},
-	"analytics":           {},
-	"intelligent-tiering": {},
-	"ownershipControls":   {},
-	"publicAccessBlock":   {},
-}
-
-// Checks requests for not implemented Bucket resources
-func ignoreNotImplementedBucketResources(req *http.Request) bool {
-	for name := range req.URL.Query() {
-		methods, ok := supportedDummyBucketAPIs[name]
-		if ok {
-			for _, method := range methods {
-				if method == req.Method {
-					return false
-				}
-			}
-		}
-
-		if _, ok := notImplementedBucketResourceNames[name]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-var supportedDummyObjectAPIs = map[string][]string{
-	"acl": {http.MethodGet, http.MethodPut},
-}
-
-// List of not implemented object APIs
-var notImplementedObjectResourceNames = map[string]struct{}{
-	"torrent": {},
-}
-
-// Checks requests for not implemented Object resources
-func ignoreNotImplementedObjectResources(req *http.Request) bool {
-	for name := range req.URL.Query() {
-		methods, ok := supportedDummyObjectAPIs[name]
-		if ok {
-			for _, method := range methods {
-				if method == req.Method {
-					return false
-				}
-			}
-		}
-		if _, ok := notImplementedObjectResourceNames[name]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-// setIgnoreResourcesHandler -
-// Ignore resources handler is wrapper handler used for API request resource validation
-// Since we do not support all the S3 queries, it is necessary for us to throw back a
-// valid error message indicating that requested feature is not implemented.
-func setIgnoreResourcesHandler(h http.Handler) http.Handler {
-	// Resource handler ServeHTTP() wrapper
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bucketName, objectName := request2BucketObjectName(r)
-
-		// If bucketName is present and not objectName check for bucket level resource queries.
-		if bucketName != "" && objectName == "" {
-			if ignoreNotImplementedBucketResources(r) {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-				return
-			}
-		}
-		// If bucketName and objectName are present check for its resource queries.
-		if bucketName != "" && objectName != "" {
-			if ignoreNotImplementedObjectResources(r) {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-				return
-			}
-		}
-
-		// Serve HTTP.
 		h.ServeHTTP(w, r)
 	})
 }
@@ -517,6 +422,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// Check for bad components in URL path.
 		if hasBadPathComponent(r.URL.Path) {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL, guessIsBrowserReq(r))
+			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
 		}
 		// Check for bad components in URL query values.
@@ -524,12 +430,14 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL, guessIsBrowserReq(r))
+					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 					return
 				}
 			}
 		}
 		if hasMultipleAuth(r) {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
+			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
 		}
 		h.ServeHTTP(w, r)

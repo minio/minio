@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -505,6 +506,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 			return
 		}
 		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+		atomic.AddUint64(&globalHTTPStats.rejectedRequestsAuth, 1)
 	})
 }
 
