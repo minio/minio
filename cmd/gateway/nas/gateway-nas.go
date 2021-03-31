@@ -19,7 +19,6 @@ package nas
 import (
 	"context"
 	"errors"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"golang.org/x/sys/unix"
 	"os"
@@ -94,8 +93,7 @@ func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	var err error
 
 	minio.GlobalIsFastFS = isFastFS(g.path)
-	minio.GlobalFSOTmpfile = minio.GlobalIsFastFS && isOTmpfileSupported()
-	logger.Info("fastfs: %s, tmpfile: %s", minio.GlobalIsFastFS, minio.GlobalFSOTmpfile)
+	minio.GlobalFSOTmpfile = minio.GlobalIsFastFS && isOTmpfileSupported(g.path)
 	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
@@ -113,9 +111,9 @@ func isFastFS(fsPath string) bool {
 	return true
 }
 
-func isOTmpfileSupported() bool {
+func isOTmpfileSupported(fsPath string) bool {
 	flags := os.O_WRONLY | unix.O_TMPFILE
-	var writer, err = lock.Open(os.TempDir(), flags, 0666)
+	var writer, err = lock.Open(fsPath, flags, 0666)
 	defer writer.Close()
 
 	return err == nil
