@@ -175,8 +175,7 @@ func erasureSelfTest() {
 		for _, conf := range testConfigs {
 			failOnErr := func(err error) {
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "%v: error on self-test [d:%d,p:%d]: %v. Unsafe to start server.\n", algo, conf[0], conf[1], err)
-					os.Exit(1)
+					logger.Fatal(errSelfTestFailure, "%v: error on self-test [d:%d,p:%d]: %v. Unsafe to start server.\n", algo, conf[0], conf[1], err)
 				}
 			}
 			e, err := NewErasure(context.Background(), int(conf[0]), int(conf[1]), blockSizeV2)
@@ -211,7 +210,6 @@ func erasureSelfTest() {
 		}
 	}
 	if !ok {
-		fmt.Fprint(os.Stderr, "Unsafe to start server.\n")
-		os.Exit(1)
+		logger.Fatal(errSelfTestFailure, "Erasure Coding self test failed")
 	}
 }

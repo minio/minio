@@ -26,7 +26,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -973,8 +972,7 @@ func compressSelfTest() {
 	}
 	failOnErr := func(err error) {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "compress: error on self-test: %v\n", err)
-			os.Exit(1)
+			logger.Fatal(errSelfTestFailure, "compress: error on self-test: %v", err)
 		}
 	}
 	const skip = 2<<20 + 511
@@ -989,7 +987,7 @@ func compressSelfTest() {
 	got, err := io.ReadAll(s2Reader)
 	failOnErr(err)
 	if !bytes.Equal(got, data[skip:]) {
-		fmt.Fprintf(os.Stderr, "compress: self-test roundtrip mismatch. Unsafe to start server.\n")
-		os.Exit(1)
+		logger.Fatal(errSelfTestFailure, "compress: self-test roundtrip mismatch.")
+
 	}
 }
