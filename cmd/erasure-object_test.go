@@ -302,7 +302,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	opts := ObjectOptions{}
-	buf := make([]byte, 129<<10)
+	buf := make([]byte, smallFileThreshold*16)
 	if _, err = io.ReadFull(crand.Reader, buf); err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +467,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	object := "object"
 	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{'a'}, smallFileThreshold*2)), smallFileThreshold*2, "", ""), opts)
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{'a'}, smallFileThreshold*16)), smallFileThreshold*16, "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +496,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Upload new content to same object "object"
-		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{byte(f)}, smallFileThreshold*2)), smallFileThreshold*2, "", ""), opts)
+		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bytes.Repeat([]byte{byte(f)}, smallFileThreshold*16)), smallFileThreshold*16, "", ""), opts)
 		if !errors.Is(err, errErasureWriteQuorum) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 		}
