@@ -48,9 +48,6 @@ var globalHandlers = []mux.MiddlewareFunc{
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
 	setAuthHandler,
-	// Validates all incoming URL resources, for invalid/unsupported
-	// resources client receives a HTTP error.
-	setIgnoreResourcesHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
 	// Adds cache control for all browser requests.

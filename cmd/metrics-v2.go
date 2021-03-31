@@ -49,44 +49,49 @@ const (
 )
 
 const (
-	cacheSubsystem          MetricSubsystem = "cache"
-	capacityRawSubsystem    MetricSubsystem = "capacity_raw"
-	capacityUsableSubsystem MetricSubsystem = "capacity_usable"
-	diskSubsystem           MetricSubsystem = "disk"
-	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
-	goRoutines              MetricSubsystem = "go_routine"
-	ioSubsystem             MetricSubsystem = "io"
-	nodesSubsystem          MetricSubsystem = "nodes"
-	objectsSubsystem        MetricSubsystem = "objects"
-	processSubsystem        MetricSubsystem = "process"
-	replicationSubsystem    MetricSubsystem = "replication"
-	requestsSubsystem       MetricSubsystem = "requests"
-	timeSubsystem           MetricSubsystem = "time"
-	trafficSubsystem        MetricSubsystem = "traffic"
-	softwareSubsystem       MetricSubsystem = "software"
-	sysCallSubsystem        MetricSubsystem = "syscall"
-	usageSubsystem          MetricSubsystem = "usage"
+	cacheSubsystem            MetricSubsystem = "cache"
+	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
+	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
+	diskSubsystem             MetricSubsystem = "disk"
+	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
+	goRoutines                MetricSubsystem = "go_routine"
+	ioSubsystem               MetricSubsystem = "io"
+	nodesSubsystem            MetricSubsystem = "nodes"
+	objectsSubsystem          MetricSubsystem = "objects"
+	processSubsystem          MetricSubsystem = "process"
+	replicationSubsystem      MetricSubsystem = "replication"
+	requestsSubsystem         MetricSubsystem = "requests"
+	requestsRejectedSubsystem MetricSubsystem = "requests_rejected"
+	timeSubsystem             MetricSubsystem = "time"
+	trafficSubsystem          MetricSubsystem = "traffic"
+	softwareSubsystem         MetricSubsystem = "software"
+	sysCallSubsystem          MetricSubsystem = "syscall"
+	usageSubsystem            MetricSubsystem = "usage"
 )
 
 // MetricName are the individual names for the metric.
 type MetricName string
 
 const (
-	total         MetricName = "total"
-	errorsTotal   MetricName = "error_total"
-	canceledTotal MetricName = "canceled_total"
-	healTotal     MetricName = "heal_total"
-	hitsTotal     MetricName = "hits_total"
-	inflightTotal MetricName = "inflight_total"
-	limitTotal    MetricName = "limit_total"
-	missedTotal   MetricName = "missed_total"
-	waitingTotal  MetricName = "waiting_total"
-	objectTotal   MetricName = "object_total"
-	offlineTotal  MetricName = "offline_total"
-	onlineTotal   MetricName = "online_total"
-	openTotal     MetricName = "open_total"
-	readTotal     MetricName = "read_total"
-	writeTotal    MetricName = "write_total"
+	authTotal      MetricName = "auth_total"
+	canceledTotal  MetricName = "canceled_total"
+	errorsTotal    MetricName = "errors_total"
+	headerTotal    MetricName = "header_total"
+	healTotal      MetricName = "heal_total"
+	hitsTotal      MetricName = "hits_total"
+	inflightTotal  MetricName = "inflight_total"
+	invalidTotal   MetricName = "invalid_total"
+	limitTotal     MetricName = "limit_total"
+	missedTotal    MetricName = "missed_total"
+	waitingTotal   MetricName = "waiting_total"
+	objectTotal    MetricName = "object_total"
+	offlineTotal   MetricName = "offline_total"
+	onlineTotal    MetricName = "online_total"
+	openTotal      MetricName = "open_total"
+	readTotal      MetricName = "read_total"
+	timestampTotal MetricName = "timestamp_total"
+	writeTotal     MetricName = "write_total"
+	total          MetricName = "total"
 
 	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
@@ -532,6 +537,42 @@ func getS3RequestsCanceledMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      canceledTotal,
 		Help:      "Total number S3 requests that were canceled from the client while processing",
+		Type:      counterMetric,
+	}
+}
+func getS3RejectedAuthRequestsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsRejectedSubsystem,
+		Name:      authTotal,
+		Help:      "Total number S3 requests rejected for auth failure.",
+		Type:      counterMetric,
+	}
+}
+func getS3RejectedHeaderRequestsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsRejectedSubsystem,
+		Name:      headerTotal,
+		Help:      "Total number S3 requests rejected for invalid header.",
+		Type:      counterMetric,
+	}
+}
+func getS3RejectedTimestampRequestsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsRejectedSubsystem,
+		Name:      timestampTotal,
+		Help:      "Total number S3 requests rejected for invalid timestamp.",
+		Type:      counterMetric,
+	}
+}
+func getS3RejectedInvalidRequestsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsRejectedSubsystem,
+		Name:      invalidTotal,
+		Help:      "Total number S3 invalid requests.",
 		Type:      counterMetric,
 	}
 }
@@ -1103,6 +1144,22 @@ func getHTTPMetrics() MetricsGroup {
 				len(httpStats.CurrentS3Requests.APIStats)+
 				len(httpStats.TotalS3Requests.APIStats)+
 				len(httpStats.TotalS3Errors.APIStats))
+			metrics = append(metrics, Metric{
+				Description: getS3RejectedAuthRequestsTotalMD(),
+				Value:       float64(httpStats.TotalS3RejectedAuth),
+			})
+			metrics = append(metrics, Metric{
+				Description: getS3RejectedTimestampRequestsTotalMD(),
+				Value:       float64(httpStats.TotalS3RejectedTime),
+			})
+			metrics = append(metrics, Metric{
+				Description: getS3RejectedHeaderRequestsTotalMD(),
+				Value:       float64(httpStats.TotalS3RejectedHeader),
+			})
+			metrics = append(metrics, Metric{
+				Description: getS3RejectedInvalidRequestsTotalMD(),
+				Value:       float64(httpStats.TotalS3RejectedInvalid),
+			})
 			metrics = append(metrics, Metric{
 				Description: getS3RequestsInQueueMD(),
 				Value:       float64(httpStats.S3RequestsInQueue),
