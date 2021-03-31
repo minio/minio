@@ -137,11 +137,15 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
-	s3RequestsInQueue int32
-	currentS3Requests HTTPAPIStats
-	totalS3Requests   HTTPAPIStats
-	totalS3Errors     HTTPAPIStats
-	totalS3Canceled   HTTPAPIStats
+	s3RequestsInQueue       int32
+	currentS3Requests       HTTPAPIStats
+	totalS3Requests         HTTPAPIStats
+	totalS3Errors           HTTPAPIStats
+	totalS3Canceled         HTTPAPIStats
+	rejectedRequestsAuth    uint64
+	rejectedRequestsTime    uint64
+	rejectedRequestsHeader  uint64
+	rejectedRequestsInvalid uint64
 }
 
 func (st *HTTPStats) addRequestsInQueue(i int32) {
@@ -152,6 +156,10 @@ func (st *HTTPStats) addRequestsInQueue(i int32) {
 func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
 	serverStats.S3RequestsInQueue = atomic.LoadInt32(&st.s3RequestsInQueue)
+	serverStats.TotalS3RejectedAuth = atomic.LoadUint64(&st.rejectedRequestsAuth)
+	serverStats.TotalS3RejectedTime = atomic.LoadUint64(&st.rejectedRequestsTime)
+	serverStats.TotalS3RejectedHeader = atomic.LoadUint64(&st.rejectedRequestsHeader)
+	serverStats.TotalS3RejectedInvalid = atomic.LoadUint64(&st.rejectedRequestsInvalid)
 	serverStats.CurrentS3Requests = ServerHTTPAPIStats{
 		APIStats: st.currentS3Requests.Load(),
 	}
