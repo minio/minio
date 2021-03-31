@@ -233,10 +233,15 @@ func extractReqParams(r *http.Request) map[string]string {
 	region := globalServerRegion
 	cred := getReqAccessCred(r, region)
 
+	principalID := cred.AccessKey
+	if cred.ParentUser != "" {
+		principalID = cred.ParentUser
+	}
+
 	// Success.
 	m := map[string]string{
 		"region":          region,
-		"accessKey":       cred.AccessKey,
+		"principalId":     principalID,
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
