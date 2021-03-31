@@ -496,7 +496,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			object.PurgeTransitioned = goi.TransitionStatus
 		}
 		if replicateDeletes {
-			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
 			}, goi, gerr)
@@ -511,9 +511,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 				if object.VersionID != "" {
 					object.VersionPurgeStatus = Pending
-					if delMarker {
-						object.DeleteMarkerVersionID = object.VersionID
-					}
 				} else {
 					object.DeleteMarkerReplicationStatus = string(replication.Pending)
 				}
@@ -557,13 +554,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	})
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[ObjectToDelete{
+		// DeleteMarkerVersionID is not used specifically to avoid
+		// lookup errors, since DeleteMarkerVersionID is only
+		// created during DeleteMarker creation when client didn't
+		// specify a versionID.
+		objToDel := ObjectToDelete{
 			ObjectName:                    dObjects[i].ObjectName,
 			VersionID:                     dObjects[i].VersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
-		}]
+		}
+		dindex := objectsToDelete[objToDel]
 		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
 			if replicateDeletes {
 				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
@@ -619,12 +621,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		eventName := event.ObjectRemovedDelete
 		objInfo := ObjectInfo{
-			Name:      dobj.ObjectName,
-			VersionID: dobj.VersionID,
+			Name:         dobj.ObjectName,
+			VersionID:    dobj.VersionID,
+			DeleteMarker: dobj.DeleteMarker,
 		}
 
-		if dobj.DeleteMarker {
-			objInfo.DeleteMarker = dobj.DeleteMarker
+		if objInfo.DeleteMarker {
 			objInfo.VersionID = dobj.DeleteMarkerVersionID
 			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}

@@ -2817,7 +2817,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			VersionID: opts.VersionID,
 		})
 	}
-	_, replicateDel, replicateSync := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
+
+	replicateDel, replicateSync := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
 	if replicateDel {
 		if opts.VersionID != "" {
 			opts.VersionPurgeStatus = Pending
@@ -2825,6 +2826,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 		}
 	}
+
 	vID := opts.VersionID
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		// check if replica has permission to be deleted.
