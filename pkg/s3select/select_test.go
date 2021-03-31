@@ -1154,11 +1154,36 @@ func TestParquetInputSchema(t *testing.T) {
         <Enabled>FALSE</Enabled>
     </RequestProgress>
 </SelectObjectContentRequest>
-`), wantResult: `{"shipdate":"1996-03-13T00:00:00Z"}
-{"shipdate":"1996-04-12T00:00:00Z"}
-{"shipdate":"1996-01-29T00:00:00Z"}
-{"shipdate":"1996-04-21T00:00:00Z"}
-{"shipdate":"1996-03-30T00:00:00Z"}`,
+`), wantResult: `{"shipdate":"1996-03-13T"}
+{"shipdate":"1996-04-12T"}
+{"shipdate":"1996-01-29T"}
+{"shipdate":"1996-04-21T"}
+{"shipdate":"1996-03-30T"}`,
+		},
+		{
+			requestXML: []byte(`
+<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>SELECT DATE_ADD(day, 2, shipdate) as shipdate FROM S3Object LIMIT 5</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <Parquet>
+        </Parquet>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>
+`), wantResult: `{"shipdate":"1996-03-15T"}
+{"shipdate":"1996-04-14T"}
+{"shipdate":"1996-01-31T"}
+{"shipdate":"1996-04-23T"}
+{"shipdate":"1996-04T"}`,
 		},
 	}
 
@@ -1249,11 +1274,35 @@ func TestParquetInputSchemaCSV(t *testing.T) {
         <Enabled>FALSE</Enabled>
     </RequestProgress>
 </SelectObjectContentRequest>
-`), wantResult: `1996-03-13
-1996-04-12
-1996-01-29
-1996-04-21
-1996-03-30`,
+`), wantResult: `1996-03-13T
+1996-04-12T
+1996-01-29T
+1996-04-21T
+1996-03-30T`,
+		},
+		{
+			requestXML: []byte(`
+<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>SELECT DATE_ADD(day, 2, shipdate) as shipdate FROM S3Object LIMIT 5</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <Parquet>
+        </Parquet>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV/>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>
+`), wantResult: `1996-03-15T
+1996-04-14T
+1996-01-31T
+1996-04-23T
+1996-04T`,
 		},
 	}
 
