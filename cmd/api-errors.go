@@ -66,6 +66,8 @@ type APIErrorResponse struct {
 // APIErrorCode type of error status.
 type APIErrorCode int
 
+//go:generate stringer -type=APIErrorCode -trimprefix=Err $GOFILE
+
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
 	ErrNone APIErrorCode = iota
