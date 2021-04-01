@@ -702,9 +702,10 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 				ventry.ObjectV2.MetaUser[k] = v
 			}
 		}
+
 		// If asked to save data.
 		if len(fi.Data) > 0 || fi.Size == 0 {
-			z.data.replace(dd.String(), fi.Data)
+			z.data.replace(fi.VersionID, fi.Data)
 		}
 	}
 

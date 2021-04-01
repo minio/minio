@@ -83,7 +83,17 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 		if !data || err != nil {
 			return fi, err
 		}
-		fi.Data = xlMeta.data.find(fi.DataDir)
+		versionID := fi.VersionID
+		if versionID == "" {
+			versionID = nullVersionID
+		}
+		fi.Data = xlMeta.data.find(versionID)
+		if len(fi.Data) == 0 {
+			// PR #11758 used DataDir, preserve it
+			// for users who might have used master
+			// branch
+			fi.Data = xlMeta.data.find(fi.DataDir)
+		}
 		return fi, nil
 	}
 

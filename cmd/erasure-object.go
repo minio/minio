@@ -124,27 +124,11 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		}
 	}
 
-	tempObj := mustGetUUID()
-
-	var online int
-	// Cleanup in case of xl.meta writing failure
-	defer func() {
-		if online != len(onlineDisks) {
-			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
-		}
-	}()
-
-	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
+	// Write directly...
+	if _, err = writeUniqueFileInfo(ctx, onlineDisks, srcBucket, srcObject, metaArr, writeQuorum); err != nil {
+		logger.LogIf(ctx, err)
+		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 	}
-
-	// Rename atomically `xl.meta` from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
-	}
-
-	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(srcBucket, srcObject), nil
 }
@@ -1261,15 +1245,9 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		}
 	}
 
-	tempObj := mustGetUUID()
-
-	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	// Atomically rename metadata from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+	// Write directly...
+	if _, err = writeUniqueFileInfo(ctx, onlineDisks, bucket, object, metaArr, writeQuorum); err != nil {
+		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1324,15 +1302,9 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 		metaArr[i].Metadata = fi.Metadata
 	}
 
-	tempObj := mustGetUUID()
-
-	// Write unique `xl.meta` for each disk.
-	if disks, err = writeUniqueFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
-	// Atomically rename metadata from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+	// Write directly...
+	if _, err = writeUniqueFileInfo(ctx, disks, bucket, object, metaArr, writeQuorum); err != nil {
+		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket, object)
 	}
 

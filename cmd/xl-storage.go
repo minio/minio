@@ -850,7 +850,16 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// api call to mark object as deleted. When object is pending transition,
 		// just update the metadata and avoid deleting data dir.
 		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
+			versionID := fi.VersionID
+			if versionID == "" {
+				versionID = nullVersionID
+			}
+			xlMeta.data.remove(versionID)
+			// PR #11758 used DataDir, preserve it
+			// for users who might have used master
+			// branch
 			xlMeta.data.remove(dataDir)
+
 			filePath := pathJoin(volumeDir, path, dataDir)
 			if err = checkPathLength(filePath); err != nil {
 				return err
@@ -1769,6 +1778,10 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+	if dataDir == "" {
+		return errInvalidArgument
+	}
+
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -1801,15 +1814,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	srcFilePath := pathutil.Join(srcVolumeDir, pathJoin(srcPath, xlStorageFormatFile))
 	dstFilePath := pathutil.Join(dstVolumeDir, pathJoin(dstPath, xlStorageFormatFile))
 
-	var srcDataPath string
-	var dstDataPath string
-	if dataDir != "" {
-		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
-		// make sure to always use path.Join here, do not use pathJoin as
-		// it would additionally add `/` at the end and it comes in the
-		// way of renameAll(), parentDir creation.
-		dstDataPath = pathutil.Join(dstVolumeDir, dstPath, dataDir)
-	}
+	srcDataPath := retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
+	// make sure to always use path.Join here, do not use pathJoin as
+	// it would additionally add `/` at the end and it comes in the
+	// way of renameAll(), parentDir creation.
+	dstDataPath := pathutil.Join(dstVolumeDir, dstPath, dataDir)
 
 	if err = checkPathLength(srcFilePath); err != nil {
 		return err
@@ -1985,30 +1994,22 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return errFileCorrupt
 	}
 
-	// Commit data, if any
-	if srcDataPath != "" {
-		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-			return err
-		}
+	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+		return err
+	}
 
-		tmpuuid := mustGetUUID()
-		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		tmpuuid = mustGetUUID()
-		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		if err = renameAll(srcDataPath, dstDataPath); err != nil {
-			logger.LogIf(ctx, err)
-			return osErrToFileErr(err)
-		}
+	tmpuuid := mustGetUUID()
+	renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
+	tmpuuid = mustGetUUID()
+	renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
+	if err = renameAll(srcDataPath, dstDataPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFileErr(err)
+	}
 
-		// Commit meta-file
-		if err = renameAll(srcFilePath, dstFilePath); err != nil {
-			return osErrToFileErr(err)
-		}
-	} else {
-		// Write meta-file directly, no data
-		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
-			return err
-		}
+	// Commit meta-file
+	if err = renameAll(srcFilePath, dstFilePath); err != nil {
+		return osErrToFileErr(err)
 	}
 
 	// Remove parent dir of the source file if empty
