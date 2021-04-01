@@ -110,10 +110,18 @@ const (
 
 	// AWSUsername - user friendly name, in MinIO this value is same as your user Access Key.
 	AWSUsername Key = "aws:username"
+
+	// S3SignatureVersion - identifies the version of AWS Signature that you want to support for authenticated requests.
+	S3SignatureVersion = "s3:signatureversion"
+
+	// S3AuthType - optionally use this condition key to restrict incoming requests to use a specific authentication method.
+	S3AuthType = "s3:authType"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
 var AllSupportedKeys = append([]Key{
+	S3SignatureVersion,
+	S3AuthType,
 	S3XAmzCopySource,
 	S3XAmzServerSideEncryption,
 	S3XAmzServerSideEncryptionCustomerAlgorithm,
@@ -144,6 +152,8 @@ var AllSupportedKeys = append([]Key{
 
 // CommonKeys - is list of all common condition keys.
 var CommonKeys = append([]Key{
+	S3SignatureVersion,
+	S3AuthType,
 	S3XAmzContentSha256,
 	S3LocationConstraint,
 	AWSReferer,
