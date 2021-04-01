@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.16.x]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
@@ -21,14 +21,6 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Build on ${{ matrix.os }}
-        if: matrix.os == 'macos-latest'
-        env:
-          CGO_ENABLED: 0
-          GO111MODULE: on
-        run: |
-          make
-          make test-race
       - name: Build on ${{ matrix.os }}
         if: matrix.os == 'windows-latest'
         env:

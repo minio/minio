@@ -64,11 +64,14 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
-	storage StorageAPI
-	diskID  string
-
-	apiCalls     [storageMetricLast]uint64
+	// fields position optimized for memory please
+	// do not re-order them, if you add new fields
+	// please use `fieldalignment ./...` to check
+	// if your changes are not causing any problems.
+	storage      StorageAPI
 	apiLatencies [storageMetricLast]ewma.MovingAverage
+	diskID       string
+	apiCalls     [storageMetricLast]uint64
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
