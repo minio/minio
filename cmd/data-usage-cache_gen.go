@@ -788,8 +788,8 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 8 {
-		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+	if zb0001 != 9 {
+		err = msgp.ArrayError{Wanted: 9, Got: zb0001}
 		return
 	}
 	z.Size, err = dc.ReadInt64()
@@ -844,13 +844,18 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "Children")
 		return
 	}
+	z.ReplicationPendingCount, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingCount")
+		return
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 8
-	err = en.Append(0x98)
+	// array header, size 9
+	err = en.Append(0x99)
 	if err != nil {
 		return
 	}
@@ -901,14 +906,19 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Children")
 		return
 	}
+	err = en.WriteUint64(z.ReplicationPendingCount)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingCount")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 8
-	o = append(o, 0x98)
+	// array header, size 9
+	o = append(o, 0x99)
 	o = msgp.AppendInt64(o, z.Size)
 	o = msgp.AppendUint64(o, z.ReplicatedSize)
 	o = msgp.AppendUint64(o, z.ReplicationPendingSize)
@@ -924,6 +934,7 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Children")
 		return
 	}
+	o = msgp.AppendUint64(o, z.ReplicationPendingCount)
 	return
 }
 
@@ -935,8 +946,8 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 8 {
-		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+	if zb0001 != 9 {
+		err = msgp.ArrayError{Wanted: 9, Got: zb0001}
 		return
 	}
 	z.Size, bts, err = msgp.ReadInt64Bytes(bts)
@@ -991,13 +1002,18 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Children")
 		return
 	}
+	z.ReplicationPendingCount, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingCount")
+		return
+	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntry) Msgsize() (s int) {
-	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize()
+	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize() + msgp.Uint64Size
 	return
 }
 

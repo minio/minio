@@ -790,6 +790,7 @@ type sizeSummary struct {
 	pendingSize    int64
 	failedSize     int64
 	replicaSize    int64
+	pendingCount   uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -1105,6 +1106,7 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	}
 	switch oi.ReplicationStatus {
 	case replication.Pending:
+		sizeS.pendingCount += 1
 		sizeS.pendingSize += oi.Size
 		globalReplicationPool.queueReplicaTask(oi)
 	case replication.Failed:

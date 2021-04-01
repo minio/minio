@@ -774,7 +774,8 @@ type DeletedObjectVersionInfo struct {
 }
 
 var (
-	globalReplicationPool *ReplicationPool
+	globalReplicationPool  *ReplicationPool
+	globalReplicationStats *ReplicationStats
 )
 
 // ReplicationPool describes replication pool
@@ -851,8 +852,10 @@ func (p *ReplicationPool) queueReplicaTask(oi ObjectInfo) {
 		return
 	}
 	select {
-	case p.replicaCh <- oi:
+	case <-GlobalContext.Done():
+		return
 	default:
+		p.replicaCh <- oi
 	}
 }
 
@@ -861,13 +864,16 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectVersionInfo) {
 		return
 	}
 	select {
-	case p.replicaDeleteCh <- doi:
+	case <-GlobalContext.Done():
+		return
 	default:
+		p.replicaDeleteCh <- doi
 	}
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationWorkers())
+	globalReplicationStats = newReplicationStats(GlobalContext)
 }
 
 // get Reader from replication target if active-active replication is in place and
@@ -1003,11 +1009,14 @@ func proxyHeadToReplicationTarget(ctx context.Context, bucket, object string, op
 	return oi, proxy, err
 }
 
-func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer, sync bool) {
+func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer, sync bool, opType replication.Type) {
 	if sync {
 		replicateObject(ctx, objInfo, o)
 	} else {
 		globalReplicationPool.queueReplicaTask(objInfo)
+	}
+	if sz, err := objInfo.GetActualSize(); err == nil {
+		globalReplicationStats.Update(objInfo.Bucket, sz, objInfo.ReplicationStatus, opType)
 	}
 }
 
@@ -1017,4 +1026,5 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	} else {
 		globalReplicationPool.queueReplicaDeleteTask(dv)
 	}
+	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.DeleteReplicationType)
 }

@@ -12,6 +12,7 @@ These metrics can be from any MinIO server once per collection.
 |`minio_bucket_replication_pending_bytes`        |Total bytes pending to replicate.                                                                                            |
 |`minio_bucket_replication_received_bytes`       |Total number of bytes replicated to this bucket from another source bucket.                                                  |
 |`minio_bucket_replication_sent_bytes`           |Total number of bytes replicated to the target bucket.                                                                       |
+|`minio_bucket_replication_pending_count`        |Total number of replication operations pending for this bucket.                                                                  |
 |`minio_bucket_usage_object_total`               |Total number of objects                                                                                                      |
 |`minio_bucket_usage_total_bytes`                |Total bucket size in bytes                                                                                                   |
 |`minio_cache_hits_total`                        |Total number of disk cache hits                                                                                              |

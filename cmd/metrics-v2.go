@@ -96,6 +96,7 @@ const (
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
 	pendingBytes  MetricName = "pending_bytes"
+	pendingCount  MetricName = "pending_count"
 	readBytes     MetricName = "read_bytes"
 	rcharBytes    MetricName = "rchar_bytes"
 	receivedBytes MetricName = "received_bytes"
@@ -407,6 +408,15 @@ func getBucketRepReceivedBytesMD() MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      receivedBytes,
 		Help:      "Total number of bytes replicated to this bucket from another source bucket.",
+		Type:      gaugeMetric,
+	}
+}
+func getBucketRepPendingOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      pendingCount,
+		Help:      "Total number of objects pending replication",
 		Type:      gaugeMetric,
 	}
 }
@@ -1225,6 +1235,8 @@ func getBucketUsageMetrics() MetricsGroup {
 			}
 
 			for bucket, usage := range dataUsageInfo.BucketsUsage {
+				stat := getLatestReplicationStats(bucket, usage)
+
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageTotalBytesMD(),
 					Value:          float64(usage.Size),
@@ -1237,25 +1249,30 @@ func getBucketUsageMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 
-				if usage.hasReplicationUsage() {
+				if stat.hasReplicationUsage() {
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepPendingBytesMD(),
-						Value:          float64(usage.ReplicationPendingSize),
+						Value:          float64(stat.PendingSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepFailedBytesMD(),
-						Value:          float64(usage.ReplicationFailedSize),
+						Value:          float64(stat.FailedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepSentBytesMD(),
-						Value:          float64(usage.ReplicatedSize),
+						Value:          float64(stat.ReplicatedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepReceivedBytesMD(),
-						Value:          float64(usage.ReplicaSize),
+						Value:          float64(stat.ReplicaSize),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getBucketRepPendingOperationsMD(),
+						Value:          float64(stat.OperationsPendingCount),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 				}
@@ -1370,13 +1387,6 @@ func getClusterStorageMetrics() MetricsGroup {
 			return
 		},
 	}
-}
-
-func (b *BucketUsageInfo) hasReplicationUsage() bool {
-	return b.ReplicationPendingSize > 0 ||
-		b.ReplicationFailedSize > 0 ||
-		b.ReplicatedSize > 0 ||
-		b.ReplicaSize > 0
 }
 
 type minioClusterCollector struct {

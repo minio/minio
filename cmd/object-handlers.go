@@ -1341,7 +1341,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
 	setPutObjHeaders(w, objInfo, false)
@@ -1656,7 +1656,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 	setPutObjHeaders(w, objInfo, false)
 
@@ -1938,7 +1938,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 
 		if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
-			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 		}
 
 	}
@@ -3014,7 +3014,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setPutObjHeaders(w, objInfo, false)
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
 	// Write success response.
@@ -3294,7 +3294,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.MetadataReplicationType)
 	}
 	writeSuccessResponseHeadersOnly(w)
 
@@ -3467,7 +3467,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.MetadataReplicationType)
 	}
 
 	writeSuccessNoContent(w)
@@ -3650,7 +3650,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objAPI, sync, replication.MetadataReplicationType)
 	}
 
 	if objInfo.VersionID != "" {
@@ -3724,7 +3724,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	if replicate {
-		scheduleReplication(ctx, oi.Clone(), objAPI, sync)
+		scheduleReplication(ctx, oi.Clone(), objAPI, sync, replication.MetadataReplicationType)
 	}
 
 	if oi.VersionID != "" {

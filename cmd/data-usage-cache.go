@@ -46,14 +46,15 @@ type sizeHistogram [dataUsageBucketLen]uint64
 //msgp:tuple dataUsageEntry
 type dataUsageEntry struct {
 	// These fields do no include any children.
-	Size                   int64
-	ReplicatedSize         uint64
-	ReplicationPendingSize uint64
-	ReplicationFailedSize  uint64
-	ReplicaSize            uint64
-	Objects                uint64
-	ObjSizes               sizeHistogram
-	Children               dataUsageHashMap
+	Size                    int64
+	ReplicatedSize          uint64
+	ReplicationPendingSize  uint64
+	ReplicationFailedSize   uint64
+	ReplicaSize             uint64
+	Objects                 uint64
+	ObjSizes                sizeHistogram
+	Children                dataUsageHashMap
+	ReplicationPendingCount uint64
 }
 
 //msgp:tuple dataUsageEntryV2
@@ -104,6 +105,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.ReplicationFailedSize += uint64(summary.failedSize)
 	e.ReplicationPendingSize += uint64(summary.pendingSize)
 	e.ReplicaSize += uint64(summary.replicaSize)
+	e.ReplicationPendingCount += uint64(summary.pendingCount)
 }
 
 // merge other data usage entry into this, excluding children.
@@ -114,6 +116,7 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.ReplicationFailedSize += other.ReplicationFailedSize
 	e.ReplicatedSize += other.ReplicatedSize
 	e.ReplicaSize += other.ReplicaSize
+	e.ReplicationPendingCount += other.ReplicationPendingCount
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
@@ -248,15 +251,16 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
-		LastUpdate:             d.Info.LastUpdate,
-		ObjectsTotalCount:      flat.Objects,
-		ObjectsTotalSize:       uint64(flat.Size),
-		ReplicatedSize:         flat.ReplicatedSize,
-		ReplicationFailedSize:  flat.ReplicationFailedSize,
-		ReplicationPendingSize: flat.ReplicationPendingSize,
-		ReplicaSize:            flat.ReplicaSize,
-		BucketsCount:           uint64(len(e.Children)),
-		BucketsUsage:           d.bucketsUsageInfo(buckets),
+		LastUpdate:              d.Info.LastUpdate,
+		ObjectsTotalCount:       flat.Objects,
+		ObjectsTotalSize:        uint64(flat.Size),
+		ReplicatedSize:          flat.ReplicatedSize,
+		ReplicationFailedSize:   flat.ReplicationFailedSize,
+		ReplicationPendingSize:  flat.ReplicationPendingSize,
+		ReplicaSize:             flat.ReplicaSize,
+		ReplicationPendingCount: flat.ReplicationPendingCount,
+		BucketsCount:            uint64(len(e.Children)),
+		BucketsUsage:            d.bucketsUsageInfo(buckets),
 	}
 }
 
@@ -382,13 +386,15 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		flat := d.flatten(*e)
 		dst[bucket.Name] = BucketUsageInfo{
-			Size:                   uint64(flat.Size),
-			ObjectsCount:           flat.Objects,
-			ReplicationPendingSize: flat.ReplicationPendingSize,
-			ReplicatedSize:         flat.ReplicatedSize,
-			ReplicationFailedSize:  flat.ReplicationFailedSize,
-			ReplicaSize:            flat.ReplicaSize,
-			ObjectSizesHistogram:   flat.ObjSizes.toMap(),
+			Size:                    uint64(flat.Size),
+			ObjectsCount:            flat.Objects,
+			ReplicationPendingSize:  flat.ReplicationPendingSize,
+			ReplicatedSize:          flat.ReplicatedSize,
+			ReplicationFailedSize:   flat.ReplicationFailedSize,
+			ReplicationPendingCount: flat.ReplicationPendingCount,
+
+			ReplicaSize:          flat.ReplicaSize,
+			ObjectSizesHistogram: flat.ObjSizes.toMap(),
 		}
 	}
 	return dst
@@ -403,13 +409,14 @@ func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return BucketUsageInfo{
-		Size:                   uint64(flat.Size),
-		ObjectsCount:           flat.Objects,
-		ReplicationPendingSize: flat.ReplicationPendingSize,
-		ReplicatedSize:         flat.ReplicatedSize,
-		ReplicationFailedSize:  flat.ReplicationFailedSize,
-		ReplicaSize:            flat.ReplicaSize,
-		ObjectSizesHistogram:   flat.ObjSizes.toMap(),
+		Size:                    uint64(flat.Size),
+		ObjectsCount:            flat.Objects,
+		ReplicationPendingSize:  flat.ReplicationPendingSize,
+		ReplicationPendingCount: flat.ReplicationPendingCount,
+		ReplicatedSize:          flat.ReplicatedSize,
+		ReplicationFailedSize:   flat.ReplicationFailedSize,
+		ReplicaSize:             flat.ReplicaSize,
+		ObjectSizesHistogram:    flat.ObjSizes.toMap(),
 	}
 }
 
