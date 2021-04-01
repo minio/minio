@@ -367,10 +367,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	tmpID := mustGetUUID()
 	migrateDataDir := mustGetUUID()
 
+	copyPartsMetadata := make([]FileInfo, len(partsMetadata))
 	for i := range outDatedDisks {
 		if outDatedDisks[i] == nil {
 			continue
 		}
+		copyPartsMetadata[i] = partsMetadata[i]
 		partsMetadata[i] = cleanFileInfo(latestMeta)
 	}
 
@@ -392,6 +394,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		latestDisks = shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
 		outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 		partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
+		copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
 
 		// Heal each part. erasureHealFile() will write the healed
 		// part to .minio/tmp/uuid/ which needs to be renamed later to
@@ -415,7 +418,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				if disk == OfflineDisk {
 					continue
 				}
-				checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(partNumber)
+				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
 				if latestMeta.XLV1 {
 					partPath = pathJoin(object, fmt.Sprintf("part.%d", partNumber))
