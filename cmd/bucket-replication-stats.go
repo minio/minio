@@ -56,50 +56,58 @@ type ReplicationStats struct {
 	Cache map[string]*BucketReplicationStats
 }
 
+// Update updates in-memory replication statistics with new values.
 func (r *ReplicationStats) Update(ctx context.Context, bucket string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
 	if r == nil {
 		return
 	}
-	r.Lock()
-	defer r.Unlock()
-	if _, ok := r.Cache[bucket]; !ok {
-		r.Cache[bucket] = &BucketReplicationStats{}
+
+	r.RLock()
+	b, ok := r.Cache[bucket]
+	if !ok {
+		b = &BucketReplicationStats{}
 	}
+	r.RUnlock()
+
 	switch status {
 	case replication.Pending:
 		if opType == replication.ObjectReplicationType {
-			atomic.AddUint64(&r.Cache[bucket].PendingSize, uint64(n))
+			atomic.AddUint64(&b.PendingSize, uint64(n))
 		}
-		atomic.AddUint64(&r.Cache[bucket].PendingCount, 1)
+		atomic.AddUint64(&b.PendingCount, 1)
 	case replication.Completed:
 		switch prevStatus { // adjust counters based on previous state
 		case replication.Pending:
-			atomic.AddUint64(&r.Cache[bucket].PendingCount, ^uint64(0))
+			atomic.AddUint64(&b.PendingCount, ^uint64(0))
 		case replication.Failed:
-			atomic.AddUint64(&r.Cache[bucket].FailedCount, ^uint64(0))
+			atomic.AddUint64(&b.FailedCount, ^uint64(0))
 		}
 		if opType == replication.ObjectReplicationType {
-			atomic.AddUint64(&r.Cache[bucket].ReplicatedSize, uint64(n))
+			atomic.AddUint64(&b.ReplicatedSize, uint64(n))
 			switch prevStatus {
 			case replication.Pending:
-				atomic.AddUint64(&r.Cache[bucket].PendingSize, ^uint64(n-1))
+				atomic.AddUint64(&b.PendingSize, ^uint64(n-1))
 			case replication.Failed:
-				atomic.AddUint64(&r.Cache[bucket].FailedSize, ^uint64(n-1))
+				atomic.AddUint64(&b.FailedSize, ^uint64(n-1))
 			}
 		}
 	case replication.Failed:
 		// count failures only once - not on every retry
 		if opType == replication.ObjectReplicationType {
 			if prevStatus == replication.Pending {
-				atomic.AddUint64(&r.Cache[bucket].FailedSize, uint64(n))
-				atomic.AddUint64(&r.Cache[bucket].FailedCount, 1)
+				atomic.AddUint64(&b.FailedSize, uint64(n))
+				atomic.AddUint64(&b.FailedCount, 1)
 			}
 		}
 	case replication.Replica:
 		if opType == replication.ObjectReplicationType {
-			atomic.AddUint64(&r.Cache[bucket].ReplicaSize, uint64(n))
+			atomic.AddUint64(&b.ReplicaSize, uint64(n))
 		}
 	}
+
+	r.Lock()
+	r.Cache[bucket] = b
+	r.Unlock()
 }
 
 // Get total bytes pending replication for a bucket
@@ -124,6 +132,7 @@ func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	}
 }
 
+// NewReplicationStats initialize in-memory replication statistics
 func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *ReplicationStats {
 	st := &ReplicationStats{
 		Cache: make(map[string]*BucketReplicationStats),

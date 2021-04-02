@@ -815,13 +815,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *Replication
 		ctx:                ctx,
 		objLayer:           o,
 	}
-	go func() {
-		<-ctx.Done()
-		close(pool.replicaCh)
-		close(pool.replicaDeleteCh)
-		close(pool.mrfReplicaCh)
-		close(pool.mrfReplicaDeleteCh)
-	}()
 	pool.Resize(sz)
 	// add long running worker for handling most recent failures/pending replications
 	go pool.AddMRFWorker()
@@ -835,20 +828,16 @@ func (p *ReplicationPool) AddMRFWorker() {
 		select {
 		case <-p.ctx.Done():
 			return
-		default:
-			select {
-			case oi, ok := <-p.mrfReplicaCh:
-				if !ok {
-					return
-				}
-				replicateObject(p.ctx, oi, p.objLayer)
-			case doi, ok := <-p.mrfReplicaDeleteCh:
-				if !ok {
-					return
-				}
-				replicateDelete(p.ctx, doi, p.objLayer)
-			default:
+		case oi, ok := <-p.mrfReplicaCh:
+			if !ok {
+				return
 			}
+			replicateObject(p.ctx, oi, p.objLayer)
+		case doi, ok := <-p.mrfReplicaDeleteCh:
+			if !ok {
+				return
+			}
+			replicateDelete(p.ctx, doi, p.objLayer)
 		}
 	}
 }
@@ -899,17 +888,12 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, oi ObjectInfo) {
 	}
 	select {
 	case <-ctx.Done():
+		close(p.replicaCh)
+		close(p.mrfReplicaCh)
+	case p.replicaCh <- oi:
+	case p.mrfReplicaCh <- oi:
+		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
 	default:
-		//this nested select is to ensure replicaCh not picked after ctrl-c on server
-		select {
-		case p.replicaCh <- oi:
-		default:
-			// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
-			select {
-			case p.mrfReplicaCh <- oi:
-			default:
-			}
-		}
 	}
 }
 
@@ -919,17 +903,12 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 	}
 	select {
 	case <-ctx.Done():
+		close(p.replicaDeleteCh)
+		close(p.mrfReplicaDeleteCh)
+	case p.replicaDeleteCh <- doi:
+	case p.mrfReplicaDeleteCh <- doi:
+		// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
 	default:
-		//this nested select is to ensure replicaDeleteCh not picked after ctrl-c on server
-		select {
-		case p.replicaDeleteCh <- doi:
-		default:
-			// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
-			select {
-			case p.mrfReplicaDeleteCh <- doi:
-			default:
-			}
-		}
 	}
 }
 

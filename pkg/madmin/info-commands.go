@@ -135,14 +135,16 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 // - total objects in a bucket
 // - object size histogram per bucket
 type BucketUsageInfo struct {
-	Size                    uint64            `json:"size"`
-	ReplicationPendingSize  uint64            `json:"objectsPendingReplicationTotalSize"`
-	ReplicationFailedSize   uint64            `json:"objectsFailedReplicationTotalSize"`
-	ReplicatedSize          uint64            `json:"objectsReplicatedTotalSize"`
-	ReplicaSize             uint64            `json:"objectReplicaTotalSize"`
-	ReplicationPendingCount uint64            `json:"objectsPendingReplicationCount"`
-	ObjectsCount            uint64            `json:"objectsCount"`
-	ObjectSizesHistogram    map[string]uint64 `json:"objectsSizesHistogram"`
+	Size                    uint64 `json:"size"`
+	ReplicationPendingSize  uint64 `json:"objectsPendingReplicationTotalSize"`
+	ReplicationFailedSize   uint64 `json:"objectsFailedReplicationTotalSize"`
+	ReplicatedSize          uint64 `json:"objectsReplicatedTotalSize"`
+	ReplicaSize             uint64 `json:"objectReplicaTotalSize"`
+	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
+	ReplicationFailedCount  uint64 `json:"objectsFailedReplicationCount"`
+
+	ObjectsCount         uint64            `json:"objectsCount"`
+	ObjectSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -171,6 +173,9 @@ type DataUsageInfo struct {
 
 	// Total number of objects pending replication
 	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
+
+	// Total number of objects that failed replication
+	ReplicationFailedCount uint64 `json:"objectsFailedReplicationCount"`
 
 	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
