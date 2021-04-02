@@ -837,7 +837,7 @@ func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objA
 
 // Check if the bucket is on a remote site, this code only gets executed when federation is enabled.
 func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer) bool {
-	if globalDNSConfig == nil {
+	if GlobalDNSConfig == nil {
 		return false
 	}
 	if globalBucketFederation {
@@ -1290,7 +1290,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		var dstRecords []dns.SrvRecord
-		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		dstRecords, err = GlobalDNSConfig.Get(dstBucket)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2273,7 +2273,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		var dstRecords []dns.SrvRecord
-		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		dstRecords, err = GlobalDNSConfig.Get(dstBucket)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -3064,8 +3064,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	if globalDNSConfig != nil {
-		_, err := globalDNSConfig.Get(bucket)
+	if GlobalDNSConfig != nil {
+		_, err := GlobalDNSConfig.Get(bucket)
 		if err != nil && err != dns.ErrNotImplemented {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return

@@ -151,7 +151,7 @@ func setRedirectHandler(h http.Handler) http.Handler {
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Re-direction is handled specifically for browser requests.
-		if globalBrowserEnabled && guessIsBrowserReq(r) {
+		if GlobalBrowserEnabled && guessIsBrowserReq(r) {
 			// Fetch the redirect location if any.
 			redirectLocation := getRedirectLocation(r.URL.Path)
 			if redirectLocation != "" {
@@ -204,7 +204,7 @@ func guessIsBrowserReq(req *http.Request) bool {
 		return false
 	}
 	aType := getRequestAuthType(req)
-	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && globalBrowserEnabled &&
+	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && GlobalBrowserEnabled &&
 		(aType == authTypeJWT || aType == authTypeAnonymous)
 }
 
@@ -247,7 +247,7 @@ func guessIsRPCReq(req *http.Request) bool {
 // Adds Cache-Control header
 func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalBrowserEnabled && r.Method == http.MethodGet && guessIsBrowserReq(r) {
+		if GlobalBrowserEnabled && r.Method == http.MethodGet && guessIsBrowserReq(r) {
 			// For all browser requests set appropriate Cache-Control policies
 			if HasPrefix(r.URL.Path, minioReservedBucketPath+SlashSeparator) {
 				if HasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
@@ -449,7 +449,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalDNSConfig == nil || len(globalDomainNames) == 0 || !globalBucketFederation ||
+		if GlobalDNSConfig == nil || len(globalDomainNames) == 0 || !globalBucketFederation ||
 			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 			h.ServeHTTP(w, r)
@@ -476,7 +476,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 				h.ServeHTTP(w, r)
 				return
 			}
-			sr, err := globalDNSConfig.Get(bucket)
+			sr, err := GlobalDNSConfig.Get(bucket)
 			if err != nil {
 				if err == dns.ErrNoEntriesFound {
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket),
@@ -533,7 +533,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 				return
 			}
 		}
-		sr, err := globalDNSConfig.Get(bucket)
+		sr, err := GlobalDNSConfig.Get(bucket)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL, guessIsBrowserReq(r))

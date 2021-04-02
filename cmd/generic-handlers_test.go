@@ -114,7 +114,7 @@ func TestGuessIsRPC(t *testing.T) {
 
 // Tests browser request guess function.
 func TestGuessIsBrowser(t *testing.T) {
-	globalBrowserEnabled = true
+	GlobalBrowserEnabled = true
 	if guessIsBrowserReq(nil) {
 		t.Fatal("Unexpected return for nil request")
 	}

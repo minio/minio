@@ -361,7 +361,7 @@ func LookupConfigs(s config.Config, setDriveCounts []int) {
 	}
 
 	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
-		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
+		GlobalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(GlobalRootCAs))
 		if err != nil {
@@ -383,8 +383,8 @@ func LookupConfigs(s config.Config, setDriveCounts []int) {
 	}
 
 	if etcdCfg.Enabled {
-		if globalEtcdClient == nil {
-			globalEtcdClient, err = etcd.New(etcdCfg)
+		if GlobalEtcdClient == nil {
+			GlobalEtcdClient, err = etcd.New(etcdCfg)
 			if err != nil {
 				if GlobalIsGateway {
 					logger.FatalIf(err, "Unable to initialize etcd config")
@@ -394,13 +394,13 @@ func LookupConfigs(s config.Config, setDriveCounts []int) {
 			}
 		}
 
-		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-			if globalDNSConfig != nil {
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && GlobalEtcdClient != nil {
+			if GlobalDNSConfig != nil {
 				// if global DNS is already configured, indicate with a warning, incase
 				// users are confused.
-				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", globalDNSConfig))
+				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", GlobalDNSConfig))
 			} else {
-				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+				GlobalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
 					dns.DomainIPs(globalDomainIPs),
 					dns.DomainPort(GlobalMinioPort),

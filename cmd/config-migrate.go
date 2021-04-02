@@ -49,17 +49,17 @@ var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s'
 
 // Save config file to corresponding backend
 func Save(configFile string, data interface{}) error {
-	return quick.SaveConfig(data, configFile, globalEtcdClient)
+	return quick.SaveConfig(data, configFile, GlobalEtcdClient)
 }
 
 // Load config from backend
 func Load(configFile string, data interface{}) (quick.Config, error) {
-	return quick.LoadConfig(configFile, globalEtcdClient, data)
+	return quick.LoadConfig(configFile, GlobalEtcdClient, data)
 }
 
 // GetVersion gets config version from backend
 func GetVersion(configFile string) (string, error) {
-	return quick.GetVersion(configFile, globalEtcdClient)
+	return quick.GetVersion(configFile, GlobalEtcdClient)
 }
 
 // Migrates all config versions from "1" to "28".
@@ -2014,7 +2014,7 @@ func migrateV23ToV24() error {
 	configFile := getConfigFile()
 
 	cv23 := &serverConfigV23{}
-	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv23)
+	_, err := quick.LoadConfig(configFile, GlobalEtcdClient, cv23)
 	if osIsNotExist(err) || osIsPermission(err) {
 		return nil
 	} else if err != nil {
@@ -2115,7 +2115,7 @@ func migrateV23ToV24() error {
 	srvConfig.Cache.Exclude = cv23.Cache.Exclude
 	srvConfig.Cache.Expiry = cv23.Cache.Expiry
 
-	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, GlobalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv23.Version, srvConfig.Version, err)
 	}
 
@@ -2127,7 +2127,7 @@ func migrateV24ToV25() error {
 	configFile := getConfigFile()
 
 	cv24 := &serverConfigV24{}
-	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv24)
+	_, err := quick.LoadConfig(configFile, GlobalEtcdClient, cv24)
 	if osIsNotExist(err) || osIsPermission(err) {
 		return nil
 	} else if err != nil {
@@ -2233,7 +2233,7 @@ func migrateV24ToV25() error {
 	srvConfig.Cache.Exclude = cv24.Cache.Exclude
 	srvConfig.Cache.Expiry = cv24.Cache.Expiry
 
-	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, GlobalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv24.Version, srvConfig.Version, err)
 	}
 
@@ -2245,7 +2245,7 @@ func migrateV25ToV26() error {
 	configFile := getConfigFile()
 
 	cv25 := &serverConfigV25{}
-	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv25)
+	_, err := quick.LoadConfig(configFile, GlobalEtcdClient, cv25)
 	if osIsNotExist(err) || osIsPermission(err) {
 		return nil
 	} else if err != nil {
@@ -2352,7 +2352,7 @@ func migrateV25ToV26() error {
 	// Add predefined value to new server config.
 	srvConfig.Cache.MaxUse = 80
 
-	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, GlobalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv25.Version, srvConfig.Version, err)
 	}
 
@@ -2367,7 +2367,7 @@ func migrateV26ToV27() error {
 	// config file in serverConfigV27 struct and put some examples
 	// in the new `logger` field
 	srvConfig := &serverConfigV27{}
-	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	_, err := quick.LoadConfig(configFile, GlobalEtcdClient, srvConfig)
 	if osIsNotExist(err) || osIsPermission(err) {
 		return nil
 	} else if err != nil {
@@ -2385,7 +2385,7 @@ func migrateV26ToV27() error {
 	srvConfig.Logger.HTTP = make(map[string]logger.HTTP)
 	srvConfig.Logger.HTTP["1"] = logger.HTTP{}
 
-	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, GlobalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %w", err)
 	}
 
@@ -2400,7 +2400,7 @@ func migrateV27ToV28() error {
 	// config file in serverConfigV28 struct and initialize KMSConfig
 
 	srvConfig := &serverConfigV28{}
-	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	_, err := quick.LoadConfig(configFile, GlobalEtcdClient, srvConfig)
 	if osIsNotExist(err) || osIsPermission(err) {
 		return nil
 	} else if err != nil {
@@ -2413,7 +2413,7 @@ func migrateV27ToV28() error {
 
 	srvConfig.Version = "28"
 	srvConfig.KMS = crypto.KMSConfig{}
-	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, GlobalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
 
@@ -2429,8 +2429,8 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 
 	defer func() {
 		if err == nil {
-			if globalEtcdClient != nil {
-				deleteKeyEtcd(GlobalContext, globalEtcdClient, configFile)
+			if GlobalEtcdClient != nil {
+				deleteKeyEtcd(GlobalContext, GlobalEtcdClient, configFile)
 			} else {
 				// Rename config.json to config.json.deprecated only upon
 				// success of this function.

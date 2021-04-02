@@ -716,8 +716,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var buckets []BucketInfo
-	if globalDNSConfig != nil && globalBucketFederation {
-		dnsBuckets, err := globalDNSConfig.List()
+	if GlobalDNSConfig != nil && globalBucketFederation {
+		dnsBuckets, err := GlobalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
 			dns.ErrDomainMissing) {
