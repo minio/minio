@@ -47,7 +47,7 @@ func (a GatewayUnsupported) LocalStorageInfo(ctx context.Context) (StorageInfo, 
 }
 
 // NSScanner - scanner is not implemented for gateway
-func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return NotImplemented{}
 }

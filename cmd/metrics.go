@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -430,8 +431,8 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 }
 
-// get the most current of in-memory replication stats and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u BucketUsageInfo) BucketReplicationStats {
+// get the most current of in-memory replication stats  and data usage info from crawler.
+func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) BucketReplicationStats {
 	s := BucketReplicationStats{
 		PendingSize:    u.ReplicationPendingSize,
 		FailedSize:     u.ReplicationFailedSize,

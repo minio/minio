@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -274,16 +275,16 @@ func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
 	}
 }
 
-// dui converts the flattened version of the path to DataUsageInfo.
+// dui converts the flattened version of the path to madmin.DataUsageInfo.
 // As a side effect d will be flattened, use a clone if this is not ok.
-func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
+func (d *dataUsageCache) dui(path string, buckets []BucketInfo) madmin.DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
 		// No entry found, return empty.
-		return DataUsageInfo{}
+		return madmin.DataUsageInfo{}
 	}
 	flat := d.flatten(*e)
-	return DataUsageInfo{
+	return madmin.DataUsageInfo{
 		LastUpdate:              d.Info.LastUpdate,
 		ObjectsTotalCount:       flat.Objects,
 		ObjectsTotalSize:        uint64(flat.Size),
@@ -411,15 +412,15 @@ func (h *sizeHistogram) toMap() map[string]uint64 {
 
 // bucketsUsageInfo returns the buckets usage info as a map, with
 // key as bucket name
-func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]BucketUsageInfo {
-	var dst = make(map[string]BucketUsageInfo, len(buckets))
+func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]madmin.BucketUsageInfo {
+	var dst = make(map[string]madmin.BucketUsageInfo, len(buckets))
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
 			continue
 		}
 		flat := d.flatten(*e)
-		dst[bucket.Name] = BucketUsageInfo{
+		dst[bucket.Name] = madmin.BucketUsageInfo{
 			Size:                    uint64(flat.Size),
 			ObjectsCount:            flat.Objects,
 			ReplicationPendingSize:  flat.ReplicationStats.PendingSize,
@@ -436,13 +437,13 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 
 // bucketUsageInfo returns the buckets usage info.
 // If not found all values returned are zero values.
-func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
+func (d *dataUsageCache) bucketUsageInfo(bucket string) madmin.BucketUsageInfo {
 	e := d.find(bucket)
 	if e == nil {
-		return BucketUsageInfo{}
+		return madmin.BucketUsageInfo{}
 	}
 	flat := d.flatten(*e)
-	return BucketUsageInfo{
+	return madmin.BucketUsageInfo{
 		Size:                    uint64(flat.Size),
 		ObjectsCount:            flat.Objects,
 		ReplicationPendingSize:  flat.ReplicationStats.PendingSize,

@@ -44,7 +44,7 @@ const (
 	healMetricNamespace      MetricNamespace = "minio_heal"
 	interNodeMetricNamespace MetricNamespace = "minio_inter_node"
 	nodeMetricNamespace      MetricNamespace = "minio_node"
-	minIOMetricNamespace     MetricNamespace = "minio"
+	minioMetricNamespace     MetricNamespace = "minio"
 	s3MetricNamespace        MetricNamespace = "minio_s3"
 )
 
@@ -358,6 +358,16 @@ func getNodeDiskTotalBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getUsageLastScanActivityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: minioMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      lastActivityTime,
+		Help:      "Time elapsed (in nano seconds) since last scan activity. This is set to 0 until first scan cycle",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -686,7 +696,7 @@ func getNodeOfflineTotalMD() MetricDescription {
 }
 func getMinIOVersionMD() MetricDescription {
 	return MetricDescription{
-		Namespace: minIOMetricNamespace,
+		Namespace: minioMetricNamespace,
 		Subsystem: softwareSubsystem,
 		Name:      versionInfo,
 		Help:      "MinIO Release tag for the server",
@@ -695,7 +705,7 @@ func getMinIOVersionMD() MetricDescription {
 }
 func getMinIOCommitMD() MetricDescription {
 	return MetricDescription{
-		Namespace: minIOMetricNamespace,
+		Namespace: minioMetricNamespace,
 		Subsystem: softwareSubsystem,
 		Name:      commitInfo,
 		Help:      "Git commit hash for the MinIO release.",
@@ -1016,13 +1026,14 @@ func getMinioHealingMetrics() MetricsGroup {
 			if !exists {
 				return
 			}
-			var dur time.Duration
-			if !bgSeq.lastHealActivity.IsZero() {
-				dur = time.Since(bgSeq.lastHealActivity)
+
+			if bgSeq.lastHealActivity.IsZero() {
+				return
 			}
+
 			metrics = append(metrics, Metric{
 				Description: getHealLastActivityTimeMD(),
-				Value:       float64(dur),
+				Value:       float64(time.Since(bgSeq.lastHealActivity)),
 			})
 			metrics = append(metrics, getObjectsScanned(bgSeq)...)
 			metrics = append(metrics, getScannedItems(bgSeq)...)
@@ -1243,6 +1254,11 @@ func getBucketUsageMetrics() MetricsGroup {
 			if dataUsageInfo.LastUpdate.IsZero() {
 				return
 			}
+
+			metrics = append(metrics, Metric{
+				Description: getUsageLastScanActivityMD(),
+				Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
+			})
 
 			for bucket, usage := range dataUsageInfo.BucketsUsage {
 				stat := getLatestReplicationStats(bucket, usage)

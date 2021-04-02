@@ -130,22 +130,59 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 	return storageInfo, nil
 }
 
-// DataUsageInfo represents data usage of an Object API
+// BucketUsageInfo - bucket usage info provides
+// - total size of the bucket
+// - total objects in a bucket
+// - object size histogram per bucket
+type BucketUsageInfo struct {
+	Size                    uint64            `json:"size"`
+	ReplicationPendingSize  uint64            `json:"objectsPendingReplicationTotalSize"`
+	ReplicationFailedSize   uint64            `json:"objectsFailedReplicationTotalSize"`
+	ReplicatedSize          uint64            `json:"objectsReplicatedTotalSize"`
+	ReplicaSize             uint64            `json:"objectReplicaTotalSize"`
+	ReplicationPendingCount uint64            `json:"objectsPendingReplicationCount"`
+	ObjectsCount            uint64            `json:"objectsCount"`
+	ObjectSizesHistogram    map[string]uint64 `json:"objectsSizesHistogram"`
+}
+
+// DataUsageInfo represents data usage stats of the underlying Object API
 type DataUsageInfo struct {
 	// LastUpdate is the timestamp of when the data usage info was last updated.
 	// This does not indicate a full scan.
-	LastUpdate       time.Time `json:"lastUpdate"`
-	ObjectsCount     uint64    `json:"objectsCount"`
-	ObjectsTotalSize uint64    `json:"objectsTotalSize"`
+	LastUpdate time.Time `json:"lastUpdate"`
 
-	// ObjectsSizesHistogram contains information on objects across all buckets.
-	// See ObjectsHistogramIntervals.
-	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
+	// Objects total count across all buckets
+	ObjectsTotalCount uint64 `json:"objectsCount"`
 
+	// Objects total size across all buckets
+	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
+
+	// Total Size for objects that have not yet been replicated
+	ReplicationPendingSize uint64 `json:"objectsPendingReplicationTotalSize"`
+
+	// Total size for objects that have witness one or more failures and will be retried
+	ReplicationFailedSize uint64 `json:"objectsFailedReplicationTotalSize"`
+
+	// Total size for objects that have been replicated to destination
+	ReplicatedSize uint64 `json:"objectsReplicatedTotalSize"`
+
+	// Total size for objects that are replicas
+	ReplicaSize uint64 `json:"objectsReplicaTotalSize"`
+
+	// Total number of objects pending replication
+	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
+
+	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
 
-	// BucketsSizes is "bucket name" -> size.
-	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
+	// Buckets usage info provides following information across all buckets
+	// - total size of the bucket
+	// - total objects in a bucket
+	// - object size histogram per bucket
+	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
+
+	// Deprecated kept here for backward compatibility reasons.
+	BucketSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // DataUsageInfo - returns data usage of the current object API
