@@ -146,7 +146,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	}
 	PrintEventNotifiers()
 
-	if globalBrowserEnabled {
+	if GlobalBrowserEnabled {
 		LogStartupMessage(color.Blue("\nBrowser Access:"))
 		LogStartupMessage(fmt.Sprintf(GetFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}

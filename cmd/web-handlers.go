@@ -198,15 +198,15 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		LockEnabled: false,
 	}
 
-	if globalDNSConfig != nil {
-		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
+	if GlobalDNSConfig != nil {
+		if _, err := GlobalDNSConfig.Get(args.BucketName); err != nil {
 			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
 				}
 
-				if err = globalDNSConfig.Put(args.BucketName); err != nil {
+				if err = GlobalDNSConfig.Put(args.BucketName); err != nil {
 					objectAPI.DeleteBucket(ctx, args.BucketName, false)
 					return toJSONError(ctx, err)
 				}
@@ -276,7 +276,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	reply.UIVersion = Version
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -303,8 +303,8 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	GlobalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
 
-	if globalDNSConfig != nil {
-		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
+	if GlobalDNSConfig != nil {
+		if err := GlobalDNSConfig.Delete(args.BucketName); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			return toJSONError(ctx, err)
 		}
@@ -359,8 +359,8 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil && globalBucketFederation {
-		dnsBuckets, err := globalDNSConfig.List()
+	if GlobalDNSConfig != nil && globalBucketFederation {
+		dnsBuckets, err := GlobalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
 			dns.ErrDomainMissing) {
@@ -447,7 +447,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	listObjects := objectAPI.ListObjects
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -679,7 +679,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	reply.UIVersion = Version
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -1824,7 +1824,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -1921,7 +1921,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -2018,7 +2018,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := GlobalDNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{

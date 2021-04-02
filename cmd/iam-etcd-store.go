@@ -66,7 +66,7 @@ type IAMEtcdStore struct {
 }
 
 func newIAMEtcdStore() *IAMEtcdStore {
-	return &IAMEtcdStore{client: globalEtcdClient}
+	return &IAMEtcdStore{client: GlobalEtcdClient}
 }
 
 func (ies *IAMEtcdStore) lock() {

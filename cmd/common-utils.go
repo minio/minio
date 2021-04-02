@@ -54,17 +54,8 @@ var (
 	// GlobalActiveCred exported currently active root credential
 	GlobalActiveCred = &globalActiveCred
 
-	// GlobalEtcdClient exposed etcd client
-	GlobalEtcdClient = globalEtcdClient
-
 	// GlobalCacheConfig exposed cache config
 	GlobalCacheConfig = &globalCacheConfig
-
-	// GlobalDNSConfig exposed DNS config
-	GlobalDNSConfig = globalDNSConfig
-
-	// GlobalBrowserEnabled browser enabled
-	GlobalBrowserEnabled = globalBrowserEnabled
 
 	// InitFederatorBackend initialize federated backend
 	InitFederatorBackend = initFederatorBackend
