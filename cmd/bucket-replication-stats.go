@@ -49,8 +49,8 @@ func (b *BucketReplicationStats) hasReplicationUsage() bool {
 
 // ReplicationStats holds the global in-memory replication stats
 type ReplicationStats struct {
-	Cache map[string]*BucketReplicationStats
 	sync.RWMutex
+	Cache map[string]*BucketReplicationStats
 }
 
 // Update replication stats from incoming queue

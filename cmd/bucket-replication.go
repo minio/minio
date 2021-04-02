@@ -847,27 +847,25 @@ func (p *ReplicationPool) Resize(n int) {
 	}
 }
 
-func (p *ReplicationPool) queueReplicaTask(oi ObjectInfo) {
+func (p *ReplicationPool) queueReplicaTask(ctx context.Context, oi ObjectInfo) {
 	if p == nil {
 		return
 	}
 	select {
-	case <-GlobalContext.Done():
-		return
+	case <-ctx.Done():
+	case p.replicaCh <- oi:
 	default:
-		p.replicaCh <- oi
 	}
 }
 
-func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectVersionInfo) {
+func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi DeletedObjectVersionInfo) {
 	if p == nil {
 		return
 	}
 	select {
-	case <-GlobalContext.Done():
-		return
+	case <-ctx.Done():
+	case p.replicaDeleteCh <- doi:
 	default:
-		p.replicaDeleteCh <- doi
 	}
 }
 
@@ -1013,7 +1011,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 	if sync {
 		replicateObject(ctx, objInfo, o)
 	} else {
-		globalReplicationPool.queueReplicaTask(objInfo)
+		globalReplicationPool.queueReplicaTask(ctx, objInfo)
 	}
 	if sz, err := objInfo.GetActualSize(); err == nil {
 		globalReplicationStats.Update(objInfo.Bucket, sz, objInfo.ReplicationStatus, opType)
@@ -1024,7 +1022,7 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	if sync {
 		replicateDelete(ctx, dv, o)
 	} else {
-		globalReplicationPool.queueReplicaDeleteTask(dv)
+		globalReplicationPool.queueReplicaDeleteTask(ctx, dv)
 	}
 	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.DeleteReplicationType)
 }
