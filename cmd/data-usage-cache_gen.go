@@ -301,16 +301,16 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
-		case "LastUpdate":
-			z.LastUpdate, err = dc.ReadTime()
-			if err != nil {
-				err = msgp.WrapError(err, "LastUpdate")
-				return
-			}
 		case "NextCycle":
 			z.NextCycle, err = dc.ReadUint32()
 			if err != nil {
 				err = msgp.WrapError(err, "NextCycle")
+				return
+			}
+		case "LastUpdate":
+			z.LastUpdate, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
 		case "SkipHealing":
@@ -363,16 +363,6 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Name")
 		return
 	}
-	// write "LastUpdate"
-	err = en.Append(0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteTime(z.LastUpdate)
-	if err != nil {
-		err = msgp.WrapError(err, "LastUpdate")
-		return
-	}
 	// write "NextCycle"
 	err = en.Append(0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
 	if err != nil {
@@ -381,6 +371,16 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteUint32(z.NextCycle)
 	if err != nil {
 		err = msgp.WrapError(err, "NextCycle")
+		return
+	}
+	// write "LastUpdate"
+	err = en.Append(0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.LastUpdate)
+	if err != nil {
+		err = msgp.WrapError(err, "LastUpdate")
 		return
 	}
 	// write "SkipHealing"
@@ -426,12 +426,12 @@ func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Name"
 	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
-	// string "LastUpdate"
-	o = append(o, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
-	o = msgp.AppendTime(o, z.LastUpdate)
 	// string "NextCycle"
 	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
 	o = msgp.AppendUint32(o, z.NextCycle)
+	// string "LastUpdate"
+	o = append(o, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
+	o = msgp.AppendTime(o, z.LastUpdate)
 	// string "SkipHealing"
 	o = append(o, 0xab, 0x53, 0x6b, 0x69, 0x70, 0x48, 0x65, 0x61, 0x6c, 0x69, 0x6e, 0x67)
 	o = msgp.AppendBool(o, z.SkipHealing)
@@ -467,16 +467,16 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
-		case "LastUpdate":
-			z.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "LastUpdate")
-				return
-			}
 		case "NextCycle":
 			z.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NextCycle")
+				return
+			}
+		case "LastUpdate":
+			z.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
 		case "SkipHealing":
@@ -505,7 +505,7 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint32Size + 12 + msgp.BoolSize + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 12 + msgp.BoolSize + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
 	return
 }
 

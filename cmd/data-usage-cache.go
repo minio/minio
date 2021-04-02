@@ -120,8 +120,8 @@ type dataUsageEntryInfo struct {
 type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
 	Name       string
-	LastUpdate time.Time
 	NextCycle  uint32
+	LastUpdate time.Time
 	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool

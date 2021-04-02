@@ -20,7 +20,6 @@ package madmin
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -124,14 +123,7 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 
 	// Unmarshal the server's json response
 	var storageInfo StorageInfo
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return StorageInfo{}, err
-	}
-
-	err = json.Unmarshal(respBytes, &storageInfo)
-	if err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&storageInfo); err != nil {
 		return StorageInfo{}, err
 	}
 
@@ -171,14 +163,7 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 
 	// Unmarshal the server's json response
 	var dataUsageInfo DataUsageInfo
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return DataUsageInfo{}, err
-	}
-
-	err = json.Unmarshal(respBytes, &dataUsageInfo)
-	if err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&dataUsageInfo); err != nil {
 		return DataUsageInfo{}, err
 	}
 
@@ -344,14 +329,7 @@ func (adm *AdminClient) ServerInfo(ctx context.Context) (InfoMessage, error) {
 
 	// Unmarshal the server's json response
 	var message InfoMessage
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return InfoMessage{}, err
-	}
-
-	err = json.Unmarshal(respBytes, &message)
-	if err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&message); err != nil {
 		return InfoMessage{}, err
 	}
 

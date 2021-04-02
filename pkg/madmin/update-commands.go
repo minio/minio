@@ -20,7 +20,6 @@ package madmin
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 )
@@ -53,10 +52,9 @@ func (adm *AdminClient) ServerUpdate(ctx context.Context, updateURL string) (us 
 		return us, httpRespToErrorResponse(resp)
 	}
 
-	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&us); err != nil {
 		return us, err
 	}
-	err = json.Unmarshal(buf, &us)
-	return us, err
+
+	return us, nil
 }
