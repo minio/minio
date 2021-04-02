@@ -87,7 +87,7 @@ func (r *ReplicationStats) Update(bucket string, n int64, status replication.Sta
 }
 
 // Get total bytes pending replication for a bucket
-func (r *ReplicationStats) get(bucket string) BucketReplicationStats {
+func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	if r == nil {
 		return BucketReplicationStats{}
 	}
@@ -106,38 +106,34 @@ func (r *ReplicationStats) get(bucket string) BucketReplicationStats {
 	}
 }
 
-// Prepare new ReplicationStats structure
-func newReplicationStats(ctx context.Context) *ReplicationStats {
+// NewReplicationStats - prepare new ReplicationStats structure
+func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *ReplicationStats {
 	st := &ReplicationStats{
 		Cache: make(map[string]*BucketReplicationStats),
 	}
-	go func(st *ReplicationStats) {
-		objLayer := newObjectLayerFn()
 
-		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
-		if err != nil {
-			return
-		}
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		return st
+	}
 
-		// data usage has not captured any data yet.
-		if dataUsageInfo.LastUpdate.IsZero() {
-			return
-		}
-		st.Lock()
-		defer st.Unlock()
+	// data usage has not captured any data yet.
+	if dataUsageInfo.LastUpdate.IsZero() {
+		return st
+	}
 
-		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			b := &BucketReplicationStats{
-				PendingSize:            usage.ReplicationPendingSize,
-				FailedSize:             usage.ReplicationFailedSize,
-				ReplicatedSize:         usage.ReplicatedSize,
-				ReplicaSize:            usage.ReplicaSize,
-				OperationsPendingCount: usage.ReplicationPendingCount,
-			}
-			if b.hasReplicationUsage() {
-				st.Cache[bucket] = b
-			}
+	for bucket, usage := range dataUsageInfo.BucketsUsage {
+		b := &BucketReplicationStats{
+			PendingSize:            usage.ReplicationPendingSize,
+			FailedSize:             usage.ReplicationFailedSize,
+			ReplicatedSize:         usage.ReplicatedSize,
+			ReplicaSize:            usage.ReplicaSize,
+			OperationsPendingCount: usage.ReplicationPendingCount,
 		}
-	}(st)
+		if b.hasReplicationUsage() {
+			st.Cache[bucket] = b
+		}
+	}
+
 	return st
 }

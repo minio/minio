@@ -871,7 +871,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationWorkers())
-	globalReplicationStats = newReplicationStats(GlobalContext)
+	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 }
 
 // get Reader from replication target if active-active replication is in place and

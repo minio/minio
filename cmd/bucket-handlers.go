@@ -1627,18 +1627,17 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// Check if bucket exists.
 	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	metrics := globalReplicationStats.get(bucket)
-	metricsBytes, err := json.Marshal(&metrics)
-	if err != nil {
+	metrics := globalReplicationStats.Get(bucket)
+	if err := json.NewEncoder(w).Encode(&metrics); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	// Write to client.
-	writeSuccessResponseJSON(w, metricsBytes)
+	w.(http.Flusher).Flush()
 }

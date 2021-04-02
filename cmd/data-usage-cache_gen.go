@@ -30,54 +30,54 @@ func (z *dataUsageCache) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
-		case "Disks":
-			var zb0002 uint32
-			zb0002, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "Disks")
-				return
-			}
-			if cap(z.Disks) >= int(zb0002) {
-				z.Disks = (z.Disks)[:zb0002]
-			} else {
-				z.Disks = make([]string, zb0002)
-			}
-			for za0001 := range z.Disks {
-				z.Disks[za0001], err = dc.ReadString()
-				if err != nil {
-					err = msgp.WrapError(err, "Disks", za0001)
-					return
-				}
-			}
 		case "Cache":
-			var zb0003 uint32
-			zb0003, err = dc.ReadMapHeader()
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntry, zb0003)
+				z.Cache = make(map[string]dataUsageEntry, zb0002)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0003 > 0 {
-				zb0003--
-				var za0002 string
-				var za0003 dataUsageEntry
-				za0002, err = dc.ReadString()
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 dataUsageEntry
+				za0001, err = dc.ReadString()
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
 					return
 				}
-				err = za0003.DecodeMsg(dc)
+				err = za0002.DecodeMsg(dc)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache", za0002)
+					err = msgp.WrapError(err, "Cache", za0001)
 					return
 				}
-				z.Cache[za0002] = za0003
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -103,23 +103,6 @@ func (z *dataUsageCache) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Info")
 		return
 	}
-	// write "Disks"
-	err = en.Append(0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.Disks)))
-	if err != nil {
-		err = msgp.WrapError(err, "Disks")
-		return
-	}
-	for za0001 := range z.Disks {
-		err = en.WriteString(z.Disks[za0001])
-		if err != nil {
-			err = msgp.WrapError(err, "Disks", za0001)
-			return
-		}
-	}
 	// write "Cache"
 	err = en.Append(0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
 	if err != nil {
@@ -130,15 +113,32 @@ func (z *dataUsageCache) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Cache")
 		return
 	}
-	for za0002, za0003 := range z.Cache {
-		err = en.WriteString(za0002)
+	for za0001, za0002 := range z.Cache {
+		err = en.WriteString(za0001)
 		if err != nil {
 			err = msgp.WrapError(err, "Cache")
 			return
 		}
-		err = za0003.EncodeMsg(en)
+		err = za0002.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache", za0002)
+			err = msgp.WrapError(err, "Cache", za0001)
+			return
+		}
+	}
+	// write "Disks"
+	err = en.Append(0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Disks)))
+	if err != nil {
+		err = msgp.WrapError(err, "Disks")
+		return
+	}
+	for za0003 := range z.Disks {
+		err = en.WriteString(z.Disks[za0003])
+		if err != nil {
+			err = msgp.WrapError(err, "Disks", za0003)
 			return
 		}
 	}
@@ -156,22 +156,22 @@ func (z *dataUsageCache) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Info")
 		return
 	}
-	// string "Disks"
-	o = append(o, 0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Disks)))
-	for za0001 := range z.Disks {
-		o = msgp.AppendString(o, z.Disks[za0001])
-	}
 	// string "Cache"
 	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Cache)))
-	for za0002, za0003 := range z.Cache {
-		o = msgp.AppendString(o, za0002)
-		o, err = za0003.MarshalMsg(o)
+	for za0001, za0002 := range z.Cache {
+		o = msgp.AppendString(o, za0001)
+		o, err = za0002.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache", za0002)
+			err = msgp.WrapError(err, "Cache", za0001)
 			return
 		}
+	}
+	// string "Disks"
+	o = append(o, 0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Disks)))
+	for za0003 := range z.Disks {
+		o = msgp.AppendString(o, z.Disks[za0003])
 	}
 	return
 }
@@ -200,54 +200,54 @@ func (z *dataUsageCache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
-		case "Disks":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Disks")
-				return
-			}
-			if cap(z.Disks) >= int(zb0002) {
-				z.Disks = (z.Disks)[:zb0002]
-			} else {
-				z.Disks = make([]string, zb0002)
-			}
-			for za0001 := range z.Disks {
-				z.Disks[za0001], bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Disks", za0001)
-					return
-				}
-			}
 		case "Cache":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntry, zb0003)
+				z.Cache = make(map[string]dataUsageEntry, zb0002)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0003 > 0 {
-				var za0002 string
-				var za0003 dataUsageEntry
-				zb0003--
-				za0002, bts, err = msgp.ReadStringBytes(bts)
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 dataUsageEntry
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
 					return
 				}
-				bts, err = za0003.UnmarshalMsg(bts)
+				bts, err = za0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache", za0002)
+					err = msgp.WrapError(err, "Cache", za0001)
 					return
 				}
-				z.Cache[za0002] = za0003
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -263,16 +263,16 @@ func (z *dataUsageCache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCache) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.ArrayHeaderSize
-	for za0001 := range z.Disks {
-		s += msgp.StringPrefixSize + len(z.Disks[za0001])
-	}
-	s += 6 + msgp.MapHeaderSize
+	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
-		for za0002, za0003 := range z.Cache {
-			_ = za0003
-			s += msgp.StringPrefixSize + len(za0002) + za0003.Msgsize()
+		for za0001, za0002 := range z.Cache {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
 		}
+	}
+	s += 6 + msgp.ArrayHeaderSize
+	for za0003 := range z.Disks {
+		s += msgp.StringPrefixSize + len(z.Disks[za0003])
 	}
 	return
 }
@@ -533,54 +533,54 @@ func (z *dataUsageCacheV2) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
-		case "Disks":
-			var zb0002 uint32
-			zb0002, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "Disks")
-				return
-			}
-			if cap(z.Disks) >= int(zb0002) {
-				z.Disks = (z.Disks)[:zb0002]
-			} else {
-				z.Disks = make([]string, zb0002)
-			}
-			for za0001 := range z.Disks {
-				z.Disks[za0001], err = dc.ReadString()
-				if err != nil {
-					err = msgp.WrapError(err, "Disks", za0001)
-					return
-				}
-			}
 		case "Cache":
-			var zb0003 uint32
-			zb0003, err = dc.ReadMapHeader()
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV2, zb0003)
+				z.Cache = make(map[string]dataUsageEntryV2, zb0002)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0003 > 0 {
-				zb0003--
-				var za0002 string
-				var za0003 dataUsageEntryV2
-				za0002, err = dc.ReadString()
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 dataUsageEntryV2
+				za0001, err = dc.ReadString()
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
 					return
 				}
-				err = za0003.DecodeMsg(dc)
+				err = za0002.DecodeMsg(dc)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache", za0002)
+					err = msgp.WrapError(err, "Cache", za0001)
 					return
 				}
-				z.Cache[za0002] = za0003
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -606,23 +606,6 @@ func (z *dataUsageCacheV2) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Info")
 		return
 	}
-	// write "Disks"
-	err = en.Append(0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.Disks)))
-	if err != nil {
-		err = msgp.WrapError(err, "Disks")
-		return
-	}
-	for za0001 := range z.Disks {
-		err = en.WriteString(z.Disks[za0001])
-		if err != nil {
-			err = msgp.WrapError(err, "Disks", za0001)
-			return
-		}
-	}
 	// write "Cache"
 	err = en.Append(0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
 	if err != nil {
@@ -633,15 +616,32 @@ func (z *dataUsageCacheV2) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Cache")
 		return
 	}
-	for za0002, za0003 := range z.Cache {
-		err = en.WriteString(za0002)
+	for za0001, za0002 := range z.Cache {
+		err = en.WriteString(za0001)
 		if err != nil {
 			err = msgp.WrapError(err, "Cache")
 			return
 		}
-		err = za0003.EncodeMsg(en)
+		err = za0002.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache", za0002)
+			err = msgp.WrapError(err, "Cache", za0001)
+			return
+		}
+	}
+	// write "Disks"
+	err = en.Append(0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Disks)))
+	if err != nil {
+		err = msgp.WrapError(err, "Disks")
+		return
+	}
+	for za0003 := range z.Disks {
+		err = en.WriteString(z.Disks[za0003])
+		if err != nil {
+			err = msgp.WrapError(err, "Disks", za0003)
 			return
 		}
 	}
@@ -659,22 +659,22 @@ func (z *dataUsageCacheV2) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Info")
 		return
 	}
-	// string "Disks"
-	o = append(o, 0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Disks)))
-	for za0001 := range z.Disks {
-		o = msgp.AppendString(o, z.Disks[za0001])
-	}
 	// string "Cache"
 	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Cache)))
-	for za0002, za0003 := range z.Cache {
-		o = msgp.AppendString(o, za0002)
-		o, err = za0003.MarshalMsg(o)
+	for za0001, za0002 := range z.Cache {
+		o = msgp.AppendString(o, za0001)
+		o, err = za0002.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache", za0002)
+			err = msgp.WrapError(err, "Cache", za0001)
 			return
 		}
+	}
+	// string "Disks"
+	o = append(o, 0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Disks)))
+	for za0003 := range z.Disks {
+		o = msgp.AppendString(o, z.Disks[za0003])
 	}
 	return
 }
@@ -703,54 +703,54 @@ func (z *dataUsageCacheV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
-		case "Disks":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Disks")
-				return
-			}
-			if cap(z.Disks) >= int(zb0002) {
-				z.Disks = (z.Disks)[:zb0002]
-			} else {
-				z.Disks = make([]string, zb0002)
-			}
-			for za0001 := range z.Disks {
-				z.Disks[za0001], bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Disks", za0001)
-					return
-				}
-			}
 		case "Cache":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV2, zb0003)
+				z.Cache = make(map[string]dataUsageEntryV2, zb0002)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0003 > 0 {
-				var za0002 string
-				var za0003 dataUsageEntryV2
-				zb0003--
-				za0002, bts, err = msgp.ReadStringBytes(bts)
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 dataUsageEntryV2
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
 					return
 				}
-				bts, err = za0003.UnmarshalMsg(bts)
+				bts, err = za0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache", za0002)
+					err = msgp.WrapError(err, "Cache", za0001)
 					return
 				}
-				z.Cache[za0002] = za0003
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -766,16 +766,287 @@ func (z *dataUsageCacheV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV2) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.ArrayHeaderSize
-	for za0001 := range z.Disks {
-		s += msgp.StringPrefixSize + len(z.Disks[za0001])
-	}
-	s += 6 + msgp.MapHeaderSize
+	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
-		for za0002, za0003 := range z.Cache {
-			_ = za0003
-			s += msgp.StringPrefixSize + len(za0002) + za0003.Msgsize()
+		for za0001, za0002 := range z.Cache {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
 		}
+	}
+	s += 6 + msgp.ArrayHeaderSize
+	for za0003 := range z.Disks {
+		s += msgp.StringPrefixSize + len(z.Disks[za0003])
+	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *dataUsageCacheV3) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Info":
+			err = z.Info.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Info")
+				return
+			}
+		case "Cache":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Cache")
+				return
+			}
+			if z.Cache == nil {
+				z.Cache = make(map[string]dataUsageEntryV3, zb0002)
+			} else if len(z.Cache) > 0 {
+				for key := range z.Cache {
+					delete(z.Cache, key)
+				}
+			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 dataUsageEntryV3
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Cache")
+					return
+				}
+				err = za0002.DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "Cache", za0001)
+					return
+				}
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *dataUsageCacheV3) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 3
+	// write "Info"
+	err = en.Append(0x83, 0xa4, 0x49, 0x6e, 0x66, 0x6f)
+	if err != nil {
+		return
+	}
+	err = z.Info.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Info")
+		return
+	}
+	// write "Cache"
+	err = en.Append(0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteMapHeader(uint32(len(z.Cache)))
+	if err != nil {
+		err = msgp.WrapError(err, "Cache")
+		return
+	}
+	for za0001, za0002 := range z.Cache {
+		err = en.WriteString(za0001)
+		if err != nil {
+			err = msgp.WrapError(err, "Cache")
+			return
+		}
+		err = za0002.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Cache", za0001)
+			return
+		}
+	}
+	// write "Disks"
+	err = en.Append(0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Disks)))
+	if err != nil {
+		err = msgp.WrapError(err, "Disks")
+		return
+	}
+	for za0003 := range z.Disks {
+		err = en.WriteString(z.Disks[za0003])
+		if err != nil {
+			err = msgp.WrapError(err, "Disks", za0003)
+			return
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *dataUsageCacheV3) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 3
+	// string "Info"
+	o = append(o, 0x83, 0xa4, 0x49, 0x6e, 0x66, 0x6f)
+	o, err = z.Info.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Info")
+		return
+	}
+	// string "Cache"
+	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	o = msgp.AppendMapHeader(o, uint32(len(z.Cache)))
+	for za0001, za0002 := range z.Cache {
+		o = msgp.AppendString(o, za0001)
+		o, err = za0002.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Cache", za0001)
+			return
+		}
+	}
+	// string "Disks"
+	o = append(o, 0xa5, 0x44, 0x69, 0x73, 0x6b, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Disks)))
+	for za0003 := range z.Disks {
+		o = msgp.AppendString(o, z.Disks[za0003])
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *dataUsageCacheV3) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Info":
+			bts, err = z.Info.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Info")
+				return
+			}
+		case "Cache":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Cache")
+				return
+			}
+			if z.Cache == nil {
+				z.Cache = make(map[string]dataUsageEntryV3, zb0002)
+			} else if len(z.Cache) > 0 {
+				for key := range z.Cache {
+					delete(z.Cache, key)
+				}
+			}
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 dataUsageEntryV3
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Cache")
+					return
+				}
+				bts, err = za0002.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Cache", za0001)
+					return
+				}
+				z.Cache[za0001] = za0002
+			}
+		case "Disks":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Disks")
+				return
+			}
+			if cap(z.Disks) >= int(zb0003) {
+				z.Disks = (z.Disks)[:zb0003]
+			} else {
+				z.Disks = make([]string, zb0003)
+			}
+			for za0003 := range z.Disks {
+				z.Disks[za0003], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Disks", za0003)
+					return
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *dataUsageCacheV3) Msgsize() (s int) {
+	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	if z.Cache != nil {
+		for za0001, za0002 := range z.Cache {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
+		}
+	}
+	s += 6 + msgp.ArrayHeaderSize
+	for za0003 := range z.Disks {
+		s += msgp.StringPrefixSize + len(z.Disks[za0003])
 	}
 	return
 }
@@ -792,9 +1063,19 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.ArrayError{Wanted: 9, Got: zb0001}
 		return
 	}
+	err = z.Children.DecodeMsg(dc)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
 	z.Size, err = dc.ReadInt64()
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicaSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	z.ReplicatedSize, err = dc.ReadUint64()
@@ -812,9 +1093,9 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "ReplicationFailedSize")
 		return
 	}
-	z.ReplicaSize, err = dc.ReadUint64()
+	z.ReplicationPendingCount, err = dc.ReadUint64()
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicaSize")
+		err = msgp.WrapError(err, "ReplicationPendingCount")
 		return
 	}
 	z.Objects, err = dc.ReadUint64()
@@ -839,16 +1120,6 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 	}
-	err = z.Children.DecodeMsg(dc)
-	if err != nil {
-		err = msgp.WrapError(err, "Children")
-		return
-	}
-	z.ReplicationPendingCount, err = dc.ReadUint64()
-	if err != nil {
-		err = msgp.WrapError(err, "ReplicationPendingCount")
-		return
-	}
 	return
 }
 
@@ -859,9 +1130,19 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
+	err = z.Children.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
 	err = en.WriteInt64(z.Size)
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	err = en.WriteUint64(z.ReplicaSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	err = en.WriteUint64(z.ReplicatedSize)
@@ -879,9 +1160,9 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ReplicationFailedSize")
 		return
 	}
-	err = en.WriteUint64(z.ReplicaSize)
+	err = en.WriteUint64(z.ReplicationPendingCount)
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicaSize")
+		err = msgp.WrapError(err, "ReplicationPendingCount")
 		return
 	}
 	err = en.WriteUint64(z.Objects)
@@ -901,16 +1182,6 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	err = z.Children.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Children")
-		return
-	}
-	err = en.WriteUint64(z.ReplicationPendingCount)
-	if err != nil {
-		err = msgp.WrapError(err, "ReplicationPendingCount")
-		return
-	}
 	return
 }
 
@@ -919,22 +1190,22 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// array header, size 9
 	o = append(o, 0x99)
-	o = msgp.AppendInt64(o, z.Size)
-	o = msgp.AppendUint64(o, z.ReplicatedSize)
-	o = msgp.AppendUint64(o, z.ReplicationPendingSize)
-	o = msgp.AppendUint64(o, z.ReplicationFailedSize)
-	o = msgp.AppendUint64(o, z.ReplicaSize)
-	o = msgp.AppendUint64(o, z.Objects)
-	o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
-	for za0001 := range z.ObjSizes {
-		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
-	}
 	o, err = z.Children.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "Children")
 		return
 	}
+	o = msgp.AppendInt64(o, z.Size)
+	o = msgp.AppendUint64(o, z.ReplicaSize)
+	o = msgp.AppendUint64(o, z.ReplicatedSize)
+	o = msgp.AppendUint64(o, z.ReplicationPendingSize)
+	o = msgp.AppendUint64(o, z.ReplicationFailedSize)
 	o = msgp.AppendUint64(o, z.ReplicationPendingCount)
+	o = msgp.AppendUint64(o, z.Objects)
+	o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
+	for za0001 := range z.ObjSizes {
+		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
+	}
 	return
 }
 
@@ -950,9 +1221,19 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.ArrayError{Wanted: 9, Got: zb0001}
 		return
 	}
+	bts, err = z.Children.UnmarshalMsg(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
 	z.Size, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	z.ReplicatedSize, bts, err = msgp.ReadUint64Bytes(bts)
@@ -970,9 +1251,9 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "ReplicationFailedSize")
 		return
 	}
-	z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+	z.ReplicationPendingCount, bts, err = msgp.ReadUint64Bytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicaSize")
+		err = msgp.WrapError(err, "ReplicationPendingCount")
 		return
 	}
 	z.Objects, bts, err = msgp.ReadUint64Bytes(bts)
@@ -997,23 +1278,13 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 	}
-	bts, err = z.Children.UnmarshalMsg(bts)
-	if err != nil {
-		err = msgp.WrapError(err, "Children")
-		return
-	}
-	z.ReplicationPendingCount, bts, err = msgp.ReadUint64Bytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err, "ReplicationPendingCount")
-		return
-	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntry) Msgsize() (s int) {
-	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize() + msgp.Uint64Size
+	s = 1 + z.Children.Msgsize() + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size))
 	return
 }
 
@@ -1171,6 +1442,227 @@ func (z *dataUsageEntryV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntryV2) Msgsize() (s int) {
 	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *dataUsageEntryV3) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+		return
+	}
+	z.Size, err = dc.ReadInt64()
+	if err != nil {
+		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicatedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.ReplicationPendingSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	z.ReplicationFailedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	z.ReplicaSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	z.Objects, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "Objects")
+		return
+	}
+	var zb0002 uint32
+	zb0002, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "ObjSizes")
+		return
+	}
+	if zb0002 != uint32(dataUsageBucketLen) {
+		err = msgp.ArrayError{Wanted: uint32(dataUsageBucketLen), Got: zb0002}
+		return
+	}
+	for za0001 := range z.ObjSizes {
+		z.ObjSizes[za0001], err = dc.ReadUint64()
+		if err != nil {
+			err = msgp.WrapError(err, "ObjSizes", za0001)
+			return
+		}
+	}
+	err = z.Children.DecodeMsg(dc)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *dataUsageEntryV3) EncodeMsg(en *msgp.Writer) (err error) {
+	// array header, size 8
+	err = en.Append(0x98)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.Size)
+	if err != nil {
+		err = msgp.WrapError(err, "Size")
+		return
+	}
+	err = en.WriteUint64(z.ReplicatedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicationPendingSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicationFailedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicaSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	err = en.WriteUint64(z.Objects)
+	if err != nil {
+		err = msgp.WrapError(err, "Objects")
+		return
+	}
+	err = en.WriteArrayHeader(uint32(dataUsageBucketLen))
+	if err != nil {
+		err = msgp.WrapError(err, "ObjSizes")
+		return
+	}
+	for za0001 := range z.ObjSizes {
+		err = en.WriteUint64(z.ObjSizes[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "ObjSizes", za0001)
+			return
+		}
+	}
+	err = z.Children.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *dataUsageEntryV3) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// array header, size 8
+	o = append(o, 0x98)
+	o = msgp.AppendInt64(o, z.Size)
+	o = msgp.AppendUint64(o, z.ReplicatedSize)
+	o = msgp.AppendUint64(o, z.ReplicationPendingSize)
+	o = msgp.AppendUint64(o, z.ReplicationFailedSize)
+	o = msgp.AppendUint64(o, z.ReplicaSize)
+	o = msgp.AppendUint64(o, z.Objects)
+	o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
+	for za0001 := range z.ObjSizes {
+		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
+	}
+	o, err = z.Children.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *dataUsageEntryV3) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+		return
+	}
+	z.Size, bts, err = msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicatedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.ReplicationPendingSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	z.ReplicationFailedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	z.Objects, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Objects")
+		return
+	}
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ObjSizes")
+		return
+	}
+	if zb0002 != uint32(dataUsageBucketLen) {
+		err = msgp.ArrayError{Wanted: uint32(dataUsageBucketLen), Got: zb0002}
+		return
+	}
+	for za0001 := range z.ObjSizes {
+		z.ObjSizes[za0001], bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "ObjSizes", za0001)
+			return
+		}
+	}
+	bts, err = z.Children.UnmarshalMsg(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Children")
+		return
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *dataUsageEntryV3) Msgsize() (s int) {
+	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize()
 	return
 }
 

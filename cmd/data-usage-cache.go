@@ -46,15 +46,28 @@ type sizeHistogram [dataUsageBucketLen]uint64
 //msgp:tuple dataUsageEntry
 type dataUsageEntry struct {
 	// These fields do no include any children.
+	Children                dataUsageHashMap
 	Size                    int64
+	ReplicaSize             uint64
 	ReplicatedSize          uint64
 	ReplicationPendingSize  uint64
 	ReplicationFailedSize   uint64
-	ReplicaSize             uint64
+	ReplicationPendingCount uint64
 	Objects                 uint64
 	ObjSizes                sizeHistogram
-	Children                dataUsageHashMap
-	ReplicationPendingCount uint64
+}
+
+//msgp:tuple dataUsageEntryV3
+type dataUsageEntryV3 struct {
+	// These fields do no include any children.
+	Size                   int64
+	ReplicatedSize         uint64
+	ReplicationPendingSize uint64
+	ReplicationFailedSize  uint64
+	ReplicaSize            uint64
+	Objects                uint64
+	ObjSizes               sizeHistogram
+	Children               dataUsageHashMap
 }
 
 //msgp:tuple dataUsageEntryV2
@@ -66,18 +79,25 @@ type dataUsageEntryV2 struct {
 	Children dataUsageHashMap
 }
 
-// dataUsageCache contains a cache of data usage entries latest version 3.
+// dataUsageCache contains a cache of data usage entries latest version 4.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntry
+	Disks []string
+}
+
+// dataUsageCacheV3 contains a cache of data usage entries latest version 3.
+type dataUsageCacheV3 struct {
+	Info  dataUsageCacheInfo
+	Cache map[string]dataUsageEntryV3
+	Disks []string
 }
 
 // dataUsageCache contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV2
+	Disks []string
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -112,10 +132,10 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Size += other.Size
-	e.ReplicationPendingSize += other.ReplicationPendingSize
-	e.ReplicationFailedSize += other.ReplicationFailedSize
-	e.ReplicatedSize += other.ReplicatedSize
 	e.ReplicaSize += other.ReplicaSize
+	e.ReplicatedSize += other.ReplicatedSize
+	e.ReplicationFailedSize += other.ReplicationFailedSize
+	e.ReplicationPendingSize += other.ReplicationPendingSize
 	e.ReplicationPendingCount += other.ReplicationPendingCount
 
 	for i, v := range other.ObjSizes[:] {
@@ -254,10 +274,10 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 		LastUpdate:              d.Info.LastUpdate,
 		ObjectsTotalCount:       flat.Objects,
 		ObjectsTotalSize:        uint64(flat.Size),
+		ReplicaSize:             flat.ReplicaSize,
 		ReplicatedSize:          flat.ReplicatedSize,
 		ReplicationFailedSize:   flat.ReplicationFailedSize,
 		ReplicationPendingSize:  flat.ReplicationPendingSize,
-		ReplicaSize:             flat.ReplicaSize,
 		ReplicationPendingCount: flat.ReplicationPendingCount,
 		BucketsCount:            uint64(len(e.Children)),
 		BucketsUsage:            d.bucketsUsageInfo(buckets),
@@ -540,6 +560,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
 const (
+	dataUsageCacheVerV4 = 4
 	dataUsageCacheVerV3 = 3
 	dataUsageCacheVerV2 = 2
 	dataUsageCacheVerV1 = 1
@@ -548,7 +569,7 @@ const (
 // serialize the contents of the cache.
 func (d *dataUsageCache) serializeTo(dst io.Writer) error {
 	// Add version and compress.
-	_, err := dst.Write([]byte{dataUsageCacheVerV3})
+	_, err := dst.Write([]byte{dataUsageCacheVerV4})
 	if err != nil {
 		return err
 	}
@@ -610,6 +631,34 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		}
 		return nil
 	case dataUsageCacheVerV3:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
+
+		dold := &dataUsageCacheV3{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		d.Info = dold.Info
+		d.Disks = dold.Disks
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			d.Cache[k] = dataUsageEntry{
+				Size:                   v.Size,
+				Objects:                v.Objects,
+				ObjSizes:               v.ObjSizes,
+				Children:               v.Children,
+				ReplicaSize:            v.ReplicaSize,
+				ReplicatedSize:         v.ReplicatedSize,
+				ReplicationFailedSize:  v.ReplicationFailedSize,
+				ReplicationPendingSize: v.ReplicationPendingSize,
+			}
+		}
+		return nil
+	case dataUsageCacheVerV4:
 		// Zstd compressed.
 		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
 		if err != nil {

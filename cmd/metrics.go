@@ -439,7 +439,7 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) BucketReplicati
 		ReplicaSize:            u.ReplicaSize,
 		OperationsPendingCount: u.ReplicationPendingCount,
 	}
-	rStat := globalReplicationStats.get(bucket)
+	rStat := globalReplicationStats.Get(bucket)
 
 	// use in memory replication stats if it is ahead of usage info.
 	if rStat.ReplicatedSize > u.ReplicatedSize {
