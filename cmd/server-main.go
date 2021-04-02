@@ -380,7 +380,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
+	if GlobalDNSConfig != nil {
 		// Background this operation.
 		go initFederatorBackend(buckets, newObject)
 	}

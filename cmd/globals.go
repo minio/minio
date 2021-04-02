@@ -153,7 +153,7 @@ var (
 	globalIsErasure = false
 
 	// This flag is set to 'true' by default
-	globalBrowserEnabled = true
+	GlobalBrowserEnabled = true
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
@@ -243,14 +243,14 @@ var (
 	globalCacheKMS crypto.KMS
 
 	// Allocated etcd endpoint for config and bucket DNS.
-	globalEtcdClient *etcd.Client
+	GlobalEtcdClient *etcd.Client
 
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
 	globalBucketFederation bool
 
 	// Allocated DNS config wrapper over etcd client.
-	globalDNSConfig dns.Store
+	GlobalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
