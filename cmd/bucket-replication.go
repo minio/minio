@@ -290,12 +290,14 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		} else {
 			versionPurgeStatus = Complete
 		}
-		prevStatus := dobj.DeleteMarkerReplicationStatus
-		if dobj.VersionID != "" {
-			prevStatus = string(dobj.VersionPurgeStatus)
-		}
-		globalReplicationStats.Update(ctx, dobj.Bucket, 0, replication.Completed, replication.StatusType(prevStatus), replication.DeleteReplicationType) // to decrement pending count
 	}
+	prevStatus := dobj.DeleteMarkerReplicationStatus
+	currStatus := replicationStatus
+	if dobj.VersionID != "" {
+		prevStatus = string(dobj.VersionPurgeStatus)
+		currStatus = string(versionPurgeStatus)
+	}
+	globalReplicationStats.Update(ctx, dobj.Bucket, 0, replication.StatusType(currStatus), replication.StatusType(prevStatus), replication.DeleteReplicationType) // to decrement pending count
 
 	var eventName = event.ObjectReplicationComplete
 	if replicationStatus == string(replication.Failed) || versionPurgeStatus == Failed {
@@ -791,31 +793,64 @@ var (
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
-	mu              sync.Mutex
-	size            int
-	replicaCh       chan ObjectInfo
-	replicaDeleteCh chan DeletedObjectVersionInfo
-	killCh          chan struct{}
-	wg              sync.WaitGroup
-	ctx             context.Context
-	objLayer        ObjectLayer
+	mu                 sync.Mutex
+	size               int
+	replicaCh          chan ObjectInfo
+	replicaDeleteCh    chan DeletedObjectVersionInfo
+	mrfReplicaCh       chan ObjectInfo
+	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
+	killCh             chan struct{}
+	wg                 sync.WaitGroup
+	ctx                context.Context
+	objLayer           ObjectLayer
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size
 func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
 	pool := &ReplicationPool{
-		replicaCh:       make(chan ObjectInfo, 10000),
-		replicaDeleteCh: make(chan DeletedObjectVersionInfo, 10000),
-		ctx:             ctx,
-		objLayer:        o,
+		replicaCh:          make(chan ObjectInfo, 1000),
+		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
+		mrfReplicaCh:       make(chan ObjectInfo, 100000),
+		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
+		ctx:                ctx,
+		objLayer:           o,
 	}
 	go func() {
 		<-ctx.Done()
 		close(pool.replicaCh)
 		close(pool.replicaDeleteCh)
+		close(pool.mrfReplicaCh)
+		close(pool.mrfReplicaDeleteCh)
 	}()
 	pool.Resize(sz)
+	// add long running worker for handling most recent failures/pending replications
+	go pool.AddMRFWorker()
 	return pool
+}
+
+// AddMRFWorker adds a pending/failed replication worker to handle requests that could not be queued
+// to the other workers
+func (p *ReplicationPool) AddMRFWorker() {
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		default:
+			select {
+			case oi, ok := <-p.mrfReplicaCh:
+				if !ok {
+					return
+				}
+				replicateObject(p.ctx, oi, p.objLayer)
+			case doi, ok := <-p.mrfReplicaDeleteCh:
+				if !ok {
+					return
+				}
+				replicateDelete(p.ctx, doi, p.objLayer)
+			default:
+			}
+		}
+	}
 }
 
 // AddWorker adds a replication worker to the pool
@@ -865,10 +900,15 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, oi ObjectInfo) {
 	select {
 	case <-ctx.Done():
 	default:
-		//this select is to ensure replicaCh not picked on ctrl-c
+		//this nested select is to ensure replicaCh not picked after ctrl-c on server
 		select {
 		case p.replicaCh <- oi:
 		default:
+			// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
+			select {
+			case p.mrfReplicaCh <- oi:
+			default:
+			}
 		}
 	}
 }
@@ -880,10 +920,15 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 	select {
 	case <-ctx.Done():
 	default:
-		//this select is to ensure replicaCh not picked on ctrl-c
+		//this nested select is to ensure replicaDeleteCh not picked after ctrl-c on server
 		select {
 		case p.replicaDeleteCh <- doi:
 		default:
+			// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
+			select {
+			case p.mrfReplicaDeleteCh <- doi:
+			default:
+			}
 		}
 	}
 }
