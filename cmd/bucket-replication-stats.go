@@ -28,15 +28,15 @@ import (
 // such as pending, failed and completed bytes in total for a bucket
 type BucketReplicationStats struct {
 	// Pending size in bytes
-	PendingSize uint64
+	PendingSize uint64 `json:"objectsPendingReplicationTotalSize"`
 	// Completed size in bytes
-	ReplicatedSize uint64
+	ReplicatedSize uint64 `json:"objectsReplicatedTotalSize"`
 	// Total Replica size in bytes
-	ReplicaSize uint64
+	ReplicaSize uint64 `json:"objectsReplicaTotalSize"`
 	// Failed size in bytes
-	FailedSize uint64
+	FailedSize uint64 `json:"objectsFailedReplicationTotalSize"`
 	// Total number of pending operations including metadata updates
-	OperationsPendingCount uint64
+	OperationsPendingCount uint64 `json:"objectsPendingReplicationCount"`
 }
 
 func (b *BucketReplicationStats) hasReplicationUsage() bool {
@@ -47,6 +47,7 @@ func (b *BucketReplicationStats) hasReplicationUsage() bool {
 		b.OperationsPendingCount > 0
 }
 
+// ReplicationStats holds the global in-memory replication stats
 type ReplicationStats struct {
 	Cache map[string]*BucketReplicationStats
 	sync.RWMutex

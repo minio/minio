@@ -311,7 +311,9 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketReplicationConfig
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationconfiguration", maxClients(httpTraceAll(api.GetBucketReplicationConfigHandler)))).Queries("replication", "")
-
+		// GetBucketReplicationStatus
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("getbucketreplicationstatus", maxClients(httpTraceAll(api.GetBucketReplicationMetricsHandler)))).Queries("replication-metrics", "")
 		// GetBucketVersioning
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketversioning", maxClients(httpTraceAll(api.GetBucketVersioningHandler)))).Queries("versioning", "")
