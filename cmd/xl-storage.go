@@ -850,7 +850,16 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// api call to mark object as deleted. When object is pending transition,
 		// just update the metadata and avoid deleting data dir.
 		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
+			versionID := fi.VersionID
+			if versionID == "" {
+				versionID = nullVersionID
+			}
+			xlMeta.data.remove(versionID)
+			// PR #11758 used DataDir, preserve it
+			// for users who might have used master
+			// branch
 			xlMeta.data.remove(dataDir)
+
 			filePath := pathJoin(volumeDir, path, dataDir)
 			if err = checkPathLength(filePath); err != nil {
 				return err
@@ -1604,9 +1613,6 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 
 	for _, part := range fi.Parts {
 		partPath := pathJoin(path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(path, fmt.Sprintf("part.%d", part.Number))
-		}
 		filePath := pathJoin(volumeDir, partPath)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -1985,19 +1991,22 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return errFileCorrupt
 	}
 
-	// Commit data, if any
 	if srcDataPath != "" {
 		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
 			return err
 		}
 
-		tmpuuid := mustGetUUID()
-		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		tmpuuid = mustGetUUID()
-		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		if err = renameAll(srcDataPath, dstDataPath); err != nil {
-			logger.LogIf(ctx, err)
-			return osErrToFileErr(err)
+		if oldDstDataPath != "" {
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		}
+		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+
+		// renameAll only for objects that have xl.meta not saved inline.
+		if len(fi.Data) == 0 && fi.Size > 0 {
+			if err = renameAll(srcDataPath, dstDataPath); err != nil {
+				logger.LogIf(ctx, err)
+				return osErrToFileErr(err)
+			}
 		}
 
 		// Commit meta-file
@@ -2136,9 +2145,6 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	for _, part := range fi.Parts {
 		checksumInfo := erasure.GetChecksumInfo(part.Number)
 		partPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(volumeDir, path, fmt.Sprintf("part.%d", part.Number))
-		}
 		if err := s.bitrotVerify(partPath,
 			erasure.ShardFileSize(part.Size),
 			checksumInfo.Algorithm,

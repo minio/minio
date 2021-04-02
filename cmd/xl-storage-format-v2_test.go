@@ -88,50 +88,50 @@ func TestXLV2FormatData(t *testing.T) {
 		t.Fatalf("want 1 entry, got %d", len(list))
 	}
 
-	if !bytes.Equal(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"), data) {
-		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+	if !bytes.Equal(xl2.data.find("756100c6-b393-4981-928a-d49bbc164741"), data) {
+		t.Fatal("Find data returned", xl2.data.find("756100c6-b393-4981-928a-d49bbc164741"))
 	}
-	if !bytes.Equal(xl2.data.find(fi.DataDir), data2) {
-		t.Fatal("Find data returned", xl2.data.find(fi.DataDir))
+	if !bytes.Equal(xl2.data.find(fi.VersionID), data2) {
+		t.Fatal("Find data returned", xl2.data.find(fi.VersionID))
 	}
 
 	// Remove entry
-	xl2.data.remove(fi.DataDir)
+	xl2.data.remove(fi.VersionID)
 	failOnErr(xl2.data.validate())
-	if xl2.data.find(fi.DataDir) != nil {
-		t.Fatal("Data was not removed:", xl2.data.find(fi.DataDir))
+	if xl2.data.find(fi.VersionID) != nil {
+		t.Fatal("Data was not removed:", xl2.data.find(fi.VersionID))
 	}
 	if xl2.data.entries() != 1 {
 		t.Fatal("want 1 entry, got", xl2.data.entries())
 	}
 	// Re-add
-	xl2.data.replace(fi.DataDir, fi.Data)
+	xl2.data.replace(fi.VersionID, fi.Data)
 	failOnErr(xl2.data.validate())
 	if xl2.data.entries() != 2 {
 		t.Fatal("want 2 entries, got", xl2.data.entries())
 	}
 
 	// Replace entry
-	xl2.data.replace("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef", data2)
+	xl2.data.replace("756100c6-b393-4981-928a-d49bbc164741", data2)
 	failOnErr(xl2.data.validate())
 	if xl2.data.entries() != 2 {
 		t.Fatal("want 2 entries, got", xl2.data.entries())
 	}
-	if !bytes.Equal(xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"), data2) {
-		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+	if !bytes.Equal(xl2.data.find("756100c6-b393-4981-928a-d49bbc164741"), data2) {
+		t.Fatal("Find data returned", xl2.data.find("756100c6-b393-4981-928a-d49bbc164741"))
 	}
 
-	if !xl2.data.rename("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef", "new-key") {
+	if !xl2.data.rename("756100c6-b393-4981-928a-d49bbc164741", "new-key") {
 		t.Fatal("old key was not found")
 	}
 	failOnErr(xl2.data.validate())
 	if !bytes.Equal(xl2.data.find("new-key"), data2) {
-		t.Fatal("Find data returned", xl2.data.find("bffea160-ca7f-465f-98bc-9b4f1c3ba1ef"))
+		t.Fatal("Find data returned", xl2.data.find("756100c6-b393-4981-928a-d49bbc164741"))
 	}
 	if xl2.data.entries() != 2 {
 		t.Fatal("want 2 entries, got", xl2.data.entries())
 	}
-	if !bytes.Equal(xl2.data.find(fi.DataDir), data2) {
+	if !bytes.Equal(xl2.data.find(fi.VersionID), data2) {
 		t.Fatal("Find data returned", xl2.data.find(fi.DataDir))
 	}
 
