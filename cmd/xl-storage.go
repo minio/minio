@@ -1613,9 +1613,6 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 
 	for _, part := range fi.Parts {
 		partPath := pathJoin(path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(path, fmt.Sprintf("part.%d", part.Number))
-		}
 		filePath := pathJoin(volumeDir, partPath)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -1778,10 +1775,6 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
-	if dataDir == "" {
-		return errInvalidArgument
-	}
-
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -1814,11 +1807,15 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	srcFilePath := pathutil.Join(srcVolumeDir, pathJoin(srcPath, xlStorageFormatFile))
 	dstFilePath := pathutil.Join(dstVolumeDir, pathJoin(dstPath, xlStorageFormatFile))
 
-	srcDataPath := retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
-	// make sure to always use path.Join here, do not use pathJoin as
-	// it would additionally add `/` at the end and it comes in the
-	// way of renameAll(), parentDir creation.
-	dstDataPath := pathutil.Join(dstVolumeDir, dstPath, dataDir)
+	var srcDataPath string
+	var dstDataPath string
+	if dataDir != "" {
+		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
+		// make sure to always use path.Join here, do not use pathJoin as
+		// it would additionally add `/` at the end and it comes in the
+		// way of renameAll(), parentDir creation.
+		dstDataPath = pathutil.Join(dstVolumeDir, dstPath, dataDir)
+	}
 
 	if err = checkPathLength(srcFilePath); err != nil {
 		return err
@@ -1994,22 +1991,33 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return errFileCorrupt
 	}
 
-	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-		return err
-	}
+	if srcDataPath != "" {
+		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
 
-	tmpuuid := mustGetUUID()
-	renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-	tmpuuid = mustGetUUID()
-	renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-	if err = renameAll(srcDataPath, dstDataPath); err != nil {
-		logger.LogIf(ctx, err)
-		return osErrToFileErr(err)
-	}
+		if oldDstDataPath != "" {
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		}
+		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 
-	// Commit meta-file
-	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		return osErrToFileErr(err)
+		// renameAll only for objects that have xl.meta not saved inline.
+		if len(fi.Data) == 0 && fi.Size > 0 {
+			if err = renameAll(srcDataPath, dstDataPath); err != nil {
+				logger.LogIf(ctx, err)
+				return osErrToFileErr(err)
+			}
+		}
+
+		// Commit meta-file
+		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+			return osErrToFileErr(err)
+		}
+	} else {
+		// Write meta-file directly, no data
+		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
 	}
 
 	// Remove parent dir of the source file if empty
@@ -2137,9 +2145,6 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	for _, part := range fi.Parts {
 		checksumInfo := erasure.GetChecksumInfo(part.Number)
 		partPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(volumeDir, path, fmt.Sprintf("part.%d", part.Number))
-		}
 		if err := s.bitrotVerify(partPath,
 			erasure.ShardFileSize(part.Size),
 			checksumInfo.Algorithm,

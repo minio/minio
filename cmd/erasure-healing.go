@@ -376,9 +376,14 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		partsMetadata[i] = cleanFileInfo(latestMeta)
 	}
 
-	dataDir := latestMeta.DataDir
+	// source data dir shall be empty in case of XLV1
+	// differentiate it with dstDataDir for readability
+	// srcDataDir is the one used with newBitrotReader()
+	// to read existing content.
+	srcDataDir := latestMeta.DataDir
+	dstDataDir := latestMeta.DataDir
 	if latestMeta.XLV1 {
-		dataDir = migrateDataDir
+		dstDataDir = migrateDataDir
 	}
 
 	var inlineBuffers []*bytes.Buffer
@@ -419,10 +424,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					continue
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
-				partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
-				if latestMeta.XLV1 {
-					partPath = pathJoin(object, fmt.Sprintf("part.%d", partNumber))
-				}
+				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
 				readers[i] = newBitrotReader(disk, partsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
@@ -430,7 +432,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				if disk == OfflineDisk {
 					continue
 				}
-				partPath := pathJoin(tmpID, dataDir, fmt.Sprintf("part.%d", partNumber))
+				partPath := pathJoin(tmpID, dstDataDir, fmt.Sprintf("part.%d", partNumber))
 				if len(inlineBuffers) > 0 {
 					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)))
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
@@ -460,7 +462,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					continue
 				}
 
-				partsMetadata[i].DataDir = dataDir
+				partsMetadata[i].DataDir = dstDataDir
 				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize)
 				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 					PartNumber: partNumber,
@@ -481,25 +483,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 	}
 
-	if len(inlineBuffers) > 0 {
-		// Write directly...
-		if outDatedDisks, err = writeUniqueFileInfo(ctx, outDatedDisks, bucket, object, partsMetadata, diskCount(outDatedDisks)); err != nil {
-			logger.LogIf(ctx, err)
-			return result, toObjectErr(err, bucket, object)
-		}
-		result.ObjectSize = latestMeta.Size
-		for _, disk := range outDatedDisks {
-			if disk == OfflineDisk {
-				continue
-			}
-			for i, v := range result.Before.Drives {
-				if v.Endpoint == disk.String() {
-					result.After.Drives[i].State = madmin.DriveStateOk
-				}
-			}
-		}
-		return result, nil
-	}
 	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpID, len(storageDisks)/2+1)
 
 	// Generate and write `xl.meta` generated from other disks.
