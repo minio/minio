@@ -93,6 +93,7 @@ const (
 	writeTotal     MetricName = "write_total"
 	total          MetricName = "total"
 
+	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
 	pendingBytes  MetricName = "pending_bytes"
@@ -417,6 +418,15 @@ func getBucketRepPendingOperationsMD() MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      pendingCount,
 		Help:      "Total number of objects pending replication",
+		Type:      gaugeMetric,
+	}
+}
+func getBucketRepFailedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      failedCount,
+		Help:      "Total number of objects which failed replication",
 		Type:      gaugeMetric,
 	}
 }
@@ -1272,7 +1282,12 @@ func getBucketUsageMetrics() MetricsGroup {
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepPendingOperationsMD(),
-						Value:          float64(stat.OperationsPendingCount),
+						Value:          float64(stat.PendingCount),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getBucketRepFailedOperationsMD(),
+						Value:          float64(stat.FailedCount),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 				}

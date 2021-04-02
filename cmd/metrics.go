@@ -430,14 +430,15 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 }
 
-// get the most current of in-memory replication stats  and data usage info from crawler.
+// get the most current of in-memory replication stats and data usage info from crawler.
 func getLatestReplicationStats(bucket string, u BucketUsageInfo) BucketReplicationStats {
 	s := BucketReplicationStats{
-		PendingSize:            u.ReplicationPendingSize,
-		FailedSize:             u.ReplicationFailedSize,
-		ReplicatedSize:         u.ReplicatedSize,
-		ReplicaSize:            u.ReplicaSize,
-		OperationsPendingCount: u.ReplicationPendingCount,
+		PendingSize:    u.ReplicationPendingSize,
+		FailedSize:     u.ReplicationFailedSize,
+		ReplicatedSize: u.ReplicatedSize,
+		ReplicaSize:    u.ReplicaSize,
+		PendingCount:   u.ReplicationPendingCount,
+		FailedCount:    u.ReplicationFailedCount,
 	}
 	rStat := globalReplicationStats.Get(bucket)
 
@@ -454,8 +455,11 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) BucketReplicati
 	if rStat.ReplicaSize > u.ReplicaSize {
 		s.ReplicaSize = rStat.ReplicaSize
 	}
-	if rStat.OperationsPendingCount > u.ReplicationPendingCount {
-		s.OperationsPendingCount = rStat.OperationsPendingCount
+	if rStat.PendingCount > u.ReplicationPendingCount {
+		s.PendingCount = rStat.PendingCount
+	}
+	if rStat.FailedCount > u.ReplicationFailedCount {
+		s.FailedCount = rStat.FailedCount
 	}
 	return s
 }
@@ -545,7 +549,16 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total replication operations pending",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(stat.OperationsPendingCount),
+			float64(stat.PendingCount),
+			bucket,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("bucket", "replication", "failed_count"),
+				"Total replication operations failed",
+				[]string{"bucket"}, nil),
+			prometheus.GaugeValue,
+			float64(stat.FailedCount),
 			bucket,
 		)
 		for k, v := range usageInfo.ObjectSizesHistogram {

@@ -290,6 +290,11 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		} else {
 			versionPurgeStatus = Complete
 		}
+		prevStatus := dobj.DeleteMarkerReplicationStatus
+		if dobj.VersionID != "" {
+			prevStatus = string(dobj.VersionPurgeStatus)
+		}
+		globalReplicationStats.Update(ctx, dobj.Bucket, 0, replication.Completed, replication.StatusType(prevStatus), replication.DeleteReplicationType) // to decrement pending count
 	}
 
 	var eventName = event.ObjectReplicationComplete
@@ -712,6 +717,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		defer r.Close()
 	}
 
+	prevReplStatus := objInfo.ReplicationStatus
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
@@ -736,6 +742,11 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	}
+	opType := replication.MetadataReplicationType
+	if rtype == replicateAll {
+		opType = replication.ObjectReplicationType
+	}
+	globalReplicationStats.Update(ctx, bucket, size, replicationStatus, prevReplStatus, opType)
 	sendEvent(eventArgs{
 		EventName:  eventName,
 		BucketName: bucket,
@@ -853,8 +864,12 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, oi ObjectInfo) {
 	}
 	select {
 	case <-ctx.Done():
-	case p.replicaCh <- oi:
 	default:
+		//this select is to ensure replicaCh not picked on ctrl-c
+		select {
+		case p.replicaCh <- oi:
+		default:
+		}
 	}
 }
 
@@ -864,8 +879,12 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 	}
 	select {
 	case <-ctx.Done():
-	case p.replicaDeleteCh <- doi:
 	default:
+		//this select is to ensure replicaCh not picked on ctrl-c
+		select {
+		case p.replicaDeleteCh <- doi:
+		default:
+		}
 	}
 }
 
@@ -1014,7 +1033,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 		globalReplicationPool.queueReplicaTask(ctx, objInfo)
 	}
 	if sz, err := objInfo.GetActualSize(); err == nil {
-		globalReplicationStats.Update(objInfo.Bucket, sz, objInfo.ReplicationStatus, opType)
+		globalReplicationStats.Update(ctx, objInfo.Bucket, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
 	}
 }
 
@@ -1024,5 +1043,5 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	} else {
 		globalReplicationPool.queueReplicaDeleteTask(ctx, dv)
 	}
-	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.DeleteReplicationType)
+	globalReplicationStats.Update(ctx, dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }
