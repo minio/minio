@@ -113,7 +113,7 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 			} else {
 				objects = append(objects, obj)
 			}
-			if len(objects) > maxKeys {
+			if maxKeys > 0 && len(objects) > maxKeys {
 				break
 			}
 		}
@@ -130,7 +130,7 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 				prefixes = append(prefixes, p)
 			}
 		}
-		if (len(objects) > maxKeys) || !loi.IsTruncated {
+		if (maxKeys > 0 && len(objects) > maxKeys) || !loi.IsTruncated {
 			break
 		}
 	}
