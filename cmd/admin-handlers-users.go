@@ -1029,7 +1029,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			if !dataUsageInfo.LastUpdate.IsZero() {
 				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
 			}
-			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketUsageInfo{
+			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
 				Name:    bucket.Name,
 				Created: bucket.Created,
 				Size:    size,

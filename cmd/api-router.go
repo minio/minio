@@ -208,7 +208,6 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketReplicationConfig
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationconfiguration", maxClients(httpTraceAll(api.GetBucketReplicationConfigHandler)))).Queries("replication", "")
-
 		// GetBucketVersioning
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketversioning", maxClients(httpTraceAll(api.GetBucketVersioningHandler)))).Queries("versioning", "")
@@ -275,8 +274,6 @@ func registerAPIRouter(router *mux.Router) {
 		// PutBucketReplicationConfig
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketreplicationconfiguration", maxClients(httpTraceAll(api.PutBucketReplicationConfigHandler)))).Queries("replication", "")
-		// GetObjectRetention
-
 		// PutBucketEncryption
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketencryption", maxClients(httpTraceAll(api.PutBucketEncryptionHandler)))).Queries("encryption", "")
@@ -327,6 +324,12 @@ func registerAPIRouter(router *mux.Router) {
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
+
+		// MinIO extension API for replication.
+		//
+		// GetBucketReplicationMetrics
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("getbucketreplicationmetrics", maxClients(httpTraceAll(api.GetBucketReplicationMetricsHandler)))).Queries("replication-metrics", "")
 	}
 
 	/// Root operation
