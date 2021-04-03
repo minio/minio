@@ -322,8 +322,12 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 				return errDiskNotFound
 			}
 			// Pick one FileInfo for a disk at index.
-			files[index].Erasure.Index = index + 1
-			return disks[index].WriteMetadata(ctx, bucket, prefix, files[index])
+			fi := files[index]
+			fi.Erasure.Index = index + 1
+			if fi.IsValid() {
+				return disks[index].WriteMetadata(ctx, bucket, prefix, fi)
+			}
+			return errCorruptedFormat
 		}, index)
 	}
 

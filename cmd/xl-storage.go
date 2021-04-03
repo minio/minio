@@ -911,29 +911,28 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
-		}
-		if err := xlMeta.Load(buf); err != nil {
-			panic(err)
 		}
 	} else {
 		if err = xlMeta.Load(buf); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		if err = xlMeta.AddVersion(fi); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
-
 	}
 
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
@@ -1042,11 +1041,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		if len(fi.Data) > 0 || fi.Size == 0 {
 			return fi, nil
 		}
+
 		// Reading data for small objects when
 		// - object has not yet transitioned
 		// - object size lesser than 32KiB
 		// - object has maximum of 1 parts
-
 		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
 			// Enable O_DIRECT optionally only if drive supports it.
 			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
