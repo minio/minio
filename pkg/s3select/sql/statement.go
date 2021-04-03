@@ -46,6 +46,9 @@ type SelectStatement struct {
 
 	// Count of rows that have been output.
 	outputCount int64
+
+	// Table alias
+	tableAlias string
 }
 
 // ParseSelectStatement - parses a select query from the given string
@@ -107,6 +110,9 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	if err != nil {
 		err = errQueryAnalysisFailure(err)
 	}
+
+	// Set table alias
+	stmt.tableAlias = selectAST.From.As
 	return
 }
 
@@ -226,7 +232,7 @@ func (e *SelectStatement) IsAggregated() bool {
 // records have been processed. Applies only to aggregation queries.
 func (e *SelectStatement) AggregateResult(output Record) error {
 	for i, expr := range e.selectAST.Expression.Expressions {
-		v, err := expr.evalNode(nil)
+		v, err := expr.evalNode(nil, e.tableAlias)
 		if err != nil {
 			return err
 		}
@@ -246,7 +252,7 @@ func (e *SelectStatement) isPassingWhereClause(input Record) (bool, error) {
 	if e.selectAST.Where == nil {
 		return true, nil
 	}
-	value, err := e.selectAST.Where.evalNode(input)
+	value, err := e.selectAST.Where.evalNode(input, e.tableAlias)
 	if err != nil {
 		return false, err
 	}
@@ -272,7 +278,7 @@ func (e *SelectStatement) AggregateRow(input Record) error {
 	}
 
 	for _, expr := range e.selectAST.Expression.Expressions {
-		err := expr.aggregateRow(input)
+		err := expr.aggregateRow(input, e.tableAlias)
 		if err != nil {
 			return err
 		}
@@ -302,7 +308,7 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 	}
 
 	for i, expr := range e.selectAST.Expression.Expressions {
-		v, err := expr.evalNode(input)
+		v, err := expr.evalNode(input, e.tableAlias)
 		if err != nil {
 			return nil, err
 		}
