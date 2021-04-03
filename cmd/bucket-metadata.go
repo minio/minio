@@ -416,6 +416,7 @@ func encryptBucketMetadata(bucket string, input []byte, kmsContext crypto.Contex
 	if err != nil {
 		return
 	}
+
 	outbuf := bytes.NewBuffer(nil)
 	objectKey := crypto.GenerateKey(key, rand.Reader)
 	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, "")
@@ -437,7 +438,6 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 		return nil, errKMSNotConfigured
 	}
 	keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(meta)
-
 	if err != nil {
 		return nil, err
 	}
@@ -449,8 +449,8 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 	if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, ""); err != nil {
 		return nil, err
 	}
+
 	outbuf := bytes.NewBuffer(nil)
 	_, err = sio.Decrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20})
-
 	return outbuf.Bytes(), err
 }

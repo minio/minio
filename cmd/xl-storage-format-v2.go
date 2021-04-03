@@ -231,7 +231,7 @@ type xlMetaV2 struct {
 	Versions []xlMetaV2Version `json:"Versions" msg:"Versions"`
 
 	// data will contain raw data if any.
-	// data will be one or more versions indexed by storage dir.
+	// data will be one or more versions indexed by versionID.
 	// To remove all data set to nil.
 	data xlMetaInlineData `msg:"-"`
 }
@@ -295,28 +295,31 @@ func (x xlMetaInlineData) validate() error {
 	if len(x) == 0 {
 		return nil
 	}
+
 	if !x.versionOK() {
 		return fmt.Errorf("xlMetaInlineData: unknown version 0x%x", x[0])
 	}
 
 	sz, buf, err := msgp.ReadMapHeaderBytes(x.afterVersion())
 	if err != nil {
-		return err
+		return fmt.Errorf("xlMetaInlineData: %w", err)
 	}
+
 	for i := uint32(0); i < sz; i++ {
 		var key []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
-			return err
+			return fmt.Errorf("xlMetaInlineData: %w", err)
 		}
 		if len(key) == 0 {
 			return fmt.Errorf("xlMetaInlineData: key %d is length 0", i)
 		}
 		_, buf, err = msgp.ReadBytesZC(buf)
 		if err != nil {
-			return err
+			return fmt.Errorf("xlMetaInlineData: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -564,31 +567,27 @@ func (z *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 func (z *xlMetaV2) Load(buf []byte) error {
 	buf, _, minor, err := checkXL2V1(buf)
 	if err != nil {
-		return errFileCorrupt
+		return fmt.Errorf("z.Load %w", err)
 	}
 	switch minor {
 	case 0:
 		_, err = z.UnmarshalMsg(buf)
 		if err != nil {
-			return errFileCorrupt
+			return fmt.Errorf("z.Load %w", err)
 		}
 		return nil
 	case 1:
 		v, buf, err := msgp.ReadBytesZC(buf)
 		if err != nil {
-			return errFileCorrupt
+			return fmt.Errorf("z.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
 		}
-		_, err = z.UnmarshalMsg(v)
-		if err != nil {
-			return errFileCorrupt
+		if _, err = z.UnmarshalMsg(v); err != nil {
+			return fmt.Errorf("z.Load version(%d), vLen(%d), %w", minor, len(v), err)
 		}
 		// Add remaining data.
-		z.data = nil
-		if len(buf) > 0 {
-			z.data = buf
-			if err := z.data.validate(); err != nil {
-				return errFileCorrupt
-			}
+		z.data = buf
+		if err = z.data.validate(); err != nil {
+			return fmt.Errorf("z.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
 		}
 	default:
 		return errors.New("unknown metadata version")

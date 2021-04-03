@@ -601,7 +601,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		})
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, writeLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
@@ -611,10 +611,10 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			Object:     objInfo,
 			Host:       "Internal: [Replication]",
 		})
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		return
 	}
-	defer gr.Close() // hold read lock for entire transaction
+	defer gr.Close() // hold write lock for entire transaction
 
 	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
@@ -651,7 +651,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		rtype = getReplicationAction(objInfo, oi)
 		if rtype == replicateNone {
 			// object with same VersionID already exists, replication kicked off by
-			// PutObject might have completed.
+			// PutObject might have completed
 			return
 		}
 	}
@@ -663,7 +663,8 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		srcOpts := miniogo.CopySrcOptions{
 			Bucket:    dest.Bucket,
 			Object:    object,
-			VersionID: objInfo.VersionID}
+			VersionID: objInfo.VersionID,
+		}
 		dstOpts := miniogo.PutObjectOptions{
 			Internal: miniogo.AdvancedPutOptions{
 				SourceVersionID:    objInfo.VersionID,
