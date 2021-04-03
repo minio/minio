@@ -1055,7 +1055,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 	if sync {
 		replicateObject(ctx, objInfo, o)
 	} else {
-		globalReplicationPool.queueReplicaTask(ctx, objInfo)
+		globalReplicationPool.queueReplicaTask(GlobalContext, objInfo)
 	}
 	if sz, err := objInfo.GetActualSize(); err == nil {
 		globalReplicationStats.Update(ctx, objInfo.Bucket, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
@@ -1066,7 +1066,7 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	if sync {
 		replicateDelete(ctx, dv, o)
 	} else {
-		globalReplicationPool.queueReplicaDeleteTask(ctx, dv)
+		globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	}
 	globalReplicationStats.Update(ctx, dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }

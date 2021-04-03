@@ -56,6 +56,17 @@ type ReplicationStats struct {
 	Cache map[string]*BucketReplicationStats
 }
 
+// Delete deletes in-memory replication statistics for a bucket.
+func (r *ReplicationStats) Delete(ctx context.Context, bucket string) {
+	if r == nil {
+		return
+	}
+
+	r.Lock()
+	defer r.Unlock()
+	delete(r.Cache, bucket)
+}
+
 // Update updates in-memory replication statistics with new values.
 func (r *ReplicationStats) Update(ctx context.Context, bucket string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
 	if r == nil {
@@ -104,10 +115,6 @@ func (r *ReplicationStats) Update(ctx context.Context, bucket string, n int64, s
 			atomic.AddUint64(&b.ReplicaSize, uint64(n))
 		}
 	}
-
-	r.Lock()
-	r.Cache[bucket] = b
-	r.Unlock()
 }
 
 // Get total bytes pending replication for a bucket

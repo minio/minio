@@ -76,6 +76,8 @@ type dataUsageEntryV2 struct {
 	ObjSizes sizeHistogram
 	Children dataUsageHashMap
 }
+
+//msgp:tuple dataUsageEntryV3
 type dataUsageEntryV3 struct {
 	// These fields do no include any children.
 	Size                   int64
@@ -95,13 +97,11 @@ type dataUsageCache struct {
 	Disks []string
 }
 
-// dataUsageCacheV3 contains a cache of data usage entries latest version 3.
-
-// dataUsageCache contains a cache of data usage entries version 2.
+// dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
 	Info  dataUsageCacheInfo
-	Cache map[string]dataUsageEntryV2
 	Disks []string
+	Cache map[string]dataUsageEntryV2
 }
 
 // dataUsageCache contains a cache of data usage entries version 3.
@@ -150,7 +150,7 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.ReplicationStats.ReplicatedSize += other.ReplicationStats.ReplicatedSize
 	e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
 	e.ReplicationStats.PendingCount += other.ReplicationStats.PendingCount
-	e.ReplicationStats.PendingCount += other.ReplicationStats.PendingCount
+	e.ReplicationStats.FailedCount += other.ReplicationStats.FailedCount
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
@@ -653,7 +653,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		defer dec.Close()
-
 		dold := &dataUsageCacheV3{}
 		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
 			return err

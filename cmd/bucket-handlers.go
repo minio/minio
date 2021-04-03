@@ -1244,7 +1244,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-
+	globalReplicationStats.Delete(ctx, bucket)
 	// Write success response.
 	writeSuccessNoContent(w)
 
