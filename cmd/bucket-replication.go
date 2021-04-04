@@ -297,7 +297,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		prevStatus = string(dobj.VersionPurgeStatus)
 		currStatus = string(versionPurgeStatus)
 	}
-	globalReplicationStats.Update(ctx, dobj.Bucket, 0, replication.StatusType(currStatus), replication.StatusType(prevStatus), replication.DeleteReplicationType) // to decrement pending count
+	// to decrement pending count later.
+	globalReplicationStats.Update(dobj.Bucket, 0, replication.StatusType(currStatus), replication.StatusType(prevStatus), replication.DeleteReplicationType)
 
 	var eventName = event.ObjectReplicationComplete
 	if replicationStatus == string(replication.Failed) || versionPurgeStatus == Failed {
@@ -754,7 +755,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	if rtype == replicateAll {
 		opType = replication.ObjectReplicationType
 	}
-	globalReplicationStats.Update(ctx, bucket, size, replicationStatus, prevReplStatus, opType)
+	globalReplicationStats.Update(bucket, size, replicationStatus, prevReplStatus, opType)
 	sendEvent(eventArgs{
 		EventName:  eventName,
 		BucketName: bucket,
@@ -1063,7 +1064,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 		globalReplicationPool.queueReplicaTask(GlobalContext, objInfo)
 	}
 	if sz, err := objInfo.GetActualSize(); err == nil {
-		globalReplicationStats.Update(ctx, objInfo.Bucket, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
+		globalReplicationStats.Update(objInfo.Bucket, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
 	}
 }
 
@@ -1073,5 +1074,5 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	} else {
 		globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	}
-	globalReplicationStats.Update(ctx, dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
+	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }

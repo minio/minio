@@ -1244,7 +1244,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	globalReplicationStats.Delete(ctx, bucket)
+
 	// Write success response.
 	writeSuccessNoContent(w)
 
@@ -1634,8 +1634,19 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		return
 	}
 
-	metrics := globalReplicationStats.Get(bucket)
-	if err := json.NewEncoder(w).Encode(&metrics); err != nil {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
+	bucketReplStats := BucketReplicationStats{}
+
+	for _, bucketStat := range bucketStats {
+		bucketReplStats.FailedCount += bucketStat.ReplicationStats.FailedCount
+		bucketReplStats.FailedSize += bucketStat.ReplicationStats.FailedSize
+		bucketReplStats.PendingCount += bucketStat.ReplicationStats.PendingCount
+		bucketReplStats.PendingSize += bucketStat.ReplicationStats.PendingSize
+		bucketReplStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		bucketReplStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
+	}
+
+	if err := json.NewEncoder(w).Encode(&bucketReplStats); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
