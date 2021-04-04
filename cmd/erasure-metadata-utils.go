@@ -135,7 +135,8 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 					errFileVersionNotFound,
 					errDiskNotFound,
 				}...) {
-					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s returned an error (%w)", disks[index], err),
+					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+						disks[index], bucket, object, err),
 						disks[index].String())
 				}
 			}

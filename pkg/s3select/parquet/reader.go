@@ -19,6 +19,7 @@ package parquet
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/bcicen/jstream"
 	parquetgo "github.com/minio/minio/pkg/s3select/internal/parquet-go"
@@ -63,8 +64,23 @@ func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 			value = v.Value.(bool)
 		case parquetgen.Type_INT32:
 			value = int64(v.Value.(int32))
+			if v.Schema != nil && v.Schema.ConvertedType != nil {
+				switch *v.Schema.ConvertedType {
+				case parquetgen.ConvertedType_DATE:
+					value = sql.FormatSQLTimestamp(time.Unix(60*60*24*int64(v.Value.(int32)), 0).UTC())
+				}
+			}
 		case parquetgen.Type_INT64:
 			value = v.Value.(int64)
+			if v.Schema != nil && v.Schema.ConvertedType != nil {
+				switch *v.Schema.ConvertedType {
+				// Only UTC supported, add one NS to never be exactly midnight.
+				case parquetgen.ConvertedType_TIMESTAMP_MILLIS:
+					value = sql.FormatSQLTimestamp(time.Unix(0, 0).Add(time.Duration(v.Value.(int64)) * time.Millisecond).UTC())
+				case parquetgen.ConvertedType_TIMESTAMP_MICROS:
+					value = sql.FormatSQLTimestamp(time.Unix(0, 0).Add(time.Duration(v.Value.(int64)) * time.Microsecond).UTC())
+				}
+			}
 		case parquetgen.Type_FLOAT:
 			value = float64(v.Value.(float32))
 		case parquetgen.Type_DOUBLE:

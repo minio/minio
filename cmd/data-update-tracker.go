@@ -31,11 +31,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/env"
 	"github.com/willf/bloom"
 )
 
@@ -80,7 +78,7 @@ func newDataUpdateTracker() *dataUpdateTracker {
 		Current: dataUpdateFilter{
 			idx: 1,
 		},
-		debug:      env.Get(envDataUsageScannerDebug, config.EnableOff) == config.EnableOn || serverDebugLog,
+		debug:      serverDebugLog,
 		input:      make(chan string, dataUpdateTrackerQueueSize),
 		save:       make(chan struct{}, 1),
 		saveExited: make(chan struct{}),

@@ -54,6 +54,7 @@ const (
 	storageMetricWriteAll
 	storageMetricDeleteVersion
 	storageMetricWriteMetadata
+	storageMetricUpdateMetadata
 	storageMetricReadVersion
 	storageMetricReadAll
 
@@ -64,11 +65,14 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
-	storage StorageAPI
-	diskID  string
-
-	apiCalls     [storageMetricLast]uint64
+	// fields position optimized for memory please
+	// do not re-order them, if you add new fields
+	// please use `fieldalignment ./...` to check
+	// if your changes are not causing any problems.
+	storage      StorageAPI
 	apiLatencies [storageMetricLast]ewma.MovingAverage
+	diskID       string
+	apiCalls     [storageMetricLast]uint64
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
@@ -536,6 +540,22 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 	}
 
 	return p.storage.DeleteVersion(ctx, volume, path, fi, forceDelMarker)
+}
+
+func (p *xlStorageDiskIDCheck) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+	defer p.updateStorageMetrics(storageMetricUpdateMetadata, volume, path)()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	if err = p.checkDiskStale(); err != nil {
+		return err
+	}
+
+	return p.storage.UpdateMetadata(ctx, volume, path, fi)
 }
 
 func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {

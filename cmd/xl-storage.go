@@ -850,7 +850,16 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// api call to mark object as deleted. When object is pending transition,
 		// just update the metadata and avoid deleting data dir.
 		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
+			versionID := fi.VersionID
+			if versionID == "" {
+				versionID = nullVersionID
+			}
+			xlMeta.data.remove(versionID)
+			// PR #11758 used DataDir, preserve it
+			// for users who might have used master
+			// branch
 			xlMeta.data.remove(dataDir)
+
 			filePath := pathJoin(volumeDir, path, dataDir)
 			if err = checkPathLength(filePath); err != nil {
 				return err
@@ -888,6 +897,44 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	return err
 }
 
+// Updates only metadata for a given version.
+func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+	if len(fi.Metadata) == 0 {
+		return errInvalidArgument
+	}
+
+	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
+	if err != nil {
+		if err == errFileNotFound {
+			if fi.VersionID != "" {
+				return errFileVersionNotFound
+			}
+		}
+		return err
+	}
+
+	if !isXL2V1Format(buf) {
+		return errFileVersionNotFound
+	}
+
+	var xlMeta xlMetaV2
+	if err = xlMeta.Load(buf); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err = xlMeta.UpdateObjectVersion(fi); err != nil {
+		return err
+	}
+
+	buf, err = xlMeta.AppendTo(nil)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+}
+
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
 func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
@@ -902,33 +949,31 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
-		}
-		if err := xlMeta.Load(buf); err != nil {
-			panic(err)
 		}
 	} else {
 		if err = xlMeta.Load(buf); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		if err = xlMeta.AddVersion(fi); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
+
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
-
 	}
 
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
-
 }
 
 func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
@@ -1033,11 +1078,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		if len(fi.Data) > 0 || fi.Size == 0 {
 			return fi, nil
 		}
+
 		// Reading data for small objects when
 		// - object has not yet transitioned
-		// - object size lesser than 32KiB
+		// - object size lesser than 128KiB
 		// - object has maximum of 1 parts
-
 		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
 			// Enable O_DIRECT optionally only if drive supports it.
 			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
@@ -1604,9 +1649,6 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 
 	for _, part := range fi.Parts {
 		partPath := pathJoin(path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(path, fmt.Sprintf("part.%d", part.Number))
-		}
 		filePath := pathJoin(volumeDir, partPath)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -1886,7 +1928,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		if isXL2V1Format(dstBuf) {
 			if err = xlMeta.Load(dstBuf); err != nil {
 				logger.LogIf(s.ctx, err)
-				return errFileCorrupt
+				return err
 			}
 		} else {
 			// This code-path is to preserve the legacy data.
@@ -1985,19 +2027,22 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return errFileCorrupt
 	}
 
-	// Commit data, if any
 	if srcDataPath != "" {
 		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
 			return err
 		}
 
-		tmpuuid := mustGetUUID()
-		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		tmpuuid = mustGetUUID()
-		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		if err = renameAll(srcDataPath, dstDataPath); err != nil {
-			logger.LogIf(ctx, err)
-			return osErrToFileErr(err)
+		if oldDstDataPath != "" {
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		}
+		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+
+		// renameAll only for objects that have xl.meta not saved inline.
+		if len(fi.Data) == 0 && fi.Size > 0 {
+			if err = renameAll(srcDataPath, dstDataPath); err != nil {
+				logger.LogIf(ctx, err)
+				return osErrToFileErr(err)
+			}
 		}
 
 		// Commit meta-file
@@ -2136,9 +2181,6 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	for _, part := range fi.Parts {
 		checksumInfo := erasure.GetChecksumInfo(part.Number)
 		partPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		if fi.XLV1 {
-			partPath = pathJoin(volumeDir, path, fmt.Sprintf("part.%d", part.Number))
-		}
 		if err := s.bitrotVerify(partPath,
 			erasure.ShardFileSize(part.Size),
 			checksumInfo.Algorithm,

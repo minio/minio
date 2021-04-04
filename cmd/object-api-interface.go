@@ -91,7 +91,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error
 
 	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)
@@ -160,6 +160,9 @@ type ObjectLayer interface {
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
 	ReadHealth(ctx context.Context) bool
+
+	// Metadata operations
+	PutObjectMetadata(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)

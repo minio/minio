@@ -1341,7 +1341,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
 	setPutObjHeaders(w, objInfo, false)
@@ -1656,7 +1656,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 	setPutObjHeaders(w, objInfo, false)
 
@@ -1938,7 +1938,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 
 		if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
-			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 		}
 
 	}
@@ -3014,7 +3014,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setPutObjHeaders(w, objInfo, false)
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
 	// Write success response.
@@ -3274,27 +3274,33 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
-	if objInfo.UserTags != "" {
-		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
+	if objInfo.DeleteMarker {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+		return
 	}
+	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
 	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-
-	objInfo.metadataOnly = true
-	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
-		VersionID: opts.VersionID,
-	}, ObjectOptions{
-		VersionID: opts.VersionID,
-		MTime:     opts.MTime,
-	}); err != nil {
+	// if version-id is not specified retention is supposed to be set on the latest object.
+	if opts.VersionID == "" {
+		opts.VersionID = objInfo.VersionID
+	}
+	popts := ObjectOptions{
+		MTime:       opts.MTime,
+		VersionID:   opts.VersionID,
+		UserDefined: make(map[string]string, len(objInfo.UserDefined)),
+	}
+	for k, v := range objInfo.UserDefined {
+		popts.UserDefined[k] = v
+	}
+	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.MetadataReplicationType)
 	}
 	writeSuccessResponseHeadersOnly(w)
 
@@ -3441,33 +3447,39 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if objInfo.DeleteMarker {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	if objRetention.Mode.Valid() {
 		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
 		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
 	} else {
-		delete(objInfo.UserDefined, strings.ToLower(xhttp.AmzObjectLockRetainUntilDate))
-		delete(objInfo.UserDefined, strings.ToLower(xhttp.AmzObjectLockMode))
-	}
-	if objInfo.UserTags != "" {
-		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
+		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
+		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
 	}
 	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-	objInfo.metadataOnly = true // Perform only metadata updates.
-	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
-		VersionID: opts.VersionID,
-	}, ObjectOptions{
-		VersionID: opts.VersionID,
-		MTime:     opts.MTime,
-	}); err != nil {
+	// if version-id is not specified retention is supposed to be set on the latest object.
+	if opts.VersionID == "" {
+		opts.VersionID = objInfo.VersionID
+	}
+	popts := ObjectOptions{
+		MTime:       opts.MTime,
+		VersionID:   opts.VersionID,
+		UserDefined: make(map[string]string, len(objInfo.UserDefined)),
+	}
+	for k, v := range objInfo.UserDefined {
+		popts.UserDefined[k] = v
+	}
+	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.MetadataReplicationType)
 	}
 
 	writeSuccessNoContent(w)
@@ -3650,7 +3662,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	if replicate {
-		scheduleReplication(ctx, objInfo.Clone(), objAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objAPI, sync, replication.MetadataReplicationType)
 	}
 
 	if objInfo.VersionID != "" {
@@ -3724,7 +3736,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	if replicate {
-		scheduleReplication(ctx, oi.Clone(), objAPI, sync)
+		scheduleReplication(ctx, oi.Clone(), objAPI, sync, replication.MetadataReplicationType)
 	}
 
 	if oi.VersionID != "" {

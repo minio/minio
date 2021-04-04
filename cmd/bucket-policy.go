@@ -83,17 +83,38 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		}
 	}
 
+	authType := getRequestAuthType(r)
+	var signatureVersion string
+	switch authType {
+	case authTypeSignedV2, authTypePresignedV2:
+		signatureVersion = signV2Algorithm
+	case authTypeSigned, authTypePresigned, authTypeStreamingSigned, authTypePostPolicy:
+		signatureVersion = signV4Algorithm
+	}
+
+	var authtype string
+	switch authType {
+	case authTypePresignedV2, authTypePresigned:
+		authtype = "REST-QUERY-STRING"
+	case authTypeSignedV2, authTypeSigned, authTypeStreamingSigned:
+		authtype = "REST-HEADER"
+	case authTypePostPolicy:
+		authtype = "POST"
+	}
+
 	args := map[string][]string{
-		"CurrentTime":     {currTime.Format(time.RFC3339)},
-		"EpochTime":       {strconv.FormatInt(currTime.Unix(), 10)},
-		"SecureTransport": {strconv.FormatBool(r.TLS != nil)},
-		"SourceIp":        {handlers.GetSourceIP(r)},
-		"UserAgent":       {r.UserAgent()},
-		"Referer":         {r.Referer()},
-		"principaltype":   {principalType},
-		"userid":          {username},
-		"username":        {username},
-		"versionid":       {vid},
+		"CurrentTime":      {currTime.Format(time.RFC3339)},
+		"EpochTime":        {strconv.FormatInt(currTime.Unix(), 10)},
+		"SecureTransport":  {strconv.FormatBool(r.TLS != nil)},
+		"SourceIp":         {handlers.GetSourceIP(r)},
+		"UserAgent":        {r.UserAgent()},
+		"Referer":          {r.Referer()},
+		"principaltype":    {principalType},
+		"userid":           {username},
+		"username":         {username},
+		"versionid":        {vid},
+		"signatureversion": {signatureVersion},
+		"authType":         {authtype},
 	}
 
 	if lc != "" {

@@ -231,7 +231,7 @@ type xlMetaV2 struct {
 	Versions []xlMetaV2Version `json:"Versions" msg:"Versions"`
 
 	// data will contain raw data if any.
-	// data will be one or more versions indexed by storage dir.
+	// data will be one or more versions indexed by versionID.
 	// To remove all data set to nil.
 	data xlMetaInlineData `msg:"-"`
 }
@@ -295,28 +295,31 @@ func (x xlMetaInlineData) validate() error {
 	if len(x) == 0 {
 		return nil
 	}
+
 	if !x.versionOK() {
 		return fmt.Errorf("xlMetaInlineData: unknown version 0x%x", x[0])
 	}
 
 	sz, buf, err := msgp.ReadMapHeaderBytes(x.afterVersion())
 	if err != nil {
-		return err
+		return fmt.Errorf("xlMetaInlineData: %w", err)
 	}
+
 	for i := uint32(0); i < sz; i++ {
 		var key []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
-			return err
+			return fmt.Errorf("xlMetaInlineData: %w", err)
 		}
 		if len(key) == 0 {
 			return fmt.Errorf("xlMetaInlineData: key %d is length 0", i)
 		}
 		_, buf, err = msgp.ReadBytesZC(buf)
 		if err != nil {
-			return err
+			return fmt.Errorf("xlMetaInlineData: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -564,31 +567,27 @@ func (z *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 func (z *xlMetaV2) Load(buf []byte) error {
 	buf, _, minor, err := checkXL2V1(buf)
 	if err != nil {
-		return errFileCorrupt
+		return fmt.Errorf("z.Load %w", err)
 	}
 	switch minor {
 	case 0:
 		_, err = z.UnmarshalMsg(buf)
 		if err != nil {
-			return errFileCorrupt
+			return fmt.Errorf("z.Load %w", err)
 		}
 		return nil
 	case 1:
 		v, buf, err := msgp.ReadBytesZC(buf)
 		if err != nil {
-			return errFileCorrupt
+			return fmt.Errorf("z.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
 		}
-		_, err = z.UnmarshalMsg(v)
-		if err != nil {
-			return errFileCorrupt
+		if _, err = z.UnmarshalMsg(v); err != nil {
+			return fmt.Errorf("z.Load version(%d), vLen(%d), %w", minor, len(v), err)
 		}
 		// Add remaining data.
-		z.data = nil
-		if len(buf) > 0 {
-			z.data = buf
-			if err := z.data.validate(); err != nil {
-				return errFileCorrupt
-			}
+		z.data = buf
+		if err = z.data.validate(); err != nil {
+			return fmt.Errorf("z.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
 		}
 	default:
 		return errors.New("unknown metadata version")
@@ -623,6 +622,75 @@ func (z *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	binary.BigEndian.PutUint32(dst[dataOffset-4:dataOffset], uint32(len(dst)-dataOffset))
 
 	return append(dst, z.data...), nil
+}
+
+// UpdateObjectVersion updates metadata and modTime for a given
+// versionID, NOTE: versionID must be valid and should exist -
+// and must not be a DeleteMarker or legacy object, if no
+// versionID is specified 'null' versionID is updated instead.
+//
+// It is callers responsibility to set correct versionID, this
+// function shouldn't be further extended to update immutable
+// values such as ErasureInfo, ChecksumInfo.
+//
+// Metadata is only updated to new values, existing values
+// stay as is, if you wish to update all values you should
+// update all metadata freshly before calling this function
+// in-case you wish to clear existing metadata.
+func (z *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
+	if fi.VersionID == "" {
+		// this means versioning is not yet
+		// enabled or suspend i.e all versions
+		// are basically default value i.e "null"
+		fi.VersionID = nullVersionID
+	}
+
+	var uv uuid.UUID
+	var err error
+	if fi.VersionID != "" && fi.VersionID != nullVersionID {
+		uv, err = uuid.Parse(fi.VersionID)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i, version := range z.Versions {
+		if !version.Valid() {
+			return errFileCorrupt
+		}
+		switch version.Type {
+		case LegacyType:
+			if version.ObjectV1.VersionID == fi.VersionID {
+				return errMethodNotAllowed
+			}
+		case ObjectType:
+			if version.ObjectV2.VersionID == uv {
+				for k, v := range fi.Metadata {
+					if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+						if v == "" {
+							delete(z.Versions[i].ObjectV2.MetaSys, k)
+						} else {
+							z.Versions[i].ObjectV2.MetaSys[k] = []byte(v)
+						}
+					} else {
+						if v == "" {
+							delete(z.Versions[i].ObjectV2.MetaUser, k)
+						} else {
+							z.Versions[i].ObjectV2.MetaUser[k] = v
+						}
+					}
+				}
+				if !fi.ModTime.IsZero() {
+					z.Versions[i].ObjectV2.ModTime = fi.ModTime.UnixNano()
+				}
+				return nil
+			}
+		case DeleteType:
+			return errMethodNotAllowed
+		}
+	}
+
+	return errFileVersionNotFound
 }
 
 // AddVersion adds a new version
@@ -702,9 +770,10 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 				ventry.ObjectV2.MetaUser[k] = v
 			}
 		}
+
 		// If asked to save data.
 		if len(fi.Data) > 0 || fi.Size == 0 {
-			z.data.replace(dd.String(), fi.Data)
+			z.data.replace(fi.VersionID, fi.Data)
 		}
 	}
 
