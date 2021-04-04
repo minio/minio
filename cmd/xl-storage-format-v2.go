@@ -624,6 +624,75 @@ func (z *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	return append(dst, z.data...), nil
 }
 
+// UpdateObjectVersion updates metadata and modTime for a given
+// versionID, NOTE: versionID must be valid and should exist -
+// and must not be a DeleteMarker or legacy object, if no
+// versionID is specified 'null' versionID is updated instead.
+//
+// It is callers responsibility to set correct versionID, this
+// function shouldn't be further extended to update immutable
+// values such as ErasureInfo, ChecksumInfo.
+//
+// Metadata is only updated to new values, existing values
+// stay as is, if you wish to update all values you should
+// update all metadata freshly before calling this function
+// in-case you wish to clear existing metadata.
+func (z *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
+	if fi.VersionID == "" {
+		// this means versioning is not yet
+		// enabled or suspend i.e all versions
+		// are basically default value i.e "null"
+		fi.VersionID = nullVersionID
+	}
+
+	var uv uuid.UUID
+	var err error
+	if fi.VersionID != "" && fi.VersionID != nullVersionID {
+		uv, err = uuid.Parse(fi.VersionID)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i, version := range z.Versions {
+		if !version.Valid() {
+			return errFileCorrupt
+		}
+		switch version.Type {
+		case LegacyType:
+			if version.ObjectV1.VersionID == fi.VersionID {
+				return errMethodNotAllowed
+			}
+		case ObjectType:
+			if version.ObjectV2.VersionID == uv {
+				for k, v := range fi.Metadata {
+					if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+						if v == "" {
+							delete(z.Versions[i].ObjectV2.MetaSys, k)
+						} else {
+							z.Versions[i].ObjectV2.MetaSys[k] = []byte(v)
+						}
+					} else {
+						if v == "" {
+							delete(z.Versions[i].ObjectV2.MetaUser, k)
+						} else {
+							z.Versions[i].ObjectV2.MetaUser[k] = v
+						}
+					}
+				}
+				if !fi.ModTime.IsZero() {
+					z.Versions[i].ObjectV2.ModTime = fi.ModTime.UnixNano()
+				}
+				return nil
+			}
+		case DeleteType:
+			return errMethodNotAllowed
+		}
+	}
+
+	return errFileVersionNotFound
+}
+
 // AddVersion adds a new version
 func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 	if fi.VersionID == "" {

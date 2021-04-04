@@ -1778,6 +1778,22 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 }
 
+// PutObjectMetadata - replace or add tags to an existing object
+func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].PutObjectMetadata(ctx, bucket, object, opts)
+	}
+
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	return z.serverPools[idx].PutObjectMetadata(ctx, bucket, object, opts)
+}
+
 // PutObjectTags - replace or add tags to an existing object
 func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	object = encodeDirObject(object)
