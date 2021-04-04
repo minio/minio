@@ -434,6 +434,20 @@ func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err
 	return data, err
 }
 
+// GetBucketStats - load bucket statistics
+func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error) {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodGetBucketStats, values, nil, -1)
+	if err != nil {
+		return BucketStats{}, err
+	}
+
+	var bs BucketStats
+	defer http.DrainBody(respBody)
+	return bs, msgp.Decode(respBody, &bs)
+}
+
 // LoadBucketMetadata - load bucket metadata
 func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	values := make(url.Values)

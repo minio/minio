@@ -24,23 +24,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 )
 
-// BucketReplicationStats represents inline replication statistics
-// such as pending, failed and completed bytes in total for a bucket
-type BucketReplicationStats struct {
-	// Pending size in bytes
-	PendingSize uint64 `json:"pendingReplicationSize"`
-	// Completed size in bytes
-	ReplicatedSize uint64 `json:"completedReplicationSize"`
-	// Total Replica size in bytes
-	ReplicaSize uint64 `json:"replicaSize"`
-	// Failed size in bytes
-	FailedSize uint64 `json:"failedReplicationSize"`
-	// Total number of pending operations including metadata updates
-	PendingCount uint64 `json:"pendingReplicationCount"`
-	// Total number of failed operations including metadata updates
-	FailedCount uint64 `json:"failedReplicationCount"`
-}
-
 func (b *BucketReplicationStats) hasReplicationUsage() bool {
 	return b.PendingSize > 0 ||
 		b.FailedSize > 0 ||
@@ -57,7 +40,7 @@ type ReplicationStats struct {
 }
 
 // Delete deletes in-memory replication statistics for a bucket.
-func (r *ReplicationStats) Delete(ctx context.Context, bucket string) {
+func (r *ReplicationStats) Delete(bucket string) {
 	if r == nil {
 		return
 	}
@@ -68,7 +51,7 @@ func (r *ReplicationStats) Delete(ctx context.Context, bucket string) {
 }
 
 // Update updates in-memory replication statistics with new values.
-func (r *ReplicationStats) Update(ctx context.Context, bucket string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
+func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
 	if r == nil {
 		return
 	}
@@ -125,10 +108,12 @@ func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 
 	r.RLock()
 	defer r.RUnlock()
+
 	st, ok := r.Cache[bucket]
 	if !ok {
 		return BucketReplicationStats{}
 	}
+
 	return BucketReplicationStats{
 		PendingSize:    atomic.LoadUint64(&st.PendingSize),
 		FailedSize:     atomic.LoadUint64(&st.FailedSize),
