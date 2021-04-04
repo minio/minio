@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v13" // Add storage tracing
+	peerRESTVersion       = "v14" // Add GetBucketStats API
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -36,6 +36,7 @@ const (
 	peerRESTMethodDispatchNetInfo        = "/dispatchnetinfo"
 	peerRESTMethodDeleteBucketMetadata   = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata     = "/loadbucketmetadata"
+	peerRESTMethodGetBucketStats         = "/getbucketstats"
 	peerRESTMethodServerUpdate           = "/serverupdate"
 	peerRESTMethodSignalService          = "/signalservice"
 	peerRESTMethodBackgroundHealStatus   = "/backgroundhealstatus"

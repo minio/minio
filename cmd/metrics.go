@@ -432,35 +432,56 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 }
 
 // get the most current of in-memory replication stats  and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) BucketReplicationStats {
-	s := BucketReplicationStats{
-		PendingSize:    u.ReplicationPendingSize,
-		FailedSize:     u.ReplicationFailedSize,
-		ReplicatedSize: u.ReplicatedSize,
-		ReplicaSize:    u.ReplicaSize,
-		PendingCount:   u.ReplicationPendingCount,
-		FailedCount:    u.ReplicationFailedCount,
+func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s BucketReplicationStats) {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+
+	replStats := BucketReplicationStats{}
+	for _, bucketStat := range bucketStats {
+		replStats.FailedCount += bucketStat.ReplicationStats.FailedCount
+		replStats.FailedSize += bucketStat.ReplicationStats.FailedSize
+		replStats.PendingCount += bucketStat.ReplicationStats.PendingCount
+		replStats.PendingSize += bucketStat.ReplicationStats.PendingSize
+		replStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		replStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
 	}
-	rStat := globalReplicationStats.Get(bucket)
+
 	// use in memory replication stats if it is ahead of usage info.
-	if rStat.ReplicatedSize > u.ReplicatedSize {
-		s.ReplicatedSize = rStat.ReplicatedSize
+	if replStats.ReplicatedSize > u.ReplicatedSize {
+		s.ReplicatedSize = replStats.ReplicatedSize
+	} else {
+		s.ReplicatedSize = u.ReplicatedSize
 	}
-	if rStat.PendingSize > u.ReplicationPendingSize {
-		s.PendingSize = rStat.PendingSize
+
+	if replStats.PendingSize > u.ReplicationPendingSize {
+		s.PendingSize = replStats.PendingSize
+	} else {
+		s.PendingSize = u.ReplicationPendingSize
 	}
-	if rStat.FailedSize > u.ReplicationFailedSize {
-		s.FailedSize = rStat.FailedSize
+
+	if replStats.FailedSize > u.ReplicationFailedSize {
+		s.FailedSize = replStats.FailedSize
+	} else {
+		s.FailedSize = u.ReplicationFailedSize
 	}
-	if rStat.ReplicaSize > u.ReplicaSize {
-		s.ReplicaSize = rStat.ReplicaSize
+
+	if replStats.ReplicaSize > u.ReplicaSize {
+		s.ReplicaSize = replStats.ReplicaSize
+	} else {
+		s.ReplicaSize = u.ReplicaSize
 	}
-	if rStat.PendingCount > u.ReplicationPendingCount {
-		s.PendingCount = rStat.PendingCount
+
+	if replStats.PendingCount > u.ReplicationPendingCount {
+		s.PendingCount = replStats.PendingCount
+	} else {
+		s.PendingCount = u.ReplicationPendingCount
 	}
-	if rStat.FailedCount > u.ReplicationFailedCount {
-		s.FailedCount = rStat.FailedCount
+
+	if replStats.FailedCount > u.ReplicationFailedCount {
+		s.FailedCount = replStats.FailedCount
+	} else {
+		s.FailedCount = u.ReplicationFailedCount
 	}
+
 	return s
 }
 
