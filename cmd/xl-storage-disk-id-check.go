@@ -54,6 +54,7 @@ const (
 	storageMetricWriteAll
 	storageMetricDeleteVersion
 	storageMetricWriteMetadata
+	storageMetricUpdateMetadata
 	storageMetricReadVersion
 	storageMetricReadAll
 
@@ -539,6 +540,22 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 	}
 
 	return p.storage.DeleteVersion(ctx, volume, path, fi, forceDelMarker)
+}
+
+func (p *xlStorageDiskIDCheck) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+	defer p.updateStorageMetrics(storageMetricUpdateMetadata, volume, path)()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	if err = p.checkDiskStale(); err != nil {
+		return err
+	}
+
+	return p.storage.UpdateMetadata(ctx, volume, path, fi)
 }
 
 func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {

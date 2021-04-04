@@ -52,6 +52,12 @@ func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, upda
 	return NotImplemented{}
 }
 
+// PutObjectMetadata - not implemented for gateway.
+func (a GatewayUnsupported) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return ObjectInfo{}, NotImplemented{}
+}
+
 // NewNSLock is a dummy stub for gateway.
 func (a GatewayUnsupported) NewNSLock(bucket string, objects ...string) RWLocker {
 	logger.CriticalIf(context.Background(), errors.New("not implemented"))

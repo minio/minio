@@ -571,11 +571,6 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 // replicateObject replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
 func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLayer) {
-	z, ok := objectAPI.(*erasureServerPools)
-	if !ok {
-		return
-	}
-
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 
@@ -734,17 +729,27 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		eventName = event.ObjectReplicationFailed
 	}
 
+	z, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		return
+	}
+
 	// This lower level implementation is necessary to avoid write locks from CopyObject.
 	poolIdx, err := z.getPoolIdx(ctx, bucket, object, objInfo.Size)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 	} else {
-		if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, objInfo.UserDefined, ObjectOptions{
-			VersionID: objInfo.VersionID,
-		}); err != nil {
+		fi := FileInfo{}
+		fi.VersionID = objInfo.VersionID
+		fi.Metadata = make(map[string]string, len(objInfo.UserDefined))
+		for k, v := range objInfo.UserDefined {
+			fi.Metadata[k] = v
+		}
+		if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, fi); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	}
+
 	opType := replication.MetadataReplicationType
 	if rtype == replicateAll {
 		opType = replication.ObjectReplicationType

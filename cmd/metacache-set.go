@@ -686,7 +686,14 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				// Update block 0 metadata.
 				var retries int
 				for {
-					err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), b.headerKV(), ObjectOptions{})
+					meta := b.headerKV()
+					fi := FileInfo{
+						Metadata: make(map[string]string, len(meta)),
+					}
+					for k, v := range meta {
+						fi.Metadata[k] = v
+					}
+					err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), fi)
 					if err == nil {
 						break
 					}

@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v29" // Removed WalkVersions()
+	storageRESTVersion       = "v30" // Added UpdateMetadata()
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -36,6 +36,7 @@ const (
 	storageRESTMethodCreateFile     = "/createfile"
 	storageRESTMethodWriteAll       = "/writeall"
 	storageRESTMethodWriteMetadata  = "/writemetadata"
+	storageRESTMethodUpdateMetadata = "/updatemetadata"
 	storageRESTMethodDeleteVersion  = "/deleteversion"
 	storageRESTMethodReadVersion    = "/readversion"
 	storageRESTMethodRenameData     = "/renamedata"

@@ -360,6 +360,21 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	return err
 }
 
+func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var reader bytes.Buffer
+	if err := msgp.Encode(&reader, &fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodUpdateMetadata, values, &reader, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
 func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)

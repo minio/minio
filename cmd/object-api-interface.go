@@ -161,6 +161,9 @@ type ObjectLayer interface {
 	Health(ctx context.Context, opts HealthOptions) HealthResult
 	ReadHealth(ctx context.Context) bool
 
+	// Metadata operations
+	PutObjectMetadata(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
+
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)

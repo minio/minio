@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
@@ -89,6 +90,9 @@ var (
 type StorageClass struct {
 	Parity int
 }
+
+// ConfigLock is a global lock for storage-class config
+var ConfigLock = sync.RWMutex{}
 
 // Config storage class configuration
 type Config struct {
@@ -232,6 +236,8 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 //    is returned, the caller is expected to choose the right parity
 //    at that point.
 func (sCfg Config) GetParityForSC(sc string) (parity int) {
+	ConfigLock.RLock()
+	defer ConfigLock.RUnlock()
 	switch strings.TrimSpace(sc) {
 	case RRS:
 		// set the rrs parity if available
@@ -244,8 +250,19 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// Update update storage-class with new config
+func (sCfg Config) Update(newCfg Config) {
+	ConfigLock.Lock()
+	defer ConfigLock.Unlock()
+	sCfg.RRS = newCfg.RRS
+	sCfg.DMA = newCfg.DMA
+	sCfg.Standard = newCfg.Standard
+}
+
 // GetDMA - returns DMA configuration.
 func (sCfg Config) GetDMA() string {
+	ConfigLock.RLock()
+	defer ConfigLock.RUnlock()
 	return sCfg.DMA
 }
 
