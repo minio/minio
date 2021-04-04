@@ -1143,6 +1143,7 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 	if err != nil {
 		err = osErrToFileErr(err)
 	}
+
 	return buf, err
 }
 
@@ -1811,6 +1812,14 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+	defer func() {
+		if err == nil {
+			if s.globalSync {
+				globalSync()
+			}
+		}
+	}()
+
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -1984,11 +1993,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			return osErrToFileErr(err)
 		}
 
-		if s.globalSync {
-			// Sync all the previous directory operations.
-			globalSync()
-		}
-
 		for _, entry := range entries {
 			// Skip xl.meta renames further, also ignore any directories such as `legacyDataDir`
 			if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
@@ -1998,11 +2002,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			if err = Rename(pathJoin(currentDataPath, entry), pathJoin(legacyDataPath, entry)); err != nil {
 				return osErrToFileErr(err)
 			}
-		}
-
-		// Sync all the metadata operations once renames are done.
-		if s.globalSync {
-			globalSync()
 		}
 	}
 
@@ -2032,13 +2031,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			return err
 		}
 
-		if oldDstDataPath != "" {
-			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
-		}
-		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
-
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
+			if oldDstDataPath != "" {
+				renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+			}
+			renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 			if err = renameAll(srcDataPath, dstDataPath); err != nil {
 				logger.LogIf(ctx, err)
 				return osErrToFileErr(err)
