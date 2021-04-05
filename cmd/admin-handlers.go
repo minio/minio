@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -1526,30 +1527,33 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	setEventStreamHeaders(w)
-	reportCh := make(chan bandwidth.Report, 1)
+	reportCh := make(chan bandwidth.Report)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
 	go func() {
+		defer close(reportCh)
 		for {
-			reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				time.Sleep(2 * time.Second)
+			case reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...):
+				time.Sleep(time.Duration(rnd.Float64() * float64(2*time.Second)))
 			}
 		}
 	}()
 	for {
 		select {
-		case report := <-reportCh:
-			enc := json.NewEncoder(w)
-			err := enc.Encode(report)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		case report, ok := <-reportCh:
+			if !ok {
+				return
+			}
+			if err := json.NewEncoder(w).Encode(report); err != nil {
+				writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
 			w.(http.Flusher).Flush()
