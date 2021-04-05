@@ -697,19 +697,25 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		if totalNodesCount == 0 {
 			totalNodesCount = 1 // For standalone erasure coding
 		}
-		b := target.BandwidthLimit / int64(totalNodesCount)
+
 		var headerSize int
 		for k, v := range putOpts.Header() {
 			headerSize += len(k) + len(v)
 		}
 
-		// r takes over closing gr.
-		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
+		opts := &bandwidth.MonitorReaderOptions{
+			Bucket:               objInfo.Bucket,
+			Object:               objInfo.Name,
+			HeaderSize:           headerSize,
+			BandwidthBytesPerSec: target.BandwidthLimit / int64(totalNodesCount),
+			ClusterBandwidth:     target.BandwidthLimit,
+		}
+
+		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, gr, opts)
 		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
-		defer r.Close()
 	}
 
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
