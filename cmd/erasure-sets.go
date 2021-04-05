@@ -851,6 +851,9 @@ type FileInfoVersionsCh struct {
 	Valid     bool
 	SetIndex  int
 	ZoneIndex int
+
+	// Is set when storage Walk() returns an error
+	Err error
 }
 
 // Pop - pops a cached entry if any, or from the cached channel.
@@ -876,6 +879,9 @@ type FileInfoCh struct {
 	Valid     bool
 	SetIndex  int
 	ZoneIndex int
+
+	// Is set when storage Walk() returns an error
+	Err error
 }
 
 // Pop - pops a cached entry if any, or from the cached channel.
@@ -984,6 +990,9 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 
 				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
 				if err != nil {
+					mutex.Lock()
+					entryChs = append(entryChs, FileInfoVersionsCh{Err: err})
+					mutex.Unlock()
 					return
 				}
 
@@ -1022,7 +1031,9 @@ func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, mark
 					entryCh, err = disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
 				}
 				if err != nil {
-					// Disk walk returned error, ignore it.
+					mutex.Lock()
+					entryChs = append(entryChs, FileInfoCh{Err: err})
+					mutex.Unlock()
 					return
 				}
 				mutex.Lock()

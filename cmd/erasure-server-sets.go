@@ -38,6 +38,8 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+var errErasureListingQuorum = errors.New("Listing failed. Insufficient number of disks online")
+
 type erasureServerSets struct {
 	GatewayUnsupported
 
@@ -695,10 +697,14 @@ func (z *erasureServerSets) listObjectsNonSlash(ctx context.Context, bucket, pre
 			break
 		}
 
-		result, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		result, isDir, quorumCount, zoneIndex, listingOK, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			eof = true
 			break
+		}
+
+		if listingOK < serverSetsListTolerancePerSet[zoneIndex] {
+			return loi, errErasureListingQuorum
 		}
 
 		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
@@ -810,7 +816,10 @@ func (z *erasureServerSets) listObjectsSplunk(ctx context.Context, bucket, prefi
 		}
 	}
 
-	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	entries, err := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	if err != nil {
+		return loi, err
+	}
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -906,7 +915,10 @@ func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, mar
 		}
 	}
 
-	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	entries, err := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	if err != nil {
+		return loi, err
+	}
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -940,9 +952,15 @@ func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, mar
 // again to list the next entry. It is callers responsibility
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, bool, int, int, bool) {
+func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, bool, int, int, int, bool) {
+	var listingOK int
+
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
+			if entryChs[j].Err != nil {
+				continue
+			}
+			listingOK++
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
 	}
@@ -997,7 +1015,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 	// We haven't been able to find any least entry,
 	// this would mean that we don't have valid entry.
 	if !found {
-		return lentry, false, 0, zoneIndex, isTruncated
+		return lentry, false, 0, zoneIndex, listingOK, isTruncated
 	}
 
 	if HasSuffix(lentry.Name, slashSeparator) {
@@ -1044,7 +1062,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 		}
 	}
 
-	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, isTruncated
+	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, listingOK, isTruncated
 }
 
 // Calculate least entry across serverSets and across multiple FileInfoVersions
@@ -1054,9 +1072,15 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 // again to list the next entry. It is callers responsibility
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, bool, int, int, bool) {
+func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, bool, int, int, int, bool) {
+	var listingOK int
+
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
+			if entryChs[j].Err != nil {
+				continue
+			}
+			listingOK++
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
 	}
@@ -1111,7 +1135,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	// We haven't been able to find any least entry,
 	// this would mean that we don't have valid entry.
 	if !found {
-		return lentry, false, 0, zoneIndex, isTruncated
+		return lentry, false, 0, zoneIndex, listingOK, isTruncated
 	}
 
 	if HasSuffix(lentry.Name, slashSeparator) {
@@ -1158,11 +1182,11 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 		}
 	}
 
-	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, isTruncated
+	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, listingOK, isTruncated
 }
 
 // mergeServerSetsEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
-func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfoVersions) {
+func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfoVersions, err error) {
 	var i = 0
 	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
 	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
@@ -1173,10 +1197,14 @@ func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh,
 
 	var prevEntryName string
 	for {
-		fi, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		fi, isDir, quorumCount, zoneIndex, listingOK, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
+		}
+
+		if listingOK < serverSetsListTolerancePerSet[zoneIndex] {
+			return entries, errErasureListingQuorum
 		}
 
 		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
@@ -1196,11 +1224,11 @@ func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh,
 			break
 		}
 	}
-	return entries
+	return entries, nil
 }
 
 // mergeServerSetsEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfo) {
+func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfo, err error) {
 	var i = 0
 	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
 	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
@@ -1211,10 +1239,14 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 
 	var prevEntryName string
 	for {
-		fi, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		fi, isDir, quorumCount, zoneIndex, listingOK, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
+		}
+
+		if listingOK < serverSetsListTolerancePerSet[zoneIndex] {
+			return entries, errErasureListingQuorum
 		}
 
 		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
@@ -1234,7 +1266,7 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 			break
 		}
 	}
-	return entries
+	return entries, nil
 }
 
 func isTruncatedServerSets(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
@@ -1363,7 +1395,10 @@ func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, pref
 		}
 	}
 
-	entries := mergeServerSetsEntriesVersionsCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	entries, err := mergeServerSetsEntriesVersionsCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
+	if err != nil {
+		return loi, err
+	}
 	if len(entries.FilesVersions) == 0 {
 		return loi, nil
 	}
@@ -1839,7 +1874,7 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 
 			var prevEntryName string
 			for {
-				entry, isDir, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+				entry, isDir, quorumCount, zoneIdx, _, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 				if !ok {
 					// We have reached EOF across all entryChs, break the loop.
 					return
@@ -1880,7 +1915,7 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 
 		var prevEntryName string
 		for {
-			entry, isDir, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+			entry, isDir, quorumCount, zoneIdx, _, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
@@ -1930,7 +1965,7 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 	// actions they may want to take as if `prefix` is missing.
 	err := toObjectErr(errFileNotFound, bucket, prefix)
 	for {
-		entry, _, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		entry, _, quorumCount, zoneIndex, _, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			break
 		}
