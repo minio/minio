@@ -704,6 +704,7 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	bucketStats := make([]BucketStats, len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		index := index
+		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
