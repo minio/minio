@@ -25,11 +25,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
-	envDataUsageScannerDebug = "MINIO_DISK_USAGE_SCANNER_DEBUG"
-
 	dataUsageRoot   = SlashSeparator
 	dataUsageBucket = minioMetaBucket + SlashSeparator + bucketMetaPrefix
 
@@ -39,7 +38,7 @@ const (
 )
 
 // storeDataUsageInBackend will store all objects sent on the gui channel until closed.
-func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan DataUsageInfo) {
+func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan madmin.DataUsageInfo) {
 	for dataUsageInfo := range dui {
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
@@ -59,27 +58,27 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 	}
 }
 
-func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
+func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (madmin.DataUsageInfo, error) {
 	r, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageObjName, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
-			return DataUsageInfo{}, nil
+			return madmin.DataUsageInfo{}, nil
 		}
-		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
+		return madmin.DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
 	}
 	defer r.Close()
 
-	var dataUsageInfo DataUsageInfo
+	var dataUsageInfo madmin.DataUsageInfo
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.NewDecoder(r).Decode(&dataUsageInfo); err != nil {
-		return DataUsageInfo{}, err
+		return madmin.DataUsageInfo{}, err
 	}
 
 	// For forward compatibility reasons, we need to add this code.
 	if len(dataUsageInfo.BucketsUsage) == 0 {
-		dataUsageInfo.BucketsUsage = make(map[string]BucketUsageInfo, len(dataUsageInfo.BucketSizes))
+		dataUsageInfo.BucketsUsage = make(map[string]madmin.BucketUsageInfo, len(dataUsageInfo.BucketSizes))
 		for bucket, size := range dataUsageInfo.BucketSizes {
-			dataUsageInfo.BucketsUsage[bucket] = BucketUsageInfo{Size: size}
+			dataUsageInfo.BucketsUsage[bucket] = madmin.BucketUsageInfo{Size: size}
 		}
 	}
 

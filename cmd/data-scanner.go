@@ -134,7 +134,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Wait before starting next cycle and wait on startup.
-			results := make(chan DataUsageInfo, 1)
+			results := make(chan madmin.DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
@@ -790,6 +790,8 @@ type sizeSummary struct {
 	pendingSize    int64
 	failedSize     int64
 	replicaSize    int64
+	pendingCount   uint64
+	failedCount    uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -1105,11 +1107,13 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	}
 	switch oi.ReplicationStatus {
 	case replication.Pending:
+		sizeS.pendingCount++
 		sizeS.pendingSize += oi.Size
-		globalReplicationPool.queueReplicaTask(oi)
+		globalReplicationPool.queueReplicaTask(ctx, oi)
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
-		globalReplicationPool.queueReplicaTask(oi)
+		sizeS.failedCount++
+		globalReplicationPool.queueReplicaTask(ctx, oi)
 	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
@@ -1128,7 +1132,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 		} else {
 			versionID = oi.VersionID
 		}
-		globalReplicationPool.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+		globalReplicationPool.queueReplicaDeleteTask(ctx, DeletedObjectVersionInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    oi.Name,
 				DeleteMarkerVersionID:         dmVersionID,

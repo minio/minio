@@ -1318,6 +1318,12 @@ func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID 
 	return s.getHashedSet(object).HealObject(ctx, bucket, object, versionID, opts)
 }
 
+// PutObjectMetadata - replace or add metadata to an existing object/version
+func (s *erasureSets) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	er := s.getHashedSet(object)
+	return er.PutObjectMetadata(ctx, bucket, object, opts)
+}
+
 // PutObjectTags - replace or add tags to an existing object
 func (s *erasureSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	er := s.getHashedSet(object)

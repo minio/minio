@@ -30,7 +30,7 @@ type LRWMutex struct {
 	source      string
 	isWriteLock bool
 	ref         int
-	m           sync.Mutex // Mutex to prevent multiple simultaneous locks
+	mu          sync.Mutex // Mutex to prevent multiple simultaneous locks
 }
 
 // NewLRWMutex - initializes a new lsync RW mutex.
@@ -73,7 +73,9 @@ func (lm *LRWMutex) GetRLock(ctx context.Context, id string, source string, time
 }
 
 func (lm *LRWMutex) lock(id, source string, isWriteLock bool) (locked bool) {
-	lm.m.Lock()
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
 	lm.id = id
 	lm.source = source
 	if isWriteLock {
@@ -88,7 +90,6 @@ func (lm *LRWMutex) lock(id, source string, isWriteLock bool) (locked bool) {
 			locked = true
 		}
 	}
-	lm.m.Unlock()
 
 	return locked
 }
@@ -147,7 +148,8 @@ func (lm *LRWMutex) RUnlock() {
 }
 
 func (lm *LRWMutex) unlock(isWriteLock bool) (unlocked bool) {
-	lm.m.Lock()
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
 
 	// Try to release lock.
 	if isWriteLock {
@@ -165,16 +167,17 @@ func (lm *LRWMutex) unlock(isWriteLock bool) (unlocked bool) {
 		}
 	}
 
-	lm.m.Unlock()
 	return unlocked
 }
 
 // ForceUnlock will forcefully clear a write or read lock.
 func (lm *LRWMutex) ForceUnlock() {
-	lm.m.Lock()
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
 	lm.ref = 0
 	lm.isWriteLock = false
-	lm.m.Unlock()
+
 }
 
 // DRLocker returns a sync.Locker interface that implements

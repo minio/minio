@@ -67,10 +67,18 @@ func getColumns(
 		if nameColumnMap == nil {
 			nameColumnMap = make(map[string]*column)
 		}
+		var se *parquet.SchemaElement
+		for _, schema := range schemaElements {
+			if schema != nil && schema.Name == columnName {
+				se = schema
+				break
+			}
+		}
 
 		nameColumnMap[columnName] = &column{
 			name:           columnName,
 			metadata:       meta,
+			schema:         se,
 			schemaElements: schemaElements,
 			rc:             rc,
 			thriftReader:   thriftReader,
@@ -95,6 +103,7 @@ type column struct {
 	valueIndex     int
 	valueType      parquet.Type
 	metadata       *parquet.ColumnMetaData
+	schema         *parquet.SchemaElement
 	schemaElements []*parquet.SchemaElement
 	nameIndexMap   map[string]int
 	dictPage       *page
@@ -140,14 +149,14 @@ func (column *column) readPage() {
 	column.dataTable.Merge(page.DataTable)
 }
 
-func (column *column) read() (value interface{}, valueType parquet.Type) {
+func (column *column) read() (value interface{}, valueType parquet.Type, cnv *parquet.SchemaElement) {
 	if column.dataTable == nil {
 		column.readPage()
 		column.valueIndex = 0
 	}
 
 	if column.endOfValues {
-		return nil, column.metadata.GetType()
+		return nil, column.metadata.GetType(), column.schema
 	}
 
 	value = column.dataTable.Values[column.valueIndex]
@@ -156,5 +165,5 @@ func (column *column) read() (value interface{}, valueType parquet.Type) {
 		column.dataTable = nil
 	}
 
-	return value, column.metadata.GetType()
+	return value, column.metadata.GetType(), column.schema
 }

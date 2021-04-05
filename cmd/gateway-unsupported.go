@@ -47,9 +47,15 @@ func (a GatewayUnsupported) LocalStorageInfo(ctx context.Context) (StorageInfo, 
 }
 
 // NSScanner - scanner is not implemented for gateway
-func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return NotImplemented{}
+}
+
+// PutObjectMetadata - not implemented for gateway.
+func (a GatewayUnsupported) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return ObjectInfo{}, NotImplemented{}
 }
 
 // NewNSLock is a dummy stub for gateway.
