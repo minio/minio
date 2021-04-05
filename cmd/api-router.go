@@ -321,15 +321,17 @@ func registerAPIRouter(router *mux.Router) {
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			collectAPIStats("deletebucket", maxClients(httpTraceAll(api.DeleteBucketHandler))))
-		// ListObjectsV1 (Legacy)
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
 
 		// MinIO extension API for replication.
 		//
 		// GetBucketReplicationMetrics
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(httpTraceAll(api.GetBucketReplicationMetricsHandler)))).Queries("replication-metrics", "")
+
+		// S3 ListObjectsV1 (Legacy)
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
+
 	}
 
 	/// Root operation
