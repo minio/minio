@@ -110,7 +110,7 @@ func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus rep
 	r.Unlock()
 }
 
-// GetInitialUsage gets initial usage from the time of cluster initialization
+// GetInitialUsage get replication metrics available at the time of cluster initialization
 func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats {
 	if r == nil {
 		return BucketReplicationStats{}
@@ -133,7 +133,7 @@ func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats
 	}
 }
 
-// Get total bytes pending replication for a bucket
+// Get replication metrics for a bucket from this node since this node came up.
 func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	if r == nil {
 		return BucketReplicationStats{}
