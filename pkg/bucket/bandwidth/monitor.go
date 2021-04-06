@@ -123,8 +123,12 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *bandwidth.Report {
 		if !selectBucket(bucket) {
 			continue
 		}
+		bucketThrottle, ok := m.bucketThrottle[bucket]
+		if !ok {
+			continue
+		}
 		report.BucketStats[bucket] = bandwidth.Details{
-			LimitInBytesPerSecond:            m.bucketThrottle[bucket].clusterBandwidth,
+			LimitInBytesPerSecond:            bucketThrottle.clusterBandwidth,
 			CurrentBandwidthInBytesPerSecond: bucketMeasurement.getExpMovingAvgBytesPerSecond(),
 		}
 	}
