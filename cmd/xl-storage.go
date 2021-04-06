@@ -347,6 +347,8 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	s.RLock()
+	defer s.RUnlock()
 	// If unset, see if we can locate it.
 	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
 		return getXLDiskLoc(s.diskID)
@@ -1615,6 +1617,9 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 	if err != nil {
 		return err
 	}
+	s.RLock()
+	formatLegacy := s.formatLegacy
+	s.RUnlock()
 
 	var checkFile func(p string) error
 	checkFile = func(p string) error {
@@ -1626,10 +1631,10 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 		if err := checkPathLength(filePath); err != nil {
 			return err
 		}
-
 		st, _ := Lstat(filePath)
 		if st == nil {
-			if !s.formatLegacy {
+
+			if !formatLegacy {
 				return errPathNotFound
 			}
 
@@ -1880,10 +1885,13 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			legacyPreserved = true
 		}
 	} else {
+		s.RLock()
+		formatLegacy := s.formatLegacy
+		s.RUnlock()
 		// It is possible that some drives may not have `xl.meta` file
 		// in such scenarios verify if atleast `part.1` files exist
 		// to verify for legacy version.
-		if s.formatLegacy {
+		if formatLegacy {
 			// We only need this code if we are moving
 			// from `xl.json` to `xl.meta`, we can avoid
 			// one extra readdir operation here for all
