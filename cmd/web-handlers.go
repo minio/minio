@@ -226,7 +226,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	reply.UIVersion = Version
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	sendEvent(eventArgs{
 		EventName:  event.BucketCreated,
@@ -723,7 +723,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	)
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 	sourceIP := handlers.GetSourceIP(r)
 
 next:
@@ -1340,7 +1340,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	// Notify object created event.
 	sendEvent(eventArgs{
@@ -1529,7 +1529,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
@@ -1684,7 +1684,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	defer archive.Close()
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 	respElements := extractRespElements(w)
 
 	for i, object := range args.Objects {

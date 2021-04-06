@@ -81,6 +81,15 @@ type MapClaims struct {
 	jwtgo.MapClaims
 }
 
+// GetAccessKey will return the access key.
+// If nil an empty string will be returned.
+func (c *MapClaims) GetAccessKey() string {
+	if c == nil {
+		return ""
+	}
+	return c.AccessKey
+}
+
 // NewStandardClaims - initializes standard claims
 func NewStandardClaims() *StandardClaims {
 	return &StandardClaims{}
