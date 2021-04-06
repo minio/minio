@@ -444,9 +444,16 @@ func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s Bucke
 		replStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
 		replStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
 	}
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	replStats.FailedCount += usageStat.FailedCount
+	replStats.FailedSize += usageStat.FailedSize
+	replStats.PendingCount += usageStat.PendingCount
+	replStats.PendingSize += usageStat.PendingSize
+	replStats.ReplicaSize += usageStat.ReplicaSize
+	replStats.ReplicatedSize += usageStat.ReplicatedSize
 
 	// use in memory replication stats if it is ahead of usage info.
-	if replStats.ReplicatedSize > u.ReplicatedSize {
+	if replStats.ReplicatedSize >= u.ReplicatedSize {
 		s.ReplicatedSize = replStats.ReplicatedSize
 	} else {
 		s.ReplicatedSize = u.ReplicatedSize
