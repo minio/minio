@@ -250,8 +250,8 @@ func (s *erasureSets) connectDisks() {
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
-			s.erasureDisksMu.Unlock()
 			setsJustConnected[setIndex] = true
+			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
 
