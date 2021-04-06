@@ -408,8 +408,8 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddTarget(globalConsoleSys)
+	GlobalConsoleSys = NewConsoleLogger(GlobalContext)
+	logger.AddTarget(GlobalConsoleSys)
 
 	// Perform any self-tests
 	erasureSelfTest()
@@ -422,7 +422,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Set node name, only set for distributed setup.
-	globalConsoleSys.SetNodeName(globalLocalNodeName)
+	GlobalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
 	InitHelp()

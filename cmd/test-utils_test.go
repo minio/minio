@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 	SetMaxResources()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	GlobalConsoleSys = NewConsoleLogger(context.Background())
 
 	GlobalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second, logger.LogOnceIf)
 

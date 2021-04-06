@@ -1634,7 +1634,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		return
 	}
 
-	bucketStats := globalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
+	bucketStats := GlobalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
 	bucketReplStats := BucketReplicationStats{}
 
 	for _, bucketStat := range bucketStats {

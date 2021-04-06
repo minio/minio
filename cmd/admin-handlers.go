@@ -1202,7 +1202,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
+	GlobalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
 
 	for _, peer := range peers {
 		if peer == nil {

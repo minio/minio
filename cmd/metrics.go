@@ -433,7 +433,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 // get the most current of in-memory replication stats  and data usage info from crawler.
 func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s BucketReplicationStats) {
-	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+	bucketStats := GlobalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
 
 	replStats := BucketReplicationStats{}
 	for _, bucketStat := range bucketStats {

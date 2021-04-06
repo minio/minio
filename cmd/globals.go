@@ -198,7 +198,7 @@ var (
 
 	// global console system to send console logs to
 	// registered listeners
-	globalConsoleSys *HTTPConsoleLoggerSys
+	GlobalConsoleSys *HTTPConsoleLoggerSys
 
 	globalEndpoints EndpointServerPools
 
