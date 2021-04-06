@@ -25,62 +25,61 @@ import (
 
 // MonitoredReader monitors the bandwidth
 type MonitoredReader struct {
-	bucket            string             // Token to track bucket
+	opts              *MonitorReaderOptions
 	bucketMeasurement *bucketMeasurement // bucket measurement object
-	object            string             // Token to track object
-	reader            io.ReadCloser      // Reader to wrap
+	reader            io.Reader          // Reader to wrap
 	lastStop          time.Time          // Last timestamp for a measurement
-	headerSize        int                // Size of the header not captured by reader
 	throttle          *throttle          // throttle the rate at which replication occur
 	monitor           *Monitor           // Monitor reference
-	closed            bool               // Reader is closed
+	lastErr           error              // last error reported, if this non-nil all reads will fail.
 }
 
-// NewMonitoredReader returns a io.ReadCloser that reports bandwidth details.
-// The supplied reader will be closed.
-func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, object string, reader io.ReadCloser, headerSize int, bandwidthBytesPerSecond int64, clusterBandwidth int64) *MonitoredReader {
+// MonitorReaderOptions provides configurable options for monitor reader implementation.
+type MonitorReaderOptions struct {
+	Bucket               string
+	Object               string
+	HeaderSize           int
+	BandwidthBytesPerSec int64
+	ClusterBandwidth     int64
+}
+
+// NewMonitoredReader returns a io.Reader that reports bandwidth details.
+func NewMonitoredReader(ctx context.Context, monitor *Monitor, reader io.Reader, opts *MonitorReaderOptions) *MonitoredReader {
 	timeNow := time.Now()
-	b := monitor.track(bucket, object, timeNow)
+	b := monitor.track(opts.Bucket, opts.Object, timeNow)
 	return &MonitoredReader{
-		bucket:            bucket,
-		object:            object,
+		opts:              opts,
 		bucketMeasurement: b,
 		reader:            reader,
 		lastStop:          timeNow,
-		headerSize:        headerSize,
-		throttle:          monitor.throttleBandwidth(ctx, bucket, bandwidthBytesPerSecond, clusterBandwidth),
+		throttle:          monitor.throttleBandwidth(ctx, opts.Bucket, opts.BandwidthBytesPerSec, opts.ClusterBandwidth),
 		monitor:           monitor,
 	}
 }
 
 // Read wraps the read reader
 func (m *MonitoredReader) Read(p []byte) (n int, err error) {
-	if m.closed {
-		err = io.ErrClosedPipe
+	if m.lastErr != nil {
+		err = m.lastErr
 		return
 	}
+
 	p = p[:m.throttle.GetLimitForBytes(int64(len(p)))]
 
 	n, err = m.reader.Read(p)
 	stop := time.Now()
-	update := uint64(n + m.headerSize)
+	update := uint64(n + m.opts.HeaderSize)
 
 	m.bucketMeasurement.incrementBytes(update)
 	m.lastStop = stop
-	unused := len(p) - (n + m.headerSize)
-	m.headerSize = 0 // Set to 0 post first read
+	unused := len(p) - (n + m.opts.HeaderSize)
+	m.opts.HeaderSize = 0 // Set to 0 post first read
 
 	if unused > 0 {
 		m.throttle.ReleaseUnusedBandwidth(int64(unused))
 	}
-	return
-}
-
-// Close stops tracking the io
-func (m *MonitoredReader) Close() error {
-	if m.closed {
-		return nil
+	if err != nil {
+		m.lastErr = err
 	}
-	m.closed = true
-	return m.reader.Close()
+	return
 }
