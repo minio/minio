@@ -39,6 +39,7 @@ The following minimal permission policy is needed by admin user setting up repli
    "Effect": "Allow",
    "Action": [
     "s3:GetReplicationConfiguration",
+    "s3:PutReplicationConfiguration",
     "s3:ListBucket",
     "s3:ListBucketMultipartUploads",
     "s3:GetBucketLocation",
