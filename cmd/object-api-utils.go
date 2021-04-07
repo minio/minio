@@ -817,13 +817,7 @@ func (g *GetObjectReader) Close() error {
 
 // Read - to implement Reader interface.
 func (g *GetObjectReader) Read(p []byte) (n int, err error) {
-	n, err = g.pReader.Read(p)
-	if err != nil {
-		// Calling code may not Close() in case of error, so
-		// we ensure it.
-		g.Close()
-	}
-	return
+	return g.pReader.Read(p)
 }
 
 //SealMD5CurrFn seals md5sum with object encryption key and returns sealed
