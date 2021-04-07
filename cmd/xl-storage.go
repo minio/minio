@@ -1035,11 +1035,13 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 }
 
 func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirectIO bool) (buf []byte, err error) {
-	var f *os.File
+	var r io.ReadCloser
 	if requireDirectIO {
+		var f *os.File
 		f, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
+		r = &odirectReader{f, nil, nil, true, true, s, nil}
 	} else {
-		f, err = OpenFile(filePath, readMode, 0)
+		r, err = OpenFile(filePath, readMode, 0)
 	}
 	if err != nil {
 		if osIsNotExist(err) {
@@ -1074,10 +1076,8 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 		return nil, err
 	}
 
-	or := &odirectReader{f, nil, nil, true, true, s, nil}
-	defer or.Close()
-
-	buf, err = ioutil.ReadAll(or)
+	defer r.Close()
+	buf, err = ioutil.ReadAll(r)
 	if err != nil {
 		err = osErrToFileErr(err)
 	}
@@ -1250,7 +1250,7 @@ type odirectReader struct {
 
 // Read - Implements Reader interface.
 func (o *odirectReader) Read(buf []byte) (n int, err error) {
-	if o.err != nil {
+	if o.err != nil && (len(o.buf) == 0 || o.freshRead) {
 		return 0, o.err
 	}
 	if o.buf == nil {
@@ -1277,20 +1277,22 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 			}
 		}
 		if n == 0 {
-			// err is io.EOF
+			// err is likely io.EOF
 			o.err = err
 			return n, err
 		}
+		o.err = err
 		o.buf = o.buf[:n]
 		o.freshRead = false
 	}
 	if len(buf) >= len(o.buf) {
 		n = copy(buf, o.buf)
 		o.freshRead = true
-		return n, nil
+		return n, o.err
 	}
 	n = copy(buf, o.buf)
 	o.buf = o.buf[n:]
+	// There is more left in buffer, do not return any EOF yet.
 	return n, nil
 }
 
