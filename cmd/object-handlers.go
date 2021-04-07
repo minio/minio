@@ -400,7 +400,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Both 'bytes' and 'partNumber' cannot be specified at the same time
 	if rs != nil && opts.PartNumber > 0 {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -694,7 +694,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Both 'bytes' and 'partNumber' cannot be specified at the same time
 	if rs != nil && opts.PartNumber > 0 {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber))
 		return
 	}
 
