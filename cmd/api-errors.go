@@ -82,6 +82,7 @@ const (
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
+	ErrInvalidRangePartNumber
 	ErrInvalidCopyPartRange
 	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
@@ -504,6 +505,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidRange",
 		Description:    "The requested range is not satisfiable",
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
+	},
+	ErrInvalidRangePartNumber: {
+		Code:           "InvalidRequest",
+		Description:    "Cannot specify both Range header and partNumber query parameter",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedXML: {
 		Code:           "MalformedXML",
