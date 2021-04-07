@@ -597,7 +597,15 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		})
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, writeLock, ObjectOptions{
+
+	lock := objectAPI.NewNSLock(bucket, object)
+	ctx, err = lock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+	}
+	defer lock.Unlock()
+
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, noLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
