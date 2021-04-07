@@ -994,10 +994,12 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 	return true
 }
 
-func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo) bool {
+func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, applyOnVersion bool) bool {
 	opts := ObjectOptions{}
 
-	opts.VersionID = obj.VersionID
+	if applyOnVersion {
+		opts.VersionID = obj.VersionID
+	}
 	if opts.VersionID == "" {
 		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
 	}
@@ -1029,20 +1031,20 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 }
 
 // Apply object, object version, restored object or restored object version action on the given object
-func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
+func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
 	if obj.TransitionStatus != "" {
 		return applyExpiryOnTransitionedObject(ctx, objLayer, obj, restoredObject)
 	}
-	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj)
+	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj, applyOnVersion)
 }
 
 // Perform actions (removal of transitioning of objects), return true the action is successfully performed
 func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-		success = applyExpiryRule(ctx, objLayer, obj, false)
+		success = applyExpiryRule(ctx, objLayer, obj, false, action == lifecycle.DeleteVersionAction)
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		success = applyExpiryRule(ctx, objLayer, obj, true)
+		success = applyExpiryRule(ctx, objLayer, obj, true, action == lifecycle.DeleteRestoredVersionAction)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 		success = applyTransitionAction(ctx, action, objLayer, obj)
 	}
