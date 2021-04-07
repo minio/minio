@@ -530,7 +530,7 @@ type SelectParameters struct {
 
 // IsEmpty returns true if no select parameters set
 func (sp *SelectParameters) IsEmpty() bool {
-	return sp == nil || sp.S3Select == s3select.S3Select{}
+	return sp == nil
 }
 
 var (
