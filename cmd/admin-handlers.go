@@ -267,21 +267,6 @@ type ServerHTTPStats struct {
 	TotalS3Canceled   ServerHTTPAPIStats `json:"totalS3Canceled"`
 }
 
-// ServerInfoData holds storage, connections and other
-// information of a given server.
-type ServerInfoData struct {
-	ConnStats  ServerConnStats  `json:"network"`
-	HTTPStats  ServerHTTPStats  `json:"http"`
-	Properties ServerProperties `json:"server"`
-}
-
-// ServerInfo holds server information result of one node
-type ServerInfo struct {
-	Error string          `json:"error"`
-	Addr  string          `json:"addr"`
-	Data  *ServerInfoData `json:"data"`
-}
-
 // StorageInfoHandler - GET /minio/admin/v3/storageinfo
 // ----------
 // Get server information

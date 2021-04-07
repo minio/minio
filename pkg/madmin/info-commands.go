@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"runtime"
 	"time"
 )
 
@@ -316,6 +317,7 @@ type ServerProperties struct {
 	Network    map[string]string `json:"network,omitempty"`
 	Disks      []Disk            `json:"drives,omitempty"`
 	PoolNumber int               `json:"poolNumber,omitempty"`
+	MemStats   runtime.MemStats  `json:"mem_stats"`
 }
 
 // DiskMetrics has the information about XL Storage APIs

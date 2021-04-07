@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -67,6 +68,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		CommitID: CommitID,
 		Network:  network,
 	}
+	runtime.ReadMemStats(&props.MemStats)
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil && !globalIsGateway {
