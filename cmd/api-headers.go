@@ -158,14 +158,14 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		return err
 	}
 
+	if rs == nil && opts.PartNumber > 0 {
+		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
+	}
+
 	// For providing ranged content
 	start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
 	if err != nil {
 		return err
-	}
-
-	if rs == nil && opts.PartNumber > 0 {
-		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
 	}
 
 	// Set content length.
