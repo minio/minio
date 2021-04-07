@@ -413,6 +413,7 @@ func serverMain(ctx *cli.Context) {
 	logger.AddTarget(globalConsoleSys)
 
 	// Perform any self-tests
+	bitrotSelfTest()
 	erasureSelfTest()
 	compressSelfTest()
 

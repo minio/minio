@@ -739,6 +739,152 @@ func TestCSVQueries2(t *testing.T) {
 	}
 }
 
+func TestCSVQueries3(t *testing.T) {
+	input := `na.me,qty,CAST
+apple,1,true
+mango,3,false
+`
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte // override request XML
+		wantResult string
+	}{
+		{
+			name:  "Select a column containing dot",
+			query: `select "na.me" from S3Object s`,
+			wantResult: `apple
+mango`,
+		},
+		{
+			name:       "Select column containing dot with table name prefix",
+			query:      `select count(S3Object."na.me") from S3Object`,
+			wantResult: `2`,
+		},
+		{
+			name:  "Select column containing dot with table alias prefix",
+			query: `select s."na.me" from S3Object as s`,
+			wantResult: `apple
+mango`,
+		},
+		{
+			name:  "Select column simplest",
+			query: `select qty from S3Object`,
+			wantResult: `1
+3`,
+		},
+		{
+			name:  "Select column with table name prefix",
+			query: `select S3Object.qty from S3Object`,
+			wantResult: `1
+3`,
+		},
+		{
+			name:  "Select column without table alias",
+			query: `select qty from S3Object s`,
+			wantResult: `1
+3`,
+		},
+		{
+			name:  "Select column with table alias",
+			query: `select s.qty from S3Object s`,
+			wantResult: `1
+3`,
+		},
+		{
+			name:  "Select reserved word column",
+			query: `select "CAST"  from s3object`,
+			wantResult: `true
+false`,
+		},
+		{
+			name:  "Select reserved word column with table alias",
+			query: `select S3Object."CAST" from s3object`,
+			wantResult: `true
+false`,
+		},
+		{
+			name:  "Select reserved word column with unused table alias",
+			query: `select "CAST"  from s3object s`,
+			wantResult: `true
+false`,
+		},
+		{
+			name:  "Select reserved word column with table alias",
+			query: `select s."CAST"  from s3object s`,
+			wantResult: `true
+false`,
+		},
+		{
+			name:  "Select reserved word column with table alias",
+			query: `select NOT CAST(s."CAST" AS Bool)  from s3object s`,
+			wantResult: `false
+true`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <CSV>
+            <FileHeaderInfo>USE</FileHeaderInfo>
+	    <QuoteCharacter>"</QuoteCharacter>
+        </CSV>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV/>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if gotS != testCase.wantResult {
+				t.Errorf("received response does not match with expected reply.\nQuery: %s\n=====\ngot: %s\n=====\nwant: %s\n=====\n", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
+}
+
 func TestCSVInput(t *testing.T) {
 	var testTable = []struct {
 		requestXML     []byte

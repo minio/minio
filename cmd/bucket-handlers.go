@@ -1636,7 +1636,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 
 	bucketStats := globalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
 	bucketReplStats := BucketReplicationStats{}
-
+	// sum up metrics from each node in the cluster
 	for _, bucketStat := range bucketStats {
 		bucketReplStats.FailedCount += bucketStat.ReplicationStats.FailedCount
 		bucketReplStats.FailedSize += bucketStat.ReplicationStats.FailedSize
@@ -1645,6 +1645,14 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		bucketReplStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
 		bucketReplStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
 	}
+	// add initial usage from the time of cluster up
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	bucketReplStats.FailedCount += usageStat.FailedCount
+	bucketReplStats.FailedSize += usageStat.FailedSize
+	bucketReplStats.PendingCount += usageStat.PendingCount
+	bucketReplStats.PendingSize += usageStat.PendingSize
+	bucketReplStats.ReplicaSize += usageStat.ReplicaSize
+	bucketReplStats.ReplicatedSize += usageStat.ReplicatedSize
 
 	if err := json.NewEncoder(w).Encode(&bucketReplStats); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

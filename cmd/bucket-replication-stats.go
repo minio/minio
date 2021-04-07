@@ -36,7 +36,8 @@ func (b *BucketReplicationStats) hasReplicationUsage() bool {
 // ReplicationStats holds the global in-memory replication stats
 type ReplicationStats struct {
 	sync.RWMutex
-	Cache map[string]*BucketReplicationStats
+	Cache      map[string]*BucketReplicationStats
+	UsageCache map[string]*BucketReplicationStats // initial usage
 }
 
 // Delete deletes in-memory replication statistics for a bucket.
@@ -48,6 +49,8 @@ func (r *ReplicationStats) Delete(bucket string) {
 	r.Lock()
 	defer r.Unlock()
 	delete(r.Cache, bucket)
+	delete(r.UsageCache, bucket)
+
 }
 
 // Update updates in-memory replication statistics with new values.
@@ -62,7 +65,6 @@ func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus rep
 		b = &BucketReplicationStats{}
 	}
 	r.RUnlock()
-
 	switch status {
 	case replication.Pending:
 		if opType == replication.ObjectReplicationType {
@@ -87,10 +89,15 @@ func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus rep
 		}
 	case replication.Failed:
 		// count failures only once - not on every retry
+		switch prevStatus { // adjust counters based on previous state
+		case replication.Pending:
+			atomic.AddUint64(&b.PendingCount, ^uint64(0))
+		}
 		if opType == replication.ObjectReplicationType {
 			if prevStatus == replication.Pending {
 				atomic.AddUint64(&b.FailedSize, uint64(n))
 				atomic.AddUint64(&b.FailedCount, 1)
+				atomic.AddUint64(&b.PendingSize, ^uint64(n-1))
 			}
 		}
 	case replication.Replica:
@@ -98,9 +105,35 @@ func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus rep
 			atomic.AddUint64(&b.ReplicaSize, uint64(n))
 		}
 	}
+	r.Lock()
+	r.Cache[bucket] = b
+	r.Unlock()
 }
 
-// Get total bytes pending replication for a bucket
+// GetInitialUsage get replication metrics available at the time of cluster initialization
+func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats {
+	if r == nil {
+		return BucketReplicationStats{}
+	}
+
+	r.RLock()
+	defer r.RUnlock()
+
+	st, ok := r.UsageCache[bucket]
+	if !ok {
+		return BucketReplicationStats{}
+	}
+	return BucketReplicationStats{
+		PendingSize:    atomic.LoadUint64(&st.PendingSize),
+		FailedSize:     atomic.LoadUint64(&st.FailedSize),
+		ReplicatedSize: atomic.LoadUint64(&st.ReplicatedSize),
+		ReplicaSize:    atomic.LoadUint64(&st.ReplicaSize),
+		PendingCount:   atomic.LoadUint64(&st.PendingCount),
+		FailedCount:    atomic.LoadUint64(&st.FailedCount),
+	}
+}
+
+// Get replication metrics for a bucket from this node since this node came up.
 func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	if r == nil {
 		return BucketReplicationStats{}
@@ -127,7 +160,8 @@ func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 // NewReplicationStats initialize in-memory replication statistics
 func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *ReplicationStats {
 	st := &ReplicationStats{
-		Cache: make(map[string]*BucketReplicationStats),
+		Cache:      make(map[string]*BucketReplicationStats),
+		UsageCache: make(map[string]*BucketReplicationStats),
 	}
 
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
@@ -150,7 +184,7 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 			FailedCount:    usage.ReplicationFailedCount,
 		}
 		if b.hasReplicationUsage() {
-			st.Cache[bucket] = b
+			st.UsageCache[bucket] = b
 		}
 	}
 

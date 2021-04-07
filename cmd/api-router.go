@@ -343,9 +343,6 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketLoggingHandler - this is a dummy call.
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketlogging", maxClients(httpTraceAll(api.GetBucketLoggingHandler)))).Queries("logging", "")
-		// GetBucketLifecycleHandler - this is a dummy call.
-		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("getbucketlifecycle", maxClients(httpTraceAll(api.GetBucketLifecycleHandler)))).Queries("lifecycle", "")
 		// GetBucketTaggingHandler
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbuckettagging", maxClients(httpTraceAll(api.GetBucketTaggingHandler)))).Queries("tagging", "")
