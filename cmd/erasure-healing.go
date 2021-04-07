@@ -231,7 +231,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
-func (er erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, partsMetadata []FileInfo, errs []error, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
+func (er erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
@@ -249,13 +249,14 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
 
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
-			return result, err
-		}
-		defer lk.Unlock()
+	lk := er.NewNSLock(bucket, object)
+	if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		return result, err
 	}
+	defer lk.Unlock()
+
+	// Re-read when we have lock...
+	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
@@ -857,7 +858,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		versionID = nullVersionID
 	}
 
-	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, true)
+	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
 
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)
@@ -874,5 +875,5 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	}
 
 	// Heal the object.
-	return er.healObject(healCtx, bucket, object, versionID, partsMetadata, errs, opts)
+	return er.healObject(healCtx, bucket, object, versionID, opts)
 }
