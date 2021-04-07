@@ -80,6 +80,8 @@ type ServiceTraceInfo struct {
 
 // ServiceTraceOpts holds tracing options
 type ServiceTraceOpts struct {
+	All bool // Deprecated
+
 	S3         bool
 	Internal   bool
 	Storage    bool
@@ -97,11 +99,17 @@ func (adm AdminClient) ServiceTrace(ctx context.Context, opts ServiceTraceOpts) 
 		for {
 			urlValues := make(url.Values)
 			urlValues.Set("err", strconv.FormatBool(opts.OnlyErrors))
-			urlValues.Set("s3", strconv.FormatBool(opts.S3))
-			urlValues.Set("internal", strconv.FormatBool(opts.Internal))
-			urlValues.Set("storage", strconv.FormatBool(opts.Storage))
-			urlValues.Set("os", strconv.FormatBool(opts.OS))
 			urlValues.Set("threshold", opts.Threshold.String())
+
+			if opts.All {
+				// Deprecated flag
+				urlValues.Set("all", "true")
+			} else {
+				urlValues.Set("s3", strconv.FormatBool(opts.S3))
+				urlValues.Set("internal", strconv.FormatBool(opts.Internal))
+				urlValues.Set("storage", strconv.FormatBool(opts.Storage))
+				urlValues.Set("os", strconv.FormatBool(opts.OS))
+			}
 			reqData := requestData{
 				relPath:     adminAPIPrefix + "/trace",
 				queryValues: urlValues,

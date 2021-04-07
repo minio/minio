@@ -25,12 +25,12 @@ import (
 type Type int
 
 const (
+	// HTTP tracing (MinIO S3 & Internode)
+	HTTP Type = iota
 	// OS tracing (Golang os package calls)
-	OS Type = iota
+	OS
 	// Storage tracing (MinIO Storage Layer)
 	Storage
-	// HTTP tracing (MinIO S3 & Internode)
-	HTTP
 )
 
 // Info - represents a trace record, additionally
