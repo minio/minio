@@ -298,22 +298,25 @@ func TestDownloadReleaseData(t *testing.T) {
 func TestParseReleaseData(t *testing.T) {
 	releaseTime, _ := releaseTagToReleaseTime("RELEASE.2016-10-07T01-16-39Z")
 	testCases := []struct {
-		data              string
-		expectedResult    time.Time
-		expectedSha256hex string
-		expectedErr       bool
+		data                string
+		expectedResult      time.Time
+		expectedSha256hex   string
+		expectedReleaseInfo string
+		expectedErr         bool
 	}{
-		{"more than two fields", time.Time{}, "", true},
-		{"more than", time.Time{}, "", true},
-		{"more than.two.fields", time.Time{}, "", true},
-		{"more minio.RELEASE.fields", time.Time{}, "", true},
-		{"more minio.RELEASE.2016-10-07T01-16-39Z", time.Time{}, "", true},
-		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d", false},
-		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d", false},
+		{"more than two fields", time.Time{}, "", "", true},
+		{"more than", time.Time{}, "", "", true},
+		{"more than.two.fields", time.Time{}, "", "", true},
+		{"more minio.RELEASE.fields", time.Time{}, "", "", true},
+		{"more minio.RELEASE.2016-10-07T01-16-39Z", time.Time{}, "", "", true},
+		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
+			"minio.RELEASE.2016-10-07T01-16-39Z", false},
+		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
+			"minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix", false},
 	}
 
 	for i, testCase := range testCases {
-		sha256Sum, result, err := parseReleaseData(testCase.data)
+		sha256Sum, result, releaseInfo, err := parseReleaseData(testCase.data)
 		if !testCase.expectedErr {
 			if err != nil {
 				t.Errorf("error case %d: expected no error, got: %v", i+1, err)
@@ -327,6 +330,9 @@ func TestParseReleaseData(t *testing.T) {
 			}
 			if !testCase.expectedResult.Equal(result) {
 				t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			}
+			if testCase.expectedReleaseInfo != releaseInfo {
+				t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedReleaseInfo, releaseInfo)
 			}
 		}
 	}

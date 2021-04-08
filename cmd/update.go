@@ -1,5 +1,7 @@
+// +build !fips
+
 /*
- * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -369,7 +371,7 @@ func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content
 // fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.<hotfix_optional>
 //
 // The second word must be `minio.` appended to a standard release tag.
-func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, err error) {
+func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, releaseInfo string, err error) {
 	defer func() {
 		if err != nil {
 			err = AdminError{
@@ -383,25 +385,25 @@ func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, err
 	fields := strings.Fields(data)
 	if len(fields) != 2 {
 		err = fmt.Errorf("Unknown release data `%s`", data)
-		return sha256Sum, releaseTime, err
+		return sha256Sum, releaseTime, releaseInfo, err
 	}
 
 	sha256Sum, err = hex.DecodeString(fields[0])
 	if err != nil {
-		return sha256Sum, releaseTime, err
+		return sha256Sum, releaseTime, releaseInfo, err
 	}
 
-	releaseInfo := fields[1]
+	releaseInfo = fields[1]
 
 	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
 	nfields := strings.SplitN(releaseInfo, ".", 2)
 	if len(nfields) != 2 {
 		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
-		return sha256Sum, releaseTime, err
+		return sha256Sum, releaseTime, releaseInfo, err
 	}
 	if nfields[0] != "minio" {
 		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
-		return sha256Sum, releaseTime, err
+		return sha256Sum, releaseTime, releaseInfo, err
 	}
 
 	releaseTime, err = releaseTagToReleaseTime(nfields[1])
@@ -409,7 +411,7 @@ func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, err
 		err = fmt.Errorf("Unknown release tag format. %w", err)
 	}
 
-	return sha256Sum, releaseTime, err
+	return sha256Sum, releaseTime, releaseInfo, err
 }
 
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
@@ -433,7 +435,8 @@ func getLatestReleaseTime(u *url.URL, timeout time.Duration, mode string) (sha25
 		return sha256Sum, releaseTime, err
 	}
 
-	return parseReleaseData(data)
+	sha256Sum, releaseTime, _, err = parseReleaseData(data)
+	return
 }
 
 const (
@@ -516,7 +519,7 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 	return resp.Body, nil
 }
 
-func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, mode string) (err error) {
+func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string) (err error) {
 	transport := getUpdateTransport(30 * time.Second)
 	var reader io.ReadCloser
 	if u.Scheme == "https" || u.Scheme == "http" {
@@ -539,7 +542,7 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, mode string) (err 
 	minisignPubkey := env.Get(envMinisignPubKey, "")
 	if minisignPubkey != "" {
 		v := selfupdate.NewVerifier()
-		u.Path = path.Dir(u.Path) + slashSeparator + "minio.RELEASE." + lrTime.Format(minioReleaseTagTimeLayout) + ".minisig"
+		u.Path = path.Dir(u.Path) + slashSeparator + releaseInfo + ".minisig"
 		if err = v.LoadFromURL(u.String(), minisignPubkey, transport); err != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,
