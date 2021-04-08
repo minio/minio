@@ -186,6 +186,12 @@ func IsNetworkOrHostDown(err error, expectTimeouts bool) bool {
 	case strings.Contains(err.Error(), "connection timed out"):
 		// If err is a net.Dial timeout.
 		return true
+	case strings.Contains(err.Error(), "connection reset by peer"):
+		// IF err is a peer reset on a socket.
+		return true
+	case strings.Contains(err.Error(), "broken pipe"):
+		// IF err is a broken pipe on a socket.
+		return true
 	case strings.Contains(strings.ToLower(err.Error()), "503 service unavailable"):
 		// Denial errors
 		return true

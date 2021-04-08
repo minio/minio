@@ -381,6 +381,13 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 	if err != nil {
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
+	if globalServerRegion != "" {
+		switch errCode {
+		case ErrAuthorizationHeaderMalformed:
+			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
+			return apiErr
+		}
+	}
 	return apiErr
 }
 
@@ -2115,6 +2122,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code:           e.Code,
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
+			}
+			if globalIsGateway && strings.Contains(e.Message, "KMS is not configured") {
+				apiErr = APIError{
+					Code:           "NotImplemented",
+					Description:    e.Message,
+					HTTPStatusCode: http.StatusNotImplemented,
+				}
 			}
 		case *googleapi.Error:
 			apiErr = APIError{
