@@ -585,7 +585,6 @@ func xlMetaV2TrimData(buf []byte) []byte {
 	}
 	// Skip CRC
 	if maj > 1 || min >= 2 {
-		logger.LogIf(GlobalContext, err)
 		_, metaBuf, err = msgp.ReadUint32Bytes(metaBuf)
 		logger.LogIf(GlobalContext, err)
 	}
