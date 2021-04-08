@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/fips"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/sio"
 )
@@ -391,7 +392,7 @@ func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI Obje
 		return nil
 	}
 
-	encBytes, metaBytes, err := encryptBucketMetadata(b.Name, b.BucketTargetsConfigJSON, crypto.Context{b.Name: b.Name, bucketTargetsFile: bucketTargetsFile})
+	encBytes, metaBytes, err := encryptBucketMetadata(b.Name, b.BucketTargetsConfigJSON, kms.Context{b.Name: b.Name, bucketTargetsFile: bucketTargetsFile})
 	if err != nil {
 		return err
 	}
@@ -402,26 +403,22 @@ func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI Obje
 }
 
 // encrypt bucket metadata if kms is configured.
-func encryptBucketMetadata(bucket string, input []byte, kmsContext crypto.Context) (output, metabytes []byte, err error) {
-	var sealedKey crypto.SealedKey
+func encryptBucketMetadata(bucket string, input []byte, kmsContext kms.Context) (output, metabytes []byte, err error) {
 	if GlobalKMS == nil {
 		output = input
 		return
 	}
-	var (
-		key    [32]byte
-		encKey []byte
-	)
+
 	metadata := make(map[string]string)
-	key, encKey, err = GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), kmsContext)
+	key, err := GlobalKMS.GenerateKey("", kmsContext)
 	if err != nil {
 		return
 	}
 
 	outbuf := bytes.NewBuffer(nil)
-	objectKey := crypto.GenerateKey(key, rand.Reader)
-	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, "")
-	crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
+	objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
+	sealedKey := objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, "")
+	crypto.S3.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey)
 	_, err = sio.Encrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		return output, metabytes, err
@@ -434,7 +431,7 @@ func encryptBucketMetadata(bucket string, input []byte, kmsContext crypto.Contex
 }
 
 // decrypt bucket metadata if kms is configured.
-func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, kmsContext crypto.Context) ([]byte, error) {
+func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, kmsContext kms.Context) ([]byte, error) {
 	if GlobalKMS == nil {
 		return nil, errKMSNotConfigured
 	}
@@ -442,7 +439,7 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 	if err != nil {
 		return nil, err
 	}
-	extKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, kmsContext)
+	extKey, err := GlobalKMS.DecryptKey(keyID, kmsKey, kmsContext)
 	if err != nil {
 		return nil, err
 	}

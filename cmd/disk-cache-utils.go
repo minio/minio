@@ -245,11 +245,10 @@ func decryptCacheObjectETag(info *ObjectInfo) error {
 			return errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(info.UserDefined)
-
 		if err != nil {
 			return err
 		}
-		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
+		extKey, err := globalCacheKMS.DecryptKey(keyID, kmsKey, crypto.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
 		if err != nil {
 			return err
 		}

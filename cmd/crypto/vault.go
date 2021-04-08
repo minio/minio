@@ -22,6 +22,7 @@ import (
 	"time"
 
 	vault "github.com/hashicorp/vault/api"
+	"github.com/minio/minio/pkg/kms"
 )
 
 var (
@@ -190,22 +191,15 @@ func (v *vaultService) authenticate() (err error) {
 	return
 }
 
-// DefaultKeyID returns the default key ID that should be
-// used for SSE-S3 or SSE-KMS when the S3 client does not
-// provide an explicit key ID.
-func (v *vaultService) DefaultKeyID() string {
-	return v.config.Key.Name
-}
-
 // Info returns some information about the Vault,
 // configuration - like the endpoints or authentication
 // method.
-func (v *vaultService) Info() KMSInfo {
-	return KMSInfo{
-		Endpoints: []string{v.config.Endpoint},
-		Name:      v.DefaultKeyID(),
-		AuthType:  v.config.Auth.Type,
-	}
+func (v *vaultService) Stat() (kms.Status, error) {
+	return kms.Status{
+		Endpoints:  []string{v.config.Endpoint},
+		Name:       "Hashicorp Vault",
+		DefaultKey: v.config.Key.Name,
+	}, nil
 }
 
 // CreateKey is a stub that exists such that the Vault
@@ -222,10 +216,13 @@ func (v *vaultService) CreateKey(keyID string) error {
 // and a sealed version of this plaintext key encrypted using the
 // named key referenced by keyID. It also binds the generated key
 // cryptographically to the provided context.
-func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
+func (v *vaultService) GenerateKey(keyID string, ctx Context) (kms.DEK, error) {
+	if keyID == "" {
+		keyID = v.config.Key.Name
+	}
 	context, err := ctx.MarshalText()
 	if err != nil {
-		return key, sealedKey, err
+		return kms.DEK{}, err
 	}
 
 	payload := map[string]interface{}{
@@ -233,24 +230,27 @@ func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 	}
 	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/datakey/plaintext/%s", keyID), payload)
 	if err != nil {
-		return key, sealedKey, Errorf("crypto: client error %w", err)
+		return kms.DEK{}, Errorf("crypto: client error %w", err)
 	}
 	sealKey, ok := s.Data["ciphertext"].(string)
 	if !ok {
-		return key, sealedKey, Errorf("crypto: incorrect 'ciphertext' key type %v", s.Data["ciphertext"])
+		return kms.DEK{}, Errorf("crypto: incorrect 'ciphertext' key type %v", s.Data["ciphertext"])
 	}
 
 	plainKeyB64, ok := s.Data["plaintext"].(string)
 	if !ok {
-		return key, sealedKey, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
+		return kms.DEK{}, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
 	}
 
 	plainKey, err := base64.StdEncoding.DecodeString(plainKeyB64)
 	if err != nil {
-		return key, sealedKey, Errorf("crypto: invalid base64 key %w", err)
+		return kms.DEK{}, Errorf("crypto: invalid base64 key %w", err)
 	}
-	copy(key[:], plainKey)
-	return key, []byte(sealKey), nil
+	return kms.DEK{
+		KeyID:      keyID,
+		Plaintext:  plainKey,
+		Ciphertext: []byte(sealKey),
+	}, nil
 }
 
 // UnsealKey returns the decrypted sealedKey as plaintext key.
@@ -260,10 +260,10 @@ func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 //
 // The context must be same context as the one provided while
 // generating the plaintext key / sealedKey.
-func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
+func (v *vaultService) DecryptKey(keyID string, sealedKey []byte, ctx Context) ([]byte, error) {
 	context, err := ctx.MarshalText()
 	if err != nil {
-		return key, err
+		return nil, err
 	}
 
 	payload := map[string]interface{}{
@@ -273,18 +273,17 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 
 	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/decrypt/%s", keyID), payload)
 	if err != nil {
-		return key, Errorf("crypto: client error %w", err)
+		return nil, Errorf("crypto: client error %w", err)
 	}
 
 	base64Key, ok := s.Data["plaintext"].(string)
 	if !ok {
-		return key, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
+		return nil, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
 	}
 
 	plainKey, err := base64.StdEncoding.DecodeString(base64Key)
 	if err != nil {
-		return key, Errorf("crypto: invalid base64 key %w", err)
+		return nil, Errorf("crypto: invalid base64 key %w", err)
 	}
-	copy(key[:], plainKey)
-	return key, nil
+	return plainKey, nil
 }

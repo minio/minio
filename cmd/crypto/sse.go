@@ -77,12 +77,12 @@ func (sse ssecCopy) UnsealObjectKey(h http.Header, metadata map[string]string, b
 	if err != nil {
 		return
 	}
-	return unsealObjectKey(clientKey, metadata, bucket, object)
+	return unsealObjectKey(clientKey[:], metadata, bucket, object)
 }
 
 // unsealObjectKey decrypts and returns the sealed object key
 // from the metadata using the SSE-C client key.
-func unsealObjectKey(clientKey [32]byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func unsealObjectKey(clientKey []byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	sealedKey, err := SSEC.ParseMetadata(metadata)
 	if err != nil {
 		return

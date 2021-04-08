@@ -37,7 +37,7 @@ type ObjectKey [32]byte
 // GenerateKey generates a unique ObjectKey from a 256 bit external key
 // and a source of randomness. If random is nil the default PRNG of the
 // system (crypto/rand) is used.
-func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
+func GenerateKey(extKey []byte, random io.Reader) (key ObjectKey) {
 	if random == nil {
 		random = rand.Reader
 	}
@@ -46,7 +46,7 @@ func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
 	sha := sha256.New()
-	sha.Write(extKey[:])
+	sha.Write(extKey)
 	sha.Write(nonce[:])
 	sha.Sum(key[:0])
 	return key
@@ -76,7 +76,7 @@ type SealedKey struct {
 // Seal encrypts the ObjectKey using the 256 bit external key and IV. The sealed
 // key is also cryptographically bound to the object's path (bucket/object) and the
 // domain (SSE-C or SSE-S3).
-func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) SealedKey {
+func (key ObjectKey) Seal(extKey []byte, iv [32]byte, domain, bucket, object string) SealedKey {
 	var (
 		sealingKey   [32]byte
 		encryptedKey bytes.Buffer
@@ -101,7 +101,7 @@ func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) Se
 // Unseal decrypts a sealed key using the 256 bit external key. Since the sealed key
 // may be cryptographically bound to the object's path the same bucket/object as during sealing
 // must be provided. On success the ObjectKey contains the decrypted sealed key.
-func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucket, object string) error {
+func (key *ObjectKey) Unseal(extKey []byte, sealedKey SealedKey, domain, bucket, object string) error {
 	var (
 		unsealConfig sio.Config
 	)
