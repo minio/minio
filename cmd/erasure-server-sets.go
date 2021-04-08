@@ -930,6 +930,12 @@ func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, mar
 
 	for _, entry := range entries.Files {
 		objInfo := entry.ToObjectInfo(entry.Volume, entry.Name)
+		// Always avoid including the marker in the result, this is
+		// needed to avoid including dir__XLDIR__ and dir/ twice in
+		// different listing pages
+		if objInfo.Name == marker {
+			continue
+		}
 		if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
 			loi.Prefixes = append(loi.Prefixes, objInfo.Name)
 			continue
@@ -1411,6 +1417,12 @@ func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, pref
 	for _, entry := range entries.FilesVersions {
 		for _, version := range entry.Versions {
 			objInfo := version.ToObjectInfo(bucket, entry.Name)
+			// Always avoid including the marker in the result, this is
+			// needed to avoid including dir__XLDIR__ and dir/ twice in
+			// different listing pages
+			if objInfo.Name == marker && objInfo.VersionID == versionMarker {
+				continue
+			}
 			if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
 				loi.Prefixes = append(loi.Prefixes, objInfo.Name)
 				continue
