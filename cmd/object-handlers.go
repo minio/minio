@@ -1271,6 +1271,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(srcInfo.UserDefined)
 
+	// If we see legacy source, metadataOnly we have to overwrite the content.
+	if srcInfo.Legacy {
+		srcInfo.metadataOnly = false
+	}
+
 	// Check if x-amz-metadata-directive or x-amz-tagging-directive was not set to REPLACE and source,
 	// destination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
