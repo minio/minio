@@ -2004,6 +2004,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKeyTooLongError
 	case dns.ErrInvalidBucketName:
 		apiErr = ErrInvalidBucketName
+	case dns.ErrBucketConflict:
+		apiErr = ErrBucketAlreadyExists
 	default:
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
