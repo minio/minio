@@ -400,7 +400,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -408,7 +408,7 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.ServerUpdate(ctx, u, sha256Sum, lrTime)
+			return client.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
