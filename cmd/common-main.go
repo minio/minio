@@ -59,7 +59,15 @@ func init() {
 	config.Logger.Info = logger.Info
 	config.Logger.LogIf = logger.LogIf
 
-	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second, logger.LogOnceIf)
+	if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsKubernetesReplicaSet() || IsPCFTile() {
+		// 30 seconds matches the orchestrator DNS TTLs, have
+		// a 5 second timeout to lookup from DNS servers.
+		globalDNSCache = xhttp.NewDNSCache(30*time.Second, 5*time.Second, logger.LogOnceIf)
+	} else {
+		// On bare-metals DNS do not change often, so it is
+		// safe to assume a higher timeout upto 10 minutes.
+		globalDNSCache = xhttp.NewDNSCache(10*time.Minute, 5*time.Second, logger.LogOnceIf)
+	}
 
 	initGlobalContext()
 
