@@ -137,8 +137,14 @@ func TestXLV2FormatData(t *testing.T) {
 
 	// Test trimmed
 	xl2 = xlMetaV2{}
-	failOnErr(xl2.Load(xlMetaV2TrimData(serialized)))
+	trimmed := xlMetaV2TrimData(serialized)
+	failOnErr(xl2.Load(trimmed))
 	if len(xl2.data) != 0 {
 		t.Fatal("data, was not trimmed, bytes left:", len(xl2.data))
+	}
+	// Corrupt metadata, last 5 bytes is the checksum, so go a bit further back.
+	trimmed[len(trimmed)-10] += 10
+	if err := xl2.Load(trimmed); err == nil {
+		t.Fatal("metadata corruption not detected")
 	}
 }
