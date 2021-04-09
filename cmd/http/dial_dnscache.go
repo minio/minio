@@ -121,6 +121,8 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration, loggerOnce fun
 		doneCh:        make(chan struct{}),
 	}
 
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	timer := time.NewTimer(freq)
 	go func() {
 		defer timer.Stop()
@@ -128,7 +130,10 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration, loggerOnce fun
 		for {
 			select {
 			case <-timer.C:
-				timer.Reset(freq)
+				// Make sure that refreshes on DNS do not be attempted
+				// at the same time, allows for reduced load on the
+				// DNS servers.
+				timer.Reset(time.Duration(rnd.Float64() * float64(freq)))
 
 				r.Refresh()
 			case <-r.doneCh:

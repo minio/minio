@@ -221,6 +221,11 @@ func IsSourceBuild() bool {
 	return err != nil
 }
 
+// IsPCFTile returns if server is running in PCF
+func IsPCFTile() bool {
+	return env.Get("MINIO_PCF_TILE_VERSION", "") != ""
+}
+
 // DO NOT CHANGE USER AGENT STYLE.
 // The style should be
 //
@@ -286,9 +291,11 @@ func getUserAgent(mode string) string {
 		}
 	}
 
-	pcfTileVersion := env.Get("MINIO_PCF_TILE_VERSION", "")
-	if pcfTileVersion != "" {
-		uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
+	if IsPCFTile() {
+		pcfTileVersion := env.Get("MINIO_PCF_TILE_VERSION", "")
+		if pcfTileVersion != "" {
+			uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
+		}
 	}
 
 	return strings.Join(userAgentParts, "")
