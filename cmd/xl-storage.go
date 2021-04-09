@@ -2041,11 +2041,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			return err
 		}
 
+		if oldDstDataPath != "" {
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		}
+
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
-			if oldDstDataPath != "" {
-				renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
-			}
 			renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 			if err = renameAll(srcDataPath, dstDataPath); err != nil {
 				logger.LogIf(ctx, err)
