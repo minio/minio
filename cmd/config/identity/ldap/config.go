@@ -291,6 +291,10 @@ func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) (
 
 // LookupUserDN searches for the full DN ang groups of a given username
 func (l *Config) LookupUserDN(username string) (string, []string, error) {
+	if !l.isUsingLookupBind {
+		return "", nil, errors.New("current lookup mode does not support searching for User DN")
+	}
+
 	conn, err := l.Connect()
 	if err != nil {
 		return "", nil, err
