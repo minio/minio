@@ -872,9 +872,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-		return
+	if _, ok := crypto.IsRequested(r.Header); ok {
+		if globalIsGateway {
+			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+				return
+			}
+		} else {
+			if !objectAPI.IsEncryptionSupported() {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+				return
+			}
+		}
 	}
 
 	vars := mux.Vars(r)
