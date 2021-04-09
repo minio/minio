@@ -97,11 +97,16 @@ GLOBAL FLAGS:
 				if err != nil {
 					return err
 				}
-			case 1:
+			case 1, 2:
 				v, b, err := msgp.ReadBytesZC(b)
 				if err != nil {
 					return err
 				}
+				if _, nbuf, err := msgp.ReadUint32Bytes(b); err == nil {
+					// Read metadata CRC (added in v2, ignore if not found)
+					b = nbuf
+				}
+
 				_, err = msgp.CopyToJSON(buf, bytes.NewBuffer(v))
 				if err != nil {
 					return err
