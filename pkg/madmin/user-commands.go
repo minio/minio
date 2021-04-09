@@ -387,3 +387,8 @@ func (adm *AdminClient) DeleteServiceAccount(ctx context.Context, serviceAccount
 
 	return nil
 }
+
+// SetUserPolicy - set policy to user
+func (adm *AdminClient) SetUserPolicy(ctx context.Context, user string, policyName string) error {
+	return adm.SetPolicy(ctx, policyName, user, false)
+}
