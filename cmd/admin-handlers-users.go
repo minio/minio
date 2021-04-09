@@ -579,9 +579,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, encryptedData)
 }
 
-// EditServiceAccount - POST /minio/admin/v3/edit-service-account
-func (a adminAPIHandlers) EditServiceAccount(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "EditServiceAccount")
+// UpdateServiceAccount - POST /minio/admin/v3/update-service-account
+func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "UpdateServiceAccount")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -618,7 +618,7 @@ func (a adminAPIHandlers) EditServiceAccount(w http.ResponseWriter, r *http.Requ
 
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
-		Action:          iampolicy.EditServiceAccountAdminAction,
+		Action:          iampolicy.UpdateServiceAccountAdminAction,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 		IsOwner:         owner,
 		Claims:          claims,
@@ -641,14 +641,14 @@ func (a adminAPIHandlers) EditServiceAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var editReq madmin.EditServiceAccountReq
-	if err = json.Unmarshal(reqBytes, &editReq); err != nil {
+	var updateReq madmin.UpdateServiceAccountReq
+	if err = json.Unmarshal(reqBytes, &updateReq); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
 
-	opts := editServiceAccountOpts{sessionPolicy: editReq.NewPolicy, secretKey: editReq.NewSecretKey, status: editReq.NewStatus}
-	err = globalIAMSys.EditServiceAccount(ctx, accessKey, opts)
+	opts := updateServiceAccountOpts{sessionPolicy: updateReq.NewPolicy, secretKey: updateReq.NewSecretKey, status: updateReq.NewStatus}
+	err = globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

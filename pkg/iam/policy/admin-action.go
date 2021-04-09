@@ -81,8 +81,8 @@ const (
 
 	// CreateServiceAccountAdminAction - allow create a service account for a user
 	CreateServiceAccountAdminAction = "admin:CreateServiceAccount"
-	// EditServiceAccountAdminAction - allow editing a service account
-	EditServiceAccountAdminAction = "admin:EditServiceAccount"
+	// UpdateServiceAccountAdminAction - allow updating a service account
+	UpdateServiceAccountAdminAction = "admin:UpdateServiceAccount"
 	// RemoveServiceAccountAdminAction - allow removing a service account
 	RemoveServiceAccountAdminAction = "admin:RemoveServiceAccount"
 	// ListServiceAccountsAdminAction - allow listing service accounts
@@ -164,7 +164,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	EnableGroupAdminAction:          {},
 	DisableGroupAdminAction:         {},
 	CreateServiceAccountAdminAction: {},
-	EditServiceAccountAdminAction:   {},
+	UpdateServiceAccountAdminAction: {},
 	RemoveServiceAccountAdminAction: {},
 	ListServiceAccountsAdminAction:  {},
 	CreatePolicyAdminAction:         {},
@@ -215,7 +215,7 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	EnableGroupAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DisableGroupAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	CreateServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	EditServiceAccountAdminAction:   condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	UpdateServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	RemoveServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ListServiceAccountsAdminAction:  condition.NewKeySet(condition.AllSupportedAdminKeys...),
 

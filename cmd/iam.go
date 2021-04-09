@@ -1158,14 +1158,14 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	return cred, nil
 }
 
-type editServiceAccountOpts struct {
+type updateServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	secretKey     string
 	status        string
 }
 
-// EditServiceAccount - edit a service account
-func (sys *IAMSys) EditServiceAccount(ctx context.Context, accessKey string, opts editServiceAccountOpts) error {
+// UpdateServiceAccount - edit a service account
+func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, opts updateServiceAccountOpts) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}

@@ -326,15 +326,15 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, opts AddServiceAc
 	return serviceAccountResp.Credentials, nil
 }
 
-// EditServiceAccountReq is the request options of the edit service account admin call
-type EditServiceAccountReq struct {
+// UpdateServiceAccountReq is the request options of the edit service account admin call
+type UpdateServiceAccountReq struct {
 	NewPolicy    *iampolicy.Policy `json:"newPolicy,omitempty"`
 	NewSecretKey string            `json:"newSecretKey,omitempty"`
 	NewStatus    string            `json:"newStatus,omityempty"`
 }
 
-// EditServiceAccount - edit an existing service account
-func (adm *AdminClient) EditServiceAccount(ctx context.Context, accessKey string, opts EditServiceAccountReq) error {
+// UpdateServiceAccount - edit an existing service account
+func (adm *AdminClient) UpdateServiceAccount(ctx context.Context, accessKey string, opts UpdateServiceAccountReq) error {
 	if opts.NewPolicy != nil {
 		if err := opts.NewPolicy.Validate(); err != nil {
 			return err
@@ -355,12 +355,12 @@ func (adm *AdminClient) EditServiceAccount(ctx context.Context, accessKey string
 	queryValues.Set("accessKey", accessKey)
 
 	reqData := requestData{
-		relPath:     adminAPIPrefix + "/edit-service-account",
+		relPath:     adminAPIPrefix + "/update-service-account",
 		content:     econfigBytes,
 		queryValues: queryValues,
 	}
 
-	// Execute POST on /minio/admin/v3/edit-service-account to edit a service account
+	// Execute POST on /minio/admin/v3/update-service-account to edit a service account
 	resp, err := adm.executeMethod(ctx, http.MethodPost, reqData)
 	defer closeResponse(resp)
 	if err != nil {
