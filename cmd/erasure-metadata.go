@@ -138,7 +138,10 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.ETag = extractETag(fi.Metadata)
 
 	// Add user tags to the object info
-	objInfo.UserTags = fi.Metadata[xhttp.AmzObjectTagging]
+	tags := fi.Metadata[xhttp.AmzObjectTagging]
+	if len(tags) != 0 {
+		objInfo.UserTags = tags
+	}
 
 	// Add replication status to the object info
 	objInfo.ReplicationStatus = replication.StatusType(fi.Metadata[xhttp.AmzBucketReplicationStatus])
