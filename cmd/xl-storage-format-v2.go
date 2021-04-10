@@ -739,17 +739,9 @@ func (z *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
 			if version.ObjectV2.VersionID == uv {
 				for k, v := range fi.Metadata {
 					if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
-						if v == "" {
-							delete(z.Versions[i].ObjectV2.MetaSys, k)
-						} else {
-							z.Versions[i].ObjectV2.MetaSys[k] = []byte(v)
-						}
+						z.Versions[i].ObjectV2.MetaSys[k] = []byte(v)
 					} else {
-						if v == "" {
-							delete(z.Versions[i].ObjectV2.MetaUser, k)
-						} else {
-							z.Versions[i].ObjectV2.MetaUser[k] = v
-						}
+						z.Versions[i].ObjectV2.MetaUser[k] = v
 					}
 				}
 				if !fi.ModTime.IsZero() {
