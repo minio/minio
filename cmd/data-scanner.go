@@ -233,7 +233,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	done := ctx.Done()
-	var flattenLevels = 2
+	const flattenLevels = 1
 
 	if s.dataUsageScannerDebug {
 		console.Debugf(logPrefix+"Cycle: %v, Entries: %v %s\n", cache.Info.NextCycle, len(cache.Cache), logSuffix)
