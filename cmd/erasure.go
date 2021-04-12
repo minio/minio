@@ -435,6 +435,11 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 		}
 	}()
 
+	// Shuffle disks to ensure a total randomness of bucket/disk association to ensure
+	// that objects that are not present in all disks are accounted and ILM applied.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(disks), func(i, j int) { disks[i], disks[j] = disks[j], disks[i] })
+
 	// Start one scanner per disk
 	var wg sync.WaitGroup
 	wg.Add(len(disks))
