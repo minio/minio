@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,16 +211,18 @@ func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeou
 	lockSource := getSource(2)
 	start := UTCNow()
 	const readLock = false
-	var success []int
+	success := make([]int, len(li.paths))
 	for i, path := range li.paths {
 		if !li.ns.lock(ctx, li.volume, path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 			timeout.LogFailure()
-			for _, sint := range success {
-				li.ns.unlock(li.volume, li.paths[sint], readLock)
+			for si, sint := range success {
+				if sint == 1 {
+					li.ns.unlock(li.volume, li.paths[si], readLock)
+				}
 			}
 			return nil, OperationTimedOut{}
 		}
-		success = append(success, i)
+		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return ctx, nil
@@ -239,16 +241,18 @@ func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeo
 	lockSource := getSource(2)
 	start := UTCNow()
 	const readLock = true
-	var success []int
+	success := make([]int, len(li.paths))
 	for i, path := range li.paths {
 		if !li.ns.lock(ctx, li.volume, path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 			timeout.LogFailure()
-			for _, sint := range success {
-				li.ns.unlock(li.volume, li.paths[sint], readLock)
+			for si, sint := range success {
+				if sint == 1 {
+					li.ns.unlock(li.volume, li.paths[si], readLock)
+				}
 			}
 			return nil, OperationTimedOut{}
 		}
-		success = append(success, i)
+		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return ctx, nil
