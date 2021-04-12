@@ -612,7 +612,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	var errs []error
+	errs := make([]error, 0, len(s.sets)*s.setDriveCount)
 	for i := range s.sets {
 		errs = append(errs, storageInfoErrs[i]...)
 	}

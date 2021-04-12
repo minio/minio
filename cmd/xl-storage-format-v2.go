@@ -641,7 +641,7 @@ func (z xlMetaV2) TotalSize() int64 {
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
 func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, error) {
-	var versions []FileInfo
+	versions := make([]FileInfo, 0, len(z.Versions))
 	var err error
 
 	for _, version := range z.Versions {
