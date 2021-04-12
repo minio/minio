@@ -28,6 +28,7 @@ var (
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {
 	XMLName xml.Name `xml:"Filter"`
+	set     bool
 
 	Prefix Prefix
 
@@ -68,6 +69,7 @@ func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 // UnmarshalXML - decodes XML data.
 func (f *Filter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	f.set = true
 	for {
 		// Read tokens from the XML document in a stream.
 		t, err := d.Token()
@@ -111,12 +113,12 @@ func (f *Filter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error
 
 // IsEmpty returns true if Filter is not specified in the XML
 func (f Filter) IsEmpty() bool {
-	return !f.Prefix.set && !f.andSet && !f.tagSet
+	return !f.set
 }
 
 // Validate - validates the filter element
 func (f Filter) Validate() error {
-	if !f.Prefix.set && !f.andSet && !f.tagSet {
+	if f.IsEmpty() {
 		return errXMLNotWellFormed
 	}
 	// A Filter must have exactly one of Prefix, Tag, or And specified.
