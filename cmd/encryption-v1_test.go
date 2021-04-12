@@ -19,14 +19,10 @@ package cmd
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -619,97 +615,10 @@ func TestGetDefaultOpts(t *testing.T) {
 		if err == nil {
 			if opts.ServerSideEncryption == nil && test.encryptionType != "" {
 				t.Errorf("Case %d: expected opts to be of %v encryption type", i, test.encryptionType)
-
 			}
 			if opts.ServerSideEncryption != nil && test.encryptionType != opts.ServerSideEncryption.Type() {
 				t.Errorf("Case %d: expected opts to have encryption type %v but was %v ", i, test.encryptionType, opts.ServerSideEncryption.Type())
 			}
 		}
 	}
-}
-func Test_decryptObjectInfo(t *testing.T) {
-	var testSet []struct {
-		Bucket  string
-		Name    string
-		UserDef map[string]string
-	}
-	file, err := os.Open("testdata/decryptObjectInfo.json.zst")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	dec, err := zstd.NewReader(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dec.Close()
-	js := json.NewDecoder(dec)
-	err = js.Decode(&testSet)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
-	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var dst [32]byte
-	for i := range testSet {
-		t.Run(fmt.Sprint("case-", i), func(t *testing.T) {
-			test := &testSet[i]
-			_, err := decryptObjectInfo(dst[:], test.Bucket, test.Name, test.UserDef)
-			if err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
-func Benchmark_decryptObjectInfo(b *testing.B) {
-	var testSet []struct {
-		Bucket  string
-		Name    string
-		UserDef map[string]string
-	}
-	file, err := os.Open("testdata/decryptObjectInfo.json.zst")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer file.Close()
-	dec, err := zstd.NewReader(file)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer dec.Close()
-	js := json.NewDecoder(dec)
-	err = js.Decode(&testSet)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
-	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	b.SetBytes(int64(len(testSet)))
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			var dst [32]byte
-			for i := range testSet {
-				test := &testSet[i]
-				_, err := decryptObjectInfo(dst[:], test.Bucket, test.Name, test.UserDef)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
 }

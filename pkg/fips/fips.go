@@ -1,3 +1,5 @@
+// +build fips
+
 // MinIO Cloud Storage, (C) 2021 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,8 +13,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//+build fips
 
 package fips
 
@@ -37,6 +37,6 @@ func cipherSuitesTLS() []uint16 {
 	}
 }
 
-func ellipticCurvesTLS() []tls.Curve {
+func ellipticCurvesTLS() []tls.CurveID {
 	return []tls.CurveID{tls.CurveP256}
 }

@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -55,8 +56,6 @@ func initHelp() {
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
-		config.KmsVaultSubSys:       crypto.DefaultVaultKVS,
-		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
 		config.HealSubSys:           heal.DefaultKVS,
@@ -204,8 +203,6 @@ func initHelp() {
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
-		config.KmsVaultSubSys:       crypto.HelpVault,
-		config.KmsKesSubSys:         crypto.HelpKes,
 		config.LoggerWebhookSubSys:  logger.Help,
 		config.AuditWebhookSubSys:   logger.HelpAudit,
 		config.NotifyAMQPSubSys:     notify.HelpAMQP,
@@ -295,27 +292,6 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 			etcdClnt.Close()
 		}
 	}
-	{
-		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
-			&tls.Config{
-				RootCAs: globalRootCAs,
-			}, defaultDialTimeout)())
-		if err != nil {
-			return err
-		}
-
-		// Set env to enable master key validation.
-		// this is needed only for KMS.
-		env.SetEnvOn()
-
-		if _, err = crypto.NewKMS(kmsCfg); err != nil {
-			return err
-		}
-
-		// Disable merging env values for the rest.
-		env.SetEnvOff()
-	}
-
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
@@ -467,33 +443,17 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 	}
 
 	if globalCacheConfig.Enabled {
-		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
-			globalCacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
+		if cacheEncKey := env.Get(cache.EnvCacheEncryptionKey, ""); cacheEncKey != "" {
+			globalCacheKMS, err = kms.Parse(cacheEncKey)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to setup encryption cache: %w", err))
 			}
 		}
 	}
 
-	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), newCustomHTTPTransportWithHTTP2(
-		&tls.Config{
-			RootCAs: globalRootCAs,
-		}, defaultDialTimeout)())
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
-	}
-
-	GlobalKMS, err = crypto.NewKMS(kmsCfg)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS with current KMS config: %w", err))
-	}
-	globalAutoEncryption = kmsCfg.AutoEncryption // Enable auto-encryption if enabled
-
-	if kmsCfg.Vault.Enabled {
-		const deprecationWarning = `Native Hashicorp Vault support is deprecated and will be removed on 2021-10-01. Please migrate to KES + Hashicorp Vault: https://github.com/minio/kes/wiki/Hashicorp-Vault-Keystore
-Note that native Hashicorp Vault and KES + Hashicorp Vault are not compatible.
-If you need help to migrate smoothly visit: https://min.io/pricing`
-		logger.LogIf(ctx, fmt.Errorf(deprecationWarning))
+	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
+	if globalAutoEncryption && GlobalKMS == nil {
+		logger.Fatal(errors.New("no KMS configured"), "MINIO_KMS_AUTO_ENCRYPTION requires a valid KMS configuration")
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],

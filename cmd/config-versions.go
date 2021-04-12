@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
@@ -713,9 +712,6 @@ type serverConfigV28 struct {
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
 
-	// KMS configuration
-	KMS crypto.KMSConfig `json:"kms"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 
@@ -742,9 +738,6 @@ type serverConfigV30 struct {
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
 
-	// KMS configuration
-	KMS crypto.KMSConfig `json:"kms"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 
@@ -769,9 +762,6 @@ type serverConfigV31 struct {
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
-
-	// KMS configuration
-	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -808,9 +798,6 @@ type serverConfigV32 struct {
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
-
-	// KMS configuration
-	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
 	Notify notify.Config `json:"notify"`
@@ -849,9 +836,6 @@ type serverConfigV33 struct {
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
-
-	// KMS configuration
-	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
 	Notify notify.Config `json:"notify"`

@@ -28,6 +28,30 @@ import (
 	"github.com/secure-io/sio-go/sioutil"
 )
 
+// EncryptBytes encrypts the plaintext with a key managed by KMS.
+// The context is bound to the returned ciphertext.
+//
+// The same context must be provided when decrypting the
+// ciphertext.
+func EncryptBytes(KMS kms.KMS, plaintext []byte, context kms.Context) ([]byte, error) {
+	ciphertext, err := Encrypt(KMS, bytes.NewReader(plaintext), context)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(ciphertext)
+}
+
+// DecryptBytes decrypts the ciphertext using a key managed by the KMS.
+// The same context that have been used during encryption must be
+// provided.
+func DecryptBytes(KMS kms.KMS, ciphertext []byte, context kms.Context) ([]byte, error) {
+	plaintext, err := Decrypt(KMS, bytes.NewReader(ciphertext), context)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(plaintext)
+}
+
 // Encrypt encrypts the plaintext with a key managed by KMS.
 // The context is bound to the returned ciphertext.
 //

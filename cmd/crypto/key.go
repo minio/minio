@@ -41,6 +41,9 @@ func GenerateKey(extKey []byte, random io.Reader) (key ObjectKey) {
 	if random == nil {
 		random = rand.Reader
 	}
+	if len(extKey) != 32 { // safety check
+		logger.CriticalIf(context.Background(), errors.New("crypto: invalid key length"))
+	}
 	var nonce [32]byte
 	if _, err := io.ReadFull(random, nonce[:]); err != nil {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
@@ -77,6 +80,9 @@ type SealedKey struct {
 // key is also cryptographically bound to the object's path (bucket/object) and the
 // domain (SSE-C or SSE-S3).
 func (key ObjectKey) Seal(extKey []byte, iv [32]byte, domain, bucket, object string) SealedKey {
+	if len(extKey) != 32 {
+		logger.CriticalIf(context.Background(), errors.New("crypto: invalid key length"))
+	}
 	var (
 		sealingKey   [32]byte
 		encryptedKey bytes.Buffer

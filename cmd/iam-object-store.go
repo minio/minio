@@ -27,11 +27,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
-
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -204,29 +204,43 @@ func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
 	return iamOS.migrateToV1(ctx)
 }
 
-func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error {
+func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
-		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+	if GlobalKMS != nil {
+		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, objPath),
+		})
 		if err != nil {
 			return err
 		}
 	}
-	return saveConfig(ctx, iamOS.objAPI, path, data)
+	return saveConfig(ctx, iamOS.objAPI, objPath, data)
 }
 
-func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}, path string) error {
-	data, err := readConfig(ctx, iamOS.objAPI, path)
+func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}, objPath string) error {
+	data, err := readConfig(ctx, iamOS.objAPI, objPath)
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted && !utf8.Valid(data) {
-		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-		if err != nil {
-			return err
+	if !utf8.Valid(data) {
+		if GlobalKMS != nil {
+			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: path.Join(minioMetaBucket, objPath),
+			})
+			if err != nil {
+				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return json.Unmarshal(data, item)
@@ -278,26 +292,6 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 		iamOS.deleteIAMConfig(ctx, getUserIdentityPath(user, userType))
 		iamOS.deleteIAMConfig(ctx, getMappedPolicyPath(user, userType, false))
 		return nil
-	}
-
-	// If this is a service account, rotate the session key if needed
-	if globalOldCred.IsValid() && u.Credentials.IsServiceAccount() {
-		if !globalOldCred.Equal(globalActiveCred) {
-			m := jwtgo.MapClaims{}
-			stsTokenCallback := func(t *jwtgo.Token) (interface{}, error) {
-				return []byte(globalOldCred.SecretKey), nil
-			}
-			if _, err := jwtgo.ParseWithClaims(u.Credentials.SessionToken, m, stsTokenCallback); err == nil {
-				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
-				if token, err := jwt.SignedString([]byte(globalActiveCred.SecretKey)); err == nil {
-					u.Credentials.SessionToken = token
-					err := iamOS.saveIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
 	}
 
 	if u.Credentials.AccessKey == "" {

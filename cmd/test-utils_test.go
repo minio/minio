@@ -81,12 +81,9 @@ func TestMain(m *testing.M) {
 
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
-		crypto.EnvAutoEncryptionLegacy,
 		crypto.EnvKMSAutoEncryption,
 		config.EnvAccessKey,
-		config.EnvAccessKeyOld,
 		config.EnvSecretKey,
-		config.EnvSecretKeyOld,
 	} {
 		os.Unsetenv(env)
 	}

@@ -48,7 +48,7 @@ const (
 	EnvCacheRange         = "MINIO_CACHE_RANGE"
 	EnvCacheCommit        = "MINIO_CACHE_COMMIT"
 
-	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
+	EnvCacheEncryptionKey = "MINIO_CACHE_ENCRYPTION_SECRET_KEY"
 
 	DefaultExpiry        = "90"
 	DefaultQuota         = "80"

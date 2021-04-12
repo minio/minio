@@ -21,12 +21,11 @@ import (
 	"context"
 	"io"
 	"math/rand"
-	"os"
 	"strconv"
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/pkg/kms"
 )
 
 // Return pointer to testOneByteReadEOF{}
@@ -518,10 +517,8 @@ func enableCompression(t *testing.T, encrypt bool) {
 	globalCompressConfigMu.Unlock()
 	if encrypt {
 		globalAutoEncryption = encrypt
-		os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-		defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
 		var err error
-		GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
+		GlobalKMS, err = kms.Parse("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -535,10 +532,8 @@ func enableEncrytion(t *testing.T) {
 	globalCompressConfigMu.Unlock()
 
 	globalAutoEncryption = true
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
 	var err error
-	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
+	GlobalKMS, err = kms.Parse("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
 	if err != nil {
 		t.Fatal(err)
 	}
