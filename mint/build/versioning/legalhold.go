@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
@@ -123,6 +125,22 @@ func testLockingLegalhold() {
 		if uploads[i].deleteMarker || uploads[i].legalhold == "OFF" {
 			continue
 		}
+		input := &s3.GetObjectLegalHoldInput{
+			Bucket:    aws.String(bucket),
+			Key:       aws.String(object),
+			VersionId: aws.String(uploads[i].versionId),
+		}
+		_, err := s3Client.GetObjectLegalHold(input)
+		if err != nil {
+			failureLog(function, args, startTime, "", fmt.Sprintf("GetObjectLegalHold expected to succeed but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	for i := range uploads {
+		if uploads[i].deleteMarker || uploads[i].legalhold == "OFF" {
+			continue
+		}
 		input := &s3.PutObjectLegalHoldInput{
 			Bucket:    aws.String(bucket),
 			Key:       aws.String(object),
@@ -134,6 +152,132 @@ func testLockingLegalhold() {
 			failureLog(function, args, startTime, "", fmt.Sprintf("Turning off legalhold failed with %v", err), err).Fatal()
 			return
 		}
+	}
+
+	// Error cases
+
+	// object-handlers.go > GetObjectLegalHoldHandler > getObjectInfo
+	for i := range uploads {
+		if uploads[i].legalhold == "" || uploads[i].legalhold == "OFF" {
+			input := &s3.GetObjectLegalHoldInput{
+				Bucket:    aws.String(bucket),
+				Key:       aws.String(object),
+				VersionId: aws.String(uploads[i].versionId),
+			}
+			// legalhold = "off" => The specified version does not exist.
+			// legalhold = ""    => The specified method is not allowed against this resource.
+			_, err := s3Client.GetObjectLegalHold(input)
+			if err == nil {
+				failureLog(function, args, startTime, "", fmt.Sprintf("GetObjectLegalHold expected to fail but got %v", err), err).Fatal()
+				return
+			}
+		}
+	}
+
+	// Second client
+	creds := credentials.NewStaticCredentials("test", "test", "")
+	newSession, err := session.NewSession()
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("NewSession expected to succeed but got %v", err), err).Fatal()
+		return
+	}
+	s3Config := s3Client.Config
+	s3Config.Credentials = creds
+	s3ClientTest := s3.New(newSession, &s3Config)
+
+	// Check with a second client: object-handlers.go > GetObjectLegalHoldHandler > checkRequestAuthType
+	input := &s3.GetObjectLegalHoldInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	}
+	// The Access Key Id you provided does not exist in our records.
+	_, err = s3ClientTest.GetObjectLegalHold(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("GetObjectLegalHold expected to fail but got %v", err), err).Fatal()
+		return
+	}
+
+	// object-handlers.go > GetObjectLegalHoldHandler > globalBucketObjectLockSys.Get(bucket); !rcfg.LockEnabled
+	bucketWithoutLock := bucket + "-without-lock"
+	_, err = s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket:                     aws.String(bucketWithoutLock),
+		ObjectLockEnabledForBucket: aws.Bool(false),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "CreateBucket failed", err).Fatal()
+		return
+	}
+	defer cleanupBucket(bucketWithoutLock, function, args, startTime)
+
+	input = &s3.GetObjectLegalHoldInput{
+		Bucket: aws.String(bucketWithoutLock),
+		Key:    aws.String(object),
+	}
+	// Bucket is missing ObjectLockConfiguration
+	_, err = s3Client.GetObjectLegalHold(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("GetObjectLegalHold expected to fail but got %v", err), err).Fatal()
+		return
+	}
+
+	// Check with a second client: object-handlers.go > PutObjectLegalHoldHandler > checkRequestAuthType
+	for i := range uploads {
+		if uploads[i].deleteMarker || uploads[i].legalhold == "OFF" {
+			continue
+		}
+		input := &s3.PutObjectLegalHoldInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(object),
+		}
+		// The Access Key Id you provided does not exist in our records.
+		_, err := s3ClientTest.PutObjectLegalHold(input)
+		if err == nil {
+			failureLog(function, args, startTime, "", fmt.Sprintf("Turning off legalhold expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	// object-handlers.go > PutObjectLegalHoldHandler > globalBucketObjectLockSys.Get(bucket); !rcfg.LockEnabled
+	for i := range uploads {
+		if uploads[i].deleteMarker || uploads[i].legalhold == "OFF" {
+			continue
+		}
+		input := &s3.PutObjectLegalHoldInput{
+			Bucket: aws.String(bucketWithoutLock),
+			Key:    aws.String(object),
+		}
+		// Bucket is missing ObjectLockConfiguration
+		_, err := s3Client.PutObjectLegalHold(input)
+		if err == nil {
+			failureLog(function, args, startTime, "", fmt.Sprintf("Turning off legalhold expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	// object-handlers.go > PutObjectLegalHoldHandler > objectlock.ParseObjectLegalHold
+	putInput := &s3.PutObjectInput{
+		Body:                      aws.ReadSeekCloser(strings.NewReader("content")),
+		Bucket:                    aws.String(bucket),
+		Key:                       aws.String(object),
+		ObjectLockLegalHoldStatus: aws.String("test"),
+	}
+	output, err := s3Client.PutObject(putInput)
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("PUT expected to succeed but got %v", err), err).Fatal()
+		return
+	}
+	uploads[0].versionId = *output.VersionId
+
+	polhInput := &s3.PutObjectLegalHoldInput{
+		Bucket:    aws.String(bucket),
+		Key:       aws.String(object),
+		VersionId: aws.String(uploads[0].versionId),
+	}
+	// We encountered an internal error, please try again.: cause(EOF)
+	_, err = s3Client.PutObjectLegalHold(polhInput)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("PutObjectLegalHold expected to fail but got %v", err), err).Fatal()
+		return
 	}
 
 	successLogger(function, args, startTime).Info()
