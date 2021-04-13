@@ -951,6 +951,29 @@ func testListMultipartUploads(s3Client *s3.S3) {
 		return
 	}
 
+	// Error cases
+
+	// MaxParts < 0
+	lpInput := &s3.ListPartsInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(object),
+		UploadId: multipartUpload.UploadId,
+		MaxParts: aws.Int64(-1),
+	}
+	listParts, err = s3Client.ListParts(lpInput)
+	if err == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go ListPartsInput API (MaxParts < 0) failed for", err).Fatal()
+		return
+	}
+
+	// PartNumberMarker < 0
+	lpInput.PartNumberMarker = aws.Int64(-1)
+	listParts, err = s3Client.ListParts(lpInput)
+	if err == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go ListPartsInput API (PartNumberMarker < 0) failed for", err).Fatal()
+		return
+	}
+
 	successLogger(function, args, startTime).Info()
 }
 
