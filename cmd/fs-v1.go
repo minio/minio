@@ -1212,7 +1212,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	var bytesWritten int64;
 	var file os.File
 
-	if globalFSOTmpfile {
+	if GlobalFSOTmpfile {
 		fsTmpObjPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
 		bytesWritten, err, file = fsCreateAndGetFile(ctx, fsTmpObjPath, data, buf, data.Size())
 	} else {
@@ -1241,7 +1241,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
 
-	if globalFSOTmpfile {
+	if GlobalFSOTmpfile {
 		if err = reliableMkdirAll(path.Dir(fsNSObjPath), 0777); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}

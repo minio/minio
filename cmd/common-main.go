@@ -21,8 +21,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/minio/minio/pkg/lock"
-	"golang.org/x/sys/unix"
 	"math/rand"
 	"net"
 	"net/url"
@@ -64,7 +62,7 @@ func init() {
 
 	gob.Register(StorageErr(""))
 
-	globalFSOTmpfile = isOTmpfileSupported()
+
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -314,13 +312,7 @@ func logStartupMessage(msg string) {
 	logger.StartupMessage(msg)
 }
 
-func isOTmpfileSupported() bool {
-	flags := os.O_WRONLY | unix.O_TMPFILE
-	var writer, err = lock.Open(os.TempDir(), flags, 0666)
-	defer writer.Close()
 
-	return err == nil
-}
 
 func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
