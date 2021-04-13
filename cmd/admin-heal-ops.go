@@ -72,26 +72,22 @@ var (
 
 // healSequenceStatus - accumulated status of the heal sequence
 type healSequenceStatus struct {
-	// summary and detail for failures
+	StartTime     time.Time         `json:"StartTime"`
 	Summary       healStatusSummary `json:"Summary"`
 	FailureDetail string            `json:"Detail,omitempty"`
-	StartTime     time.Time         `json:"StartTime"`
-
-	// settings for the heal sequence
-	HealSettings madmin.HealOpts `json:"Settings"`
-
-	// slice of available heal result records
-	Items []madmin.HealResultItem `json:"Items"`
+	Items         []madmin.         // summary and detail for failures
+		// slice of available heal result records
+		HealResultItem `json:"Items"`
+	HealSettings madmin.HealOpts `json:"Settings"` // settings for the heal sequence
 }
 
 // structure to hold state of all heal sequences in server memory
 type allHealState struct {
-	sync.RWMutex
-
-	// map of heal path to heal sequence
-	healSeqMap     map[string]*healSequence // Indexed by endpoint
+	healSeqMap map[ // map of heal path to heal sequence
+	string]*healSequence
 	healLocalDisks map[Endpoint]struct{}
-	healStatus     map[string]healingTracker // Indexed by disk ID
+	healStatus     map[string]healingTracker
+	sync.RWMutex
 }
 
 // newHealState - initialize global heal state management
@@ -383,72 +379,43 @@ func (ahs *allHealState) PopHealStatusJSON(hpath string,
 
 // healSource denotes single entity and heal option.
 type healSource struct {
+	opts      *madmin.HealOpts
 	bucket    string
 	object    string
 	versionID string
-	opts      *madmin.HealOpts // optional heal option overrides default setting
 }
 
 // healSequence - state for each heal sequence initiated on the
 // server.
 type healSequence struct {
-	// bucket, and object on which heal seq. was initiated
-	bucket, object string
-
-	// A channel of entities (format, buckets, objects) to heal
-	sourceCh chan healSource
-
-	// A channel of entities with heal result
-	respCh chan healResult
-
-	// Report healing progress
-	reportProgress bool
-
-	// time at which heal sequence was started
-	startTime time.Time
-
-	// time at which heal sequence has ended
-	endTime time.Time
-
-	// Heal client info
-	clientToken, clientAddress string
-
-	// was this heal sequence force started?
-	forceStarted bool
-
-	// heal settings applied to this heal sequence
-	settings madmin.HealOpts
-
-	// current accumulated status of the heal sequence
-	currentStatus healSequenceStatus
-
-	// channel signaled by background routine when traversal has
-	// completed
-	traverseAndHealDoneCh chan error
-
-	// canceler to cancel heal sequence.
-	cancelCtx context.CancelFunc
-
-	// the last result index sent to client
-	lastSentResultIndex int64
-
-	// Number of total items scanned against item type
-	scannedItemsMap map[madmin.HealItemType]int64
-
-	// Number of total items healed against item type
-	healedItemsMap map[madmin.HealItemType]int64
-
+	endTime            time.Time
+	lastHealActivity   time.Time
+	startTime          time.Time
+	ctx                context.Context
+	healFailedItemsMap map[ // time at which heal sequence has ended
 	// Number of total items where healing failed against endpoint and drive state
-	healFailedItemsMap map[string]int64
-
-	// The time of the last scan/heal activity
-	lastHealActivity time.Time
-
-	// Holds the request-info for logging
-	ctx context.Context
-
-	// used to lock this structure as it is concurrently accessed
-	mutex sync.RWMutex
+	string]int64
+	sourceCh              chan healSource
+	traverseAndHealDoneCh chan error
+	cancelCtx             context.CancelFunc
+	healedItemsMap        map[ // A channel of entities (format, buckets, objects) to heal
+	// Number of total items healed against item type
+	madmin.HealItemType]int64
+	respCh          chan healResult
+	scannedItemsMap map[ // A channel of entities with heal result
+	// Number of total items scanned against item type
+	madmin.HealItemType]int64
+	bucket              string
+	clientToken         string
+	object              string
+	clientAddress       string
+	currentStatus       healSequenceStatus
+	settings            madmin.HealOpts
+	lastSentResultIndex int64
+	mutex               sync.RWMutex
+	forceStarted        bool
+	reportProgress      bool // current accumulated status of the heal sequence
+	// Report healing progress
 }
 
 // NewHealSequence - creates healSettings, assumes bucket and

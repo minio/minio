@@ -23,20 +23,15 @@ import (
 
 // DeletedObject objects deleted
 type DeletedObject struct {
-	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
-	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
-	ObjectName            string `xml:"Key,omitempty"`
-	VersionID             string `xml:"VersionId,omitempty"`
-
-	// MinIO extensions to support delete marker replication
-	// Replication status of DeleteMarker
-	DeleteMarkerReplicationStatus string `xml:"DeleteMarkerReplicationStatus,omitempty"`
-	// MTime of DeleteMarker on source that needs to be propagated to replica
-	DeleteMarkerMTime DeleteMarkerMTime `xml:"DeleteMarkerMTime,omitempty"`
-	// Status of versioned delete (of object or DeleteMarker)
-	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus,omitempty"`
+	DeleteMarkerMTime             DeleteMarkerMTime      `xml:"DeleteMarkerMTime,omitempty"`
+	VersionPurgeStatus            VersionPurgeStatusType `xml:"VersionPurgeStatus,omitempty"`
+	DeleteMarkerVersionID         string                 `xml:"DeleteMarkerVersionId,omitempty"`
+	ObjectName                    string                 `xml:"Key,omitempty"`
+	VersionID                     string                 `xml:"VersionId,omitempty"`
+	DeleteMarkerReplicationStatus string                 `xml:"DeleteMarkerReplicationStatus,omitempty"`
+	PurgeTransitioned             string                 `xml:"PurgeTransitioned,omitempty"`
+	DeleteMarker                  bool                   `xml:"DeleteMarker,omitempty"` // MTime of DeleteMarker on source that needs to be propagated to replica
 	// PurgeTransitioned is nonempty if object is in transition tier
-	PurgeTransitioned string `xml:"PurgeTransitioned,omitempty"`
 }
 
 // DeleteMarkerMTime is an embedded type containing time.Time for XML marshal
@@ -76,8 +71,7 @@ type createBucketLocationConfiguration struct {
 
 // DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.
 type DeleteObjectsRequest struct {
-	// Element to enable quiet mode for the request
-	Quiet bool
-	// List of objects to be deleted
-	Objects []ObjectToDelete `xml:"Object"`
+	Objects []ObjectToDelete `xml:"Object"` // List of objects to be deleted
+
+	Quiet bool // Element to enable quiet mode for the request
 }

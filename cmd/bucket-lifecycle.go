@@ -548,13 +548,13 @@ func (sp *SelectParameters) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 
 // RestoreObjectRequest - xml to restore a transitioned object
 type RestoreObjectRequest struct {
+	SelectParameters *SelectParameters  `xml:"SelectParameters,omitempty"`
 	XMLName          xml.Name           `xml:"http://s3.amazonaws.com/doc/2006-03-01/ RestoreRequest" json:"-"`
-	Days             int                `xml:"Days,omitempty"`
 	Type             RestoreRequestType `xml:"Type,omitempty"`
 	Tier             string             `xml:"Tier,-"`
 	Description      string             `xml:"Description,omitempty"`
-	SelectParameters *SelectParameters  `xml:"SelectParameters,omitempty"`
 	OutputLocation   OutputLocation     `xml:"OutputLocation,omitempty"`
+	Days             int                `xml:"Days,omitempty"`
 }
 
 // Maximum 2MiB size per restore object request.

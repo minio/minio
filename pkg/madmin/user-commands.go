@@ -38,9 +38,9 @@ type AccountAccess struct {
 // BucketAccessInfo represents bucket usage of a bucket, and its relevant
 // access type for an account
 type BucketAccessInfo struct {
+	Created time.Time     `json:"created"`
 	Name    string        `json:"name"`
 	Size    uint64        `json:"size"`
-	Created time.Time     `json:"created"`
 	Access  AccountAccess `json:"access"`
 }
 

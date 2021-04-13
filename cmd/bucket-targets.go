@@ -42,9 +42,9 @@ const (
 
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
-	sync.RWMutex
 	arnRemotesMap map[string]*TargetClient
 	targetsMap    map[string][]madmin.BucketTarget
+	sync.RWMutex
 }
 
 // ListTargets lists bucket targets across tenant or for individual bucket, and returns
@@ -453,9 +453,9 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 // TargetClient is the struct for remote target client.
 type TargetClient struct {
 	*miniogo.Client
-	up                  int32
+	bucket              string
 	healthCheckDuration time.Duration
-	bucket              string // remote bucket target
+	up                  int32
 	replicateSync       bool
 }
 

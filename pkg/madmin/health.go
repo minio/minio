@@ -47,51 +47,51 @@ type HealthInfo struct {
 
 // SysHealthInfo - Includes hardware and system information of the MinIO cluster
 type SysHealthInfo struct {
+	Error      string             `json:"error,omitempty"`
 	CPUInfo    []ServerCPUInfo    `json:"cpus,omitempty"`
 	DiskHwInfo []ServerDiskHwInfo `json:"drives,omitempty"`
 	OsInfo     []ServerOsInfo     `json:"osinfos,omitempty"`
 	MemInfo    []ServerMemInfo    `json:"meminfos,omitempty"`
 	ProcInfo   []ServerProcInfo   `json:"procinfos,omitempty"`
-	Error      string             `json:"error,omitempty"`
 }
 
 // ServerProcInfo - Includes host process lvl information
 type ServerProcInfo struct {
 	Addr      string       `json:"addr"`
-	Processes []SysProcess `json:"processes,omitempty"`
 	Error     string       `json:"error,omitempty"`
+	Processes []SysProcess `json:"processes,omitempty"`
 }
 
 // SysProcess - Includes process lvl information about a single process
 type SysProcess struct {
-	Pid             int32                       `json:"pid"`
-	Background      bool                        `json:"background,omitempty"`
-	CPUPercent      float64                     `json:"cpupercent,omitempty"`
-	Children        []int32                     `json:"children,omitempty"`
-	CmdLine         string                      `json:"cmd,omitempty"`
-	ConnectionCount int                         `json:"connection_count,omitempty"`
-	CreateTime      int64                       `json:"createtime,omitempty"`
+	PageFaults      *process.PageFaultsStat     `json:"pagefaults,omitempty"`
+	MemMaps         *[]process.MemoryMapsStat   `json:"memmaps,omitempty"`
+	MemInfo         *process.MemoryInfoStat     `json:"meminfo,omitempty"`
+	Times           *cpu.TimesStat              `json:"cputimes,omitempty"`
+	IOCounters      *process.IOCountersStat     `json:"iocounters,omitempty"`
+	NumCtxSwitches  *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
 	Cwd             string                      `json:"cwd,omitempty"`
 	Exe             string                      `json:"exe,omitempty"`
-	Gids            []int32                     `json:"gids,omitempty"`
-	IOCounters      *process.IOCountersStat     `json:"iocounters,omitempty"`
-	IsRunning       bool                        `json:"isrunning,omitempty"`
-	MemInfo         *process.MemoryInfoStat     `json:"meminfo,omitempty"`
-	MemMaps         *[]process.MemoryMapsStat   `json:"memmaps,omitempty"`
-	MemPercent      float32                     `json:"mempercent,omitempty"`
 	Name            string                      `json:"name,omitempty"`
-	Nice            int32                       `json:"nice,omitempty"`
-	NumCtxSwitches  *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
-	NumFds          int32                       `json:"numfds,omitempty"`
+	CmdLine         string                      `json:"cmd,omitempty"`
+	Username        string                      `json:"username,omitempty"`
+	Status          string                      `json:"status,omitempty"`
+	Children        []int32                     `json:"children,omitempty"`
+	Uids            []int32                     `json:"uids,omitempty"`
+	Gids            []int32                     `json:"gids,omitempty"`
+	CreateTime      int64                       `json:"createtime,omitempty"`
+	CPUPercent      float64                     `json:"cpupercent,omitempty"`
+	ConnectionCount int                         `json:"connection_count,omitempty"`
+	MemPercent      float32                     `json:"mempercent,omitempty"`
 	NumThreads      int32                       `json:"numthreads,omitempty"`
-	PageFaults      *process.PageFaultsStat     `json:"pagefaults,omitempty"`
+	NumFds          int32                       `json:"numfds,omitempty"`
 	Parent          int32                       `json:"parent,omitempty"`
 	Ppid            int32                       `json:"ppid,omitempty"`
-	Status          string                      `json:"status,omitempty"`
+	Nice            int32                       `json:"nice,omitempty"`
 	Tgid            int32                       `json:"tgid,omitempty"`
-	Times           *cpu.TimesStat              `json:"cputimes,omitempty"`
-	Uids            []int32                     `json:"uids,omitempty"`
-	Username        string                      `json:"username,omitempty"`
+	Pid             int32                       `json:"pid"`
+	IsRunning       bool                        `json:"isrunning,omitempty"`
+	Background      bool                        `json:"background,omitempty"`
 }
 
 // ServerMemInfo - Includes host virtual and swap mem information
@@ -104,35 +104,35 @@ type ServerMemInfo struct {
 
 // ServerOsInfo - Includes host os information
 type ServerOsInfo struct {
-	Addr    string                 `json:"addr"`
 	Info    *host.InfoStat         `json:"info,omitempty"`
+	Addr    string                 `json:"addr"`
+	Error   string                 `json:"error,omitempty"`
 	Sensors []host.TemperatureStat `json:"sensors,omitempty"`
 	Users   []host.UserStat        `json:"users,omitempty"`
-	Error   string                 `json:"error,omitempty"`
 }
 
 // ServerCPUInfo - Includes cpu and timer stats of each node of the MinIO cluster
 type ServerCPUInfo struct {
 	Addr     string          `json:"addr"`
+	Error    string          `json:"error,omitempty"`
 	CPUStat  []cpu.InfoStat  `json:"cpu,omitempty"`
 	TimeStat []cpu.TimesStat `json:"time,omitempty"`
-	Error    string          `json:"error,omitempty"`
 }
 
 // MinioHealthInfo - Includes MinIO confifuration information
 type MinioHealthInfo struct {
-	Info   InfoMessage `json:"info,omitempty"`
 	Config interface{} `json:"config,omitempty"`
 	Error  string      `json:"error,omitempty"`
+	Info   InfoMessage `json:"info,omitempty"`
 }
 
 // ServerDiskHwInfo - Includes usage counters, disk counters and partitions
 type ServerDiskHwInfo struct {
+	Counters   map[string]diskhw.IOCountersStat `json:"counters,omitempty"`
 	Addr       string                           `json:"addr"`
+	Error      string                           `json:"error,omitempty"`
 	Usage      []*diskhw.UsageStat              `json:"usages,omitempty"`
 	Partitions []PartitionStat                  `json:"partitions,omitempty"`
-	Counters   map[string]diskhw.IOCountersStat `json:"counters,omitempty"`
-	Error      string                           `json:"error,omitempty"`
 }
 
 // PartitionStat - includes data from both shirou/psutil.diskHw.PartitionStat as well as SMART data
@@ -146,41 +146,41 @@ type PartitionStat struct {
 
 // PerfInfo - Includes Drive and Net perf info for the entire MinIO cluster
 type PerfInfo struct {
-	DriveInfo   []ServerDrivesInfo    `json:"drives,omitempty"`
-	Net         []ServerNetHealthInfo `json:"net,omitempty"`
 	NetParallel ServerNetHealthInfo   `json:"net_parallel,omitempty"`
 	Error       string                `json:"error,omitempty"`
+	DriveInfo   []ServerDrivesInfo    `json:"drives,omitempty"`
+	Net         []ServerNetHealthInfo `json:"net,omitempty"`
 }
 
 // ServerDrivesInfo - Drive info about all drives in a single MinIO node
 type ServerDrivesInfo struct {
 	Addr     string          `json:"addr"`
-	Serial   []DrivePerfInfo `json:"serial,omitempty"`   // Drive perf info collected one drive at a time
-	Parallel []DrivePerfInfo `json:"parallel,omitempty"` // Drive perf info collected in parallel
 	Error    string          `json:"error,omitempty"`
+	Serial   []DrivePerfInfo `json:"serial,omitempty"`
+	Parallel []DrivePerfInfo `json:"parallel,omitempty"`
 }
 
 // DrivePerfInfo - Stats about a single drive in a MinIO node
 type DrivePerfInfo struct {
 	Path       string          `json:"endpoint"`
+	Error      string          `json:"error,omitempty"`
 	Latency    disk.Latency    `json:"latency,omitempty"`
 	Throughput disk.Throughput `json:"throughput,omitempty"`
-	Error      string          `json:"error,omitempty"`
 }
 
 // ServerNetHealthInfo - Network health info about a single MinIO node
 type ServerNetHealthInfo struct {
 	Addr  string        `json:"addr"`
-	Net   []NetPerfInfo `json:"net,omitempty"`
 	Error string        `json:"error,omitempty"`
+	Net   []NetPerfInfo `json:"net,omitempty"`
 }
 
 // NetPerfInfo - one-to-one network connectivity Stats between 2 MinIO nodes
 type NetPerfInfo struct {
 	Addr       string         `json:"remote"`
+	Error      string         `json:"error,omitempty"`
 	Latency    net.Latency    `json:"latency,omitempty"`
 	Throughput net.Throughput `json:"throughput,omitempty"`
-	Error      string         `json:"error,omitempty"`
 }
 
 // HealthDataType - Typed Health data types

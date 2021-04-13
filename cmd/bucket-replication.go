@@ -795,8 +795,8 @@ func filterReplicationStatusMetadata(metadata map[string]string) map[string]stri
 
 // DeletedObjectVersionInfo has info on deleted object
 type DeletedObjectVersionInfo struct {
-	DeletedObject
 	Bucket string
+	DeletedObject
 }
 
 var (
@@ -806,16 +806,16 @@ var (
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
-	mu                 sync.Mutex
-	size               int
-	replicaCh          chan ObjectInfo
-	replicaDeleteCh    chan DeletedObjectVersionInfo
-	mrfReplicaCh       chan ObjectInfo
-	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
-	killCh             chan struct{}
-	wg                 sync.WaitGroup
 	ctx                context.Context
 	objLayer           ObjectLayer
+	killCh             chan struct{}
+	mrfReplicaCh       chan ObjectInfo
+	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
+	replicaCh          chan ObjectInfo
+	replicaDeleteCh    chan DeletedObjectVersionInfo
+	size               int
+	wg                 sync.WaitGroup
+	mu                 sync.Mutex
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size

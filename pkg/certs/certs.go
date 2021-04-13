@@ -51,13 +51,12 @@ type GetCertificateFunc func(hello *tls.ClientHelloInfo) (*tls.Certificate, erro
 //
 // Manager will automatically reload certificates if the corresponding file changes.
 type Manager struct {
-	lock         sync.RWMutex
-	certificates map[pair]*tls.Certificate // Mapping: certificate file name => TLS certificates
-	defaultCert  pair
-
+	ctx             context.Context
+	certificates    map[pair]*tls.Certificate
 	loadX509KeyPair LoadX509KeyPairFunc
 	events          chan notify.EventInfo
-	ctx             context.Context
+	defaultCert     pair
+	lock            sync.RWMutex
 }
 
 // pair represents a certificate and private key file tuple.

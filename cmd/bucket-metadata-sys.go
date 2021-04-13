@@ -39,8 +39,8 @@ import (
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
 type BucketMetadataSys struct {
-	sync.RWMutex
 	metadataMap map[string]BucketMetadata
+	sync.RWMutex
 }
 
 // Remove bucket metadata from memory.

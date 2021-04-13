@@ -67,15 +67,15 @@ func WriteOnClose(w io.Writer) *WriteOnCloser {
 }
 
 type ioret struct {
-	n   int
 	err error
+	n   int
 }
 
 // DeadlineWriter deadline writer with context
 type DeadlineWriter struct {
 	io.WriteCloser
-	timeout time.Duration
 	err     error
+	timeout time.Duration
 }
 
 // NewDeadlineWriter wraps a writer to make it respect given deadline
@@ -97,7 +97,7 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 
 	go func() {
 		n, err := w.WriteCloser.Write(buf)
-		c <- ioret{n, err}
+		c <- ioret{err, n}
 		close(c)
 	}()
 

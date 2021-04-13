@@ -68,9 +68,9 @@ func (o HealOpts) Equal(no HealOpts) bool {
 // HealStartSuccess - holds information about a successfully started
 // heal operation
 type HealStartSuccess struct {
+	StartTime     time.Time `json:"startTime"`
 	ClientToken   string    `json:"clientToken"`
 	ClientAddress string    `json:"clientAddress"`
-	StartTime     time.Time `json:"startTime"`
 }
 
 // HealStopSuccess - holds information about a successfully stopped
@@ -79,12 +79,11 @@ type HealStopSuccess HealStartSuccess
 
 // HealTaskStatus - status struct for a heal task
 type HealTaskStatus struct {
-	Summary       string    `json:"summary"`
-	FailureDetail string    `json:"detail"`
-	StartTime     time.Time `json:"startTime"`
-	HealSettings  HealOpts  `json:"settings"`
-
-	Items []HealResultItem `json:"items,omitempty"`
+	StartTime     time.Time        `json:"startTime"`
+	Summary       string           `json:"summary"`
+	FailureDetail string           `json:"detail"`
+	Items         []HealResultItem `json:"items,omitempty"`
+	HealSettings  HealOpts         `json:"settings"`
 }
 
 // HealItemType - specify the type of heal operation in a healing
@@ -120,24 +119,24 @@ type HealDriveInfo struct {
 
 // HealResultItem - struct for an individual heal result item
 type HealResultItem struct {
-	ResultIndex  int64        `json:"resultId"`
-	Type         HealItemType `json:"type"`
-	Bucket       string       `json:"bucket"`
-	Object       string       `json:"object"`
-	VersionID    string       `json:"versionId"`
-	Detail       string       `json:"detail"`
-	ParityBlocks int          `json:"parityBlocks,omitempty"`
-	DataBlocks   int          `json:"dataBlocks,omitempty"`
-	DiskCount    int          `json:"diskCount"`
-	SetCount     int          `json:"setCount"`
-	// below slices are from drive info.
-	Before struct {
-		Drives []HealDriveInfo `json:"drives"`
+	Type      HealItemType `json:"type"`
+	Bucket    string       `json:"bucket"`
+	Object    string       `json:"object"`
+	VersionID string       `json:"versionId"`
+	Detail    string       `json:"detail"`
+	Before    struct {
+		Drives []HealDriveInfo `json:"drives"` // below slices are from drive info.
+
 	} `json:"before"`
 	After struct {
 		Drives []HealDriveInfo `json:"drives"`
 	} `json:"after"`
-	ObjectSize int64 `json:"objectSize"`
+	ResultIndex  int64 `json:"resultId"`
+	DiskCount    int   `json:"diskCount"`
+	SetCount     int   `json:"setCount"`
+	DataBlocks   int   `json:"dataBlocks,omitempty"`
+	ParityBlocks int   `json:"parityBlocks,omitempty"`
+	ObjectSize   int64 `json:"objectSize"`
 }
 
 // GetMissingCounts - returns the number of missing disks before
@@ -298,52 +297,43 @@ func (adm *AdminClient) Heal(ctx context.Context, bucket, prefix string,
 
 // BgHealState represents the status of the background heal
 type BgHealState struct {
-	ScannedItemsCount int64
-
 	HealDisks []string
+	Sets      []SetStatus `json:"sets"` // SetStatus contains information for each set.
 
-	// SetStatus contains information for each set.
-	Sets []SetStatus `json:"sets"`
+	ScannedItemsCount int64
 }
 
 // SetStatus contains information about the heal status of a set.
 type SetStatus struct {
 	ID           string `json:"id"`
-	PoolIndex    int    `json:"pool_index"`
-	SetIndex     int    `json:"set_index"`
 	HealStatus   string `json:"heal_status"`
 	HealPriority string `json:"heal_priority"`
 	Disks        []Disk `json:"disks"`
+	PoolIndex    int    `json:"pool_index"`
+	SetIndex     int    `json:"set_index"`
 }
 
 // HealingDisk contains information about
 type HealingDisk struct {
-	// Copied from cmd/background-newdisks-heal-ops.go
-	// When adding new field, update (*healingTracker).toHealingDisk
-
-	ID            string    `json:"id"`
-	PoolIndex     int       `json:"pool_index"`
-	SetIndex      int       `json:"set_index"`
-	DiskIndex     int       `json:"disk_index"`
-	Endpoint      string    `json:"endpoint"`
-	Path          string    `json:"path"`
 	Started       time.Time `json:"started"`
 	LastUpdate    time.Time `json:"last_update"`
-	ObjectsHealed uint64    `json:"objects_healed"`
-	ObjectsFailed uint64    `json:"objects_failed"`
-	BytesDone     uint64    `json:"bytes_done"`
-	BytesFailed   uint64    `json:"bytes_failed"`
-
-	// Last object scanned.
-	Bucket string `json:"current_bucket"`
-	Object string `json:"current_object"`
-
+	Object        string    `json:"current_object"`
+	Bucket        string    `json:"current_bucket"`
+	Endpoint      string    `json:"endpoint"`
+	Path          string    `json:"path"`
+	ID            string    `json:"id"`
+	QueuedBuckets []string  `json:"queued_buckets"` // Last object scanned.
 	// Filled on startup/restarts.
-	QueuedBuckets []string `json:"queued_buckets"`
 
-	// Filled during heal.
-	HealedBuckets []string `json:"healed_buckets"`
-	// future add more tracking capabilities
+	HealedBuckets []string `json:"healed_buckets"` // Filled during heal.
+
+	ObjectsFailed uint64 `json:"objects_failed"`
+	BytesDone     uint64 `json:"bytes_done"`
+	BytesFailed   uint64 `json:"bytes_failed"`
+	DiskIndex     int    `json:"disk_index"`
+	SetIndex      int    `json:"set_index"`
+	PoolIndex     int    `json:"pool_index"`
+	ObjectsHealed uint64 `json:"objects_healed"`
 }
 
 // Merge others into b.

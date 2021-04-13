@@ -74,8 +74,8 @@ func (adm *AdminClient) serviceCallAction(ctx context.Context, action ServiceAct
 
 // ServiceTraceInfo holds http trace
 type ServiceTraceInfo struct {
-	Trace trace.Info
 	Err   error `json:"-"`
+	Trace trace.Info
 }
 
 // ServiceTraceOpts holds tracing options

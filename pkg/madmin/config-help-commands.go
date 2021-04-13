@@ -28,8 +28,8 @@ import (
 type Help struct {
 	SubSys          string  `json:"subSys"`
 	Description     string  `json:"description"`
-	MultipleTargets bool    `json:"multipleTargets"`
 	KeysHelp        HelpKVS `json:"keysHelp"`
+	MultipleTargets bool    `json:"multipleTargets"`
 }
 
 // HelpKV - implements help messages for keys
@@ -37,8 +37,8 @@ type Help struct {
 type HelpKV struct {
 	Key             string `json:"key"`
 	Description     string `json:"description"`
-	Optional        bool   `json:"optional"`
 	Type            string `json:"type"`
+	Optional        bool   `json:"optional"`
 	MultipleTargets bool   `json:"multipleTargets"`
 }
 

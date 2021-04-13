@@ -45,31 +45,18 @@ import (
 
 // AdminClient implements Amazon S3 compatible methods.
 type AdminClient struct {
-	///  Standard options.
-
-	// Parsed endpoint url provided by the user.
-	endpointURL *url.URL
-
-	// Holds various credential providers.
+	traceOutput   io.Writer
+	endpointURL   *url.URL
+	httpClient    *http.Client
+	random        *rand.Rand
 	credsProvider *credentials.Credentials
-
-	// User supplied.
-	appInfo struct {
+	appInfo       struct {
 		appName    string
 		appVersion string
 	}
-
-	// Indicate whether we are using https or not
-	secure bool
-
-	// Needs allocation.
-	httpClient *http.Client
-
-	random *rand.Rand
-
+	secure         bool
+	isTraceEnabled bool // Parsed endpoint url provided by the user.
 	// Advanced functionality.
-	isTraceEnabled bool
-	traceOutput    io.Writer
 }
 
 // Global constants.

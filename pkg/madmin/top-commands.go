@@ -32,15 +32,14 @@ import (
 // servers holding the lock, source on the client machine,
 // ID, type(read or write) and time stamp.
 type LockEntry struct {
-	Timestamp  time.Time `json:"time"`       // When the lock was first granted
-	Resource   string    `json:"resource"`   // Resource contains info like bucket+object
-	Type       string    `json:"type"`       // Type indicates if 'Write' or 'Read' lock
-	Source     string    `json:"source"`     // Source at which lock was granted
-	ServerList []string  `json:"serverlist"` // List of servers participating in the lock.
-	Owner      string    `json:"owner"`      // Owner UUID indicates server owns the lock.
-	ID         string    `json:"id"`         // UID to uniquely identify request of client.
-	// Represents quorum number of servers required to hold this lock, used to look for stale locks.
-	Quorum int `json:"quorum"`
+	Timestamp  time.Time `json:"time"`
+	Resource   string    `json:"resource"`
+	Type       string    `json:"type"`
+	Source     string    `json:"source"`
+	Owner      string    `json:"owner"`
+	ID         string    `json:"id"`
+	ServerList []string  `json:"serverlist"`
+	Quorum     int       `json:"quorum"` // Represents quorum number of servers required to hold this lock, used to look for stale locks.
 }
 
 // LockEntries - To sort the locks

@@ -64,21 +64,17 @@ type StorageInfo struct {
 
 // BackendInfo - contains info of the underlying backend
 type BackendInfo struct {
-	// Represents various backend types, currently on FS, Erasure and Gateway
-	Type BackendType
+	OnlineDisks  BackendDisks
+	OfflineDisks BackendDisks
+	RRSCData     []int // Following fields are only meaningful if BackendType is Erasure.
 
+	StandardSCData []int // Following fields are only meaningful if BackendType is Erasure.
+
+	RRSCParity       int
+	StandardSCParity int
+	Type             BackendType
+	GatewayOnline    bool // Represents various backend types, currently on FS, Erasure and Gateway
 	// Following fields are only meaningful if BackendType is Gateway.
-	GatewayOnline bool
-
-	// Following fields are only meaningful if BackendType is Erasure.
-	OnlineDisks  BackendDisks // Online disks during server startup.
-	OfflineDisks BackendDisks // Offline disks during server startup.
-
-	// Following fields are only meaningful if BackendType is Erasure.
-	StandardSCData   []int // Data disks for currently configured Standard storage class.
-	StandardSCParity int   // Parity disks for currently configured Standard storage class.
-	RRSCData         []int // Data disks for currently configured Reduced Redundancy storage class.
-	RRSCParity       int   // Parity disks for currently configured Reduced Redundancy storage class.
 }
 
 // BackendDisks - represents the map of endpoint-disks.
@@ -136,59 +132,39 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 // - total objects in a bucket
 // - object size histogram per bucket
 type BucketUsageInfo struct {
-	Size                    uint64 `json:"size"`
-	ReplicationPendingSize  uint64 `json:"objectsPendingReplicationTotalSize"`
-	ReplicationFailedSize   uint64 `json:"objectsFailedReplicationTotalSize"`
-	ReplicatedSize          uint64 `json:"objectsReplicatedTotalSize"`
-	ReplicaSize             uint64 `json:"objectReplicaTotalSize"`
-	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
-	ReplicationFailedCount  uint64 `json:"objectsFailedReplicationCount"`
-
-	ObjectsCount         uint64            `json:"objectsCount"`
-	ObjectSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
+	ObjectSizesHistogram    map[string]uint64 `json:"objectsSizesHistogram"`
+	Size                    uint64            `json:"size"`
+	ReplicationPendingSize  uint64            `json:"objectsPendingReplicationTotalSize"`
+	ReplicatedSize          uint64            `json:"objectsReplicatedTotalSize"`
+	ReplicaSize             uint64            `json:"objectReplicaTotalSize"`
+	ReplicationPendingCount uint64            `json:"objectsPendingReplicationCount"`
+	ReplicationFailedCount  uint64            `json:"objectsFailedReplicationCount"`
+	ObjectsCount            uint64            `json:"objectsCount"`
+	ReplicationFailedSize   uint64            `json:"objectsFailedReplicationTotalSize"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
 type DataUsageInfo struct {
-	// LastUpdate is the timestamp of when the data usage info was last updated.
+	LastUpdate   time.Time `json:"lastUpdate"`
+	BucketsUsage map[      // LastUpdate is the timestamp of when the data usage info was last updated.
 	// This does not indicate a full scan.
-	LastUpdate time.Time `json:"lastUpdate"`
-
-	// Objects total count across all buckets
-	ObjectsTotalCount uint64 `json:"objectsCount"`
-
-	// Objects total size across all buckets
-	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
-
-	// Total Size for objects that have not yet been replicated
-	ReplicationPendingSize uint64 `json:"objectsPendingReplicationTotalSize"`
-
-	// Total size for objects that have witness one or more failures and will be retried
-	ReplicationFailedSize uint64 `json:"objectsFailedReplicationTotalSize"`
-
-	// Total size for objects that have been replicated to destination
-	ReplicatedSize uint64 `json:"objectsReplicatedTotalSize"`
-
-	// Total size for objects that are replicas
-	ReplicaSize uint64 `json:"objectsReplicaTotalSize"`
-
-	// Total number of objects pending replication
-	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
-
-	// Total number of objects that failed replication
-	ReplicationFailedCount uint64 `json:"objectsFailedReplicationCount"`
-
-	// Total number of buckets in this cluster
-	BucketsCount uint64 `json:"bucketsCount"`
-
 	// Buckets usage info provides following information across all buckets
 	// - total size of the bucket
 	// - total objects in a bucket
 	// - object size histogram per bucket
-	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
-
-	// Deprecated kept here for backward compatibility reasons.
-	BucketSizes map[string]uint64 `json:"bucketsSizes"`
+	string]BucketUsageInfo `json:"bucketsUsageInfo"`
+	BucketSizes   map[ // Deprecated kept here for backward compatibility reasons.
+	string]uint64      `json:"bucketsSizes"`
+	ObjectsTotalCount       uint64 `json:"objectsCount"`
+	ObjectsTotalSize        uint64 `json:"objectsTotalSize"`
+	ReplicationPendingSize  uint64 `json:"objectsPendingReplicationTotalSize"`
+	ReplicaSize             uint64 `json:"objectsReplicaTotalSize"`
+	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
+	ReplicationFailedCount  uint64 `json:"objectsFailedReplicationCount"`
+	BucketsCount            uint64 `json:"bucketsCount"`
+	ReplicationFailedSize   uint64 `json:"objectsFailedReplicationTotalSize"`
+	ReplicatedSize          uint64 `json:"objectsReplicatedTotalSize"` // Objects total count across all buckets
+	// Total size for objects that have been replicated to destination
 }
 
 // DataUsageInfo - returns data usage of the current object API
@@ -239,20 +215,20 @@ type Services struct {
 
 // Buckets contains the number of buckets
 type Buckets struct {
-	Count uint64 `json:"count"`
 	Error string `json:"error,omitempty"`
+	Count uint64 `json:"count"`
 }
 
 // Objects contains the number of objects
 type Objects struct {
-	Count uint64 `json:"count"`
 	Error string `json:"error,omitempty"`
+	Count uint64 `json:"count"`
 }
 
 // Usage contains the total size used
 type Usage struct {
-	Size  uint64 `json:"size"`
 	Error string `json:"error,omitempty"`
+	Size  uint64 `json:"size"`
 }
 
 // KMS contains KMS status information
@@ -309,15 +285,15 @@ type ErasureBackend struct {
 
 // ServerProperties holds server information
 type ServerProperties struct {
+	Network    map[string]string `json:"network,omitempty"`
 	State      string            `json:"state,omitempty"`
 	Endpoint   string            `json:"endpoint,omitempty"`
-	Uptime     int64             `json:"uptime,omitempty"`
 	Version    string            `json:"version,omitempty"`
 	CommitID   string            `json:"commitID,omitempty"`
-	Network    map[string]string `json:"network,omitempty"`
 	Disks      []Disk            `json:"drives,omitempty"`
-	PoolNumber int               `json:"poolNumber,omitempty"`
 	MemStats   runtime.MemStats  `json:"mem_stats"`
+	PoolNumber int               `json:"poolNumber,omitempty"`
+	Uptime     int64             `json:"uptime,omitempty"`
 }
 
 // DiskMetrics has the information about XL Storage APIs
@@ -330,28 +306,26 @@ type DiskMetrics struct {
 
 // Disk holds Disk information
 type Disk struct {
+	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
+	Metrics         *DiskMetrics `json:"metrics,omitempty"`
 	Endpoint        string       `json:"endpoint,omitempty"`
-	RootDisk        bool         `json:"rootDisk,omitempty"`
 	DrivePath       string       `json:"path,omitempty"`
-	Healing         bool         `json:"healing,omitempty"`
 	State           string       `json:"state,omitempty"`
 	UUID            string       `json:"uuid,omitempty"`
 	Model           string       `json:"model,omitempty"`
-	TotalSpace      uint64       `json:"totalspace,omitempty"`
+	ReadThroughput  float64      `json:"readthroughput,omitempty"`
 	UsedSpace       uint64       `json:"usedspace,omitempty"`
 	AvailableSpace  uint64       `json:"availspace,omitempty"`
-	ReadThroughput  float64      `json:"readthroughput,omitempty"`
+	TotalSpace      uint64       `json:"totalspace,omitempty"`
 	WriteThroughPut float64      `json:"writethroughput,omitempty"`
 	ReadLatency     float64      `json:"readlatency,omitempty"`
 	WriteLatency    float64      `json:"writelatency,omitempty"`
 	Utilization     float64      `json:"utilization,omitempty"`
-	Metrics         *DiskMetrics `json:"metrics,omitempty"`
-	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
-
-	// Indexes, will be -1 until assigned a set.
-	PoolIndex int `json:"pool_index"`
-	SetIndex  int `json:"set_index"`
-	DiskIndex int `json:"disk_index"`
+	PoolIndex       int          `json:"pool_index"`
+	SetIndex        int          `json:"set_index"`
+	DiskIndex       int          `json:"disk_index"`
+	Healing         bool         `json:"healing,omitempty"`
+	RootDisk        bool         `json:"rootDisk,omitempty"` // Indexes, will be -1 until assigned a set.
 }
 
 // ServerInfo - Connect to a minio server and call Server Admin Info Management API

@@ -27,9 +27,9 @@ import (
 // LogInfo holds console log messages
 type LogInfo struct {
 	logEntry
+	Err        error `json:"-"`
 	ConsoleMsg string
 	NodeName   string `json:"node"`
-	Err        error  `json:"-"`
 }
 
 // GetLogs - listen on console log messages.

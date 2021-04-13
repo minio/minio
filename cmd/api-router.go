@@ -84,9 +84,9 @@ func notImplementedHandler(w http.ResponseWriter, r *http.Request) {
 
 type rejectedAPI struct {
 	api     string
+	path    string
 	methods []string
 	queries []string
-	path    string
 }
 
 var rejectedAPIs = []rejectedAPI{

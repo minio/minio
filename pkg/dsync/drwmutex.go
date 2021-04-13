@@ -54,18 +54,18 @@ const drwMutexInfinite = 1<<63 - 1
 
 // A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
-	Names         []string
-	writeLocks    []string   // Array of nodes that granted a write lock
-	readersLocks  [][]string // Array of array of nodes that granted reader locks
-	m             sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 	clnt          *Dsync
 	cancelRefresh context.CancelFunc
+	Names         []string
+	writeLocks    []string
+	readersLocks  [][]string
+	m             sync.Mutex
 }
 
 // Granted - represents a structure of a granted lock.
 type Granted struct {
+	lockUID string
 	index   int
-	lockUID string // Locked if set with UID string, unlocked if empty
 }
 
 func (g *Granted) isLocked() bool {

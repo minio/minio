@@ -23,10 +23,10 @@ package disk
 // Ffree - free inodes available
 // FSType - file system type
 type Info struct {
+	FSType string
 	Total  uint64
 	Free   uint64
 	Used   uint64
 	Files  uint64
 	Ffree  uint64
-	FSType string
 }

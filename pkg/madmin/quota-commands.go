@@ -42,8 +42,8 @@ func (t QuotaType) IsValid() bool {
 
 // BucketQuota holds bucket quota restrictions
 type BucketQuota struct {
-	Quota uint64    `json:"quota"`
 	Type  QuotaType `json:"quotatype,omitempty"`
+	Quota uint64    `json:"quota"`
 }
 
 // IsValid returns false if quota is invalid

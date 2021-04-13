@@ -643,8 +643,8 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 type Help struct {
 	SubSys          string         `json:"subSys"`
 	Description     string         `json:"description"`
-	MultipleTargets bool           `json:"multipleTargets"`
 	KeysHelp        config.HelpKVS `json:"keysHelp"`
+	MultipleTargets bool           `json:"multipleTargets"`
 }
 
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.

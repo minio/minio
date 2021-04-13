@@ -47,8 +47,8 @@ const (
 // profiler result in a given node.
 type StartProfilingResult struct {
 	NodeName string `json:"nodeName"`
-	Success  bool   `json:"success"`
 	Error    string `json:"error"`
+	Success  bool   `json:"success"`
 }
 
 // StartProfiling makes an admin call to remotely start profiling on a standalone

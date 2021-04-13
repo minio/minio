@@ -36,18 +36,15 @@ const (
 // Info - represents a trace record, additionally
 // also reports errors if any while listening on trace.
 type Info struct {
-	TraceType Type `json:"type"`
-
-	NodeName string    `json:"nodename"`
-	FuncName string    `json:"funcname"`
-	Time     time.Time `json:"time"`
-
-	ReqInfo   RequestInfo  `json:"request"`
-	RespInfo  ResponseInfo `json:"response"`
-	CallStats CallStats    `json:"stats"`
-
+	Time         time.Time    `json:"time"`
+	ReqInfo      RequestInfo  `json:"request"`
+	NodeName     string       `json:"nodename"`
+	FuncName     string       `json:"funcname"`
 	StorageStats StorageStats `json:"storageStats"`
 	OSStats      OSStats      `json:"osStats"`
+	RespInfo     ResponseInfo `json:"response"`
+	CallStats    CallStats    `json:"stats"`
+	TraceType    Type         `json:"type"`
 }
 
 // StorageStats statistics on MinIO Storage layer calls
@@ -73,13 +70,13 @@ type CallStats struct {
 // RequestInfo represents trace of http request
 type RequestInfo struct {
 	Time     time.Time   `json:"time"`
+	Headers  http.Header `json:"headers,omitempty"`
 	Proto    string      `json:"proto"`
 	Method   string      `json:"method"`
 	Path     string      `json:"path,omitempty"`
 	RawQuery string      `json:"rawquery,omitempty"`
-	Headers  http.Header `json:"headers,omitempty"`
-	Body     []byte      `json:"body,omitempty"`
 	Client   string      `json:"client"`
+	Body     []byte      `json:"body,omitempty"`
 }
 
 // ResponseInfo represents trace of http request

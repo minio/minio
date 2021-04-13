@@ -27,11 +27,11 @@ import (
 
 // Implementation to calculate bitrot for the whole file.
 type wholeBitrotWriter struct {
-	disk      StorageAPI
+	disk StorageAPI
+	hash.Hash
 	volume    string
 	filePath  string
-	shardSize int64 // This is the shard size of the erasure logic
-	hash.Hash       // For bitrot hash
+	shardSize int64
 }
 
 func (b *wholeBitrotWriter) Write(p []byte) (int, error) {
@@ -54,17 +54,17 @@ func (b *wholeBitrotWriter) Close() error {
 
 // Returns whole-file bitrot writer.
 func newWholeBitrotWriter(disk StorageAPI, volume, filePath string, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
-	return &wholeBitrotWriter{disk, volume, filePath, shardSize, algo.New()}
+	return &wholeBitrotWriter{disk, algo.New(), volume, filePath, shardSize}
 }
 
 // Implementation to verify bitrot for the whole file.
 type wholeBitrotReader struct {
 	disk       StorageAPI
+	verifier   *BitrotVerifier
 	volume     string
 	filePath   string
-	verifier   *BitrotVerifier // Holds the bit-rot info
-	tillOffset int64           // Affects the length of data requested in disk.ReadFile depending on Read()'s offset
-	buf        []byte          // Holds bit-rot verified data
+	buf        []byte
+	tillOffset int64
 }
 
 func (b *wholeBitrotReader) ReadAt(buf []byte, offset int64) (n int, err error) {
@@ -90,7 +90,7 @@ func newWholeBitrotReader(disk StorageAPI, volume, filePath string, algo BitrotA
 		disk:       disk,
 		volume:     volume,
 		filePath:   filePath,
-		verifier:   &BitrotVerifier{algo, sum},
+		verifier:   &BitrotVerifier{sum, algo},
 		tillOffset: tillOffset,
 		buf:        nil,
 	}

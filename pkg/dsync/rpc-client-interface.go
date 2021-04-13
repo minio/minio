@@ -23,9 +23,6 @@ type LockArgs struct {
 	// Unique ID of lock/unlock request.
 	UID string
 
-	// Resources contains single or multiple entries to be locked/unlocked.
-	Resources []string
-
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	Source string
@@ -34,8 +31,10 @@ type LockArgs struct {
 	// the locked resource, useful primarily in figuring our stale locks.
 	Owner string
 
-	// Quorum represents the expected quorum for this lock type.
-	Quorum int
+	// Resources contains single or multiple entries to be locked/unlocked.
+	Resources []string
+
+	Quorum int // Quorum represents the expected quorum for this lock type.
 }
 
 // NetLocker is dsync compatible locker interface.

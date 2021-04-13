@@ -66,8 +66,8 @@ func (adm *AdminClient) UpdateGroupMembers(ctx context.Context, g GroupAddRemove
 type GroupDesc struct {
 	Name    string   `json:"name"`
 	Status  string   `json:"status"`
-	Members []string `json:"members"`
 	Policy  string   `json:"policy"`
+	Members []string `json:"members"`
 }
 
 // GetGroupDescription - fetches information on a group.

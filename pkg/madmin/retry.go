@@ -44,8 +44,8 @@ const DefaultRetryCap = time.Second * 30
 
 // lockedRandSource provides protected rand source, implements rand.Source interface.
 type lockedRandSource struct {
-	lk  sync.Mutex
 	src rand.Source
+	lk  sync.Mutex
 }
 
 // Int63 returns a non-negative pseudo-random 63-bit integer as an int64.

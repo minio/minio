@@ -39,10 +39,10 @@ func (err *errHashMismatch) Error() string {
 // Calculates bitrot in chunks and writes the hash into the stream.
 type streamingBitrotWriter struct {
 	iow          io.WriteCloser
-	closeWithErr func(err error) error
 	h            hash.Hash
+	closeWithErr func(err error) error
+	canClose     chan struct{}
 	shardSize    int64
-	canClose     chan struct{} // Needed to avoid race explained in Close() call.
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
@@ -101,15 +101,15 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 // ReadAt() implementation which verifies the bitrot hash available as part of the stream.
 type streamingBitrotReader struct {
 	disk       StorageAPI
-	data       []byte
+	h          hash.Hash
 	rc         io.Reader
 	volume     string
 	filePath   string
+	data       []byte
+	hashBytes  []byte
 	tillOffset int64
 	currOffset int64
-	h          hash.Hash
 	shardSize  int64
-	hashBytes  []byte
 }
 
 func (b *streamingBitrotReader) Close() error {

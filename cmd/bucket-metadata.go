@@ -64,33 +64,34 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
-	Name                        string
-	Created                     time.Time
-	LockEnabled                 bool // legacy not used anymore.
-	PolicyConfigJSON            []byte
-	NotificationConfigXML       []byte
-	LifecycleConfigXML          []byte
-	ObjectLockConfigXML         []byte
-	VersioningConfigXML         []byte
-	EncryptionConfigXML         []byte
-	TaggingConfigXML            []byte
-	QuotaConfigJSON             []byte
-	ReplicationConfigXML        []byte
-	BucketTargetsConfigJSON     []byte
-	BucketTargetsConfigMetaJSON []byte
+	Created time.Time
 
 	// Unexported fields. Must be updated atomically.
-	policyConfig           *policy.Policy
-	notificationConfig     *event.Config
-	lifecycleConfig        *lifecycle.Lifecycle
-	objectLockConfig       *objectlock.Config
-	versioningConfig       *versioning.Versioning
-	sseConfig              *bucketsse.BucketSSEConfig
-	taggingConfig          *tags.Tags
-	quotaConfig            *madmin.BucketQuota
-	replicationConfig      *replication.Config
-	bucketTargetConfig     *madmin.BucketTargets
 	bucketTargetConfigMeta map[string]string
+	bucketTargetConfig     *madmin.BucketTargets
+	replicationConfig      *replication.Config
+	quotaConfig            *madmin.BucketQuota
+	taggingConfig          *tags.Tags
+	sseConfig              *bucketsse.BucketSSEConfig
+	versioningConfig       *versioning.Versioning
+	objectLockConfig       *objectlock.Config
+	lifecycleConfig        *lifecycle.Lifecycle
+	notificationConfig     *event.Config
+	policyConfig           *policy.Policy
+
+	Name                        string
+	BucketTargetsConfigMetaJSON []byte
+	ReplicationConfigXML        []byte
+	QuotaConfigJSON             []byte
+	TaggingConfigXML            []byte
+	EncryptionConfigXML         []byte
+	VersioningConfigXML         []byte
+	ObjectLockConfigXML         []byte
+	LifecycleConfigXML          []byte
+	NotificationConfigXML       []byte
+	PolicyConfigJSON            []byte
+	BucketTargetsConfigJSON     []byte
+	LockEnabled                 bool // legacy not used anymore.
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.

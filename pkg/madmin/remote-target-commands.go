@@ -87,20 +87,20 @@ func ParseARN(s string) (*ARN, error) {
 
 // BucketTarget represents the target bucket and site association.
 type BucketTarget struct {
+	Credentials         *auth.Credentials `json:"credentials"`
 	SourceBucket        string            `json:"sourcebucket"`
 	Endpoint            string            `json:"endpoint"`
-	Credentials         *auth.Credentials `json:"credentials"`
 	TargetBucket        string            `json:"targetbucket"`
-	Secure              bool              `json:"secure"`
+	Label               string            `json:"label,omitempty"`
 	Path                string            `json:"path,omitempty"`
 	API                 string            `json:"api,omitempty"`
 	Arn                 string            `json:"arn,omitempty"`
 	Type                ServiceType       `json:"type"`
 	Region              string            `json:"omitempty"`
-	Label               string            `json:"label,omitempty"`
 	BandwidthLimit      int64             `json:"bandwidthlimit,omitempty"`
-	ReplicationSync     bool              `json:"replicationSync"`
 	HealthCheckDuration time.Duration     `json:"healthCheckDuration,omitempty"`
+	Secure              bool              `json:"secure"`
+	ReplicationSync     bool              `json:"replicationSync"`
 }
 
 // Clone returns shallow clone of BucketTarget without secret key in credentials
