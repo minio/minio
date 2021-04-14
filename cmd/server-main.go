@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -157,11 +158,15 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back

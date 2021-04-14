@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/sio"
 )
@@ -421,7 +422,7 @@ func encryptBucketMetadata(bucket string, input []byte, kmsContext crypto.Contex
 	objectKey := crypto.GenerateKey(key, rand.Reader)
 	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, "")
 	crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
-	_, err = sio.Encrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20})
+	_, err = sio.Encrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		return output, metabytes, err
 	}
@@ -451,6 +452,6 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 	}
 
 	outbuf := bytes.NewBuffer(nil)
-	_, err = sio.Decrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20})
+	_, err = sio.Decrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
 	return outbuf.Bytes(), err
 }
