@@ -518,12 +518,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	if globalLDAPConfig.Enabled {
-		if targetUser == "" {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-			return
-		}
-
+	if globalLDAPConfig.Enabled && targetUser != "" {
 		// If LDAP enabled, service accounts need
 		// to be created only for LDAP users.
 		var err error
