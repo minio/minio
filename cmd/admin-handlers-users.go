@@ -791,7 +791,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 
 	var targetAccount string
 
-	user := mux.Vars(r)["user"]
+	user := r.URL.Query().Get("user")
 	if user != "" {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
