@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/sio"
 )
@@ -93,7 +94,7 @@ func unsealObjectKey(clientKey [32]byte, metadata map[string]string, bucket, obj
 // EncryptSinglePart encrypts an io.Reader which must be the
 // the body of a single-part PUT request.
 func EncryptSinglePart(r io.Reader, key ObjectKey) io.Reader {
-	r, err := sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, Key: key[:]})
+	r, err := sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, Key: key[:], CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to encrypt io.Reader using object key"))
 	}
@@ -115,7 +116,7 @@ func DecryptSinglePart(w io.Writer, offset, length int64, key ObjectKey) io.Writ
 	const PayloadSize = 1 << 16 // DARE 2.0
 	w = ioutil.LimitedWriter(w, offset%PayloadSize, length)
 
-	decWriter, err := sio.DecryptWriter(w, sio.Config{Key: key[:]})
+	decWriter, err := sio.DecryptWriter(w, sio.Config{Key: key[:], CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to decrypt io.Writer using object key"))
 	}
