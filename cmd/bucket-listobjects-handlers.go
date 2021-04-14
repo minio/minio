@@ -236,12 +236,20 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	listObjectsV2 := objectAPI.ListObjectsV2
+	var (
+		listObjectsV2Info ListObjectsV2Info
+		err               error
+	)
 
-	// Inititate a list objects operation based on the input params.
-	// On success would return back ListObjectsInfo object to be
-	// marshaled into S3 compatible XML header.
-	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
+	if globalAPIConfig.s3ZipEnabled() && strings.Contains(prefix, archivePattern) {
+		// Inititate a list objects operation inside a zip file based in the input params
+		listObjectsV2Info, err = listObjectsV2InArchive(ctx, objectAPI, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
+	} else {
+		// Inititate a list objects operation based on the input params.
+		// On success would return back ListObjectsInfo object to be
+		// marshaled into S3 compatible XML header.
+		listObjectsV2Info, err = objectAPI.ListObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
+	}
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
