@@ -20,6 +20,7 @@ import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import { getCurrentBucket } from "./selectors"
 import Dropdown from "react-bootstrap/lib/Dropdown"
+import { withTranslation } from 'react-i18next'
 
 export class BucketDropdown extends React.Component {
   constructor(props) {
@@ -42,7 +43,7 @@ export class BucketDropdown extends React.Component {
   }
 
   render() {
-    const { bucket, showBucketPolicy, deleteBucket, currentBucket } = this.props
+    const { bucket, showBucketPolicy, deleteBucket, currentBucket, t } = this.props
     return (
       <Dropdown 
         open = {this.state.showBucketDropdown}
@@ -62,7 +63,7 @@ export class BucketDropdown extends React.Component {
                 showBucketPolicy()
               }}
             >
-              Edit policy
+              {t('editPolicy')}
             </a>
           </li>
           <li>
@@ -73,7 +74,7 @@ export class BucketDropdown extends React.Component {
                 deleteBucket(bucket)
               }}
             >
-              Delete
+              {t('common:delete')}
             </a>
           </li>
         </Dropdown.Menu>
@@ -89,4 +90,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(state => state, mapDispatchToProps)(BucketDropdown)
+export default withTranslation('bucketDropdown')(connect(state => state, mapDispatchToProps)(BucketDropdown))

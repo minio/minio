@@ -25,13 +25,15 @@ import {
   SORT_ORDER_DESC,
   SORT_ORDER_ASC
 } from "../constants"
+import { withTranslation } from 'react-i18next'
 
 export const ObjectsHeader = ({
   sortedByName,
   sortedBySize,
   sortedByLastModified,
   sortOrder,
-  sortObjects
+  sortObjects,
+  t
 }) => (
   <div className="feb-container">
     <header className="fesl-row" data-type="folder">
@@ -42,7 +44,7 @@ export const ObjectsHeader = ({
         onClick={() => sortObjects(SORT_BY_NAME)}
         data-sort="name"
       >
-        Name
+        {t('name')}
         <i
           className={classNames({
             "fesli-sort": true,
@@ -59,7 +61,7 @@ export const ObjectsHeader = ({
         onClick={() => sortObjects(SORT_BY_SIZE)}
         data-sort="size"
       >
-        Size
+        {t('size')}
         <i
           className={classNames({
             "fesli-sort": true,
@@ -77,7 +79,7 @@ export const ObjectsHeader = ({
         onClick={() => sortObjects(SORT_BY_LAST_MODIFIED)}
         data-sort="last-modified"
       >
-        Last Modified
+        {t('lastModified')}
         <i
           className={classNames({
             "fesli-sort": true,
@@ -110,7 +112,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('objectHeader')(connect(
   mapStateToProps,
   mapDispatchToProps
-)(ObjectsHeader)
+)(ObjectsHeader))

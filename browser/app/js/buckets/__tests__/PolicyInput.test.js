@@ -29,13 +29,13 @@ jest.mock("../../web", () => ({
 describe("PolicyInput", () => {
   it("should render without crashing", () => {
     const fetchPolicies = jest.fn()
-    shallow(<PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies}/>)
+    shallow(<PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies} t={key => key}/>)
   })
 
   it("should call fetchPolicies after the component has mounted", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies} />
+      <PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies} t={key => key} />
     )
     setImmediate(() => {
       expect(fetchPolicies).toHaveBeenCalled()
@@ -45,7 +45,7 @@ describe("PolicyInput", () => {
   it("should call web.setBucketPolicy and fetchPolicies on submit", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies}/>
+      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies} t={key => key}/>
     )
     wrapper.instance().prefix = { value: "baz" }
     wrapper.instance().policy = { value: READ_ONLY }
@@ -65,7 +65,7 @@ describe("PolicyInput", () => {
   it("should change the prefix '*' to an empty string", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies}/>
+      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies} t={key => key}/>
     )
     wrapper.instance().prefix = { value: "*" }
     wrapper.instance().policy = { value: READ_ONLY }

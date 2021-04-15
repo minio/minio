@@ -23,6 +23,7 @@ import InputGroup from "./InputGroup"
 import web from "../web"
 import { Redirect, Link } from "react-router-dom"
 import OpenIDLoginButton from './OpenIDLoginButton'
+import { withTranslation } from 'react-i18next'
 
 export class Login extends React.Component {
   constructor(props) {
@@ -99,7 +100,7 @@ export class Login extends React.Component {
   }
 
   render() {
-    const { clearAlert, alert } = this.props
+    const { clearAlert, alert, t } = this.props
     if (web.LoggedIn()) {
       return <Redirect to={"/"} />
     }
@@ -117,7 +118,7 @@ export class Login extends React.Component {
               value={this.state.accessKey}
               onChange={this.accessKeyChange.bind(this)}
               className="ig-dark"
-              label="Access Key"
+              label={t('accessKey')}
               id="accessKey"
               name="username"
               type="text"
@@ -129,7 +130,7 @@ export class Login extends React.Component {
               value={this.state.secretKey}
               onChange={this.secretKeyChange.bind(this)}
               className="ig-dark"
-              label="Secret Key"
+              label={t('secretKey')}
               id="secretKey"
               name="password"
               type="password"
@@ -142,7 +143,7 @@ export class Login extends React.Component {
           </form>
           {showOpenID && (
             <div className="openid-login">
-              <div className="or">or</div>
+              <div className="or">{t('or')}</div>
               {
                 this.state.clientId ? (
                   <OpenIDLoginButton
@@ -151,11 +152,11 @@ export class Login extends React.Component {
                     authEp={this.state.discoveryDoc.authorization_endpoint}
                     authScopes={this.state.discoveryDoc.scopes_supported}
                   >
-                    Log in with OpenID
+                    {t('loginOpenID')}
                   </OpenIDLoginButton>
                 ) : (
                   <Link to={"/login/openid"} className="btn openid-btn">
-                    Log in with OpenID
+                    {t('loginOpenID')}
                   </Link>
                 )
               }
@@ -181,7 +182,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('login')(connect(
   state => state,
   mapDispatchToProps
-)(Login)
+)(Login))

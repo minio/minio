@@ -20,33 +20,33 @@ import { PrefixActions } from "../PrefixActions"
 
 describe("PrefixActions", () => {
   it("should render without crashing", () => {
-    shallow(<PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} />)
+    shallow(<PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} t={key => key} />)
   })
 
   it("should show DeleteObjectConfirmModal when delete action is clicked", () => {
     const wrapper = shallow(
-      <PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} />
+      <PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} t={key => key} />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
     expect(wrapper.state("showDeleteConfirmation")).toBeTruthy()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(1)
+    expect(wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").length).toBe(1)
   })
 
   it("should hide DeleteObjectConfirmModal when Cancel button is clicked", () => {
     const wrapper = shallow(
-      <PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} />
+      <PrefixActions object={{ name: "abc/" }} currentPrefix={"pre1/"} t={key => key} />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
-    wrapper.find("DeleteObjectConfirmModal").prop("hideDeleteConfirmModal")()
+    wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").prop("hideDeleteConfirmModal")()
     wrapper.update()
     expect(wrapper.state("showDeleteConfirmation")).toBeFalsy()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(0)
+    expect(wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").length).toBe(0)
   })
 
   it("should call deleteObject with object name", () => {
@@ -56,13 +56,14 @@ describe("PrefixActions", () => {
         object={{ name: "abc/" }}
         currentPrefix={"pre1/"}
         deleteObject={deleteObject}
+        t={key => key}
       />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
-    wrapper.find("DeleteObjectConfirmModal").prop("deleteObject")()
+    wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").prop("deleteObject")()
     expect(deleteObject).toHaveBeenCalledWith("abc/")
   })
 
@@ -73,7 +74,8 @@ describe("PrefixActions", () => {
       <PrefixActions
         object={{ name: "abc/" }}
         currentPrefix={"pre1/"}
-        downloadPrefix={downloadPrefix} />
+        downloadPrefix={downloadPrefix}
+        t={key => key} />
     )
     wrapper
       .find("a")

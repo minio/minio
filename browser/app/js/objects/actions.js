@@ -33,6 +33,7 @@ import {
   SORT_ORDER_DESC,
 } from "../constants"
 import { getServerInfo, hasServerPublicDomain } from '../browser/selectors'
+import i18n from './../../i18n'
 
 export const SET_LIST = "objects/SET_LIST"
 export const RESET_LIST = "objects/RESET_LIST"
@@ -247,7 +248,8 @@ export const shareObject = (object, days, hours, minutes) => {
             dispatch(
               alertActions.set({
                 type: "success",
-                message: "Object shared."
+                //Same message as line 298
+                message: i18n.t('actions:msgObjShared')
               })
             )
           } else {
@@ -266,7 +268,7 @@ export const shareObject = (object, days, hours, minutes) => {
           dispatch(
             alertActions.set({
               type: "success",
-              message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`,
+              message: i18n.t('actions:msgObjSharedDetails', { nbrDays: days, nbrHours: hours, nbrMinutes: minutes })
             })
           )
         })
@@ -292,7 +294,8 @@ export const shareObject = (object, days, hours, minutes) => {
       dispatch(
         alertActions.set({
           type: "success",
-          message: `Object shared.`,
+          //Same message as line 252
+          message: i18n.t('actions:msgObjShared'),
         })
       )
     }

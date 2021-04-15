@@ -20,13 +20,13 @@ import { BucketDropdown } from "../BucketDropdown"
 
 describe("BucketDropdown", () => {
   it("should render without crashing", () => {
-    shallow(<BucketDropdown />)
+    shallow(<BucketDropdown t={key => key} />)
   })
 
   it("should call toggleDropdown on dropdown toggle", () => {
     const spy = jest.spyOn(BucketDropdown.prototype, 'toggleDropdown')
     const wrapper = shallow(
-      <BucketDropdown />
+      <BucketDropdown t={key => key} />
     )
     wrapper
       .find("Uncontrolled(Dropdown)")
@@ -39,7 +39,7 @@ describe("BucketDropdown", () => {
   it("should call showBucketPolicy when Edit Policy link is clicked", () => {
     const showBucketPolicy = jest.fn()
     const wrapper = shallow(
-      <BucketDropdown showBucketPolicy={showBucketPolicy} />
+      <BucketDropdown showBucketPolicy={showBucketPolicy} t={key => key} />
     )
     wrapper
       .find("li a")
@@ -51,7 +51,7 @@ describe("BucketDropdown", () => {
   it("should call deleteBucket when Delete link is clicked", () => {
     const deleteBucket = jest.fn()
     const wrapper = shallow(
-      <BucketDropdown bucket={"test"} deleteBucket={deleteBucket} />
+      <BucketDropdown bucket={"test"} deleteBucket={deleteBucket} t={key => key} />
     )
     wrapper
       .find("li a")

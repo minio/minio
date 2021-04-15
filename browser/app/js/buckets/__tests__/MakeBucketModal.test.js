@@ -20,13 +20,13 @@ import { MakeBucketModal } from "../MakeBucketModal"
 
 describe("MakeBucketModal", () => {
   it("should render without crashing", () => {
-    shallow(<MakeBucketModal />)
+    shallow(<MakeBucketModal t={key => key}/>)
   })
 
   it("should call hideMakeBucketModal when close button is clicked", () => {
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} />
+      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} t={key => key} />
     )
     wrapper.find("button").simulate("click")
     expect(hideMakeBucketModal).toHaveBeenCalled()
@@ -35,7 +35,7 @@ describe("MakeBucketModal", () => {
   it("bucketName should be cleared before hiding the modal", () => {
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} />
+      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} t={key => key} />
     )
     wrapper.find("input").simulate("change", {
       target: { value: "test" }
@@ -52,6 +52,7 @@ describe("MakeBucketModal", () => {
       <MakeBucketModal
         makeBucket={makeBucket}
         hideMakeBucketModal={hideMakeBucketModal}
+        t={key => key}
       />
     )
     wrapper.find("input").simulate("change", {
@@ -68,6 +69,7 @@ describe("MakeBucketModal", () => {
       <MakeBucketModal
         makeBucket={makeBucket}
         hideMakeBucketModal={hideMakeBucketModal}
+        t={key => key}
       />
     )
     wrapper.find("input").simulate("change", {

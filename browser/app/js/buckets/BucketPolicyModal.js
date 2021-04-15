@@ -20,8 +20,9 @@ import { Modal, ModalHeader } from "react-bootstrap"
 import * as actionsBuckets from "./actions"
 import PolicyInput from "./PolicyInput"
 import Policy from "./Policy"
+import { withTranslation } from "react-i18next"
 
-export const BucketPolicyModal = ({ showBucketPolicy, currentBucket, hideBucketPolicy, policies }) => {
+export const BucketPolicyModal = ({ showBucketPolicy, currentBucket, hideBucketPolicy, policies, t }) => {
   return (
     <Modal className="modal-policy"
             animation={ false }
@@ -29,8 +30,7 @@ export const BucketPolicyModal = ({ showBucketPolicy, currentBucket, hideBucketP
             onHide={ hideBucketPolicy }
     >
       <ModalHeader>
-        Bucket Policy (
-        { currentBucket })
+        {t('bucketPolicy', { bucketName: currentBucket })}
         <button className="close close-alt" onClick={ hideBucketPolicy }>
           <span>×</span>
         </button>
@@ -58,4 +58,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(BucketPolicyModal)
+export default withTranslation('bucketPolicyModal')(connect(mapStateToProps, mapDispatchToProps)(BucketPolicyModal))

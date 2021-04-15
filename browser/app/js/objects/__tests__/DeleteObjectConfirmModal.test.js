@@ -20,13 +20,13 @@ import { DeleteObjectConfirmModal } from "../DeleteObjectConfirmModal"
 
 describe("DeleteObjectConfirmModal", () => {
   it("should render without crashing", () => {
-    shallow(<DeleteObjectConfirmModal />)
+    shallow(<DeleteObjectConfirmModal t={key => key} />)
   })
 
   it("should call deleteObject when Delete is clicked", () => {
     const deleteObject = jest.fn()
     const wrapper = shallow(
-      <DeleteObjectConfirmModal deleteObject={deleteObject} />
+      <DeleteObjectConfirmModal deleteObject={deleteObject} t={key => key} />
     )
     wrapper.find("ConfirmModal").prop("okHandler")()
     expect(deleteObject).toHaveBeenCalled()
@@ -37,6 +37,7 @@ describe("DeleteObjectConfirmModal", () => {
     const wrapper = shallow(
       <DeleteObjectConfirmModal
         hideDeleteConfirmModal={hideDeleteConfirmModal}
+        t={key => key}
       />
     )
     wrapper.find("ConfirmModal").prop("cancelHandler")()

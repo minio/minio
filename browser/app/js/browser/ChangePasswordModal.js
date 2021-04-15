@@ -25,6 +25,7 @@ import classNames from "classnames"
 import { Modal, ModalBody, ModalHeader } from "react-bootstrap"
 import InputGroup from "./InputGroup"
 import { ACCESS_KEY_MIN_LENGTH, SECRET_KEY_MIN_LENGTH } from "../constants"
+import { withTranslation } from 'react-i18next'
 
 export class ChangePasswordModal extends React.Component {
   constructor(props) {
@@ -111,15 +112,15 @@ export class ChangePasswordModal extends React.Component {
   }
 
   render() {
-    const { hideChangePassword, serverInfo } = this.props
+    const { hideChangePassword, serverInfo, t } = this.props
     const allowChangePassword = this.canChangePassword()
 
     if (!allowChangePassword) {
       return (
         <Modal bsSize="sm" animation={false} show={true}>
-          <ModalHeader>Change Password</ModalHeader>
+          <ModalHeader>{t('changePassword')}</ModalHeader>
           <ModalBody>
-            Credentials of this user cannot be updated through MinIO Browser.
+            {t('msgNoCredUpdate')}
           </ModalBody>
           <div className="modal-footer">
             <button
@@ -127,7 +128,7 @@ export class ChangePasswordModal extends React.Component {
               className="btn btn-link"
               onClick={hideChangePassword}
             >
-              Close
+              {t('common:close')}
             </button>
           </div>
         </Modal>
@@ -136,13 +137,13 @@ export class ChangePasswordModal extends React.Component {
 
     return (
       <Modal bsSize="sm" animation={false} show={true}>
-        <ModalHeader>Change Password</ModalHeader>
+        <ModalHeader>{t('changePassword')}</ModalHeader>
         <ModalBody className="m-t-20">
           <div className="has-toggle-password">
             <InputGroup
               value={this.state.currentAccessKey}
               id="currentAccessKey"
-              label="Current Access Key"
+              label={t('currentAccessKey')}
               name="currentAccesskey"
               type="text"
               spellCheck="false"
@@ -169,7 +170,7 @@ export class ChangePasswordModal extends React.Component {
                 this.setState({ currentSecretKey: e.target.value })
               }}
               id="currentSecretKey"
-              label="Current Secret Key"
+              label={t('currentSecretKey')}
               name="currentSecretKey"
               type={this.state.currentSecretKeyVisible ? "text" : "password"}
               spellCheck="false"
@@ -197,7 +198,7 @@ export class ChangePasswordModal extends React.Component {
                 this.setState({ newSecretKey: e.target.value })
               }}
               id="newSecretKey"
-              label="New Secret Key"
+              label={t('newSecretKey')}
               name="newSecretKey"
               type={this.state.newSecretKeyVisible ? "text" : "password"}
               spellCheck="false"
@@ -216,7 +217,7 @@ export class ChangePasswordModal extends React.Component {
             className={"btn btn-primary"}
             onClick={this.generateAuth.bind(this)}
           >
-            Generate
+            {t('generate')}
           </button>
           <button
             id="update-keys"
@@ -227,14 +228,14 @@ export class ChangePasswordModal extends React.Component {
             disabled={!this.canUpdateCredentials()}
             onClick={this.setAuth.bind(this)}
           >
-            Update
+            {t('common:update')}
           </button>
           <button
             id="cancel-change-password"
             className="btn btn-link"
             onClick={hideChangePassword}
           >
-            Cancel
+            {t('common:cancel')}
           </button>
         </div>
       </Modal>
@@ -254,7 +255,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('changePasswordModal')(connect(
   mapStateToProps,
   mapDispatchToProps
-)(ChangePasswordModal)
+)(ChangePasswordModal))

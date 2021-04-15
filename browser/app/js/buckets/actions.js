@@ -19,6 +19,7 @@ import history from "../history"
 import * as alertActions from "../alert/actions"
 import * as objectsActions from "../objects/actions"
 import { pathSlice } from "../utils"
+import i18n from './../../i18n'
 
 export const SET_LIST = "buckets/SET_LIST"
 export const ADD = "buckets/ADD"
@@ -127,7 +128,7 @@ export const deleteBucket = bucket => {
         dispatch(
           alertActions.set({
             type: "info",
-            message: "Bucket '" + bucket + "' has been deleted."
+            message: i18n.t('actions:msgBucketDeleted', { bucketName: bucket })
           })
         )
         dispatch(removeBucket(bucket))

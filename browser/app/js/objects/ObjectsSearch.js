@@ -17,8 +17,9 @@
 import React from "react"
 import { connect } from "react-redux"
 import * as actionsObjects from "./actions"
+import { withTranslation } from 'react-i18next'
 
-export const ObjectsSearch = ({ onChange }) => (
+export const ObjectsSearch = ({ t, onChange }) => (
   <div
     className="input-group ig-left ig-search-dark"
     style={{ display: "block" }}
@@ -26,7 +27,7 @@ export const ObjectsSearch = ({ onChange }) => (
     <input
       className="ig-text"
       type="input"
-      placeholder="Search Objects..."
+      placeholder={t('searchObjects')}
       onChange={e => onChange(e.target.value)}
     />
     <i className="ig-helpers" />
@@ -40,4 +41,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(undefined, mapDispatchToProps)(ObjectsSearch)
+export default withTranslation('searchObject')(connect(undefined, mapDispatchToProps)(ObjectsSearch))

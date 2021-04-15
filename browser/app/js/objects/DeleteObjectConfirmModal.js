@@ -16,21 +16,23 @@
 
 import React from "react"
 import ConfirmModal from "../browser/ConfirmModal"
+import { withTranslation } from "react-i18next"
 
 export const DeleteObjectConfirmModal = ({
   deleteObject,
-  hideDeleteConfirmModal
+  hideDeleteConfirmModal,
+  t
 }) => (
   <ConfirmModal
     show={true}
     icon="fas fa-exclamation-triangle mci-red"
-    text="Are you sure you want to delete?"
-    sub="This cannot be undone!"
-    okText="Delete"
-    cancelText="Cancel"
+    text={t('confirmationDelete')}
+    sub={t('confirmationDeleteSub')}
+    okText={t('common:delete')}
+    cancelText={t('common:cancel')}
     okHandler={deleteObject}
     cancelHandler={hideDeleteConfirmModal}
   />
 )
 
-export default DeleteObjectConfirmModal
+export default withTranslation('deleteObjectConfirmationModal')(DeleteObjectConfirmModal)

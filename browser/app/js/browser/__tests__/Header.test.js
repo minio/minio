@@ -36,7 +36,11 @@ describe("Header", () => {
 
   it("should render StorageInfo and BrowserDropdown when the user has LoggedIn", () => {
     const wrapper = shallow(<Header />)
-    expect(wrapper.find("Connect(BrowserDropdown)").length).toBe(1)
-    expect(wrapper.find("Connect(StorageInfo)").length).toBe(1)
+    expect(
+      wrapper.find("withI18nextTranslation(Connect(BrowserDropdown))").length
+    ).toBe(1)
+    expect(
+      wrapper.find("withI18nextTranslation(Connect(StorageInfo))").length
+    ).toBe(1)
   })
 })

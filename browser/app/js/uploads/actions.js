@@ -21,6 +21,7 @@ import * as objectsActions from "../objects/actions"
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix } from "../objects/selectors"
 import { minioBrowserPrefix } from "../constants"
+import i18n from './../../i18n'
 
 export const ADD = "uploads/ADD"
 export const UPDATE_PROGRESS = "uploads/UPDATE_PROGRESS"
@@ -83,7 +84,7 @@ export const uploadFile = file => {
       dispatch(
         alertActions.set({
           type: "danger",
-          message: "Please choose a bucket before trying to upload files."
+          message: i18n.t('actions:msgNeedBucket')
         })
       )
       return
@@ -126,7 +127,7 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "danger",
-            message: "Unauthorized request."
+            message: i18n.t('actions:msgUnauthorizedRequest')
           })
         )
       }
@@ -146,7 +147,7 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "success",
-            message: "File '" + filePath + "' uploaded successfully."
+            message: i18n.t('actions:msgFileUploaded', { fileName: filePath })
           })
         )
         dispatch(objectsActions.selectPrefix(currentPrefix))
@@ -158,7 +159,7 @@ export const uploadFile = file => {
       dispatch(
         alertActions.set({
           type: "danger",
-          message: "Error occurred uploading '" + filePath + "'."
+          message: i18n.t('actions:msgErrorUploading', { fileName: filePath })
         })
       )
     })

@@ -21,15 +21,17 @@ import web from "../web"
 import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
 import { getPrefixWritable } from "../objects/selectors"
+import { withTranslation } from 'react-i18next'
 
 export const MainActions = ({
   prefixWritable,
   uploadFile,
-  showMakeBucketModal
+  showMakeBucketModal,
+  t
 }) => {
-  const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
+  const uploadTooltip = <Tooltip id="tt-upload-file">{t('uploadFile')}</Tooltip>
   const makeBucketTooltip = (
-    <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
+    <Tooltip id="tt-create-bucket">{t('createBucket')}</Tooltip>
   )
   const onFileUpload = e => {
     e.preventDefault()
@@ -103,4 +105,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(MainActions)
+export default withTranslation('mainActions')(connect(mapStateToProps, mapDispatchToProps)(MainActions))

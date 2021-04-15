@@ -28,11 +28,11 @@ jest.mock("../../web", () => ({
 
 describe("Policy", () => {
   it("should render without crashing", () => {
-    shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />)
+    shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} t={key => key} />)
   })
 
   it("should not render when policy is listed as 'none'", () => {
-    const wrapper = shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={NONE} />)
+    const wrapper = shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={NONE} t={key => key} />)
     expect(wrapper.find(".pmb-list").length).toBe(0)
   })
 
@@ -44,6 +44,7 @@ describe("Policy", () => {
         prefix={"foo"}
         policy={READ_ONLY}
         fetchPolicies={fetchPolicies}
+        t={key => key}
       />
     )
     wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
@@ -61,7 +62,7 @@ describe("Policy", () => {
 
   it("should change the empty string to '*' while displaying prefixes", () => {
     const wrapper = shallow(
-      <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} />
+      <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} t={key => key} />
     )
     expect(wrapper.find(".pmbl-item").at(0).text()).toEqual("*")
   })

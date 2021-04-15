@@ -18,7 +18,7 @@ import JSONrpc from './jsonrpc'
 import { minioBrowserPrefix } from './constants.js'
 import Moment from 'moment'
 import storage from 'local-storage-fallback'
-
+import i18n from './../i18n'
 class Web {
   constructor(endpoint) {
     const namespace = 'web'
@@ -35,21 +35,30 @@ class Web {
         if (err.status === 401) {
           storage.removeItem('token')
           location.reload()
-          throw new Error('Please re-login.')
+          throw new Error(i18n.t('errReLogin'))
         }
         if (err.status)
-          throw new Error(`Server returned error [${err.status}]`)
-        throw new Error('MinIO server is unreachable')
+          throw new Error(i18n.t('errReturnedError', { errorStatus: err.status }))
+        throw new Error(i18n.t('errMinioUnreachable'))
       })
-      .then(res => {
+      .then(res => { //Rpc server handled the request
         let json = JSON.parse(res.text)
         let result = json.result
         let error = json.error
-        if (error) {
-          throw new Error(error.message)
+        if (error) { // This limits to only the message. 
+          //If there is a code (numbered), show a generic error
+          if(error.code){
+            throw new Error(i18n.t('errGeneric'))
+          }
+          // If an error key was provided, find the error and translation
+          if(error.data){
+            let msg = this.createTranslatedError(error)
+            throw new Error(msg)
+          }
+          throw new Error(i18n.t('errGeneric') + ' ' + error.message)
         }
         if (!Moment(result.uiVersion).isValid()) {
-          throw new Error("Invalid UI version in the JSON-RPC response")
+          throw new Error(i18n.t('errInvalidUIVersion'))
         }
         if (result.uiVersion !== currentUiVersion
           && currentUiVersion !== 'MINIO_UI_VERSION') {
@@ -58,6 +67,15 @@ class Web {
         }
         return result
       })
+  }
+  createTranslatedError(error) {
+    let key = error.data['key']
+    let parameters = error.data['param']
+    if(parameters){ 
+      //There are parameter(s) for the message
+      return i18n.t(key, parameters)
+    }
+    return i18n.t(key)
   }
   LoggedIn() {
     return !!storage.getItem('token')

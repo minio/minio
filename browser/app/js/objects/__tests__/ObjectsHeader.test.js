@@ -22,7 +22,7 @@ import { SORT_ORDER_ASC, SORT_ORDER_DESC } from "../../constants"
 describe("ObjectsHeader", () => {
   it("should render without crashing", () => {
     const sortObjects = jest.fn()
-    shallow(<ObjectsHeader sortObjects={sortObjects} />)
+    shallow(<ObjectsHeader sortObjects={sortObjects} t={key => key}/>)
   })
 
   it("should render the name column with asc class when objects are sorted by name asc", () => {
@@ -32,6 +32,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedByName={true}
         sortOrder={SORT_ORDER_ASC}
+        t={key => key}
       />
     )
     expect(
@@ -46,6 +47,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedByName={true}
         sortOrder={SORT_ORDER_DESC}
+        t={key => key}
       />
     )
     expect(
@@ -60,6 +62,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedBySize={true}
         sortOrder={SORT_ORDER_ASC}
+        t={key => key}
       />
     )
     expect(
@@ -74,6 +77,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedBySize={true}
         sortOrder={SORT_ORDER_DESC}
+        t={key => key}
       />
     )
     expect(
@@ -88,6 +92,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedByLastModified={true}
         sortOrder={SORT_ORDER_ASC}
+        t={key => key}
       />
     )
     expect(
@@ -102,6 +107,7 @@ describe("ObjectsHeader", () => {
         sortObjects={sortObjects}
         sortedByLastModified={true}
         sortOrder={SORT_ORDER_DESC}
+        t={key => key}
       />
     )
     expect(
@@ -111,7 +117,7 @@ describe("ObjectsHeader", () => {
 
   it("should call sortObjects when a column is clicked", () => {
     const sortObjects = jest.fn()
-    const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
+    const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} t={key => key}/>)
     wrapper.find("#sort-by-name").simulate("click")
     expect(sortObjects).toHaveBeenCalledWith("name")
     wrapper.find("#sort-by-size").simulate("click")

@@ -20,11 +20,11 @@ import { Path } from "../Path"
 
 describe("Path", () => {
   it("should render without crashing", () => {
-    shallow(<Path currentBucket={"test1"} currentPrefix={"test2"} />)
+    shallow(<Path currentBucket={"test1"} currentPrefix={"test2"} t={key => key} />)
   })
 
   it("should render only bucket if there is no prefix", () => {
-    const wrapper = shallow(<Path currentBucket={"test1"} currentPrefix={""} />)
+    const wrapper = shallow(<Path currentBucket={"test1"} currentPrefix={""} t={key => key} />)
     expect(wrapper.find("span").length).toBe(1)
     expect(
       wrapper
@@ -36,7 +36,7 @@ describe("Path", () => {
 
   it("should render bucket and prefix", () => {
     const wrapper = shallow(
-      <Path currentBucket={"test1"} currentPrefix={"a/b/"} />
+      <Path currentBucket={"test1"} currentPrefix={"a/b/"} t={key => key} />
     )
     expect(wrapper.find("span").length).toBe(3)
     expect(
@@ -66,6 +66,7 @@ describe("Path", () => {
         currentBucket={"test1"}
         currentPrefix={"a/b/"}
         selectPrefix={selectPrefix}
+        t={key => key}
       />
     )
     wrapper
@@ -76,7 +77,7 @@ describe("Path", () => {
   })
 
   it("should switch to input mode when edit icon is clicked", () => {
-    const wrapper = mount(<Path currentBucket={"test1"} currentPrefix={""} />)
+    const wrapper = mount(<Path currentBucket={"test1"} currentPrefix={""} t={key => key} />)
     wrapper.find(".fe-edit").simulate("click", { preventDefault: jest.fn() })
     expect(wrapper.find(".form-control--path").exists()).toBeTruthy()
   })
@@ -90,6 +91,7 @@ describe("Path", () => {
         currentBucket={"test1"}
         currentPrefix={""}
         selectBucket={selectBucket}
+        t={key => key}
       />
     )
     wrapper.setState({
@@ -109,6 +111,7 @@ describe("Path", () => {
         currentBucket={"test1"}
         currentPrefix={""}
         makeBucket={makeBucket}
+        t={key => key}
       />
     )
     wrapper.setState({
@@ -130,6 +133,7 @@ describe("Path", () => {
         currentPrefix={""}
         makeBucket={makeBucket}
         selectBucket={selectBucket}
+        t={key => key}
       />
     )
     wrapper.setState({

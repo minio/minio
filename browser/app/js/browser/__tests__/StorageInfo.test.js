@@ -21,7 +21,7 @@ import { StorageInfo } from "../StorageInfo"
 describe("StorageInfo", () => {
   it("should render without crashing", () => {
     shallow(
-      <StorageInfo storageInfo={ {used: 60} } fetchStorageInfo={jest.fn()} />
+      <StorageInfo storageInfo={ {used: 60} } fetchStorageInfo={jest.fn()} t={key => key} />
     )
   })
 
@@ -31,6 +31,7 @@ describe("StorageInfo", () => {
       <StorageInfo
         storageInfo={ {used: 60} }
         fetchStorageInfo={fetchStorageInfo}
+        t={key => key}
       />
     )
     expect(fetchStorageInfo).toHaveBeenCalled()
@@ -42,6 +43,7 @@ describe("StorageInfo", () => {
       <StorageInfo
       storageInfo={ {used: 0} }
         fetchStorageInfo={fetchStorageInfo}
+        t={key => key}
       />
     )
     expect(wrapper.text()).toBe("")

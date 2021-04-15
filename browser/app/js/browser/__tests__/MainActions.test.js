@@ -28,23 +28,23 @@ jest.mock("../../web", () => ({
 
 describe("MainActions", () => {
   it("should render without crashing", () => {
-    shallow(<MainActions />)
+    shallow(<MainActions t={key => key} />)
   })
 
   it("should not show any actions when user has not LoggedIn and prefixWritable is false", () => {
-    const wrapper = shallow(<MainActions />)
+    const wrapper = shallow(<MainActions t={key => key} />)
     expect(wrapper.find("#show-make-bucket").length).toBe(0)
     expect(wrapper.find("#file-input").length).toBe(0)
   })
 
   it("should show only file upload action when user has not LoggedIn and prefixWritable is true", () => {
-    const wrapper = shallow(<MainActions prefixWritable={true} />)
+    const wrapper = shallow(<MainActions prefixWritable={true} t={key => key} />)
     expect(wrapper.find("#show-make-bucket").length).toBe(0)
     expect(wrapper.find("#file-input").length).toBe(1)
   })
 
   it("should show make bucket upload file actions when user has LoggedIn", () => {
-    const wrapper = shallow(<MainActions />)
+    const wrapper = shallow(<MainActions t={key => key} />)
     expect(wrapper.find("#show-make-bucket").length).toBe(1)
     expect(wrapper.find("#file-input").length).toBe(1)
   })
@@ -52,7 +52,7 @@ describe("MainActions", () => {
   it("should call showMakeBucketModal when create bucket icon is clicked", () => {
     const showMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MainActions showMakeBucketModal={showMakeBucketModal} />
+      <MainActions showMakeBucketModal={showMakeBucketModal} t={key => key} />
     )
     wrapper
       .find("#show-make-bucket")
@@ -62,7 +62,7 @@ describe("MainActions", () => {
 
   it("should call uploadFile when a file is selected for upload", () => {
     const uploadFile = jest.fn()
-    const wrapper = shallow(<MainActions uploadFile={uploadFile} />)
+    const wrapper = shallow(<MainActions uploadFile={uploadFile} t={key => key} />)
     const files = [new Blob(["file content"], { type: "text/plain" })]
     const input = wrapper.find("#file-input")
     const event = {

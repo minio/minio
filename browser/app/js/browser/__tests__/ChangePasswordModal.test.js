@@ -58,7 +58,7 @@ describe("ChangePasswordModal", () => {
   }
 
   it("should render without crashing", () => {
-    shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    shallow(<ChangePasswordModal serverInfo={serverInfo} t={key => key} />)
   })
 
   it("should not allow changing password when not IAM user", () => {
@@ -66,13 +66,13 @@ describe("ChangePasswordModal", () => {
       ...serverInfo,
       userInfo: { isIAMUser: false }
     }
-    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
+    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} t={key => key} />)
     expect(
       wrapper
         .find("ModalBody")
         .childAt(0)
         .text()
-    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
+    ).toBe("msgNoCredUpdate")
   })
 
   it("should not allow changing password for STS user", () => {
@@ -80,17 +80,17 @@ describe("ChangePasswordModal", () => {
       ...serverInfo,
       userInfo: { isTempUser: true }
     }
-    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
+    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} t={key => key} />)
     expect(
       wrapper
         .find("ModalBody")
         .childAt(0)
         .text()
-    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
+    ).toBe("msgNoCredUpdate")
   })
 
   it("should not generate accessKey for IAM User", () => {
-    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} t={key => key} />)
     wrapper.find("#generate-keys").simulate("click")
     setImmediate(() => {
       expect(wrapper.state("newAccessKey")).toBe("minio")
@@ -99,14 +99,14 @@ describe("ChangePasswordModal", () => {
   })
 
   it("should not show new accessKey field for IAM User", () => {
-    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} t={key => key} />)
     expect(wrapper.find("#newAccesskey").exists()).toBeFalsy()
   })
 
   it("should disable Update button for secretKey", () => {
     const showAlert = jest.fn()
     const wrapper = shallow(
-      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />
+      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} t={key => key} />
     )
     wrapper
       .find("#currentSecretKey")
@@ -123,6 +123,7 @@ describe("ChangePasswordModal", () => {
       <ChangePasswordModal
         serverInfo={serverInfo}
         hideChangePassword={hideChangePassword}
+        t={key => key}
       />
     )
     wrapper.find("#cancel-change-password").simulate("click")

@@ -22,6 +22,7 @@ import classnames from "classnames"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
+import { withTranslation } from "react-i18next"
 
 export class PolicyInput extends React.Component {
   componentDidMount() {
@@ -36,7 +37,7 @@ export class PolicyInput extends React.Component {
 
   handlePolicySubmit(e) {
     e.preventDefault()
-    const { currentBucket, fetchPolicies, showAlert } = this.props
+    const { currentBucket, fetchPolicies, showAlert, t } = this.props
     
     if (this.prefix.value === "*")
       this.prefix.value = ""
@@ -45,7 +46,7 @@ export class PolicyInput extends React.Component {
       elem => this.prefix.value === elem.prefix && this.policy.value === elem.policy
     )
     if (policyAlreadyExists) {
-      showAlert("danger", "Policy for this prefix already exists.")
+      showAlert("danger", t('errPolicyAlreadyExists'))
       return
     }
     
@@ -63,6 +64,7 @@ export class PolicyInput extends React.Component {
   }
 
   render() {
+    const { t } = this.props
     return (
       <header className="pmb-list">
         <div className="pmbl-item">
@@ -70,25 +72,25 @@ export class PolicyInput extends React.Component {
             type="text"
             ref={ prefix => this.prefix = prefix }
             className="form-control"
-            placeholder="Prefix"
+            placeholder={t('prefix')}
           />
         </div>
         <div className="pmbl-item">
           <select ref={ policy => this.policy = policy } className="form-control">
             <option value={ READ_ONLY }>
-              Read Only
+              {t('common:readOnly')}
             </option>
             <option value={ WRITE_ONLY }>
-              Write Only
+              {t('common:writeOnly')}
             </option>
             <option value={ READ_WRITE }>
-              Read and Write
+              {t('common:readWrite')}
             </option>
           </select>
         </div>
         <div className="pmbl-item">
           <button className="btn btn-block btn-primary" onClick={ this.handlePolicySubmit.bind(this) }>
-            Add
+            {t('common:add')}
           </button>
         </div>
       </header>
@@ -112,4 +114,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(PolicyInput)
+export default withTranslation('policyInput')(connect(mapStateToProps, mapDispatchToProps)(PolicyInput))

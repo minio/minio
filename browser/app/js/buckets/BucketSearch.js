@@ -17,8 +17,9 @@
 import React from "react"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
+import { withTranslation } from 'react-i18next'
 
-export const BucketSearch = ({ onChange }) => (
+export const BucketSearch = ({ t, onChange }) => (
   <div
     className="input-group ig-dark ig-left ig-search"
     style={{ display: "block" }}
@@ -27,7 +28,7 @@ export const BucketSearch = ({ onChange }) => (
       className="ig-text"
       type="text"
       onChange={e => onChange(e.target.value)}
-      placeholder="Search Buckets..."
+      placeholder={t('searchBuckets')}
     />
     <i className="ig-helpers" />
   </div>
@@ -41,4 +42,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(undefined, mapDispatchToProps)(BucketSearch)
+export default  withTranslation('searchBucket')(connect(undefined, mapDispatchToProps)(BucketSearch))

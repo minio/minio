@@ -21,6 +21,7 @@ import { OverlayTrigger, Tooltip } from "react-bootstrap"
 import { getCurrentBucket } from "../buckets/selectors"
 import * as actionsObjects from "./actions"
 import * as actionsBuckets from "../buckets/actions"
+import { withTranslation } from 'react-i18next'
 
 export class Path extends React.Component {
   constructor(props) {
@@ -98,8 +99,8 @@ export class Path extends React.Component {
     }
   }
   render() {
-    const pathTooltip = <Tooltip id="tt-path">Choose or create new path</Tooltip>
-    const { currentBucket, currentPrefix } = this.props
+    const { currentBucket, currentPrefix, t } = this.props
+    const pathTooltip = <Tooltip id="tt-path">{t('chooseCreatePath')}</Tooltip>
     let dirPath = []
     let path = ""
     if (currentPrefix) {
@@ -125,7 +126,7 @@ export class Path extends React.Component {
               <input
                 className="form-control form-control--path"
                 type="text"
-                placeholder="Choose or create new path"
+                placeholder={t('chooseCreatePath')}
                 ref={node => (this.pathInput = node)}
                 onKeyDown={e => this.onKeyDown(e)}
                 value={this.state.path}
@@ -170,7 +171,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('path')(connect(
   mapStateToProps,
   mapDispatchToProps
-)(Path)
+)(Path))

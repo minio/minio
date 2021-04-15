@@ -20,11 +20,11 @@ import { ObjectsBulkActions } from "../ObjectsBulkActions"
 
 describe("ObjectsBulkActions", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsBulkActions checkedObjects={[]} />)
+    shallow(<ObjectsBulkActions checkedObjects={[]} t={key => key} />)
   })
 
   it("should show actions when checkObjectsCount is more than 0", () => {
-    const wrapper = shallow(<ObjectsBulkActions checkedObjects={["test"]} />)
+    const wrapper = shallow(<ObjectsBulkActions checkedObjects={["test"]} t={key => key} />)
     expect(wrapper.hasClass("list-actions-toggled")).toBeTruthy()
   })
 
@@ -36,6 +36,7 @@ describe("ObjectsBulkActions", () => {
         checkedObjects={["test"]}
         downloadObject={downloadObject}
         clearChecked={clearChecked}
+        t={key => key}
       />
     )
     wrapper.find("#download-checked").simulate("click")
@@ -48,6 +49,7 @@ describe("ObjectsBulkActions", () => {
       <ObjectsBulkActions
         checkedObjects={["test/"]}
         downloadChecked={downloadChecked}
+        t={key => key}
       />
     )
     wrapper.find("#download-checked").simulate("click")
@@ -60,6 +62,7 @@ describe("ObjectsBulkActions", () => {
       <ObjectsBulkActions
         checkedObjects={["test1", "test2"]}
         downloadChecked={downloadChecked}
+        t={key => key}
       />
     )
     wrapper.find("#download-checked").simulate("click")
@@ -69,17 +72,17 @@ describe("ObjectsBulkActions", () => {
   it("should call clearChecked when close button is clicked", () => {
     const clearChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions checkedObjects={["test"]} clearChecked={clearChecked} />
+      <ObjectsBulkActions checkedObjects={["test"]} clearChecked={clearChecked} t={key => key} />
     )
     wrapper.find("#close-bulk-actions").simulate("click")
     expect(clearChecked).toHaveBeenCalled()
   })
 
   it("shoud show DeleteObjectConfirmModal when delete-checked button is clicked", () => {
-    const wrapper = shallow(<ObjectsBulkActions checkedObjects={["test"]} />)
+    const wrapper = shallow(<ObjectsBulkActions checkedObjects={["test"]} t={key => key} />)
     wrapper.find("#delete-checked").simulate("click")
     wrapper.update()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(1)
+    expect(wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").length).toBe(1)
   })
 
   it("shoud call deleteChecked when Delete is clicked on confirmation modal", () => {
@@ -88,13 +91,14 @@ describe("ObjectsBulkActions", () => {
       <ObjectsBulkActions
         checkedObjects={["test"]}
         deleteChecked={deleteChecked}
+        t={key => key}
       />
     )
     wrapper.find("#delete-checked").simulate("click")
     wrapper.update()
-    wrapper.find("DeleteObjectConfirmModal").prop("deleteObject")()
+    wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").prop("deleteObject")()
     expect(deleteChecked).toHaveBeenCalled()
     wrapper.update()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(0)
+    expect(wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").length).toBe(0)
   })
 })

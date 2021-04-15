@@ -22,6 +22,7 @@ import classnames from "classnames"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
+import { withTranslation } from "react-i18next"
 
 export class Policy extends React.Component {
   removePolicy(e) {
@@ -40,7 +41,7 @@ export class Policy extends React.Component {
   }
 
   render() {
-    const {policy, prefix} = this.props
+    const {policy, prefix, t} = this.props
     let newPrefix = prefix
     if (newPrefix === '')
       newPrefix = '*'
@@ -58,19 +59,19 @@ export class Policy extends React.Component {
               disabled
               value={ policy }>
               <option value={ READ_ONLY }>
-                Read Only
+                {t('common:readOnly')}
               </option>
               <option value={ WRITE_ONLY }>
-                Write Only
+                {t('common:writeOnly')}
               </option>
               <option value={ READ_WRITE }>
-                Read and Write
+                {t('common:readWrite')}
               </option>
             </select>
           </div>
           <div className="pmbl-item">
             <button className="btn btn-block btn-danger" onClick={ this.removePolicy.bind(this) }>
-              Remove
+              {t('common:remove')}
             </button>
           </div>
         </div>
@@ -93,4 +94,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(Policy)
+export default withTranslation('common')(connect(mapStateToProps, mapDispatchToProps)(Policy))

@@ -28,6 +28,7 @@ import {
   SHARE_OBJECT_EXPIRY_HOURS,
   SHARE_OBJECT_EXPIRY_MINUTES,
 } from "../constants"
+import { withTranslation } from 'react-i18next';
 
 export class ObjectActions extends React.Component {
   constructor(props) {
@@ -79,7 +80,7 @@ export class ObjectActions extends React.Component {
     })
   }
   render() {
-    const { object, showShareObjectModal, shareObjectName } = this.props
+    const { object, showShareObjectModal, shareObjectName, t } = this.props
     return (
       <Dropdown id={`obj-actions-${object.name}`}>
         <Dropdown.Toggle noCaret className="fia-toggle" />
@@ -87,7 +88,7 @@ export class ObjectActions extends React.Component {
           <a
             href=""
             className="fiad-action"
-            title="Share"
+            title={t('share')}
             onClick={this.shareObject.bind(this)}
           >
             <i className="fas fa-share-alt" />
@@ -96,7 +97,7 @@ export class ObjectActions extends React.Component {
             <a
               href=""
               className="fiad-action"
-              title="Preview"
+              title={t('preview')}
               onClick={this.showPreviewModal.bind(this)}
             >
               <i className="far fa-file-image" />
@@ -105,7 +106,7 @@ export class ObjectActions extends React.Component {
           <a
             href=""
             className="fiad-action"
-            title="Download"
+            title={t('common:download')}
             onClick={this.handleDownload.bind(this)}
           >
             <i className="fas fa-cloud-download-alt" />
@@ -113,7 +114,7 @@ export class ObjectActions extends React.Component {
           <a
             href=""
             className="fiad-action"
-            title="Delete"
+            title={t('common:delete')}
             onClick={this.showDeleteConfirmModal.bind(this)}
           >
             <i className="fas fa-trash-alt" />
@@ -159,4 +160,4 @@ const mapDispatchToProps = (dispatch) => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectActions)
+export default withTranslation('objectActions')(connect(mapStateToProps, mapDispatchToProps)(ObjectActions))

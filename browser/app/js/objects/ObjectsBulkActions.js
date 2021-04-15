@@ -20,6 +20,7 @@ import classNames from "classnames"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import { withTranslation } from "react-i18next"
 
 export class ObjectsBulkActions extends React.Component {
   constructor(props) {
@@ -48,7 +49,7 @@ export class ObjectsBulkActions extends React.Component {
     })
   }
   render() {
-    const { checkedObjects, clearChecked } = this.props
+    const { checkedObjects, clearChecked, t } = this.props
     return (
       <div
         className={
@@ -59,16 +60,14 @@ export class ObjectsBulkActions extends React.Component {
         }
       >
         <span className="la-label">
-          <i className="fas fa-check-circle" /> {checkedObjects.length}
-          {checkedObjects.length === 1 ? " Object " : " Objects "}
-          selected
+          <i className="fas fa-check-circle" />
+          {t('object', { count: checkedObjects.length })}
         </span>
         <span className="la-actions pull-right">
           <button id="download-checked" onClick={this.handleDownload.bind(this)}>
-            {" "}
-            Download
+            {t('common:download')}
             {(checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) ? 
-            " object" : " all as zip" }{" "}
+            t('downloadSingular') : t('downloadMultiple') }{" "}
           </button>
         </span>
         <span className="la-actions pull-right">
@@ -76,8 +75,7 @@ export class ObjectsBulkActions extends React.Component {
             id="delete-checked"
             onClick={() => this.setState({ showDeleteConfirmation: true })}
           >
-            {" "}
-            Delete selected{" "}
+            {t('deleteSelected')}
           </button>
         </span>
         <i
@@ -113,4 +111,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectsBulkActions)
+export default withTranslation('objectsBulkActions')(connect(mapStateToProps, mapDispatchToProps)(ObjectsBulkActions))

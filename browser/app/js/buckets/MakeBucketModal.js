@@ -18,6 +18,7 @@ import React from "react"
 import { connect } from "react-redux"
 import { Modal, ModalBody } from "react-bootstrap"
 import * as actionsBuckets from "./actions"
+import { withTranslation } from 'react-i18next'
 
 export class MakeBucketModal extends React.Component {
   constructor(props) {
@@ -42,7 +43,7 @@ export class MakeBucketModal extends React.Component {
     this.props.hideMakeBucketModal()
   }
   render() {
-    const { showMakeBucketModal } = this.props
+    const { showMakeBucketModal, t } = this.props
     return (
       <Modal
         className="modal-create-bucket"
@@ -60,7 +61,7 @@ export class MakeBucketModal extends React.Component {
               <input
                 className="ig-text"
                 type="text"
-                placeholder="Bucket Name"
+                placeholder={t("bucketName")}
                 value={this.state.bucketName}
                 onChange={e => this.setState({ bucketName: e.target.value })}
                 autoFocus
@@ -87,4 +88,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(MakeBucketModal)
+export default withTranslation('makeBucketModal')(connect(mapStateToProps, mapDispatchToProps)(MakeBucketModal))

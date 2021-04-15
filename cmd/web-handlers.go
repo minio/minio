@@ -2309,6 +2309,9 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 	apiErr := toWebAPIError(ctx, err)
 	jerr = &json2.Error{
 		Message: apiErr.Description,
+		Data: map[string]interface{}{
+			"key": apiErr.Key,
+		},
 	}
 	switch apiErr.Code {
 	// Reserved bucket name provided.
@@ -2316,6 +2319,12 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 		if len(params) > 0 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("All access to this bucket %s has been disabled.", params[0]),
+				Data: map[string]interface{}{
+					"key": "AllAccessDisabledParam",
+					"param": map[string]interface{}{
+						"bucketName": params[0],
+					},
+				},
 			}
 		}
 	// Bucket name invalid with custom error message.
@@ -2323,6 +2332,12 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 		if len(params) > 0 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period, hyphen, numerals are the only allowed characters and should be minimum 3 characters in length.", params[0]),
+				Data: map[string]interface{}{
+					"key": "InvalidBucketNameParam",
+					"param": map[string]interface{}{
+						"bucketName": params[0],
+					},
+				},
 			}
 		}
 	// Bucket not found custom error message.
@@ -2330,6 +2345,12 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 		if len(params) > 0 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("The specified bucket %s does not exist.", params[0]),
+				Data: map[string]interface{}{
+					"key": "NoSuchBucketParam",
+					"param": map[string]interface{}{
+						"bucketName": params[0],
+					},
+				},
 			}
 		}
 	// Object not found custom error message.
@@ -2337,9 +2358,37 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 		if len(params) > 1 {
 			jerr = &json2.Error{
 				Message: fmt.Sprintf("The specified key %s does not exist", params[1]),
+				Data: map[string]interface{}{
+					"key": "NoSuchKeyParam",
+					"param": map[string]interface{}{
+						"keyName": params[0],
+					},
+				},
 			}
 		}
 		// Add more custom error messages here with more context.
+	case "ErrInvalidAccessKeyLength": //acess
+		accessKeyMinLen := 3
+		jerr = &json2.Error{
+			Message: fmt.Sprintf("The access key must be minimum %v or more characters long", accessKeyMinLen),
+			Data: map[string]interface{}{
+				"key": "ErrInvalidAccessKeyLength",
+				"param": map[string]interface{}{
+					"minLength": accessKeyMinLen,
+				},
+			},
+		}
+	case "ErrInvalidSecretKeyLength": //secret
+		secretKeyMinLen := 8
+		jerr = &json2.Error{
+			Message: fmt.Sprintf("The secret key must be minimum %v or more characters long", secretKeyMinLen),
+			Data: map[string]interface{}{
+				"key": "ErrInvalidSecretKeyLength",
+				"param": map[string]interface{}{
+					"minLength": secretKeyMinLen,
+				},
+			},
+		}
 	}
 	return jerr
 }
@@ -2352,6 +2401,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Code:           "WebTokenMissing",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
+			Key:            "errNoAuthToken",
 		}
 	case errSTSNotInitialized:
 		return APIError(stsErrCodes.ToSTSErr(ErrSTSNotInitialized))
@@ -2360,37 +2410,77 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
+			Key:            "errServerNotInitialized",
 		}
-	case errAuthentication, auth.ErrInvalidAccessKeyLength,
-		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID, errAccessDenied, errLockedObject:
+	case auth.ErrInvalidAccessKeyLength:
+		return APIError{
+			Code:           "ErrInvalidAccessKeyLength",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+			Key:            "ErrInvalidAccessKeyLength",
+		}
+	case errAuthentication:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
+			Key:            "errAuthentication",
+		}
+	case auth.ErrInvalidSecretKeyLength:
+		return APIError{
+			Code:           "ErrInvalidSecretKeyLength",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+			Key:            "ErrInvalidSecretKeyLength",
+		}
+	case errInvalidAccessKeyID:
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+			Key:            "errInvalidAccessKeyID",
+		}
+	case errAccessDenied:
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+			Key:            "errAccessDenied",
+		}
+	case errLockedObject:
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+			Key:            "errLockedObject",
 		}
 	case errSizeUnspecified:
 		return APIError{
 			Code:           "InvalidRequest",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
+			Key:            "errSizeUnspecified",
 		}
 	case errChangeCredNotAllowed:
 		return APIError{
 			Code:           "MethodNotAllowed",
 			HTTPStatusCode: http.StatusMethodNotAllowed,
 			Description:    err.Error(),
+			Key:            "errChangeCredNotAllowed",
 		}
 	case errInvalidBucketName:
 		return APIError{
 			Code:           "InvalidBucketName",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
+			Key:            "errInvalidBucketName",
 		}
 	case errInvalidArgument:
 		return APIError{
 			Code:           "InvalidArgument",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
+			Key:            "errInvalidArgument",
 		}
 	case errEncryptedObject:
 		return getAPIError(ErrSSEEncryptedObject)
@@ -2435,6 +2525,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Code:           "NotImplemented",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    "Functionality not implemented",
+			Key:            "NotImplemented",
 		}
 	}
 

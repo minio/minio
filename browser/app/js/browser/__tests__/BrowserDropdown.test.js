@@ -27,7 +27,7 @@ describe("BrowserDropdown", () => {
 
   it("should render without crashing", () => {
     shallow(
-      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} />
+      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} t={key => key} />
     )
   })
 
@@ -37,6 +37,7 @@ describe("BrowserDropdown", () => {
       <BrowserDropdown
         serverInfo={serverInfo}
         fetchServerInfo={fetchServerInfo}
+        t={key => key}
       />
     )
     expect(fetchServerInfo).toHaveBeenCalled()
@@ -44,17 +45,17 @@ describe("BrowserDropdown", () => {
 
   it("should show AboutModal when About link is clicked", () => {
     const wrapper = shallow(
-      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} />
+      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} t={key => key} />
     )
     wrapper.find("#show-about").simulate("click", { preventDefault: jest.fn() })
     wrapper.update()
     expect(wrapper.state("showAboutModal")).toBeTruthy()
-    expect(wrapper.find("AboutModal").length).toBe(1)
+    expect(wrapper.find("withI18nextTranslation(AboutModal)").length).toBe(1)
   })
 
   it("should logout and redirect to /login when logout is clicked", () => {
     const wrapper = shallow(
-      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} />
+      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} t={key => key} />
     )
     wrapper.find("#logout").simulate("click", { preventDefault: jest.fn() })
     expect(window.location.pathname.endsWith("/login")).toBeTruthy()

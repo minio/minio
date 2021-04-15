@@ -19,6 +19,7 @@ import { connect } from "react-redux"
 import { Dropdown } from "react-bootstrap"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
 import * as actions from "./actions"
+import { withTranslation } from "react-i18next"
 
 export class PrefixActions extends React.Component {
   constructor(props) {
@@ -46,7 +47,7 @@ export class PrefixActions extends React.Component {
     })
   }
   render() {
-    const { object, showShareObjectModal, shareObjectName } = this.props
+    const { object, showShareObjectModal, shareObjectName, t } = this.props
     return (
       <Dropdown id={`obj-actions-${object.name}`}>
         <Dropdown.Toggle noCaret className="fia-toggle" />
@@ -54,7 +55,7 @@ export class PrefixActions extends React.Component {
           <a
             href=""
             className="fiad-action"
-            title="Download as zip"
+            title={t('downloadZip')}
             onClick={this.handleDownload.bind(this)}
           >
             <i className="fas fa-cloud-download-alt" />
@@ -62,7 +63,7 @@ export class PrefixActions extends React.Component {
           <a
             href=""
             className="fiad-action"
-            title="Delete"
+            title={t('common:delete')}
             onClick={this.showDeleteConfirmModal.bind(this)}
           >
             <i className="fas fa-trash-alt" />
@@ -92,4 +93,4 @@ const mapDispatchToProps = (dispatch) => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(PrefixActions)
+export default withTranslation('prefixActions')(connect(mapStateToProps, mapDispatchToProps)(PrefixActions))

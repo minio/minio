@@ -40,6 +40,7 @@ describe("Login", () => {
       alert={{ show: false, type: "danger"}}
       showAlert={showAlertMock}
       clearAlert={clearAlertMock}
+      t={key => key}
     />)
   })
 
@@ -50,6 +51,7 @@ describe("Login", () => {
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
+        t={key => key}
       />,
       { attachTo: document.body }
     )
@@ -63,6 +65,7 @@ describe("Login", () => {
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
+        t={key => key}
       />
     )
     // case where both keys are empty - displays the second warning
@@ -93,6 +96,7 @@ describe("Login", () => {
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
+        t={key => key}
       />
     )
     wrapper.setState({

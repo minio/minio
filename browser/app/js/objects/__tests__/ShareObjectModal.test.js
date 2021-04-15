@@ -35,6 +35,7 @@ describe("ShareObjectModal", () => {
       <ShareObjectModal
         object={{ name: "obj1" }}
         shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
+        t={key => key}
       />
     )
   })
@@ -46,6 +47,7 @@ describe("ShareObjectModal", () => {
         object={{ name: "obj1" }}
         shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
         hideShareObject={hideShareObject}
+        t={key => key}
       />
     )
     wrapper
@@ -60,6 +62,7 @@ describe("ShareObjectModal", () => {
       <ShareObjectModal
         object={{ name: "obj1" }}
         shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
+        t={key => key}
       />
     )
     expect(
@@ -79,10 +82,11 @@ describe("ShareObjectModal", () => {
         shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
         hideShareObject={hideShareObject}
         showCopyAlert={showCopyAlert}
+        t={key => key}
       />
     )
     wrapper.find("CopyToClipboard").prop("onCopy")()
-    expect(showCopyAlert).toHaveBeenCalledWith("Link copied to clipboard!")
+    expect(showCopyAlert).toHaveBeenCalledWith("msgLinkCopied")
     expect(hideShareObject).toHaveBeenCalled()
   })
 
@@ -94,12 +98,12 @@ describe("ShareObjectModal", () => {
 
     it("should not show expiry values if shared with public link", () => {
       const shareObjectDetails = { show: true, object: "obj1", url: "test", showExpiryDate: false }
-      const wrapper = shallow(<ShareObjectModal {...props} shareObjectDetails={shareObjectDetails} />)
+      const wrapper = shallow(<ShareObjectModal {...props} shareObjectDetails={shareObjectDetails} t={key => key} />)
       expect(wrapper.find('.set-expire').exists()).toEqual(false)
     })
 
     it("should have default expiry values", () => {
-      const wrapper = shallow(<ShareObjectModal {...props} />)
+      const wrapper = shallow(<ShareObjectModal {...props} t={key => key} />)
       expect(wrapper.state("expiry")).toEqual({
         days: SHARE_OBJECT_EXPIRY_DAYS,
         hours: SHARE_OBJECT_EXPIRY_HOURS,
@@ -110,7 +114,7 @@ describe("ShareObjectModal", () => {
     it("should not allow any increments when days is already max", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={shareObject} t={key => key} />
       )
       wrapper.setState({
         expiry: {
@@ -131,7 +135,7 @@ describe("ShareObjectModal", () => {
     it("should not allow expiry values less than minimum value", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={shareObject} t={key => key} />
       )
       wrapper.setState({
         expiry: {
@@ -150,7 +154,7 @@ describe("ShareObjectModal", () => {
     it("should not allow expiry values more than maximum value", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={shareObject} t={key => key} />
       )
       wrapper.setState({
         expiry: {
@@ -169,7 +173,7 @@ describe("ShareObjectModal", () => {
     it("should set hours and minutes to 0 when days reaches max", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={shareObject} t={key => key} />
       )
       wrapper.setState({
         expiry: {
@@ -190,7 +194,7 @@ describe("ShareObjectModal", () => {
     it("should set days to MAX when all of them becomes 0", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={shareObject} t={key => key} />
       )
       wrapper.setState({
         expiry: {

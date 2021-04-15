@@ -20,12 +20,12 @@ import { ObjectsSearch } from "../ObjectsSearch"
 
 describe("ObjectsSearch", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsSearch />)
+    shallow(<ObjectsSearch t={key => key}/>)
   })
 
   it("should call onChange with search text", () => {
     const onChange = jest.fn()
-    const wrapper = shallow(<ObjectsSearch onChange={onChange} />)
+    const wrapper = shallow(<ObjectsSearch onChange={onChange} t={key => key}/>)
     wrapper.find("input").simulate("change", { target: { value: "test" } })
     expect(onChange).toHaveBeenCalledWith("test")
   })

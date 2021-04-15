@@ -18,6 +18,7 @@ import React from "react"
 import { connect } from "react-redux"
 import humanize from "humanize"
 import * as actionsCommon from "./actions"
+import { withTranslation } from "react-i18next"
 
 export class StorageInfo extends React.Component {
   componentWillMount() {
@@ -25,7 +26,7 @@ export class StorageInfo extends React.Component {
     fetchStorageInfo()
   }
   render() {
-    const { used } = this.props.storageInfo
+    const { t, storageInfo:{used} } = this.props
     if (!used || used == 0) {
       return <noscript />
     }
@@ -37,7 +38,7 @@ export class StorageInfo extends React.Component {
         </div>
         <ul>
           <li>
-            <span>Used: </span>
+            <span>{t('used')}</span>
             {humanize.filesize(used)}
           </li>
         </ul>
@@ -58,7 +59,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('storageInfo')(connect(
   mapStateToProps,
   mapDispatchToProps
-)(StorageInfo)
+)(StorageInfo))

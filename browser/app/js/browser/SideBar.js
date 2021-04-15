@@ -25,8 +25,9 @@ import BucketList from "../buckets/BucketList"
 import Host from "./Host"
 import * as actionsCommon from "./actions"
 import web from "../web"
+import { withTranslation } from "react-i18next"
 
-export const SideBar = ({ sidebarOpen, clickOutside }) => {
+export const SideBar = ({ sidebarOpen, clickOutside, t }) => {
   const onClickOut = e => {
     if (e.target.classList.contains("feh-trigger")) {
       return
@@ -43,7 +44,7 @@ export const SideBar = ({ sidebarOpen, clickOutside }) => {
       >
         <div className="fes-header clearfix hidden-sm hidden-xs">
           <img src={logo} alt="" />
-          <h2>MinIO Browser</h2>
+          <h2>{t('minioBrowser')}</h2>
         </div>
         <div className="fes-list">
           {web.LoggedIn() && <BucketSearch />}
@@ -67,7 +68,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(
+export default withTranslation('sideBar')(connect(
   mapStateToProps,
   mapDispatchToProps
-)(SideBar)
+)(SideBar))

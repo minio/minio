@@ -20,12 +20,12 @@ import { BucketSearch } from "../BucketSearch"
 
 describe("BucketSearch", () => {
   it("should render without crashing", () => {
-    shallow(<BucketSearch />)
+    shallow(<BucketSearch t={key => key}/>)
   })
 
   it("should call onChange with search text", () => {
     const onChange = jest.fn()
-    const wrapper = shallow(<BucketSearch onChange={onChange} />)
+    const wrapper = shallow(<BucketSearch onChange={onChange} t={key => key}/>)
     wrapper.find("input").simulate("change", { target: { value: "test" } })
     expect(onChange).toHaveBeenCalledWith("test")
   })

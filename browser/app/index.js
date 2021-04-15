@@ -28,15 +28,18 @@ import history from "./js/history"
 import configureStore from "./js/store/configure-store"
 import hideLoader from "./js/loader"
 import App from "./js/App"
+import "./i18n"
 
 const store = configureStore()
 
 ReactDOM.render(
-  <Provider store={store}>
-    <Router history={history}>
-      <App />
-    </Router>
-  </Provider>,
+  <React.Suspense fallback="loading">
+    <Provider store={store}>
+      <Router history={history}>
+        <App />
+      </Router>
+    </Provider>
+  </React.Suspense>,
   document.getElementById("root")
 )
 

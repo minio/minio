@@ -20,30 +20,30 @@ import { ObjectActions } from "../ObjectActions"
 
 describe("ObjectActions", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} />)
+    shallow(<ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} t={key => key} />)
   })
 
   it("should show DeleteObjectConfirmModal when delete action is clicked", () => {
     const wrapper = shallow(
-      <ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} />
+      <ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} t={key => key} />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
     expect(wrapper.state("showDeleteConfirmation")).toBeTruthy()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(1)
+    expect(wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").length).toBe(1)
   })
 
   it("should hide DeleteObjectConfirmModal when Cancel button is clicked", () => {
     const wrapper = shallow(
-      <ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} />
+      <ObjectActions object={{ name: "obj1" }} currentPrefix={"pre1/"} t={key => key} />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
-    wrapper.find("DeleteObjectConfirmModal").prop("hideDeleteConfirmModal")()
+    wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").prop("hideDeleteConfirmModal")()
     wrapper.update()
     expect(wrapper.state("showDeleteConfirmation")).toBeFalsy()
     expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(0)
@@ -56,13 +56,14 @@ describe("ObjectActions", () => {
         object={{ name: "obj1" }}
         currentPrefix={"pre1/"}
         deleteObject={deleteObject}
+        t={key => key}
       />
     )
     wrapper
       .find("a")
       .last()
       .simulate("click", { preventDefault: jest.fn() })
-    wrapper.find("DeleteObjectConfirmModal").prop("deleteObject")()
+    wrapper.find("withI18nextTranslation(DeleteObjectConfirmModal)").prop("deleteObject")()
     expect(deleteObject).toHaveBeenCalledWith("obj1")
   })
 
@@ -73,7 +74,8 @@ describe("ObjectActions", () => {
       <ObjectActions
         object={{ name: "obj1" }}
         currentPrefix={"pre1/"}
-        downloadObject={downloadObject} />
+        downloadObject={downloadObject}
+        t={key => key} />
     )
     wrapper
       .find("a")
@@ -87,7 +89,8 @@ describe("ObjectActions", () => {
     const wrapper = shallow(
       <ObjectActions 
       object={{ name: "obj1", contentType: "image/jpeg"}} 
-      currentPrefix={"pre1/"} />
+      currentPrefix={"pre1/"}
+      t={key => key} />
     )
     wrapper
       .find("a")
@@ -101,7 +104,8 @@ describe("ObjectActions", () => {
     const wrapper = shallow(
       <ObjectActions 
         object={{ name: "obj1" , contentType: "image/jpeg"}}
-        currentPrefix={"pre1/"} />
+        currentPrefix={"pre1/"}
+        t={key => key} />
     )
     wrapper
       .find("a")
@@ -116,7 +120,8 @@ describe("ObjectActions", () => {
     const wrapper = shallow(
       <ObjectActions 
       object={{ name: "obj1"}} 
-      currentPrefix={"pre1/"} />
+      currentPrefix={"pre1/"}
+      t={key => key} />
     )
     expect(wrapper
       .find("a")
@@ -130,6 +135,7 @@ describe("ObjectActions", () => {
         object={{ name: "obj1" }}
         currentPrefix={"pre1/"}
         shareObject={shareObject}
+        t={key => key}
       />
     )
     wrapper
@@ -146,9 +152,10 @@ describe("ObjectActions", () => {
         currentPrefix={"pre1/"}
         showShareObjectModal={true}
         shareObjectName={"obj1"}
+        t={key => key}
       />
     )
-    expect(wrapper.find("Connect(ShareObjectModal)").length).toBe(1)
+    expect(wrapper.find("withI18nextTranslation(Connect(ShareObjectModal))").length).toBe(1)
   })
 
   it("shouldn't render ShareObjectModal when the names of the objects don't match", () => {
@@ -158,6 +165,7 @@ describe("ObjectActions", () => {
         currentPrefix={"pre1/"}
         showShareObjectModal={true}
         shareObjectName={"obj2"}
+        t={key => key}
       />
     )
     expect(wrapper.find("Connect(ShareObjectModal)").length).toBe(0)
