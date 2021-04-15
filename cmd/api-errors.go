@@ -1906,8 +1906,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
 		apiErr = ErrSlowDown
-	case UnsupportedDelimiter:
-		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
 		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
@@ -2038,6 +2036,22 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if ok {
 		code := toAPIErrorCode(ctx, e)
 		apiErr = errorCodes.ToAPIErrWithErr(code, e)
+	}
+
+	if apiErr.Code == "NotImplemented" {
+		switch e := err.(type) {
+		case NotImplemented:
+			desc := e.Error()
+			if desc == "" {
+				desc = apiErr.Description
+			}
+			apiErr = APIError{
+				Code:           apiErr.Code,
+				Description:    desc,
+				HTTPStatusCode: apiErr.HTTPStatusCode,
+			}
+			return apiErr
+		}
 	}
 
 	if apiErr.Code == "InternalError" {
