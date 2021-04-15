@@ -105,7 +105,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalIsErasure {
-			return NotImplemented{}
+			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
@@ -116,6 +116,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		if vcfg.Status != string(versioning.Enabled) {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
+		}
+		if tgt.ReplicationSync && tgt.BandwidthLimit > 0 {
+			return NotImplemented{Message: "Synchronous replication does not support bandwidth limits"}
 		}
 	}
 	if tgt.Type == madmin.ILMService {
@@ -180,7 +183,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	}
 	if arn.Type == madmin.ReplicationService {
 		if !globalIsErasure {
-			return NotImplemented{}
+			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 		}
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
