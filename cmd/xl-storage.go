@@ -1954,9 +1954,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		// return the latest "null" versionId info
 		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
 		if err == nil && !ofi.Deleted {
-			// Purge the destination path as we are not preserving anything
-			// versioned object was not requested.
-			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			if xlMeta.SharedDataDirCountStr(nullVersionID, ofi.DataDir) == 0 {
+				// Purge the destination path as we are not preserving anything
+				// versioned object was not requested.
+				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			}
 		}
 	}
 
