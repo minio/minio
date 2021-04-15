@@ -1109,11 +1109,11 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	case replication.Pending:
 		sizeS.pendingCount++
 		sizeS.pendingSize += oi.Size
-		globalReplicationPool.queueReplicaTask(ctx, oi)
+		globalReplicationPool.queueReplicaTask(ctx, ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
 		sizeS.failedCount++
-		globalReplicationPool.queueReplicaTask(ctx, oi)
+		globalReplicationPool.queueReplicaTask(ctx, ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
 	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:

@@ -122,6 +122,7 @@ const (
 	ObjectReplicationType Type = 1 + iota
 	DeleteReplicationType
 	MetadataReplicationType
+	HealReplicationType
 )
 
 // ObjectOpts provides information to deduce whether replication
