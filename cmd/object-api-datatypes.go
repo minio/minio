@@ -220,6 +220,13 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 	return cinfo
 }
 
+// ReplicateObjectInfo represents object info to be replicated
+type ReplicateObjectInfo struct {
+	ObjectInfo
+	OpType     replication.Type
+	RetryCount uint32
+}
+
 // MultipartInfo captures metadata information about the uploadId
 // this data structure is used primarily for some internal purposes
 // for verifying upload type such as was the upload
