@@ -43,8 +43,10 @@ import (
 )
 
 const (
-	dataScannerSleepPerFolder = time.Millisecond // Time to wait between folders.
-	dataUsageUpdateDirCycles  = 16               // Visit all folders every n cycles.
+	dataScannerSleepPerFolder   = time.Millisecond // Time to wait between folders.
+	dataUsageUpdateDirCycles    = 16               // Visit all folders every n cycles.
+	dataScannerCompactAtFolders = 1000             // Compact when this many subfolders.
+	dataScannerCompactAtObjects = 10000            // Compact when this many objects in subfolders.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
@@ -178,9 +180,7 @@ type folderScanner struct {
 	healFolderInclude     uint32 // Include a clean folder one in n cycles.
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 
-	newFolders      []cachedFolder
-	existingFolders []cachedFolder
-	disks           []StorageAPI
+	disks []StorageAPI
 }
 
 // scanDataFolder will scanner the basepath+cache.Info.Name and return an updated cache.
@@ -204,15 +204,11 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		return cache, errors.New("internal error: root scan attempted")
 	}
 
-	skipHeal := cache.Info.SkipHealing
-
 	s := folderScanner{
 		root:                  basePath,
 		getSize:               getSize,
 		oldCache:              cache,
 		newCache:              dataUsageCache{Info: cache.Info},
-		newFolders:            nil,
-		existingFolders:       nil,
 		dataUsageScannerDebug: intDataUpdateTracker.debug,
 		healFolderInclude:     0,
 		healObjectSelect:      0,
@@ -231,7 +227,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	// Enable healing in XL mode.
-	if globalIsErasure {
+	if globalIsErasure && !cache.Info.SkipHealing {
 		// Include a clean folder one in n cycles.
 		s.healFolderInclude = healFolderIncludeProb
 		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
@@ -250,115 +246,110 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	done := ctx.Done()
-	var flattenLevels = 2
-
 	if s.dataUsageScannerDebug {
 		console.Debugf(logPrefix+"Cycle: %v, Entries: %v %s\n", cache.Info.NextCycle, len(cache.Cache), logSuffix)
 	}
 
-	// Always scan flattenLevels deep. Cache root is level 0.
-	todo := []cachedFolder{{name: cache.Info.Name, objectHealProbDiv: 1}}
-	for i := 0; i < flattenLevels; i++ {
+	// Read top level in bucket.
+	select {
+	case <-done:
+		return cache, ctx.Err()
+	default:
+	}
+	root := dataUsageEntry{}
+	folder := cachedFolder{name: cache.Info.Name, objectHealProbDiv: 1}
+	err := s.scanFolder(ctx, folder, &root)
+	if err != nil {
+		// No useful information...
+		return cache, err
+	}
+
+	/*
 		if s.dataUsageScannerDebug {
-			console.Debugf(logPrefix+"Level %v, scanning %v directories. %s\n", i, len(todo), logSuffix)
-		}
-		select {
-		case <-done:
-			return cache, ctx.Err()
-		default:
-		}
-		var err error
-		todo, err = s.scanQueuedLevels(ctx, todo, i == flattenLevels-1, skipHeal)
-		if err != nil {
-			// No useful information...
-			return cache, err
-		}
-	}
-
-	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"New folders: %v %s\n", s.newFolders, logSuffix)
-	}
-
-	// Add new folders first
-	for _, folder := range s.newFolders {
-		select {
-		case <-done:
-			return s.newCache, ctx.Err()
-		default:
-		}
-		du, err := s.deepScanFolder(ctx, folder, skipHeal)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		if du == nil {
-			console.Debugln(logPrefix + "no disk usage provided" + logSuffix)
-			continue
+			console.Debugf(logPrefix+"New folders: %v %s\n", s.newFolders, logSuffix)
 		}
 
-		s.newCache.replace(folder.name, "", *du)
-		// Add to parent manually
-		if folder.parent != nil {
-			parent := s.newCache.Cache[folder.parent.Key()]
-			parent.addChildString(folder.name)
-		}
-	}
-
-	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Existing folders: %v %s\n", len(s.existingFolders), logSuffix)
-	}
-
-	// Do selective scanning of existing folders.
-	for _, folder := range s.existingFolders {
-		select {
-		case <-done:
-			return s.newCache, ctx.Err()
-		default:
-		}
-		h := hashPath(folder.name)
-		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-			if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-				continue
-			} else {
-				folder.objectHealProbDiv = s.healFolderInclude
+		// Add new folders first
+		for _, folder := range s.newFolders {
+			select {
+			case <-done:
+				return s.newCache, ctx.Err()
+			default:
 			}
-			folder.objectHealProbDiv = dataUsageUpdateDirCycles
+			du, err := s.deepScanFolder(ctx, folder, skipHeal)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			if du == nil {
+				console.Debugln(logPrefix + "no disk usage provided" + logSuffix)
+				continue
+			}
+
+			s.newCache.replace(folder.name, "", *du)
+			// Add to parent manually
+			if folder.parent != nil {
+				parent := s.newCache.Cache[folder.parent.Key()]
+				parent.addChildString(folder.name)
+			}
 		}
-		if s.withFilter != nil {
-			_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
-			if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
-				// If folder isn't in filter, skip it completely.
-				if !s.withFilter.containsDir(folder.name) {
-					if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-						if s.dataUsageScannerDebug {
-							console.Debugf(logPrefix+"Skipping non-updated folder: %v %s\n", folder, logSuffix)
+
+		if s.dataUsageScannerDebug {
+			console.Debugf(logPrefix+"Existing folders: %v %s\n", len(s.existingFolders), logSuffix)
+		}
+
+		// Do selective scanning of existing folders.
+		for _, folder := range s.existingFolders {
+			select {
+			case <-done:
+				return s.newCache, ctx.Err()
+			default:
+			}
+			h := hashPath(folder.name)
+			if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
+				if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
+					s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
+					continue
+				} else {
+					folder.objectHealProbDiv = s.healFolderInclude
+				}
+				folder.objectHealProbDiv = dataUsageUpdateDirCycles
+			}
+			if s.withFilter != nil {
+				_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
+				if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+					// If folder isn't in filter, skip it completely.
+					if !s.withFilter.containsDir(folder.name) {
+						if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
+							if s.dataUsageScannerDebug {
+								console.Debugf(logPrefix+"Skipping non-updated folder: %v %s\n", folder, logSuffix)
+							}
+							s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
+							continue
+						} else {
+							if s.dataUsageScannerDebug {
+								console.Debugf(logPrefix+"Adding non-updated folder to heal check: %v %s\n", folder.name, logSuffix)
+							}
+							// Update probability of including objects
+							folder.objectHealProbDiv = s.healFolderInclude
 						}
-						s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-						continue
-					} else {
-						if s.dataUsageScannerDebug {
-							console.Debugf(logPrefix+"Adding non-updated folder to heal check: %v %s\n", folder.name, logSuffix)
-						}
-						// Update probability of including objects
-						folder.objectHealProbDiv = s.healFolderInclude
 					}
 				}
 			}
-		}
 
-		// Update on this cycle...
-		du, err := s.deepScanFolder(ctx, folder, skipHeal)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
+			// Update on this cycle...
+			du, err := s.deepScanFolder(ctx, folder, skipHeal)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			if du == nil {
+				logger.LogIf(ctx, errors.New("data-usage: no disk usage provided"))
+				continue
+			}
+			s.newCache.replaceHashed(h, folder.parent, *du)
 		}
-		if du == nil {
-			logger.LogIf(ctx, errors.New("data-usage: no disk usage provided"))
-			continue
-		}
-		s.newCache.replaceHashed(h, folder.parent, *du)
-	}
+	*/
 	if s.dataUsageScannerDebug {
 		console.Debugf(logPrefix+"Finished scanner, %v entries %s\n", len(s.newCache.Cache), logSuffix)
 	}
@@ -367,22 +358,25 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	return s.newCache, nil
 }
 
-// scanQueuedLevels will scan the provided folders.
+// scanFolder will scan the provided folder.
 // Files found in the folders will be added to f.newCache.
 // If final is provided folders will be put into f.newFolders or f.existingFolders.
 // If final is not provided the folders found are returned from the function.
-func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool, skipHeal bool) ([]cachedFolder, error) {
-	var nextFolders []cachedFolder
+func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, into *dataUsageEntry) error {
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
-	for _, folder := range folders {
+	thisHash := hashPath(folder.name)
+	for {
 		select {
 		case <-done:
-			return nil, ctx.Err()
+			return ctx.Err()
 		default:
 		}
-		thisHash := hashPath(folder.name)
-		existing := f.oldCache.findChildrenCopy(thisHash)
+		existing, ok := f.oldCache.Cache[thisHash.Key()]
+		var abandonedChildren dataUsageHashMap
+		if !into.Compacted {
+			abandonedChildren = f.oldCache.findChildrenCopy(thisHash)
+		}
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
@@ -395,7 +389,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 			filter = nil
 		}
-		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
+
+		if filter != nil && ok && existing.Compacted {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
 				if !thisHash.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
@@ -403,7 +398,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					if f.dataUsageScannerDebug {
 						console.Debugf(scannerLogPrefix+" Skipping non-updated folder: %v\n", folder.name)
 					}
-					continue
+					return nil
 				} else {
 					if f.dataUsageScannerDebug {
 						console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
@@ -415,8 +410,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		}
 		scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
 
-		cache := dataUsageEntry{}
-
+		var existingFolders, newFolders []cachedFolder
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
 			entName = path.Clean(path.Join(folder.name, entName))
@@ -444,22 +438,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			if typ&os.ModeDir != 0 {
 				h := hashPath(entName)
 				_, exists := f.oldCache.Cache[h.Key()]
-				cache.addChildString(entName)
 
 				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-
-				delete(existing, h.Key()) // h.Key() already accounted for.
-
-				cache.addChild(h)
-
-				if final {
-					if exists {
-						f.existingFolders = append(f.existingFolders, this)
-					} else {
-						f.newFolders = append(f.newFolders, this)
-					}
+				delete(abandonedChildren, h.Key()) // h.Key() already accounted for.
+				if exists {
+					existingFolders = append(existingFolders, this)
 				} else {
-					nextFolders = append(nextFolders, this)
+					newFolders = append(newFolders, this)
 				}
 				return nil
 			}
@@ -482,7 +467,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// if the drive belongs to an erasure set
 			// that is already being healed, skip the
 			// healing attempt on this drive.
-			item.heal = item.heal && !skipHeal
+			item.heal = item.heal && f.healObjectSelect > 0
 
 			sizeSummary, err := f.getSize(item)
 			if err == errSkipFile {
@@ -499,34 +484,114 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// Object already accounted for, remove from heal map,
 			// simply because getSize() function already heals the
 			// object.
-			delete(existing, path.Join(item.bucket, item.objectPath()))
+			delete(abandonedChildren, path.Join(item.bucket, item.objectPath()))
 
-			cache.addSizes(sizeSummary)
-			cache.Objects++
-			cache.ObjSizes.add(sizeSummary.totalSize)
+			into.addSizes(sizeSummary)
+			into.Objects++
+			into.ObjSizes.add(sizeSummary.totalSize)
 
 			wait() // wait to proceed to next entry.
 
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
+		// If we have many subfolders, compact ourself.
+		if !into.Compacted && len(existingFolders)+len(newFolders) > dataScannerCompactAtFolders {
+			into.Compacted = true
+		}
+
+		// Scan new...
+		for _, folder := range newFolders {
+			dst := into
+			if !into.Compacted {
+				dst = &dataUsageEntry{Compacted: false}
+			}
+			if err := f.scanFolder(ctx, folder, dst); err != nil {
+				return err
+			}
+			if !into.Compacted {
+				if !dst.Compacted {
+					// Compact is exceeding object count.
+					sz := f.newCache.sizeRecursive(folder.name)
+					if sz != nil && sz.Objects > dataScannerCompactAtObjects {
+						folderHash := dataUsageHash(folder.name)
+						f.newCache.deleteRecursive(folderHash)
+						sz.Compacted = true
+						f.newCache.replaceHashed(folderHash, folder.parent, *sz)
+					}
+				}
+				into.addChild(dataUsageHash(folder.name))
+			}
+		}
+
+		// Scan existing...
+		for _, folder := range existingFolders {
+			h := hashPath(folder.name)
+			// Check if we should skip scanning folder...
+			// We can only skip if we are not indexing into a compacted destination...
+			if !into.Compacted {
+				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
+					if !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
+						// Transfer and add as child...
+						f.newCache.replaceHashed(h, folder.parent, f.oldCache.Cache[h.Key()])
+						into.addChild(h)
+						continue
+					}
+					folder.objectHealProbDiv = dataUsageUpdateDirCycles
+				}
+				if f.withFilter != nil {
+					_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
+					if f.oldCache.Info.lifeCycle == nil || !f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+						// If folder isn't in filter, skip it completely.
+						if !f.withFilter.containsDir(folder.name) {
+							if !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
+								if f.dataUsageScannerDebug {
+									console.Debugf(scannerLogPrefix+"Skipping non-updated folder: %v\n", folder)
+								}
+								f.newCache.replaceHashed(h, folder.parent, f.oldCache.Cache[h.Key()])
+								into.addChild(h)
+								continue
+							} else {
+								if f.dataUsageScannerDebug {
+									console.Debugf(scannerLogPrefix+"Adding non-updated folder to heal check: %v\n", folder.name)
+								}
+								// Update probability of including objects
+								folder.objectHealProbDiv = f.healFolderInclude
+							}
+						}
+					}
+				}
+			}
+
+			dst := into
+			if !into.Compacted {
+				dst = &dataUsageEntry{Compacted: false}
+			}
+			if err := f.scanFolder(ctx, folder, dst); err != nil {
+				continue
+			}
+			if !into.Compacted {
+				into.addChild(dataUsageHash(folder.name))
+			}
+		}
+
+		// Scan for healing
 		if f.healObjectSelect == 0 {
-			// If we are not scanning, return now.
-			f.newCache.replaceHashed(thisHash, folder.parent, cache)
-			continue
+			// If we are not heal scanning, return now.
+			break
 		}
 
 		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
 		if !ok || len(f.disks) == 0 {
-			continue
+			break
 		}
 
 		bgSeq, found := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if !found {
-			continue
+			break
 		}
 
 		// Whatever remains in 'existing' are folders at this level
@@ -548,7 +613,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		}
 
 		healObjectsPrefix := color.Green("healObjects:")
-		for k := range existing {
+		for k := range abandonedChildren {
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageScannerDebug {
 				console.Debugf(scannerLogPrefix+" checking disappeared folder: %v/%v\n", bucket, prefix)
@@ -675,17 +740,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// Add unless healing returned an error.
 			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-				cache.addChild(hashPath(k))
-				if final {
-					f.existingFolders = append(f.existingFolders, this)
-				} else {
-					nextFolders = append(nextFolders, this)
-				}
+				into.addChild(hashPath(k))
+				// TODO: Scan
+				existingFolders = append(existingFolders, this)
 			}
 		}
-		f.newCache.replaceHashed(thisHash, folder.parent, cache)
+		break
 	}
-	return nextFolders, nil
+
+	f.newCache.replaceHashed(thisHash, folder.parent, *into)
+	if !into.Compacted {
+		// Compact is exceeding object count or there are no children.
+		sz := f.newCache.totalChildrenRec(folder.name)
+		if sz == 0 || sz > dataScannerCompactAtFolders {
+			folderHash := dataUsageHash(folder.name)
+			flat := f.newCache.sizeRecursive(folder.name)
+			if flat != nil {
+				f.newCache.deleteRecursive(folderHash)
+				flat.Compacted = true
+				f.newCache.replaceHashed(folderHash, folder.parent, *flat)
+			}
+		}
+	}
+	return nil
 }
 
 // deepScanFolder will deep scan a folder and return the size if no error occurs.

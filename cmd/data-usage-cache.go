@@ -51,7 +51,8 @@ type dataUsageEntry struct {
 	Size             int64
 	Objects          uint64
 	ObjSizes         sizeHistogram
-	ReplicationStats replicationStats
+	ReplicationStats *replicationStats
+	Compacted        bool
 }
 
 //msgp:tuple replicationStats
@@ -132,25 +133,38 @@ type dataUsageCacheInfo struct {
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
-	e.ReplicationStats.ReplicatedSize += uint64(summary.replicatedSize)
-	e.ReplicationStats.FailedSize += uint64(summary.failedSize)
-	e.ReplicationStats.PendingSize += uint64(summary.pendingSize)
-	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
-	e.ReplicationStats.PendingCount += uint64(summary.pendingCount)
-	e.ReplicationStats.FailedCount += uint64(summary.failedCount)
-
+	if summary.replicaSize > 0 || summary.pendingSize > 0 || summary.replicatedSize > 0 ||
+		summary.failedCount > 0 || summary.pendingCount > 0 || summary.failedSize > 0 {
+		if e.ReplicationStats == nil {
+			e.ReplicationStats = &replicationStats{}
+		}
+		e.ReplicationStats.ReplicatedSize += uint64(summary.replicatedSize)
+		e.ReplicationStats.FailedSize += uint64(summary.failedSize)
+		e.ReplicationStats.PendingSize += uint64(summary.pendingSize)
+		e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
+		e.ReplicationStats.PendingCount += summary.pendingCount
+		e.ReplicationStats.FailedCount += summary.failedCount
+	}
 }
 
 // merge other data usage entry into this, excluding children.
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Size += other.Size
-	e.ReplicationStats.PendingSize += other.ReplicationStats.PendingSize
-	e.ReplicationStats.FailedSize += other.ReplicationStats.FailedSize
-	e.ReplicationStats.ReplicatedSize += other.ReplicationStats.ReplicatedSize
-	e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
-	e.ReplicationStats.PendingCount += other.ReplicationStats.PendingCount
-	e.ReplicationStats.FailedCount += other.ReplicationStats.FailedCount
+	ors := other.ReplicationStats
+	if ors != nil && (ors.ReplicaSize > 0 || ors.PendingSize > 0 || ors.ReplicatedSize > 0 ||
+		ors.FailedCount > 0 || ors.PendingCount > 0 || ors.FailedSize > 0) {
+		if e.ReplicationStats == nil {
+			e.ReplicationStats = &replicationStats{}
+		}
+		e.ReplicationStats.PendingSize += other.ReplicationStats.PendingSize
+		e.ReplicationStats.FailedSize += other.ReplicationStats.FailedSize
+		e.ReplicationStats.ReplicatedSize += other.ReplicationStats.ReplicatedSize
+		e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
+		e.ReplicationStats.PendingCount += other.ReplicationStats.PendingCount
+		e.ReplicationStats.FailedCount += other.ReplicationStats.FailedCount
+
+	}
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
@@ -284,19 +298,22 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) madmin.DataUsage
 		return madmin.DataUsageInfo{}
 	}
 	flat := d.flatten(*e)
-	return madmin.DataUsageInfo{
-		LastUpdate:              d.Info.LastUpdate,
-		ObjectsTotalCount:       flat.Objects,
-		ObjectsTotalSize:        uint64(flat.Size),
-		ReplicatedSize:          flat.ReplicationStats.ReplicatedSize,
-		ReplicationFailedSize:   flat.ReplicationStats.FailedSize,
-		ReplicationPendingSize:  flat.ReplicationStats.PendingSize,
-		ReplicaSize:             flat.ReplicationStats.ReplicaSize,
-		ReplicationPendingCount: flat.ReplicationStats.PendingCount,
-		ReplicationFailedCount:  flat.ReplicationStats.FailedCount,
-		BucketsCount:            uint64(len(e.Children)),
-		BucketsUsage:            d.bucketsUsageInfo(buckets),
+	dui := madmin.DataUsageInfo{
+		LastUpdate:        d.Info.LastUpdate,
+		ObjectsTotalCount: flat.Objects,
+		ObjectsTotalSize:  uint64(flat.Size),
+		BucketsCount:      uint64(len(e.Children)),
+		BucketsUsage:      d.bucketsUsageInfo(buckets),
 	}
+	if flat.ReplicationStats != nil {
+		dui.ReplicationPendingSize = flat.ReplicationStats.PendingSize
+		dui.ReplicatedSize = flat.ReplicationStats.ReplicatedSize
+		dui.ReplicationFailedSize = flat.ReplicationStats.FailedSize
+		dui.ReplicationPendingCount = flat.ReplicationStats.PendingCount
+		dui.ReplicationFailedCount = flat.ReplicationStats.FailedCount
+		dui.ReplicaSize = flat.ReplicationStats.ReplicaSize
+	}
+	return dui
 }
 
 // replace will add or replace an entry in the cache.
@@ -420,17 +437,20 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]madmi
 			continue
 		}
 		flat := d.flatten(*e)
-		dst[bucket.Name] = madmin.BucketUsageInfo{
-			Size:                    uint64(flat.Size),
-			ObjectsCount:            flat.Objects,
-			ReplicationPendingSize:  flat.ReplicationStats.PendingSize,
-			ReplicatedSize:          flat.ReplicationStats.ReplicatedSize,
-			ReplicationFailedSize:   flat.ReplicationStats.FailedSize,
-			ReplicationPendingCount: flat.ReplicationStats.PendingCount,
-			ReplicationFailedCount:  flat.ReplicationStats.FailedCount,
-			ReplicaSize:             flat.ReplicationStats.ReplicaSize,
-			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
+		bui := madmin.BucketUsageInfo{
+			Size:                 uint64(flat.Size),
+			ObjectsCount:         flat.Objects,
+			ObjectSizesHistogram: flat.ObjSizes.toMap(),
 		}
+		if flat.ReplicationStats != nil {
+			bui.ReplicationPendingSize = flat.ReplicationStats.PendingSize
+			bui.ReplicatedSize = flat.ReplicationStats.ReplicatedSize
+			bui.ReplicationFailedSize = flat.ReplicationStats.FailedSize
+			bui.ReplicationPendingCount = flat.ReplicationStats.PendingCount
+			bui.ReplicationFailedCount = flat.ReplicationStats.FailedCount
+			bui.ReplicaSize = flat.ReplicationStats.ReplicaSize
+		}
+		dst[bucket.Name] = bui
 	}
 	return dst
 }
@@ -443,17 +463,20 @@ func (d *dataUsageCache) bucketUsageInfo(bucket string) madmin.BucketUsageInfo {
 		return madmin.BucketUsageInfo{}
 	}
 	flat := d.flatten(*e)
-	return madmin.BucketUsageInfo{
-		Size:                    uint64(flat.Size),
-		ObjectsCount:            flat.Objects,
-		ReplicationPendingSize:  flat.ReplicationStats.PendingSize,
-		ReplicationPendingCount: flat.ReplicationStats.PendingCount,
-		ReplicatedSize:          flat.ReplicationStats.ReplicatedSize,
-		ReplicationFailedSize:   flat.ReplicationStats.FailedSize,
-		ReplicationFailedCount:  flat.ReplicationStats.FailedCount,
-		ReplicaSize:             flat.ReplicationStats.ReplicaSize,
-		ObjectSizesHistogram:    flat.ObjSizes.toMap(),
+	bui := madmin.BucketUsageInfo{
+		Size:                 uint64(flat.Size),
+		ObjectsCount:         flat.Objects,
+		ObjectSizesHistogram: flat.ObjSizes.toMap(),
 	}
+	if flat.ReplicationStats != nil {
+		bui.ReplicationPendingSize = flat.ReplicationStats.PendingSize
+		bui.ReplicatedSize = flat.ReplicationStats.ReplicatedSize
+		bui.ReplicationFailedSize = flat.ReplicationStats.FailedSize
+		bui.ReplicationPendingCount = flat.ReplicationStats.PendingCount
+		bui.ReplicationFailedCount = flat.ReplicationStats.FailedCount
+		bui.ReplicaSize = flat.ReplicationStats.ReplicaSize
+	}
+	return bui
 }
 
 // sizeRecursive returns the path as a flattened entry.
@@ -464,6 +487,19 @@ func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 	}
 	flat := d.flatten(*root)
 	return &flat
+}
+
+// totalChildrenRec returns the total number of children recorded.
+func (d *dataUsageCache) totalChildrenRec(path string) int {
+	root := d.find(path)
+	if root == nil || len(root.Children) == 0 {
+		return 0
+	}
+	n := len(root.Children)
+	for ch := range root.Children {
+		n += d.totalChildrenRec(ch)
+	}
+	return n
 }
 
 // root returns the root of the cache.
@@ -661,18 +697,21 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
-			d.Cache[k] = dataUsageEntry{
+			due := dataUsageEntry{
 				Size:     v.Size,
 				Objects:  v.Objects,
 				ObjSizes: v.ObjSizes,
 				Children: v.Children,
-				ReplicationStats: replicationStats{
+			}
+			if v.ReplicatedSize > 0 || v.ReplicaSize > 0 || v.ReplicationFailedSize > 0 || v.ReplicationPendingSize > 0 {
+				due.ReplicationStats = &replicationStats{
 					ReplicatedSize: v.ReplicatedSize,
 					ReplicaSize:    v.ReplicaSize,
 					FailedSize:     v.ReplicationFailedSize,
 					PendingSize:    v.ReplicationPendingSize,
-				},
+				}
 			}
+			d.Cache[k] = due
 		}
 		return nil
 	case dataUsageCacheVerV4:

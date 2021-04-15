@@ -1059,8 +1059,8 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 5 {
-		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+	if zb0001 != 6 {
+		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
 		return
 	}
 	err = z.Children.DecodeMsg(dc)
@@ -1095,9 +1095,26 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 	}
-	err = z.ReplicationStats.DecodeMsg(dc)
+	if dc.IsNil() {
+		err = dc.ReadNil()
+		if err != nil {
+			err = msgp.WrapError(err, "ReplicationStats")
+			return
+		}
+		z.ReplicationStats = nil
+	} else {
+		if z.ReplicationStats == nil {
+			z.ReplicationStats = new(replicationStats)
+		}
+		err = z.ReplicationStats.DecodeMsg(dc)
+		if err != nil {
+			err = msgp.WrapError(err, "ReplicationStats")
+			return
+		}
+	}
+	z.Compacted, err = dc.ReadBool()
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicationStats")
+		err = msgp.WrapError(err, "Compacted")
 		return
 	}
 	return
@@ -1105,8 +1122,8 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 5
-	err = en.Append(0x95)
+	// array header, size 6
+	err = en.Append(0x96)
 	if err != nil {
 		return
 	}
@@ -1137,9 +1154,21 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	err = z.ReplicationStats.EncodeMsg(en)
+	if z.ReplicationStats == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = z.ReplicationStats.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "ReplicationStats")
+			return
+		}
+	}
+	err = en.WriteBool(z.Compacted)
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicationStats")
+		err = msgp.WrapError(err, "Compacted")
 		return
 	}
 	return
@@ -1148,8 +1177,8 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 5
-	o = append(o, 0x95)
+	// array header, size 6
+	o = append(o, 0x96)
 	o, err = z.Children.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "Children")
@@ -1161,11 +1190,16 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0001 := range z.ObjSizes {
 		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
 	}
-	o, err = z.ReplicationStats.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "ReplicationStats")
-		return
+	if z.ReplicationStats == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o, err = z.ReplicationStats.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "ReplicationStats")
+			return
+		}
 	}
+	o = msgp.AppendBool(o, z.Compacted)
 	return
 }
 
@@ -1177,8 +1211,8 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 5 {
-		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+	if zb0001 != 6 {
+		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
 		return
 	}
 	bts, err = z.Children.UnmarshalMsg(bts)
@@ -1213,9 +1247,25 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 	}
-	bts, err = z.ReplicationStats.UnmarshalMsg(bts)
+	if msgp.IsNil(bts) {
+		bts, err = msgp.ReadNilBytes(bts)
+		if err != nil {
+			return
+		}
+		z.ReplicationStats = nil
+	} else {
+		if z.ReplicationStats == nil {
+			z.ReplicationStats = new(replicationStats)
+		}
+		bts, err = z.ReplicationStats.UnmarshalMsg(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "ReplicationStats")
+			return
+		}
+	}
+	z.Compacted, bts, err = msgp.ReadBoolBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "ReplicationStats")
+		err = msgp.WrapError(err, "Compacted")
 		return
 	}
 	o = bts
@@ -1224,7 +1274,13 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntry) Msgsize() (s int) {
-	s = 1 + z.Children.Msgsize() + msgp.Int64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.ReplicationStats.Msgsize()
+	s = 1 + z.Children.Msgsize() + msgp.Int64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size))
+	if z.ReplicationStats == nil {
+		s += msgp.NilSize
+	} else {
+		s += z.ReplicationStats.Msgsize()
+	}
+	s += msgp.BoolSize
 	return
 }
 
