@@ -1138,7 +1138,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	}
 	cred.ParentUser = parentUser
 	cred.Groups = groups
-	cred.Status = string(madmin.AccountEnabled)
+	cred.Status = string(auth.AccountOn)
 
 	u := newUserIdentity(cred)
 
@@ -1257,10 +1257,13 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 		pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
 		sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
 		if ptok && spok && pt == "embedded-policy" {
-			p, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sp)))
+			policyBytes, err := base64.StdEncoding.DecodeString(sp)
 			if err == nil {
-				embeddedPolicy = &iampolicy.Policy{}
-				embeddedPolicy.Merge(*p)
+				p, err := iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+				if err == nil {
+					policy := iampolicy.Policy{}.Merge(*p)
+					embeddedPolicy = &policy
+				}
 			}
 		}
 	}
