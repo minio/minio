@@ -55,7 +55,7 @@ func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 //  suffix := "config.json"
 //  result is foo
 func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
-	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
+	return pathClean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
 }
 
 // IAMEtcdStore implements IAMStorageAPI
