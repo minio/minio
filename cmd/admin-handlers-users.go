@@ -491,6 +491,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts for root user.
 	if createReq.TargetUser == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
 		return
