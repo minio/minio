@@ -841,40 +841,31 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		return errServerNotInitialized
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	ttl := int64(cred.Expiration.Sub(UTCNow()).Seconds())
 
 	// If OPA is not set we honor any policy claims for this
 	// temporary user which match with pre-configured canned
 	// policies for this server.
 	if globalPolicyOPA == nil && policyName != "" {
-		var availablePolicies []iampolicy.Policy
 		mp := newMappedPolicy(policyName)
-		for _, policy := range mp.toSlice() {
-			p, found := sys.iamPolicyDocsMap[policy]
-			if found {
-				availablePolicies = append(availablePolicies, p)
-			}
-		}
-
-		combinedPolicy := availablePolicies[0]
-		for i := 1; i < len(availablePolicies); i++ {
-			combinedPolicy.Statements = append(combinedPolicy.Statements,
-				availablePolicies[i].Statements...)
-		}
+		combinedPolicy := sys.GetCombinedPolicy(mp.toSlice()...)
 
 		if combinedPolicy.IsEmpty() {
-			delete(sys.iamUserPolicyMap, accessKey)
-			return nil
+			return fmt.Errorf("specified policy %s, not found %w", policyName, errNoSuchPolicy)
 		}
 
+		sys.store.lock()
+		defer sys.store.unlock()
+
 		if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
+			sys.store.unlock()
 			return err
 		}
 
 		sys.iamUserPolicyMap[accessKey] = mp
+	} else {
+		sys.store.lock()
+		defer sys.store.unlock()
 	}
 
 	u := newUserIdentity(cred)
