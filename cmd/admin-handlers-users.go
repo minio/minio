@@ -721,14 +721,14 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 
 	// If policy is empty, check for policy of the parent user
 	if !impliedPolicy {
-		svcAccountPolicy.Merge(*policy)
+		svcAccountPolicy = svcAccountPolicy.Merge(*policy)
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.AccessKey, false)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
+		svcAccountPolicy = svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
 	}
 
 	policyJSON, err := json.Marshal(svcAccountPolicy)
