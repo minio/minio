@@ -332,15 +332,6 @@ func (e BucketExists) Error() string {
 	return "Bucket exists: " + e.Bucket
 }
 
-// UnsupportedDelimiter - unsupported delimiter.
-type UnsupportedDelimiter struct {
-	Delimiter string
-}
-
-func (e UnsupportedDelimiter) Error() string {
-	return fmt.Sprintf("delimiter '%s' is not supported. Only '/' is supported", e.Delimiter)
-}
-
 // InvalidUploadIDKeyCombination - invalid upload id and key marker combination.
 type InvalidUploadIDKeyCombination struct {
 	UploadIDMarker, KeyMarker string
@@ -638,14 +629,11 @@ func (e InvalidETag) Error() string {
 
 // NotImplemented If a feature is not implemented
 type NotImplemented struct {
-	API string
+	Message string
 }
 
 func (e NotImplemented) Error() string {
-	if e.API != "" {
-		return e.API + " is Not Implemented"
-	}
-	return "Not Implemented"
+	return e.Message
 }
 
 // UnsupportedMetadata - unsupported metadata
