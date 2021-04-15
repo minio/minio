@@ -672,8 +672,10 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 		if pset.Contains(policyName) {
 			cr, ok := sys.iamUsersMap[u]
 			if !ok {
-				// This case cannot happen
-				return errNoSuchUser
+				// This case can happen when an temporary account
+				// is deleted or expired, removed it from userPolicyMap.
+				delete(sys.iamUserPolicyMap, u)
+				continue
 			}
 			pset.Remove(policyName)
 			// User is from STS if the cred are temporary
