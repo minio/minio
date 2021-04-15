@@ -638,7 +638,7 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, req bloomFilterRequ
 
 // splitPathDeterministic will split the provided relative path
 // deterministically and return up to the first 3 elements of the path.
-// Slash and dot prefixes are removed.
+// slash and dot prefixes are removed.
 // Trailing slashes are removed.
 // Returns 0 length if no parts are found after trimming.
 func splitPathDeterministic(in string) []string {
