@@ -760,7 +760,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Make sure to add Location information here only for bucket
-	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
+	if cp := pathClean(r.URL.Path); cp != "" {
+		w.Header().Set(xhttp.Location, cp) // Clean any trailing slashes.
+	}
 
 	writeSuccessResponseHeadersOnly(w)
 
