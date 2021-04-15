@@ -364,7 +364,7 @@ const (
 	ErrAddUserInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
-	ErrServiceAccountNotFound
+	ErrAdminServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -1739,7 +1739,7 @@ var errorCodes = errorCodeMap{
 		Description:    "The account key is not eligible for this operation",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrServiceAccountNotFound: {
+	ErrAdminServiceAccountNotFound: {
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "The specified service account is not found",
 		HTTPStatusCode: http.StatusNotFound,
@@ -1775,6 +1775,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchServiceAccount:
+		apiErr = ErrAdminServiceAccountNotFound
 	case errNoSuchGroup:
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:

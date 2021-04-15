@@ -193,24 +193,21 @@ func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
 
 // Fetch claims in the security token returned by the client.
 func getClaimsFromToken(token string) (map[string]interface{}, error) {
-	claims := xjwt.NewMapClaims()
 	if token == "" {
+		claims := xjwt.NewMapClaims()
 		return claims.Map(), nil
 	}
 
-	stsTokenCallback := func(claims *xjwt.MapClaims) ([]byte, error) {
-		// JWT token for x-amz-security-token is signed with admin
-		// secret key, temporary credentials become invalid if
-		// server admin credentials change. This is done to ensure
-		// that clients cannot decode the token using the temp
-		// secret keys and generate an entirely new claim by essentially
-		// hijacking the policies. We need to make sure that this is
-		// based an admin credential such that token cannot be decoded
-		// on the client side and is treated like an opaque value.
-		return []byte(globalActiveCred.SecretKey), nil
-	}
-
-	if err := xjwt.ParseWithClaims(token, claims, stsTokenCallback); err != nil {
+	// JWT token for x-amz-security-token is signed with admin
+	// secret key, temporary credentials become invalid if
+	// server admin credentials change. This is done to ensure
+	// that clients cannot decode the token using the temp
+	// secret keys and generate an entirely new claim by essentially
+	// hijacking the policies. We need to make sure that this is
+	// based an admin credential such that token cannot be decoded
+	// on the client side and is treated like an opaque value.
+	claims, err := auth.ExtractClaims(token, globalActiveCred.SecretKey)
+	if err != nil {
 		return nil, errAuthentication
 	}
 
