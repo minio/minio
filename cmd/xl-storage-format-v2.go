@@ -467,6 +467,7 @@ func (x *xlMetaInlineData) replace(key string, value []byte) {
 			plSize += len(foundVal)
 		}
 	}
+
 	// Add one more.
 	if !replaced {
 		keys = append(keys, []byte(key))
@@ -1080,12 +1081,16 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		}
 	}
 
-	findDataDir := func(dataDir [16]byte, versions []xlMetaV2Version) int {
+	findDataDir := func(v2 *xlMetaV2Object, versions []xlMetaV2Version) int {
+		// v2 object is inlined, if it is skip dataDir share check.
+		if z.data.find(uuid.UUID(v2.VersionID).String()) != nil {
+			return 0
+		}
 		var sameDataDirCount int
 		for _, version := range versions {
 			switch version.Type {
 			case ObjectType:
-				if version.ObjectV2.DataDir == dataDir {
+				if version.ObjectV2.DataDir == v2.DataDir {
 					sameDataDirCount++
 				}
 			}
@@ -1105,7 +1110,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
 				}
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
+				if findDataDir(version.ObjectV2, z.Versions) > 0 {
 					if fi.Deleted {
 						z.Versions = append(z.Versions, ventry)
 					}
