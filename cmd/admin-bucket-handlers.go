@@ -213,8 +213,9 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
-	bucket := path.Clean(vars["bucket"])
+	bucket := vars["bucket"]
 	arnType := vars["type"]
+
 	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
@@ -229,10 +230,6 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 		// Check if bucket exists.
 		if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		if _, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 	}
