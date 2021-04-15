@@ -77,6 +77,9 @@ var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 // error returned in IAM subsystem when user doesn't exist.
 var errNoSuchUser = errors.New("Specified user does not exist")
 
+// error returned when service account is not found
+var errNoSuchServiceAccount = errors.New("Specified service account does not exist")
+
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")
 

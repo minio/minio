@@ -56,14 +56,14 @@ func main() {
 	}
 
 	// Create a new service account
-	creds, err := madmClnt.AddServiceAccount(context.Background(), &p)
+	creds, err := madmClnt.AddServiceAccount(context.Background(), madmin.AddServiceAccountReq{Policy: &p})
 	if err != nil {
 		log.Fatalln(err)
 	}
 	fmt.Println(creds)
 
 	// List all services accounts
-	list, err := madmClnt.ListServiceAccounts(context.Background())
+	list, err := madmClnt.ListServiceAccounts(context.Background(), "")
 	if err != nil {
 		log.Fatalln(err)
 	}
