@@ -815,6 +815,7 @@ var (
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
+	once               sync.Once
 	mu                 sync.Mutex
 	size               int
 	replicaCh          chan ReplicateObjectInfo
@@ -910,8 +911,10 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObje
 	}
 	select {
 	case <-ctx.Done():
-		close(p.replicaCh)
-		close(p.mrfReplicaCh)
+		p.once.Do(func() {
+			close(p.replicaCh)
+			close(p.mrfReplicaCh)
+		})
 	case p.replicaCh <- ri:
 	case p.mrfReplicaCh <- ri:
 		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
@@ -925,8 +928,10 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 	}
 	select {
 	case <-ctx.Done():
-		close(p.replicaDeleteCh)
-		close(p.mrfReplicaDeleteCh)
+		p.once.Do(func() {
+			close(p.replicaDeleteCh)
+			close(p.mrfReplicaDeleteCh)
+		})
 	case p.replicaDeleteCh <- doi:
 	case p.mrfReplicaDeleteCh <- doi:
 		// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
