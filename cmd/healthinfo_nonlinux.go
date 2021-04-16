@@ -30,7 +30,7 @@ import (
 func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskHwInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	return madmin.ServerDiskHwInfo{
@@ -42,7 +42,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
+		addr = globalLocalNodeName
 	}
 
 	return madmin.ServerOsInfo{

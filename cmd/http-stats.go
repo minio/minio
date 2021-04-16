@@ -137,10 +137,15 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
-	s3RequestsInQueue int32
-	currentS3Requests HTTPAPIStats
-	totalS3Requests   HTTPAPIStats
-	totalS3Errors     HTTPAPIStats
+	s3RequestsInQueue       int32
+	currentS3Requests       HTTPAPIStats
+	totalS3Requests         HTTPAPIStats
+	totalS3Errors           HTTPAPIStats
+	totalS3Canceled         HTTPAPIStats
+	rejectedRequestsAuth    uint64
+	rejectedRequestsTime    uint64
+	rejectedRequestsHeader  uint64
+	rejectedRequestsInvalid uint64
 }
 
 func (st *HTTPStats) addRequestsInQueue(i int32) {
@@ -151,6 +156,10 @@ func (st *HTTPStats) addRequestsInQueue(i int32) {
 func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
 	serverStats.S3RequestsInQueue = atomic.LoadInt32(&st.s3RequestsInQueue)
+	serverStats.TotalS3RejectedAuth = atomic.LoadUint64(&st.rejectedRequestsAuth)
+	serverStats.TotalS3RejectedTime = atomic.LoadUint64(&st.rejectedRequestsTime)
+	serverStats.TotalS3RejectedHeader = atomic.LoadUint64(&st.rejectedRequestsHeader)
+	serverStats.TotalS3RejectedInvalid = atomic.LoadUint64(&st.rejectedRequestsInvalid)
 	serverStats.CurrentS3Requests = ServerHTTPAPIStats{
 		APIStats: st.currentS3Requests.Load(),
 	}
@@ -159,6 +168,9 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	}
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
 		APIStats: st.totalS3Errors.Load(),
+	}
+	serverStats.TotalS3Canceled = ServerHTTPAPIStats{
+		APIStats: st.totalS3Canceled.Load(),
 	}
 	return serverStats
 }
@@ -172,8 +184,15 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.StatusCode != 0 {
-			st.totalS3Errors.Inc(api)
+		if !successReq {
+			switch w.StatusCode {
+			case 0:
+			case 499:
+				// 499 is a good error, shall be counted at canceled.
+				st.totalS3Canceled.Inc(api)
+			default:
+				st.totalS3Errors.Inc(api)
+			}
 		}
 	}
 

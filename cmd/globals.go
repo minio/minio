@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"errors"
 	"net/http"
 	"os"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/kms"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -35,7 +37,6 @@ import (
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	etcd "go.etcd.io/etcd/clientv3"
@@ -181,9 +182,9 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	// global Trace system to send HTTP request/response logs to
-	// registered listeners
-	globalHTTPTrace = pubsub.New()
+	// global Trace system to send HTTP request/response
+	// and Storage/OS calls info to registered listeners.
+	globalTrace = pubsub.New()
 
 	// global Listen system to send S3 API events to registered listeners
 	globalHTTPListen = pubsub.New()
@@ -193,6 +194,9 @@ var (
 	globalConsoleSys *HTTPConsoleLoggerSys
 
 	globalEndpoints EndpointServerPools
+
+	// The name of this local node, fetched from arguments
+	globalLocalNodeName string
 
 	globalRemoteEndpoints map[string]Endpoint
 
@@ -229,7 +233,7 @@ var (
 	globalCacheConfig cache.Config
 
 	// Initialized KMS configuration for disk cache
-	globalCacheKMS crypto.KMS
+	globalCacheKMS kms.KMS
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
@@ -242,7 +246,7 @@ var (
 	globalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
-	GlobalKMS crypto.KMS
+	GlobalKMS kms.KMS
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
@@ -291,6 +295,8 @@ var (
 	globalForwarder *handlers.Forwarder
 	// Add new variable global values here.
 )
+
+var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
 
 // Returns minio global information, as a key value map.
 // returned list of global values is not an exhaustive

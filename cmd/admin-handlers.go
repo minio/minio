@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -45,6 +46,7 @@ import (
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
@@ -63,8 +65,8 @@ const (
 	mgmtForceStop   = "forceStop"
 )
 
-func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
-	if err = doUpdate(u, lrTime, sha256Sum, mode); err != nil {
+func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error) {
+	if err = doUpdate(u, lrTime, sha256Sum, releaseInfo, mode); err != nil {
 		return us, err
 	}
 
@@ -114,14 +116,13 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	sha256Sum, lrTime, err := parseReleaseData(content)
+	sha256Sum, lrTime, releaseInfo, err := parseReleaseData(content)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	u.Path = path.Dir(u.Path) + SlashSeparator + "minio.RELEASE." + lrTime.Format(minioReleaseTagTimeLayout)
-
+	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 	crTime, err := GetCurrentReleaseTime()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -145,7 +146,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime) {
+	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -155,7 +156,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	updateStatus, err := updateServer(u, sha256Sum, lrTime, mode)
+	updateStatus, err := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
 	if err != nil {
 		err = fmt.Errorf("Server update failed, please do not restart the servers yet: failed with %w", err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -259,25 +260,15 @@ type ServerHTTPAPIStats struct {
 // ServerHTTPStats holds all type of http operations performed to/from the server
 // including their average execution time.
 type ServerHTTPStats struct {
-	S3RequestsInQueue int32              `json:"s3RequestsInQueue"`
-	CurrentS3Requests ServerHTTPAPIStats `json:"currentS3Requests"`
-	TotalS3Requests   ServerHTTPAPIStats `json:"totalS3Requests"`
-	TotalS3Errors     ServerHTTPAPIStats `json:"totalS3Errors"`
-}
-
-// ServerInfoData holds storage, connections and other
-// information of a given server.
-type ServerInfoData struct {
-	ConnStats  ServerConnStats  `json:"network"`
-	HTTPStats  ServerHTTPStats  `json:"http"`
-	Properties ServerProperties `json:"server"`
-}
-
-// ServerInfo holds server information result of one node
-type ServerInfo struct {
-	Error string          `json:"error"`
-	Addr  string          `json:"addr"`
-	Data  *ServerInfoData `json:"data"`
+	S3RequestsInQueue      int32              `json:"s3RequestsInQueue"`
+	CurrentS3Requests      ServerHTTPAPIStats `json:"currentS3Requests"`
+	TotalS3Requests        ServerHTTPAPIStats `json:"totalS3Requests"`
+	TotalS3Errors          ServerHTTPAPIStats `json:"totalS3Errors"`
+	TotalS3Canceled        ServerHTTPAPIStats `json:"totalS3Canceled"`
+	TotalS3RejectedAuth    uint64             `json:"totalS3RejectedAuth"`
+	TotalS3RejectedTime    uint64             `json:"totalS3RejectedTime"`
+	TotalS3RejectedHeader  uint64             `json:"totalS3RejectedHeader"`
+	TotalS3RejectedInvalid uint64             `json:"totalS3RejectedInvalid"`
 }
 
 // StorageInfoHandler - GET /minio/admin/v3/storageinfo
@@ -516,7 +507,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 
 	vars := mux.Vars(r)
 	profiles := strings.Split(vars["profilerType"], ",")
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, err := xnet.ParseHost(globalLocalNodeName)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1030,26 +1021,75 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 // false if certain conditions are not met.
 // - input entry is not of the type *trace.Info*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
-// - all entries to be traced, if not trace only S3 API requests.
-func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
+// - trace.Info type is asked by opts
+func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
 	trcInfo, ok := entry.(trace.Info)
 	if !ok {
 		return false
 	}
 
-	// Handle browser requests separately filter them and return.
-	if HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+"/upload") {
-		if errOnly {
-			return trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	// Override shouldTrace decision with errOnly filtering
+	defer func() {
+		if shouldTrace && opts.OnlyErrors {
+			shouldTrace = trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
 		}
+	}()
+
+	if opts.Threshold > 0 {
+		var latency time.Duration
+		switch trcInfo.TraceType {
+		case trace.OS:
+			latency = trcInfo.OSStats.Duration
+		case trace.Storage:
+			latency = trcInfo.StorageStats.Duration
+		case trace.HTTP:
+			latency = trcInfo.CallStats.Latency
+		}
+		if latency < opts.Threshold {
+			return false
+		}
+	}
+
+	if opts.Internal && trcInfo.TraceType == trace.HTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
 		return true
 	}
 
-	trace := trcAll || !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
-	if errOnly {
-		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	if opts.S3 && trcInfo.TraceType == trace.HTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
+		return true
 	}
-	return trace
+
+	if opts.Storage && trcInfo.TraceType == trace.Storage {
+		return true
+	}
+
+	return opts.OS && trcInfo.TraceType == trace.OS
+}
+
+func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+	q := r.URL.Query()
+
+	opts.OnlyErrors = q.Get("err") == "true"
+	opts.S3 = q.Get("s3") == "true"
+	opts.Internal = q.Get("internal") == "true"
+	opts.Storage = q.Get("storage") == "true"
+	opts.OS = q.Get("os") == "true"
+
+	// Support deprecated 'all' query
+	if q.Get("all") == "true" {
+		opts.S3 = true
+		opts.Internal = true
+		opts.Storage = true
+		opts.OS = true
+	}
+
+	if t := q.Get("threshold"); t != "" {
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return opts, err
+		}
+		opts.Threshold = d
+	}
+	return
 }
 
 // TraceHandler - POST /minio/admin/v3/trace
@@ -1058,13 +1098,16 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 
-	trcAll := r.URL.Query().Get("all") == "true"
-	trcErr := r.URL.Query().Get("err") == "true"
-
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	traceOpts, err := extractTraceOptions(r)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
 
@@ -1076,15 +1119,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalHTTPTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
-		return mustTrace(entry, trcAll, trcErr)
+	globalTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
+		return mustTrace(entry, traceOpts)
 	})
 
 	for _, peer := range peers {
 		if peer == nil {
 			continue
 		}
-		peer.Trace(traceCh, ctx.Done(), trcAll, trcErr)
+		peer.Trace(traceCh, ctx.Done(), traceOpts)
 	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -1218,18 +1261,23 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		return
+	}
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = GlobalKMS.DefaultKeyID()
+		keyID = stat.DefaultKey
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
 	}
 
-	kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1242,7 +1290,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Plaintext, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1255,7 +1303,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 3. Compare generated key with decrypted key
-	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
+	if subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
 		if err != nil {
@@ -1469,30 +1517,33 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	setEventStreamHeaders(w)
-	reportCh := make(chan bandwidth.Report, 1)
+	reportCh := make(chan bandwidth.Report)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
 	go func() {
+		defer close(reportCh)
 		for {
-			reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				time.Sleep(2 * time.Second)
+			case reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...):
+				time.Sleep(time.Duration(rnd.Float64() * float64(2*time.Second)))
 			}
 		}
 	}()
 	for {
 		select {
-		case report := <-reportCh:
-			enc := json.NewEncoder(w)
-			err := enc.Encode(report)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		case report, ok := <-reportCh:
+			if !ok {
+				return
+			}
+			if err := json.NewEncoder(w).Encode(report); err != nil {
+				writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
 			w.(http.Flusher).Flush()
@@ -1697,36 +1748,39 @@ func fetchKMSStatus() madmin.KMS {
 		kmsStat.Status = "disabled"
 		return kmsStat
 	}
-	keyID := GlobalKMS.DefaultKeyID()
-	kmsInfo := GlobalKMS.Info()
-	if len(kmsInfo.Endpoints) == 0 {
-		kmsStat.Status = "KMS configured using master key"
+
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		kmsStat.Status = string(madmin.ItemOffline)
 		return kmsStat
 	}
-
-	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
+	if len(stat.Endpoints) == 0 {
+		kmsStat.Status = stat.Name
 	} else {
-		kmsStat.Status = string(madmin.ItemOnline)
-
-		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-		// 1. Generate a new key using the KMS.
-		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
-		if err != nil {
-			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+		if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
+			kmsStat.Status = string(madmin.ItemOffline)
 		} else {
-			kmsStat.Encrypt = "success"
-		}
+			kmsStat.Status = string(madmin.ItemOnline)
 
-		// 2. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
-		switch {
-		case err != nil:
-			kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
-			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-		default:
-			kmsStat.Decrypt = "success"
+			kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+			// 1. Generate a new key using the KMS.
+			key, err := GlobalKMS.GenerateKey("", kmsContext)
+			if err != nil {
+				kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+			} else {
+				kmsStat.Encrypt = "success"
+			}
+
+			// 2. Verify that we can indeed decrypt the (encrypted) key
+			decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+			switch {
+			case err != nil:
+				kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+			case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+				kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
+			default:
+				kmsStat.Decrypt = "success"
+			}
 		}
 	}
 	return kmsStat

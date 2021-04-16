@@ -84,35 +84,35 @@ func (e *FuncExpr) getFunctionName() FuncName {
 
 // evalSQLFnNode assumes that the FuncExpr is not an aggregation
 // function.
-func (e *FuncExpr) evalSQLFnNode(r Record) (res *Value, err error) {
+func (e *FuncExpr) evalSQLFnNode(r Record, tableAlias string) (res *Value, err error) {
 	// Handle functions that have phrase arguments
 	switch e.getFunctionName() {
 	case sqlFnCast:
 		expr := e.Cast.Expr
-		res, err = expr.castTo(r, strings.ToUpper(e.Cast.CastType))
+		res, err = expr.castTo(r, strings.ToUpper(e.Cast.CastType), tableAlias)
 		return
 
 	case sqlFnSubstring:
-		return handleSQLSubstring(r, e.Substring)
+		return handleSQLSubstring(r, e.Substring, tableAlias)
 
 	case sqlFnExtract:
-		return handleSQLExtract(r, e.Extract)
+		return handleSQLExtract(r, e.Extract, tableAlias)
 
 	case sqlFnTrim:
-		return handleSQLTrim(r, e.Trim)
+		return handleSQLTrim(r, e.Trim, tableAlias)
 
 	case sqlFnDateAdd:
-		return handleDateAdd(r, e.DateAdd)
+		return handleDateAdd(r, e.DateAdd, tableAlias)
 
 	case sqlFnDateDiff:
-		return handleDateDiff(r, e.DateDiff)
+		return handleDateDiff(r, e.DateDiff, tableAlias)
 
 	}
 
 	// For all simple argument functions, we evaluate the arguments here
 	argVals := make([]*Value, len(e.SFunc.ArgsList))
 	for i, arg := range e.SFunc.ArgsList {
-		argVals[i], err = arg.evalNode(r)
+		argVals[i], err = arg.evalNode(r, tableAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -219,8 +219,8 @@ func upperCase(v *Value) (*Value, error) {
 	return FromString(strings.ToUpper(s)), nil
 }
 
-func handleDateAdd(r Record, d *DateAddFunc) (*Value, error) {
-	q, err := d.Quantity.evalNode(r)
+func handleDateAdd(r Record, d *DateAddFunc, tableAlias string) (*Value, error) {
+	q, err := d.Quantity.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func handleDateAdd(r Record, d *DateAddFunc) (*Value, error) {
 		return nil, fmt.Errorf("QUANTITY must be a numeric argument to %s()", sqlFnDateAdd)
 	}
 
-	ts, err := d.Timestamp.evalNode(r)
+	ts, err := d.Timestamp.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -245,8 +245,8 @@ func handleDateAdd(r Record, d *DateAddFunc) (*Value, error) {
 	return dateAdd(strings.ToUpper(d.DatePart), qty, t)
 }
 
-func handleDateDiff(r Record, d *DateDiffFunc) (*Value, error) {
-	tval1, err := d.Timestamp1.evalNode(r)
+func handleDateDiff(r Record, d *DateDiffFunc, tableAlias string) (*Value, error) {
+	tval1, err := d.Timestamp1.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func handleDateDiff(r Record, d *DateDiffFunc) (*Value, error) {
 		return nil, fmt.Errorf("%s() expects two timestamp arguments", sqlFnDateDiff)
 	}
 
-	tval2, err := d.Timestamp2.evalNode(r)
+	tval2, err := d.Timestamp2.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -277,12 +277,12 @@ func handleUTCNow() (*Value, error) {
 	return FromTimestamp(time.Now().UTC()), nil
 }
 
-func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
+func handleSQLSubstring(r Record, e *SubstringFunc, tableAlias string) (val *Value, err error) {
 	// Both forms `SUBSTRING('abc' FROM 2 FOR 1)` and
 	// SUBSTRING('abc', 2, 1) are supported.
 
 	// Evaluate the string argument
-	v1, err := e.Expr.evalNode(r)
+	v1, err := e.Expr.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
 	}
 
 	// Evaluate the FROM argument
-	v2, err := arg2.evalNode(r)
+	v2, err := arg2.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
 	length := -1
 	// Evaluate the optional FOR argument
 	if arg3 != nil {
-		v3, err := arg3.evalNode(r)
+		v3, err := arg3.evalNode(r, tableAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -336,11 +336,11 @@ func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
 	return FromString(res), err
 }
 
-func handleSQLTrim(r Record, e *TrimFunc) (res *Value, err error) {
+func handleSQLTrim(r Record, e *TrimFunc, tableAlias string) (res *Value, err error) {
 	chars := ""
 	ok := false
 	if e.TrimChars != nil {
-		charsV, cerr := e.TrimChars.evalNode(r)
+		charsV, cerr := e.TrimChars.evalNode(r, tableAlias)
 		if cerr != nil {
 			return nil, cerr
 		}
@@ -351,7 +351,7 @@ func handleSQLTrim(r Record, e *TrimFunc) (res *Value, err error) {
 		}
 	}
 
-	fromV, ferr := e.TrimFrom.evalNode(r)
+	fromV, ferr := e.TrimFrom.evalNode(r, tableAlias)
 	if ferr != nil {
 		return nil, ferr
 	}
@@ -368,8 +368,8 @@ func handleSQLTrim(r Record, e *TrimFunc) (res *Value, err error) {
 	return FromString(result), nil
 }
 
-func handleSQLExtract(r Record, e *ExtractFunc) (res *Value, err error) {
-	timeVal, verr := e.From.evalNode(r)
+func handleSQLExtract(r Record, e *ExtractFunc, tableAlias string) (res *Value, err error) {
+	timeVal, verr := e.From.evalNode(r, tableAlias)
 	if verr != nil {
 		return nil, verr
 	}
@@ -406,8 +406,8 @@ const (
 	castTimestamp = "TIMESTAMP"
 )
 
-func (e *Expression) castTo(r Record, castType string) (res *Value, err error) {
-	v, err := e.evalNode(r)
+func (e *Expression) castTo(r Record, castType string, tableAlias string) (res *Value, err error) {
+	v, err := e.evalNode(r, tableAlias)
 	if err != nil {
 		return nil, err
 	}

@@ -489,6 +489,41 @@ type ObjectLegalHold struct {
 	Status  LegalHoldStatus `xml:"Status,omitempty"`
 }
 
+// UnmarshalXML - decodes XML data.
+func (l *ObjectLegalHold) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	switch start.Name.Local {
+	case "LegalHold", "ObjectLockLegalHold":
+	default:
+		return xml.UnmarshalError(fmt.Sprintf("expected element type <LegalHold>/<ObjectLockLegalHold> but have <%s>",
+			start.Name.Local))
+	}
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := d.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			switch se.Name.Local {
+			case "Status":
+				var st LegalHoldStatus
+				if err = d.DecodeElement(&st, &se); err != nil {
+					return err
+				}
+				l.Status = st
+			default:
+				return xml.UnmarshalError(fmt.Sprintf("expected element type <Status> but have <%s>", se.Name.Local))
+			}
+		}
+	}
+	return nil
+}
+
 // IsEmpty returns true if struct is empty
 func (l *ObjectLegalHold) IsEmpty() bool {
 	return !l.Status.Valid()

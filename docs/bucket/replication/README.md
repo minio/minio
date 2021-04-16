@@ -2,6 +2,8 @@
 
 Bucket replication is designed to replicate selected objects in a bucket to a destination bucket.
 
+The contents of this page have been migrated to the new [MinIO Baremetal Documentation: Bucket Replication](https://docs.min.io/minio/baremetal/replication/replication-overview.html#) page. The [Bucket Replication](https://docs.min.io/minio/baremetal/replication/replication-overview.html#) section includes dedicated tutorials for configuring one-way "Active-Passive" and two-way "Active-Active" bucket replication. Please update your bookmarks to use the new MinIO documentation, as this legacy documentation will be deprecated and removed in the future.
+
 To replicate objects in a bucket to a destination bucket on a target site either in the same cluster or a different cluster, start by enabling [versioning](https://docs.minio.io/docs/minio-bucket-versioning-guide.html) for both source and destination buckets. Finally, the target site and the destination bucket need to be configured on the source MinIO server.
 
 ## Highlights
@@ -39,6 +41,7 @@ The following minimal permission policy is needed by admin user setting up repli
    "Effect": "Allow",
    "Action": [
     "s3:GetReplicationConfiguration",
+    "s3:PutReplicationConfiguration",
     "s3:ListBucket",
     "s3:ListBucketMultipartUploads",
     "s3:GetBucketLocation",

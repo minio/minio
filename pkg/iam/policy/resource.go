@@ -56,7 +56,7 @@ func (r Resource) Match(resource string, conditionValues map[string][]string) bo
 			pattern = strings.Replace(pattern, key.VarName(), rvalues[0], -1)
 		}
 	}
-	if path.Clean(resource) == pattern {
+	if cp := path.Clean(resource); cp != "." && cp == pattern {
 		return true
 	}
 	return wildcard.Match(pattern, resource)

@@ -37,14 +37,15 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	doneCh := make(chan struct{})
-	defer close(doneCh)
 
-	// Start listening on all http trace activity from all servers
-	// in the minio cluster.
-	allTrace := false
-	errTrace := false
-	traceCh := madmClnt.ServiceTrace(context.Background(), allTrace, errTrace, doneCh)
+	// Start listening on all http trace activity from all servers in the minio cluster.
+	traceCh := madmClnt.ServiceTrace(context.Background(), madmin.ServiceTraceOpts{
+		S3:        true,
+		Internal:  true,
+		Storage:   true,
+		OS:        true,
+		Threshold: 0,
+	})
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)

@@ -452,7 +452,7 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 			// if we validated all setDriveCounts and it was successful
 			// proceed to store the correct storage class globally.
 			if i == len(setDriveCounts)-1 {
-				globalStorageClass = sc
+				globalStorageClass.Update(sc)
 			}
 		}
 	}
@@ -624,6 +624,8 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	globalHealConfig = healCfg
 	globalHealConfigMu.Unlock()
 
+	// update dynamic scanner values.
+	scannerCycle.Update(scannerCfg.Cycle)
 	logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 
 	// Update all dynamic config values in memory.

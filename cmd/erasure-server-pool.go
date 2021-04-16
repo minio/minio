@@ -433,7 +433,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -448,7 +448,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 	}
 
 	if len(allBuckets) == 0 {
-		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
+		updates <- madmin.DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
 
@@ -1563,10 +1563,15 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						bucket:    bucket,
 					}
 
+					path := baseDirFromPrefix(prefix)
+					if path == "" {
+						path = prefix
+					}
+
 					if err := listPathRaw(ctx, listPathRawOptions{
 						disks:          disks,
 						bucket:         bucket,
-						path:           baseDirFromPrefix(prefix),
+						path:           path,
 						recursive:      true,
 						forwardTo:      "",
 						minDisks:       1,
@@ -1771,6 +1776,22 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		HealingDrives: len(aggHealStateResult.HealDisks),
 		WriteQuorum:   writeQuorum,
 	}
+}
+
+// PutObjectMetadata - replace or add tags to an existing object
+func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].PutObjectMetadata(ctx, bucket, object, opts)
+	}
+
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	return z.serverPools[idx].PutObjectMetadata(ctx, bucket, object, opts)
 }
 
 // PutObjectTags - replace or add tags to an existing object

@@ -287,10 +287,9 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
-	err = s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-	}
+
+	done := keepHTTPResponseAlive(w)
+	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body))
 }
 
 // DeleteVersion delete updated metadata.
@@ -369,6 +368,32 @@ func (s *storageRESTServer) WriteMetadataHandler(w http.ResponseWriter, r *http.
 	}
 
 	err := s.storage.WriteMetadata(r.Context(), volume, filePath, fi)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
+// UpdateMetadata update new updated metadata.
+func (s *storageRESTServer) UpdateMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	var fi FileInfo
+	if err := msgp.Decode(r.Body, &fi); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	err := s.storage.UpdateMetadata(r.Context(), volume, filePath, fi)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -1018,6 +1043,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteAll).HandlerFunc(httpTraceHdrs(server.WriteAllHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteMetadata).HandlerFunc(httpTraceHdrs(server.WriteMetadataHandler)).
+				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodUpdateMetadata).HandlerFunc(httpTraceHdrs(server.UpdateMetadataHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersion).HandlerFunc(httpTraceHdrs(server.DeleteVersionHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTForceDelMarker)...)

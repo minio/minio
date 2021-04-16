@@ -36,6 +36,27 @@ func (e *JSONPath) String() string {
 	return e.pathString
 }
 
+// StripTableAlias removes a table alias from the path. The result is also
+// cached for repeated lookups during SQL query evaluation.
+func (e *JSONPath) StripTableAlias(tableAlias string) []*JSONPathElement {
+	if e.strippedTableAlias == tableAlias {
+		return e.strippedPathExpr
+	}
+
+	hasTableAlias := e.BaseKey.String() == tableAlias || strings.ToLower(e.BaseKey.String()) == baseTableName
+	var pathExpr []*JSONPathElement
+	if hasTableAlias {
+		pathExpr = e.PathExpr
+	} else {
+		pathExpr = make([]*JSONPathElement, len(e.PathExpr)+1)
+		pathExpr[0] = &JSONPathElement{Key: &ObjectKey{ID: e.BaseKey}}
+		copy(pathExpr[1:], e.PathExpr)
+	}
+	e.strippedTableAlias = tableAlias
+	e.strippedPathExpr = pathExpr
+	return e.strippedPathExpr
+}
+
 func (e *JSONPathElement) String() string {
 	switch {
 	case e.Key != nil:

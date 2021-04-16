@@ -100,6 +100,10 @@ func (c *OperatorDNS) Put(bucket string) error {
 	xhttp.DrainBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		errorString := errorStringBuilder.String()
+		switch resp.StatusCode {
+		case http.StatusConflict:
+			return ErrBucketConflict(Error{bucket, errors.New(errorString)})
+		}
 		return newError(bucket, fmt.Errorf("service create for bucket %s, failed with status %s, error %s", bucket, resp.Status, errorString))
 	}
 	return nil

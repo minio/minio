@@ -663,7 +663,7 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatErasureV3) error {
 
 	// Compute the local disks eligible for meta volumes (re)initialization
-	var disksToInit []StorageAPI
+	disksToInit := make([]StorageAPI, 0, len(storageDisks))
 	for index := range storageDisks {
 		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
 			// Ignore create meta volume on disks which are not found or not local.
@@ -913,7 +913,7 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 		return errDiskNotFound
 	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
+	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket, dataUsageBucket, minioMetaTmpBucket+"-old")
 }
 
 // Initialize a new set of set formats which will be written to all disks.

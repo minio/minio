@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -354,7 +355,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	}
 
 	// Local host
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, err := xnet.ParseHost(globalLocalNodeName)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return profilingDataFound
@@ -399,7 +400,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -407,7 +408,7 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.ServerUpdate(ctx, u, sha256Sum, lrTime)
+			return client.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -615,6 +616,8 @@ func (sys *NotificationSys) findEarliestCleanBloomFilter(ctx context.Context, di
 	return best
 }
 
+var errPeerNotReachable = errors.New("peer is not reachable")
+
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*PeerLocks {
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
@@ -623,7 +626,7 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 		index := index
 		g.Go(func() error {
 			if client == nil {
-				return nil
+				return errPeerNotReachable
 			}
 			serverLocksResp, err := sys.peerClients[index].GetLocks()
 			if err != nil {
@@ -671,6 +674,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
+	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
@@ -692,6 +696,37 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
 		}
 	}
+}
+
+// GetClusterBucketStats - calls GetClusterBucketStats call on all peers for a cluster statistics view.
+func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketName string) []BucketStats {
+	ng := WithNPeers(len(sys.peerClients))
+	bucketStats := make([]BucketStats, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		index := index
+		client := client
+		ng.Go(ctx, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			bs, err := client.GetBucketStats(bucketName)
+			if err != nil {
+				return err
+			}
+			bucketStats[index] = bs
+			return nil
+		}, index, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+	bucketStats = append(bucketStats, BucketStats{
+		ReplicationStats: globalReplicationStats.Get(bucketName),
+	})
+	return bucketStats
 }
 
 // Loads notification policies for all buckets into NotificationSys.
@@ -889,7 +924,7 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 	}
 
 	for i := 0; i < len(sortedGlobalEndpoints); i++ {
-		if sortedGlobalEndpoints[i] != GetLocalPeer(globalEndpoints) {
+		if sortedGlobalEndpoints[i] != globalLocalNodeName {
 			continue
 		}
 		for j := 0; j < len(sortedGlobalEndpoints); j++ {
@@ -922,7 +957,7 @@ func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthI
 	}
 	return madmin.ServerNetHealthInfo{
 		Net:  netInfos,
-		Addr: GetLocalPeer(globalEndpoints),
+		Addr: globalLocalNodeName,
 	}
 }
 
@@ -997,7 +1032,7 @@ func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.Serv
 	wg.Wait()
 	return madmin.ServerNetHealthInfo{
 		Net:  netInfos,
-		Addr: GetLocalPeer(globalEndpoints),
+		Addr: globalLocalNodeName,
 	}
 
 }
@@ -1368,7 +1403,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		AwsRegion:         args.ReqParams["region"],
 		EventTime:         eventTime.Format(event.AMZTimeFormat),
 		EventName:         args.EventName,
-		UserIdentity:      event.Identity{PrincipalID: args.ReqParams["accessKey"]},
+		UserIdentity:      event.Identity{PrincipalID: args.ReqParams["principalId"]},
 		RequestParameters: args.ReqParams,
 		ResponseElements:  respElements,
 		S3: event.Metadata{
@@ -1376,7 +1411,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 			ConfigurationID: "Config",
 			Bucket: event.Bucket{
 				Name:          args.BucketName,
-				OwnerIdentity: event.Identity{PrincipalID: args.ReqParams["accessKey"]},
+				OwnerIdentity: event.Identity{PrincipalID: args.ReqParams["principalId"]},
 				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{

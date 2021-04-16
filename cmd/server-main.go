@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -140,26 +141,32 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	logger.FatalIf(err, "Invalid command line arguments")
+
+	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
 			if ep.IsLocal {
-				globalRemoteEndpoints[GetLocalPeer(globalEndpoints)] = ep
+				globalRemoteEndpoints[globalLocalNodeName] = ep
 			} else {
 				globalRemoteEndpoints[ep.Host] = ep
 			}
 		}
 	}
-	logger.FatalIf(err, "Invalid command line arguments")
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -410,6 +417,11 @@ func serverMain(ctx *cli.Context) {
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
 	logger.AddTarget(globalConsoleSys)
 
+	// Perform any self-tests
+	bitrotSelfTest()
+	erasureSelfTest()
+	compressSelfTest()
+
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
@@ -417,7 +429,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Set node name, only set for distributed setup.
-	globalConsoleSys.SetNodeName(globalEndpoints)
+	globalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
 	initHelp()

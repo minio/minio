@@ -39,6 +39,8 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/fips"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/sio"
 )
 
@@ -661,7 +663,7 @@ func newCacheEncryptReader(content io.Reader, bucket, object string, metadata ma
 		return nil, err
 	}
 
-	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20})
+	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey
 	}
@@ -672,14 +674,14 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	if globalCacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.DefaultKeyID(), crypto.Context{bucket: pathJoin(bucket, object)})
+	key, err := globalCacheKMS.GenerateKey("", kms.Context{bucket: pathJoin(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
 
-	objectKey := crypto.GenerateKey(key, rand.Reader)
-	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-	crypto.S3.CreateMetadata(metadata, globalCacheKMS.DefaultKeyID(), encKey, sealedKey)
+	objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
+	sealedKey = objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
+	crypto.S3.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey)
 
 	if etag, ok := metadata["etag"]; ok {
 		metadata["etag"] = hex.EncodeToString(objectKey.SealETag([]byte(etag)))

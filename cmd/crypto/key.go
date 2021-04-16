@@ -26,6 +26,7 @@ import (
 	"path"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/sio"
 )
 
@@ -36,7 +37,7 @@ type ObjectKey [32]byte
 // GenerateKey generates a unique ObjectKey from a 256 bit external key
 // and a source of randomness. If random is nil the default PRNG of the
 // system (crypto/rand) is used.
-func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
+func GenerateKey(extKey []byte, random io.Reader) (key ObjectKey) {
 	if random == nil {
 		random = rand.Reader
 	}
@@ -45,7 +46,7 @@ func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
 	sha := sha256.New()
-	sha.Write(extKey[:])
+	sha.Write(extKey)
 	sha.Write(nonce[:])
 	sha.Sum(key[:0])
 	return key
@@ -75,7 +76,7 @@ type SealedKey struct {
 // Seal encrypts the ObjectKey using the 256 bit external key and IV. The sealed
 // key is also cryptographically bound to the object's path (bucket/object) and the
 // domain (SSE-C or SSE-S3).
-func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) SealedKey {
+func (key ObjectKey) Seal(extKey []byte, iv [32]byte, domain, bucket, object string) SealedKey {
 	var (
 		sealingKey   [32]byte
 		encryptedKey bytes.Buffer
@@ -86,7 +87,7 @@ func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) Se
 	mac.Write([]byte(SealAlgorithm))
 	mac.Write([]byte(path.Join(bucket, object))) // use path.Join for canonical 'bucket/object'
 	mac.Sum(sealingKey[:0])
-	if n, err := sio.Encrypt(&encryptedKey, bytes.NewReader(key[:]), sio.Config{Key: sealingKey[:]}); n != 64 || err != nil {
+	if n, err := sio.Encrypt(&encryptedKey, bytes.NewReader(key[:]), sio.Config{Key: sealingKey[:], CipherSuites: fips.CipherSuitesDARE()}); n != 64 || err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to generate sealed key"))
 	}
 	sealedKey := SealedKey{
@@ -100,7 +101,7 @@ func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) Se
 // Unseal decrypts a sealed key using the 256 bit external key. Since the sealed key
 // may be cryptographically bound to the object's path the same bucket/object as during sealing
 // must be provided. On success the ObjectKey contains the decrypted sealed key.
-func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucket, object string) error {
+func (key *ObjectKey) Unseal(extKey []byte, sealedKey SealedKey, domain, bucket, object string) error {
 	var (
 		unsealConfig sio.Config
 	)
@@ -113,12 +114,12 @@ func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucke
 		mac.Write([]byte(domain))
 		mac.Write([]byte(SealAlgorithm))
 		mac.Write([]byte(path.Join(bucket, object))) // use path.Join for canonical 'bucket/object'
-		unsealConfig = sio.Config{MinVersion: sio.Version20, Key: mac.Sum(nil)}
+		unsealConfig = sio.Config{MinVersion: sio.Version20, Key: mac.Sum(nil), CipherSuites: fips.CipherSuitesDARE()}
 	case InsecureSealAlgorithm:
 		sha := sha256.New()
 		sha.Write(extKey[:])
 		sha.Write(sealedKey.IV[:])
-		unsealConfig = sio.Config{MinVersion: sio.Version10, Key: sha.Sum(nil)}
+		unsealConfig = sio.Config{MinVersion: sio.Version10, Key: sha.Sum(nil), CipherSuites: fips.CipherSuitesDARE()}
 	}
 
 	if out, err := sio.DecryptBuffer(key[:0], sealedKey.Key[:], unsealConfig); len(out) != 32 || err != nil {
@@ -149,7 +150,7 @@ func (key ObjectKey) SealETag(etag []byte) []byte {
 	var buffer bytes.Buffer
 	mac := hmac.New(sha256.New, key[:])
 	mac.Write([]byte("SSE-etag"))
-	if _, err := sio.Encrypt(&buffer, bytes.NewReader(etag), sio.Config{Key: mac.Sum(nil)}); err != nil {
+	if _, err := sio.Encrypt(&buffer, bytes.NewReader(etag), sio.Config{Key: mac.Sum(nil), CipherSuites: fips.CipherSuitesDARE()}); err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to encrypt ETag using object key"))
 	}
 	return buffer.Bytes()
@@ -165,5 +166,5 @@ func (key ObjectKey) UnsealETag(etag []byte) ([]byte, error) {
 	}
 	mac := hmac.New(sha256.New, key[:])
 	mac.Write([]byte("SSE-etag"))
-	return sio.DecryptBuffer(make([]byte, 0, len(etag)), etag, sio.Config{Key: mac.Sum(nil)})
+	return sio.DecryptBuffer(make([]byte, 0, len(etag)), etag, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.CipherSuitesDARE()})
 }

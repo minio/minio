@@ -532,10 +532,33 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}
+}
+
+// GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
+// returns BucketReplicationStatus
+func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	bs := BucketStats{
+		ReplicationStats: globalReplicationStats.Get(bucketName),
+	}
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, &bs))
 }
 
 // LoadBucketMetadataHandler - reloads in memory bucket metadata
@@ -748,7 +771,7 @@ func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, err = updateServer(info.URL, info.Sha256Sum, info.Time, getMinioMode()); err != nil {
+	if _, err = updateServer(info.URL, info.Sha256Sum, info.Time, info.ReleaseInfo, getMinioMode()); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -899,14 +922,37 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func extractTraceOptsFromPeerRequest(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+
+	q := r.URL.Query()
+	opts.OnlyErrors = q.Get(peerRESTTraceErr) == "true"
+	opts.Storage = q.Get(peerRESTTraceStorage) == "true"
+	opts.Internal = q.Get(peerRESTTraceInternal) == "true"
+	opts.S3 = q.Get(peerRESTTraceS3) == "true"
+	opts.OS = q.Get(peerRESTTraceOS) == "true"
+
+	if t := q.Get(peerRESTTraceThreshold); t != "" {
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return opts, err
+		}
+		opts.Threshold = d
+	}
+	return
+}
+
 // TraceHandler sends http trace messages back to peer rest client
 func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
-	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
-	trcErr := r.URL.Query().Get(peerRESTTraceErr) == "true"
+
+	traceOpts, err := extractTraceOptsFromPeerRequest(r)
+	if err != nil {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
@@ -918,8 +964,8 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalHTTPTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
-		return mustTrace(entry, trcAll, trcErr)
+	globalTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
+		return mustTrace(entry, traceOpts)
 	})
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -1069,6 +1115,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCycleBloom).HandlerFunc(httpTraceHdrs(server.CycleServerBloomFilterHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(httpTraceHdrs(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadBucketMetadata).HandlerFunc(httpTraceHdrs(server.LoadBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBucketStats).HandlerFunc(httpTraceHdrs(server.GetBucketStatsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.DeletePolicyHandler)).Queries(restQueries(peerRESTPolicy)...)

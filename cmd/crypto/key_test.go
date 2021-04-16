@@ -53,7 +53,7 @@ func TestGenerateKey(t *testing.T) {
 		i, test := i, test
 		func() {
 			defer recoverTest(i, test.ShouldPass, t)
-			key := GenerateKey(test.ExtKey, test.Random)
+			key := GenerateKey(test.ExtKey[:], test.Random)
 			if [32]byte(key) == [32]byte{} {
 				t.Errorf("Test %d: generated key is zero key", i) // check that we generate random and unique key
 			}
@@ -125,9 +125,9 @@ var sealUnsealKeyTests = []struct {
 
 func TestSealUnsealKey(t *testing.T) {
 	for i, test := range sealUnsealKeyTests {
-		key := GenerateKey(test.SealExtKey, rand.Reader)
-		sealedKey := key.Seal(test.SealExtKey, test.SealIV, test.SealDomain, test.SealBucket, test.SealObject)
-		if err := key.Unseal(test.UnsealExtKey, sealedKey, test.UnsealDomain, test.UnsealBucket, test.UnsealObject); err == nil && !test.ShouldPass {
+		key := GenerateKey(test.SealExtKey[:], rand.Reader)
+		sealedKey := key.Seal(test.SealExtKey[:], test.SealIV, test.SealDomain, test.SealBucket, test.SealObject)
+		if err := key.Unseal(test.UnsealExtKey[:], sealedKey, test.UnsealDomain, test.UnsealBucket, test.UnsealObject); err == nil && !test.ShouldPass {
 			t.Errorf("Test %d should fail but passed successfully", i)
 		} else if err != nil && test.ShouldPass {
 			t.Errorf("Test %d should pass put failed: %v", i, err)
@@ -136,10 +136,10 @@ func TestSealUnsealKey(t *testing.T) {
 
 	// Test legacy InsecureSealAlgorithm
 	var extKey, iv [32]byte
-	key := GenerateKey(extKey, rand.Reader)
-	sealedKey := key.Seal(extKey, iv, "SSE-S3", "bucket", "object")
+	key := GenerateKey(extKey[:], rand.Reader)
+	sealedKey := key.Seal(extKey[:], iv, "SSE-S3", "bucket", "object")
 	sealedKey.Algorithm = InsecureSealAlgorithm
-	if err := key.Unseal(extKey, sealedKey, "SSE-S3", "bucket", "object"); err == nil {
+	if err := key.Unseal(extKey[:], sealedKey, "SSE-S3", "bucket", "object"); err == nil {
 		t.Errorf("'%s' test succeeded but it should fail because the legacy algorithm was used", sealedKey.Algorithm)
 	}
 }

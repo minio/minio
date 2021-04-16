@@ -66,6 +66,8 @@ type APIErrorResponse struct {
 // APIErrorCode type of error status.
 type APIErrorCode int
 
+//go:generate stringer -type=APIErrorCode -trimprefix=Err $GOFILE
+
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
 	ErrNone APIErrorCode = iota
@@ -80,6 +82,7 @@ const (
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
+	ErrInvalidRangePartNumber
 	ErrInvalidCopyPartRange
 	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
@@ -364,7 +367,7 @@ const (
 	ErrAddUserInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
-	ErrServiceAccountNotFound
+	ErrAdminServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -377,6 +380,13 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 	}
 	if err != nil {
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+	}
+	if globalServerRegion != "" {
+		switch errCode {
+		case ErrAuthorizationHeaderMalformed:
+			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
+			return apiErr
+		}
 	}
 	return apiErr
 }
@@ -502,6 +512,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidRange",
 		Description:    "The requested range is not satisfiable",
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
+	},
+	ErrInvalidRangePartNumber: {
+		Code:           "InvalidRequest",
+		Description:    "Cannot specify both Range header and partNumber query parameter",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedXML: {
 		Code:           "MalformedXML",
@@ -1739,7 +1754,7 @@ var errorCodes = errorCodeMap{
 		Description:    "The account key is not eligible for this operation",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrServiceAccountNotFound: {
+	ErrAdminServiceAccountNotFound: {
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "The specified service account is not found",
 		HTTPStatusCode: http.StatusNotFound,
@@ -1775,6 +1790,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchServiceAccount:
+		apiErr = ErrAdminServiceAccountNotFound
 	case errNoSuchGroup:
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
@@ -1904,8 +1921,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
 		apiErr = ErrSlowDown
-	case UnsupportedDelimiter:
-		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
 		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
@@ -1996,6 +2011,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKeyTooLongError
 	case dns.ErrInvalidBucketName:
 		apiErr = ErrInvalidBucketName
+	case dns.ErrBucketConflict:
+		apiErr = ErrBucketAlreadyExists
 	default:
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
@@ -2036,6 +2053,22 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if ok {
 		code := toAPIErrorCode(ctx, e)
 		apiErr = errorCodes.ToAPIErrWithErr(code, e)
+	}
+
+	if apiErr.Code == "NotImplemented" {
+		switch e := err.(type) {
+		case NotImplemented:
+			desc := e.Error()
+			if desc == "" {
+				desc = apiErr.Description
+			}
+			apiErr = APIError{
+				Code:           apiErr.Code,
+				Description:    desc,
+				HTTPStatusCode: apiErr.HTTPStatusCode,
+			}
+			return apiErr
+		}
 	}
 
 	if apiErr.Code == "InternalError" {
@@ -2105,6 +2138,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code:           e.Code,
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
+			}
+			if globalIsGateway && strings.Contains(e.Message, "KMS is not configured") {
+				apiErr = APIError{
+					Code:           "NotImplemented",
+					Description:    e.Message,
+					HTTPStatusCode: http.StatusNotImplemented,
+				}
 			}
 		case *googleapi.Error:
 			apiErr = APIError{

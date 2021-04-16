@@ -250,8 +250,8 @@ func (s *erasureSets) connectDisks() {
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
-			s.erasureDisksMu.Unlock()
 			setsJustConnected[setIndex] = true
+			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
 
@@ -355,7 +355,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		sets:               make([]*erasureObjects, setCount),
 		erasureDisks:       make([][]StorageAPI, setCount),
 		erasureLockers:     make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:   GetLocalPeer(globalEndpoints),
+		erasureLockOwner:   globalLocalNodeName,
 		endpoints:          endpoints,
 		endpointStrings:    endpointStrings,
 		setCount:           setCount,
@@ -431,8 +431,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		}
 	}
 
-	// cleanup ".trash/" folder every 10 minutes with sufficient sleep cycles.
-	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get(envMinioDeleteCleanupInterval, "10m"))
+	// cleanup ".trash/" folder every 5m minutes with sufficient sleep cycles, between each
+	// deletes a dynamic sleeper is used with a factor of 10 ratio with max delay between
+	// deletes to be 2 seconds.
+	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get(envMinioDeleteCleanupInterval, "5m"))
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +612,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	var errs []error
+	errs := make([]error, 0, len(s.sets)*s.setDriveCount)
 	for i := range s.sets {
 		errs = append(errs, storageInfoErrs[i]...)
 	}
@@ -1314,6 +1316,12 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin
 // HealObject - heals inconsistent object on a hashedSet based on object name.
 func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return s.getHashedSet(object).HealObject(ctx, bucket, object, versionID, opts)
+}
+
+// PutObjectMetadata - replace or add metadata to an existing object/version
+func (s *erasureSets) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	er := s.getHashedSet(object)
+	return er.PutObjectMetadata(ctx, bucket, object, opts)
 }
 
 // PutObjectTags - replace or add tags to an existing object

@@ -175,10 +175,10 @@ func isStandardHeader(matchHeaderKey string) bool {
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (dm, replicate, sync bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (replicate, sync bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		return false, false, sync
+		return false, sync
 	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,
@@ -198,19 +198,19 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			validReplStatus = true
 		}
 		if oi.DeleteMarker && (validReplStatus || replicate) {
-			return oi.DeleteMarker, true, sync
+			return true, sync
 		}
 		// can be the case that other cluster is down and duplicate `mc rm --vid`
 		// is issued - this still needs to be replicated back to the other target
-		return oi.DeleteMarker, oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
+		return oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
 	// the target online status should not be used here while deciding
 	// whether to replicate deletes as the target could be temporarily down
 	if tgt == nil {
-		return oi.DeleteMarker, false, false
+		return false, false
 	}
-	return oi.DeleteMarker, replicate, tgt.replicateSync
+	return replicate, tgt.replicateSync
 }
 
 // replicate deletes to the designated replication target if replication configuration
@@ -291,6 +291,14 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 			versionPurgeStatus = Complete
 		}
 	}
+	prevStatus := dobj.DeleteMarkerReplicationStatus
+	currStatus := replicationStatus
+	if dobj.VersionID != "" {
+		prevStatus = string(dobj.VersionPurgeStatus)
+		currStatus = string(versionPurgeStatus)
+	}
+	// to decrement pending count later.
+	globalReplicationStats.Update(dobj.Bucket, 0, replication.StatusType(currStatus), replication.StatusType(prevStatus), replication.DeleteReplicationType)
 
 	var eventName = event.ObjectReplicationComplete
 	if replicationStatus == string(replication.Failed) || versionPurgeStatus == Failed {
@@ -563,12 +571,8 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 
 // replicateObject replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
-func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLayer) {
-	z, ok := objectAPI.(*erasureServerPools)
-	if !ok {
-		return
-	}
-
+func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI ObjectLayer) {
+	objInfo := ri.ObjectInfo
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 
@@ -594,7 +598,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		})
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, writeLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
@@ -604,10 +608,10 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			Object:     objInfo,
 			Host:       "Internal: [Replication]",
 		})
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		return
 	}
-	defer gr.Close() // hold read lock for entire transaction
+	defer gr.Close() // hold write lock for entire transaction
 
 	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
@@ -644,7 +648,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		rtype = getReplicationAction(objInfo, oi)
 		if rtype == replicateNone {
 			// object with same VersionID already exists, replication kicked off by
-			// PutObject might have completed.
+			// PutObject might have completed
 			return
 		}
 	}
@@ -656,7 +660,8 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		srcOpts := miniogo.CopySrcOptions{
 			Bucket:    dest.Bucket,
 			Object:    object,
-			VersionID: objInfo.VersionID}
+			VersionID: objInfo.VersionID,
+		}
 		dstOpts := miniogo.PutObjectOptions{
 			Internal: miniogo.AdvancedPutOptions{
 				SourceVersionID:    objInfo.VersionID,
@@ -697,21 +702,28 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		if totalNodesCount == 0 {
 			totalNodesCount = 1 // For standalone erasure coding
 		}
-		b := target.BandwidthLimit / int64(totalNodesCount)
+
 		var headerSize int
 		for k, v := range putOpts.Header() {
 			headerSize += len(k) + len(v)
 		}
 
-		// r takes over closing gr.
-		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
+		opts := &bandwidth.MonitorReaderOptions{
+			Bucket:               objInfo.Bucket,
+			Object:               objInfo.Name,
+			HeaderSize:           headerSize,
+			BandwidthBytesPerSec: target.BandwidthLimit / int64(totalNodesCount),
+			ClusterBandwidth:     target.BandwidthLimit,
+		}
+
+		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, gr, opts)
 		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
-		defer r.Close()
 	}
 
+	prevReplStatus := objInfo.ReplicationStatus
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
@@ -725,23 +737,46 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		eventName = event.ObjectReplicationFailed
 	}
 
-	// This lower level implementation is necessary to avoid write locks from CopyObject.
-	poolIdx, err := z.getPoolIdx(ctx, bucket, object, objInfo.Size)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
-	} else {
-		if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, objInfo.UserDefined, ObjectOptions{
-			VersionID: objInfo.VersionID,
-		}); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
-		}
+	z, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		return
 	}
-	sendEvent(eventArgs{
-		EventName:  eventName,
-		BucketName: bucket,
-		Object:     objInfo,
-		Host:       "Internal: [Replication]",
-	})
+	// Leave metadata in `PENDING` state if inline replication fails to save iops
+	if ri.OpType == replication.HealReplicationType || replicationStatus == replication.Completed {
+		// This lower level implementation is necessary to avoid write locks from CopyObject.
+		poolIdx, err := z.getPoolIdx(ctx, bucket, object, objInfo.Size)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+		} else {
+			fi := FileInfo{}
+			fi.VersionID = objInfo.VersionID
+			fi.Metadata = make(map[string]string, len(objInfo.UserDefined))
+			for k, v := range objInfo.UserDefined {
+				fi.Metadata[k] = v
+			}
+			if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, fi); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+			}
+		}
+		opType := replication.MetadataReplicationType
+		if rtype == replicateAll {
+			opType = replication.ObjectReplicationType
+		}
+		globalReplicationStats.Update(bucket, size, replicationStatus, prevReplStatus, opType)
+		sendEvent(eventArgs{
+			EventName:  eventName,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+	}
+	// re-queue failures once more - keep a retry count to avoid flooding the queue if
+	// the target site is down. Leave it to scanner to catch up instead.
+	if replicationStatus == replication.Failed && ri.RetryCount < 1 {
+		ri.OpType = replication.HealReplicationType
+		ri.RetryCount++
+		globalReplicationPool.queueReplicaTask(ctx, ri)
+	}
 }
 
 // filterReplicationStatusMetadata filters replication status metadata for COPY
@@ -774,36 +809,59 @@ type DeletedObjectVersionInfo struct {
 }
 
 var (
-	globalReplicationPool *ReplicationPool
+	globalReplicationPool  *ReplicationPool
+	globalReplicationStats *ReplicationStats
 )
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
-	mu              sync.Mutex
-	size            int
-	replicaCh       chan ObjectInfo
-	replicaDeleteCh chan DeletedObjectVersionInfo
-	killCh          chan struct{}
-	wg              sync.WaitGroup
-	ctx             context.Context
-	objLayer        ObjectLayer
+	mu                 sync.Mutex
+	size               int
+	replicaCh          chan ReplicateObjectInfo
+	replicaDeleteCh    chan DeletedObjectVersionInfo
+	mrfReplicaCh       chan ReplicateObjectInfo
+	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
+	killCh             chan struct{}
+	wg                 sync.WaitGroup
+	ctx                context.Context
+	objLayer           ObjectLayer
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size
 func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
 	pool := &ReplicationPool{
-		replicaCh:       make(chan ObjectInfo, 10000),
-		replicaDeleteCh: make(chan DeletedObjectVersionInfo, 10000),
-		ctx:             ctx,
-		objLayer:        o,
+		replicaCh:          make(chan ReplicateObjectInfo, 1000),
+		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
+		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
+		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
+		ctx:                ctx,
+		objLayer:           o,
 	}
-	go func() {
-		<-ctx.Done()
-		close(pool.replicaCh)
-		close(pool.replicaDeleteCh)
-	}()
 	pool.Resize(sz)
+	// add long running worker for handling most recent failures/pending replications
+	go pool.AddMRFWorker()
 	return pool
+}
+
+// AddMRFWorker adds a pending/failed replication worker to handle requests that could not be queued
+// to the other workers
+func (p *ReplicationPool) AddMRFWorker() {
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case oi, ok := <-p.mrfReplicaCh:
+			if !ok {
+				return
+			}
+			replicateObject(p.ctx, oi, p.objLayer)
+		case doi, ok := <-p.mrfReplicaDeleteCh:
+			if !ok {
+				return
+			}
+			replicateDelete(p.ctx, doi, p.objLayer)
+		}
+	}
 }
 
 // AddWorker adds a replication worker to the pool
@@ -846,28 +904,39 @@ func (p *ReplicationPool) Resize(n int) {
 	}
 }
 
-func (p *ReplicationPool) queueReplicaTask(oi ObjectInfo) {
+func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObjectInfo) {
 	if p == nil {
 		return
 	}
 	select {
-	case p.replicaCh <- oi:
+	case <-ctx.Done():
+		close(p.replicaCh)
+		close(p.mrfReplicaCh)
+	case p.replicaCh <- ri:
+	case p.mrfReplicaCh <- ri:
+		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
 	default:
 	}
 }
 
-func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectVersionInfo) {
+func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi DeletedObjectVersionInfo) {
 	if p == nil {
 		return
 	}
 	select {
+	case <-ctx.Done():
+		close(p.replicaDeleteCh)
+		close(p.mrfReplicaDeleteCh)
 	case p.replicaDeleteCh <- doi:
+	case p.mrfReplicaDeleteCh <- doi:
+		// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
 	default:
 	}
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationWorkers())
+	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 }
 
 // get Reader from replication target if active-active replication is in place and
@@ -1003,11 +1072,14 @@ func proxyHeadToReplicationTarget(ctx context.Context, bucket, object string, op
 	return oi, proxy, err
 }
 
-func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer, sync bool) {
+func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer, sync bool, opType replication.Type) {
 	if sync {
-		replicateObject(ctx, objInfo, o)
+		replicateObject(ctx, ReplicateObjectInfo{ObjectInfo: objInfo, OpType: opType}, o)
 	} else {
-		globalReplicationPool.queueReplicaTask(objInfo)
+		globalReplicationPool.queueReplicaTask(GlobalContext, ReplicateObjectInfo{ObjectInfo: objInfo, OpType: opType})
+	}
+	if sz, err := objInfo.GetActualSize(); err == nil {
+		globalReplicationStats.Update(objInfo.Bucket, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
 	}
 }
 
@@ -1015,6 +1087,7 @@ func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo,
 	if sync {
 		replicateDelete(ctx, dv, o)
 	} else {
-		globalReplicationPool.queueReplicaDeleteTask(dv)
+		globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	}
+	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }

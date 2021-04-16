@@ -530,7 +530,7 @@ type SelectParameters struct {
 
 // IsEmpty returns true if no select parameters set
 func (sp *SelectParameters) IsEmpty() bool {
-	return sp == nil || sp.S3Select == s3select.S3Select{}
+	return sp == nil
 }
 
 var (
@@ -623,7 +623,9 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 			}
 			meta[v.Name] = v.Value
 		}
-		meta[xhttp.AmzObjectTagging] = rreq.OutputLocation.S3.Tagging.String()
+		if tags := rreq.OutputLocation.S3.Tagging.String(); tags != "" {
+			meta[xhttp.AmzObjectTagging] = tags
+		}
 		if rreq.OutputLocation.S3.Encryption.EncryptionType != "" {
 			meta[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
 		}
@@ -636,7 +638,9 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 	for k, v := range objInfo.UserDefined {
 		meta[k] = v
 	}
-	meta[xhttp.AmzObjectTagging] = objInfo.UserTags
+	if len(objInfo.UserTags) != 0 {
+		meta[xhttp.AmzObjectTagging] = objInfo.UserTags
+	}
 
 	return ObjectOptions{
 		Versioned:        globalBucketVersioningSys.Enabled(bucket),

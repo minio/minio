@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -42,6 +43,15 @@ var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnform
 
 /// Object Operations
 
+func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
+	for _, onlineDisk := range onlineDisks {
+		if onlineDisk != nil && onlineDisk.IsOnline() {
+			online++
+		}
+	}
+	return online
+}
+
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
@@ -62,7 +72,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
-	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, false)
+	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, true)
 
 	// get Quorum for this object
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
@@ -86,7 +96,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
-
 	versionID := srcInfo.VersionID
 	if srcInfo.versionOnly {
 		versionID = dstOpts.VersionID
@@ -116,8 +125,13 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	tempObj := mustGetUUID()
 
+	var online int
 	// Cleanup in case of xl.meta writing failure
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+		}
+	}()
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
@@ -128,6 +142,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(srcBucket, srcObject), nil
 }
@@ -653,11 +669,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		writeQuorum++
 	}
 
-	// Delete temporary object in the event of failure.
-	// If PutObject succeeded there would be no temporary
-	// object to delete.
-	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
-
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument, logger.Application)
@@ -725,13 +736,38 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partName := "part.1"
 	tempErasureObj := pathJoin(uniqueID, fi.DataDir, partName)
 
+	// Delete temporary object in the event of failure.
+	// If PutObject succeeded there would be no temporary
+	// object to delete.
+	var online int
+	defer func() {
+		if online != len(onlineDisks) {
+			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+		}
+	}()
+
+	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
+	var inlineBuffers []*bytes.Buffer
+	if shardFileSize >= 0 {
+		if !opts.Versioned && shardFileSize < smallFileThreshold {
+			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+		} else if shardFileSize < smallFileThreshold/8 {
+			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+		}
+	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
 		}
+
+		if len(inlineBuffers) > 0 {
+			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
+			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
+			continue
+		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj,
-			erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+			shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
@@ -761,6 +797,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			onlineDisks[i] = nil
 			continue
 		}
+		if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
+			partsMetadata[i].Data = inlineBuffers[i].Bytes()
+		}
 		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
@@ -788,15 +827,20 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = opts.UserDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
+		if len(inlineBuffers) > 0 && inlineBuffers[index] != nil {
+			partsMetadata[index].Data = inlineBuffers[index].Bytes()
+		}
 	}
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
+		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Rename the successfully written temporary object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
+		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -818,6 +862,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object), nil
 }
@@ -871,8 +916,8 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 	var err error
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 
-	tmpObj := mustGetUUID()
 	disks := er.getDisks()
+	tmpObj := mustGetUUID()
 	if bucket == minioMetaTmpBucket {
 		tmpObj = object
 	} else {
@@ -893,7 +938,7 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
+			return disks[index].Delete(ctx, minioMetaTmpBucket, tmpObj, true)
 		}, index)
 	}
 
@@ -1167,6 +1212,56 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 	}
 }
 
+func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	var err error
+	// Lock the object before updating tags.
+	lk := er.NewNSLock(bucket, object)
+	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
+
+	disks := er.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
+
+	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// List all online disks.
+	_, modTime := listOnlineDisks(disks, metaArr, errs)
+
+	// Pick latest valid metadata.
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return ObjectInfo{}, toObjectErr(errFileNotFound, bucket, object)
+		}
+		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
+	for k, v := range opts.UserDefined {
+		fi.Metadata[k] = v
+	}
+	fi.ModTime = opts.MTime
+	fi.VersionID = opts.VersionID
+
+	if err = er.updateObjectMeta(ctx, bucket, object, fi); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	objInfo := fi.ToObjectInfo(bucket, object)
+	return objInfo, nil
+
+}
+
 // PutObjectTags - replace or add tags to an existing object
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	var err error
@@ -1183,13 +1278,13 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
 
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
 	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
@@ -1203,98 +1298,43 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
-	for i, metaFi := range metaArr {
-		if metaFi.IsValid() {
-			// clean fi.Meta of tag key, before updating the new tags
-			delete(metaFi.Metadata, xhttp.AmzObjectTagging)
-			// Don't update for empty tags
-			if tags != "" {
-				metaFi.Metadata[xhttp.AmzObjectTagging] = tags
-			}
-			for k, v := range opts.UserDefined {
-				metaFi.Metadata[k] = v
-			}
-			metaArr[i].Metadata = metaFi.Metadata
-		}
-	}
-
-	tempObj := mustGetUUID()
-
-	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	// Atomically rename metadata from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	objInfo := fi.ToObjectInfo(bucket, object)
-	objInfo.UserTags = tags
-
-	return objInfo, nil
-}
-
-// updateObjectMeta will update the metadata of a file.
-func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) error {
-	if len(meta) == 0 {
-		return nil
-	}
-	disks := er.getDisks()
-
-	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
-
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
-	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
-
-	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
-	// Update metadata
-	for k, v := range meta {
+	fi.Metadata[xhttp.AmzObjectTagging] = tags
+	for k, v := range opts.UserDefined {
 		fi.Metadata[k] = v
 	}
 
-	if fi.Deleted {
-		if opts.VersionID == "" {
-			return toObjectErr(errFileNotFound, bucket, object)
-		}
-		return toObjectErr(errMethodNotAllowed, bucket, object)
+	if err = er.updateObjectMeta(ctx, bucket, object, fi); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	for i := range metaArr {
-		if errs[i] != nil {
-			// Avoid disks where loading metadata fail
-			continue
-		}
+	return fi.ToObjectInfo(bucket, object), nil
+}
 
-		metaArr[i].Metadata = fi.Metadata
+// updateObjectMeta will update the metadata of a file.
+func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo) error {
+	if len(fi.Metadata) == 0 {
+		return nil
 	}
 
-	tempObj := mustGetUUID()
+	disks := er.getDisks()
 
-	// Write unique `xl.meta` for each disk.
-	if disks, err = writeUniqueFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
+	g := errgroup.WithNErrs(len(disks))
+
+	// Start writing `xl.meta` to all disks in parallel.
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			return disks[index].UpdateMetadata(ctx, bucket, object, fi)
+		}, index)
 	}
 
-	// Atomically rename metadata from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
-	}
+	// Wait for all the routines.
+	mErrs := g.Wait()
 
-	return nil
+	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, getWriteQuorum(len(disks)))
 }
 
 // DeleteObjectTags - delete object tags from an existing object

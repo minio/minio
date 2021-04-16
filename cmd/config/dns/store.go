@@ -26,10 +26,18 @@ type Error struct {
 type ErrInvalidBucketName Error
 
 func (e ErrInvalidBucketName) Error() string {
-	return "invalid bucket name error: " + e.Err.Error()
+	return e.Bucket + " invalid bucket name error: " + e.Err.Error()
 }
+
 func (e Error) Error() string {
 	return "dns related error: " + e.Err.Error()
+}
+
+// ErrBucketConflict for buckets that already exist
+type ErrBucketConflict Error
+
+func (e ErrBucketConflict) Error() string {
+	return e.Bucket + " bucket conflict error: " + e.Err.Error()
 }
 
 // Store dns record store

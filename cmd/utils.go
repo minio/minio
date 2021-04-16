@@ -687,6 +687,16 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	return
 }
 
+// pathClean is like path.Clean but does not return "." for
+// empty inputs, instead returns "empty" as is.
+func pathClean(p string) string {
+	cp := path.Clean(p)
+	if cp == "." {
+		return ""
+	}
+	return cp
+}
+
 func trimLeadingSlash(ep string) string {
 	if len(ep) > 0 && ep[0] == '/' {
 		// Path ends with '/' preserve it

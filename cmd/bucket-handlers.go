@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -291,7 +293,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction, "", "")
 	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -343,10 +345,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		for _, bucketInfo := range bucketsInfo {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     accessKey,
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", accessKey, claims),
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims,
@@ -494,7 +497,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			object.PurgeTransitioned = goi.TransitionStatus
 		}
 		if replicateDeletes {
-			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
 			}, goi, gerr)
@@ -509,9 +512,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 				if object.VersionID != "" {
 					object.VersionPurgeStatus = Pending
-					if delMarker {
-						object.DeleteMarkerVersionID = object.VersionID
-					}
 				} else {
 					object.DeleteMarkerReplicationStatus = string(replication.Pending)
 				}
@@ -555,13 +555,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	})
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[ObjectToDelete{
+		// DeleteMarkerVersionID is not used specifically to avoid
+		// lookup errors, since DeleteMarkerVersionID is only
+		// created during DeleteMarker creation when client didn't
+		// specify a versionID.
+		objToDel := ObjectToDelete{
 			ObjectName:                    dObjects[i].ObjectName,
 			VersionID:                     dObjects[i].VersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
-		}]
+		}
+		dindex := objectsToDelete[objToDel]
 		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
 			if replicateDeletes {
 				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
@@ -617,12 +622,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		eventName := event.ObjectRemovedDelete
 		objInfo := ObjectInfo{
-			Name:      dobj.ObjectName,
-			VersionID: dobj.VersionID,
+			Name:         dobj.ObjectName,
+			VersionID:    dobj.VersionID,
+			DeleteMarker: dobj.DeleteMarker,
 		}
 
-		if dobj.DeleteMarker {
-			objInfo.DeleteMarker = dobj.DeleteMarker
+		if objInfo.DeleteMarker {
 			objInfo.VersionID = dobj.DeleteMarkerVersionID
 			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
@@ -755,7 +760,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Make sure to add Location information here only for bucket
-	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
+	if cp := pathClean(r.URL.Path); cp != "" {
+		w.Header().Set(xhttp.Location, cp) // Clean any trailing slashes.
+	}
 
 	writeSuccessResponseHeadersOnly(w)
 
@@ -925,10 +932,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
-
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat), r.URL, guessIsBrowserReq(r))
+			errAPI := errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat)
+			errAPI.Description = fmt.Sprintf("%s '(%s)'", errAPI.Description, err)
+			writeErrorResponse(ctx, w, errAPI, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -1597,4 +1605,60 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetBucketReplicationMetricsHandler - GET Bucket replication metrics.
+// ----------
+// Gets the replication metrics for a bucket.
+func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketReplicationMetrics")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// check if user has permissions to perform this operation
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	bucketStats := globalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
+	bucketReplStats := BucketReplicationStats{}
+	// sum up metrics from each node in the cluster
+	for _, bucketStat := range bucketStats {
+		bucketReplStats.FailedCount += bucketStat.ReplicationStats.FailedCount
+		bucketReplStats.FailedSize += bucketStat.ReplicationStats.FailedSize
+		bucketReplStats.PendingCount += bucketStat.ReplicationStats.PendingCount
+		bucketReplStats.PendingSize += bucketStat.ReplicationStats.PendingSize
+		bucketReplStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		bucketReplStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
+	}
+	// add initial usage from the time of cluster up
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	bucketReplStats.FailedCount += usageStat.FailedCount
+	bucketReplStats.FailedSize += usageStat.FailedSize
+	bucketReplStats.PendingCount += usageStat.PendingCount
+	bucketReplStats.PendingSize += usageStat.PendingSize
+	bucketReplStats.ReplicaSize += usageStat.ReplicaSize
+	bucketReplStats.ReplicatedSize += usageStat.ReplicatedSize
+
+	if err := json.NewEncoder(w).Encode(&bucketReplStats); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	w.(http.Flusher).Flush()
 }

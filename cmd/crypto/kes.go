@@ -32,6 +32,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -155,22 +156,12 @@ func NewKes(cfg KesConfig) (KMS, error) {
 	}, nil
 }
 
-// DefaultKeyID returns the default key ID that should be
-// used for SSE-S3 or SSE-KMS when the S3 client does not
-// provide an explicit key ID.
-func (kes *kesService) DefaultKeyID() string {
-	return kes.defaultKeyID
-}
-
-// Info returns some information about the KES,
-// configuration - like the endpoint or authentication
-// method.
-func (kes *kesService) Info() KMSInfo {
-	return KMSInfo{
-		Endpoints: kes.endpoints,
-		Name:      kes.DefaultKeyID(),
-		AuthType:  "TLS",
-	}
+func (kes *kesService) Stat() (kms.Status, error) {
+	return kms.Status{
+		Name:       "KES",
+		Endpoints:  kes.endpoints,
+		DefaultKey: kes.defaultKeyID,
+	}, nil
 }
 
 // CreateKey tries to create a new master key with the given keyID.
@@ -180,22 +171,24 @@ func (kes *kesService) CreateKey(keyID string) error { return kes.client.CreateK
 // and a sealed version of this plaintext key encrypted using the
 // named key referenced by keyID. It also binds the generated key
 // cryptographically to the provided context.
-func (kes *kesService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
+func (kes *kesService) GenerateKey(keyID string, ctx Context) (kms.DEK, error) {
+	if keyID == "" {
+		keyID = kes.defaultKeyID
+	}
 	context, err := ctx.MarshalText()
 	if err != nil {
-		return key, nil, err
+		return kms.DEK{}, err
 	}
 
-	var plainKey []byte
-	plainKey, sealedKey, err = kes.client.GenerateDataKey(keyID, context)
+	plaintext, ciphertext, err := kes.client.GenerateDataKey(keyID, context)
 	if err != nil {
-		return key, nil, err
+		return kms.DEK{}, err
 	}
-	if len(plainKey) != len(key) {
-		return key, nil, Errorf("crypto: received invalid plaintext key size from KMS")
-	}
-	copy(key[:], plainKey)
-	return key, sealedKey, nil
+	return kms.DEK{
+		KeyID:      keyID,
+		Plaintext:  plaintext,
+		Ciphertext: ciphertext,
+	}, nil
 }
 
 // UnsealKey returns the decrypted sealedKey as plaintext key.
@@ -205,22 +198,12 @@ func (kes *kesService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 //
 // The context must be same context as the one provided while
 // generating the plaintext key / sealedKey.
-func (kes *kesService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
+func (kes *kesService) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]byte, error) {
 	context, err := ctx.MarshalText()
 	if err != nil {
-		return key, err
+		return nil, err
 	}
-
-	var plainKey []byte
-	plainKey, err = kes.client.DecryptDataKey(keyID, sealedKey, context)
-	if err != nil {
-		return key, err
-	}
-	if len(plainKey) != len(key) {
-		return key, Errorf("crypto: received invalid plaintext key size from KMS")
-	}
-	copy(key[:], plainKey)
-	return key, nil
+	return kes.client.DecryptDataKey(keyID, ciphertext, context)
 }
 
 // kesClient implements the bare minimum functionality needed for

@@ -258,15 +258,15 @@ Fetches accounting usage information for the current authenticated user
 | Param                          | Type                 | Description             |
 |--------------------------------|----------------------|-------------------------|
 | `AccountInfo.AccountName` | _string_             | Account name.           |
-| `AccountInfo.Buckets`     | _[]BucketUsageInfo_  | Bucket usage info.      |
+| `AccountInfo.Buckets`     | _[]BucketAccessInfo_  | Bucket usage info.      |
 
 
 | Param                      | Type            | Description                             |
 |----------------------------|-----------------|-----------------------------------------|
-| `BucketUsageInfo.Name`     | _string_        | The name of the current bucket
-| `BucketUsageInfo.Size`     | _uint64_        | The total size of the current bucket
-| `BucketUsageInfo.Created`  | _time.Time_     | Bucket creation time
-| `BucketUsageInfo.Access`   | _AccountAccess_ | Type of access of the current account
+| `BucketAccessInfo.Name`     | _string_        | The name of the current bucket
+| `BucketAccessInfo.Size`     | _uint64_        | The total size of the current bucket
+| `BucketAccessInfo.Created`  | _time.Time_     | Bucket creation time
+| `BucketAccessInfo.Access`   | _AccountAccess_ | Type of access of the current account
 
 
 | Param                  | Type    | Description                                                                                                              |

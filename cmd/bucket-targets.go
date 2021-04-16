@@ -31,6 +31,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -100,21 +101,24 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 		}
-		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalIsErasure {
-			return NotImplemented{}
+			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil {
-			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 		}
 		if vcfg.Status != string(versioning.Enabled) {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
+		}
+		if tgt.ReplicationSync && tgt.BandwidthLimit > 0 {
+			return NotImplemented{Message: "Synchronous replication does not support bandwidth limits"}
 		}
 	}
 	if tgt.Type == madmin.ILMService {
@@ -124,7 +128,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 				if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 					return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 				}
-				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 			}
 			if vcfg.Status != string(versioning.Enabled) {
 				return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
@@ -179,7 +183,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	}
 	if arn.Type == madmin.ReplicationService {
 		if !globalIsErasure {
-			return NotImplemented{}
+			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 		}
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
@@ -328,6 +332,7 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 	for _, bucket := range buckets {
 		cfg, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket.Name)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			continue
 		}
 		if cfg == nil || cfg.Empty() {
@@ -339,6 +344,7 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 		for _, tgt := range cfg.Targets {
 			tgtClient, err := sys.getRemoteTargetClient(&tgt)
 			if err != nil {
+				logger.LogIf(ctx, err)
 				continue
 			}
 			sys.arnRemotesMap[tgt.Arn] = tgtClient
@@ -432,7 +438,10 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 			return nil, err
 		}
 		if crypto.S3.IsEncrypted(meta) {
-			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{bucket: bucket, bucketTargetsFile: bucketTargetsFile}); err != nil {
+			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{
+				bucket:            bucket,
+				bucketTargetsFile: bucketTargetsFile,
+			}); err != nil {
 				return nil, err
 			}
 		}

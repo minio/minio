@@ -30,7 +30,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -673,8 +672,10 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 		if pset.Contains(policyName) {
 			cr, ok := sys.iamUsersMap[u]
 			if !ok {
-				// This case cannot happen
-				return errNoSuchUser
+				// This case can happen when an temporary account
+				// is deleted or expired, removed it from userPolicyMap.
+				delete(sys.iamUserPolicyMap, u)
+				continue
 			}
 			pset.Remove(policyName)
 			// User is from STS if the cred are temporary
@@ -841,40 +842,31 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		return errServerNotInitialized
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	ttl := int64(cred.Expiration.Sub(UTCNow()).Seconds())
 
 	// If OPA is not set we honor any policy claims for this
 	// temporary user which match with pre-configured canned
 	// policies for this server.
 	if globalPolicyOPA == nil && policyName != "" {
-		var availablePolicies []iampolicy.Policy
 		mp := newMappedPolicy(policyName)
-		for _, policy := range mp.toSlice() {
-			p, found := sys.iamPolicyDocsMap[policy]
-			if found {
-				availablePolicies = append(availablePolicies, p)
-			}
-		}
-
-		combinedPolicy := availablePolicies[0]
-		for i := 1; i < len(availablePolicies); i++ {
-			combinedPolicy.Statements = append(combinedPolicy.Statements,
-				availablePolicies[i].Statements...)
-		}
+		combinedPolicy := sys.GetCombinedPolicy(mp.toSlice()...)
 
 		if combinedPolicy.IsEmpty() {
-			delete(sys.iamUserPolicyMap, accessKey)
-			return nil
+			return fmt.Errorf("specified policy %s, not found %w", policyName, errNoSuchPolicy)
 		}
 
+		sys.store.lock()
+		defer sys.store.unlock()
+
 		if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
+			sys.store.unlock()
 			return err
 		}
 
 		sys.iamUserPolicyMap[accessKey] = mp
+	} else {
+		sys.store.lock()
+		defer sys.store.unlock()
 	}
 
 	u := newUserIdentity(cred)
@@ -1046,9 +1038,9 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		SecretKey: cred.SecretKey,
 		Status: func() string {
 			if status == madmin.AccountEnabled {
-				return config.EnableOn
+				return auth.AccountOn
 			}
-			return config.EnableOff
+			return auth.AccountOff
 		}(),
 	})
 
@@ -1060,19 +1052,25 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	return nil
 }
 
+type newServiceAccountOpts struct {
+	sessionPolicy *iampolicy.Policy
+	accessKey     string
+	secretKey     string
+}
+
 // NewServiceAccount - create a new service account
-func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, groups []string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
+func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, groups []string, opts newServiceAccountOpts) (auth.Credentials, error) {
 	if !sys.Initialized() {
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
 	var policyBuf []byte
-	if sessionPolicy != nil {
-		err := sessionPolicy.Validate()
+	if opts.sessionPolicy != nil {
+		err := opts.sessionPolicy.Validate()
 		if err != nil {
 			return auth.Credentials{}, err
 		}
-		policyBuf, err = json.Marshal(sessionPolicy)
+		policyBuf, err = json.Marshal(opts.sessionPolicy)
 		if err != nil {
 			return auth.Credentials{}, err
 		}
@@ -1125,13 +1123,22 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		m[iamPolicyClaimNameSA()] = "inherited-policy"
 	}
 
-	secret := globalActiveCred.SecretKey
-	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
+	var (
+		cred auth.Credentials
+		err  error
+	)
+
+	if len(opts.accessKey) > 0 {
+		cred, err = auth.CreateNewCredentialsWithMetadata(opts.accessKey, opts.secretKey, m, globalActiveCred.SecretKey)
+	} else {
+		cred, err = auth.GetNewCredentialsWithMetadata(m, globalActiveCred.SecretKey)
+	}
 	if err != nil {
 		return auth.Credentials{}, err
 	}
 	cred.ParentUser = parentUser
 	cred.Groups = groups
+	cred.Status = string(auth.AccountOn)
 
 	u := newUserIdentity(cred)
 
@@ -1144,8 +1151,69 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	return cred, nil
 }
 
+type updateServiceAccountOpts struct {
+	sessionPolicy *iampolicy.Policy
+	secretKey     string
+	status        string
+}
+
+// UpdateServiceAccount - edit a service account
+func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, opts updateServiceAccountOpts) error {
+	if !sys.Initialized() {
+		return errServerNotInitialized
+	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
+
+	cr, ok := sys.iamUsersMap[accessKey]
+	if !ok || !cr.IsServiceAccount() {
+		return errNoSuchServiceAccount
+	}
+
+	if opts.secretKey != "" {
+		cr.SecretKey = opts.secretKey
+	}
+
+	if opts.status != "" {
+		cr.Status = opts.status
+	}
+
+	if opts.sessionPolicy != nil {
+		m := make(map[string]interface{})
+		err := opts.sessionPolicy.Validate()
+		if err != nil {
+			return err
+		}
+		policyBuf, err := json.Marshal(opts.sessionPolicy)
+		if err != nil {
+			return err
+		}
+		if len(policyBuf) > 16*humanize.KiByte {
+			return fmt.Errorf("Session policy should not exceed 16 KiB characters")
+		}
+
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
+		m[iamPolicyClaimNameSA()] = "embedded-policy"
+		m[parentClaim] = cr.ParentUser
+		cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, globalActiveCred.SecretKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	u := newUserIdentity(cr)
+	if err := sys.store.saveUserIdentity(context.Background(), u.Credentials.AccessKey, srvAccUser, u); err != nil {
+		return err
+	}
+
+	sys.iamUsersMap[u.Credentials.AccessKey] = u.Credentials
+
+	return nil
+}
+
 // ListServiceAccounts - lists all services accounts associated to a specific user
-func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]string, error) {
+func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1155,30 +1223,56 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	var serviceAccounts []string
-	for k, v := range sys.iamUsersMap {
+	var serviceAccounts []auth.Credentials
+	for _, v := range sys.iamUsersMap {
 		if v.IsServiceAccount() && v.ParentUser == accessKey {
-			serviceAccounts = append(serviceAccounts, k)
+			// Hide secret key & session key here
+			v.SecretKey = ""
+			v.SessionToken = ""
+			serviceAccounts = append(serviceAccounts, v)
 		}
 	}
 
 	return serviceAccounts, nil
 }
 
-// GetServiceAccountParent - gets information about a service account
-func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string) (string, error) {
+// GetServiceAccount - gets information about a service account
+func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
 	if !sys.Initialized() {
-		return "", errServerNotInitialized
+		return auth.Credentials{}, nil, errServerNotInitialized
 	}
 
 	sys.store.rlock()
 	defer sys.store.runlock()
 
 	sa, ok := sys.iamUsersMap[accessKey]
-	if ok && sa.IsServiceAccount() {
-		return sa.ParentUser, nil
+	if !ok || !sa.IsServiceAccount() {
+		return auth.Credentials{}, nil, errNoSuchServiceAccount
 	}
-	return "", nil
+
+	var embeddedPolicy *iampolicy.Policy
+
+	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+	if err == nil {
+		pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
+		sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
+		if ptok && spok && pt == "embedded-policy" {
+			policyBytes, err := base64.StdEncoding.DecodeString(sp)
+			if err == nil {
+				p, err := iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+				if err == nil {
+					policy := iampolicy.Policy{}.Merge(*p)
+					embeddedPolicy = &policy
+				}
+			}
+		}
+	}
+
+	// Hide secret & session keys
+	sa.SecretKey = ""
+	sa.SessionToken = ""
+
+	return sa, embeddedPolicy, nil
 }
 
 // DeleteServiceAccount - delete a service account
@@ -1231,7 +1325,12 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 	u := newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: uinfo.SecretKey,
-		Status:    string(uinfo.Status),
+		Status: func() string {
+			if uinfo.Status == madmin.AccountEnabled {
+				return auth.AccountOn
+			}
+			return auth.AccountOff
+		}(),
 	})
 
 	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regularUser, u); err != nil {
@@ -1661,10 +1760,9 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 	return nil
 }
 
-// PolicyDBGet - gets policy set on a user or group. Since a user may
-// be a member of multiple groups, this function returns an array of
-// applicable policies
-func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
+// PolicyDBGet - gets policy set on a user or group. If a list of groups is
+// given, policies associated with them are included as well.
+func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1676,11 +1774,36 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	return sys.policyDBGet(name, isGroup)
+	policies, err := sys.policyDBGet(name, isGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isGroup {
+		for _, group := range groups {
+			ps, err := sys.policyDBGet(group, true)
+			if err != nil {
+				return nil, err
+			}
+			policies = append(policies, ps...)
+		}
+	}
+
+	return policies, nil
 }
 
-// This call assumes that caller has the sys.RLock()
-func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
+// This call assumes that caller has the sys.RLock().
+//
+// If a group is passed, it returns policies associated with the group.
+//
+// If a user is passed, it returns policies of the user along with any groups
+// that the server knows the user is a member of.
+//
+// In LDAP users mode, the server does not store any group membership
+// information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
+// generated credentials. Thus we skip looking up group memberships, user map,
+// and group map and check the appropriate policy maps directly.
+func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, err error) {
 	if isGroup {
 		if sys.usersSysType == MinIOUsersSysType {
 			g, ok := sys.iamGroupsMap[name]
@@ -1695,16 +1818,15 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			}
 		}
 
-		mp := sys.iamGroupPolicyMap[name]
-		return mp.toSlice(), nil
+		return sys.iamGroupPolicyMap[name].toSlice(), nil
 	}
-
-	// When looking for a user's policies, we also check if the
-	// user and the groups they are member of are enabled.
 
 	var u auth.Credentials
 	var ok bool
 	if sys.usersSysType == MinIOUsersSysType {
+		// When looking for a user's policies, we also check if the user
+		// and the groups they are member of are enabled.
+
 		u, ok = sys.iamUsersMap[name]
 		if !ok {
 			return nil, errNoSuchUser
@@ -1713,8 +1835,6 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			return nil, nil
 		}
 	}
-
-	var policies []string
 
 	mp, ok := sys.iamUserPolicyMap[name]
 	if !ok {
@@ -1733,8 +1853,7 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 			continue
 		}
 
-		p := sys.iamGroupPolicyMap[group]
-		policies = append(policies, p.toSlice()...)
+		policies = append(policies, sys.iamGroupPolicyMap[group].toSlice()...)
 	}
 
 	return policies, nil
@@ -1764,8 +1883,9 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	}
 
 	// Check policy for this service account.
-	svcPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	svcPolicies, err := sys.PolicyDBGet(parent, false, args.Groups...)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return false
 	}
 
@@ -1863,7 +1983,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool
 	}
 
 	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	ldapPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
 	if err != nil {
 		return false
 	}
@@ -2048,7 +2168,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	}
 
 	// Continue with the assumption of a regular user
-	policies, err := sys.PolicyDBGet(args.AccountName, false)
+	policies, err := sys.PolicyDBGet(args.AccountName, false, args.Groups...)
 	if err != nil {
 		return false
 	}

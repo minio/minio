@@ -51,8 +51,11 @@ func TestParseMasterKey(t *testing.T) {
 			if !tt.success && err == nil {
 				t.Error("Unexpected failure")
 			}
-			if err == nil && kms.DefaultKeyID() != tt.expectedKeyID {
-				t.Errorf("Expected keyID %s, got %s", tt.expectedKeyID, kms.DefaultKeyID())
+			if kms != nil {
+				stat, _ := kms.Stat()
+				if err == nil && stat.DefaultKey != tt.expectedKeyID {
+					t.Errorf("Expected keyID %s, got %s", tt.expectedKeyID, stat.DefaultKey)
+				}
 			}
 		})
 	}

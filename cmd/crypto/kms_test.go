@@ -43,18 +43,18 @@ func TestMasterKeyKMS(t *testing.T) {
 	for i, test := range masterKeyKMSTests {
 		kms := NewMasterKey(test.GenKeyID, [32]byte{})
 
-		key, sealedKey, err := kms.GenerateKey(test.GenKeyID, test.GenContext)
+		key, err := kms.GenerateKey(test.GenKeyID, test.GenContext)
 		if err != nil {
 			t.Errorf("Test %d: KMS failed to generate key: %v", i, err)
 		}
-		unsealedKey, err := kms.UnsealKey(test.UnsealKeyID, sealedKey, test.UnsealContext)
+		unsealedKey, err := kms.DecryptKey(test.UnsealKeyID, key.Ciphertext, test.UnsealContext)
 		if err != nil && !test.ShouldFail {
 			t.Errorf("Test %d: KMS failed to unseal the generated key: %v", i, err)
 		}
 		if err == nil && test.ShouldFail {
 			t.Errorf("Test %d: KMS unsealed the generated key successfully but should have failed", i)
 		}
-		if !test.ShouldFail && !bytes.Equal(key[:], unsealedKey[:]) {
+		if !test.ShouldFail && !bytes.Equal(key.Plaintext, unsealedKey[:]) {
 			t.Errorf("Test %d: The generated and unsealed key differ", i)
 		}
 	}

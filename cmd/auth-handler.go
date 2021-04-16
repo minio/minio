@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -162,6 +163,7 @@ func checkAdminRequestAuth(ctx context.Context, r *http.Request, action iampolic
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.Action(action),
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 		IsOwner:         owner,
@@ -192,24 +194,21 @@ func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
 
 // Fetch claims in the security token returned by the client.
 func getClaimsFromToken(token string) (map[string]interface{}, error) {
-	claims := xjwt.NewMapClaims()
 	if token == "" {
+		claims := xjwt.NewMapClaims()
 		return claims.Map(), nil
 	}
 
-	stsTokenCallback := func(claims *xjwt.MapClaims) ([]byte, error) {
-		// JWT token for x-amz-security-token is signed with admin
-		// secret key, temporary credentials become invalid if
-		// server admin credentials change. This is done to ensure
-		// that clients cannot decode the token using the temp
-		// secret keys and generate an entirely new claim by essentially
-		// hijacking the policies. We need to make sure that this is
-		// based an admin credential such that token cannot be decoded
-		// on the client side and is treated like an opaque value.
-		return []byte(globalActiveCred.SecretKey), nil
-	}
-
-	if err := xjwt.ParseWithClaims(token, claims, stsTokenCallback); err != nil {
+	// JWT token for x-amz-security-token is signed with admin
+	// secret key, temporary credentials become invalid if
+	// server admin credentials change. This is done to ensure
+	// that clients cannot decode the token using the temp
+	// secret keys and generate an entirely new claim by essentially
+	// hijacking the policies. We need to make sure that this is
+	// based an admin credential such that token cannot be decoded
+	// on the client side and is treated like an opaque value.
+	claims, err := auth.ExtractClaims(token, globalActiveCred.SecretKey)
+	if err != nil {
 		return nil, errAuthentication
 	}
 
@@ -272,7 +271,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
-	_, _, s3Err = checkRequestAuthTypeToAccessKey(ctx, r, action, bucketName, objectName)
+	_, _, s3Err = checkRequestAuthTypeCredential(ctx, r, action, bucketName, objectName)
 	return s3Err
 }
 
@@ -282,14 +281,13 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 // Additionally returns the accessKey used in the request, and if this request is by an admin.
-func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (accessKey string, owner bool, s3Err APIErrorCode) {
-	var cred auth.Credentials
+func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (cred auth.Credentials, owner bool, s3Err APIErrorCode) {
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return accessKey, owner, ErrSignatureVersionNotSupported
+		return cred, owner, ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return accessKey, owner, s3Err
+			return cred, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
@@ -299,18 +297,18 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			region = ""
 		}
 		if s3Err = isReqAuthenticated(ctx, r, region, serviceS3); s3Err != ErrNone {
-			return accessKey, owner, s3Err
+			return cred, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
-		return accessKey, owner, s3Err
+		return cred, owner, s3Err
 	}
 
 	var claims map[string]interface{}
 	claims, s3Err = checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
-		return accessKey, owner, s3Err
+		return cred, owner, s3Err
 	}
 
 	// LocationConstraint is valid only for CreateBucketAction.
@@ -320,7 +318,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, maxLocationConstraintSize))
 		if err != nil {
 			logger.LogIf(ctx, err, logger.Application)
-			return accessKey, owner, ErrMalformedXML
+			return cred, owner, ErrMalformedXML
 		}
 
 		// Populate payload to extract location constraint.
@@ -329,7 +327,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		var s3Error APIErrorCode
 		locationConstraint, s3Error = parseLocationConstraint(r)
 		if s3Error != ErrNone {
-			return accessKey, owner, s3Error
+			return cred, owner, s3Error
 		}
 
 		// Populate payload again to handle it in HTTP handler.
@@ -350,7 +348,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			ObjectName:      objectName,
 		}) {
 			// Request is allowed return the appropriate access key.
-			return cred.AccessKey, owner, ErrNone
+			return cred, owner, ErrNone
 		}
 
 		if action == policy.ListBucketVersionsAction {
@@ -365,15 +363,16 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 				ObjectName:      objectName,
 			}) {
 				// Request is allowed return the appropriate access key.
-				return cred.AccessKey, owner, ErrNone
+				return cred, owner, ErrNone
 			}
 		}
 
-		return cred.AccessKey, owner, ErrAccessDenied
+		return cred, owner, ErrAccessDenied
 	}
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.Action(action),
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
@@ -382,7 +381,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		Claims:          claims,
 	}) {
 		// Request is allowed return the appropriate access key.
-		return cred.AccessKey, owner, ErrNone
+		return cred, owner, ErrNone
 	}
 
 	if action == policy.ListBucketVersionsAction {
@@ -390,6 +389,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// verify as a fallback.
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
@@ -398,11 +398,11 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			Claims:          claims,
 		}) {
 			// Request is allowed return the appropriate access key.
-			return cred.AccessKey, owner, ErrNone
+			return cred, owner, ErrNone
 		}
 	}
 
-	return cred.AccessKey, owner, ErrAccessDenied
+	return cred, owner, ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -503,6 +503,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 			return
 		}
 		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+		atomic.AddUint64(&globalHTTPStats.rejectedRequestsAuth, 1)
 	})
 }
 
@@ -549,6 +550,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		if retMode == objectlock.RetGovernance && byPassSet {
 			byPassSet = globalPolicySys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
 				Action:          policy.BypassGovernanceRetentionAction,
 				BucketName:      bucketName,
 				ConditionValues: conditions,
@@ -558,6 +560,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		}
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          policy.PutObjectRetentionAction,
 			BucketName:      bucketName,
 			ConditionValues: conditions,
@@ -581,6 +584,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 	if retMode == objectlock.RetGovernance && byPassSet {
 		byPassSet = globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.BypassGovernanceRetentionAction,
 			BucketName:      bucketName,
 			ObjectName:      objectName,
@@ -591,6 +595,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.PutObjectRetentionAction,
 		BucketName:      bucketName,
 		ConditionValues: conditions,
@@ -646,6 +651,7 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          policy.Action(action),
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", "", nil),
@@ -659,6 +665,7 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          action,
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),

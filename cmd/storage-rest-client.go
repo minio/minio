@@ -337,6 +337,10 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
+	if err != nil {
+		return err
+	}
+	_, err = waitForHTTPResponse(respBody)
 	defer http.DrainBody(respBody)
 	return err
 }
@@ -352,6 +356,21 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodWriteMetadata, values, &reader, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var reader bytes.Buffer
+	if err := msgp.Encode(&reader, &fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodUpdateMetadata, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }

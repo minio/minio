@@ -233,10 +233,15 @@ func extractReqParams(r *http.Request) map[string]string {
 	region := globalServerRegion
 	cred := getReqAccessCred(r, region)
 
+	principalID := cred.AccessKey
+	if cred.ParentUser != "" {
+		principalID = cred.ParentUser
+	}
+
 	// Success.
 	m := map[string]string{
 		"region":          region,
-		"accessKey":       cred.AccessKey,
+		"principalId":     principalID,
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
@@ -359,24 +364,24 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 // Log headers and body.
 func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if globalHTTPTrace.NumSubscribers() == 0 {
+		if globalTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
 		trace := Trace(f, true, w, r)
-		globalHTTPTrace.Publish(trace)
+		globalTrace.Publish(trace)
 	}
 }
 
 // Log only the headers.
 func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if globalHTTPTrace.NumSubscribers() == 0 {
+		if globalTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
 		trace := Trace(f, false, w, r)
-		globalHTTPTrace.Publish(trace)
+		globalTrace.Publish(trace)
 	}
 }
 
@@ -541,7 +546,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 // gets host name for current node
 func getHostName(r *http.Request) (hostName string) {
 	if globalIsDistErasure {
-		hostName = GetLocalPeer(globalEndpoints)
+		hostName = globalLocalNodeName
 	} else {
 		hostName = r.Host
 	}

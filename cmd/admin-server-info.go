@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -31,7 +32,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	var localEndpoints Endpoints
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointServerPools)
+		addr = globalLocalNodeName
 	}
 	network := make(map[string]string)
 	for _, ep := range endpointServerPools {
@@ -67,9 +68,11 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		CommitID: CommitID,
 		Network:  network,
 	}
+	runtime.ReadMemStats(&props.MemStats)
 
 	objLayer := newObjectLayerFn()
-	if objLayer != nil {
+	if objLayer != nil && !globalIsGateway {
+		// only need Disks information in server mode.
 		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks

@@ -226,7 +226,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	reply.UIVersion = Version
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	sendEvent(eventArgs{
 		EventName:  event.BucketCreated,
@@ -723,7 +723,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	)
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 	sourceIP := handlers.GetSourceIP(r)
 
 next:
@@ -767,7 +767,7 @@ next:
 			}
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
-				if _, replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{
+				if replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{
 					ObjectName: objectName,
 					VersionID:  goi.VersionID,
 				}, goi, gerr); replicateDel {
@@ -903,7 +903,7 @@ next:
 						}
 					}
 				}
-				_, replicateDel, _ := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
+				replicateDel, _ := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
 				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
 				objToDel := ObjectToDelete{ObjectName: obj.Name}
 				if replicateDel {
@@ -1336,11 +1336,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	// Notify object created event.
 	sendEvent(eventArgs{
@@ -1529,7 +1529,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
@@ -1684,7 +1684,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	defer archive.Close()
 
 	reqParams := extractReqParams(r)
-	reqParams["accessKey"] = claims.AccessKey
+	reqParams["accessKey"] = claims.GetAccessKey()
 	respElements := extractRespElements(w)
 
 	for i, object := range args.Objects {

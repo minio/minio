@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v12"
+	peerRESTVersion       = "v14" // Add GetBucketStats API
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -36,6 +36,7 @@ const (
 	peerRESTMethodDispatchNetInfo        = "/dispatchnetinfo"
 	peerRESTMethodDeleteBucketMetadata   = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata     = "/loadbucketmetadata"
+	peerRESTMethodGetBucketStats         = "/getbucketstats"
 	peerRESTMethodServerUpdate           = "/serverupdate"
 	peerRESTMethodSignalService          = "/signalservice"
 	peerRESTMethodBackgroundHealStatus   = "/backgroundhealstatus"
@@ -62,18 +63,22 @@ const (
 )
 
 const (
-	peerRESTBucket      = "bucket"
-	peerRESTBuckets     = "buckets"
-	peerRESTUser        = "user"
-	peerRESTGroup       = "group"
-	peerRESTUserTemp    = "user-temp"
-	peerRESTPolicy      = "policy"
-	peerRESTUserOrGroup = "user-or-group"
-	peerRESTIsGroup     = "is-group"
-	peerRESTSignal      = "signal"
-	peerRESTProfiler    = "profiler"
-	peerRESTTraceAll    = "all"
-	peerRESTTraceErr    = "err"
+	peerRESTBucket         = "bucket"
+	peerRESTBuckets        = "buckets"
+	peerRESTUser           = "user"
+	peerRESTGroup          = "group"
+	peerRESTUserTemp       = "user-temp"
+	peerRESTPolicy         = "policy"
+	peerRESTUserOrGroup    = "user-or-group"
+	peerRESTIsGroup        = "is-group"
+	peerRESTSignal         = "signal"
+	peerRESTProfiler       = "profiler"
+	peerRESTTraceErr       = "err"
+	peerRESTTraceInternal  = "internal"
+	peerRESTTraceStorage   = "storage"
+	peerRESTTraceS3        = "s3"
+	peerRESTTraceOS        = "os"
+	peerRESTTraceThreshold = "threshold"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

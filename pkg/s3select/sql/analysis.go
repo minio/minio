@@ -19,6 +19,7 @@ package sql
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Query analysis - The query is analyzed to determine if it involves
@@ -177,7 +178,7 @@ func (e *PrimaryTerm) analyze(s *Select) (result qProp) {
 	case e.JPathExpr != nil:
 		// Check if the path expression is valid
 		if len(e.JPathExpr.PathExpr) > 0 {
-			if e.JPathExpr.BaseKey.String() != s.From.As {
+			if e.JPathExpr.BaseKey.String() != s.From.As && strings.ToLower(e.JPathExpr.BaseKey.String()) != baseTableName {
 				result = qProp{err: errInvalidKeypath}
 				return
 			}
