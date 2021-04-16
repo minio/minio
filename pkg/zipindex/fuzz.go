@@ -1,3 +1,5 @@
+// +build gofuzz
+
 package zipindex
 
 import (
@@ -8,6 +10,7 @@ import (
 
 // SET GO111_MODULE=off&&go-fuzz-build -o=fuzz-build.zip&&go-fuzz -minimize=5s -timeout=60 -bin=fuzz-build.zip -workdir=fuzz
 
+// Fuzz a roundtrip.
 func Fuzz(b []byte) int {
 	exitOnErr := func(err error) {
 		if err != nil {
