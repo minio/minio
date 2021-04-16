@@ -36,9 +36,12 @@ import (
 )
 
 var (
-	ErrFormat    = errors.New("zip: not a valid zip file")
+	// ErrFormat is returned when zip file cannot be parsed.
+	ErrFormat = errors.New("zip: not a valid zip file")
+	// ErrAlgorithm is returned if an unsupported compression type is used.
 	ErrAlgorithm = errors.New("zip: unsupported compression algorithm")
-	ErrChecksum  = errors.New("zip: checksum error")
+	// ErrChecksum is returned if a file fails a CRC check.
+	ErrChecksum = errors.New("zip: checksum error")
 )
 
 // ErrNeedMoreData is returned by ReadDir when more data is required to read the directory.
