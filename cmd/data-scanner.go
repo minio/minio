@@ -43,10 +43,11 @@ import (
 )
 
 const (
-	dataScannerSleepPerFolder   = time.Millisecond // Time to wait between folders.
-	dataUsageUpdateDirCycles    = 16               // Visit all folders every n cycles.
-	dataScannerCompactAtFolders = 1000             // Compact when this many subfolders.
-	dataScannerCompactAtObjects = 10000            // Compact when this many objects in subfolders.
+	dataScannerSleepPerFolder     = time.Millisecond // Time to wait between folders.
+	dataUsageUpdateDirCycles      = 16               // Visit all folders every n cycles.
+	dataScannerCompactAtFolders   = 1000             // Compact when this many subfolders.
+	dataScannerCompactLeastObject = 1000             // Compact when there is less than this many objects.
+	dataScannerCompactAtObjects   = 10000            // Compact when this many objects in subfolders.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
@@ -164,9 +165,10 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 }
 
 type cachedFolder struct {
-	name              string
-	parent            *dataUsageHash
-	objectHealProbDiv uint32
+	name               string
+	parent             *dataUsageHash
+	anyParentCompacted bool
+	objectHealProbDiv  uint32
 }
 
 type folderScanner struct {
@@ -264,92 +266,6 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		return cache, err
 	}
 
-	/*
-		if s.dataUsageScannerDebug {
-			console.Debugf(logPrefix+"New folders: %v %s\n", s.newFolders, logSuffix)
-		}
-
-		// Add new folders first
-		for _, folder := range s.newFolders {
-			select {
-			case <-done:
-				return s.newCache, ctx.Err()
-			default:
-			}
-			du, err := s.deepScanFolder(ctx, folder, skipHeal)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			if du == nil {
-				console.Debugln(logPrefix + "no disk usage provided" + logSuffix)
-				continue
-			}
-
-			s.newCache.replace(folder.name, "", *du)
-			// Add to parent manually
-			if folder.parent != nil {
-				parent := s.newCache.Cache[folder.parent.Key()]
-				parent.addChildString(folder.name)
-			}
-		}
-
-		if s.dataUsageScannerDebug {
-			console.Debugf(logPrefix+"Existing folders: %v %s\n", len(s.existingFolders), logSuffix)
-		}
-
-		// Do selective scanning of existing folders.
-		for _, folder := range s.existingFolders {
-			select {
-			case <-done:
-				return s.newCache, ctx.Err()
-			default:
-			}
-			h := hashPath(folder.name)
-			if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-				if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-					s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-					continue
-				} else {
-					folder.objectHealProbDiv = s.healFolderInclude
-				}
-				folder.objectHealProbDiv = dataUsageUpdateDirCycles
-			}
-			if s.withFilter != nil {
-				_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
-				if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
-					// If folder isn't in filter, skip it completely.
-					if !s.withFilter.containsDir(folder.name) {
-						if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-							if s.dataUsageScannerDebug {
-								console.Debugf(logPrefix+"Skipping non-updated folder: %v %s\n", folder, logSuffix)
-							}
-							s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-							continue
-						} else {
-							if s.dataUsageScannerDebug {
-								console.Debugf(logPrefix+"Adding non-updated folder to heal check: %v %s\n", folder.name, logSuffix)
-							}
-							// Update probability of including objects
-							folder.objectHealProbDiv = s.healFolderInclude
-						}
-					}
-				}
-			}
-
-			// Update on this cycle...
-			du, err := s.deepScanFolder(ctx, folder, skipHeal)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			if du == nil {
-				logger.LogIf(ctx, errors.New("data-usage: no disk usage provided"))
-				continue
-			}
-			s.newCache.replaceHashed(h, folder.parent, *du)
-		}
-	*/
 	if s.dataUsageScannerDebug {
 		console.Debugf(logPrefix+"Finished scanner, %v entries %s\n", len(s.newCache.Cache), logSuffix)
 	}
@@ -516,7 +432,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				if !dst.Compacted {
 					// Compact is exceeding object count.
 					sz := f.newCache.sizeRecursive(folder.name)
-					if sz != nil && sz.Objects > dataScannerCompactAtObjects {
+					if sz != nil && sz.Objects < dataScannerCompactLeastObject {
 						folderHash := dataUsageHash(folder.name)
 						f.newCache.deleteRecursive(folderHash)
 						sz.Compacted = true
@@ -536,8 +452,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
 					if !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 						// Transfer and add as child...
-						f.newCache.replaceHashed(h, folder.parent, f.oldCache.Cache[h.Key()])
-						into.addChild(h)
+						f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
 						continue
 					}
 					folder.objectHealProbDiv = dataUsageUpdateDirCycles
@@ -551,8 +466,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 								if f.dataUsageScannerDebug {
 									console.Debugf(scannerLogPrefix+"Skipping non-updated folder: %v\n", folder)
 								}
-								f.newCache.replaceHashed(h, folder.parent, f.oldCache.Cache[h.Key()])
-								into.addChild(h)
+								f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
 								continue
 							} else {
 								if f.dataUsageScannerDebug {
@@ -749,12 +663,19 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	}
 
 	f.newCache.replaceHashed(thisHash, folder.parent, *into)
-	if !into.Compacted {
-		// Compact is exceeding object count or there are no children.
+	if !into.Compacted && f.newCache.Info.Name != folder.name {
+		var compact bool
+		flat := f.newCache.sizeRecursive(folder.name)
+		if flat.Objects < dataScannerCompactLeastObject {
+			compact = true
+		}
+		// Compact is exceeding uncompacted child count or there are no children.
 		sz := f.newCache.totalChildrenRec(folder.name)
 		if sz == 0 || sz > dataScannerCompactAtFolders {
+			compact = true
+		}
+		if compact {
 			folderHash := dataUsageHash(folder.name)
-			flat := f.newCache.sizeRecursive(folder.name)
 			if flat != nil {
 				f.newCache.deleteRecursive(folderHash)
 				flat.Compacted = true
