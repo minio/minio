@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/kms"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -36,7 +37,6 @@ import (
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	etcd "go.etcd.io/etcd/clientv3"
@@ -233,7 +233,7 @@ var (
 	globalCacheConfig cache.Config
 
 	// Initialized KMS configuration for disk cache
-	globalCacheKMS crypto.KMS
+	globalCacheKMS kms.KMS
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
@@ -246,7 +246,7 @@ var (
 	globalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
-	GlobalKMS crypto.KMS
+	GlobalKMS kms.KMS
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS

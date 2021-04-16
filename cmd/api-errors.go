@@ -367,7 +367,7 @@ const (
 	ErrAddUserInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
-	ErrServiceAccountNotFound
+	ErrAdminServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -1754,7 +1754,7 @@ var errorCodes = errorCodeMap{
 		Description:    "The account key is not eligible for this operation",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrServiceAccountNotFound: {
+	ErrAdminServiceAccountNotFound: {
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "The specified service account is not found",
 		HTTPStatusCode: http.StatusNotFound,
@@ -1790,6 +1790,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchServiceAccount:
+		apiErr = ErrAdminServiceAccountNotFound
 	case errNoSuchGroup:
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
@@ -1919,8 +1921,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
 		apiErr = ErrSlowDown
-	case UnsupportedDelimiter:
-		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
 		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
@@ -2053,6 +2053,22 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if ok {
 		code := toAPIErrorCode(ctx, e)
 		apiErr = errorCodes.ToAPIErrWithErr(code, e)
+	}
+
+	if apiErr.Code == "NotImplemented" {
+		switch e := err.(type) {
+		case NotImplemented:
+			desc := e.Error()
+			if desc == "" {
+				desc = apiErr.Description
+			}
+			apiErr = APIError{
+				Code:           apiErr.Code,
+				Description:    desc,
+				HTTPStatusCode: apiErr.HTTPStatusCode,
+			}
+			return apiErr
+		}
 	}
 
 	if apiErr.Code == "InternalError" {

@@ -419,7 +419,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
-			entName = path.Clean(path.Join(folder.name, entName))
+			entName = pathClean(path.Join(folder.name, entName))
+			if entName == "" {
+				if f.dataUsageScannerDebug {
+					console.Debugf(scannerLogPrefix+" no bucket (%s,%s)\n", f.root, entName)
+				}
+				return errDoneForNow
+			}
 			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
 				if f.dataUsageScannerDebug {
@@ -1109,11 +1115,11 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	case replication.Pending:
 		sizeS.pendingCount++
 		sizeS.pendingSize += oi.Size
-		globalReplicationPool.queueReplicaTask(ctx, oi)
+		globalReplicationPool.queueReplicaTask(ctx, ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
 		sizeS.failedCount++
-		globalReplicationPool.queueReplicaTask(ctx, oi)
+		globalReplicationPool.queueReplicaTask(ctx, ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
 	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:

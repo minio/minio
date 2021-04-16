@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/bandwidth"
-	"github.com/minio/minio/pkg/pubsub"
 )
 
 // throttleBandwidth gets the throttle for bucket with the configured value
@@ -39,26 +38,6 @@ func (m *Monitor) throttleBandwidth(ctx context.Context, bucket string, bandwidt
 	return throttle
 }
 
-// SubscribeToBuckets subscribes to buckets. Empty array for monitoring all buckets.
-func (m *Monitor) SubscribeToBuckets(subCh chan interface{}, doneCh <-chan struct{}, buckets []string) {
-	m.pubsub.Subscribe(subCh, doneCh, func(f interface{}) bool {
-		if buckets != nil || len(buckets) == 0 {
-			return true
-		}
-		report, ok := f.(*bandwidth.Report)
-		if !ok {
-			return false
-		}
-		for _, b := range buckets {
-			_, ok := report.BucketStats[b]
-			if ok {
-				return true
-			}
-		}
-		return false
-	})
-}
-
 // Monitor implements the monitoring for bandwidth measurements.
 type Monitor struct {
 	lock sync.Mutex // lock for all updates
@@ -67,11 +46,7 @@ type Monitor struct {
 
 	bucketMovingAvgTicker *time.Ticker // Ticker for calculating moving averages
 
-	pubsub *pubsub.PubSub // PubSub for reporting bandwidths.
-
 	bucketThrottle map[string]*throttle
-
-	startProcessing sync.Once
 
 	doneCh <-chan struct{}
 }
@@ -81,10 +56,10 @@ func NewMonitor(doneCh <-chan struct{}) *Monitor {
 	m := &Monitor{
 		activeBuckets:         make(map[string]*bucketMeasurement),
 		bucketMovingAvgTicker: time.NewTicker(2 * time.Second),
-		pubsub:                pubsub.New(),
 		bucketThrottle:        make(map[string]*throttle),
 		doneCh:                doneCh,
 	}
+	go m.trackEWMA()
 	return m
 }
 
@@ -135,12 +110,12 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *bandwidth.Report {
 	return report
 }
 
-func (m *Monitor) process(doneCh <-chan struct{}) {
+func (m *Monitor) trackEWMA() {
 	for {
 		select {
 		case <-m.bucketMovingAvgTicker.C:
-			m.processAvg()
-		case <-doneCh:
+			m.updateMovingAvg()
+		case <-m.doneCh:
 			return
 		}
 	}
@@ -155,24 +130,19 @@ func (m *Monitor) getBucketMeasurement(bucket string, initTime time.Time) *bucke
 	return bucketTracker
 }
 
-func (m *Monitor) processAvg() {
+func (m *Monitor) updateMovingAvg() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, bucketMeasurement := range m.activeBuckets {
 		bucketMeasurement.updateExponentialMovingAverage(time.Now())
 	}
-	m.pubsub.Publish(m.getReport(SelectBuckets()))
 }
 
 // track returns the measurement object for bucket and object
-func (m *Monitor) track(bucket string, object string, timeNow time.Time) *bucketMeasurement {
+func (m *Monitor) track(bucket string, object string) *bucketMeasurement {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.startProcessing.Do(func() {
-		go m.process(m.doneCh)
-	})
-	b := m.getBucketMeasurement(bucket, timeNow)
-	return b
+	return m.getBucketMeasurement(bucket, time.Now())
 }
 
 // DeleteBucket deletes monitoring the 'bucket'

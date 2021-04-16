@@ -20,7 +20,6 @@ package bandwidth
 import (
 	"context"
 	"io"
-	"time"
 )
 
 // MonitoredReader monitors the bandwidth
@@ -28,7 +27,6 @@ type MonitoredReader struct {
 	opts              *MonitorReaderOptions
 	bucketMeasurement *bucketMeasurement // bucket measurement object
 	reader            io.Reader          // Reader to wrap
-	lastStop          time.Time          // Last timestamp for a measurement
 	throttle          *throttle          // throttle the rate at which replication occur
 	monitor           *Monitor           // Monitor reference
 	lastErr           error              // last error reported, if this non-nil all reads will fail.
@@ -45,13 +43,10 @@ type MonitorReaderOptions struct {
 
 // NewMonitoredReader returns a io.Reader that reports bandwidth details.
 func NewMonitoredReader(ctx context.Context, monitor *Monitor, reader io.Reader, opts *MonitorReaderOptions) *MonitoredReader {
-	timeNow := time.Now()
-	b := monitor.track(opts.Bucket, opts.Object, timeNow)
 	return &MonitoredReader{
 		opts:              opts,
-		bucketMeasurement: b,
+		bucketMeasurement: monitor.track(opts.Bucket, opts.Object),
 		reader:            reader,
-		lastStop:          timeNow,
 		throttle:          monitor.throttleBandwidth(ctx, opts.Bucket, opts.BandwidthBytesPerSec, opts.ClusterBandwidth),
 		monitor:           monitor,
 	}
@@ -67,19 +62,19 @@ func (m *MonitoredReader) Read(p []byte) (n int, err error) {
 	p = p[:m.throttle.GetLimitForBytes(int64(len(p)))]
 
 	n, err = m.reader.Read(p)
-	stop := time.Now()
-	update := uint64(n + m.opts.HeaderSize)
+	if err != nil {
+		m.lastErr = err
+	}
 
-	m.bucketMeasurement.incrementBytes(update)
-	m.lastStop = stop
-	unused := len(p) - (n + m.opts.HeaderSize)
+	update := n + m.opts.HeaderSize
+	unused := len(p) - update
+
+	m.bucketMeasurement.incrementBytes(uint64(update))
 	m.opts.HeaderSize = 0 // Set to 0 post first read
 
 	if unused > 0 {
 		m.throttle.ReleaseUnusedBandwidth(int64(unused))
 	}
-	if err != nil {
-		m.lastErr = err
-	}
+
 	return
 }

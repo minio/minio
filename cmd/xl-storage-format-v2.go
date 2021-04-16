@@ -467,6 +467,7 @@ func (x *xlMetaInlineData) replace(key string, value []byte) {
 			plSize += len(foundVal)
 		}
 	}
+
 	// Add one more.
 	if !replaced {
 		keys = append(keys, []byte(key))
@@ -973,6 +974,48 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	return fi, nil
 }
 
+func (z *xlMetaV2) SharedDataDirCountStr(versionID, dataDir string) int {
+	var (
+		uv   uuid.UUID
+		ddir uuid.UUID
+		err  error
+	)
+	if versionID == nullVersionID {
+		versionID = ""
+	}
+	if versionID != "" {
+		uv, err = uuid.Parse(versionID)
+		if err != nil {
+			return 0
+		}
+	}
+	ddir, err = uuid.Parse(dataDir)
+	if err != nil {
+		return 0
+	}
+	return z.SharedDataDirCount(uv, ddir)
+}
+
+func (z *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
+	// v2 object is inlined, if it is skip dataDir share check.
+	if z.data.find(uuid.UUID(versionID).String()) != nil {
+		return 0
+	}
+	var sameDataDirCount int
+	for _, version := range z.Versions {
+		switch version.Type {
+		case ObjectType:
+			if version.ObjectV2.VersionID == versionID {
+				continue
+			}
+			if version.ObjectV2.DataDir == dataDir {
+				sameDataDirCount++
+			}
+		}
+	}
+	return sameDataDirCount
+}
+
 // DeleteVersion deletes the version specified by version id.
 // returns to the caller which dataDir to delete, also
 // indicates if this is the last version.
@@ -1080,19 +1123,6 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		}
 	}
 
-	findDataDir := func(dataDir [16]byte, versions []xlMetaV2Version) int {
-		var sameDataDirCount int
-		for _, version := range versions {
-			switch version.Type {
-			case ObjectType:
-				if version.ObjectV2.DataDir == dataDir {
-					sameDataDirCount++
-				}
-			}
-		}
-		return sameDataDirCount
-	}
-
 	for i, version := range z.Versions {
 		if !version.Valid() {
 			return "", false, errFileCorrupt
@@ -1105,7 +1135,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
 				}
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
+				if z.SharedDataDirCount(version.ObjectV2.VersionID, version.ObjectV2.DataDir) > 0 {
 					if fi.Deleted {
 						z.Versions = append(z.Versions, ventry)
 					}
@@ -1238,7 +1268,6 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 			fi.IsLatest = true
 			fi.NumVersions = len(orderedVersions)
 			return fi, err
-
 		}
 		return FileInfo{}, errFileNotFound
 	}

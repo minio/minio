@@ -99,7 +99,7 @@ func (s3 ssec) UnsealObjectKey(h http.Header, metadata map[string]string, bucket
 	if err != nil {
 		return
 	}
-	return unsealObjectKey(clientKey, metadata, bucket, object)
+	return unsealObjectKey(clientKey[:], metadata, bucket, object)
 }
 
 // CreateMetadata encodes the sealed key into the metadata

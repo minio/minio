@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
@@ -1260,18 +1261,23 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		return
+	}
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = GlobalKMS.DefaultKeyID()
+		keyID = stat.DefaultKey
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
 	}
 
-	kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1284,7 +1290,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Plaintext, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1297,7 +1303,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 3. Compare generated key with decrypted key
-	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
+	if subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
 		if err != nil {
@@ -1742,36 +1748,39 @@ func fetchKMSStatus() madmin.KMS {
 		kmsStat.Status = "disabled"
 		return kmsStat
 	}
-	keyID := GlobalKMS.DefaultKeyID()
-	kmsInfo := GlobalKMS.Info()
-	if len(kmsInfo.Endpoints) == 0 {
-		kmsStat.Status = "KMS configured using master key"
+
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		kmsStat.Status = string(madmin.ItemOffline)
 		return kmsStat
 	}
-
-	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
+	if len(stat.Endpoints) == 0 {
+		kmsStat.Status = stat.Name
 	} else {
-		kmsStat.Status = string(madmin.ItemOnline)
-
-		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-		// 1. Generate a new key using the KMS.
-		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
-		if err != nil {
-			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+		if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
+			kmsStat.Status = string(madmin.ItemOffline)
 		} else {
-			kmsStat.Encrypt = "success"
-		}
+			kmsStat.Status = string(madmin.ItemOnline)
 
-		// 2. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
-		switch {
-		case err != nil:
-			kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
-			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-		default:
-			kmsStat.Decrypt = "success"
+			kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+			// 1. Generate a new key using the KMS.
+			key, err := GlobalKMS.GenerateKey("", kmsContext)
+			if err != nil {
+				kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+			} else {
+				kmsStat.Encrypt = "success"
+			}
+
+			// 2. Verify that we can indeed decrypt the (encrypted) key
+			decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+			switch {
+			case err != nil:
+				kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+			case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+				kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
+			default:
+				kmsStat.Decrypt = "success"
+			}
 		}
 	}
 	return kmsStat
