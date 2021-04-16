@@ -1,3 +1,21 @@
+/*
+ * MinIO Cloud Storage, (C) 2021 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Contains code that is
+//
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -36,7 +54,10 @@ func (e ErrNeedMoreData) Error() string {
 }
 
 // ReadDir will read the directory from the provided buffer.
-// ErrNeedMoreData may be returned if more data is required to read the file.
+// Regular files that are expected to be decompressable will be returned.
+// ErrNeedMoreData may be returned if more data is required to read the directory.
+// For initial scan at least 64KiB or the entire file if smaller should be given,
+// but more will make it more likely that the entire directory can be read.
 // The total size of the zip file must be provided.
 func ReadDir(buf []byte, zipSize int64) (Files, error) {
 	if len(buf) > int(zipSize) {
@@ -96,7 +117,7 @@ func ReadDir(buf []byte, zipSize int64) (Files, error) {
 }
 
 // Open returns a ReadCloser that provides access to the File's contents.
-// The Reader must be forwarded to f.Offset.
+// The Reader 'r' must be forwarded to f.Offset before being provided.
 func (f *File) Open(r io.Reader) (io.ReadCloser, error) {
 	if err := f.skipToBody(r); err != nil {
 		return nil, err

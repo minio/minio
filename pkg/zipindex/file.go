@@ -1,7 +1,22 @@
+/*
+ * MinIO Cloud Storage, (C) 2021 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package zipindex
 
 import (
-	"encoding/binary"
 	"errors"
 	"io"
 
@@ -22,6 +37,7 @@ type File struct {
 	Method             uint16
 }
 
+// Files is a collection of files.
 type Files []File
 
 const currentVerPlain = 1
@@ -30,62 +46,23 @@ const currentVerCompressed = 2
 var zstdEnc, _ = zstd.NewWriter(nil, zstd.WithWindowSize(128<<10), zstd.WithEncoderConcurrency(2))
 var zstdDec, _ = zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(2))
 
-//msgp:tuple filesAsStructs
-type filesAsStructs struct {
-	Names   []string
-	CSizes  []int64
-	USizes  []int64
-	Offsets []int64
-	Methods []uint16
-	Crcs    []byte
-}
-
+// Serialize the files.
 func (f Files) Serialize() ([]byte, error) {
-	if true {
-		payload, err := f.MarshalMsg(nil)
-		if err != nil {
-			return nil, err
-		}
-		res := make([]byte, 0, len(payload))
-		if len(payload) < 200 {
-			res = append(res, currentVerPlain)
-			return append(res, payload...), nil
-		}
-		res = append(res, currentVerCompressed)
-		return zstdEnc.EncodeAll(payload, res), nil
-	}
-
-	// TODO: Much more efficient on multiple files, but much more complex...
-	x := filesAsStructs{
-		Names:   make([]string, len(f)),
-		CSizes:  make([]int64, len(f)),
-		USizes:  make([]int64, len(f)),
-		Offsets: make([]int64, len(f)),
-		Methods: make([]uint16, len(f)),
-		Crcs:    make([]byte, len(f)*4),
-	}
-	for i, file := range f {
-		x.Names[i] = file.Name
-		x.CSizes[i] = int64(file.CompressedSize64)
-		x.USizes[i] = int64(file.UncompressedSize64) - x.CSizes[i]
-		if i > 0 {
-			// Try to predict offset
-			file.Offset -= f[i-1].Offset + int64(f[i-1].UncompressedSize64) + fileHeaderLen + int64(len(f[i-1].Name)+dataDescriptorLen)
-			file.Method ^= f[i-1].Method
-		}
-		x.Offsets[i] = file.Offset
-		x.Methods[i] = file.Method
-		binary.LittleEndian.PutUint32(x.Crcs[i*4:], file.CRC32)
-	}
-	payload, err := x.MarshalMsg(nil)
+	payload, err := f.MarshalMsg(nil)
 	if err != nil {
 		return nil, err
 	}
 	res := make([]byte, 0, len(payload))
+	if len(payload) < 200 {
+		res = append(res, currentVerPlain)
+		return append(res, payload...), nil
+	}
 	res = append(res, currentVerCompressed)
 	return zstdEnc.EncodeAll(payload, res), nil
 }
 
+// Find the file with the provided name.
+// Search is linear.
 func (f Files) Find(name string) *File {
 	for _, file := range f {
 		if file.Name == name {
@@ -95,6 +72,7 @@ func (f Files) Find(name string) *File {
 	return nil
 }
 
+// unpackPayload unpacks and optionally decompresses the payload.
 func unpackPayload(b []byte) ([]byte, error) {
 	if len(b) < 1 {
 		return nil, io.ErrUnexpectedEOF
@@ -114,6 +92,7 @@ func unpackPayload(b []byte) ([]byte, error) {
 	return b, nil
 }
 
+// DeserializeFiles will de-serialize the files.
 func DeserializeFiles(b []byte) (Files, error) {
 	b, err := unpackPayload(b)
 	if err != nil {
@@ -124,6 +103,8 @@ func DeserializeFiles(b []byte) (Files, error) {
 	return dst, err
 }
 
+// FindSerialized will locate a file by name and return it.
+// Returns nil, io.EOF if not found.
 func FindSerialized(b []byte, name string) (*File, error) {
 	buf, err := unpackPayload(b)
 	if err != nil {
