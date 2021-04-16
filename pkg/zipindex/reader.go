@@ -373,46 +373,6 @@ parseExtras:
 	return nil
 }
 
-func readDataDescriptor(r io.Reader, f *File) error {
-	var buf [dataDescriptorLen]byte
-
-	// The spec says: "Although not originally assigned a
-	// signature, the value 0x08074b50 has commonly been adopted
-	// as a signature value for the data descriptor record.
-	// Implementers should be aware that ZIP files may be
-	// encountered with or without this signature marking data
-	// descriptors and should account for either case when reading
-	// ZIP files to ensure compatibility."
-	//
-	// dataDescriptorLen includes the size of the signature but
-	// first read just those 4 bytes to see if it exists.
-	if _, err := io.ReadFull(r, buf[:4]); err != nil {
-		return err
-	}
-	off := 0
-	maybeSig := readBuf(buf[:4])
-	if maybeSig.uint32() != dataDescriptorSignature {
-		// No data descriptor signature. Keep these four
-		// bytes.
-		off += 4
-	}
-	if _, err := io.ReadFull(r, buf[off:12]); err != nil {
-		return err
-	}
-	b := readBuf(buf[:12])
-	if b.uint32() != f.CRC32 {
-		return ErrChecksum
-	}
-
-	// The two sizes that follow here can be either 32 bits or 64 bits
-	// but the spec is not very clear on this and different
-	// interpretations has been made causing incompatibilities. We
-	// already have the sizes from the central directory so we can
-	// just ignore these.
-
-	return nil
-}
-
 func readDirectoryEnd(buf []byte, size int64) (dir *directoryEnd, err error) {
 	// look for directoryEndSignature in the last 1k, then in the last 65k
 	offset := findSignatureInBlock(buf)

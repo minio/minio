@@ -36,17 +36,13 @@ const (
 const (
 	fileHeaderSignature      = 0x04034b50
 	directoryHeaderSignature = 0x02014b50
-	directoryEndSignature    = 0x06054b50
 	directory64LocSignature  = 0x07064b50
 	directory64EndSignature  = 0x06064b50
-	dataDescriptorSignature  = 0x08074b50 // de-facto standard; required by OS X Finder
-	fileHeaderLen            = 30         // + filename + extra
-	directoryHeaderLen       = 46         // + filename + extra + comment
-	directoryEndLen          = 22         // + comment
-	dataDescriptorLen        = 16         // four uint32: descriptor signature, crc32, compressed size, size
-	dataDescriptor64Len      = 24         // descriptor with 8 byte sizes
-	directory64LocLen        = 20         //
-	directory64EndLen        = 56         // + extra
+	fileHeaderLen            = 30 // + filename + extra
+	directoryHeaderLen       = 46 // + filename + extra + comment
+	directoryEndLen          = 22 // + comment
+	directory64LocLen        = 20 //
+	directory64EndLen        = 56 // + extra
 
 	// Constants for the first byte in CreatorVersion.
 	creatorFAT    = 0
@@ -56,11 +52,8 @@ const (
 	creatorMacOSX = 19
 
 	// Version numbers.
-	zipVersion20 = 20 // 2.0
-	zipVersion45 = 45 // 4.5 (reads and writes zip64 archives)
 
 	// Limits for non zip64 files.
-	uint16max = (1 << 16) - 1
 	uint32max = (1 << 32) - 1
 
 	// Extra header IDs.
@@ -201,15 +194,6 @@ func (h *fileHeader) Mode() (mode os.FileMode) {
 	return mode
 }
 
-// timeToMsDosTime converts a time.Time to an MS-DOS date and time.
-// The resolution is 2s.
-// See: https://msdn.microsoft.com/en-us/library/ms724274(v=VS.85).aspx
-func timeToMsDosTime(t time.Time) (fDate uint16, fTime uint16) {
-	fDate = uint16(t.Day() + int(t.Month())<<5 + (t.Year()-1980)<<9)
-	fTime = uint16(t.Second()/2 + t.Minute()<<5 + t.Hour()<<11)
-	return
-}
-
 // ModTime returns the modification time in UTC using the legacy
 // ModifiedDate and ModifiedTime fields.
 //
@@ -238,17 +222,17 @@ func msdosModeToFileMode(m uint32) (mode os.FileMode) {
 const (
 	// Unix constants. The specification doesn't mention them,
 	// but these seem to be the values agreed on by tools.
-	s_IFMT   = 0xf000
-	s_IFSOCK = 0xc000
-	s_IFLNK  = 0xa000
-	s_IFREG  = 0x8000
-	s_IFBLK  = 0x6000
-	s_IFDIR  = 0x4000
-	s_IFCHR  = 0x2000
-	s_IFIFO  = 0x1000
-	s_ISUID  = 0x800
-	s_ISGID  = 0x400
-	s_ISVTX  = 0x200
+	sIfmt   = 0xf000
+	sIfsock = 0xc000
+	sIflnk  = 0xa000
+	sIfreg  = 0x8000
+	sIfblk  = 0x6000
+	sIfdir  = 0x4000
+	sIfchr  = 0x2000
+	sIfifo  = 0x1000
+	sIsuid  = 0x800
+	sIsgid  = 0x400
+	sIsvtx  = 0x200
 
 	msdosDir      = 0x10
 	msdosReadOnly = 0x01
@@ -256,29 +240,29 @@ const (
 
 func unixModeToFileMode(m uint32) os.FileMode {
 	mode := os.FileMode(m & 0777)
-	switch m & s_IFMT {
-	case s_IFBLK:
+	switch m & sIfmt {
+	case sIfblk:
 		mode |= os.ModeDevice
-	case s_IFCHR:
+	case sIfchr:
 		mode |= os.ModeDevice | os.ModeCharDevice
-	case s_IFDIR:
+	case sIfdir:
 		mode |= os.ModeDir
-	case s_IFIFO:
+	case sIfifo:
 		mode |= os.ModeNamedPipe
-	case s_IFLNK:
+	case sIflnk:
 		mode |= os.ModeSymlink
-	case s_IFREG:
+	case sIfreg:
 		// nothing to do
-	case s_IFSOCK:
+	case sIfsock:
 		mode |= os.ModeSocket
 	}
-	if m&s_ISGID != 0 {
+	if m&sIsgid != 0 {
 		mode |= os.ModeSetgid
 	}
-	if m&s_ISUID != 0 {
+	if m&sIsuid != 0 {
 		mode |= os.ModeSetuid
 	}
-	if m&s_ISVTX != 0 {
+	if m&sIsvtx != 0 {
 		mode |= os.ModeSticky
 	}
 	return mode
