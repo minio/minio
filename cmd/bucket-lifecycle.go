@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	miniogo "github.com/minio/minio-go/v7"
@@ -71,11 +72,16 @@ type expiryTask struct {
 }
 
 type expiryState struct {
+	once     sync.Once
 	expiryCh chan expiryTask
 }
 
 func (es *expiryState) queueExpiryTask(oi ObjectInfo, rmVersion bool) {
 	select {
+	case <-GlobalContext.Done():
+		es.once.Do(func() {
+			close(es.expiryCh)
+		})
 	case es.expiryCh <- expiryTask{objInfo: oi, versionExpiry: rmVersion}:
 	default:
 	}
@@ -86,14 +92,9 @@ var (
 )
 
 func newExpiryState() *expiryState {
-	es := &expiryState{
+	return &expiryState{
 		expiryCh: make(chan expiryTask, 10000),
 	}
-	go func() {
-		<-GlobalContext.Done()
-		close(es.expiryCh)
-	}()
-	return es
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
@@ -106,12 +107,17 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 }
 
 type transitionState struct {
+	once sync.Once
 	// add future metrics here
 	transitionCh chan ObjectInfo
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
 	select {
+	case <-GlobalContext.Done():
+		t.once.Do(func() {
+			close(t.transitionCh)
+		})
 	case t.transitionCh <- oi:
 	default:
 	}
@@ -123,19 +129,13 @@ var (
 )
 
 func newTransitionState() *transitionState {
-
 	// fix minimum concurrent transition to 1 for single CPU setup
 	if globalTransitionConcurrent == 0 {
 		globalTransitionConcurrent = 1
 	}
-	ts := &transitionState{
+	return &transitionState{
 		transitionCh: make(chan ObjectInfo, 10000),
 	}
-	go func() {
-		<-GlobalContext.Done()
-		close(ts.transitionCh)
-	}()
-	return ts
 }
 
 // addWorker creates a new worker to process tasks
