@@ -290,8 +290,15 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	ecOrg := parityBlocks
 	for _, disk := range onlineDisks {
+		if parityBlocks >= len(onlineDisks)/2 {
+			break
+		}
+		if disk == nil {
+			parityBlocks++
+			continue
+		}
 		di, err := disk.DiskInfo(ctx)
-		if (err != nil || di.ID == "") && parityBlocks < len(onlineDisks)/2 {
+		if err != nil || di.ID == "" {
 			parityBlocks++
 		}
 	}
