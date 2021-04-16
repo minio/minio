@@ -47,7 +47,6 @@ const (
 	dataUsageUpdateDirCycles      = 16               // Visit all folders every n cycles.
 	dataScannerCompactAtFolders   = 1000             // Compact when this many subfolders.
 	dataScannerCompactLeastObject = 1000             // Compact when there is less than this many objects.
-	dataScannerCompactAtObjects   = 10000            // Compact when this many objects in subfolders.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
@@ -259,7 +258,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	default:
 	}
 	root := dataUsageEntry{}
-	folder := cachedFolder{name: cache.Info.Name, objectHealProbDiv: 1}
+	folder := cachedFolder{name: cache.Info.Name, objectHealProbDiv: 1, anyParentCompacted: false}
 	err := s.scanFolder(ctx, folder, &root)
 	if err != nil {
 		// No useful information...
@@ -355,7 +354,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				h := hashPath(entName)
 				_, exists := f.oldCache.Cache[h.Key()]
 
-				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
+				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv, anyParentCompacted: folder.anyParentCompacted}
 				delete(abandonedChildren, h.Key()) // h.Key() already accounted for.
 				if exists {
 					existingFolders = append(existingFolders, this)
@@ -636,17 +635,16 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
 					Recursive: true,
 					Remove:    healDeleteDangling,
-				},
-					func(bucket, object, versionID string) error {
-						// Wait for each heal as per scanner frequency.
-						wait()
-						wait = scannerSleeper.Timer(ctx)
-						return bgSeq.queueHealTask(healSource{
-							bucket:    bucket,
-							object:    object,
-							versionID: versionID,
-						}, madmin.HealItemObject)
-					})
+				}, func(bucket, object, versionID string) error {
+					// Wait for each heal as per scanner frequency.
+					wait()
+					wait = scannerSleeper.Timer(ctx)
+					return bgSeq.queueHealTask(healSource{
+						bucket:    bucket,
+						object:    object,
+						versionID: versionID,
+					}, madmin.HealItemObject)
+				})
 			}
 
 			wait()
@@ -655,7 +653,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
 				into.addChild(hashPath(k))
-				// TODO: Scan
+				// FIXME: Scan
 				existingFolders = append(existingFolders, this)
 			}
 		}
