@@ -1729,7 +1729,14 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 
 	// Handle policy mapping removal
 	if policyName == "" {
-		if err := sys.store.deleteMappedPolicy(context.Background(), name, userType, isGroup); err != nil && err != errNoSuchPolicy {
+		if sys.usersSysType == LDAPUsersSysType {
+			// Add a fallback removal towards previous content that may come back
+			// as a ghost user due to lack of delete, this change occurred
+			// introduced in PR #11840
+			sys.store.deleteMappedPolicy(context.Background(), name, regularUser, false)
+		}
+		err := sys.store.deleteMappedPolicy(context.Background(), name, userType, isGroup)
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		if !isGroup {
