@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -36,7 +37,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	bandwidth "github.com/minio/minio/pkg/bandwidth"
 	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
@@ -1460,8 +1460,8 @@ func sendEvent(args eventArgs) {
 }
 
 // GetBandwidthReports - gets the bandwidth report from all nodes including self.
-func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) bandwidth.Report {
-	reports := make([]*bandwidth.Report, len(sys.peerClients))
+func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) madmin.BucketBandwidthReport {
+	reports := make([]*madmin.BucketBandwidthReport, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {
@@ -1482,8 +1482,8 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
 	reports = append(reports, globalBucketMonitor.GetReport(bucketBandwidth.SelectBuckets(buckets...)))
-	consolidatedReport := bandwidth.Report{
-		BucketStats: make(map[string]bandwidth.Details),
+	consolidatedReport := madmin.BucketBandwidthReport{
+		BucketStats: make(map[string]madmin.BandwidthDetails),
 	}
 	for _, report := range reports {
 		if report == nil || report.BucketStats == nil {
@@ -1492,7 +1492,7 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		for bucket := range report.BucketStats {
 			d, ok := consolidatedReport.BucketStats[bucket]
 			if !ok {
-				consolidatedReport.BucketStats[bucket] = bandwidth.Details{}
+				consolidatedReport.BucketStats[bucket] = madmin.BandwidthDetails{}
 				d = consolidatedReport.BucketStats[bucket]
 				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
 			}

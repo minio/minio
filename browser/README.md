@@ -1,6 +1,6 @@
 # MinIO File Browser
 
-``MinIO Browser`` provides minimal set of UI to manage buckets and objects on ``minio`` server. ``MinIO Browser`` is written in javascript and released under [Apache 2.0 License](./LICENSE).
+``MinIO Browser`` provides minimal set of UI to manage buckets and objects on ``minio`` server. ``MinIO Browser`` is written in javascript and released under [GNU Affero General Public License 3.0](./LICENSE).
 
 
 ## Installation
