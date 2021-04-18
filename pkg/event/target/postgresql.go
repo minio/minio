@@ -1,55 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-// PostgreSQL Notifier implementation. Two formats, "namespace" and
-// "access" are supported.
+// Copyright (c) 2015-2021 MinIO, Inc.
 //
-// * Namespace format
+// This file is part of MinIO Object Storage stack
 //
-// On each create or update object event in MinIO Object storage
-// server, a row is created or updated in the table in Postgres. On
-// each object removal, the corresponding row is deleted from the
-// table.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// A table with a specific structure (column names, column types, and
-// primary key/uniqueness constraint) is used. The user may set the
-// table name in the configuration. A sample SQL command that creates
-// a table with the required structure is:
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
 //
-//     CREATE TABLE myminio (
-//         key VARCHAR PRIMARY KEY,
-//         value JSONB
-//     );
-//
-// PostgreSQL's "INSERT ... ON CONFLICT ... DO UPDATE ..." feature
-// (UPSERT) is used here, so the minimum version of PostgreSQL
-// required is 9.5.
-//
-// * Access format
-//
-// On each event, a row is appended to the configured table. There is
-// no deletion or modification of existing rows.
-//
-// A different table schema is used for this format. A sample SQL
-// commant that creates a table with the required structure is:
-//
-// CREATE TABLE myminio (
-//     event_time TIMESTAMP WITH TIME ZONE NOT NULL,
-//     event_data JSONB
-// );
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package target
 
