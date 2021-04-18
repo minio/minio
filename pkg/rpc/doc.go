@@ -3,13 +3,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Copyright 2020 MinIO, Inc. All rights reserved.
+// Copyright 2021 MinIO, Inc. All rights reserved.
 // forked from https://github.com/gorilla/rpc/v2
-// modified to be used with MinIO under Apache
-// 2.0 license that can be found in the LICENSE file.
+// modified to be used with MinIO under GNU Affero General
+// Public License 3.0 license that can be found in
+// the LICENSE file.
 
 /*
-Package gorilla/rpc is a foundation for RPC over HTTP services, providing
+Package rpc is a foundation for RPC over HTTP services, providing
 access to the exported methods of an object through HTTP requests.
 
 This package derives from the standard net/rpc package but uses a single HTTP
