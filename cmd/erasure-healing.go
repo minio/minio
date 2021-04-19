@@ -213,13 +213,15 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		return true
 	}
 	if erErr == nil {
-		// If xl.meta was read fine but there may be problem with the part.N files.
-		if IsErr(dataErr, []error{
-			errFileNotFound,
-			errFileVersionNotFound,
-			errFileCorrupt,
-		}...) {
-			return true
+		if meta.TransitionStatus != lifecycle.TransitionComplete {
+			// If xl.meta was read fine but there may be problem with the part.N files.
+			if IsErr(dataErr, []error{
+				errFileNotFound,
+				errFileVersionNotFound,
+				errFileCorrupt,
+			}...) {
+				return true
+			}
 		}
 		if !quorumModTime.Equal(meta.ModTime) {
 			return true
@@ -250,11 +252,13 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
 
-	lk := er.NewNSLock(bucket, object)
-	if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
-		return result, err
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
+			return result, err
+		}
+		defer lk.Unlock()
 	}
-	defer lk.Unlock()
 
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
@@ -331,7 +335,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		// File is fully gone, fileInfo is empty.
 		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 	}
-
 	// If less than read quorum number of disks have all the parts
 	// of the data, we can't reconstruct the erasure-coded data.
 	if numAvailableDisks < result.DataBlocks {
@@ -361,7 +364,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		// Returns a copy of the 'fi' with checksums and parts nil'ed.
 		nfi := fi
 		nfi.Erasure.Checksums = nil
-		nfi.Parts = nil
+		if fi.TransitionStatus != lifecycle.TransitionComplete {
+			nfi.Parts = nil
+		}
 		return nfi
 	}
 
@@ -393,7 +398,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
-	if !latestMeta.Deleted || latestMeta.TransitionStatus != lifecycle.TransitionComplete {
+	if !latestMeta.Deleted && latestMeta.TransitionStatus != lifecycle.TransitionComplete {
 		result.DataBlocks = latestMeta.Erasure.DataBlocks
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
 
@@ -449,6 +454,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			if err != nil {
 				return result, toObjectErr(err, bucket, object)
 			}
+
 			// outDatedDisks that had write errors should not be
 			// written to for remaining parts, so we nil it out.
 			for i, disk := range outDatedDisks {
@@ -482,7 +488,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			if disksToHealCount == 0 {
 				return result, fmt.Errorf("all disks had write errors, unable to heal")
 			}
+
 		}
+
 	}
 
 	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpID, len(storageDisks)/2+1)
@@ -500,8 +508,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			continue
 		}
 
+		dataDir := partsMetadata[i].DataDir
+		if latestMeta.TransitionStatus == lifecycle.TransitionComplete {
+			dataDir = ""
+		}
 		// Attempt a rename now from healed data to final location.
-		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i].DataDir, bucket, object); err != nil {
+		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, dataDir, bucket, object); err != nil {
 			if err != errIsNotRegular && err != errFileNotFound {
 				logger.LogIf(ctx, err)
 			}
@@ -726,7 +738,6 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
-
 	// Check if the object is dangling, if yes and user requested
 	// remove we simply delete it from namespace.
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
