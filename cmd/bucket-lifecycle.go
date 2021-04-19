@@ -465,8 +465,10 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 	return nil
 }
 
-func postOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+// postRestoreOpts returns ObjectOptions with version-id from the POST restore object request for a given bucket and object.
+func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
+	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
 	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
@@ -478,17 +480,17 @@ func postOpts(ctx context.Context, r *http.Request, bucket, object string) (opts
 				VersionID: vid,
 			}
 		}
-		if !versioned {
+		if !versioned && !versionSuspended {
 			return opts, InvalidArgument{
 				Bucket: bucket,
 				Object: object,
-				Err:    fmt.Errorf("VersionID specified %s, but versioning not enabled on  %s", opts.VersionID, bucket),
+				Err:    fmt.Errorf("version-id specified %s but versioning is not enabled on %s", opts.VersionID, bucket),
 			}
 		}
 	}
 	return ObjectOptions{
 		Versioned:        versioned,
-		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+		VersionSuspended: versionSuspended,
 		VersionID:        vid,
 	}, nil
 }
