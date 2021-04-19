@@ -1688,6 +1688,9 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	respElements := extractRespElements(w)
 
 	for i, object := range args.Objects {
+		if contextCanceled(ctx) {
+			return
+		}
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
 			var opts ObjectOptions
@@ -1706,36 +1709,24 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			header := &zip.FileHeader{
-				Name:     strings.TrimPrefix(objectName, args.Prefix),
-				Method:   zip.Deflate,
-				Flags:    1 << 11,
-				Modified: info.ModTime,
+				Name:               strings.TrimPrefix(objectName, args.Prefix),
+				Method:             zip.Deflate,
+				Flags:              1 << 11,
+				Modified:           info.ModTime,
+				UncompressedSize64: uint64(info.Size),
 			}
-			if hasStringSuffixInSlice(info.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, info.ContentType) {
+			if info.Size < 20 || hasStringSuffixInSlice(info.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, info.ContentType) {
 				// We strictly disable compression for standard extensions/content-types.
 				header.Method = zip.Store
 			}
 			writer, err := archive.CreateHeader(header)
 			if err != nil {
-				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			httpWriter := ioutil.WriteOnClose(writer)
 
 			// Write object content to response body
-			if _, err = io.Copy(httpWriter, gr); err != nil {
-				httpWriter.Close()
-				if !httpWriter.HasWritten() { // write error response only if no data or headers has been written to client yet
-					writeWebErrorResponse(w, err)
-				}
+			if _, err = io.Copy(writer, gr); err != nil {
 				return err
-			}
-
-			if err = httpWriter.Close(); err != nil {
-				if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
-					writeWebErrorResponse(w, err)
-					return err
-				}
 			}
 
 			// Notify object accessed via a GET request.
