@@ -1010,6 +1010,50 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusConflict,
 			}
+
+		// Tier admin API errors
+		case errors.Is(err, madmin.ErrTierNameEmpty):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierNameEmpty",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfig):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfig",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfigVersion):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfigVersion",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierTypeUnsupported):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierTypeUnsupported",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errTierBackendInUse):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierBackendInUse",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusConflict,
+			}
+		case errors.Is(err, errTierInsufficientCreds):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientCreds",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errIsTierPermError(err):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientPermissions",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}

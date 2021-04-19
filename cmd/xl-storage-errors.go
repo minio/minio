@@ -24,16 +24,6 @@ import (
 	"syscall"
 )
 
-// Function not implemented error
-func isSysErrNoSys(err error) bool {
-	return errors.Is(err, syscall.ENOSYS)
-}
-
-// Not supported error
-func isSysErrOpNotSupported(err error) bool {
-	return errors.Is(err, syscall.EOPNOTSUPP)
-}
-
 // No space left on device error
 func isSysErrNoSpace(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)

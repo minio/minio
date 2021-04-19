@@ -351,6 +351,9 @@ func handleCommonEnvVars() {
 		os.Unsetenv(config.EnvRootUserOld)
 		os.Unsetenv(config.EnvRootPasswordOld)
 	}
+	if tiers := env.Get("_MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY", ""); tiers != "" {
+		globalDebugRemoteTiersImmediately = strings.Split(tiers, ",")
+	}
 }
 
 func logStartupMessage(msg string) {
