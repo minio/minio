@@ -243,3 +243,338 @@ func (z Files) Msgsize() (s int) {
 	}
 	return
 }
+
+// DecodeMsg implements msgp.Decodable
+func (z *filesAsStructs) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 6 {
+		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
+		return
+	}
+	var zb0002 uint32
+	zb0002, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "Names")
+		return
+	}
+	if cap(z.Names) >= int(zb0002) {
+		z.Names = (z.Names)[:zb0002]
+	} else {
+		z.Names = make([]string, zb0002)
+	}
+	for za0001 := range z.Names {
+		z.Names[za0001], err = dc.ReadString()
+		if err != nil {
+			err = msgp.WrapError(err, "Names", za0001)
+			return
+		}
+	}
+	var zb0003 uint32
+	zb0003, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "CSizes")
+		return
+	}
+	if cap(z.CSizes) >= int(zb0003) {
+		z.CSizes = (z.CSizes)[:zb0003]
+	} else {
+		z.CSizes = make([]int64, zb0003)
+	}
+	for za0002 := range z.CSizes {
+		z.CSizes[za0002], err = dc.ReadInt64()
+		if err != nil {
+			err = msgp.WrapError(err, "CSizes", za0002)
+			return
+		}
+	}
+	var zb0004 uint32
+	zb0004, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "USizes")
+		return
+	}
+	if cap(z.USizes) >= int(zb0004) {
+		z.USizes = (z.USizes)[:zb0004]
+	} else {
+		z.USizes = make([]int64, zb0004)
+	}
+	for za0003 := range z.USizes {
+		z.USizes[za0003], err = dc.ReadInt64()
+		if err != nil {
+			err = msgp.WrapError(err, "USizes", za0003)
+			return
+		}
+	}
+	var zb0005 uint32
+	zb0005, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "Offsets")
+		return
+	}
+	if cap(z.Offsets) >= int(zb0005) {
+		z.Offsets = (z.Offsets)[:zb0005]
+	} else {
+		z.Offsets = make([]int64, zb0005)
+	}
+	for za0004 := range z.Offsets {
+		z.Offsets[za0004], err = dc.ReadInt64()
+		if err != nil {
+			err = msgp.WrapError(err, "Offsets", za0004)
+			return
+		}
+	}
+	var zb0006 uint32
+	zb0006, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "Methods")
+		return
+	}
+	if cap(z.Methods) >= int(zb0006) {
+		z.Methods = (z.Methods)[:zb0006]
+	} else {
+		z.Methods = make([]uint16, zb0006)
+	}
+	for za0005 := range z.Methods {
+		z.Methods[za0005], err = dc.ReadUint16()
+		if err != nil {
+			err = msgp.WrapError(err, "Methods", za0005)
+			return
+		}
+	}
+	z.Crcs, err = dc.ReadBytes(z.Crcs)
+	if err != nil {
+		err = msgp.WrapError(err, "Crcs")
+		return
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *filesAsStructs) EncodeMsg(en *msgp.Writer) (err error) {
+	// array header, size 6
+	err = en.Append(0x96)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Names)))
+	if err != nil {
+		err = msgp.WrapError(err, "Names")
+		return
+	}
+	for za0001 := range z.Names {
+		err = en.WriteString(z.Names[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "Names", za0001)
+			return
+		}
+	}
+	err = en.WriteArrayHeader(uint32(len(z.CSizes)))
+	if err != nil {
+		err = msgp.WrapError(err, "CSizes")
+		return
+	}
+	for za0002 := range z.CSizes {
+		err = en.WriteInt64(z.CSizes[za0002])
+		if err != nil {
+			err = msgp.WrapError(err, "CSizes", za0002)
+			return
+		}
+	}
+	err = en.WriteArrayHeader(uint32(len(z.USizes)))
+	if err != nil {
+		err = msgp.WrapError(err, "USizes")
+		return
+	}
+	for za0003 := range z.USizes {
+		err = en.WriteInt64(z.USizes[za0003])
+		if err != nil {
+			err = msgp.WrapError(err, "USizes", za0003)
+			return
+		}
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Offsets)))
+	if err != nil {
+		err = msgp.WrapError(err, "Offsets")
+		return
+	}
+	for za0004 := range z.Offsets {
+		err = en.WriteInt64(z.Offsets[za0004])
+		if err != nil {
+			err = msgp.WrapError(err, "Offsets", za0004)
+			return
+		}
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Methods)))
+	if err != nil {
+		err = msgp.WrapError(err, "Methods")
+		return
+	}
+	for za0005 := range z.Methods {
+		err = en.WriteUint16(z.Methods[za0005])
+		if err != nil {
+			err = msgp.WrapError(err, "Methods", za0005)
+			return
+		}
+	}
+	err = en.WriteBytes(z.Crcs)
+	if err != nil {
+		err = msgp.WrapError(err, "Crcs")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *filesAsStructs) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// array header, size 6
+	o = append(o, 0x96)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Names)))
+	for za0001 := range z.Names {
+		o = msgp.AppendString(o, z.Names[za0001])
+	}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.CSizes)))
+	for za0002 := range z.CSizes {
+		o = msgp.AppendInt64(o, z.CSizes[za0002])
+	}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.USizes)))
+	for za0003 := range z.USizes {
+		o = msgp.AppendInt64(o, z.USizes[za0003])
+	}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Offsets)))
+	for za0004 := range z.Offsets {
+		o = msgp.AppendInt64(o, z.Offsets[za0004])
+	}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Methods)))
+	for za0005 := range z.Methods {
+		o = msgp.AppendUint16(o, z.Methods[za0005])
+	}
+	o = msgp.AppendBytes(o, z.Crcs)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *filesAsStructs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 6 {
+		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
+		return
+	}
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Names")
+		return
+	}
+	if cap(z.Names) >= int(zb0002) {
+		z.Names = (z.Names)[:zb0002]
+	} else {
+		z.Names = make([]string, zb0002)
+	}
+	for za0001 := range z.Names {
+		z.Names[za0001], bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Names", za0001)
+			return
+		}
+	}
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "CSizes")
+		return
+	}
+	if cap(z.CSizes) >= int(zb0003) {
+		z.CSizes = (z.CSizes)[:zb0003]
+	} else {
+		z.CSizes = make([]int64, zb0003)
+	}
+	for za0002 := range z.CSizes {
+		z.CSizes[za0002], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "CSizes", za0002)
+			return
+		}
+	}
+	var zb0004 uint32
+	zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "USizes")
+		return
+	}
+	if cap(z.USizes) >= int(zb0004) {
+		z.USizes = (z.USizes)[:zb0004]
+	} else {
+		z.USizes = make([]int64, zb0004)
+	}
+	for za0003 := range z.USizes {
+		z.USizes[za0003], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "USizes", za0003)
+			return
+		}
+	}
+	var zb0005 uint32
+	zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Offsets")
+		return
+	}
+	if cap(z.Offsets) >= int(zb0005) {
+		z.Offsets = (z.Offsets)[:zb0005]
+	} else {
+		z.Offsets = make([]int64, zb0005)
+	}
+	for za0004 := range z.Offsets {
+		z.Offsets[za0004], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Offsets", za0004)
+			return
+		}
+	}
+	var zb0006 uint32
+	zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Methods")
+		return
+	}
+	if cap(z.Methods) >= int(zb0006) {
+		z.Methods = (z.Methods)[:zb0006]
+	} else {
+		z.Methods = make([]uint16, zb0006)
+	}
+	for za0005 := range z.Methods {
+		z.Methods[za0005], bts, err = msgp.ReadUint16Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Methods", za0005)
+			return
+		}
+	}
+	z.Crcs, bts, err = msgp.ReadBytesBytes(bts, z.Crcs)
+	if err != nil {
+		err = msgp.WrapError(err, "Crcs")
+		return
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *filesAsStructs) Msgsize() (s int) {
+	s = 1 + msgp.ArrayHeaderSize
+	for za0001 := range z.Names {
+		s += msgp.StringPrefixSize + len(z.Names[za0001])
+	}
+	s += msgp.ArrayHeaderSize + (len(z.CSizes) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.USizes) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.Offsets) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.Methods) * (msgp.Uint16Size)) + msgp.BytesPrefixSize + len(z.Crcs)
+	return
+}

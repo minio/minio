@@ -18,6 +18,7 @@ package zipindex
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"path/filepath"
 	"testing"
@@ -72,11 +73,24 @@ func TestReadDir(t *testing.T) {
 				}
 				return
 			}
-			// Truncate a bit from the start...
-			files, err := ReadDir(input[10:], int64(len(input)))
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
+			sz := 8 << 10
+			if sz > len(input) {
+				// Truncate a bit from the start...
+				sz = len(input) - 10
+			}
+			var files Files
+			for {
+				files, err = ReadDir(input[len(input)-sz:], int64(len(input)))
+				if err == nil {
+					break
+				}
+				var more ErrNeedMoreData
+				if !errors.As(err, &more) {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				t.Logf("wanted more: %d bytes from end...", more.FromEnd)
+				sz = int(more.FromEnd)
 			}
 			ser, err := files.Serialize()
 			if err != nil {
@@ -93,23 +107,23 @@ func TestReadDir(t *testing.T) {
 					if files.Find(file.Name) != nil {
 						t.Errorf("found non-regular file %v", file.Name)
 					}
-					return
+					continue
 				}
 				gotFile := files.Find(file.Name)
 				if gotFile == nil {
 					t.Errorf(" could not find regular file %v", file.Name)
-					return
+					continue
 				}
 				if f, err := FindSerialized(ser, file.Name); err != nil || f == nil {
 					t.Errorf(" could not find regular file %v, err: %v, file: %v", file.Name, err, f)
-					return
+					continue
 				}
 
 				wantRC, wantErr := file.Open()
 				rc, err := gotFile.Open(bytes.NewReader(input[gotFile.Offset:]))
 				if err != nil {
 					if wantErr != nil {
-						return
+						continue
 					}
 					t.Error("got error:", err)
 					return
@@ -123,7 +137,7 @@ func TestReadDir(t *testing.T) {
 				gotData, err := io.ReadAll(rc)
 				if err != nil {
 					if err != wantErr {
-						return
+						continue
 					}
 					t.Error("got error:", err)
 					return
