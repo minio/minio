@@ -43,6 +43,7 @@ const (
 	directoryEndLen          = 22 // + comment
 	directory64LocLen        = 20 //
 	directory64EndLen        = 56 // + extra
+	dataDescriptorLen        = 16
 
 	// Constants for the first byte in CreatorVersion.
 	creatorFAT    = 0
