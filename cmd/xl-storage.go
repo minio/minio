@@ -845,37 +845,28 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if err != nil {
 		return err
 	}
-
-	// transitioned objects maintains metadata on the source cluster. When transition
-	// status is set, update the metadata to disk.
-	if !lastVersion || fi.TransitionStatus != "" {
-		// when data-dir is specified. Transition leverages existing DeleteObject
-		// api call to mark object as deleted. When object is pending transition,
-		// just update the metadata and avoid deleting data dir.
-		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-			versionID := fi.VersionID
-			if versionID == "" {
-				versionID = nullVersionID
-			}
-			xlMeta.data.remove(versionID)
-			// PR #11758 used DataDir, preserve it
-			// for users who might have used master
-			// branch
-			xlMeta.data.remove(dataDir)
-
-			filePath := pathJoin(volumeDir, path, dataDir)
-			if err = checkPathLength(filePath); err != nil {
-				return err
-			}
-
-			tmpuuid := mustGetUUID()
-			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-				if err != errFileNotFound {
-					return err
-				}
-			}
+	if dataDir != "" {
+		versionID := fi.VersionID
+		if versionID == "" {
+			versionID = nullVersionID
+		}
+		xlMeta.data.remove(versionID)
+		// PR #11758 used DataDir, preserve it
+		// for users who might have used master
+		// branch
+		xlMeta.data.remove(dataDir)
+		filePath := pathJoin(volumeDir, path, dataDir)
+		if err = checkPathLength(filePath); err != nil {
+			return err
 		}
 
+		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
+			if err != errFileNotFound {
+				return err
+			}
+		}
+	}
+	if !lastVersion {
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			return err
@@ -1867,7 +1858,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	var srcDataPath string
 	var dstDataPath string
 	dataDir := retainSlash(fi.DataDir)
-	if dataDir != "" {
+	// no need to rename dataDir paths for objects that are in transitionComplete state.
+	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionComplete {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
 		// it would additionally add `/` at the end and it comes in the

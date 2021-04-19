@@ -115,6 +115,10 @@ type ObjectInfo struct {
 
 	// TransitionStatus indicates if transition is complete/pending
 	TransitionStatus string
+	// Name of transitioned object on remote tier
+	transitionedObjName string
+	// Name of remote tier object has transitioned to
+	TransitionTier string
 
 	// RestoreExpires indicates date a restored object expires
 	RestoreExpires time.Time
