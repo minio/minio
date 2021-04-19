@@ -27,7 +27,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/dns"
@@ -254,7 +254,7 @@ var (
 	globalCompressConfig   compress.Config
 
 	// Some standard object extensions which we strictly dis-allow for compression.
-	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
+	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov", ".jpg", ".png", ".gif"}
 
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
