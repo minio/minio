@@ -944,6 +944,62 @@ function test_multipart_upload_10() {
     return $rv
 }
 
+# Tests lifecycle of a bucket.
+function test_bucket_lifecycle() {
+    # log start time
+    start_time=$(get_time)
+
+    echo "{ \"Rules\": [ { \"Expiration\": { \"Days\": 365 },\"ID\": \"Bucketlifecycle test\", \"Filter\": { \"Prefix\": \"\" }, \"Status\": \"Enabled\" } ] }" >> /tmp/lifecycle.json
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds put bucket lifecycle
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-bucket-lifecycle-configuration --bucket ${bucket_name} --lifecycle-configuration file:///tmp/lifecycle.json"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if put bucket lifecycle succeeds get bucket lifecycle
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-bucket-lifecycle-configuration --bucket ${bucket_name}"
+        out=$($function 2>&1)
+        rv=$?
+    fi
+
+    # if get bucket lifecycle succeeds delete bucket lifecycle
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-bucket-lifecycle --bucket ${bucket_name}"
+        out=$($function 2>&1)
+        rv=$?
+    fi
+
+    # delete lifecycle.json
+    rm -f /tmp/lifecycle.json
+
+    # delete bucket
+    if [ $rv -eq 0 ]; then
+        function="delete_bucket"
+        out=$(delete_bucket "$bucket_name")
+        rv=$?
+    fi
+
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "test_bucket_lifecycle"
+    else
+        # clean up and log error
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
 # Tests `aws s3 cp` by uploading a local file.
 function test_aws_s3_cp() {
     file_name="${MINT_DATA_DIR}/datafile-65-MB"
@@ -1706,6 +1762,7 @@ main() {
     test_presigned_object && \
     test_upload_object_10 && \
     test_multipart_upload_10 && \
+    test_bucket_lifecycle && \
     test_serverside_encryption && \
     test_serverside_encryption_get_range && \
     test_serverside_encryption_multipart && \
