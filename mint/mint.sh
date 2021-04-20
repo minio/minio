@@ -21,6 +21,7 @@ MINT_MODE=${MINT_MODE:-core}
 SERVER_REGION=${SERVER_REGION:-us-east-1}
 ENABLE_HTTPS=${ENABLE_HTTPS:-0}
 ENABLE_VIRTUAL_STYLE=${ENABLE_VIRTUAL_STYLE:-0}
+RUN_ON_FAIL=${RUN_ON_FAIL:-0}
 GO111MODULE=on
 
 if [ -z "$SERVER_ENDPOINT" ]; then
@@ -136,6 +137,7 @@ function main()
     export ENABLE_HTTPS
     export SERVER_REGION
     export ENABLE_VIRTUAL_STYLE
+    export RUN_ON_FAIL
     export GO111MODULE
 
     echo "Running with"
@@ -147,6 +149,7 @@ function main()
     echo "MINT_DATA_DIR:        $MINT_DATA_DIR"
     echo "MINT_MODE:            $MINT_MODE"
     echo "ENABLE_VIRTUAL_STYLE: $ENABLE_VIRTUAL_STYLE"
+    echo "RUN_ON_FAIL:          $RUN_ON_FAIL"
     echo
     echo "To get logs, run 'docker cp ${CONTAINER_ID}:/mint/log /tmp/mint-logs'"
     echo
