@@ -90,6 +90,34 @@ func testLockingRetentionGovernance() {
 		uploads[i].versionId = *output.VersionId
 	}
 
+	// Change RetainUntilDate
+	retentionUntil := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	putRetentionInput := &s3.PutObjectRetentionInput{
+		Bucket:    aws.String(bucket),
+		Key:       aws.String(object),
+		VersionId: &uploads[1].versionId,
+		Retention: &s3.ObjectLockRetention{
+			Mode:            aws.String(uploads[1].retention),
+			RetainUntilDate: aws.Time(retentionUntil),
+		},
+	}
+	_, err = s3Client.PutObjectRetention(putRetentionInput)
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("PutObjectRetention expected to succeed but got %v", err), err).Fatal()
+		return
+	}
+
+	getRetentionInput := &s3.GetObjectRetentionInput{
+		Bucket:    aws.String(bucket),
+		Key:       aws.String(object),
+		VersionId: aws.String(uploads[1].versionId),
+	}
+	retentionOutput, err := s3Client.GetObjectRetention(getRetentionInput)
+	if err != nil || retentionOutput.Retention.RetainUntilDate.String() != retentionUntil.String() {
+		failureLog(function, args, startTime, "", fmt.Sprintf("GetObjectRetention expected to succeed but got %v", err), err).Fatal()
+		return
+	}
+
 	// In all cases, we can remove an object by creating a delete marker
 	// First delete without version ID
 	deleteInput := &s3.DeleteObjectInput{
