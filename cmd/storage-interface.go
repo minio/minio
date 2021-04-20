@@ -57,7 +57,7 @@ type StorageAPI interface {
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
-	RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error
+	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error
 
 	// File operations.
 	ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error)

@@ -282,37 +282,6 @@ func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Tim
 	return findFileInfoInQuorum(ctx, metaArr, modTime, quorum)
 }
 
-// Rename metadata content to destination location for each disk concurrently.
-func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) ([]StorageAPI, error) {
-	ignoredErr := []error{errFileNotFound}
-
-	g := errgroup.WithNErrs(len(disks))
-
-	// Rename file on all underlying storage disks.
-	for index := range disks {
-		index := index
-		g.Go(func() error {
-			if disks[index] == nil {
-				return errDiskNotFound
-			}
-			if err := disks[index].RenameData(ctx, srcBucket, srcEntry, "", dstBucket, dstEntry); err != nil {
-				if !IsErrIgnored(err, ignoredErr...) {
-					return err
-				}
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all renames to finish.
-	errs := g.Wait()
-
-	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
-	// otherwise return failure. Cleanup successful renames.
-	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum)
-	return evalDisks(disks, errs), err
-}
-
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.
 func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))

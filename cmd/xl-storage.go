@@ -1503,6 +1503,8 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	defer func() {
 		if err != nil {
 			if volume == minioMetaTmpBucket {
+				// only cleanup parent path if the
+				// parent volume name is minioMetaTmpBucket
 				removeAll(parentFilePath)
 			}
 		}
@@ -1522,7 +1524,9 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 			return osErrToFileErr(err)
 		}
 
-		if written > fileSize {
+		if written < fileSize {
+			return errLessData
+		} else if written > fileSize {
 			return errMoreData
 		}
 
@@ -1818,7 +1822,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
-func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	defer func() {
 		if err == nil {
 			if s.globalSync {
@@ -1861,6 +1865,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 	var srcDataPath string
 	var dstDataPath string
+	dataDir := retainSlash(fi.DataDir)
 	if dataDir != "" {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
@@ -1874,17 +1879,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	}
 
 	if err = checkPathLength(dstFilePath); err != nil {
-		return err
-	}
-
-	srcBuf, err := xioutil.ReadFile(srcFilePath)
-	if err != nil {
-		return osErrToFileErr(err)
-	}
-
-	fi, err := getFileInfo(srcBuf, dstVolume, dstPath, "", true)
-	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 
@@ -2058,11 +2052,13 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 		// Commit meta-file
 		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+			logger.LogIf(ctx, err)
 			return osErrToFileErr(err)
 		}
 	} else {
 		// Write meta-file directly, no data
 		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
 	}

@@ -1231,6 +1231,7 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return FileInfo{}, errFileVersionNotFound
 		}
 	}

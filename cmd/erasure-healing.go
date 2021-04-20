@@ -359,6 +359,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	cleanFileInfo := func(fi FileInfo) FileInfo {
 		// Returns a copy of the 'fi' with checksums and parts nil'ed.
 		nfi := fi
+		nfi.Erasure.Index = 0
 		nfi.Erasure.Checksums = nil
 		nfi.Parts = nil
 		return nfi
@@ -486,24 +487,18 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpID, len(storageDisks)/2+1)
 
-	// Generate and write `xl.meta` generated from other disks.
-	outDatedDisks, err = writeUniqueFileInfo(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
-		partsMetadata, diskCount(outDatedDisks))
-	if err != nil {
-		return result, toObjectErr(err, bucket, object, versionID)
-	}
-
 	// Rename from tmp location to the actual location.
 	for i, disk := range outDatedDisks {
 		if disk == OfflineDisk {
 			continue
 		}
 
+		// record the index of the updated disks
+		partsMetadata[i].Erasure.Index = i + 1
+
 		// Attempt a rename now from healed data to final location.
-		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i].DataDir, bucket, object); err != nil {
-			if err != errIsNotRegular && err != errFileNotFound {
-				logger.LogIf(ctx, err)
-			}
+		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
+			logger.LogIf(ctx, err)
 			return result, toObjectErr(err, bucket, object)
 		}
 
