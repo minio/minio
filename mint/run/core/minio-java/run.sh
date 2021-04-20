@@ -31,4 +31,4 @@ if [ "$ENABLE_HTTPS" -eq 1 ]; then
 fi
 
 java -Xmx4096m -Xms256m -cp "/mint/run/core/minio-java/*:." FunctionalTest \
-    "$endpoint" "$ACCESS_KEY" "$SECRET_KEY" "$SERVER_REGION" 1>>"$output_log_file" 2>"$error_log_file"
+    "$endpoint" "$ACCESS_KEY" "$SECRET_KEY" "$SERVER_REGION" "$RUN_ON_FAIL" 1>>"$output_log_file" 2>"$error_log_file"
