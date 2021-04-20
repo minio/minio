@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
@@ -32,11 +33,18 @@ func BenchmarkFindSerialized(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			b.Log("Serialized size:", len(ser))
+			//b.Log("Serialized size:", len(ser))
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				FindSerialized(ser, files[rng.Intn(n)].Name)
+				get := rng.Intn(n)
+				f, err := FindSerialized(ser, files[get].Name)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if !reflect.DeepEqual(*f, files[get]) {
+					b.Fatalf("%+v != %+v", *f, files[get])
+				}
 			}
 		})
 	}

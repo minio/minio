@@ -115,7 +115,7 @@ func TestReadDir(t *testing.T) {
 					continue
 				}
 				if f, err := FindSerialized(ser, file.Name); err != nil || f == nil {
-					t.Errorf(" could not find regular file %v, err: %v, file: %v", file.Name, err, f)
+					t.Errorf("FindSerialized: could not find regular file %v, err: %v, file: %v", file.Name, err, f)
 					continue
 				}
 

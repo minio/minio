@@ -19,6 +19,7 @@ package zipindex
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
@@ -179,6 +180,9 @@ func DeserializeFiles(b []byte) (Files, error) {
 }
 
 // FindSerialized will locate a file by name and return it.
+// This will be less resource intensive than decoding all files,
+// if only one it requested.
+// Expected speed scales O(n) for n files.
 // Returns nil, io.EOF if not found.
 func FindSerialized(b []byte, name string) (*File, error) {
 	buf, structs, err := unpackPayload(b)
@@ -202,63 +206,131 @@ func FindSerialized(b []byte, name string) (*File, error) {
 		}
 		return nil, io.EOF
 	}
+
 	// Files are packed as an array of arrays...
 	idx := -1
 	var zb0001 uint32
 	bts := buf
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err)
+		err = msgp.WrapError(err, "Files")
 		return nil, err
 	}
 	if zb0001 != 6 {
 		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
 		return nil, err
 	}
-	var zb0002 uint32
-	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	var nFiles uint32
+	nFiles, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Names")
 		return nil, err
 	}
-	for i := 0; i < int(zb0002); i++ {
+
+	// We accumulate values needed for cur as we parse...
+	var cur File
+	for i := 0; i < int(nFiles); i++ {
 		var got []byte
 		got, bts, err = msgp.ReadBytesZC(bts)
 		if err != nil {
-			err = msgp.WrapError(err, "Names")
+			err = msgp.WrapError(err, "Names-Field")
 			return nil, err
+		}
+		if idx >= 0 {
+			continue
 		}
 		if string(got) == name {
 			idx = i
-			break
+			continue
 		}
+		// Names add to offset...
+		cur.Offset += int64(len(got))
 	}
 	if idx < 0 {
 		return nil, io.EOF
 	}
 
-	var dst filesAsStructs
-	if _, err = dst.UnmarshalMsg(buf); err != nil {
-		return nil, err
-	}
-	var cur, prev File
-	for i := range dst.Names {
-		cur = File{
-			CompressedSize64: uint64(dst.CSizes[i] + int64(cur.CompressedSize64)),
-			CRC32:            binary.LittleEndian.Uint32(dst.Crcs[i*4:]),
-			Method:           dst.Methods[i] ^ cur.Method,
+	cur.Name = name
+	for field := 0; field < 5; field++ {
+		// CRC is just a single array.
+		if field == 4 {
+			var Crcs []byte
+			Crcs, bts, err = msgp.ReadBytesZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Crcs")
+				return nil, err
+			}
+			if len(Crcs) != int(nFiles*4) {
+				return nil, fmt.Errorf("CRC field too short, want %d, got %d", int(nFiles*4), len(Crcs))
+			}
+			cur.CRC32 = binary.LittleEndian.Uint32(Crcs[idx*4:])
+			continue
 		}
-		cur.UncompressedSize64 = uint64(dst.USizes[i] + int64(cur.CompressedSize64))
-		if i == 0 {
-			cur.Offset = dst.Offsets[i]
-		} else {
-			cur.Offset = dst.Offsets[i] + prev.Offset + int64(prev.CompressedSize64) + fileHeaderLen + int64(len(prev.Name)) + dataDescriptorLen
+
+		var elems uint32
+		elems, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, fmt.Sprintf("field-%d", field))
+			return nil, err
 		}
-		prev = cur
-		if i == idx {
-			cur.Name = string(dst.Names[i])
-			// We have what we want...
-			break
+		if elems != nFiles {
+			return nil, fmt.Errorf("unexpected array size, got %d, want %d", elems, nFiles)
+		}
+
+		for i := 0; i < int(nFiles); i++ {
+			var val64 int64
+			switch field {
+			case 0: // CSizes []int64
+				val64, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CSizes")
+					return nil, err
+				}
+				if i > idx {
+					continue
+				}
+				// Compressed size adds to offset
+				cur.Offset += val64
+				cur.CompressedSize64 = uint64(int64(cur.CompressedSize64) + val64)
+			case 1: // USizes []int64
+				val64, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "USizes")
+					return nil, err
+				}
+				if i > idx {
+					continue
+				}
+				cur.UncompressedSize64 = uint64(int64(cur.CompressedSize64) + val64)
+			case 2: // Offsets []int64
+				val64, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets")
+					return nil, err
+				}
+				if i > idx {
+					continue
+				}
+				// Offset adds to offset
+				cur.Offset += val64
+				if i > 0 {
+					// Add constants...
+					cur.Offset += fileHeaderLen + dataDescriptorLen
+				}
+			case 3: // Methods []uint16
+				var val16 uint16
+				val16, bts, err = msgp.ReadUint16Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Methods")
+					return nil, err
+				}
+				if i > idx {
+					continue
+				}
+				cur.Method ^= val16
+			default:
+				panic("internal error, unexpected field")
+			}
 		}
 	}
 	return &cur, nil
