@@ -191,11 +191,11 @@ func (d *naughtyDisk) AppendFile(ctx context.Context, volume string, path string
 	return d.disk.AppendFile(ctx, volume, path, buf)
 }
 
-func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
+func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.RenameData(ctx, srcVolume, srcPath, dataDir, dstVolume, dstPath)
+	return d.disk.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath)
 }
 
 func (d *naughtyDisk) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {

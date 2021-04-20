@@ -1089,10 +1089,6 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 }
 
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo, o ObjectLayer, sync bool) {
-	if sync {
-		replicateDelete(ctx, dv, o)
-	} else {
-		globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
-	}
+	globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }
