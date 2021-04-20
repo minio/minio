@@ -461,10 +461,6 @@ func (z *xlMetaV2) SharedDataDirCountStr(versionID, dataDir string) int {
 }
 
 func (z *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
-	// v2 object is inlined, if it is skip dataDir share check.
-	if z.data.find(uuid.UUID(versionID).String()) != nil {
-		return 0
-	}
 	var sameDataDirCount int
 	for _, version := range z.Versions {
 		switch version.Type {

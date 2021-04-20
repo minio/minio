@@ -84,6 +84,13 @@ var (
 	}
 )
 
+const (
+	// AccountOn indicates that credentials are enabled
+	AccountOn = "on"
+	// AccountOff indicates that credentials are disabled
+	AccountOff = "off"
+)
+
 // Credentials holds access and secret keys.
 type Credentials struct {
 	AccessKey    string    `xml:"AccessKeyId" json:"accessKey,omitempty"`
