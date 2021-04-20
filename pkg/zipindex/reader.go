@@ -163,8 +163,8 @@ func ReadFile(name string) (Files, error) {
 		if err != nil {
 			return nil, err
 		}
-		fi, err := f.Stat()
 		defer f.Close()
+		fi, err := f.Stat()
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +176,9 @@ func ReadFile(name string) (Files, error) {
 			return nil, err
 		}
 		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
 		files, err = ReadDir(b, fi.Size())
 		if err == nil {
 			return files, nil
