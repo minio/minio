@@ -113,7 +113,7 @@ function runExceptionalTests($s3Client, $apiCall, $exceptionMatcher, $exceptionP
             switch ($e->$exceptionMatcher()) {
             case $exn:
                 // This is expected
-                continue;
+                continue 2;
             default:
                 throw $e;
             }
@@ -186,7 +186,7 @@ function testHeadObject($s3Client, $objects) {
         if (getStatusCode($result) != HTTP_OK)
             throw new Exception('headObject API failed for ' .
                                 $bucket . '/' . $object);
-        if (strtolower($result['Metadata']) != strtolower(TEST_METADATA)) {
+        if (strtolower(json_encode($result['Metadata'])) != strtolower(json_encode(TEST_METADATA))) {
             throw new Exception("headObject API Metadata didn't match for " .
                                 $bucket . '/' . $object);
         }
@@ -820,22 +820,22 @@ function testAnonDeleteObjects($s3Client, $params) {
 
     // Each object should have empty code in case of successful delete
     for ($i = 0; $i < 3; $i++) {
-        if ($result["Errors"][$i]["Code"] != "")
+        if (isset($result["Errors"][$i]) && $result["Errors"][$i]["Code"] != "")
             throw new Exception('Incorrect response deleteObjects anonymous
                                 call for ' .$bucket);
     }
 }
 
 // Check if the policy statements are equal
-function are_statements_equal($expected, $got) {   
+function are_statements_equal($expected, $got) {
     $expected = json_decode($expected, TRUE);
     $got = json_decode($got, TRUE);
 
     function are_actions_equal($action1, $action2) {
         return (
-            is_array($action1) 
-            && is_array($action2) 
-            && count($action1) == count($action2) 
+            is_array($action1)
+            && is_array($action2)
+            && count($action1) == count($action2)
             && array_diff($action1, $action2) === array_diff($action2, $action1)
         );
     }
@@ -846,10 +846,10 @@ function are_statements_equal($expected, $got) {
     }
 
     return TRUE;
-    
+
 }
  /**
-  *  testBucketPolicy tests GET/PUT Bucket policy S3 APIs
+  *  testBucketPolicy tests GET/PUT/DELETE Bucket policy S3 APIs
   *
   * @param $s3Client AWS\S3\S3Client object
   *
@@ -871,13 +871,18 @@ function testBucketPolicy($s3Client, $params) {
                             $bucket);
     $result = $s3Client->getBucketPolicy(['Bucket' => $bucket]);
     if (getstatuscode($result) != HTTP_OK)
-        throw new Exception('putBucketPolicy API failed for ' .
+        throw new Exception('getBucketPolicy API failed for ' .
                             $bucket);
 
     if ($result['Policy'] != $downloadPolicy)
-        if (!are_statements_equal($result['Policy'], $downloadPolicy))  
-            throw new Exception('bucket policy we got is not we set');  
-        
+        if (!are_statements_equal($result['Policy'], $downloadPolicy))
+            throw new Exception('bucket policy we got is not we set');
+
+    $result = $s3Client->getBucketPolicyStatus(['Bucket' => $bucket]);
+    $result = $result->get("PolicyStatus")["IsPublic"];
+    if ($result)
+        throw new Exception('getBucketPolicyStatus API failed for ' .
+            $bucket);
 
     // Delete the bucket, make the bucket (again) and check if policy is none
     // Ref: https://github.com/minio/minio/issues/4714
@@ -938,6 +943,22 @@ function testBucketPolicy($s3Client, $params) {
             ]
         ]);
 
+        $result = $s3Client->putBucketPolicy([
+            'Bucket' => $bucket,
+            'Policy' => $downloadPolicy
+        ]);
+        if (getstatuscode($result) != HTTP_NOCONTENT)
+            throw new Exception('putBucketPolicy API failed for ' .
+                $bucket);
+        $result = $s3Client->getBucketPolicy(['Bucket' => $bucket]);
+        if (getstatuscode($result) != HTTP_OK)
+            throw new Exception('getBucketPolicy API failed for ' .
+                $bucket);
+
+        $result = $s3Client->deleteBucketPolicy(['Bucket' => $bucket]);
+        if (getstatuscode($result) != HTTP_NOCONTENT)
+            throw new Exception('deleteBucketPolicy API failed for ' .
+                $bucket);
     } finally {
         // close data file
         if (!is_null($stream))
