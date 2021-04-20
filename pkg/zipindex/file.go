@@ -50,7 +50,7 @@ var zstdDec, _ = zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDeco
 
 //msgp:tuple filesAsStructs
 type filesAsStructs struct {
-	Names   []string
+	Names   [][]byte
 	CSizes  []int64
 	USizes  []int64
 	Offsets []int64
@@ -76,7 +76,7 @@ func (f Files) Serialize() ([]byte, error) {
 
 	// Encode many files as struct of arrays...
 	x := filesAsStructs{
-		Names:   make([]string, len(f)),
+		Names:   make([][]byte, len(f)),
 		CSizes:  make([]int64, len(f)),
 		USizes:  make([]int64, len(f)),
 		Offsets: make([]int64, len(f)),
@@ -93,7 +93,7 @@ func (f Files) Serialize() ([]byte, error) {
 			// Use previous size as base.
 			x.CSizes[i] = int64(file.CompressedSize64) - int64(f[i-1].CompressedSize64)
 		}
-		x.Names[i] = file.Name
+		x.Names[i] = []byte(file.Name)
 		// Uncompressed size is the size from the compressed.
 		x.USizes[i] = int64(file.UncompressedSize64) - int64(f[i].CompressedSize64)
 		x.Offsets[i] = file.Offset
@@ -161,7 +161,7 @@ func DeserializeFiles(b []byte) (Files, error) {
 	var cur File
 	for i := range files {
 		cur = File{
-			Name:             dst.Names[i],
+			Name:             string(dst.Names[i]),
 			CompressedSize64: uint64(dst.CSizes[i] + int64(cur.CompressedSize64)),
 			CRC32:            binary.LittleEndian.Uint32(dst.Crcs[i*4:]),
 			Method:           dst.Methods[i] ^ cur.Method,
@@ -223,7 +223,7 @@ func FindSerialized(b []byte, name string) (*File, error) {
 	}
 	for i := 0; i < int(zb0002); i++ {
 		var got []byte
-		got, bts, err = msgp.ReadStringZC(bts)
+		got, bts, err = msgp.ReadBytesZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Names")
 			return nil, err
@@ -244,7 +244,6 @@ func FindSerialized(b []byte, name string) (*File, error) {
 	var cur, prev File
 	for i := range dst.Names {
 		cur = File{
-			Name:             dst.Names[i],
 			CompressedSize64: uint64(dst.CSizes[i] + int64(cur.CompressedSize64)),
 			CRC32:            binary.LittleEndian.Uint32(dst.Crcs[i*4:]),
 			Method:           dst.Methods[i] ^ cur.Method,
@@ -257,6 +256,7 @@ func FindSerialized(b []byte, name string) (*File, error) {
 		}
 		prev = cur
 		if i == idx {
+			cur.Name = string(dst.Names[i])
 			// We have what we want...
 			break
 		}

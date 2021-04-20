@@ -265,10 +265,10 @@ func (z *filesAsStructs) DecodeMsg(dc *msgp.Reader) (err error) {
 	if cap(z.Names) >= int(zb0002) {
 		z.Names = (z.Names)[:zb0002]
 	} else {
-		z.Names = make([]string, zb0002)
+		z.Names = make([][]byte, zb0002)
 	}
 	for za0001 := range z.Names {
-		z.Names[za0001], err = dc.ReadString()
+		z.Names[za0001], err = dc.ReadBytes(z.Names[za0001])
 		if err != nil {
 			err = msgp.WrapError(err, "Names", za0001)
 			return
@@ -367,7 +367,7 @@ func (z *filesAsStructs) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for za0001 := range z.Names {
-		err = en.WriteString(z.Names[za0001])
+		err = en.WriteBytes(z.Names[za0001])
 		if err != nil {
 			err = msgp.WrapError(err, "Names", za0001)
 			return
@@ -436,7 +436,7 @@ func (z *filesAsStructs) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0x96)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Names)))
 	for za0001 := range z.Names {
-		o = msgp.AppendString(o, z.Names[za0001])
+		o = msgp.AppendBytes(o, z.Names[za0001])
 	}
 	o = msgp.AppendArrayHeader(o, uint32(len(z.CSizes)))
 	for za0002 := range z.CSizes {
@@ -479,10 +479,10 @@ func (z *filesAsStructs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	if cap(z.Names) >= int(zb0002) {
 		z.Names = (z.Names)[:zb0002]
 	} else {
-		z.Names = make([]string, zb0002)
+		z.Names = make([][]byte, zb0002)
 	}
 	for za0001 := range z.Names {
-		z.Names[za0001], bts, err = msgp.ReadStringBytes(bts)
+		z.Names[za0001], bts, err = msgp.ReadBytesBytes(bts, z.Names[za0001])
 		if err != nil {
 			err = msgp.WrapError(err, "Names", za0001)
 			return
@@ -573,7 +573,7 @@ func (z *filesAsStructs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z *filesAsStructs) Msgsize() (s int) {
 	s = 1 + msgp.ArrayHeaderSize
 	for za0001 := range z.Names {
-		s += msgp.StringPrefixSize + len(z.Names[za0001])
+		s += msgp.BytesPrefixSize + len(z.Names[za0001])
 	}
 	s += msgp.ArrayHeaderSize + (len(z.CSizes) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.USizes) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.Offsets) * (msgp.Int64Size)) + msgp.ArrayHeaderSize + (len(z.Methods) * (msgp.Uint16Size)) + msgp.BytesPrefixSize + len(z.Crcs)
 	return
