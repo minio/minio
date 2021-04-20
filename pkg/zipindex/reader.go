@@ -31,6 +31,7 @@ import (
 	"hash/crc32"
 	"io"
 	"io/ioutil"
+	"os"
 	"time"
 	"unicode/utf8"
 )
@@ -117,6 +118,79 @@ func ReadDir(buf []byte, zipSize int64) (Files, error) {
 		return nil, err
 	}
 	return files, nil
+}
+
+// ReaderAt will read the directory from a io.ReaderAt.
+// The total zip file must be provided.
+// If the ZIP file directory exceeds maxDir bytes it will be rejected.
+func ReaderAt(r io.ReaderAt, size, maxDir int64) (Files, error) {
+	// Read 64K by default..
+	sz := int64(64 << 10)
+	var files Files
+	for {
+		if sz > size {
+			sz = size
+		}
+		var buf = make([]byte, sz)
+		_, err := r.ReadAt(buf, size-sz)
+		if err != nil {
+			return nil, err
+		}
+		files, err = ReadDir(buf, size)
+		if err == nil {
+			return files, nil
+		}
+		var terr ErrNeedMoreData
+		if errors.As(err, &terr) {
+			if maxDir > 0 && terr.FromEnd > maxDir {
+				return nil, errors.New("directory appears to exceed limit")
+			}
+			sz = terr.FromEnd
+			continue
+		}
+		return nil, err
+	}
+}
+
+// ReadFile will read the directory from a file.
+// If the ZIP file directory exceeds 100MB it will be rejected.
+func ReadFile(name string) (Files, error) {
+	// Read 64K by default..
+	sz := int64(64 << 10)
+	var files Files
+	for {
+		f, err := os.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		fi, err := f.Stat()
+		defer f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if sz > fi.Size() {
+			sz = fi.Size()
+		}
+		_, err = f.Seek(fi.Size()-sz, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
+		b, err := ioutil.ReadAll(f)
+		files, err = ReadDir(b, fi.Size())
+		if err == nil {
+			return files, nil
+		}
+		var terr ErrNeedMoreData
+		if errors.As(err, &terr) {
+			if terr.FromEnd > 100<<20 {
+				return nil, errors.New("directory appears to exceed 100MB")
+			}
+			sz = terr.FromEnd
+			f.Close()
+			continue
+		}
+		return nil, err
+	}
 }
 
 // Open returns a ReadCloser that provides access to the File's contents.

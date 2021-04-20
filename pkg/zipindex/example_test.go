@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/zipindex"
@@ -58,6 +59,42 @@ func ExampleReadDir() {
 	fmt.Printf("First file: %+v", files[0])
 	// Output:
 	// Retrying with 57912 bytes at the end of file
+	// Got 1000 files
+	// First file: {Name:file-0.txt CompressedSize64:1 UncompressedSize64:1 Offset:0 CRC32:4108050209 Method:0}
+}
+
+// ExampleReadFile demonstrates how to read the index of a file on disk.
+func ExampleReadFile() {
+	files, err := zipindex.ReadFile("testdata/big.zip")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Got %d files\n", len(files))
+	fmt.Printf("First file: %+v", files[0])
+	// Output:
+	// Got 1000 files
+	// First file: {Name:file-0.txt CompressedSize64:1 UncompressedSize64:1 Offset:0 CRC32:4108050209 Method:0}
+}
+
+// ExampleReadFile demonstrates how to read the index of a file on disk.
+func ExampleReaderAt() {
+	f, err := os.Open("testdata/big.zip")
+	if err != nil {
+		panic(err)
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	// Read and allow up to 10MB index.
+	files, err := zipindex.ReaderAt(f, fi.Size(), 10<<20)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Got %d files\n", len(files))
+	fmt.Printf("First file: %+v", files[0])
+	// Output:
 	// Got 1000 files
 	// First file: {Name:file-0.txt CompressedSize64:1 UncompressedSize64:1 Offset:0 CRC32:4108050209 Method:0}
 }
