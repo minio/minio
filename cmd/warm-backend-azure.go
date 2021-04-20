@@ -65,7 +65,7 @@ func (az *warmBackendAzure) Put(ctx context.Context, object string, r io.Reader,
 	return azureToObjectError(err, az.Bucket, object)
 }
 
-func (az *warmBackendAzure) Get(ctx context.Context, object string, opts warmBackendGetOpts) (r io.ReadCloser, err error) {
+func (az *warmBackendAzure) Get(ctx context.Context, object string, opts WarmBackendGetOpts) (r io.ReadCloser, err error) {
 	if opts.startOffset < 0 {
 		return nil, InvalidRange{}
 	}

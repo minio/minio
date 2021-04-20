@@ -18,41 +18,101 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
-type warmBackendGetOpts struct {
+// WarmBackendGetOpts is used to express byte ranges within an object. The zero
+// value represents the entire byte range of an object.
+type WarmBackendGetOpts struct {
 	startOffset int64
 	length      int64
 }
 
-// WarmBackend provides interface to be implemented by remote backends
+// WarmBackend provides interface to be implemented by remote tier backends
 type WarmBackend interface {
 	Put(ctx context.Context, object string, r io.Reader, length int64) error
-	Get(ctx context.Context, object string, opts warmBackendGetOpts) (io.ReadCloser, error)
+	Get(ctx context.Context, object string, opts WarmBackendGetOpts) (io.ReadCloser, error)
 	Remove(ctx context.Context, object string) error
 	InUse(ctx context.Context) (bool, error)
 }
 
+const probeObject = "probeobject"
+
 // checkWarmBackend checks if tier config credentials have sufficient privileges
-// to perform all operations definde in the WarmBackend interface.
-// FIXME: currently, we check only for Get.
+// to perform all operations defined in the WarmBackend interface.
 func checkWarmBackend(ctx context.Context, w WarmBackend) error {
-	// TODO: requires additional checks to ensure that WarmBackend
-	// configuration has sufficient privileges to Put/Remove objects as well.
-	_, err := w.Get(ctx, "probeobject", warmBackendGetOpts{})
-	switch {
-	case isErrObjectNotFound(err):
-		return nil
-	case isErrBucketNotFound(err):
-		return errTierBucketNotFound
-	case isErrSignatureDoesNotMatch(err):
-		return errTierInvalidCredentials
+	var empty bytes.Reader
+	err := w.Put(ctx, probeObject, &empty, 0)
+	if err != nil {
+		return tierPermErr{
+			Op:  tierPut,
+			Err: err,
+		}
+	}
+
+	_, err = w.Get(ctx, probeObject, WarmBackendGetOpts{})
+	if err != nil {
+		switch {
+		case isErrBucketNotFound(err):
+			return errTierBucketNotFound
+		case isErrSignatureDoesNotMatch(err):
+			return errTierInvalidCredentials
+		default:
+			return tierPermErr{
+				Op:  tierGet,
+				Err: err,
+			}
+		}
+	}
+
+	if err = w.Remove(ctx, probeObject); err != nil {
+		return tierPermErr{
+			Op:  tierDelete,
+			Err: err,
+		}
 	}
 	return err
+}
+
+type tierOp uint8
+
+const (
+	_ tierOp = iota
+	tierGet
+	tierPut
+	tierDelete
+)
+
+func (op tierOp) String() string {
+	switch op {
+	case tierGet:
+		return "GET"
+	case tierPut:
+		return "PUT"
+	case tierDelete:
+		return "DELETE"
+	}
+	return "UNKNOWN"
+}
+
+type tierPermErr struct {
+	Op  tierOp
+	Err error
+}
+
+func (te tierPermErr) Error() string {
+	return fmt.Sprintf("failed to perform %s %v", te.Op, te.Err)
+}
+
+func errIsTierPermError(err error) bool {
+	var tpErr tierPermErr
+	return errors.As(err, &tpErr)
 }
 
 // newWarmBackend instantiates the tier type specific WarmBackend, runs

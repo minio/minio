@@ -57,7 +57,7 @@ func (gcs *warmBackendGCS) Put(ctx context.Context, key string, data io.Reader, 
 	return w.Close()
 }
 
-func (gcs *warmBackendGCS) Get(ctx context.Context, key string, opts warmBackendGetOpts) (r io.ReadCloser, err error) {
+func (gcs *warmBackendGCS) Get(ctx context.Context, key string, opts WarmBackendGetOpts) (r io.ReadCloser, err error) {
 	// GCS storage decompresses a gzipped object by default and returns the data.
 	// Refer to https://cloud.google.com/storage/docs/transcoding#decompressive_transcoding
 	// Need to set `Accept-Encoding` header to `gzip` when issuing a GetObject call, to be able

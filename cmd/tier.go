@@ -36,7 +36,7 @@ import (
 
 var (
 	errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
-	errWarmBackendInUse      = errors.New("backend warm tier already in use")
+	errTierBackendInUse      = errors.New("remote tier backend already in use")
 	errTierTypeUnsupported   = errors.New("unsupported tier type")
 )
 
@@ -104,7 +104,7 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 		return err
 	}
 	if inUse {
-		return errWarmBackendInUse
+		return errTierBackendInUse
 	}
 
 	config.Tiers[tierName] = tier

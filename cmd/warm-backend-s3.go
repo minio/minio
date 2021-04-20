@@ -61,7 +61,7 @@ func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, le
 	return s3.ToObjectError(err, object)
 }
 
-func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts warmBackendGetOpts) (io.ReadCloser, error) {
+func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts WarmBackendGetOpts) (io.ReadCloser, error) {
 	gopts := minio.GetObjectOptions{}
 
 	if opts.startOffset >= 0 && opts.length > 0 {

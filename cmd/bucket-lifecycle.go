@@ -194,7 +194,7 @@ func validateTransitionDestination(sc string) error {
 	if err != nil {
 		return TransitionStorageClassNotFound{}
 	}
-	_, err = backend.Get(context.Background(), "probeobject", warmBackendGetOpts{})
+	_, err = backend.Get(context.Background(), "probeobject", WarmBackendGetOpts{})
 	if !isErrObjectNotFound(err) {
 		return err
 	}
@@ -326,7 +326,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 	if err != nil {
 		return nil, ErrorRespToObjectError(err, bucket, object)
 	}
-	gopts := warmBackendGetOpts{}
+	gopts := WarmBackendGetOpts{}
 
 	// get correct offsets for object
 	if off >= 0 && length >= 0 {
