@@ -728,7 +728,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 	if !impliedPolicy {
 		svcAccountPolicy = svcAccountPolicy.Merge(*policy)
 	} else {
-		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.AccessKey, false)
+		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
