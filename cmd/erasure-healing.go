@@ -471,7 +471,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					Algorithm:  checksumAlgo,
 					Hash:       bitrotWriterSum(writers[i]),
 				})
-				if len(inlineBuffers) > 0 {
+				if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
 					partsMetadata[i].Data = inlineBuffers[i].Bytes()
 				} else {
 					partsMetadata[i].Data = nil

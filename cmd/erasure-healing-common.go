@@ -59,7 +59,7 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 	// occurrences of elements.
 	var dmaxima int
 	for ddataDir, count := range dataDirOccurenceMap {
-		if count > dmaxima || (count == dmaxima && ddataDir == dataDir) {
+		if count > dmaxima {
 			dmaxima = count
 			dataDir = ddataDir
 		}
