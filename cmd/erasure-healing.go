@@ -260,7 +260,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
-	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	latestDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// List of disks having all parts as per latest er.meta.
 	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
@@ -350,7 +350,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, result.DataBlocks)
+	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, result.DataBlocks)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, versionID)
 	}

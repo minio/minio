@@ -25,15 +25,24 @@ import (
 )
 
 // commonTime returns a maximally occurring time from a list of time.
-func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
+func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dataDir string) {
 	var maxima int // Counter for remembering max occurrence of elements.
-	timeOccurenceMap := make(map[int64]int)
+
+	timeOccurenceMap := make(map[int64]int, len(modTimes))
+	dataDirOccurenceMap := make(map[string]int, len(dataDirs))
 	// Ignore the uuid sentinel and count the rest.
 	for _, time := range modTimes {
 		if time.Equal(timeSentinel) {
 			continue
 		}
 		timeOccurenceMap[time.UnixNano()]++
+	}
+
+	for _, dataDir := range dataDirs {
+		if dataDir == "" {
+			continue
+		}
+		dataDirOccurenceMap[dataDir]++
 	}
 
 	// Find the common cardinality from previously collected
@@ -46,8 +55,18 @@ func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 		}
 	}
 
+	// Find the common cardinality from the previously collected
+	// occurrences of elements.
+	var dmaxima int
+	for ddataDir, count := range dataDirOccurenceMap {
+		if count > dmaxima || (count == dmaxima && ddataDir == dataDir) {
+			dmaxima = count
+			dataDir = ddataDir
+		}
+	}
+
 	// Return the collected common uuid.
-	return modTime, maxima
+	return modTime, dataDir
 }
 
 // Beginning of unix time is treated as sentinel value here.
@@ -101,24 +120,33 @@ func listObjectModtimes(partsMetadata []FileInfo, errs []error) (modTimes []time
 // - a slice of disks where disk having 'older' xl.meta (or nothing)
 // are set to nil.
 // - latest (in time) of the maximally occurring modTime(s).
-func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
+func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error) (onlineDisks []StorageAPI, modTime time.Time, dataDir string) {
 	onlineDisks = make([]StorageAPI, len(disks))
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
+	dataDirs := make([]string, len(partsMetadata))
+	for idx, fi := range partsMetadata {
+		if errs[idx] != nil {
+			continue
+		}
+		dataDirs[idx] = fi.DataDir
+	}
+
 	// Reduce list of UUIDs to a single common value.
-	modTime, _ = commonTime(modTimes)
+	modTime, dataDir = commonTime(modTimes, dataDirs)
 
 	// Create a new online disks slice, which have common uuid.
 	for index, t := range modTimes {
-		if t.Equal(modTime) {
+		if partsMetadata[index].IsValid() && t.Equal(modTime) && partsMetadata[index].DataDir == dataDir {
 			onlineDisks[index] = disks[index]
 		} else {
 			onlineDisks[index] = nil
 		}
 	}
-	return onlineDisks, modTime
+
+	return onlineDisks, modTime, dataDir
 }
 
 // Returns the latest updated FileInfo files and error in case of failure.
@@ -131,16 +159,24 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
+	dataDirs := make([]string, len(partsMetadata))
+	for idx, fi := range partsMetadata {
+		if errs[idx] != nil {
+			continue
+		}
+		dataDirs[idx] = fi.DataDir
+	}
+
 	// Count all latest updated FileInfo values
 	var count int
 	var latestFileInfo FileInfo
 
 	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
-	modTime, _ := commonTime(modTimes)
+	modTime, dataDir := commonTime(modTimes, dataDirs)
 
 	// Interate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
-		if t.Equal(modTime) && partsMetadata[index].IsValid() {
+		if partsMetadata[index].IsValid() && t.Equal(modTime) && dataDir == partsMetadata[index].DataDir {
 			latestFileInfo = partsMetadata[index]
 			count++
 		}

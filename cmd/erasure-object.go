@@ -81,10 +81,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(storageDisks, metaArr, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -421,10 +421,10 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err = pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return fi, nil, nil, err
 	}
@@ -1183,10 +1183,10 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -1234,10 +1234,10 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
