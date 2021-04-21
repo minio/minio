@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -430,6 +431,67 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 }
 
+// get the most current of in-memory replication stats  and data usage info from crawler.
+func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s BucketReplicationStats) {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+
+	replStats := BucketReplicationStats{}
+	for _, bucketStat := range bucketStats {
+		replStats.FailedCount += bucketStat.ReplicationStats.FailedCount
+		replStats.FailedSize += bucketStat.ReplicationStats.FailedSize
+		replStats.PendingCount += bucketStat.ReplicationStats.PendingCount
+		replStats.PendingSize += bucketStat.ReplicationStats.PendingSize
+		replStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		replStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
+	}
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	replStats.FailedCount += usageStat.FailedCount
+	replStats.FailedSize += usageStat.FailedSize
+	replStats.PendingCount += usageStat.PendingCount
+	replStats.PendingSize += usageStat.PendingSize
+	replStats.ReplicaSize += usageStat.ReplicaSize
+	replStats.ReplicatedSize += usageStat.ReplicatedSize
+
+	// use in memory replication stats if it is ahead of usage info.
+	if replStats.ReplicatedSize >= u.ReplicatedSize {
+		s.ReplicatedSize = replStats.ReplicatedSize
+	} else {
+		s.ReplicatedSize = u.ReplicatedSize
+	}
+
+	if replStats.PendingSize > u.ReplicationPendingSize {
+		s.PendingSize = replStats.PendingSize
+	} else {
+		s.PendingSize = u.ReplicationPendingSize
+	}
+
+	if replStats.FailedSize > u.ReplicationFailedSize {
+		s.FailedSize = replStats.FailedSize
+	} else {
+		s.FailedSize = u.ReplicationFailedSize
+	}
+
+	if replStats.ReplicaSize > u.ReplicaSize {
+		s.ReplicaSize = replStats.ReplicaSize
+	} else {
+		s.ReplicaSize = u.ReplicaSize
+	}
+
+	if replStats.PendingCount > u.ReplicationPendingCount {
+		s.PendingCount = replStats.PendingCount
+	} else {
+		s.PendingCount = u.ReplicationPendingCount
+	}
+
+	if replStats.FailedCount > u.ReplicationFailedCount {
+		s.FailedCount = replStats.FailedCount
+	} else {
+		s.FailedCount = u.ReplicationFailedCount
+	}
+
+	return s
+}
+
 // Populates prometheus with bucket usage metrics, this metrics
 // is only enabled if scanner is enabled.
 func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
@@ -447,13 +509,13 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	if err != nil {
 		return
 	}
-
 	// data usage has not captured any data yet.
 	if dataUsageInfo.LastUpdate.IsZero() {
 		return
 	}
 
 	for bucket, usageInfo := range dataUsageInfo.BucketsUsage {
+		stat := getLatestReplicationStats(bucket, usageInfo)
 		// Total space used by bucket
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
@@ -479,7 +541,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total capacity pending to be replicated",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(usageInfo.ReplicationPendingSize),
+			float64(stat.PendingSize),
 			bucket,
 		)
 		ch <- prometheus.MustNewConstMetric(
@@ -488,7 +550,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total capacity failed to replicate at least once",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(usageInfo.ReplicationFailedSize),
+			float64(stat.FailedSize),
 			bucket,
 		)
 		ch <- prometheus.MustNewConstMetric(
@@ -497,7 +559,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total capacity replicated to destination",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(usageInfo.ReplicatedSize),
+			float64(stat.ReplicatedSize),
 			bucket,
 		)
 		ch <- prometheus.MustNewConstMetric(
@@ -506,7 +568,25 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total capacity replicated to this instance",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(usageInfo.ReplicaSize),
+			float64(stat.ReplicaSize),
+			bucket,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("bucket", "replication", "pending_count"),
+				"Total replication operations pending",
+				[]string{"bucket"}, nil),
+			prometheus.GaugeValue,
+			float64(stat.PendingCount),
+			bucket,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("bucket", "replication", "failed_count"),
+				"Total replication operations failed",
+				[]string{"bucket"}, nil),
+			prometheus.GaugeValue,
+			float64(stat.FailedCount),
 			bucket,
 		)
 		for k, v := range usageInfo.ObjectSizesHistogram {

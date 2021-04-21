@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -615,6 +616,8 @@ func (sys *NotificationSys) findEarliestCleanBloomFilter(ctx context.Context, di
 	return best
 }
 
+var errPeerNotReachable = errors.New("peer is not reachable")
+
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*PeerLocks {
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
@@ -623,7 +626,7 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 		index := index
 		g.Go(func() error {
 			if client == nil {
-				return nil
+				return errPeerNotReachable
 			}
 			serverLocksResp, err := sys.peerClients[index].GetLocks()
 			if err != nil {
@@ -671,6 +674,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
+	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
@@ -692,6 +696,37 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
 		}
 	}
+}
+
+// GetClusterBucketStats - calls GetClusterBucketStats call on all peers for a cluster statistics view.
+func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketName string) []BucketStats {
+	ng := WithNPeers(len(sys.peerClients))
+	bucketStats := make([]BucketStats, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		index := index
+		client := client
+		ng.Go(ctx, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			bs, err := client.GetBucketStats(bucketName)
+			if err != nil {
+				return err
+			}
+			bucketStats[index] = bs
+			return nil
+		}, index, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+	bucketStats = append(bucketStats, BucketStats{
+		ReplicationStats: globalReplicationStats.Get(bucketName),
+	})
+	return bucketStats
 }
 
 // Loads notification policies for all buckets into NotificationSys.

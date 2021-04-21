@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1602,4 +1603,60 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetBucketReplicationMetricsHandler - GET Bucket replication metrics.
+// ----------
+// Gets the replication metrics for a bucket.
+func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketReplicationMetrics")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// check if user has permissions to perform this operation
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	bucketStats := globalNotificationSys.GetClusterBucketStats(r.Context(), bucket)
+	bucketReplStats := BucketReplicationStats{}
+	// sum up metrics from each node in the cluster
+	for _, bucketStat := range bucketStats {
+		bucketReplStats.FailedCount += bucketStat.ReplicationStats.FailedCount
+		bucketReplStats.FailedSize += bucketStat.ReplicationStats.FailedSize
+		bucketReplStats.PendingCount += bucketStat.ReplicationStats.PendingCount
+		bucketReplStats.PendingSize += bucketStat.ReplicationStats.PendingSize
+		bucketReplStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		bucketReplStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
+	}
+	// add initial usage from the time of cluster up
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	bucketReplStats.FailedCount += usageStat.FailedCount
+	bucketReplStats.FailedSize += usageStat.FailedSize
+	bucketReplStats.PendingCount += usageStat.PendingCount
+	bucketReplStats.PendingSize += usageStat.PendingSize
+	bucketReplStats.ReplicaSize += usageStat.ReplicaSize
+	bucketReplStats.ReplicatedSize += usageStat.ReplicatedSize
+
+	if err := json.NewEncoder(w).Encode(&bucketReplStats); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	w.(http.Flusher).Flush()
 }

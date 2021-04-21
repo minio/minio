@@ -35,9 +35,9 @@ type AccountAccess struct {
 	Write bool `json:"write"`
 }
 
-// BucketUsageInfo represents bucket usage of a bucket, and its relevant
+// BucketAccessInfo represents bucket usage of a bucket, and its relevant
 // access type for an account
-type BucketUsageInfo struct {
+type BucketAccessInfo struct {
 	Name    string        `json:"name"`
 	Size    uint64        `json:"size"`
 	Created time.Time     `json:"created"`
@@ -49,7 +49,7 @@ type BucketUsageInfo struct {
 type AccountInfo struct {
 	AccountName string
 	Policy      iampolicy.Policy
-	Buckets     []BucketUsageInfo
+	Buckets     []BucketAccessInfo
 }
 
 // AccountInfo returns the usage info for the authenticating account.

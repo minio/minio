@@ -44,7 +44,7 @@ const (
 	healMetricNamespace      MetricNamespace = "minio_heal"
 	interNodeMetricNamespace MetricNamespace = "minio_inter_node"
 	nodeMetricNamespace      MetricNamespace = "minio_node"
-	minIOMetricNamespace     MetricNamespace = "minio"
+	minioMetricNamespace     MetricNamespace = "minio"
 	s3MetricNamespace        MetricNamespace = "minio_s3"
 )
 
@@ -88,9 +88,11 @@ const (
 	readTotal     MetricName = "read_total"
 	writeTotal    MetricName = "write_total"
 
+	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
 	pendingBytes  MetricName = "pending_bytes"
+	pendingCount  MetricName = "pending_count"
 	readBytes     MetricName = "read_bytes"
 	rcharBytes    MetricName = "rchar_bytes"
 	receivedBytes MetricName = "received_bytes"
@@ -351,6 +353,16 @@ func getNodeDiskTotalBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getUsageLastScanActivityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: minioMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      lastActivityTime,
+		Help:      "Time elapsed (in nano seconds) since last scan activity. This is set to 0 until first scan cycle",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -402,6 +414,24 @@ func getBucketRepReceivedBytesMD() MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      receivedBytes,
 		Help:      "Total number of bytes replicated to this bucket from another source bucket.",
+		Type:      gaugeMetric,
+	}
+}
+func getBucketRepPendingOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      pendingCount,
+		Help:      "Total number of objects pending replication",
+		Type:      gaugeMetric,
+	}
+}
+func getBucketRepFailedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      failedCount,
+		Help:      "Total number of objects which failed replication",
 		Type:      gaugeMetric,
 	}
 }
@@ -625,7 +655,7 @@ func getNodeOfflineTotalMD() MetricDescription {
 }
 func getMinIOVersionMD() MetricDescription {
 	return MetricDescription{
-		Namespace: minIOMetricNamespace,
+		Namespace: minioMetricNamespace,
 		Subsystem: softwareSubsystem,
 		Name:      versionInfo,
 		Help:      "MinIO Release tag for the server",
@@ -634,7 +664,7 @@ func getMinIOVersionMD() MetricDescription {
 }
 func getMinIOCommitMD() MetricDescription {
 	return MetricDescription{
-		Namespace: minIOMetricNamespace,
+		Namespace: minioMetricNamespace,
 		Subsystem: softwareSubsystem,
 		Name:      commitInfo,
 		Help:      "Git commit hash for the MinIO release.",
@@ -955,13 +985,14 @@ func getMinioHealingMetrics() MetricsGroup {
 			if !exists {
 				return
 			}
-			var dur time.Duration
-			if !bgSeq.lastHealActivity.IsZero() {
-				dur = time.Since(bgSeq.lastHealActivity)
+
+			if bgSeq.lastHealActivity.IsZero() {
+				return
 			}
+
 			metrics = append(metrics, Metric{
 				Description: getHealLastActivityTimeMD(),
-				Value:       float64(dur),
+				Value:       float64(time.Since(bgSeq.lastHealActivity)),
 			})
 			metrics = append(metrics, getObjectsScanned(bgSeq)...)
 			metrics = append(metrics, getScannedItems(bgSeq)...)
@@ -1167,7 +1198,14 @@ func getBucketUsageMetrics() MetricsGroup {
 				return
 			}
 
+			metrics = append(metrics, Metric{
+				Description: getUsageLastScanActivityMD(),
+				Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
+			})
+
 			for bucket, usage := range dataUsageInfo.BucketsUsage {
+				stat := getLatestReplicationStats(bucket, usage)
+
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageTotalBytesMD(),
 					Value:          float64(usage.Size),
@@ -1180,25 +1218,35 @@ func getBucketUsageMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 
-				if usage.hasReplicationUsage() {
+				if stat.hasReplicationUsage() {
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepPendingBytesMD(),
-						Value:          float64(usage.ReplicationPendingSize),
+						Value:          float64(stat.PendingSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepFailedBytesMD(),
-						Value:          float64(usage.ReplicationFailedSize),
+						Value:          float64(stat.FailedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepSentBytesMD(),
-						Value:          float64(usage.ReplicatedSize),
+						Value:          float64(stat.ReplicatedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepReceivedBytesMD(),
-						Value:          float64(usage.ReplicaSize),
+						Value:          float64(stat.ReplicaSize),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getBucketRepPendingOperationsMD(),
+						Value:          float64(stat.PendingCount),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getBucketRepFailedOperationsMD(),
+						Value:          float64(stat.FailedCount),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 				}
@@ -1313,13 +1361,6 @@ func getClusterStorageMetrics() MetricsGroup {
 			return
 		},
 	}
-}
-
-func (b *BucketUsageInfo) hasReplicationUsage() bool {
-	return b.ReplicationPendingSize > 0 ||
-		b.ReplicationFailedSize > 0 ||
-		b.ReplicatedSize > 0 ||
-		b.ReplicaSize > 0
 }
 
 type minioClusterCollector struct {

@@ -29,14 +29,15 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax                = "requests_max"
-	apiRequestsDeadline           = "requests_deadline"
-	apiClusterDeadline            = "cluster_deadline"
-	apiCorsAllowOrigin            = "cors_allow_origin"
-	apiRemoteTransportDeadline    = "remote_transport_deadline"
-	apiListQuorum                 = "list_quorum"
-	apiExtendListCacheLife        = "extend_list_cache_life"
-	apiReplicationWorkers         = "replication_workers"
+	apiRequestsMax             = "requests_max"
+	apiRequestsDeadline        = "requests_deadline"
+	apiClusterDeadline         = "cluster_deadline"
+	apiCorsAllowOrigin         = "cors_allow_origin"
+	apiRemoteTransportDeadline = "remote_transport_deadline"
+	apiListQuorum              = "list_quorum"
+	apiExtendListCacheLife     = "extend_list_cache_life"
+	apiReplicationWorkers      = "replication_workers"
+
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
@@ -87,7 +88,7 @@ var (
 		},
 		config.KV{
 			Key:   apiReplicationWorkers,
-			Value: "100",
+			Value: "500",
 		},
 	}
 )

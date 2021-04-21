@@ -31,6 +31,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -328,6 +329,7 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 	for _, bucket := range buckets {
 		cfg, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket.Name)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			continue
 		}
 		if cfg == nil || cfg.Empty() {
@@ -339,6 +341,7 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 		for _, tgt := range cfg.Targets {
 			tgtClient, err := sys.getRemoteTargetClient(&tgt)
 			if err != nil {
+				logger.LogIf(ctx, err)
 				continue
 			}
 			sys.arnRemotesMap[tgt.Arn] = tgtClient
@@ -432,7 +435,10 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 			return nil, err
 		}
 		if crypto.S3.IsEncrypted(meta) {
-			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{bucket: bucket, bucketTargetsFile: bucketTargetsFile}); err != nil {
+			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{
+				bucket:            bucket,
+				bucketTargetsFile: bucketTargetsFile,
+			}); err != nil {
 				return nil, err
 			}
 		}

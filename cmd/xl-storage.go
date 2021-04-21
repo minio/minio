@@ -904,6 +904,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 		if err = xlMeta.Load(buf); err != nil {
 			return err
 		}
+
 		if err = xlMeta.AddVersion(fi); err != nil {
 			return err
 		}
