@@ -214,7 +214,6 @@ func TestReadProcMountFrom(t *testing.T) {
 	// Error cases where parsing fails with invalid Freq and Pass params.
 	{
 		errorCases := []string{
-			"/dev/0 /path/to/mount\n",
 			"/dev/1 /path/to/mount type flags a 0\n",
 			"/dev/2 /path/to/mount type flags 0 b\n",
 		}
