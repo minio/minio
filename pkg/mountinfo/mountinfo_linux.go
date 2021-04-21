@@ -131,9 +131,11 @@ func parseMountFrom(file io.Reader) (mountInfos, error) {
 		if err == io.EOF {
 			break
 		}
+
 		fields := strings.Fields(line)
 		if len(fields) != expectedNumFieldsPerLine {
-			return nil, fmt.Errorf("wrong number of fields (expected %d, got %d): %s", expectedNumFieldsPerLine, len(fields), line)
+			// ignore incorrect lines.
+			continue
 		}
 
 		// Freq should be an integer.
