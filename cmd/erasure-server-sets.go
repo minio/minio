@@ -1482,10 +1482,23 @@ func (z *erasureServerSets) NewMultipartUpload(ctx context.Context, bucket, obje
 		return z.serverSets[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
-	// We don't know the exact size, so we ask for at least 1GiB file.
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 1<<30)
-	if err != nil {
-		return "", err
+	for idx, zone := range z.serverSets {
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
+		if err != nil {
+			return "", err
+		}
+		// If there is a multipart upload with the same bucket/object name,
+		// create the new multipart in the same pool, this will avoid
+		// creating two multiparts uploads in two different pools
+		if len(result.Uploads) != 0 {
+			return z.serverSets[idx].NewMultipartUpload(ctx, bucket, object, opts)
+		}
+	}
+
+	// We multiply the size by 2 to account for erasure coding.
+	idx := z.getAvailableZoneIdx(ctx, (1<<30)*2)
+	if idx < 0 {
+		return "", toObjectErr(errDiskFull)
 	}
 
 	return z.serverSets[idx].NewMultipartUpload(ctx, bucket, object, opts)
@@ -1627,17 +1640,9 @@ func (z *erasureServerSets) CompleteMultipartUpload(ctx context.Context, bucket,
 		return z.serverSets[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
-	// Purge any existing object.
 	for _, zone := range z.serverSets {
-		zone.DeleteObject(ctx, bucket, object, opts)
-	}
-
-	for _, zone := range z.serverSets {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
-		if err != nil {
-			return objInfo, err
-		}
-		if result.Lookup(uploadID) {
+		_, err = zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		if err == nil {
 			return zone.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		}
 	}
