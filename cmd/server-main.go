@@ -516,9 +516,9 @@ func serverMain(ctx *cli.Context) {
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
-		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
+	initBackgroundExpiry(GlobalContext, newObject)
 	initDataScanner(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {

@@ -476,7 +476,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	// in a 16 disk Erasure setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,4)
-	for f := 0; f < 4; f++ {
+	for f := 0; f < 2; f++ {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil

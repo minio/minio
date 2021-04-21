@@ -95,7 +95,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
 
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
 	versionID := srcInfo.VersionID
 	if srcInfo.versionOnly {
 		versionID = dstOpts.VersionID
@@ -123,27 +122,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		}
 	}
 
-	tempObj := mustGetUUID()
-
-	var online int
-	// Cleanup in case of xl.meta writing failure
-	defer func() {
-		if online != len(onlineDisks) {
-			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
-		}
-	}()
-
 	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+	if _, err = writeUniqueFileInfo(ctx, onlineDisks, srcBucket, srcObject, metaArr, writeQuorum); err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
-
-	// Rename atomically `xl.meta` from tmp location to destination for each disk.
-	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
-	}
-
-	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(srcBucket, srcObject), nil
 }
@@ -525,8 +507,7 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 }
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
-func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dataDir, dstBucket, dstEntry string, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
-	dataDir = retainSlash(dataDir)
+func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
 	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
@@ -539,12 +520,16 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			if err := disks[index].RenameData(ctx, srcBucket, srcEntry, dataDir, dstBucket, dstEntry); err != nil {
-				if !IsErrIgnored(err, ignoredErr...) {
-					return err
-				}
+			// Pick one FileInfo for a disk at index.
+			fi := metadata[index]
+			// Assign index when index is initialized
+			if fi.Erasure.Index == 0 {
+				fi.Erasure.Index = index + 1
 			}
-			return nil
+			if fi.IsValid() {
+				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			}
+			return errFileCorrupt
 		}, index)
 	}
 
@@ -554,23 +539,6 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
-		ug := errgroup.WithNErrs(len(disks))
-		for index, disk := range disks {
-			if disk == nil {
-				continue
-			}
-			index := index
-			ug.Go(func() error {
-				// Undo all the partial rename operations.
-				if errs[index] == nil {
-					_ = disks[index].RenameData(context.Background(), dstBucket, dstEntry, dataDir, srcBucket, srcEntry)
-				}
-				return nil
-			}, index)
-		}
-		ug.Wait()
-	}
 	return evalDisks(disks, errs), err
 }
 
@@ -820,14 +788,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 	}
 
-	// Write unique `xl.meta` for each disk.
-	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
-		logger.LogIf(ctx, err)
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
 	// Rename the successfully written temporary object to final location.
-	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
+	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum); err != nil {
 		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}

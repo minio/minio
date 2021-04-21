@@ -398,8 +398,8 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 	return p.storage.RenameFile(ctx, srcVolume, srcPath, dstVolume, dstPath)
 }
 
-func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
-	defer p.updateStorageMetrics(storageMetricRenameData, srcPath, dataDir, dstVolume, dstPath)()
+func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error {
+	defer p.updateStorageMetrics(storageMetricRenameData, srcPath, fi.DataDir, dstVolume, dstPath)()
 
 	select {
 	case <-ctx.Done():
@@ -411,7 +411,7 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 		return err
 	}
 
-	return p.storage.RenameData(ctx, srcVolume, srcPath, dataDir, dstVolume, dstPath)
+	return p.storage.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath)
 }
 
 func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
