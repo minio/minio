@@ -1978,9 +1978,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 
 	// Commit data
 	if srcDataPath != "" {
+		if oldDstDataPath != "" {
+			tmpuuid := mustGetUUID()
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
+		}
 		tmpuuid := mustGetUUID()
-		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
-		tmpuuid = mustGetUUID()
 		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
 			return osErrToFileErr(err)
