@@ -288,8 +288,10 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	done := keepHTTPResponseAlive(w)
-	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body))
+	err = s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
 }
 
 // DeleteVersion delete updated metadata.
@@ -693,6 +695,7 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 		if doneCh == nil {
 			return
 		}
+
 		// Indicate we are ready to write.
 		doneCh <- err
 

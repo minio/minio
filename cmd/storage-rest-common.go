@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v29" // Removed WalkVersions()
+	storageRESTVersion       = "v30" // CreateFile is back to non-streaming
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
