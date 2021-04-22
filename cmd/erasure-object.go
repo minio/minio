@@ -1495,10 +1495,10 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, false, toObjectErr(reducedErr, bucket, object))
 	}
 
-	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return setRestoreHeaderFn(oi, false, err)
 	}
