@@ -44,7 +44,7 @@ const (
 func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketQuotaConfig")
 
-	defer logger.AuditLog(w, r, "PutBucketQuotaConfig", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
@@ -90,7 +90,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketQuotaConfig")
 
-	defer logger.AuditLog(w, r, "GetBucketQuotaConfig", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
@@ -125,7 +125,7 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetBucketTarget")
 
-	defer logger.AuditLog(w, r, "SetBucketTarget", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -214,7 +214,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListBucketTargets")
 
-	defer logger.AuditLog(w, r, "ListBucketTargets", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	arnType := vars["type"]
@@ -250,7 +250,7 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveBucketTarget")
 
-	defer logger.AuditLog(w, r, "RemoveBucketTarget", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	arn := vars["arn"]

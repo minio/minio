@@ -83,7 +83,7 @@ func validateListObjectsArgs(marker, delimiter, encodingType string, maxKeys int
 func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectVersions")
 
-	defer logger.AuditLog(w, r, "ListObjectVersions", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -153,7 +153,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2M")
 
-	defer logger.AuditLog(w, r, "ListObjectsV2M", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -230,7 +230,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2")
 
-	defer logger.AuditLog(w, r, "ListObjectsV2", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -359,7 +359,7 @@ func proxyRequestByStringHash(ctx context.Context, w http.ResponseWriter, r *htt
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV1")
 
-	defer logger.AuditLog(w, r, "ListObjectsV1", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

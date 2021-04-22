@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/message/audit"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
@@ -755,6 +756,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		return size
 	}
 
+	// Send audit for the lifecycle delete operation
+	auditLogLifecycle(ctx, i.bucket, i.objectPath())
+
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated
@@ -793,4 +797,14 @@ func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta act
 		meta.oi.ReplicationStatus == replication.Failed {
 		globalReplicationState.queueReplicaTask(meta.oi)
 	}
+}
+
+func auditLogLifecycle(ctx context.Context, bucket, object string) {
+	entry := audit.NewEntry(globalDeploymentID)
+	entry.Trigger = "internal-scanner"
+	entry.API.Name = "DeleteObject"
+	entry.API.Bucket = bucket
+	entry.API.Object = object
+	ctx = logger.SetAuditEntry(ctx, &entry)
+	logger.AuditLog(ctx, nil, nil, nil)
 }
