@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -152,11 +151,6 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	if err = saveServerConfigHistory(ctx, objectAPI, kvBytes); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Make sure to write backend is encrypted
-	if globalConfigEncrypted {
-		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
 	if dynamic {
@@ -411,11 +405,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Make sure to write backend is encrypted
-	if globalConfigEncrypted {
-		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
-	}
-
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -454,10 +443,6 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 				off = !cache.Enabled(kv)
 			case config.StorageClassSubSys:
 				off = !storageclass.Enabled(kv)
-			case config.KmsVaultSubSys:
-				off = !crypto.EnabledVault(kv)
-			case config.KmsKesSubSys:
-				off = !crypto.EnabledKes(kv)
 			case config.PolicyOPASubSys:
 				off = !opa.Enabled(kv)
 			case config.IdentityOpenIDSubSys:

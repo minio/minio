@@ -1756,32 +1756,32 @@ func fetchKMSStatus() madmin.KMS {
 	}
 	if len(stat.Endpoints) == 0 {
 		kmsStat.Status = stat.Name
+		return kmsStat
+	}
+	if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
+		kmsStat.Status = string(madmin.ItemOffline)
+		return kmsStat
+	}
+	kmsStat.Status = string(madmin.ItemOnline)
+
+	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+	// 1. Generate a new key using the KMS.
+	key, err := GlobalKMS.GenerateKey("", kmsContext)
+	if err != nil {
+		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 	} else {
-		if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
-			kmsStat.Status = string(madmin.ItemOffline)
-		} else {
-			kmsStat.Status = string(madmin.ItemOnline)
+		kmsStat.Encrypt = "success"
+	}
 
-			kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-			// 1. Generate a new key using the KMS.
-			key, err := GlobalKMS.GenerateKey("", kmsContext)
-			if err != nil {
-				kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-			} else {
-				kmsStat.Encrypt = "success"
-			}
-
-			// 2. Verify that we can indeed decrypt the (encrypted) key
-			decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
-			switch {
-			case err != nil:
-				kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-			case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
-				kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-			default:
-				kmsStat.Decrypt = "success"
-			}
-		}
+	// 2. Verify that we can indeed decrypt the (encrypted) key
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	switch {
+	case err != nil:
+		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+	case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+		kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
+	default:
+		kmsStat.Decrypt = "success"
 	}
 	return kmsStat
 }

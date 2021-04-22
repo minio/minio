@@ -20,57 +20,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path"
 	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	etcd "go.etcd.io/etcd/clientv3"
 )
 
 func handleEncryptedConfigBackend(objAPI ObjectLayer) error {
-
 	encrypted, err := checkBackendEncrypted(objAPI)
 	if err != nil {
 		return fmt.Errorf("Unable to encrypt config %w", err)
 	}
-
-	if encrypted {
-		// backend is encrypted, but credentials are not specified
-		// we shall fail right here. if not proceed forward.
-		if !globalConfigEncrypted || !globalActiveCred.IsValid() {
-			return config.ErrMissingCredentialsBackendEncrypted(nil)
-		}
-	} else {
-		// backend is not yet encrypted, check if encryption of
-		// backend is requested if not return nil and proceed
-		// forward.
-		if !globalConfigEncrypted {
-			return nil
-		}
-		if !globalActiveCred.IsValid() {
-			return config.ErrMissingCredentialsBackendEncrypted(nil)
-		}
-	}
-
-	// Migrate IAM configuration
-	if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
+	if err = migrateConfigPrefixToEncrypted(objAPI, encrypted); err != nil {
 		return fmt.Errorf("Unable to migrate all config at .minio.sys/config/: %w", err)
 	}
-
 	return nil
 }
 
-const (
-	backendEncryptedFile = "backend-encrypted"
-)
+const backendEncryptedFile = "backend-encrypted"
 
-var (
-	backendEncryptedMigrationIncomplete = []byte("incomplete")
-	backendEncryptedMigrationComplete   = []byte("encrypted")
-)
+var backendEncryptedMigrationComplete = []byte("encrypted")
 
 func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, error) {
 	data, err := readKeyEtcd(ctx, client, backendEncryptedFile)
@@ -112,38 +87,15 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 	}
 
 	if encrypted {
-		// backend is encrypted, but credentials are not specified
-		// we shall fail right here. if not proceed forward.
-		if !globalConfigEncrypted || !globalActiveCred.IsValid() {
-			return config.ErrMissingCredentialsBackendEncrypted(nil)
+		if GlobalKMS != nil {
+			stat, err := GlobalKMS.Stat()
+			if err != nil {
+				return err
+			}
+			logger.Info("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name)
+		} else {
+			logger.Info("Attempting to migrate encrypted config, IAM users and policies on MinIO to a plaintext format. To encrypt all MinIO config data a KMS is needed")
 		}
-	} else {
-		// backend is not yet encrypted, check if encryption of
-		// backend is requested if not return nil and proceed
-		// forward.
-		if !globalConfigEncrypted {
-			return nil
-		}
-		if !globalActiveCred.IsValid() {
-			return errInvalidArgument
-		}
-	}
-
-	if encrypted {
-		// No key rotation requested, and backend is
-		// already encrypted. We proceed without migration.
-		if !globalOldCred.IsValid() {
-			return nil
-		}
-
-		// No real reason to rotate if old and new creds are same.
-		if globalOldCred.Equal(globalActiveCred) {
-			return nil
-		}
-
-		logger.Info("Attempting rotation of encrypted IAM users and policies on etcd with newly supplied credentials")
-	} else {
-		logger.Info("Attempting encryption of all IAM users and policies on etcd")
 	}
 
 	listCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
@@ -154,134 +106,89 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		return err
 	}
 
-	if err = saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationIncomplete); err != nil {
-		return err
-	}
-
 	for _, kv := range r.Kvs {
-		var (
-			cdata    []byte
-			cencdata []byte
-		)
-		cdata, err = readKeyEtcd(ctx, client, string(kv.Key))
-		if err != nil {
-			switch err {
-			case errConfigNotFound:
-				// Perhaps not present or someone deleted it.
-				continue
-			}
-			return err
+		data, err := readKeyEtcd(ctx, client, string(kv.Key))
+		if err == errConfigNotFound { // Perhaps not present or someone deleted it.
+			continue
 		}
-
-		var data []byte
-		// Is rotating of creds requested?
-		if globalOldCred.IsValid() {
-			data, err = decryptData(cdata, globalOldCred, globalActiveCred)
-			if err != nil {
-				if err == madmin.ErrMaliciousData {
-					return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
-				}
-				return err
-			}
-		} else {
-			data = cdata
+		if err != nil {
+			return err
 		}
 
 		if !utf8.Valid(data) {
-			_, err = decryptData(data, globalActiveCred)
-			if err == nil {
-				// Config is already encrypted with right keys
-				continue
+			data, err = decryptData(data, globalActiveCred)
+			if err != nil {
+				return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 			}
-			return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 		}
 
-		cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
-		if err != nil {
-			return err
+		if GlobalKMS != nil {
+			data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: string(kv.Key),
+			})
+			if err != nil {
+				return err
+			}
 		}
 
-		if err = saveKeyEtcd(ctx, client, string(kv.Key), cencdata); err != nil {
+		if err = saveKeyEtcd(ctx, client, string(kv.Key), data); err != nil {
 			return err
 		}
 	}
 
-	if encrypted && globalActiveCred.IsValid() && globalOldCred.IsValid() {
-		logger.Info("Rotation complete, please make sure to unset MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD envs")
+	if encrypted {
+		if GlobalKMS != nil {
+			logger.Info("Migration of encrypted config data completed. All config data is now encrypted with the KMS")
+		} else {
+			logger.Info("Migration of encrypted config data completed. All config data is now stored in plaintext")
+		}
 	}
-
-	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationComplete)
+	return deleteKeyEtcd(ctx, client, backendEncryptedFile)
 }
 
-func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Credentials, encrypted bool) error {
-	if encrypted {
-		// No key rotation requested, and backend is
-		// already encrypted. We proceed without migration.
-		if !activeCredOld.IsValid() {
-			return nil
-		}
-
-		// No real reason to rotate if old and new creds are same.
-		if activeCredOld.Equal(globalActiveCred) {
-			return nil
-		}
-		logger.Info("Attempting rotation of encrypted config, IAM users and policies on MinIO with newly supplied credentials")
-	} else {
-		logger.Info("Attempting encryption of all config, IAM users and policies on MinIO backend")
+func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
+	if !encrypted {
+		return nil
 	}
-
-	err := saveConfig(GlobalContext, objAPI, backendEncryptedFile, backendEncryptedMigrationIncomplete)
-	if err != nil {
-		return err
+	if encrypted {
+		if GlobalKMS != nil {
+			stat, err := GlobalKMS.Stat()
+			if err != nil {
+				return err
+			}
+			logger.Info("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name)
+		} else {
+			logger.Info("Attempting to migrate encrypted config, IAM users and policies on MinIO to a plaintext format. To encrypt all MinIO config data a KMS is needed")
+		}
 	}
 
 	var marker string
 	for {
-		res, err := objAPI.ListObjects(GlobalContext, minioMetaBucket,
-			minioConfigPrefix, marker, "", maxObjectList)
+		res, err := objAPI.ListObjects(GlobalContext, minioMetaBucket, minioConfigPrefix, marker, "", maxObjectList)
 		if err != nil {
 			return err
 		}
 		for _, obj := range res.Objects {
-			var (
-				cdata    []byte
-				cencdata []byte
-			)
-
-			cdata, err = readConfig(GlobalContext, objAPI, obj.Name)
+			data, err := readConfig(GlobalContext, objAPI, obj.Name)
 			if err != nil {
 				return err
-			}
-
-			var data []byte
-			// Is rotating of creds requested?
-			if activeCredOld.IsValid() {
-				data, err = decryptData(cdata, activeCredOld, globalActiveCred)
-				if err != nil {
-					if err == madmin.ErrMaliciousData {
-						return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
-					}
-					return err
-				}
-			} else {
-				data = cdata
 			}
 
 			if !utf8.Valid(data) {
-				_, err = decryptData(data, globalActiveCred)
-				if err == nil {
-					// Config is already encrypted with right keys
-					continue
+				data, err = decryptData(data, globalActiveCred)
+				if err != nil {
+					return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 				}
-				return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 			}
-
-			cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
-			if err != nil {
-				return err
+			if GlobalKMS != nil {
+				data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+					obj.Bucket: path.Join(obj.Bucket, obj.Name),
+				})
+				if err != nil {
+					return err
+				}
 			}
-
-			if err = saveConfig(GlobalContext, objAPI, obj.Name, cencdata); err != nil {
+			if err = saveConfig(GlobalContext, objAPI, obj.Name, data); err != nil {
 				return err
 			}
 		}
@@ -289,13 +196,14 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		if !res.IsTruncated {
 			break
 		}
-
 		marker = res.NextMarker
 	}
-
-	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
-		logger.Info("Rotation complete, please make sure to unset MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD envs")
+	if encrypted {
+		if GlobalKMS != nil {
+			logger.Info("Migration of encrypted config data completed. All config data is now encrypted with the KMS")
+		} else {
+			logger.Info("Migration of encrypted config data completed. All config data is now stored in plaintext")
+		}
 	}
-
-	return saveConfig(GlobalContext, objAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	return deleteConfig(GlobalContext, globalObjectAPI, backendEncryptedFile)
 }

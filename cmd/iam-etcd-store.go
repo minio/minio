@@ -29,9 +29,11 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	etcd "go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -85,38 +87,51 @@ func (ies *IAMEtcdStore) runlock() {
 	ies.RUnlock()
 }
 
-func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error {
+func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, itemPath string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
-		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+	if GlobalKMS != nil {
+		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+		})
 		if err != nil {
 			return err
 		}
 	}
-	return saveKeyEtcd(ctx, ies.client, path, data, opts...)
+	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
 }
 
-func getIAMConfig(item interface{}, value []byte) error {
-	conf := value
+func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	var err error
-	if globalConfigEncrypted && !utf8.Valid(value) {
-		conf, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(conf))
-		if err != nil {
-			return err
+	if !utf8.Valid(data) {
+		if GlobalKMS != nil {
+			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+			})
+			if err != nil {
+				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return json.Unmarshal(conf, item)
+	return json.Unmarshal(data, item)
 }
 
 func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item interface{}, path string) error {
-	pdata, err := readKeyEtcd(ctx, ies.client, path)
+	data, err := readKeyEtcd(ctx, ies.client, path)
 	if err != nil {
 		return err
 	}
-	return getIAMConfig(item, pdata)
+	return getIAMConfig(item, data, path)
 }
 
 func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error {
@@ -265,7 +280,7 @@ func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map
 
 func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]iampolicy.Policy) error {
 	var p iampolicy.Policy
-	err := getIAMConfig(&p, kvs.Value)
+	err := getIAMConfig(&p, kvs.Value, string(kvs.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy
@@ -298,7 +313,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 
 func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
 	var u UserIdentity
-	err := getIAMConfig(&u, userkv.Value)
+	err := getIAMConfig(&u, userkv.Value, string(userkv.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchUser
@@ -436,7 +451,7 @@ func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, user
 
 func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, basePrefix string) error {
 	var p MappedPolicy
-	err := getIAMConfig(&p, kv.Value)
+	err := getIAMConfig(&p, kv.Value, string(kv.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy

@@ -52,7 +52,7 @@ func Parse(s string) (KMS, error) {
 }
 
 // New returns a single-key KMS that derives new DEKs from the
-// given key.
+// given key. The given key must always be 32 bytes.
 func New(keyID string, key []byte) (KMS, error) {
 	if len(key) != 32 {
 		return nil, errors.New("kms: invalid key length " + strconv.Itoa(len(key)))

@@ -18,8 +18,10 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -37,6 +39,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -44,6 +47,7 @@ import (
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/kms"
 )
 
 // serverDebugLog will enable debug printing
@@ -316,7 +320,6 @@ func handleCommonEnvVars() {
 				"Unable to validate credentials inherited from the shell environment")
 		}
 		globalActiveCred = cred
-		globalConfigEncrypted = true
 	}
 
 	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
@@ -326,29 +329,58 @@ func handleCommonEnvVars() {
 				"Unable to validate credentials inherited from the shell environment")
 		}
 		globalActiveCred = cred
-		globalConfigEncrypted = true
 	}
 
-	if env.IsSet(config.EnvAccessKeyOld) && env.IsSet(config.EnvSecretKeyOld) {
-		oldCred, err := auth.CreateCredentials(env.Get(config.EnvAccessKeyOld, ""), env.Get(config.EnvSecretKeyOld, ""))
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate the old credentials inherited from the shell environment")
-		}
-		globalOldCred = oldCred
-		os.Unsetenv(config.EnvAccessKeyOld)
-		os.Unsetenv(config.EnvSecretKeyOld)
+	if env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint) {
+		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
 	}
-
-	if env.IsSet(config.EnvRootUserOld) && env.IsSet(config.EnvRootPasswordOld) {
-		oldCred, err := auth.CreateCredentials(env.Get(config.EnvRootUserOld, ""), env.Get(config.EnvRootPasswordOld, ""))
+	switch {
+	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
+		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
+	case env.IsSet(config.EnvKMSMasterKey) && env.IsSet(config.EnvKESEndpoint):
+		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSMasterKey, config.EnvKESEndpoint))
+	}
+	if env.IsSet(config.EnvKMSSecretKey) {
+		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
 		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate the old credentials inherited from the shell environment")
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
-		globalOldCred = oldCred
-		os.Unsetenv(config.EnvRootUserOld)
-		os.Unsetenv(config.EnvRootPasswordOld)
+		GlobalKMS = KMS
+	} else if env.IsSet(config.EnvKMSMasterKey) {
+		logger.LogIf(GlobalContext, errors.New("legacy KMS configuration"), fmt.Sprintf("The environment variable %q is deprecated and will be removed in the future", config.EnvKMSMasterKey))
+
+		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
+		if len(v) != 2 {
+			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+		secretKey, err := hex.DecodeString(v[1])
+		if err != nil {
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+		KMS, err := kms.New(v[0], secretKey)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+		GlobalKMS = KMS
+	}
+	if env.IsSet(config.EnvKESEndpoint) {
+		kesEndpoints, err := crypto.ParseKESEndpoints(env.Get(config.EnvKESEndpoint, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to parse the KES endpoints inherited from the shell environment")
+		}
+		KMS, err := crypto.NewKes(crypto.KesConfig{
+			Enabled:      true,
+			Endpoint:     kesEndpoints,
+			DefaultKeyID: env.Get(config.EnvKESKeyName, ""),
+			CertFile:     env.Get(config.EnvKESClientCert, ""),
+			KeyFile:      env.Get(config.EnvKESClientKey, ""),
+			CAPath:       env.Get(config.EnvKESServerCA, globalCertsCADir.Get()),
+			Transport:    newCustomHTTPTransportWithHTTP2(&tls.Config{RootCAs: globalRootCAs}, defaultDialTimeout)(),
+		})
+		if err != nil {
+			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
+		}
+		GlobalKMS = KMS
 	}
 }
 

@@ -73,26 +73,26 @@ docker_secrets_env() {
 
 ## Set KMS_MASTER_KEY from docker secrets if provided
 docker_kms_encryption_env() {
-    if [ -f "$MINIO_KMS_MASTER_KEY_FILE" ]; then
-        KMS_MASTER_KEY_FILE="$MINIO_KMS_MASTER_KEY_FILE"
+    if [ -f "$MINIO_KMS_SECRET_KEY_FILE" ]; then
+        KMS_SECRET_KEY_FILE="$MINIO_KMS_SECRET_KEY_FILE"
     else
-        KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
+        KMS_SECRET_KEY_FILE="/run/secrets/$MINIO_KMS_SECRET_KEY_FILE"
     fi
 
-    if [ -f "$KMS_MASTER_KEY_FILE" ]; then
-        MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
-        export MINIO_KMS_MASTER_KEY
+    if [ -f "$KMS_SECRET_KEY_FILE" ]; then
+        MINIO_KMS_SECRET_KEY="$(cat "$KMS_SECRET_KEY_FILE")"
+        export MINIO_KMS_SECRET_KEY
     fi
 }
 
 ## Legacy
 ## Set SSE_MASTER_KEY from docker secrets if provided
 docker_sse_encryption_env() {
-    SSE_MASTER_KEY_FILE="/run/secrets/$MINIO_SSE_MASTER_KEY_FILE"
+    KMS_SECRET_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
 
-    if [ -f "$SSE_MASTER_KEY_FILE" ]; then
-        MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
-        export MINIO_SSE_MASTER_KEY
+    if [ -f "$KMS_SECRET_KEY_FILE" ]; then
+        MINIO_KMS_SECRET_KEY="$(cat "$KMS_SECRET_KEY_FILE")"
+        export MINIO_KMS_SECRET_KEY
     fi
 }
 
