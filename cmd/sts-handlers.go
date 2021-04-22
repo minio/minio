@@ -173,7 +173,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx = newContext(r, w, action)
-	defer logger.AuditLog(w, r, action, nil)
+	defer logger.AuditLog(ctx, w, r, nil)
 
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -284,7 +284,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	ctx = newContext(r, w, action)
-	defer logger.AuditLog(w, r, action, nil)
+	defer logger.AuditLog(ctx, w, r, nil)
 
 	if globalOpenIDValidators == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errServerNotInitialized)
@@ -437,7 +437,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithLDAPIdentity")
 
-	defer logger.AuditLog(w, r, "AssumeRoleWithLDAPIdentity", nil, stsLDAPPassword)
+	defer logger.AuditLog(ctx, w, r, nil, stsLDAPPassword)
 
 	// Parse the incoming form data.
 	if err := r.ParseForm(); err != nil {

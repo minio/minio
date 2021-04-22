@@ -43,6 +43,7 @@ type ReqInfo struct {
 	API          string   // API name - GetObject PutObject NewMultipartUpload etc.
 	BucketName   string   // Bucket name
 	ObjectName   string   // Object name
+	ObjectNames  []string // Object names for Multi delete API
 	tags         []KeyVal // Any additional info not accommodated by above fields
 	sync.RWMutex
 }

@@ -34,13 +34,14 @@ type Entry struct {
 	DeploymentID string `json:"deploymentid,omitempty"`
 	Time         string `json:"time"`
 	API          struct {
-		Name            string `json:"name,omitempty"`
-		Bucket          string `json:"bucket,omitempty"`
-		Object          string `json:"object,omitempty"`
-		Status          string `json:"status,omitempty"`
-		StatusCode      int    `json:"statusCode,omitempty"`
-		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
-		TimeToResponse  string `json:"timeToResponse,omitempty"`
+		Name            string   `json:"name,omitempty"`
+		Bucket          string   `json:"bucket,omitempty"`
+		Object          string   `json:"object,omitempty"`
+		Objects         []string `json:"objects,omitempty"`
+		Status          string   `json:"status,omitempty"`
+		StatusCode      int      `json:"statusCode,omitempty"`
+		TimeToFirstByte string   `json:"timeToFirstByte,omitempty"`
+		TimeToResponse  string   `json:"timeToResponse,omitempty"`
 	} `json:"api"`
 	RemoteHost string                 `json:"remotehost,omitempty"`
 	RequestID  string                 `json:"requestID,omitempty"`
@@ -49,10 +50,23 @@ type Entry struct {
 	ReqQuery   map[string]string      `json:"requestQuery,omitempty"`
 	ReqHeader  map[string]string      `json:"requestHeader,omitempty"`
 	RespHeader map[string]string      `json:"responseHeader,omitempty"`
+
+	Trigger string `json:"trigger,omitempty"`
+}
+
+func NewEntry(deploymentID string) Entry {
+	return Entry{
+		Version:      Version,
+		DeploymentID: deploymentID,
+		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+	}
+
 }
 
 // ToEntry - constructs an audit entry object.
 func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, deploymentID string) Entry {
+	entry := NewEntry(deploymentID)
+
 	q := r.URL.Query()
 	reqQuery := make(map[string]string, len(q))
 	for k, v := range q {
@@ -69,18 +83,13 @@ func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interf
 	}
 	respHeader[xhttp.ETag] = strings.Trim(respHeader[xhttp.ETag], `"`)
 
-	entry := Entry{
-		Version:      Version,
-		DeploymentID: deploymentID,
-		RemoteHost:   handlers.GetSourceIP(r),
-		RequestID:    wh.Get(xhttp.AmzRequestID),
-		UserAgent:    r.UserAgent(),
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
-		ReqQuery:     reqQuery,
-		ReqHeader:    reqHeader,
-		ReqClaims:    reqClaims,
-		RespHeader:   respHeader,
-	}
+	entry.RemoteHost = handlers.GetSourceIP(r)
+	entry.RequestID = wh.Get(xhttp.AmzRequestID)
+	entry.UserAgent = r.UserAgent()
+	entry.ReqQuery = reqQuery
+	entry.ReqHeader = reqHeader
+	entry.ReqClaims = reqClaims
+	entry.RespHeader = respHeader
 
 	return entry
 }
