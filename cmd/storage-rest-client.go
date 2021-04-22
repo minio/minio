@@ -221,7 +221,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	}()
 	err = newCache.deserialize(pr)
 	pr.CloseWithError(err)
-	return newCache, err
+	return newCache, toStorageErr(err)
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
@@ -337,10 +337,6 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
-	if err != nil {
-		return err
-	}
-	_, err = waitForHTTPResponse(respBody)
 	defer http.DrainBody(respBody)
 	return err
 }
@@ -459,7 +455,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	defer readMsgpReaderPool.Put(dec)
 
 	err = fi.DecodeMsg(dec)
-	return fi, err
+	return fi, toStorageErr(err)
 }
 
 // ReadAll - reads all contents of a file.
@@ -482,11 +478,7 @@ func (client *storageRESTClient) ReadFileStream(ctx context.Context, volume, pat
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(ctx, storageRESTMethodReadFileStream, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-	return respBody, nil
+	return client.call(ctx, storageRESTMethodReadFileStream, values, nil, -1)
 }
 
 // ReadFile - reads section of a file.
@@ -509,7 +501,7 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 	}
 	defer http.DrainBody(respBody)
 	n, err := io.ReadFull(respBody, buf)
-	return int64(n), err
+	return int64(n), toStorageErr(err)
 }
 
 // ListDir - lists a directory.
@@ -524,7 +516,7 @@ func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath st
 	}
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&entries)
-	return entries, err
+	return entries, toStorageErr(err)
 }
 
 // DeleteFile - deletes a file.
@@ -570,7 +562,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		for i := range errs {
-			errs[i] = err
+			errs[i] = toStorageErr(err)
 		}
 		return errs
 	}
@@ -620,12 +612,12 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 
 	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return err
+		return toStorageErr(err)
 	}
 
 	verifyResp := &VerifyFileResp{}
 	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
-		return err
+		return toStorageErr(err)
 	}
 
 	return toStorageErr(verifyResp.Err)
