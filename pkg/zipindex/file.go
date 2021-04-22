@@ -289,9 +289,11 @@ func FindSerialized(b []byte, name string) (*File, error) {
 				if i > idx {
 					continue
 				}
-				// Compressed size adds to offset
-				cur.Offset += val64
 				cur.CompressedSize64 = uint64(int64(cur.CompressedSize64) + val64)
+				if i < idx {
+					// Compressed size adds to offset for all before idx.
+					cur.Offset += int64(cur.CompressedSize64)
+				}
 			case 1: // USizes []int64
 				val64, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {

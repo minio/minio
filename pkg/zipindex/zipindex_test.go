@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/klauspost/compress/zip"
@@ -117,6 +118,10 @@ func TestReadDir(t *testing.T) {
 				if f, err := FindSerialized(ser, file.Name); err != nil || f == nil {
 					t.Errorf("FindSerialized: could not find regular file %v, err: %v, file: %v", file.Name, err, f)
 					continue
+				} else {
+					if !reflect.DeepEqual(*f, *gotFile) {
+						t.Errorf("FindSerialized returned %+v\nfiles.Find returned: %+v", *f, *gotFile)
+					}
 				}
 
 				wantRC, wantErr := file.Open()
