@@ -66,10 +66,10 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	_, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	_, err = pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	return err
 }
 
@@ -283,73 +283,62 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // operation(s) on the object.
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
 	onlineDisks := er.getDisks()
-	parityBlocks := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
-	if parityBlocks <= 0 {
-		parityBlocks = er.defaultParityCount
+	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	if parityDrives <= 0 {
+		parityDrives = er.defaultParityCount
 	}
 
-	dataBlocks := len(onlineDisks) - parityBlocks
-	fi := newFileInfo(pathJoin(bucket, object), dataBlocks, parityBlocks)
-
+	dataDrives := len(onlineDisks) - parityDrives
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data
-	writeQuorum := dataBlocks
-	if dataBlocks == parityBlocks {
+	writeQuorum := dataDrives
+	if dataDrives == parityDrives {
 		writeQuorum++
 	}
 
-	if opts.UserDefined["content-type"] == "" {
-		contentType := mimedb.TypeByExtension(path.Ext(object))
-		opts.UserDefined["content-type"] = contentType
-	}
+	// Initialize parts metadata
+	partsMetadata := make([]FileInfo, len(onlineDisks))
 
-	// Calculate the version to be saved.
+	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
 	if opts.Versioned {
 		fi.VersionID = opts.VersionID
 		if fi.VersionID == "" {
 			fi.VersionID = mustGetUUID()
 		}
 	}
-
 	fi.DataDir = mustGetUUID()
-	fi.ModTime = UTCNow()
-	fi.Metadata = cloneMSS(opts.UserDefined)
+
+	// Initialize erasure metadata.
+	for index := range partsMetadata {
+		partsMetadata[index] = fi
+	}
+
+	// Guess content-type from the extension if possible.
+	if opts.UserDefined["content-type"] == "" {
+		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
+	}
+
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(onlineDisks, partsMetadata, fi)
+
+	// Fill all the necessary metadata.
+	// Update `xl.meta` content on each disks.
+	for index := range partsMetadata {
+		partsMetadata[index].Metadata = opts.UserDefined
+		partsMetadata[index].ModTime = modTime
+	}
 
 	uploadID := mustGetUUID()
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
-	tempUploadIDPath := uploadID
 
-	// Delete the tmp path later in case we fail to commit (ignore
-	// returned errors) - this will be a no-op in case of a commit
-	// success.
-	var online int
-	defer func() {
-		if online != len(onlineDisks) {
-			er.deleteObject(context.Background(), minioMetaTmpBucket, tempUploadIDPath, writeQuorum)
-		}
-	}()
-
-	var partsMetadata = make([]FileInfo, len(onlineDisks))
-	for i := range onlineDisks {
-		partsMetadata[i] = fi
-	}
-
-	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(onlineDisks, partsMetadata, fi.Erasure.Distribution)
-
-	var err error
 	// Write updated `xl.meta` to all disks.
-	onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, writeQuorum)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
-	}
-
-	// Attempt to rename temp upload object to actual upload path object
-	_, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, true, writeQuorum, nil)
-	if err != nil {
+	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
-
-	online = countOnlineDisks(onlineDisks)
 
 	// Return success.
 	return uploadID, nil
@@ -435,10 +424,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return pi, err
 	}
@@ -545,10 +534,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// Get current highest version based on re-read partsMetadata.
-	onlineDisks, modTime = listOnlineDisks(onlineDisks, partsMetadata, errs)
+	onlineDisks, modTime, dataDir = listOnlineDisks(onlineDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
+	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return pi, err
 	}
@@ -633,10 +622,10 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		return result, toObjectErr(reducedErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, readQuorum)
 	if err != nil {
 		return result, err
 	}
@@ -682,10 +671,10 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		return result, toObjectErr(reducedErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return result, err
 	}
@@ -787,19 +776,19 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(reducedErr, bucket, object)
 	}
 
-	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
+
+	// Pick one from the first valid metadata.
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
+	if err != nil {
+		return oi, err
+	}
 
 	// Calculate full object size.
 	var objectSize int64
 
 	// Calculate consolidated actual size.
 	var objectActualSize int64
-
-	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
-	if err != nil {
-		return oi, err
-	}
 
 	// Order online disks in accordance with distribution order.
 	// Order parts metadata in accordance with distribution order.

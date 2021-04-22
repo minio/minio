@@ -232,15 +232,17 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 	return 0, 0, InvalidRange{}
 }
 
-func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
+func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
 	for i, meta := range metaArr {
-		if meta.IsValid() && meta.ModTime.Equal(modTime) {
+		if meta.IsValid() && meta.ModTime.Equal(modTime) && meta.DataDir == dataDir {
 			for _, part := range meta.Parts {
 				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
 			}
 			h.Write([]byte(fmt.Sprintf("%v", meta.Erasure.Distribution)))
+			// make sure that length of Data is same
+			h.Write([]byte(fmt.Sprintf("%v", len(meta.Data))))
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()
 		}
@@ -278,8 +280,8 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
-func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
-	return findFileInfoInQuorum(ctx, metaArr, modTime, quorum)
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
+	return findFileInfoInQuorum(ctx, metaArr, modTime, dataDir, quorum)
 }
 
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.

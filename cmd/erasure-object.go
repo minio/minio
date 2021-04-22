@@ -81,10 +81,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(storageDisks, metaArr, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -421,10 +421,10 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err = pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return fi, nil, nil, err
 	}
@@ -435,7 +435,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			missingBlocks++
 			continue
 		}
-		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) {
+		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) && metaArr[i].DataDir == fi.DataDir {
 			continue
 		}
 		missingBlocks++
@@ -658,7 +658,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// Order disks according to erasure distribution
 	var onlineDisks []StorageAPI
-	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(storageDisks, partsMetadata, fi.Erasure.Distribution)
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(storageDisks, partsMetadata, fi)
 
 	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
@@ -755,6 +755,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 		if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
 			partsMetadata[i].Data = inlineBuffers[i].Bytes()
+		} else {
+			partsMetadata[i].Data = nil
 		}
 		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
@@ -783,9 +785,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = opts.UserDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
-		if len(inlineBuffers) > 0 && inlineBuffers[index] != nil {
-			partsMetadata[index].Data = inlineBuffers[index].Bytes()
-		}
 	}
 
 	// Rename the successfully written temporary object to final location.
@@ -1183,10 +1182,10 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -1234,10 +1233,10 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}

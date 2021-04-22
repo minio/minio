@@ -157,10 +157,11 @@ func TestObjectToPartOffset(t *testing.T) {
 }
 
 func TestFindFileInfoInQuorum(t *testing.T) {
-	getNFInfo := func(n int, quorum int, t int64) []FileInfo {
+	getNFInfo := func(n int, quorum int, t int64, dataDir string) []FileInfo {
 		fi := newFileInfo("test", 8, 8)
 		fi.AddObjectPart(1, "etag", 100, 100)
 		fi.ModTime = time.Unix(t, 0)
+		fi.DataDir = dataDir
 		fis := make([]FileInfo, n)
 		for i := range fis {
 			fis[i] = fi
@@ -176,16 +177,19 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	tests := []struct {
 		fis         []FileInfo
 		modTime     time.Time
+		dataDir     string
 		expectedErr error
 	}{
 		{
-			fis:         getNFInfo(16, 16, 1603863445),
+			fis:         getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
 			modTime:     time.Unix(1603863445, 0),
+			dataDir:     "36a21454-a2ca-11eb-bbaa-93a81c686f21",
 			expectedErr: nil,
 		},
 		{
-			fis:         getNFInfo(16, 7, 1603863445),
+			fis:         getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
 			modTime:     time.Unix(1603863445, 0),
+			dataDir:     "36a21454-a2ca-11eb-bbaa-93a81c686f21",
 			expectedErr: errErasureReadQuorum,
 		},
 	}
@@ -193,7 +197,7 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run("", func(t *testing.T) {
-			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, 8)
+			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, test.dataDir, 8)
 			if err != test.expectedErr {
 				t.Errorf("Expected %s, got %s", test.expectedErr, err)
 			}
