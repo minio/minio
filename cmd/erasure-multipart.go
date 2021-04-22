@@ -494,6 +494,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	n, err := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return pi, toObjectErr(err, bucket, object)
 	}
 
@@ -528,6 +529,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	partPath := pathJoin(uploadIDPath, fi.DataDir, partSuffix)
 	onlineDisks, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, false, writeQuorum, nil)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
@@ -544,7 +546,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Pick one from the first valid metadata.
 	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
 	if err != nil {
-		return pi, err
+		logger.LogIf(ctx, err)
+		return pi, toObjectErr(err, bucket, object)
 	}
 
 	// Once part is successfully committed, proceed with updating erasure metadata.
@@ -571,6 +574,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Writes update `xl.meta` format for each disk.
 	if _, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
+		logger.LogIf(ctx, err)
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
