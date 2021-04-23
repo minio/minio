@@ -49,6 +49,25 @@
 //
 //	{`Multi-line
 //	field`, `comma is ,`}
+//
+// Copyright 2021 MinIO, Inc. All rights reserved.
+// forked from https://golang.org/pkg/encoding/csv
+// modified to be used with MinIO under GNU Affero General
+// Public License 3.0 license that can be found in
+// the LICENSE file.
+//
+// Main modifications include
+// - Configurable 'quote' parameter
+// - Performance improvements
+//    benchmark                                            old ns/op     new ns/op     delta
+//    BenchmarkRead-8                                      2807          2189          -22.02%
+//    BenchmarkReadWithFieldsPerRecord-8                   2802          2179          -22.23%
+//    BenchmarkReadWithoutFieldsPerRecord-8                2824          2181          -22.77%
+//    BenchmarkReadLargeFields-8                           3584          3371          -5.94%
+//    BenchmarkReadReuseRecord-8                           2044          1480          -27.59%
+//    BenchmarkReadReuseRecordWithFieldsPerRecord-8        2056          1483          -27.87%
+//    BenchmarkReadReuseRecordWithoutFieldsPerRecord-8     2047          1482          -27.60%
+//    BenchmarkReadReuseRecordLargeFields-8                2777          2594          -6.59%
 package csv
 
 import (
