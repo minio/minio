@@ -342,6 +342,10 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 	if err != nil {
 		return err
 	}
+
+	// Send audit for the lifecycle delete operation
+	auditLogLifecycle(ctx, bucket, object)
+
 	eventName := event.ObjectRemovedDelete
 	if lcOpts.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated

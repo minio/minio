@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/message/audit"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
@@ -1058,6 +1059,9 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		return false
 	}
 
+	// Send audit for the lifecycle delete operation
+	auditLogLifecycle(ctx, obj.Bucket, obj.Name)
+
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated
@@ -1274,4 +1278,14 @@ func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 	d.maxSleep = maxWait
 	d.cycle = make(chan struct{})
 	return nil
+}
+
+func auditLogLifecycle(ctx context.Context, bucket, object string) {
+	entry := audit.NewEntry(globalDeploymentID)
+	entry.Trigger = "internal-scanner"
+	entry.API.Name = "DeleteObject"
+	entry.API.Bucket = bucket
+	entry.API.Object = object
+	ctx = logger.SetAuditEntry(ctx, &entry)
+	logger.AuditLog(ctx, nil, nil, nil)
 }

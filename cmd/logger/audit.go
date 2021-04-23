@@ -123,6 +123,31 @@ func (lrw *ResponseWriter) Size() int {
 	return lrw.bytesWritten
 }
 
+const contextAuditKey = contextKeyType("audit-entry")
+
+// SetAuditEntry sets Audit info in the context.
+func SetAuditEntry(ctx context.Context, audit *audit.Entry) context.Context {
+	if ctx == nil {
+		LogIf(context.Background(), fmt.Errorf("context is nil"))
+		return nil
+	}
+	return context.WithValue(ctx, contextAuditKey, audit)
+}
+
+// GetAuditEntry returns Audit entry if set.
+func GetAuditEntry(ctx context.Context) *audit.Entry {
+	if ctx != nil {
+		r, ok := ctx.Value(contextAuditKey).(*audit.Entry)
+		if ok {
+			return r
+		}
+		r = &audit.Entry{}
+		SetAuditEntry(ctx, r)
+		return r
+	}
+	return nil
+}
+
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
@@ -130,41 +155,53 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		return
 	}
 
-	var (
-		statusCode      int
-		timeToResponse  time.Duration
-		timeToFirstByte time.Duration
-	)
+	var entry audit.Entry
 
-	st, ok := w.(*ResponseWriter)
-	if ok {
-		statusCode = st.StatusCode
-		timeToResponse = time.Now().UTC().Sub(st.StartTime)
-		timeToFirstByte = st.TimeToFirstByte
-	}
+	if w != nil && r != nil {
+		reqInfo := GetReqInfo(ctx)
+		if reqInfo == nil {
+			return
+		}
 
-	reqInfo := GetReqInfo(ctx)
-	if reqInfo == nil {
-		return
-	}
+		entry = audit.ToEntry(w, r, reqClaims, globalDeploymentID)
+		entry.Trigger = "external-request"
 
-	entry := audit.ToEntry(w, r, reqClaims, globalDeploymentID)
-	for _, filterKey := range filterKeys {
-		delete(entry.ReqClaims, filterKey)
-		delete(entry.ReqQuery, filterKey)
-		delete(entry.ReqHeader, filterKey)
-		delete(entry.RespHeader, filterKey)
-	}
-	entry.API.Name = reqInfo.API
-	entry.API.Bucket = reqInfo.BucketName
-	entry.API.Object = reqInfo.ObjectName
-	entry.API.Status = http.StatusText(statusCode)
-	entry.API.StatusCode = statusCode
-	entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
-	entry.Tags = reqInfo.GetTagsMap()
-	// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
-	if timeToFirstByte != 0 {
-		entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
+		for _, filterKey := range filterKeys {
+			delete(entry.ReqClaims, filterKey)
+			delete(entry.ReqQuery, filterKey)
+			delete(entry.ReqHeader, filterKey)
+			delete(entry.RespHeader, filterKey)
+		}
+
+		var (
+			statusCode      int
+			timeToResponse  time.Duration
+			timeToFirstByte time.Duration
+		)
+
+		st, ok := w.(*ResponseWriter)
+		if ok {
+			statusCode = st.StatusCode
+			timeToResponse = time.Now().UTC().Sub(st.StartTime)
+			timeToFirstByte = st.TimeToFirstByte
+		}
+
+		entry.API.Name = reqInfo.API
+		entry.API.Bucket = reqInfo.BucketName
+		entry.API.Object = reqInfo.ObjectName
+		entry.API.Status = http.StatusText(statusCode)
+		entry.API.StatusCode = statusCode
+		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
+		entry.Tags = reqInfo.GetTagsMap()
+		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
+		if timeToFirstByte != 0 {
+			entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
+		}
+	} else {
+		auditEntry := GetAuditEntry(ctx)
+		if auditEntry != nil {
+			entry = *auditEntry
+		}
 	}
 
 	// Send audit logs only to http targets.
