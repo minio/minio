@@ -230,7 +230,8 @@ func (w *metacacheWriter) Reset(out io.Writer) {
 }
 
 var s2DecPool = sync.Pool{New: func() interface{} {
-	return s2.NewReader(nil)
+	// Default alloc block for network transfer.
+	return s2.NewReader(nil, s2.ReaderAllocBlock(16<<10))
 }}
 
 // metacacheReader allows reading a cache stream.
