@@ -266,18 +266,21 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	bucketName := getRandomBucketName()
 
 	testCases := []struct {
-		bucketName string
-		success    bool
+		bucketName      string
+		success         bool
+		globalDNSConfig dns.Store
 	}{
-		{"", false},
-		{".", false},
-		{"ab", false},
-		{"minio", false},
-		{minioMetaBucket, false},
-		{bucketName, true},
+		{"", false, nil},
+		{".", false, nil},
+		{"ab", false, nil},
+		{"minio", false, nil},
+		{minioMetaBucket, false, nil},
+		{bucketName, true, nil},
+		{bucketName, false, &mockGlobalDNSConfig{}},
 	}
 
 	for i, testCase := range testCases {
+		globalDNSConfig = testCase.globalDNSConfig
 		makeBucketRequest := MakeBucketArgs{BucketName: testCase.bucketName}
 		makeBucketReply := &WebGenericRep{}
 		req, err := newTestWebRPCRequest("web.MakeBucket", authorization, makeBucketRequest)
@@ -294,6 +297,12 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 		}
 		if !testCase.success && err == nil {
 			t.Fatalf("Test %d: Should fail but it didn't (%s)", i+1, testCase.bucketName)
+		}
+		if !testCase.success && testCase.globalDNSConfig != nil {
+			existsErr := BucketAlreadyExists{}
+			if err.Error() != existsErr.Error() {
+				t.Fatalf("Test %d: Expected error message %q but got %q", i+1, existsErr.Error(), err.Error())
+			}
 		}
 	}
 }
@@ -1283,3 +1292,13 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
 }
+
+type mockGlobalDNSConfig struct{}
+
+func (m *mockGlobalDNSConfig) Put(bucket string) error                                  { return nil }
+func (m *mockGlobalDNSConfig) Get(bucket string) (srvRecord []dns.SrvRecord, err error) { return }
+func (m *mockGlobalDNSConfig) Delete(bucket string) error                               { return nil }
+func (m *mockGlobalDNSConfig) List() (mSrvRecord map[string][]dns.SrvRecord, err error) { return }
+func (m *mockGlobalDNSConfig) DeleteRecord(record dns.SrvRecord) error                  { return nil }
+func (m *mockGlobalDNSConfig) Close() error                                             { return nil }
+func (m *mockGlobalDNSConfig) String() string                                           { return "" }

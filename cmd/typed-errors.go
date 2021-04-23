@@ -69,9 +69,6 @@ var errNotFirstDisk = errors.New("Not first disk")
 // error returned by first disk waiting to initialize other servers.
 var errFirstDiskWait = errors.New("Waiting on other disks")
 
-// error returned when a bucket already exists
-var errBucketAlreadyExists = errors.New("Your previous request to create the named bucket succeeded and you already own it")
-
 // error returned for a negative actual size.
 var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 
