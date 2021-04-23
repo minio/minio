@@ -31,6 +31,8 @@ const (
 
 	// StorageInfoAdminAction - allow listing server info
 	StorageInfoAdminAction = "admin:StorageInfo"
+	// PrometheusAdminAction - prometheus info action
+	PrometheusAdminAction = "admin:Prometheus"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// ForceUnlockAdminAction - allow force unlocking locks
@@ -141,6 +143,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	DataUsageInfoAdminAction:        {},
 	TopLocksAdminAction:             {},
 	ProfilingAdminAction:            {},
+	PrometheusAdminAction:           {},
 	TraceAdminAction:                {},
 	ConsoleLogAdminAction:           {},
 	KMSKeyStatusAdminAction:         {},
