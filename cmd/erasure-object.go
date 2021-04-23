@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -26,13 +27,14 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -62,14 +64,14 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
-
-	lk := er.NewNSLock(dstBucket, dstObject)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return oi, err
+	if !dstOpts.NoLock {
+		lk := er.NewNSLock(dstBucket, dstObject)
+		ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return oi, err
+		}
+		defer lk.Unlock()
 	}
-	defer lk.Unlock()
-
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, true)
@@ -180,8 +182,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	}
 	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
 		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
-		restoreHdr, ok := caseInsensitiveMap(objInfo.UserDefined).Lookup(xhttp.AmzRestore)
-		if !ok || !strings.HasPrefix(restoreHdr, "ongoing-request=false") || (!objInfo.RestoreExpires.IsZero() && time.Now().After(objInfo.RestoreExpires)) {
+		if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
 			return getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
 		}
 	}
@@ -459,13 +460,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
-	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-		// overlay storage class for transitioned objects with transition tier SC Label
-		if sc := transitionSC(ctx, bucket); sc != "" {
-			objInfo.StorageClass = sc
-		}
-	}
-	if !fi.VersionPurgeStatus.Empty() && opts.VersionID != "" {
+	if !fi.VersionPurgeStatus.Empty() {
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
@@ -642,12 +637,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partsMetadata := make([]FileInfo, len(storageDisks))
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
-
-	if opts.Versioned {
-		fi.VersionID = opts.VersionID
-		if fi.VersionID == "" {
-			fi.VersionID = mustGetUUID()
-		}
+	fi.VersionID = opts.VersionID
+	if opts.Versioned && fi.VersionID == "" {
+		fi.VersionID = mustGetUUID()
 	}
 	fi.DataDir = mustGetUUID()
 
@@ -1000,7 +992,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
 				ObjectName:                    versions[objIndex].Name,
 				VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
-				PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 			}
 		} else {
 			dobjects[objIndex] = DeletedObject{
@@ -1008,7 +999,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				VersionID:                     versions[objIndex].VersionID,
 				VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
 				DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
-				PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 			}
 		}
 	}
@@ -1092,6 +1082,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
+
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
@@ -1101,6 +1092,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				ModTime:                       modTime,
 				DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 				VersionPurgeStatus:            opts.VersionPurgeStatus,
+				TransitionStatus:              opts.Transition.Status,
+				ExpireRestored:                opts.Transition.ExpireRestored,
 			}
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
@@ -1108,8 +1101,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
-			fi.TransitionStatus = opts.TransitionStatus
-
 			// versioning suspended means we add `null`
 			// version as delete marker
 			// Add delete marker, since we don't have any version specified explicitly.
@@ -1130,7 +1121,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ModTime:                       modTime,
 		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
-		TransitionStatus:              opts.TransitionStatus,
+		TransitionStatus:              opts.Transition.Status,
+		ExpireRestored:                opts.Transition.ExpireRestored,
 	}, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
@@ -1300,4 +1292,235 @@ func (er erasureObjects) GetObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	return tags.ParseObjectTags(oi.UserTags)
+}
+
+// TransitionObject - transition object content to target tier.
+func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	tgtClient, err := globalTierConfigMgr.getDriver(opts.Transition.Tier)
+	if err != nil {
+		return err
+	}
+	// Acquire write lock before starting to transition the object.
+	lk := er.NewNSLock(bucket, object)
+	ctx, err = lk.GetLock(ctx, globalDeleteOperationTimeout)
+	if err != nil {
+		return err
+	}
+	defer lk.Unlock()
+
+	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+	// verify that the object queued for transition is identical to that on disk.
+	if !opts.MTime.Equal(fi.ModTime) || !strings.EqualFold(opts.Transition.ETag, extractETag(fi.Metadata)) {
+		return toObjectErr(errFileNotFound, bucket, object)
+	}
+	// if object already transitioned, return
+	if fi.TransitionStatus == lifecycle.TransitionComplete {
+		return nil
+	}
+	if fi.XLV1 {
+		if _, err = er.HealObject(ctx, bucket, object, "", madmin.HealOpts{NoLock: true}); err != nil {
+			return err
+		}
+		// Fetch FileInfo again. HealObject migrates object the latest
+		// format. Among other things this changes fi.DataDir and
+		// possibly fi.Data (if data is inlined).
+		fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, bucket, object, opts, true)
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+	destObj, err := genTransitionObjName()
+	if err != nil {
+		return err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		err := er.getObjectWithFileInfo(ctx, bucket, object, 0, fi.Size, pw, fi, metaArr, onlineDisks)
+		pw.CloseWithError(err)
+	}()
+	if err = tgtClient.Put(ctx, destObj, pr, fi.Size); err != nil {
+		pr.Close()
+		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
+		return err
+	}
+	pr.Close()
+	fi.TransitionStatus = lifecycle.TransitionComplete
+	fi.TransitionedObjName = destObj
+	fi.TransitionTier = opts.Transition.Tier
+	eventName := event.ObjectTransitionComplete
+
+	storageDisks := er.getDisks()
+	writeQuorum := len(storageDisks)/2 + 1
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+		eventName = event.ObjectTransitionFailed
+	}
+	for _, disk := range storageDisks {
+		if disk != nil && disk.IsOnline() {
+			continue
+		}
+		er.addPartial(bucket, object, opts.VersionID)
+		break
+	}
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: bucket,
+		Object: ObjectInfo{
+			Name:      object,
+			VersionID: opts.VersionID,
+		},
+		Host: "Internal: [ILM-Transition]",
+	})
+	return err
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+// This is similar to PostObjectRestore from AWS GLACIER
+// storage class. When PostObjectRestore API is called, a temporary copy of the object
+// is restored locally to the bucket on source cluster until the restore expiry date.
+// The copy that was transitioned continues to reside in the transitioned tier.
+func (er erasureObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return er.restoreTransitionedObject(ctx, bucket, object, opts)
+}
+
+// update restore status header in the metadata
+func (er erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, object string, objInfo ObjectInfo, opts ObjectOptions, rerr error) error {
+	oi := objInfo.Clone()
+	oi.metadataOnly = true // Perform only metadata updates.
+
+	if rerr == nil {
+		oi.UserDefined[xhttp.AmzRestore] = completedRestoreObj(opts.Transition.RestoreExpiry).String()
+	} else { // allow retry in the case of failure to restore
+		delete(oi.UserDefined, xhttp.AmzRestore)
+	}
+	if _, err := er.CopyObject(ctx, bucket, object, bucket, object, oi, ObjectOptions{
+		VersionID: oi.VersionID,
+	}, ObjectOptions{
+		VersionID: oi.VersionID,
+	}); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update transition restore metadata for %s/%s(%s): %s", bucket, object, oi.VersionID, err))
+		return err
+	}
+	return nil
+}
+
+// restoreTransitionedObject for multipart object chunks the file stream from remote tier into the same number of parts
+// as in the xl.meta for this version and rehydrates the part.n into the fi.DataDir for this version as in the xl.meta
+func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket string, object string, opts ObjectOptions) error {
+	defer func() {
+		ObjectPathUpdated(pathJoin(bucket, object))
+	}()
+	setRestoreHeaderFn := func(oi ObjectInfo, rerr error) error {
+		er.updateRestoreMetadata(ctx, bucket, object, oi, opts, rerr)
+		return rerr
+	}
+	var oi ObjectInfo
+	// get the file info on disk for transitioned object
+	actualfi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
+	if err != nil {
+		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
+	}
+
+	oi = actualfi.ToObjectInfo(bucket, object)
+	if len(oi.Parts) == 1 {
+		var rs *HTTPRangeSpec
+		gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, http.Header{}, oi, opts)
+		if err != nil {
+			return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
+		}
+		defer gr.Close()
+		hashReader, err := hash.NewReader(gr, gr.ObjInfo.Size, "", "", gr.ObjInfo.Size)
+		if err != nil {
+			return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
+		}
+		pReader := NewPutObjReader(hashReader)
+		ropts := putRestoreOpts(bucket, object, opts.Transition.RestoreRequest, oi)
+		ropts.UserDefined[xhttp.AmzRestore] = completedRestoreObj(opts.Transition.RestoreExpiry).String()
+		_, err = er.PutObject(ctx, bucket, object, pReader, ropts)
+		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
+	}
+	uploadID, err := er.NewMultipartUpload(ctx, bucket, object, opts)
+	if err != nil {
+		return setRestoreHeaderFn(oi, err)
+	}
+	var uploadedParts []CompletePart
+	var rs *HTTPRangeSpec
+	// get reader from the warm backend - note that even in the case of encrypted objects, this stream is still encrypted.
+	gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, http.Header{}, oi, opts)
+	if err != nil {
+		return setRestoreHeaderFn(oi, err)
+	}
+	defer gr.Close()
+	// rehydrate the parts back on disk as per the original xl.meta prior to transition
+	for _, partInfo := range oi.Parts {
+		hr, err := hash.NewReader(gr, partInfo.Size, "", "", partInfo.Size)
+		if err != nil {
+			return setRestoreHeaderFn(oi, err)
+		}
+		pInfo, err := er.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
+		if err != nil {
+			return setRestoreHeaderFn(oi, err)
+		}
+		uploadedParts = append(uploadedParts, CompletePart{
+			PartNumber: pInfo.PartNumber,
+			ETag:       pInfo.ETag,
+		})
+	}
+
+	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
+	storageDisks := er.getDisks()
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath, "", false)
+
+	// get Quorum for this object
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
+	if err != nil {
+		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
+	}
+
+	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	if reducedErr == errErasureWriteQuorum {
+		return setRestoreHeaderFn(oi, toObjectErr(reducedErr, bucket, object))
+	}
+
+	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
+
+	// Pick one from the first valid metadata.
+	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
+	if err != nil {
+		return setRestoreHeaderFn(oi, err)
+	}
+	//validate parts created via multipart to transitioned object's parts info in xl.meta
+	partsMatch := true
+	if len(actualfi.Parts) != len(fi.Parts) {
+		partsMatch = false
+	}
+	if len(actualfi.Parts) == len(fi.Parts) {
+		for i, pi := range actualfi.Parts {
+			if fi.Parts[i].Size != pi.Size {
+				partsMatch = false
+			}
+		}
+	}
+
+	if !partsMatch {
+		return setRestoreHeaderFn(oi, InvalidObjectState{Bucket: bucket, Object: object})
+	}
+
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+	if err != nil {
+		return setRestoreHeaderFn(oi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath))
+	}
+	return setRestoreHeaderFn(oi, nil)
 }

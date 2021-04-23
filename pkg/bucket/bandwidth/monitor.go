@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package bandwidth
 
@@ -21,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/pkg/bandwidth"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // throttleBandwidth gets the throttle for bucket with the configured value
@@ -84,15 +85,15 @@ func SelectBuckets(buckets ...string) SelectionFunction {
 }
 
 // GetReport gets the report for all bucket bandwidth details.
-func (m *Monitor) GetReport(selectBucket SelectionFunction) *bandwidth.Report {
+func (m *Monitor) GetReport(selectBucket SelectionFunction) *madmin.BucketBandwidthReport {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	return m.getReport(selectBucket)
 }
 
-func (m *Monitor) getReport(selectBucket SelectionFunction) *bandwidth.Report {
-	report := &bandwidth.Report{
-		BucketStats: make(map[string]bandwidth.Details),
+func (m *Monitor) getReport(selectBucket SelectionFunction) *madmin.BucketBandwidthReport {
+	report := &madmin.BucketBandwidthReport{
+		BucketStats: make(map[string]madmin.BandwidthDetails),
 	}
 	for bucket, bucketMeasurement := range m.activeBuckets {
 		if !selectBucket(bucket) {
@@ -102,7 +103,7 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *bandwidth.Report {
 		if !ok {
 			continue
 		}
-		report.BucketStats[bucket] = bandwidth.Details{
+		report.BucketStats[bucket] = madmin.BandwidthDetails{
 			LimitInBytesPerSecond:            bucketThrottle.clusterBandwidth,
 			CurrentBandwidthInBytesPerSecond: bucketMeasurement.getExpMovingAvgBytesPerSecond(),
 		}

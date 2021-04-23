@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -861,17 +862,18 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 	versionID := meta.oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:             i.objectPath(),
-			UserTags:         meta.oi.UserTags,
-			ModTime:          meta.oi.ModTime,
-			VersionID:        meta.oi.VersionID,
-			DeleteMarker:     meta.oi.DeleteMarker,
-			IsLatest:         meta.oi.IsLatest,
-			NumVersions:      meta.oi.NumVersions,
-			SuccessorModTime: meta.oi.SuccessorModTime,
-			RestoreOngoing:   meta.oi.RestoreOngoing,
-			RestoreExpires:   meta.oi.RestoreExpires,
-			TransitionStatus: meta.oi.TransitionStatus,
+			Name:                   i.objectPath(),
+			UserTags:               meta.oi.UserTags,
+			ModTime:                meta.oi.ModTime,
+			VersionID:              meta.oi.VersionID,
+			DeleteMarker:           meta.oi.DeleteMarker,
+			IsLatest:               meta.oi.IsLatest,
+			NumVersions:            meta.oi.NumVersions,
+			SuccessorModTime:       meta.oi.SuccessorModTime,
+			RestoreOngoing:         meta.oi.RestoreOngoing,
+			RestoreExpires:         meta.oi.RestoreExpires,
+			TransitionStatus:       meta.oi.TransitionStatus,
+			RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 		})
 	if i.debug {
 		if versionID != "" {
@@ -947,17 +949,18 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 
 func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
 	lcOpts := lifecycle.ObjectOpts{
-		Name:             obj.Name,
-		UserTags:         obj.UserTags,
-		ModTime:          obj.ModTime,
-		VersionID:        obj.VersionID,
-		DeleteMarker:     obj.DeleteMarker,
-		IsLatest:         obj.IsLatest,
-		NumVersions:      obj.NumVersions,
-		SuccessorModTime: obj.SuccessorModTime,
-		RestoreOngoing:   obj.RestoreOngoing,
-		RestoreExpires:   obj.RestoreExpires,
-		TransitionStatus: obj.TransitionStatus,
+		Name:                   obj.Name,
+		UserTags:               obj.UserTags,
+		ModTime:                obj.ModTime,
+		VersionID:              obj.VersionID,
+		DeleteMarker:           obj.DeleteMarker,
+		IsLatest:               obj.IsLatest,
+		NumVersions:            obj.NumVersions,
+		SuccessorModTime:       obj.SuccessorModTime,
+		RestoreOngoing:         obj.RestoreOngoing,
+		RestoreExpires:         obj.RestoreExpires,
+		TransitionStatus:       obj.TransitionStatus,
+		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 	}
 
 	action = lc.ComputeAction(lcOpts)
@@ -994,17 +997,14 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 }
 
 func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
-	opts := ObjectOptions{}
+	srcOpts := ObjectOptions{}
 	if obj.TransitionStatus == "" {
-		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
-		opts.VersionID = obj.VersionID
-		opts.TransitionStatus = lifecycle.TransitionPending
-		if _, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts); err != nil {
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				return false
-			}
-			// Assume it is still there.
-			logger.LogIf(ctx, err)
+		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		srcOpts.VersionID = obj.VersionID
+		// mark transition as pending
+		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
+		obj.metadataOnly = true // Perform only metadata updates.
+		if obj.DeleteMarker {
 			return false
 		}
 	}
@@ -1028,14 +1028,18 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		TransitionStatus: obj.TransitionStatus,
 	}
 
-	if err := deleteTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, restoredObject, false); err != nil {
+	action := expireObj
+	if restoredObject {
+		action = expireRestoredObj
+	}
+	if err := expireTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, action); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
 		logger.LogIf(ctx, err)
 		return false
 	}
-	// Notification already sent at *deleteTransitionedObject*, just return 'true' here.
+	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
 	return true
 }
 

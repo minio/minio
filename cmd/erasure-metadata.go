@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -150,6 +151,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	}
 
 	objInfo.TransitionStatus = fi.TransitionStatus
+	objInfo.transitionedObjName = fi.TransitionedObjName
+	objInfo.TransitionTier = fi.TransitionTier
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
@@ -166,11 +169,15 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
+
 	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus
 	// set restore status for transitioned object
-	if ongoing, exp, err := parseRestoreHeaderFromMeta(fi.Metadata); err == nil {
-		objInfo.RestoreOngoing = ongoing
-		objInfo.RestoreExpires = exp
+	restoreHdr, ok := fi.Metadata[xhttp.AmzRestore]
+	if ok {
+		if restoreStatus, err := parseRestoreObjStatus(restoreHdr); err == nil {
+			objInfo.RestoreOngoing = restoreStatus.Ongoing()
+			objInfo.RestoreExpires, _ = restoreStatus.Expiry()
+		}
 	}
 	// Success.
 	return objInfo

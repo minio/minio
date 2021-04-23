@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -29,6 +30,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -351,7 +353,6 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
-
 		meta[k] = v
 	}
 
@@ -372,9 +373,11 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 	if sc == "" {
 		sc = oi.StorageClass
 	}
-	if sc != "" {
+	// drop non standard storage classes for tiering from replication
+	if sc != "" && (sc == storageclass.RRS || sc == storageclass.STANDARD) {
 		meta[xhttp.AmzStorageClass] = sc
 	}
+
 	meta[xhttp.MinIOSourceETag] = oi.ETag
 	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
 	meta[xhttp.AmzBucketReplicationStatus] = replication.Replica.String()
@@ -414,7 +417,7 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 	}
 
 	sc := dest.StorageClass
-	if sc == "" {
+	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
 		sc = objInfo.StorageClass
 	}
 	putOpts = miniogo.PutObjectOptions{
@@ -611,6 +614,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		return
 	}
+
 	defer gr.Close() // hold write lock for entire transaction
 
 	objInfo = gr.ObjInfo
@@ -719,7 +723,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, gr, opts)
 		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
 			replicationStatus = replication.Failed
-			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	}
 

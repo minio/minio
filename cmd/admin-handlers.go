@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -42,7 +43,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -1010,6 +1010,50 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusConflict,
 			}
+
+		// Tier admin API errors
+		case errors.Is(err, madmin.ErrTierNameEmpty):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierNameEmpty",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfig):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfig",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfigVersion):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfigVersion",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierTypeUnsupported):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierTypeUnsupported",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errTierBackendInUse):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierBackendInUse",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusConflict,
+			}
+		case errors.Is(err, errTierInsufficientCreds):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientCreds",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errIsTierPermError(err):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientPermissions",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}
@@ -1520,7 +1564,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	setEventStreamHeaders(w)
-	reportCh := make(chan bandwidth.Report)
+	reportCh := make(chan madmin.BucketBandwidthReport)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")

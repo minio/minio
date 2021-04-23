@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -844,37 +845,28 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if err != nil {
 		return err
 	}
-
-	// transitioned objects maintains metadata on the source cluster. When transition
-	// status is set, update the metadata to disk.
-	if !lastVersion || fi.TransitionStatus != "" {
-		// when data-dir is specified. Transition leverages existing DeleteObject
-		// api call to mark object as deleted. When object is pending transition,
-		// just update the metadata and avoid deleting data dir.
-		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-			versionID := fi.VersionID
-			if versionID == "" {
-				versionID = nullVersionID
-			}
-			xlMeta.data.remove(versionID)
-			// PR #11758 used DataDir, preserve it
-			// for users who might have used master
-			// branch
-			xlMeta.data.remove(dataDir)
-
-			filePath := pathJoin(volumeDir, path, dataDir)
-			if err = checkPathLength(filePath); err != nil {
-				return err
-			}
-
-			tmpuuid := mustGetUUID()
-			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-				if err != errFileNotFound {
-					return err
-				}
-			}
+	if dataDir != "" {
+		versionID := fi.VersionID
+		if versionID == "" {
+			versionID = nullVersionID
+		}
+		xlMeta.data.remove(versionID)
+		// PR #11758 used DataDir, preserve it
+		// for users who might have used master
+		// branch
+		xlMeta.data.remove(dataDir)
+		filePath := pathJoin(volumeDir, path, dataDir)
+		if err = checkPathLength(filePath); err != nil {
+			return err
 		}
 
+		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
+			if err != errFileNotFound {
+				return err
+			}
+		}
+	}
+	if !lastVersion {
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			return err
@@ -1866,7 +1858,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	var srcDataPath string
 	var dstDataPath string
 	dataDir := retainSlash(fi.DataDir)
-	if dataDir != "" {
+	// no need to rename dataDir paths for objects that are in transitionComplete state.
+	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionComplete {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
 		// it would additionally add `/` at the end and it comes in the
