@@ -238,6 +238,9 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 			return err
 		}
 
+		// Send audit for the lifecycle delete operation
+		auditLogLifecycle(ctx, bucket, object)
+
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
@@ -275,30 +278,9 @@ func genTransitionObjName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-<<<<<<< HEAD
-
-	// Send audit for the lifecycle delete operation
-	auditLogLifecycle(ctx, bucket, object)
-
-	eventName := event.ObjectRemovedDelete
-	if lcOpts.DeleteMarker {
-		eventName = event.ObjectRemovedDeleteMarkerCreated
-	}
-	// Notify object deleted event.
-	sendEvent(eventArgs{
-		EventName:  eventName,
-		BucketName: bucket,
-		Object:     objInfo,
-		Host:       "Internal: [ILM-EXPIRY]",
-	})
-
-	// should never reach here
-	return nil
-=======
 	us := u.String()
 	obj := fmt.Sprintf("%s/%s/%s", us[0:2], us[2:4], us)
 	return obj, nil
->>>>>>> ef4fac9f3... Support for remote tier management (#12090)
 }
 
 // transition object to target specified by the transition ARN. When an object is transitioned to another
