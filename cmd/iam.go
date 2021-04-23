@@ -355,12 +355,24 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 
 	if globalEtcdClient == nil {
 		var err error
-		if isGroup {
-			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, regularUser, isGroup, sys.iamGroupPolicyMap)
-		} else {
-			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, regularUser, isGroup, sys.iamUserPolicyMap)
+		userType := regularUser
+		if sys.usersSysType == LDAPUsersSysType {
+			userType = stsUser
 		}
 
+		if isGroup {
+			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamGroupPolicyMap)
+		} else {
+			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamUserPolicyMap)
+		}
+
+		if err == errNoSuchPolicy {
+			if isGroup {
+				delete(sys.iamGroupPolicyMap, userOrGroup)
+			} else {
+				delete(sys.iamUserPolicyMap, userOrGroup)
+			}
+		}
 		// Ignore policy not mapped error
 		if err != nil && err != errNoSuchPolicy {
 			return err
