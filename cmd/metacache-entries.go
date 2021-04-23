@@ -110,7 +110,9 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	if !isXL2V1Format(e.metadata) {
 		return false
 	}
-	var xlMeta xlMetaV2
+	xlMeta, release := tempXlMetaV2()
+	defer release()
+
 	if err := xlMeta.Load(e.metadata); err != nil || len(xlMeta.Versions) == 0 {
 		return true
 	}

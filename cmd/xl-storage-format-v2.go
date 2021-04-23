@@ -238,6 +238,21 @@ type xlMetaV2 struct {
 	data xlMetaInlineData `msg:"-"`
 }
 
+// tempXlMetaV2 returns a temporary xlMetaV2.
+// When usage is done, return control via the returned function.
+func tempXlMetaV2() (x *xlMetaV2, reUse func()) {
+	x = xlMetaV2Pool.Get().(*xlMetaV2)
+	return x, func() {
+		x.clear()
+		xlMetaV2Pool.Put(x)
+	}
+}
+
+func (z *xlMetaV2) clear() {
+	z.Versions = z.Versions[:0]
+	z.data = nil
+}
+
 // xlMetaInlineData is serialized data in [string][]byte pairs.
 //
 //msgp:ignore xlMetaInlineData
@@ -891,11 +906,6 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 	return nil
 }
 
-func newXLMetaV2(fi FileInfo) (xlMetaV2, error) {
-	xlMeta := xlMetaV2{}
-	return xlMeta, xlMeta.AddVersion(fi)
-}
-
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
 	versionID := ""
 	var uv uuid.UUID
@@ -937,7 +947,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	versionID := ""
 	var uv uuid.UUID
 	// check if the version is not "null"
-	if !bytes.Equal(j.VersionID[:], uv[:]) {
+	if j.VersionID != uv {
 		versionID = uuid.UUID(j.VersionID).String()
 	}
 	fi := FileInfo{

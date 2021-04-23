@@ -37,7 +37,8 @@ func (v versionsSorter) Less(i, j int) bool {
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
+		xlMeta, release := tempXlMetaV2()
+		defer release()
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
 			return FileInfoVersions{}, err
 		}
@@ -76,7 +77,9 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 
 func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
+		xlMeta, release := tempXlMetaV2()
+		defer release()
+
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
 			return FileInfo{}, err
 		}

@@ -191,13 +191,12 @@ func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
 
 // Test for gcsParseProjectID
 func TestGCSParseProjectID(t *testing.T) {
-	f, err := ioutil.TempFile("", "")
+	f, err := ioutil.TempFile("", "TestGCSParseProjectID-*")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer os.Remove(f.Name())
-	defer f.Close()
 
 	contents := `
 {
@@ -206,6 +205,7 @@ func TestGCSParseProjectID(t *testing.T) {
 }
 `
 	f.WriteString(contents)
+	f.Close()
 	projectID, err := gcsParseProjectID(f.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -218,8 +218,20 @@ func TestGCSParseProjectID(t *testing.T) {
 		t.Errorf(`Expected to fail but succeeded reading "non-existent"`)
 	}
 
-	f.WriteString(`,}`)
-
+	contents = `
+{
+  "type": "service_account",
+  "project_id": "miniotesting"
+},}
+`
+	f, err = ioutil.TempFile("", "TestGCSParseProjectID-*")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(f.Name())
+	f.WriteString(contents)
+	f.Close()
 	if _, err := gcsParseProjectID(f.Name()); err == nil {
 		t.Errorf(`Expected to fail reading corrupted credentials file`)
 	}
