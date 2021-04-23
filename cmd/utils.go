@@ -456,7 +456,7 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
 		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		ResponseHeaderTimeout: 15 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   15 * time.Second,
 		ExpectContinueTimeout: 15 * time.Second,
 		TLSClientConfig:       tlsConfig,
