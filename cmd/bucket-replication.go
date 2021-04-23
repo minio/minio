@@ -819,32 +819,34 @@ var (
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
-	once               sync.Once
-	mu                 sync.Mutex
-	size               int
+	objLayer           ObjectLayer
+	ctx                context.Context
+	mrfWorkerKillCh    chan struct{}
+	workerKillCh       chan struct{}
+	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
 	replicaCh          chan ReplicateObjectInfo
 	replicaDeleteCh    chan DeletedObjectVersionInfo
 	mrfReplicaCh       chan ReplicateObjectInfo
-	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
-	killCh             chan struct{}
-	wg                 sync.WaitGroup
-	ctx                context.Context
-	objLayer           ObjectLayer
+	workerSize         int
+	mrfWorkerSize      int
+	workerWg           sync.WaitGroup
+	mrfWorkerWg        sync.WaitGroup
+	once               sync.Once
+	mu                 sync.Mutex
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size
-func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
+func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts) *ReplicationPool {
 	pool := &ReplicationPool{
-		replicaCh:          make(chan ReplicateObjectInfo, 1000),
-		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
+		replicaCh:          make(chan ReplicateObjectInfo, 10000),
+		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 10000),
 		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
 		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
 		ctx:                ctx,
 		objLayer:           o,
 	}
-	pool.Resize(sz)
-	// add long running worker for handling most recent failures/pending replications
-	go pool.AddMRFWorker()
+	pool.ResizeWorkers(opts.Workers)
+	pool.ResizeFailedWorkers(opts.FailedWorkers)
 	return pool
 }
 
@@ -871,7 +873,7 @@ func (p *ReplicationPool) AddMRFWorker() {
 
 // AddWorker adds a replication worker to the pool
 func (p *ReplicationPool) AddWorker() {
-	defer p.wg.Done()
+	defer p.workerWg.Done()
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -886,26 +888,42 @@ func (p *ReplicationPool) AddWorker() {
 				return
 			}
 			replicateDelete(p.ctx, doi, p.objLayer)
-		case <-p.killCh:
+		case <-p.workerKillCh:
 			return
 		}
 	}
 
 }
 
-//Resize replication pool to new size
-func (p *ReplicationPool) Resize(n int) {
+// ResizeWorkers sets replication workers pool to new size
+func (p *ReplicationPool) ResizeWorkers(n int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for p.size < n {
-		p.size++
-		p.wg.Add(1)
+	for p.workerSize < n {
+		p.workerSize++
+		p.workerWg.Add(1)
 		go p.AddWorker()
 	}
-	for p.size > n {
-		p.size--
-		go func() { p.killCh <- struct{}{} }()
+	for p.workerSize > n {
+		p.workerSize--
+		go func() { p.workerKillCh <- struct{}{} }()
+	}
+}
+
+// ResizeFailedWorkers sets replication failed workers pool size
+func (p *ReplicationPool) ResizeFailedWorkers(n int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for p.mrfWorkerSize < n {
+		p.mrfWorkerSize++
+		p.mrfWorkerWg.Add(1)
+		go p.AddMRFWorker()
+	}
+	for p.mrfWorkerSize > n {
+		p.mrfWorkerSize--
+		go func() { p.mrfWorkerKillCh <- struct{}{} }()
 	}
 }
 
@@ -943,8 +961,16 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 	}
 }
 
+type replicationPoolOpts struct {
+	Workers       int
+	FailedWorkers int
+}
+
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
-	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationWorkers())
+	globalReplicationPool = NewReplicationPool(ctx, objectAPI, replicationPoolOpts{
+		Workers:       globalAPIConfig.getReplicationWorkers(),
+		FailedWorkers: globalAPIConfig.getReplicationFailedWorkers(),
+	})
 	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 }
 
