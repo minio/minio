@@ -216,7 +216,9 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 			}
 			return toJSONError(ctx, err)
 		}
-		return toJSONError(ctx, errBucketAlreadyExists)
+		return toJSONError(ctx, BucketAlreadyExists{
+			Bucket: args.BucketName,
+		})
 	}
 
 	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
