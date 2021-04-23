@@ -774,7 +774,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 
 	// re-queue failures once more - keep a retry count to avoid flooding the queue if
 	// the target site is down. Leave it to scanner to catch up instead.
-	if replicationStatus == replication.Failed && ri.RetryCount < 1 {
+	if replicationStatus != replication.Completed && ri.RetryCount < 1 {
 		ri.OpType = replication.HealReplicationType
 		ri.RetryCount++
 		globalReplicationPool.queueReplicaTask(ctx, ri)
