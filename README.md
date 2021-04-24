@@ -31,7 +31,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
@@ -51,7 +51,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
@@ -88,7 +88,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 ## Binary Download
 
@@ -106,7 +106,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 # GNU/Linux
@@ -136,7 +136,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
@@ -164,7 +164,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
 require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically,
@@ -196,7 +196,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
