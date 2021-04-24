@@ -1518,7 +1518,12 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, InvalidObjectState{Bucket: bucket, Object: object})
 	}
 
-	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
+		VersionID:        oi.VersionID,
+		MTime:            oi.ModTime,
+		Versioned:        globalBucketVersioningSys.Enabled(bucket),
+		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+	})
 	if err != nil {
 		return setRestoreHeaderFn(oi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath))
 	}
