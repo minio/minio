@@ -51,5 +51,11 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
+		config.HelpKV{
+			Key:         apiReplicationFailedWorkers,
+			Description: `set the number of replication workers for recently failed replicas, defaults to 4`,
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )

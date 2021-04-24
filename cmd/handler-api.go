@@ -36,8 +36,9 @@ type apiConfig struct {
 	extendListLife   time.Duration
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
-	totalDriveCount    int
-	replicationWorkers int
+	totalDriveCount          int
+	replicationWorkers       int
+	replicationFailedWorkers int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -82,8 +83,10 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.extendListLife = cfg.ExtendListLife
 	if globalReplicationPool != nil &&
 		cfg.ReplicationWorkers != t.replicationWorkers {
-		globalReplicationPool.Resize(cfg.ReplicationWorkers)
+		globalReplicationPool.ResizeFailedWorkers(cfg.ReplicationFailedWorkers)
+		globalReplicationPool.ResizeWorkers(cfg.ReplicationWorkers)
 	}
+	t.replicationFailedWorkers = cfg.ReplicationFailedWorkers
 	t.replicationWorkers = cfg.ReplicationWorkers
 }
 
@@ -163,6 +166,13 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 	}
+}
+
+func (t *apiConfig) getReplicationFailedWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.replicationFailedWorkers
 }
 
 func (t *apiConfig) getReplicationWorkers() int {
