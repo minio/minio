@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>MinIO Browser</title>
+
+        <link rel="icon" type="image/png" sizes="32x32" href="/minio/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="96x96" href="/minio/favicon-96x96.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/minio/favicon-16x16.png">
+
+        <link rel="stylesheet" href="/minio/loader.css" type="text/css">
+    </head>
+
+    <body>
+        <div class="page-load">
+            <div class="pl-inner">
+                <img src="/minio/logo.svg" alt="">
+            </div>
+        </div>
+        <div id="root"></div>
+
+        <!--[if lt IE 11]>
+            <div class="ie-warning">
+                <div class="iw-inner">
+                    <i class="iwi-icon fas fa-exclamation-triangle"></i>
+
+                    You are using Internet Explorer version 12.0 or lower. Due to security issues and lack of support for Web Standards it is highly recommended that you upgrade to a modern browser
+
+                    <ul>
+                        <li>
+                            <a href="http://www.google.com/chrome/">
+                                <img src="chrome.png" alt="">
+                                <div>Chrome</div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://www.mozilla.org/en-US/firefox/new/">
+                                <img src="firefox.png" alt="">
+                                <div>Firefox</div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://www.apple.com/safari/">
+                                <img src="safari.png" alt="">
+                                <div>Safari</div>
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="iwi-skip">Skip & Continue</div>
+                </div>
+            </div>
+        <![endif]-->
+
+        <script>currentUiVersion = 'MINIO_UI_VERSION'</script>
+        <script src="/minio/index_bundle.js"></script>
+    </body>
+</html>

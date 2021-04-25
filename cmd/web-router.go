@@ -47,7 +47,7 @@ func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-const assetPrefix = "production"
+const assetPrefix = "release"
 
 // specialAssets are files which are unique files not embedded inside index_bundle.js.
 const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon-16x16.png|favicon-32x32.png|favicon-96x96.png"

@@ -25,12 +25,12 @@ var PurgecssPlugin = require('purgecss-webpack-plugin')
 
 var exports = {
   context: __dirname,
-  mode: 'production',
+  mode: 'release',
   entry: [
     path.resolve(__dirname, 'app/index.js')
   ],
   output: {
-    path: path.resolve(__dirname, 'production'),
+    path: path.resolve(__dirname, 'release'),
     filename: 'index_bundle.js'
   },
   module: {

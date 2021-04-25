@@ -39,7 +39,7 @@ rmDir = function(dirPath) {
 
 async.waterfall([
     function(cb) {
-      rmDir('production');
+      rmDir('release');
       rmDir('dev');
       var cmd = 'webpack -p --config webpack.production.config.js'
       if (!isProduction) {

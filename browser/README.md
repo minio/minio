@@ -19,11 +19,13 @@ npm install
 
 ## Generating Assets
 
+> NOTE: if you are not part of MinIO organization please do not run this yourself and submit in a PR. Static assets in PRs are allowed only for authorized users.
+
 ```sh
 npm run release
 ```
 
-This generates `production` in the current directory. 
+This generates `release` in the current directory.
 
 
 ## Run MinIO Browser with live reload
@@ -166,4 +168,3 @@ npm run dev
 ```
 
 Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with the application.
-
