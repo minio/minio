@@ -345,8 +345,8 @@ func handleCommonEnvVars() {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
 	} else if env.IsSet(config.EnvKMSMasterKey) {
-		logger.LogIf(GlobalContext, errors.New("legacy KMS configuration"), fmt.Sprintf("The environment variable %q is deprecated and will be removed in the future", config.EnvKMSMasterKey))
-
+		// FIXME: remove this block by June 2021
+		logger.LogIf(GlobalContext, fmt.Errorf("legacy KMS configuration, this environment variable %q is deprecated and will be removed by June 2021", config.EnvKMSMasterKey))
 		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
 		if len(v) != 2 {
 			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
