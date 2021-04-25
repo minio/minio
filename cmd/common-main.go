@@ -341,28 +341,37 @@ func handleCommonEnvVars() {
 	case env.IsSet(config.EnvKMSMasterKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSMasterKey, config.EnvKESEndpoint))
 	}
-	if env.IsSet(config.EnvKMSSecretKey) {
-		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		GlobalKMS = KMS
-	} else if env.IsSet(config.EnvKMSMasterKey) {
-		logger.LogIf(GlobalContext, errors.New("legacy KMS configuration"), fmt.Sprintf("The environment variable %q is deprecated and will be removed in the future", config.EnvKMSMasterKey))
 
-		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
-		if len(v) != 2 {
-			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		secretKey, err := hex.DecodeString(v[1])
+	parseMasterKey := func(key string) error {
+		KMS, err := kms.Parse(env.Get(key, ""))
 		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		KMS, err := kms.New(v[0], secretKey)
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+			v := strings.SplitN(env.Get(key, ""), ":", 2)
+			if len(v) != 2 {
+				return errors.New("invalid " + key)
+			}
+			secretKey, err := hex.DecodeString(v[1])
+			if err != nil {
+				return err
+			}
+			KMS, err = kms.New(v[0], secretKey)
+			if err != nil {
+				return err
+			}
 		}
 		GlobalKMS = KMS
+		return nil
+	}
+
+	if env.IsSet(config.EnvKMSSecretKey) {
+		if err = parseMasterKey(config.EnvKMSSecretKey); err != nil {
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+	} else if env.IsSet(config.EnvKMSMasterKey) {
+		logger.LogIf(GlobalContext, errors.New("legacy KMS configuration"),
+			fmt.Sprintf("The environment variable %q is deprecated and will be removed in the future", config.EnvKMSMasterKey))
+		if err = parseMasterKey(config.EnvKMSMasterKey); err != nil {
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+		}
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
 		kesEndpoints, err := crypto.ParseKESEndpoints(env.Get(config.EnvKESEndpoint, ""))
