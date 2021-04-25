@@ -301,11 +301,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	partsMetadata := make([]FileInfo, len(onlineDisks))
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
-	if opts.Versioned {
-		fi.VersionID = opts.VersionID
-		if fi.VersionID == "" {
-			fi.VersionID = mustGetUUID()
-		}
+	fi.VersionID = opts.VersionID
+	if opts.Versioned && fi.VersionID == "" {
+		fi.VersionID = mustGetUUID()
 	}
 	fi.DataDir = mustGetUUID()
 

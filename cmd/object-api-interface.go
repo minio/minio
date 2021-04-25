@@ -52,13 +52,13 @@ type ObjectOptions struct {
 	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	Transition                    TransitionOptions
-	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet                bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ParentIsObject                func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
 
-	// Use the maximum parity (N/2), used when
-	// saving server configuration files
+	NoLock         bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest   bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ParentIsObject func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+
+	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
 }
 
