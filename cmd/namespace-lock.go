@@ -39,10 +39,10 @@ var globalLockServer *localLocker
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
-	GetLock(ctx context.Context, timeout *dynamicTimeout) (newCtx context.Context, timedOutErr error)
-	Unlock()
-	GetRLock(ctx context.Context, timeout *dynamicTimeout) (newCtx context.Context, timedOutErr error)
-	RUnlock()
+	GetLock(ctx context.Context, timeout *dynamicTimeout) (newCtx context.Context, cancel context.CancelFunc, timedOutErr error)
+	Unlock(cancel context.CancelFunc)
+	GetRLock(ctx context.Context, timeout *dynamicTimeout) (newCtx context.Context, cancel context.CancelFunc, timedOutErr error)
+	RUnlock(cancel context.CancelFunc)
 }
 
 // newNSLock - return a new name space lock map.
@@ -143,7 +143,7 @@ type distLockInstance struct {
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
-func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout) (context.Context, error) {
+func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout) (context.Context, context.CancelFunc, error) {
 	lockSource := getSource(2)
 	start := UTCNow()
 
@@ -152,19 +152,22 @@ func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout
 		Timeout: timeout.Timeout(),
 	}) {
 		timeout.LogFailure()
-		return ctx, OperationTimedOut{}
+		return ctx, nil, OperationTimedOut{}
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return newCtx, nil
+	return newCtx, cancel, nil
 }
 
 // Unlock - block until write lock is released.
-func (di *distLockInstance) Unlock() {
+func (di *distLockInstance) Unlock(cancel context.CancelFunc) {
+	if cancel != nil {
+		cancel()
+	}
 	di.rwMutex.Unlock()
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
-func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeout) (context.Context, error) {
+func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeout) (context.Context, context.CancelFunc, error) {
 	lockSource := getSource(2)
 	start := UTCNow()
 
@@ -173,14 +176,17 @@ func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeou
 		Timeout: timeout.Timeout(),
 	}) {
 		timeout.LogFailure()
-		return ctx, OperationTimedOut{}
+		return ctx, nil, OperationTimedOut{}
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return newCtx, nil
+	return newCtx, cancel, nil
 }
 
 // RUnlock - block until read lock is released.
-func (di *distLockInstance) RUnlock() {
+func (di *distLockInstance) RUnlock(cancel context.CancelFunc) {
+	if cancel != nil {
+		cancel()
+	}
 	di.rwMutex.RUnlock()
 }
 
@@ -208,7 +214,7 @@ func (n *nsLockMap) NewNSLock(lockers func() ([]dsync.NetLocker, string), volume
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
-func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout) (_ context.Context, timedOutErr error) {
+func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout) (_ context.Context, _ context.CancelFunc, timedOutErr error) {
 	lockSource := getSource(2)
 	start := UTCNow()
 	const readLock = false
@@ -221,16 +227,16 @@ func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeou
 					li.ns.unlock(li.volume, li.paths[si], readLock)
 				}
 			}
-			return nil, OperationTimedOut{}
+			return nil, nil, OperationTimedOut{}
 		}
 		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return ctx, nil
+	return ctx, nil, nil
 }
 
 // Unlock - block until write lock is released.
-func (li *localLockInstance) Unlock() {
+func (li *localLockInstance) Unlock(_ context.CancelFunc) {
 	const readLock = false
 	for _, path := range li.paths {
 		li.ns.unlock(li.volume, path, readLock)
@@ -238,7 +244,7 @@ func (li *localLockInstance) Unlock() {
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
-func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeout) (_ context.Context, timedOutErr error) {
+func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeout) (_ context.Context, _ context.CancelFunc, timedOutErr error) {
 	lockSource := getSource(2)
 	start := UTCNow()
 	const readLock = true
@@ -251,16 +257,16 @@ func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeo
 					li.ns.unlock(li.volume, li.paths[si], readLock)
 				}
 			}
-			return nil, OperationTimedOut{}
+			return nil, nil, OperationTimedOut{}
 		}
 		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return ctx, nil
+	return ctx, nil, nil
 }
 
 // RUnlock - block until read lock is released.
-func (li *localLockInstance) RUnlock() {
+func (li *localLockInstance) RUnlock(cancel context.CancelFunc) {
 	const readLock = true
 	for _, path := range li.paths {
 		li.ns.unlock(li.volume, path, readLock)
