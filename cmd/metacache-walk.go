@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 )
@@ -294,6 +295,7 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 		logger.LogIf(ctx, err)
 		return err
 	}
+	defer xhttp.DrainBody(respBody)
 	return waitForHTTPStream(respBody, wr)
 }
 
