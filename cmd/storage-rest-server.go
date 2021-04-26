@@ -735,23 +735,6 @@ func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
 	}
 }
 
-// drainCloser can be used for wrapping an http response.
-// It will drain the body before closing.
-type drainCloser struct {
-	rc io.ReadCloser
-}
-
-// Read forwards the read operation.
-func (f drainCloser) Read(p []byte) (n int, err error) {
-	return f.rc.Read(p)
-}
-
-// Close drains the body and closes the upstream.
-func (f drainCloser) Close() error {
-	xhttp.DrainBody(f.rc)
-	return nil
-}
-
 // httpStreamResponse allows streaming a response, but still send an error.
 type httpStreamResponse struct {
 	done  chan error
@@ -843,7 +826,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		case 0:
 			// 0 is unbuffered, copy the rest.
 			_, err := io.Copy(w, respBody)
-			respBody.Close()
 			if err == io.EOF {
 				return nil
 			}
@@ -853,18 +835,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 			if err != nil {
 				return err
 			}
-			respBody.Close()
 			return errors.New(string(errorText))
-		case 3:
-			// gob style is already deprecated, we can remove this when
-			// storage API version will be greater or equal to 23.
-			defer respBody.Close()
-			dec := gob.NewDecoder(respBody)
-			var err error
-			if de := dec.Decode(&err); de == nil {
-				return err
-			}
-			return errors.New("rpc error")
 		case 2:
 			// Block of data
 			var tmp [4]byte
@@ -881,7 +852,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		case 32:
 			continue
 		default:
-			go xhttp.DrainBody(respBody)
 			return fmt.Errorf("unexpected filler byte: %d", tmp[0])
 		}
 	}
