@@ -1243,7 +1243,7 @@ func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, erro
 		versions = append(versions, fi)
 	}
 
-	sort.Sort(versionsSorter(versions))
+	versionsSorter(versions).sort()
 
 	for i := range versions {
 		versions[i].NumVersions = len(versions)
