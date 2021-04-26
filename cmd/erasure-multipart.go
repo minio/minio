@@ -575,7 +575,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		PartNumber:   partID,
 		ETag:         md5hex,
 		LastModified: fi.ModTime,
-		Size:         fi.Size,
+		Size:         n,
 		ActualSize:   data.ActualSize(),
 	}, nil
 }

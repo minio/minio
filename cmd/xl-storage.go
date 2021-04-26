@@ -1858,8 +1858,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	var srcDataPath string
 	var dstDataPath string
 	dataDir := retainSlash(fi.DataDir)
-	// no need to rename dataDir paths for objects that are in transitionComplete state.
-	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionComplete {
+	if dataDir != "" {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
 		// it would additionally add `/` at the end and it comes in the
