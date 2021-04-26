@@ -20,6 +20,8 @@ package kms
 import (
 	"encoding"
 	"encoding/json"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // KMS is the generic interface that abstracts over
@@ -106,6 +108,7 @@ func (d *DEK) UnmarshalText(text []byte) error {
 		Ciphertext []byte `json:"ciphertext"`
 	}
 	var v JSON
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(text, &v); err != nil {
 		return err
 	}

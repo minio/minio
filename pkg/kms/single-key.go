@@ -23,12 +23,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/secure-io/sio-go/sioutil"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -152,6 +152,7 @@ func (kms secretKey) GenerateKey(keyID string, context Context) (DEK, error) {
 	associatedData, _ := context.MarshalText()
 	ciphertext := aead.Seal(nil, nonce, plaintext, associatedData)
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	ciphertext, err = json.Marshal(encryptedKey{
 		Algorithm: algorithm,
 		IV:        iv,
@@ -174,9 +175,11 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 	}
 
 	var encryptedKey encryptedKey
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(ciphertext, &encryptedKey); err != nil {
 		return nil, err
 	}
+
 	if n := len(encryptedKey.IV); n != 16 {
 		return nil, fmt.Errorf("kms: invalid iv size")
 	}

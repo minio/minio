@@ -1499,7 +1499,6 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 	}
 
 	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
-		VersionID:        oi.VersionID,
 		MTime:            oi.ModTime,
 		Versioned:        globalBucketVersioningSys.Enabled(bucket),
 		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
