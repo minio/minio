@@ -384,7 +384,7 @@ func gatewayHandleEnvVars() {
 
 // shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics
 func shouldMeterRequest(req *http.Request) bool {
-	return !(guessIsBrowserReq(req) || guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
+	return !(guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
 }
 
 // MetricsTransport is a custom wrapper around Transport to track metrics

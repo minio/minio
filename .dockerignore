@@ -2,7 +2,6 @@
 .github
 docs
 default.etcd
-browser
 *.gz
 *.tar.gz
 *.bzip2

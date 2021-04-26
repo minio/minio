@@ -129,9 +129,6 @@ var (
 	// Name of gateway server, e.g S3, GCS, Azure, etc
 	globalGatewayName = ""
 
-	// This flag is set to 'true' by default
-	globalBrowserEnabled = true
-
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
@@ -304,16 +301,3 @@ var (
 )
 
 var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
-
-// Returns minio global information, as a key value map.
-// returned list of global values is not an exhaustive
-// list. Feel free to add new relevant fields.
-func getGlobalInfo() (globalInfo map[string]interface{}) {
-	globalInfo = map[string]interface{}{
-		"serverRegion": globalServerRegion,
-		"domains":      globalDomainNames,
-		// Add more relevant global settings here.
-	}
-
-	return globalInfo
-}

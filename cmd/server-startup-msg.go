@@ -146,11 +146,6 @@ func printServerCommonMsg(apiEndpoints []string) {
 		}
 	}
 	printEventNotifiers()
-
-	if globalBrowserEnabled {
-		logStartupMessage(color.Blue("\nBrowser Access:"))
-		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
-	}
 }
 
 // Prints bucket notification configurations.

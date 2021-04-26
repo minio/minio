@@ -33,9 +33,6 @@ var errSignatureMismatch = errors.New("Signature does not match")
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")
 
-// used when we deal with data with unknown size
-var errSizeUnspecified = errors.New("Data size is unspecified")
-
 // When upload object size is greater than 5G in a single PUT/POST operation.
 var errDataTooLarge = errors.New("Object size larger than allowed limit")
 
@@ -51,10 +48,6 @@ var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
-// errInvalidBucketName - bucket name is reserved for MinIO, usually
-// returned for 'minio', '.minio.sys', buckets with capital letters.
-var errInvalidBucketName = errors.New("The specified bucket is not valid")
-
 // errInvalidRange - returned when given range value is not valid.
 var errInvalidRange = errors.New("Invalid range")
 
@@ -68,9 +61,6 @@ var errNotFirstDisk = errors.New("Not first disk")
 
 // error returned by first disk waiting to initialize other servers.
 var errFirstDiskWait = errors.New("Waiting on other disks")
-
-// error returned when a bucket already exists
-var errBucketAlreadyExists = errors.New("Your previous request to create the named bucket succeeded and you already own it")
 
 // error returned for a negative actual size.
 var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
@@ -96,12 +86,6 @@ var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed wit
 
 // error returned in IAM subsystem when IAM sub-system is still being initialized.
 var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
-
-// error returned when access is denied.
-var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
-
-// error returned when object is locked.
-var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")
 
 // error returned when upload id not found
 var errUploadIDNotFound = errors.New("Specified Upload ID is not found")
