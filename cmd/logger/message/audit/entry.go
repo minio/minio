@@ -33,6 +33,7 @@ type Entry struct {
 	Version      string `json:"version"`
 	DeploymentID string `json:"deploymentid,omitempty"`
 	Time         string `json:"time"`
+	Trigger      string `json:"trigger"`
 	API          struct {
 		Name            string `json:"name,omitempty"`
 		Bucket          string `json:"bucket,omitempty"`
@@ -52,37 +53,47 @@ type Entry struct {
 	Tags       map[string]interface{} `json:"tags,omitempty"`
 }
 
-// ToEntry - constructs an audit entry object.
+// NewEntry - constructs an audit entry object with some fields filled
+func NewEntry(deploymentID string) Entry {
+	return Entry{
+		Version:      Version,
+		DeploymentID: deploymentID,
+		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// ToEntry - constructs an audit entry from a http request
 func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, deploymentID string) Entry {
+
+	entry := NewEntry(deploymentID)
+
+	entry.RemoteHost = handlers.GetSourceIP(r)
+	entry.UserAgent = r.UserAgent()
+	entry.ReqClaims = reqClaims
+
 	q := r.URL.Query()
 	reqQuery := make(map[string]string, len(q))
 	for k, v := range q {
 		reqQuery[k] = strings.Join(v, ",")
 	}
+	entry.ReqQuery = reqQuery
+
 	reqHeader := make(map[string]string, len(r.Header))
 	for k, v := range r.Header {
 		reqHeader[k] = strings.Join(v, ",")
 	}
+	entry.ReqHeader = reqHeader
+
 	wh := w.Header()
+	entry.RequestID = wh.Get(xhttp.AmzRequestID)
 	respHeader := make(map[string]string, len(wh))
 	for k, v := range wh {
 		respHeader[k] = strings.Join(v, ",")
 	}
+	entry.RespHeader = respHeader
+
 	if etag := respHeader[xhttp.ETag]; etag != "" {
 		respHeader[xhttp.ETag] = strings.Trim(etag, `"`)
-	}
-
-	entry := Entry{
-		Version:      Version,
-		DeploymentID: deploymentID,
-		RemoteHost:   handlers.GetSourceIP(r),
-		RequestID:    wh.Get(xhttp.AmzRequestID),
-		UserAgent:    r.UserAgent(),
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
-		ReqQuery:     reqQuery,
-		ReqHeader:    reqHeader,
-		ReqClaims:    reqClaims,
-		RespHeader:   respHeader,
 	}
 
 	return entry
