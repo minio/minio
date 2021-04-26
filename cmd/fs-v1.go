@@ -608,12 +608,13 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	if !cpSrcDstSame {
+		var cancel context.CancelFunc
 		objectDWLock := fs.NewNSLock(dstBucket, dstObject)
-		ctx, err = objectDWLock.GetLock(ctx, globalOperationTimeout)
+		ctx, cancel, err = objectDWLock.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, err
 		}
-		defer objectDWLock.Unlock()
+		defer objectDWLock.Unlock(cancel)
 	}
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
@@ -701,19 +702,20 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if lockType != noLock {
 		// Lock the object before reading.
 		lock := fs.NewNSLock(bucket, object)
+		var cancel context.CancelFunc
 		switch lockType {
 		case writeLock:
-			ctx, err = lock.GetLock(ctx, globalOperationTimeout)
+			ctx, cancel, err = lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.Unlock
+			nsUnlocker = func() { lock.Unlock(cancel) }
 		case readLock:
-			ctx, err = lock.GetRLock(ctx, globalOperationTimeout)
+			ctx, cancel, err = lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.RUnlock
+			nsUnlocker = func() { lock.RUnlock(cancel) }
 		}
 	}
 
@@ -982,11 +984,11 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetRLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer lk.RUnlock()
+	defer lk.RUnlock(cancel)
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return oi, err
@@ -1020,15 +1022,16 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
+		var cancel context.CancelFunc
 		lk := fs.NewNSLock(bucket, object)
-		ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+		_, cancel, err = lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 		err = fs.createFsJSON(object, fsMetaPath)
-		lk.Unlock()
+		lk.Unlock(cancel)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
@@ -1073,12 +1076,12 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 
 	// Lock the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
-	defer lk.Unlock()
+	defer lk.Unlock(cancel)
 	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
@@ -1249,11 +1252,11 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 
 	// Acquire a write lock before deleting the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return objInfo, err
 	}
-	defer lk.Unlock()
+	defer lk.Unlock(cancel)
 
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err

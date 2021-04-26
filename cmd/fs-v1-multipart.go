@@ -709,11 +709,11 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	// Hold write lock on the object.
 	destLock := fs.NewNSLock(bucket, object)
-	ctx, err = destLock.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := destLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer destLock.Unlock()
+	defer destLock.Unlock(cancel)
 
 	bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
 	fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
