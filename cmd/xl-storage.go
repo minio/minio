@@ -836,8 +836,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
-	xlMeta, release := tempXlMetaV2()
-	defer release()
+	var xlMeta xlMetaV2
 	if err = xlMeta.Load(buf); err != nil {
 		return err
 	}
