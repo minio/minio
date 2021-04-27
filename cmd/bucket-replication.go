@@ -958,7 +958,10 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 	if tgt == nil || tgt.isOffline() {
 		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
-
+	// if proxying explicitly disabled on remote target
+	if tgt.disableProxy {
+		return nil, oi, false, nil
+	}
 	gopts := miniogo.GetObjectOptions{
 		VersionID:            opts.VersionID,
 		ServerSideEncryption: opts.ServerSideEncryption,

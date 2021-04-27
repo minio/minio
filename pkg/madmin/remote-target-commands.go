@@ -101,6 +101,7 @@ type BucketTarget struct {
 	BandwidthLimit      int64             `json:"bandwidthlimit,omitempty"`
 	ReplicationSync     bool              `json:"replicationSync"`
 	HealthCheckDuration time.Duration     `json:"healthCheckDuration,omitempty"`
+	DisableProxy        bool              `json:"disableProxy"`
 }
 
 // Clone returns shallow clone of BucketTarget without secret key in credentials
@@ -112,7 +113,7 @@ func (t *BucketTarget) Clone() BucketTarget {
 		Credentials:         &auth.Credentials{AccessKey: t.Credentials.AccessKey},
 		Secure:              t.Secure,
 		Path:                t.Path,
-		API:                 t.Path,
+		API:                 t.API,
 		Arn:                 t.Arn,
 		Type:                t.Type,
 		Region:              t.Region,
@@ -120,6 +121,7 @@ func (t *BucketTarget) Clone() BucketTarget {
 		BandwidthLimit:      t.BandwidthLimit,
 		ReplicationSync:     t.ReplicationSync,
 		HealthCheckDuration: t.HealthCheckDuration,
+		DisableProxy:        t.DisableProxy,
 	}
 }
 
@@ -237,8 +239,54 @@ func (adm *AdminClient) SetRemoteTarget(ctx context.Context, bucket string, targ
 	return arn, nil
 }
 
+// TargetUpdateType -  type of update on the remote target
+type TargetUpdateType int
+
+const (
+	// CredentialsUpdateType update creds
+	CredentialsUpdateType TargetUpdateType = 1 + iota
+	// SyncUpdateType update synchronous replication setting
+	SyncUpdateType
+	// ProxyUpdateType update proxy setting
+	ProxyUpdateType
+	// BandwidthLimitUpdateType update bandwidth limit
+	BandwidthLimitUpdateType
+	// HealthCheckDurationUpdateType update health check duration
+	HealthCheckDurationUpdateType
+	// PathUpdateType update Path
+	PathUpdateType
+)
+
+// GetTargetUpdateOps returns a slice of update operations being
+// performed with `mc admin bucket remote edit`
+func GetTargetUpdateOps(values url.Values) []TargetUpdateType {
+	var ops []TargetUpdateType
+	if values.Get("update") != "true" {
+		return ops
+	}
+	if values.Get("creds") == "true" {
+		ops = append(ops, CredentialsUpdateType)
+	}
+	if values.Get("sync") == "true" {
+		ops = append(ops, SyncUpdateType)
+	}
+	if values.Get("proxy") == "true" {
+		ops = append(ops, ProxyUpdateType)
+	}
+	if values.Get("healthcheck") == "true" {
+		ops = append(ops, HealthCheckDurationUpdateType)
+	}
+	if values.Get("bandwidth") == "true" {
+		ops = append(ops, BandwidthLimitUpdateType)
+	}
+	if values.Get("path") == "true" {
+		ops = append(ops, PathUpdateType)
+	}
+	return ops
+}
+
 // UpdateRemoteTarget updates credentials for a remote bucket target
-func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTarget) (string, error) {
+func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTarget, ops ...TargetUpdateType) (string, error) {
 	if target == nil {
 		return "", fmt.Errorf("target cannot be nil")
 	}
@@ -253,6 +301,23 @@ func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTa
 	queryValues := url.Values{}
 	queryValues.Set("bucket", target.SourceBucket)
 	queryValues.Set("update", "true")
+
+	for _, op := range ops {
+		switch op {
+		case CredentialsUpdateType:
+			queryValues.Set("creds", "true")
+		case SyncUpdateType:
+			queryValues.Set("sync", "true")
+		case ProxyUpdateType:
+			queryValues.Set("proxy", "true")
+		case BandwidthLimitUpdateType:
+			queryValues.Set("bandwidth", "true")
+		case HealthCheckDurationUpdateType:
+			queryValues.Set("healthcheck", "true")
+		case PathUpdateType:
+			queryValues.Set("path", "true")
+		}
+	}
 
 	reqData := requestData{
 		relPath:     adminAPIPrefix + "/set-remote-target",
