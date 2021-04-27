@@ -241,11 +241,7 @@ type xlMetaV2 struct {
 // tempXlMetaV2 returns a temporary xlMetaV2.
 // When usage is done, return control via the returned function.
 func tempXlMetaV2() (x *xlMetaV2, reUse func()) {
-	x = xlMetaV2Pool.Get().(*xlMetaV2)
-	return x, func() {
-		x.clear()
-		xlMetaV2Pool.Put(x)
-	}
+	return &xlMetaV2{}, func() {}
 }
 
 func (z *xlMetaV2) clear() {
