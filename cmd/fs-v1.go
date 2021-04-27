@@ -359,7 +359,7 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 		}
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
-		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
+		sz := item.applyActions(ctx, fs, actionMeta{oi: oi}, &sizeSummary{})
 		if sz >= 0 {
 			return sizeSummary{totalSize: sz}, nil
 		}
