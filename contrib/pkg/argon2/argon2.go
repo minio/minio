@@ -35,14 +35,8 @@
 // [1] https://github.com/P-H-C/phc-winner-argon2/blob/master/argon2-specs.pdf
 // [2] https://tools.ietf.org/html/draft-irtf-cfrg-argon2-03#section-9.3
 //
-// Copyright 2021 MinIO, Inc. All rights reserved.
-// forked from https://golang.org/x/crypto/argon2
-// modified to be used with MinIO under GNU Affero General
-// Public License 3.0 license that can be found in
-// the LICENSE file.
-//
-// Modification here specifically adds sync.Pool reusable buffers to
-// avoid large memory build up with frequent
+// Modified to be used with MinIO. Modification here specifically adds
+// sync.Pool reusable buffers to avoid large memory build up with frequent
 // allocations done by memory hard PBKDF.
 package argon2
 

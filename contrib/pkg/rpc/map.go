@@ -3,11 +3,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Copyright 2021 MinIO, Inc. All rights reserved.
-// forked from https://github.com/gorilla/rpc/v2
-// modified to be used with MinIO under GNU Affero General
-// Public License 3.0 license that can be found in
-// the LICENSE file.
+// Modified to be used with MinIO, uses jsoniter and
+// supports tracing JSON-rpc calls.
 
 package rpc
 

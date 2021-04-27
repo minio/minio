@@ -24,7 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/minio/minio/pkg/argon2"
+	"github.com/minio/minio/contrib/pkg/argon2"
 	"github.com/minio/minio/pkg/fips"
 	"github.com/secure-io/sio-go"
 	"github.com/secure-io/sio-go/sioutil"

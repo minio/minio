@@ -24,7 +24,7 @@ import (
 	"io"
 
 	"github.com/bcicen/jstream"
-	csv "github.com/minio/minio/pkg/csvparser"
+	csv "github.com/minio/minio/contrib/pkg/csvparser"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 

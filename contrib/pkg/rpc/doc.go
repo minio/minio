@@ -3,11 +3,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Copyright 2021 MinIO, Inc. All rights reserved.
+// Copyright 2021 MinIO, Inc. modified to be used with MinIO.
 // forked from https://github.com/gorilla/rpc/v2
-// modified to be used with MinIO under GNU Affero General
-// Public License 3.0 license that can be found in
-// the LICENSE file.
 
 /*
 Package rpc is a foundation for RPC over HTTP services, providing
@@ -26,8 +23,8 @@ Let's setup a server and register a codec and service:
 
 	import (
 		"http"
-		"github.com/minio/minio/pkg/rpc/"
-		"github.com/minio/minio/pkg/rpc/json2"
+		"github.com/minio/minio/contrib/pkg/rpc/"
+		"github.com/minio/minio/contrib/pkg/rpc/json2"
 	)
 
 	func init() {

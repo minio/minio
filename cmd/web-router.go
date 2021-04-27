@@ -27,8 +27,8 @@ import (
 
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
-	jsonrpc "github.com/minio/minio/pkg/rpc"
-	"github.com/minio/minio/pkg/rpc/json2"
+	jsonrpc "github.com/minio/minio/contrib/pkg/rpc"
+	"github.com/minio/minio/contrib/pkg/rpc/json2"
 )
 
 // webAPI container for Web API.
