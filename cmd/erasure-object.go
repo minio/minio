@@ -1475,37 +1475,15 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
+		if pInfo.Size != partInfo.Size {
+			return setRestoreHeaderFn(oi, InvalidObjectState{Bucket: bucket, Object: object})
+		}
 		uploadedParts = append(uploadedParts, CompletePart{
 			PartNumber: pInfo.PartNumber,
 			ETag:       pInfo.ETag,
 		})
 	}
-
-	partsMatch := true
-	// validate parts created via multipart
-	if len(oi.Parts) == len(uploadedParts) {
-		for i, pi := range oi.Parts {
-			if uploadedParts[i].ETag != pi.ETag {
-				partsMatch = false
-				break
-			}
-		}
-	} else {
-		partsMatch = false
-	}
-
-	if !partsMatch {
-		return setRestoreHeaderFn(oi, InvalidObjectState{Bucket: bucket, Object: object})
-	}
-
 	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
-		MTime:            oi.ModTime,
-		Versioned:        globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
-	})
-	if err != nil {
-		uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
-		return setRestoreHeaderFn(oi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath))
-	}
-	return setRestoreHeaderFn(oi, nil)
+		MTime: oi.ModTime})
+	return setRestoreHeaderFn(oi, err)
 }
