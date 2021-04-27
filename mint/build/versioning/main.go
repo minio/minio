@@ -32,47 +32,54 @@ import (
 var s3Client *s3.S3
 
 func cleanupBucket(bucket string, function string, args map[string]interface{}, startTime time.Time) {
+	start := time.Now()
+
 	input := &s3.ListObjectVersionsInput{
 		Bucket: aws.String(bucket),
 	}
 
-	err := s3Client.ListObjectVersionsPages(input,
-		func(page *s3.ListObjectVersionsOutput, lastPage bool) bool {
-			for _, v := range page.Versions {
-				input := &s3.DeleteObjectInput{
-					Bucket:                    &bucket,
-					Key:                       v.Key,
-					VersionId:                 v.VersionId,
-					BypassGovernanceRetention: aws.Bool(true),
+	for time.Since(start) < 30*time.Minute {
+		err := s3Client.ListObjectVersionsPages(input,
+			func(page *s3.ListObjectVersionsOutput, lastPage bool) bool {
+				for _, v := range page.Versions {
+					input := &s3.DeleteObjectInput{
+						Bucket:                    &bucket,
+						Key:                       v.Key,
+						VersionId:                 v.VersionId,
+						BypassGovernanceRetention: aws.Bool(true),
+					}
+					_, err := s3Client.DeleteObject(input)
+					if err != nil {
+						return true
+					}
 				}
-				_, err := s3Client.DeleteObject(input)
-				if err != nil {
-					log.Fatalln("cleanupBucket:", err)
-					return true
+				for _, v := range page.DeleteMarkers {
+					input := &s3.DeleteObjectInput{
+						Bucket:                    &bucket,
+						Key:                       v.Key,
+						VersionId:                 v.VersionId,
+						BypassGovernanceRetention: aws.Bool(true),
+					}
+					_, err := s3Client.DeleteObject(input)
+					if err != nil {
+						return true
+					}
 				}
-			}
-			for _, v := range page.DeleteMarkers {
-				input := &s3.DeleteObjectInput{
-					Bucket:    &bucket,
-					Key:       v.Key,
-					VersionId: v.VersionId,
-				}
-				_, err := s3Client.DeleteObject(input)
-				if err != nil {
-					log.Fatalln("cleanupBucket:", err)
-					return true
-				}
-			}
-			return true
-		})
+				return true
+			})
 
-	_, err = s3Client.DeleteBucket(&s3.DeleteBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	if err != nil {
-		failureLog(function, args, startTime, "", "Cleanup bucket Failed", err).Fatal()
+		_, err = s3Client.DeleteBucket(&s3.DeleteBucketInput{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			time.Sleep(30 * time.Second)
+			continue
+		}
 		return
 	}
+
+	failureLog(function, args, startTime, "", "Unable to cleanup bucket after compliance tests", nil).Fatal()
+	return
 }
 
 func main() {
@@ -119,6 +126,8 @@ func main() {
 	testListObjectsVersionsWithEmptyDirObject()
 	testTagging()
 	testLockingLegalhold()
+	testPutGetRetentionCompliance()
+	testPutGetDeleteRetentionGovernance()
 	testLockingRetentionGovernance()
 	testLockingRetentionCompliance()
 }
