@@ -539,13 +539,35 @@ func (x *xlMetaInlineData) rename(oldKey, newKey string) bool {
 	return true
 }
 
-// remove will remove a key.
-// Returns whether the key was found.
-func (x *xlMetaInlineData) remove(key string) bool {
+// remove will remove one or more keys.
+// Returns true if any key was found.
+func (x *xlMetaInlineData) remove(keys ...string) bool {
 	in := x.afterVersion()
 	sz, buf, _ := msgp.ReadMapHeaderBytes(in)
-	keys := make([][]byte, 0, sz)
-	vals := make([][]byte, 0, sz)
+	newKeys := make([][]byte, 0, sz)
+	newVals := make([][]byte, 0, sz)
+	var removeKey func(s []byte) bool
+
+	// Copy if big number of compares...
+	if len(keys) > 5 && sz > 5 {
+		mKeys := make(map[string]struct{}, len(keys))
+		for _, key := range keys {
+			mKeys[key] = struct{}{}
+		}
+		removeKey = func(s []byte) bool {
+			_, ok := mKeys[string(s)]
+			return ok
+		}
+	} else {
+		removeKey = func(s []byte) bool {
+			for _, key := range keys {
+				if key == string(s) {
+					return true
+				}
+			}
+			return false
+		}
+	}
 
 	// Version plus header...
 	plSize := 1 + msgp.MapHeaderSize
@@ -561,10 +583,10 @@ func (x *xlMetaInlineData) remove(key string) bool {
 		if err != nil {
 			break
 		}
-		if string(foundKey) != key {
+		if !removeKey(foundKey) {
 			plSize += msgp.StringPrefixSize + msgp.ArrayHeaderSize + len(foundKey) + len(foundVal)
-			keys = append(keys, foundKey)
-			vals = append(vals, foundVal)
+			newKeys = append(newKeys, foundKey)
+			newVals = append(newVals, foundVal)
 		} else {
 			found = true
 		}
@@ -574,13 +596,13 @@ func (x *xlMetaInlineData) remove(key string) bool {
 		return false
 	}
 	// If none left...
-	if len(keys) == 0 {
+	if len(newKeys) == 0 {
 		*x = nil
 		return true
 	}
 
 	// Reserialize...
-	x.serialize(plSize, keys, vals)
+	x.serialize(plSize, newKeys, newVals)
 	return true
 }
 
