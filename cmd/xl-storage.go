@@ -394,6 +394,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 
 	// return initialized object layer
 	objAPI := newObjectLayerFn()
+	// object layer not initialized, return.
+	if objAPI == nil {
+		return cache, errServerNotInitialized
+	}
 
 	globalHealConfigMu.Lock()
 	healOpts := globalHealConfig
@@ -431,13 +435,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			if objAPI != nil {
-				totalSize += item.applyActions(ctx, objAPI, actionMeta{
-					oi:         oi,
-					bitRotScan: healOpts.Bitrot,
-				})
-				item.healReplication(ctx, objAPI, oi.Clone(), &sizeS)
-			}
+			totalSize += item.applyActions(ctx, objAPI, actionMeta{
+				oi:         oi,
+				bitRotScan: healOpts.Bitrot,
+			}, &sizeS)
 		}
 		sizeS.totalSize = totalSize
 		return sizeS, nil
