@@ -829,7 +829,6 @@ type ReplicationPool struct {
 	mrfWorkerSize      int
 	workerWg           sync.WaitGroup
 	mrfWorkerWg        sync.WaitGroup
-	once               sync.Once
 	mu                 sync.Mutex
 }
 
