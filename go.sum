@@ -430,8 +430,12 @@ github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/miekg/dns v1.1.35 h1:oTfOaDH+mZkdcgdIjH6yBajRGtIwcwcaR+rt23ZSrJs=
 github.com/miekg/dns v1.1.35/go.mod h1:KNUDUusw/aVsxyTYZM1oqvCicbwhgbNgztCETuNZ7xM=
+github.com/minio/argon2 v0.0.0-20210427164258-0025d10c2c04 h1:4mrboT3YeVBHjAFia8IzmEUnzLRkemKeR0rjQ6+M9B4=
+github.com/minio/argon2 v0.0.0-20210427164258-0025d10c2c04/go.mod h1:XtOGJ7MjwUJDPtCqqrisx5QwVB/jDx+adQHigJVsQHQ=
 github.com/minio/cli v1.22.0 h1:VTQm7lmXm3quxO917X3p+el1l0Ca5X3S4PM2ruUYO68=
 github.com/minio/cli v1.22.0/go.mod h1:bYxnK0uS629N3Bq+AOZZ+6lwF77Sodk4+UL9vNuXhOY=
+github.com/minio/csvparser v0.0.0-20210427163918-ee4f0ffa388d h1:Q/oXgmaJluRgq4zIht5CbAOJphFbiG+wsQcR5WmDVYM=
+github.com/minio/csvparser v0.0.0-20210427163918-ee4f0ffa388d/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA/g=
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/md5-simd v1.1.0/go.mod h1:XpBqgZULrMYD3R+M28PcmP0CkI7PEMzB3U77ZrKZ0Gw=

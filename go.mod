@@ -48,7 +48,9 @@ require (
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/miekg/dns v1.1.35
+	github.com/minio/argon2 v0.0.0-20210427164258-0025d10c2c04
 	github.com/minio/cli v1.22.0
+	github.com/minio/csvparser v0.0.0-20210427163918-ee4f0ffa388d
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/md5-simd v1.1.1 // indirect
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
