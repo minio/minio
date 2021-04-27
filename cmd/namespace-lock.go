@@ -232,11 +232,14 @@ func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeou
 		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return ctx, nil, nil
+	return ctx, func() {}, nil
 }
 
 // Unlock - block until write lock is released.
-func (li *localLockInstance) Unlock(_ context.CancelFunc) {
+func (li *localLockInstance) Unlock(cancel context.CancelFunc) {
+	if cancel != nil {
+		cancel()
+	}
 	const readLock = false
 	for _, path := range li.paths {
 		li.ns.unlock(li.volume, path, readLock)
@@ -262,11 +265,14 @@ func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeo
 		success[i] = 1
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
-	return ctx, nil, nil
+	return ctx, func() {}, nil
 }
 
 // RUnlock - block until read lock is released.
 func (li *localLockInstance) RUnlock(cancel context.CancelFunc) {
+	if cancel != nil {
+		cancel()
+	}
 	const readLock = true
 	for _, path := range li.paths {
 		li.ns.unlock(li.volume, path, readLock)
