@@ -241,12 +241,63 @@ type xlMetaV2 struct {
 // tempXlMetaV2 returns a temporary xlMetaV2.
 // When usage is done, return control via the returned function.
 func tempXlMetaV2() (x *xlMetaV2, reUse func()) {
-	return &xlMetaV2{}, func() {}
+	x = xlMetaV2Pool.Get().(*xlMetaV2)
+	x.clear()
+	return x, func() {
+		xlMetaV2Pool.Put(x)
+	}
 }
 
+// clear all potentially leaky data that would not get reset by an unmarshal.
 func (z *xlMetaV2) clear() {
+	for _, v := range z.Versions {
+		v.clear()
+	}
 	z.Versions = z.Versions[:0]
 	z.data = nil
+}
+
+// cleanUpVersions will delete any excess information.
+func (z *xlMetaV2) cleanUpVersions() {
+	for i, v := range z.Versions {
+		switch v.Type {
+		case ObjectType:
+			if v.ObjectV1 != nil || v.DeleteMarker != nil {
+				z.Versions[i].DeleteMarker = nil
+				z.Versions[i].ObjectV1 = nil
+			}
+		case LegacyType:
+			if v.ObjectV2 != nil || v.DeleteMarker != nil {
+				z.Versions[i].DeleteMarker = nil
+				z.Versions[i].ObjectV2 = nil
+			}
+		case DeleteType:
+			if v.ObjectV2 != nil || v.ObjectV1 != nil {
+				z.Versions[i].ObjectV1 = nil
+				z.Versions[i].ObjectV2 = nil
+			}
+		}
+	}
+}
+
+// clear all potentially leaky data that would not get reset by an unmarshal.
+func (x *xlMetaV2Version) clear() {
+	// We keep version info pointers, but they must be cleaned up after unmarshal.
+	// Delete all with omitempty
+	if v2 := x.ObjectV2; v2 != nil {
+		v2.PartActualSizes = v2.PartActualSizes[:0]
+		for k := range v2.MetaSys {
+			delete(v2.MetaSys, k)
+		}
+		for k := range v2.MetaUser {
+			delete(v2.MetaUser, k)
+		}
+	}
+	if dm := x.DeleteMarker; dm != nil {
+		for k := range dm.MetaSys {
+			delete(dm.MetaSys, k)
+		}
+	}
 }
 
 // xlMetaInlineData is serialized data in [string][]byte pairs.
@@ -665,6 +716,7 @@ func (z *xlMetaV2) Load(buf []byte) error {
 			if err != nil {
 				return fmt.Errorf("xlMetaV2.Load %w", err)
 			}
+			z.cleanUpVersions()
 			return nil
 		case 1, 2:
 			v, buf, err := msgp.ReadBytesZC(buf)
@@ -686,6 +738,7 @@ func (z *xlMetaV2) Load(buf []byte) error {
 			if _, err = z.UnmarshalMsg(v); err != nil {
 				return fmt.Errorf("xlMetaV2.Load version(%d), vLen(%d), %w", minor, len(v), err)
 			}
+			z.cleanUpVersions()
 			// Add remaining data.
 			z.data = buf
 			if err = z.data.validate(); err != nil {
