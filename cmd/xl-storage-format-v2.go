@@ -281,10 +281,10 @@ func (z *xlMetaV2) cleanUpVersions() {
 }
 
 // clear all potentially leaky data that would not get reset by an unmarshal.
-func (x *xlMetaV2Version) clear() {
+func (j *xlMetaV2Version) clear() {
 	// We keep version info pointers, but they must be cleaned up after unmarshal.
 	// Delete all with omitempty
-	if v2 := x.ObjectV2; v2 != nil {
+	if v2 := j.ObjectV2; v2 != nil {
 		v2.PartActualSizes = v2.PartActualSizes[:0]
 		for k := range v2.MetaSys {
 			delete(v2.MetaSys, k)
@@ -293,7 +293,7 @@ func (x *xlMetaV2Version) clear() {
 			delete(v2.MetaUser, k)
 		}
 	}
-	if dm := x.DeleteMarker; dm != nil {
+	if dm := j.DeleteMarker; dm != nil {
 		for k := range dm.MetaSys {
 			delete(dm.MetaSys, k)
 		}
