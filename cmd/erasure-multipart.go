@@ -378,21 +378,21 @@ func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObjec
 // Implements S3 compatible Upload Part API.
 func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	ctx, err = uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	rctx, rcancel, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return PartInfo{}, err
 	}
 	readLocked := true
 	defer func() {
 		if readLocked {
-			uploadIDLock.RUnlock()
+			uploadIDLock.RUnlock(rcancel)
 		}
 	}()
 
 	data := r.Reader
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(rctx, errInvalidArgument, logger.Application)
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
@@ -401,23 +401,23 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 
 	// Validates if upload ID exists.
-	if err = er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+	if err = er.checkUploadIDExists(rctx, bucket, object, uploadID); err != nil {
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	storageDisks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs = readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket,
+	partsMetadata, errs = readAllFileInfo(rctx, storageDisks, minioMetaMultipartBucket,
 		uploadIDPath, "", false)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
+	_, writeQuorum, err := objectQuorumFromMeta(rctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
 
-	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	reducedErr := reduceWriteQuorumErrs(rctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if reducedErr == errErasureWriteQuorum {
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
@@ -426,7 +426,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
+	fi, err := pickValidFileInfo(rctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return pi, err
 	}
@@ -448,7 +448,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}()
 
-	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
+	erasure, err := NewErasure(rctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -485,7 +485,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 			erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
 	}
 
-	n, err := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
+	n, err := erasure.Encode(rctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
@@ -505,29 +505,29 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Unlock here before acquiring write locks all concurrent
 	// PutObjectParts would serialize here updating `xl.meta`
-	uploadIDLock.RUnlock()
+	uploadIDLock.RUnlock(rcancel)
 	readLocked = false
-	ctx, err = uploadIDLock.GetLock(ctx, globalOperationTimeout)
+	wctx, wcancel, err := uploadIDLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return PartInfo{}, err
 	}
-	defer uploadIDLock.Unlock()
+	defer uploadIDLock.Unlock(wcancel)
 
 	// Validates if upload ID exists.
-	if err = er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+	if err = er.checkUploadIDExists(wctx, bucket, object, uploadID); err != nil {
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Rename temporary part file to its final location.
 	partPath := pathJoin(uploadIDPath, fi.DataDir, partSuffix)
-	onlineDisks, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, false, writeQuorum, nil)
+	onlineDisks, err = rename(wctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, false, writeQuorum, nil)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
 	// Read metadata again because it might be updated with parallel upload of another part.
-	partsMetadata, errs = readAllFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, "", false)
-	reducedErr = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	partsMetadata, errs = readAllFileInfo(wctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, "", false)
+	reducedErr = reduceWriteQuorumErrs(wctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if reducedErr == errErasureWriteQuorum {
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
@@ -536,7 +536,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	onlineDisks, modTime, dataDir = listOnlineDisks(onlineDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, writeQuorum)
+	fi, err = pickValidFileInfo(wctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return pi, err
 	}
@@ -564,7 +564,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// Writes update `xl.meta` format for each disk.
-	if _, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
+	if _, err = writeUniqueFileInfo(wctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
@@ -591,13 +591,12 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		UploadID: uploadID,
 	}
 
-	var err error
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	ctx, err = uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return MultipartInfo{}, err
 	}
-	defer uploadIDLock.RUnlock()
+	defer uploadIDLock.RUnlock(cancel)
 
 	if err := er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, toObjectErr(err, bucket, object, uploadID)
@@ -642,11 +641,11 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 // replied back to the client.
 func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	ctx, err = uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return ListPartsInfo{}, err
 	}
-	defer uploadIDLock.RUnlock()
+	defer uploadIDLock.RUnlock(cancel)
 
 	if err := er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, toObjectErr(err, bucket, object, uploadID)
@@ -736,11 +735,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Hold read-locks to verify uploaded parts, also disallows
 	// parallel part uploads as well.
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	ctx, err = uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer uploadIDLock.RUnlock()
+	defer uploadIDLock.RUnlock(cancel)
 
 	if err = er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return oi, toObjectErr(err, bucket, object, uploadID)
@@ -892,11 +891,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Hold namespace to complete the transaction
 	lk := er.NewNSLock(bucket, object)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err = lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer lk.Unlock()
+	defer lk.Unlock(cancel)
 
 	// Rename the multipart object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
@@ -935,11 +934,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 // operation.
 func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (err error) {
 	lk := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer lk.Unlock()
+	defer lk.Unlock(cancel)
 
 	// Validates if upload ID exists.
 	if err := er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {

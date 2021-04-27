@@ -438,13 +438,13 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 // statCachedMeta returns metadata from cache - including ranges cached, partial to indicate
 // if partial object is cached.
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
-
 	cLock := c.NewNSLockFn(cacheObjPath)
-	if ctx, err = cLock.GetRLock(ctx, globalOperationTimeout); err != nil {
+	ctx, cancel, err := cLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return
 	}
 
-	defer cLock.RUnlock()
+	defer cLock.RUnlock(cancel)
 	return c.statCache(ctx, cacheObjPath)
 }
 
@@ -518,14 +518,13 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 // saves object metadata to disk cache
 // incHitsOnly is true if metadata update is incrementing only the hit counter
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
-	var err error
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachedPath)
-	ctx, err = cLock.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock()
+	defer cLock.Unlock(cancel)
 	return c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly)
 }
 
@@ -699,11 +698,11 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachePath)
-	ctx, err = cLock.GetLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer cLock.Unlock()
+	defer cLock.Unlock(cancel)
 
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
@@ -914,12 +913,12 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cacheObjPath)
-	ctx, err = cLock.GetRLock(ctx, globalOperationTimeout)
+	ctx, cancel, err := cLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return nil, numHits, err
 	}
+	defer cLock.RUnlock(cancel)
 
-	defer cLock.RUnlock()
 	var objInfo ObjectInfo
 	var rngInfo RangeInfo
 	if objInfo, rngInfo, numHits, err = c.statRange(ctx, bucket, object, rs); err != nil {
@@ -979,11 +978,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
 	cLock := c.NewNSLockFn(cacheObjPath)
-	_, err = cLock.GetLock(ctx, globalOperationTimeout)
+	_, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock()
+	defer cLock.Unlock(cancel)
 	return removeAll(cacheObjPath)
 }
 
