@@ -29,7 +29,6 @@ const (
 	EnvRootUser     = "MINIO_ROOT_USER"
 	EnvRootPassword = "MINIO_ROOT_PASSWORD"
 
-	EnvBrowser    = "MINIO_BROWSER"
 	EnvDomain     = "MINIO_DOMAIN"
 	EnvRegionName = "MINIO_REGION_NAME"
 	EnvPublicIPs  = "MINIO_PUBLIC_IPS"
