@@ -24,8 +24,6 @@ const (
 
 // Top level common ENVs
 const (
-	EnvAccessKey    = "MINIO_ACCESS_KEY"
-	EnvSecretKey    = "MINIO_SECRET_KEY"
 	EnvRootUser     = "MINIO_ROOT_USER"
 	EnvRootPassword = "MINIO_ROOT_PASSWORD"
 
