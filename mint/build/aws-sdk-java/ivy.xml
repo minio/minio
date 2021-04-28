@@ -1,6 +1,0 @@
-<ivy-module version="2.0">
-    <info organisation="org.apache" module="aws-sdk-java-tests"/>
-    <dependencies>
-	<dependency org="com.amazonaws" name="aws-java-sdk-s3" rev="1.11.706"/>
-    </dependencies>
-</ivy-module>
