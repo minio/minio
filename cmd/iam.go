@@ -872,6 +872,24 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		sys.store.lock()
 		defer sys.store.unlock()
 
+		// We are on purpose not persisting the policy map for parent
+		// user, although this is a hack, it is a good enoug hack
+		// at this point in time - we need to overhaul our OIDC
+		// usage with service accounts with a more cleaner implementation
+		//
+		// This mapping is necessary to ensure that valid credentials
+		// have necessary ParentUser present - this is mainly for only
+		// webIdentity based STS tokens.
+		if cred.IsTemp() && cred.ParentUser != "" {
+			if _, ok := sys.iamUserPolicyMap[cred.ParentUser]; !ok {
+				if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
+					sys.store.unlock()
+					return err
+				}
+				sys.iamUserPolicyMap[cred.ParentUser] = mp
+			}
+		}
+
 		if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
 			sys.store.unlock()
 			return err
@@ -1458,8 +1476,10 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	defer sys.store.runlock()
 
 	if ok && cred.IsValid() {
-		if cred.ParentUser != "" && sys.usersSysType == MinIOUsersSysType {
-			_, ok = sys.iamUsersMap[cred.ParentUser]
+		if cred.IsServiceAccount() || cred.IsTemp() {
+			// temporary credentials or service accounts
+			// must have their parent in UsersMap
+			_, ok = sys.iamUserPolicyMap[cred.ParentUser]
 		}
 		// for LDAP service accounts with ParentUser set
 		// we have no way to validate, either because user
