@@ -204,6 +204,21 @@ func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn strin
 	return sys.arnRemotesMap[arn]
 }
 
+// GetRemoteBucketTargetByArn returns BucketTarget for a ARN
+func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, bucket, arn string) madmin.BucketTarget {
+	sys.RLock()
+	defer sys.RUnlock()
+	var tgt madmin.BucketTarget
+	for _, t := range sys.targetsMap[bucket] {
+		if t.Arn == arn {
+			tgt = t.Clone()
+			tgt.Credentials = t.Credentials
+			return tgt
+		}
+	}
+	return tgt
+}
+
 // NewBucketTargetSys - creates new replication system.
 func NewBucketTargetSys() *BucketTargetSys {
 	return &BucketTargetSys{
@@ -315,6 +330,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		replicateSync:       tcfg.ReplicationSync,
 		Bucket:              tcfg.TargetBucket,
 		StorageClass:        tcfg.StorageClass,
+		disableProxy:        tcfg.DisableProxy,
 	}
 	go tc.healthCheck()
 	return tc, nil
@@ -393,6 +409,7 @@ type TargetClient struct {
 	Bucket              string // remote bucket target
 	replicateSync       bool
 	StorageClass        string // storage class on remote
+	disableProxy        bool
 }
 
 func (tc *TargetClient) isOffline() bool {
