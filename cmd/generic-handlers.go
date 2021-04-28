@@ -131,26 +131,8 @@ const (
 	loginPathPrefix         = SlashSeparator + "login"
 )
 
-// guessIsBrowserReq - returns true if the request is browser.
-// This implementation just validates user-agent and
-// looks for "Mozilla" string. This is no way certifiable
-// way to know if the request really came from a browser
-// since User-Agent's can be arbitrary. But this is just
-// a best effort function.
-func guessIsBrowserReq(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	aType := getRequestAuthType(req)
-	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && (aType == authTypeJWT || aType == authTypeAnonymous)
-}
-
 func setRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if guessIsBrowserReq(r) {
-			http.Redirect(w, r, "https://github.com/minio/console", http.StatusMovedPermanently)
-			return
-		}
 		if !shouldProxy() || guessIsRPCReq(r) || guessIsHealthCheckReq(r) ||
 			guessIsMetricsReq(r) || isAdminReq(r) {
 			h.ServeHTTP(w, r)
