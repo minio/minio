@@ -164,14 +164,44 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 
 	target.SourceBucket = bucket
-	if !update {
+	var ops []madmin.TargetUpdateType
+	if update {
+		ops = madmin.GetTargetUpdateOps(r.URL.Query())
+	} else {
 		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
 	}
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-
+	if update {
+		// overlay the updates on existing target
+		tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, bucket, target.Arn)
+		if tgt.Empty() {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetNotFoundError, err), r.URL)
+			return
+		}
+		for _, op := range ops {
+			switch op {
+			case madmin.CredentialsUpdateType:
+				tgt.Credentials = target.Credentials
+				tgt.TargetBucket = target.TargetBucket
+				tgt.Secure = target.Secure
+				tgt.Endpoint = target.Endpoint
+			case madmin.SyncUpdateType:
+				tgt.ReplicationSync = target.ReplicationSync
+			case madmin.ProxyUpdateType:
+				tgt.DisableProxy = target.DisableProxy
+			case madmin.PathUpdateType:
+				tgt.Path = target.Path
+			case madmin.BandwidthLimitUpdateType:
+				tgt.BandwidthLimit = target.BandwidthLimit
+			case madmin.HealthCheckDurationUpdateType:
+				tgt.HealthCheckDuration = target.HealthCheckDuration
+			}
+		}
+		target = tgt
+	}
 	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, update); err != nil {
 		switch err.(type) {
 		case BucketRemoteConnectionErr:
