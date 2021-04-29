@@ -772,7 +772,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	if replicationStatus != replication.Completed && ri.RetryCount < 1 {
 		ri.OpType = replication.HealReplicationType
 		ri.RetryCount++
-		globalReplicationPool.queueReplicaTask(ctx, ri)
+		globalReplicationPool.queueReplicaTask(GlobalContext, ri)
 	}
 }
 
