@@ -433,6 +433,12 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		return fi, nil, nil, err
 	}
 
+	// if one of the disk is offline, return right here no need
+	// to attempt a heal on the object.
+	if countErrs(errs, errDiskNotFound) > 0 {
+		return fi, metaArr, onlineDisks, nil
+	}
+
 	var missingBlocks int
 	for i, err := range errs {
 		if err != nil && errors.Is(err, errFileNotFound) {
