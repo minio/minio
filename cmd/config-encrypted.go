@@ -94,8 +94,6 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 				return err
 			}
 			logger.Info("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name)
-		} else {
-			logger.Info("Attempting to migrate encrypted config, IAM users and policies on MinIO to a plaintext format. To encrypt all MinIO config data a KMS is needed")
 		}
 	}
 
@@ -139,9 +137,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 
 	if encrypted {
 		if GlobalKMS != nil {
-			logger.Info("Migration of encrypted config data completed. All config data is now encrypted with the KMS")
-		} else {
-			logger.Info("Migration of encrypted config data completed. All config data is now stored in plaintext")
+			logger.Info("Migration of encrypted config data completed. All config data is now encrypted.")
 		}
 	}
 	return deleteKeyEtcd(ctx, client, backendEncryptedFile)
@@ -158,8 +154,6 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 				return err
 			}
 			logger.Info("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name)
-		} else {
-			logger.Info("Attempting to migrate encrypted config, IAM users and policies on MinIO to a plaintext format. To encrypt all MinIO config data a KMS is needed")
 		}
 	}
 
@@ -201,9 +195,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 	}
 	if encrypted {
 		if GlobalKMS != nil {
-			logger.Info("Migration of encrypted config data completed. All config data is now encrypted with the KMS")
-		} else {
-			logger.Info("Migration of encrypted config data completed. All config data is now stored in plaintext")
+			logger.Info("Migration of encrypted config data completed. All config data is now encrypted.")
 		}
 	}
 	return deleteConfig(GlobalContext, globalObjectAPI, backendEncryptedFile)
