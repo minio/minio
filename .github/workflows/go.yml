@@ -46,4 +46,3 @@ jobs:
           make crosscompile
           make verify
           make verify-healing
-          bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
