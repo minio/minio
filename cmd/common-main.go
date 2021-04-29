@@ -252,11 +252,6 @@ func handleCommonEnvVars() {
 		logger.Fatal(errors.New("WORM is deprecated"), "global MINIO_WORM support is removed, please downgrade your server or migrate to https://github.com/minio/minio/tree/master/docs/retention")
 	}
 
-	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
-	if err != nil {
-		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
-	}
-
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
@@ -314,15 +309,6 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
-		}
-		globalActiveCred = cred
-	}
-
 	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
 		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
 		if err != nil {
@@ -332,9 +318,6 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 	}
 
-	if env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint) {
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
-	}
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
@@ -342,34 +325,24 @@ func handleCommonEnvVars() {
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSMasterKey, config.EnvKESEndpoint))
 	}
 
-	parseMasterKey := func(key string) error {
-		KMS, err := kms.Parse(env.Get(key, ""))
-		if err != nil {
-			v := strings.SplitN(env.Get(key, ""), ":", 2)
-			if len(v) != 2 {
-				return errors.New("invalid " + key)
-			}
-			secretKey, err := hex.DecodeString(v[1])
-			if err != nil {
-				return err
-			}
-			KMS, err = kms.New(v[0], secretKey)
-			if err != nil {
-				return err
-			}
-		}
-		GlobalKMS = KMS
-		return nil
-	}
-
 	if env.IsSet(config.EnvKMSSecretKey) {
-		if err = parseMasterKey(config.EnvKMSSecretKey); err != nil {
+		GlobalKMS, err = kms.Parse(config.EnvKMSSecretKey)
+		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
 	} else if env.IsSet(config.EnvKMSMasterKey) {
-		logger.LogIf(GlobalContext, errors.New("legacy KMS configuration"),
-			fmt.Sprintf("The environment variable %q is deprecated and will be removed in the future", config.EnvKMSMasterKey))
-		if err = parseMasterKey(config.EnvKMSMasterKey); err != nil {
+		// FIXME: remove this block by June 2021
+		logger.LogIf(GlobalContext, fmt.Errorf("legacy KMS configuration, this environment variable %q is deprecated and will be removed by June 2021", config.EnvKMSMasterKey))
+		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
+		if len(v) != 2 {
+			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+		secretKey, err := hex.DecodeString(v[1])
+		if err != nil {
+			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
+		}
+		GlobalKMS, err = kms.New(v[0], secretKey)
+		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
 	}

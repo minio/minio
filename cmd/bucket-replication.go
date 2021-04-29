@@ -91,13 +91,6 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	return false, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
-func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) (replicate bool, sync bool) {
-	if permErr != ErrNone {
-		return
-	}
-	return mustReplicater(ctx, bucket, object, meta, replStatus)
-}
-
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
 func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {
@@ -1056,7 +1049,10 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 	if tgt == nil || tgt.isOffline() {
 		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
-
+	// if proxying explicitly disabled on remote target
+	if tgt.disableProxy {
+		return nil, oi, false, nil
+	}
 	gopts := miniogo.GetObjectOptions{
 		VersionID:            opts.VersionID,
 		ServerSideEncryption: opts.ServerSideEncryption,

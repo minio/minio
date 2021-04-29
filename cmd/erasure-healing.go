@@ -253,11 +253,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	if !opts.NoLock {
+		var cancel context.CancelFunc
 		lk := er.NewNSLock(bucket, object)
-		if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		if ctx, cancel, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return result, err
 		}
-		defer lk.Unlock()
+		defer lk.Unlock(cancel)
 	}
 
 	// Re-read when we have lock...
@@ -504,6 +505,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// record the index of the updated disks
 		partsMetadata[i].Erasure.Index = i + 1
+
+		// dataDir should be empty when
+		// - transitionStatus is complete and not in restored state
+		if partsMetadata[i].TransitionStatus == lifecycle.TransitionComplete && !isRestoredObjectOnDisk(partsMetadata[i].Metadata) {
+			partsMetadata[i].DataDir = ""
+		}
 
 		// Attempt a rename now from healed data to final location.
 		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {

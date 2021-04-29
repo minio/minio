@@ -23,14 +23,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
-	"github.com/minio/sio"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/secure-io/sio-go/sioutil"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -154,6 +152,7 @@ func (kms secretKey) GenerateKey(keyID string, context Context) (DEK, error) {
 	associatedData, _ := context.MarshalText()
 	ciphertext := aead.Seal(nil, nonce, plaintext, associatedData)
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	ciphertext, err = json.Marshal(encryptedKey{
 		Algorithm: algorithm,
 		IV:        iv,
@@ -170,43 +169,17 @@ func (kms secretKey) GenerateKey(keyID string, context Context) (DEK, error) {
 	}, nil
 }
 
-func (kms secretKey) legacyDecryptKey(keyID string, sealedKey []byte, ctx Context) ([]byte, error) {
-	var derivedKey = kms.deriveKey(keyID, ctx)
-
-	var key [32]byte
-	out, err := sio.DecryptBuffer(key[:0], sealedKey, sio.Config{Key: derivedKey[:]})
-	if err != nil || len(out) != 32 {
-		return nil, err // TODO(aead): upgrade sio to use sio.Error
-	}
-	return key[:], nil
-}
-
-func (kms secretKey) deriveKey(keyID string, context Context) (key [32]byte) {
-	if context == nil {
-		context = Context{}
-	}
-	ctxBytes, _ := context.MarshalText()
-
-	mac := hmac.New(sha256.New, kms.key[:])
-	mac.Write([]byte(keyID))
-	mac.Write(ctxBytes)
-	mac.Sum(key[:0])
-	return key
-}
-
 func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error) {
 	if keyID != kms.keyID {
 		return nil, fmt.Errorf("kms: key %q does not exist", keyID)
 	}
 
-	if !utf8.Valid(ciphertext) {
-		return kms.legacyDecryptKey(keyID, ciphertext, context)
-	}
-
 	var encryptedKey encryptedKey
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(ciphertext, &encryptedKey); err != nil {
 		return nil, err
 	}
+
 	if n := len(encryptedKey.IV); n != 16 {
 		return nil, fmt.Errorf("kms: invalid iv size")
 	}
