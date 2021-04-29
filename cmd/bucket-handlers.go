@@ -299,6 +299,12 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Anonymous users, should be rejected.
+	if cred.AccessKey == "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil && globalBucketFederation {
