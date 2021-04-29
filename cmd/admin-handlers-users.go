@@ -529,11 +529,14 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 		// targerUser is set to bindDN at this point in time.
 	} else {
-		if targetUser == "" {
-			targetUser = cred.AccessKey
-		}
-		if cred.ParentUser != "" {
+		if cred.IsServiceAccount() || cred.IsTemp() {
+			if cred.ParentUser == "" {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+				return
+			}
 			targetUser = cred.ParentUser
+		} else {
+			targetUser = cred.AccessKey
 		}
 		targetGroups = cred.Groups
 	}
@@ -985,7 +988,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		}
 		policies, err = globalIAMSys.PolicyDBGet(parentUser, false, cred.Groups...)
 	default:
-		err = errors.New("should not happen!")
+		err = errors.New("should never happen")
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
