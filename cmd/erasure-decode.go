@@ -197,6 +197,18 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		return newBuf, nil
 	}
 
+	if countErrs(p.errs, nil) == len(p.errs) {
+		// We have success from all drives this can mean that
+		// all local drives succeeded, but all remote drives
+		// failed to read since p.readers[i] was already nil
+		// for such remote servers - this condition was missed
+		// we would return instead `nil, nil` from this
+		// function - it is safer to simply return Quorum error
+		// when all errs are nil but erasure coding cannot decode
+		// the content.
+		return nil, errErasureReadQuorum
+	}
+
 	return nil, reduceReadQuorumErrs(context.Background(), p.errs, objectOpIgnoredErrs, p.dataBlocks)
 }
 
