@@ -821,6 +821,10 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		if err != nil {
 			return err
 		}
+		// Note err may not not be shadowed and should reflect the returned err.
+		defer func() {
+			r.CloseWithError(err)
+		}()
 		// Send request to each disk.
 		go func() {
 			werr := d.WalkDir(ctx, WalkDirOptions{
