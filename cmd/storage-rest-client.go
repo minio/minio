@@ -238,6 +238,14 @@ func (client *storageRESTClient) SetDiskID(id string) {
 
 // DiskInfo - fetch disk information for a remote disk.
 func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	if !client.IsOnline() {
+		// make sure to check if the disk is offline, since the underlying
+		// value is cached we should attempt to invalidate it if such calls
+		// were attempted. This can lead to false success under certain conditions
+		// - this change attempts to avoid stale information if the underlying
+		// transport is already down.
+		return info, errDiskNotFound
+	}
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
