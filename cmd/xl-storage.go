@@ -837,8 +837,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
-	xlMeta, release := tempXlMetaV2()
-	defer release()
+	var xlMeta xlMetaV2
 	if err = xlMeta.Load(buf); err != nil {
 		return err
 	}
@@ -912,8 +911,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 		return errFileVersionNotFound
 	}
 
-	xlMeta, release := tempXlMetaV2()
-	defer release()
+	var xlMeta xlMetaV2
 	if err = xlMeta.Load(buf); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -938,8 +936,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	xlMeta, release := tempXlMetaV2()
-	defer release()
+	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
 		err = xlMeta.AddVersion(fi)
 		if err != nil {
@@ -1927,8 +1924,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	xlMeta, release := tempXlMetaV2()
-	defer release()
+	var xlMeta xlMetaV2
 	var legacyPreserved bool
 	if len(dstBuf) > 0 {
 		if isXL2V1Format(dstBuf) {

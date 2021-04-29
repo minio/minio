@@ -32,15 +32,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-// xlMetaV2Pool contains *xlMetaV2 objects.
-// Note than when retrieving objects they may be non empty,
-// but the data in them should not be referenced.
-var xlMetaV2Pool = sync.Pool{
-	New: func() interface{} {
-		return &xlMetaV2{}
-	},
-}
-
 // metadata stream format:
 //
 // The stream is s2 compressed.
