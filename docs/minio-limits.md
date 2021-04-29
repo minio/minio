@@ -14,12 +14,6 @@
 |Read quorum| N/2|
 |Write quorum| N/2+1|
 
-### Browser Access
-
-|Item|Specification|
-|:---|:---|
-|Web browser upload size limit| 5 TiB|
-
 ### Limits of S3 API
 
 |Item|Specification|

@@ -341,7 +341,10 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 	if err != nil {
 		return nil, err
 	}
-	return fn(reader, h, opts.CheckPrecondFn)
+	closer := func() {
+		reader.Close()
+	}
+	return fn(reader, h, opts.CheckPrecondFn, closer)
 }
 
 // RestoreRequestType represents type of restore.
