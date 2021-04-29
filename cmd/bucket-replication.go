@@ -1046,7 +1046,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		return nil, oi, false, nil
 	}
 	tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
-	if tgt == nil || tgt.isOffline() {
+	if tgt == nil {
 		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
 	// if proxying explicitly disabled on remote target

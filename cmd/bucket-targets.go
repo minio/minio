@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	minio "github.com/minio/minio-go/v7"
@@ -153,21 +152,27 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if globalIsGateway {
 		return nil
 	}
+	if !globalIsErasure {
+		return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
+	}
+
 	if arnStr == "" {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
+
 	arn, err := madmin.ParseARN(arnStr)
 	if err != nil {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
+
 	if arn.Type == madmin.ReplicationService {
-		if !globalIsErasure {
-			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
-		}
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil && rcfg.RoleArn == arnStr {
-			if _, ok := sys.arnRemotesMap[arnStr]; ok {
+			sys.RLock()
+			_, ok := sys.arnRemotesMap[arnStr]
+			sys.RUnlock()
+			if ok {
 				return BucketRemoteRemoveDisallowed{Bucket: bucket}
 			}
 		}
@@ -332,7 +337,6 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		StorageClass:        tcfg.StorageClass,
 		disableProxy:        tcfg.DisableProxy,
 	}
-	go tc.healthCheck()
 	return tc, nil
 }
 
@@ -404,27 +408,9 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 // TargetClient is the struct for remote target client.
 type TargetClient struct {
 	*miniogo.Client
-	up                  int32
 	healthCheckDuration time.Duration
 	Bucket              string // remote bucket target
 	replicateSync       bool
 	StorageClass        string // storage class on remote
 	disableProxy        bool
-}
-
-func (tc *TargetClient) isOffline() bool {
-	return atomic.LoadInt32(&tc.up) == 0
-}
-
-func (tc *TargetClient) healthCheck() {
-	for {
-		_, err := tc.BucketExists(GlobalContext, tc.Bucket)
-		if err != nil {
-			atomic.StoreInt32(&tc.up, 0)
-			time.Sleep(tc.healthCheckDuration)
-			continue
-		}
-		atomic.StoreInt32(&tc.up, 1)
-		time.Sleep(tc.healthCheckDuration)
-	}
 }
