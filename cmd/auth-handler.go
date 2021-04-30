@@ -503,7 +503,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL)
+		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 		atomic.AddUint64(&globalHTTPStats.rejectedRequestsAuth, 1)
 	})
 }

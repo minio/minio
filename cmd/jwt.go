@@ -43,9 +43,12 @@ const (
 )
 
 var (
-	errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
-	errAuthentication     = errors.New("Authentication failed, check your access credentials")
-	errNoAuthToken        = errors.New("JWT token missing")
+	errInvalidAccessKeyID   = errors.New("The access key ID you provided does not exist in our records")
+	errChangeCredNotAllowed = errors.New("Changing access key and secret key not allowed")
+	errAuthentication       = errors.New("Authentication failed, check your access credentials")
+	errNoAuthToken          = errors.New("JWT token missing")
+	errIncorrectCreds       = errors.New("Current access key or secret key is incorrect")
+	errPresignedNotAllowed  = errors.New("Unable to generate shareable URL due to lack of read permissions")
 )
 
 func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
@@ -118,6 +121,23 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 	}
 	return []byte(cred.SecretKey), nil
 
+}
+
+func isAuthTokenValid(token string) bool {
+	_, _, err := webTokenAuthenticate(token)
+	return err == nil
+}
+
+func webTokenAuthenticate(token string) (*xjwt.MapClaims, bool, error) {
+	if token == "" {
+		return nil, false, errNoAuthToken
+	}
+	claims := xjwt.NewMapClaims()
+	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+		return claims, false, errAuthentication
+	}
+	owner := claims.AccessKey == globalActiveCred.AccessKey
+	return claims, owner, nil
 }
 
 // Check if the request is authenticated.

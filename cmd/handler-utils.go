@@ -486,7 +486,7 @@ func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Req
 				Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
 					r.Method, r.URL.Path),
 				HTTPStatusCode: http.StatusBadRequest,
-			}, r.URL)
+			}, r.URL, guessIsBrowserReq(r))
 		}
 	}
 }
@@ -539,7 +539,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
 				r.Method, r.URL.Path),
 			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
+		}, r.URL, guessIsBrowserReq(r))
 	}
 
 }

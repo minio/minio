@@ -252,6 +252,9 @@ $ go run ldap.go -u foouser -p foopassword
 }
 ```
 
+## Caveats
+**LDAP STS credentials are not yet supported on MinIO Browser UI, we may add this feature in future releases.**
+
 ## Explore Further
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
 - [The MinIO documentation website](https://docs.min.io)

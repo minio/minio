@@ -25,10 +25,14 @@ Run the following command to run the latest stable image of MinIO on a Docker co
 docker run -p 9000:9000 minio/minio server /data
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as
-the MinIO Client `mc` commandline tool. See [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc`
-commandline tool. For application developers, see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for
-supported languages.
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+[Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
+
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
   `docker -v` option. For example, `-v /mnt/data:/data` maps the host OS drive at `/mnt/data` to `/data` on the Docker container.
@@ -41,9 +45,14 @@ Run the following command to run the bleeding-edge image of MinIO on a Docker co
 docker run -p 9000:9000 minio/minio:edge server /data
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
+
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
   `docker -v` option. For example, `-v /mnt/data:/data` maps the host OS drive at `/mnt/data` to `/data` on the Docker container.
@@ -73,7 +82,11 @@ brew uninstall minio
 brew install minio/stable/minio
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
@@ -87,7 +100,11 @@ chmod +x minio
 ./minio server /data
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
@@ -113,7 +130,11 @@ The following table lists supported architectures. Replace the `wget` URL with t
 | 64-bit PowerPC LE (ppc64le)    | https://dl.min.io/server/minio/release/linux-ppc64le/minio |
 | IBM Z-Series (S390X)           | https://dl.min.io/server/minio/release/linux-s390x/minio   |
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
@@ -137,7 +158,11 @@ Use the following command to run a standalone MinIO server on the Windows host. 
 minio.exe server D:\
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
@@ -165,9 +190,14 @@ Use the following commands to compile and run a standalone MinIO server from sou
 GO111MODULE=on go get github.com/minio/minio
 ```
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
+web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+
+You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
 see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
+
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
 require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically,
@@ -239,6 +269,11 @@ When deployed on a single drive, MinIO server lets clients access any pre-existi
 The above statement is also valid for all gateway backends.
 
 # Test MinIO Connectivity
+
+## Test using MinIO Browser
+MinIO Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure your server has started successfully.
+
+![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
 
 ## Test using MinIO Client `mc`
 `mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. Follow the MinIO Client [Quickstart Guide](https://docs.min.io/docs/minio-client-quickstart-guide) for further instructions.

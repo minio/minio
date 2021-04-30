@@ -30,14 +30,16 @@ require (
 	github.com/fatih/structs v1.1.0
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/golang/snappy v0.0.3
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/martian v2.1.1-0.20190517191504-25dcb96d9e51+incompatible // indirect
 	github.com/google/uuid v1.1.2
+	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.2
-	github.com/json-iterator/go v1.1.10
-	github.com/klauspost/compress v1.11.12
+	github.com/json-iterator/go v1.1.11
+	github.com/klauspost/compress v1.12.2
 	github.com/klauspost/cpuid/v2 v2.0.4
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
@@ -47,12 +49,13 @@ require (
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/miekg/dns v1.1.35
-	github.com/minio/argon2 v0.0.0-20210427164258-0025d10c2c04
+	github.com/minio/argon2 v1.0.0
 	github.com/minio/cli v1.22.0
-	github.com/minio/csvparser v0.0.0-20210427163918-ee4f0ffa388d
+	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/md5-simd v1.1.1 // indirect
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
+	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1

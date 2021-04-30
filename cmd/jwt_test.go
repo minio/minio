@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"net/http"
 	"os"
 	"testing"
 
@@ -88,6 +89,61 @@ func TestAuthenticateWeb(t *testing.T) {
 
 func TestAuthenticateURL(t *testing.T) {
 	testAuthenticate("url", t)
+}
+
+// Tests web request authenticator.
+func TestWebRequestAuthenticate(t *testing.T) {
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
+	creds := globalActiveCred
+	token, err := getTokenString(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatalf("unable get token %s", err)
+	}
+	testCases := []struct {
+		req         *http.Request
+		expectedErr error
+	}{
+		// Set valid authorization header.
+		{
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{token},
+				},
+			},
+			expectedErr: nil,
+		},
+		// No authorization header.
+		{
+			req: &http.Request{
+				Header: http.Header{},
+			},
+			expectedErr: errNoAuthToken,
+		},
+		// Invalid authorization token.
+		{
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"invalid-token"},
+				},
+			},
+			expectedErr: errAuthentication,
+		},
+	}
+
+	for i, testCase := range testCases {
+		_, _, gotErr := webRequestAuthenticate(testCase.req)
+		if testCase.expectedErr != gotErr {
+			t.Errorf("Test %d, expected err %s, got %s", i+1, testCase.expectedErr, gotErr)
+		}
+	}
 }
 
 func BenchmarkParseJWTStandardClaims(b *testing.B) {

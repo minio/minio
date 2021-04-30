@@ -91,6 +91,13 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	return false, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
+func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) (replicate bool, sync bool) {
+	if permErr != ErrNone {
+		return
+	}
+	return mustReplicater(ctx, bucket, object, meta, replStatus)
+}
+
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
 func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {

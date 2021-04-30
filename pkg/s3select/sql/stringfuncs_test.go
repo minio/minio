@@ -106,27 +106,3 @@ func TestEvalSQLLike(t *testing.T) {
 		}
 	}
 }
-
-func TestEvalSQLSubstring(t *testing.T) {
-	evalCases := []struct {
-		s           string
-		startIdx    int
-		length      int
-		resExpected string
-		errExpected error
-	}{
-		{"abcd", 1, 1, "a", nil},
-		{"abcd", -1, 1, "a", nil},
-		{"abcd", 999, 999, "", nil},
-		{"", 999, 999, "", nil},
-		{"测试abc", 1, 1, "测", nil},
-		{"测试abc", 5, 5, "c", nil},
-	}
-
-	for i, tc := range evalCases {
-		res, err := evalSQLSubstring(tc.s, tc.startIdx, tc.length)
-		if res != tc.resExpected || err != tc.errExpected {
-			t.Errorf("Eval Case %d failed: %v %v", i, res, err)
-		}
-	}
-}

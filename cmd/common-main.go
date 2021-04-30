@@ -252,6 +252,11 @@ func handleCommonEnvVars() {
 		logger.Fatal(errors.New("WORM is deprecated"), "global MINIO_WORM support is removed, please downgrade your server or migrate to https://github.com/minio/minio/tree/master/docs/retention")
 	}
 
+	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")

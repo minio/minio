@@ -340,26 +340,6 @@ func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error 
 	return nil
 }
 
-// Renames source path to destination path, creates all the
-// missing parents if they don't exist.
-func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
-	if err := checkPathLength(sourcePath); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	if err := checkPathLength(destPath); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	if err := renameAll(sourcePath, destPath); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	return nil
-}
-
 func deleteFile(basePath, deletePath string, recursive bool) error {
 	if basePath == "" || deletePath == "" {
 		return nil

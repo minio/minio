@@ -45,7 +45,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -53,49 +53,49 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Error out if Content-Length is missing.
 	// PutBucketPolicy always needs Content-Length.
 	if r.ContentLength <= 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Error out if Content-Length is beyond allowed size.
 	if r.ContentLength > maxBucketPolicySize {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPolicyTooLarge), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPolicyTooLarge), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	bucketPolicy, err := policy.ParseConfig(io.LimitReader(r.Body, r.ContentLength), bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Version in policy must not be empty
 	if bucketPolicy.Version == "" {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	configData, err := json.Marshal(bucketPolicy)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if err = globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, configData); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -111,7 +111,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -119,18 +119,18 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if err := globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, nil); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -146,7 +146,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -154,26 +154,26 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Read bucket access policy.
 	config, err := globalPolicySys.Get(bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	configData, err := json.Marshal(config)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 

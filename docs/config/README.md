@@ -324,6 +324,17 @@ Once set the healer settings are automatically applied without the need for serv
 
 ## Environment only settings (not in config)
 
+### Browser
+
+Enable or disable access to web UI. By default it is set to `on`. You may override this field with `MINIO_BROWSER` environment variable.
+
+Example:
+
+```sh
+export MINIO_BROWSER=off
+minio server /data
+```
+
 ### Domain
 
 By default, MinIO supports path-style requests that are of the format http://mydomain.com/bucket/object. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)

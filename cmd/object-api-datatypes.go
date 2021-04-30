@@ -23,7 +23,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -479,11 +478,4 @@ func (a CompletedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 // client during CompleteMultipartUpload request.
 type CompleteMultipartUpload struct {
 	Parts []CompletePart `xml:"Part"`
-}
-
-// BucketAccessPolicy - Collection of canned bucket policy at a given prefix.
-type BucketAccessPolicy struct {
-	Bucket string                     `json:"bucket"`
-	Prefix string                     `json:"prefix"`
-	Policy miniogopolicy.BucketPolicy `json:"policy"`
 }

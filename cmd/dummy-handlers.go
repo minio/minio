@@ -40,25 +40,25 @@ func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *h
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Allow getBucketCors if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchWebsiteConfiguration), r.URL)
+	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchWebsiteConfiguration), r.URL, guessIsBrowserReq(r))
 }
 
 // GetBucketAccelerate  - GET bucket accelerate, a dummy api
@@ -72,21 +72,21 @@ func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Allow getBucketCors if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -105,21 +105,21 @@ func (api objectAPIHandlers) GetBucketRequestPaymentHandler(w http.ResponseWrite
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Allow getBucketCors if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -139,21 +139,21 @@ func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *h
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Allow getBucketCors if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -178,23 +178,23 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Allow getBucketCors if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchCORSConfiguration), r.URL)
+	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchCORSConfiguration), r.URL, guessIsBrowserReq(r))
 }

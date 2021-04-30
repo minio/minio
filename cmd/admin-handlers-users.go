@@ -956,7 +956,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
 			dns.ErrDomainMissing) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		for _, dnsRecords := range dnsBuckets {

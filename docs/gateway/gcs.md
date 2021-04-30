@@ -2,7 +2,11 @@
 
 MinIO GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
 
-## 1. Run MinIO Gateway for GCS
+- [Run MinIO Gateway for GCS](#run-minio-gateway-for-gcs)
+- [Test Using MinIO Browser](#test-using-minio-browser)
+- [Test Using MinIO Client](#test-using-minio-client)
+
+## <a name="run-minio-gateway-for-gcs"></a>1. Run MinIO Gateway for GCS
 
 ### 1.1 Create a Service Account key for GCS and get the Credentials File
 1. Navigate to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
@@ -34,7 +38,13 @@ export MINIO_ROOT_PASSWORD=miniosecretkey
 minio gateway gcs yourprojectid
 ```
 
-## 3. Test Using MinIO Client
+## <a name="test-using-minio-browser"></a>2. Test Using MinIO Browser
+
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+
+![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
+
+## <a name="test-using-minio-client"></a>3. Test Using MinIO Client
 
 MinIO Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.).  `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
 
