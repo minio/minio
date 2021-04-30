@@ -1,3 +1,5 @@
+// +build !fips
+
 /*
  * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-// +build !fips
 
 package openid
 

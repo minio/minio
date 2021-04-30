@@ -186,25 +186,30 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
 		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
 		if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
-			return getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+			gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+			if err != nil {
+				return nil, err
+			}
+			unlockOnDefer = false
+			return gr.WithCleanupFuncs(nsUnlocker), nil
 		}
 	}
-	unlockOnDefer = false
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
-	if nErr != nil {
-		return nil, nErr
+
+	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
+	if err != nil {
+		return nil, err
 	}
+	unlockOnDefer = false
 	pr, pw := io.Pipe()
 	go func() {
-		err := er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks)
-		pw.CloseWithError(err)
+		pw.CloseWithError(er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks))
 	}()
 
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
 
-	return fn(pr, h, opts.CheckPrecondFn, pipeCloser)
+	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
 }
 
 // GetObject - reads an object erasured coded across multiple
