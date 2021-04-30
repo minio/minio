@@ -608,13 +608,13 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	if !cpSrcDstSame {
-		var cancel context.CancelFunc
 		objectDWLock := fs.NewNSLock(dstBucket, dstObject)
-		ctx, cancel, err = objectDWLock.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := objectDWLock.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, err
 		}
-		defer objectDWLock.Unlock(cancel)
+		ctx = lkctx.Context()
+		defer objectDWLock.Unlock(lkctx.Cancel)
 	}
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
@@ -702,20 +702,21 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if lockType != noLock {
 		// Lock the object before reading.
 		lock := fs.NewNSLock(bucket, object)
-		var cancel context.CancelFunc
 		switch lockType {
 		case writeLock:
-			ctx, cancel, err = lock.GetLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.Unlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
 		case readLock:
-			ctx, cancel, err = lock.GetRLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.RUnlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
 		}
 	}
 
@@ -984,11 +985,12 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer lk.RUnlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.RUnlock(lkctx.Cancel)
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return oi, err
@@ -1022,21 +1024,21 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
-		var cancel context.CancelFunc
 		lk := fs.NewNSLock(bucket, object)
-		_, cancel, err = lk.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 		err = fs.createFsJSON(object, fsMetaPath)
-		lk.Unlock(cancel)
+		lk.Unlock(lkctx.Cancel)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
 		oi, err = fs.getObjectInfoWithLock(ctx, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 	return oi, toObjectErr(err, bucket, object)
 }
@@ -1076,12 +1078,13 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 
 	// Lock the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
@@ -1252,11 +1255,12 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 
 	// Acquire a write lock before deleting the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return objInfo, err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err

@@ -612,20 +612,21 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	// Acquire lock
 	if lockType != noLock {
 		lock := z.NewNSLock(bucket, object)
-		var cancel context.CancelFunc
 		switch lockType {
 		case writeLock:
-			ctx, cancel, err = lock.GetLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.Unlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
 		case readLock:
-			ctx, cancel, err = lock.GetRLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.RUnlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
 		}
 		unlockOnDefer = true
 	}
@@ -684,11 +685,12 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 
 	// Lock the object before reading.
 	lk := z.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	defer lk.RUnlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.RUnlock(lkctx.Cancel)
 
 	errs := make([]error, len(z.serverPools))
 	objInfos := make([]ObjectInfo, len(z.serverPools))
@@ -802,14 +804,15 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 
 	// Acquire a bulk write lock across 'objects'
 	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
-	ctx, cancel, err := multiDeleteLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := multiDeleteLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		for i := range derrs {
 			derrs[i] = err
 		}
 		return dobjects, derrs
 	}
-	defer multiDeleteLock.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
@@ -1366,11 +1369,12 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketI
 func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(minioMetaBucket, formatConfigFile)
-	ctx, cancel, err := formatLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := formatLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return madmin.HealResultItem{}, err
 	}
-	defer formatLock.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer formatLock.Unlock(lkctx.Cancel)
 
 	var r = madmin.HealResultItem{
 		Type:   madmin.HealItemMetadata,

@@ -250,12 +250,13 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	if !opts.NoLock {
-		var cancel context.CancelFunc
 		lk := er.NewNSLock(bucket, object)
-		if ctx, cancel, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
 			return result, err
 		}
-		defer lk.Unlock(cancel)
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx.Cancel)
 	}
 
 	// List of disks having latest version of the object er.meta
