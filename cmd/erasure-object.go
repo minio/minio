@@ -186,7 +186,13 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
 		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
 		if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
-			return getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+			unlockOnDefer = false
+			gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+			if err != nil {
+				return nil, err
+			}
+			gr.cleanUpFns = append(gr.cleanUpFns, nsUnlocker)
+			return gr, err
 		}
 	}
 	unlockOnDefer = false
