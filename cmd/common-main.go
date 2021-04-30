@@ -340,7 +340,7 @@ func handleCommonEnvVars() {
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
-		GlobalKMS, err = kms.Parse(config.EnvKMSSecretKey)
+		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
