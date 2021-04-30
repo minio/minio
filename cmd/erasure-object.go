@@ -65,13 +65,13 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
 	if !dstOpts.NoLock {
-		var cancel context.CancelFunc
 		lk := er.NewNSLock(dstBucket, dstObject)
-		ctx, cancel, err = lk.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, err
 		}
-		defer lk.Unlock(cancel)
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx.Cancel)
 	}
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
@@ -146,21 +146,22 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	// Acquire lock
 	if lockType != noLock {
-		var cancel context.CancelFunc
 		lock := er.NewNSLock(bucket, object)
 		switch lockType {
 		case writeLock:
-			ctx, cancel, err = lock.GetLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.Unlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
 		case readLock:
-			ctx, cancel, err = lock.GetRLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = func() { lock.RUnlock(cancel) }
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
 		}
 		unlockOnDefer = true
 	}
@@ -215,11 +216,12 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
 	// Lock the object before reading.
 	lk := er.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer lk.RUnlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.RUnlock(lkctx.Cancel)
 
 	// Start offset cannot be negative.
 	if startOffset < 0 {
@@ -378,14 +380,14 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
 	if !opts.NoLock {
-		var cancel context.CancelFunc
 		// Lock the object before reading.
 		lk := er.NewNSLock(bucket, object)
-		ctx, cancel, err = lk.GetRLock(ctx, globalOperationTimeout)
+		lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return ObjectInfo{}, err
 		}
-		defer lk.RUnlock(cancel)
+		ctx = lkctx.Context()
+		defer lk.RUnlock(lkctx.Cancel)
 	}
 
 	return er.getObjectInfo(ctx, bucket, object, opts)
@@ -740,14 +742,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	if !opts.NoLock {
-		var err error
-		var cancel context.CancelFunc
 		lk := er.NewNSLock(bucket, object)
-		ctx, cancel, err = lk.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return ObjectInfo{}, err
 		}
-		defer lk.Unlock(cancel)
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx.Cancel)
 	}
 
 	for i, w := range writers {
@@ -1053,11 +1054,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	storageDisks := er.getDisks()
 	writeQuorum := len(storageDisks)/2 + 1
@@ -1166,11 +1168,12 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	// Lock the object before updating tags.
 	lk := er.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	disks := er.getDisks()
 
@@ -1216,11 +1219,12 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	// Lock the object before updating tags.
 	lk := er.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	disks := er.getDisks()
 
@@ -1310,11 +1314,12 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	}
 	// Acquire write lock before starting to transition the object.
 	lk := er.NewNSLock(bucket, object)
-	ctx, cancel, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer lk.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {

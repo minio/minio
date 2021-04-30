@@ -47,7 +47,7 @@ test-race: verifiers build
 # Verify minio binary
 verify:
 	@echo "Verifying build with race"
-	@GO111MODULE=on CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 # Verify healing of disks with minio binary

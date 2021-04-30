@@ -299,7 +299,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		_, cancel, err := txnLk.GetLock(ctx, lockTimeout)
+		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 
@@ -319,7 +319,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(ctx, newObject); err == nil {
-				txnLk.Unlock(cancel)
+				txnLk.Unlock(lkctx.Cancel)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -329,7 +329,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			}
 		}
 
-		txnLk.Unlock(cancel) // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		txnLk.Unlock(lkctx.Cancel)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
