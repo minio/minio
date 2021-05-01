@@ -748,8 +748,10 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, err := NewGetObjectReader(rs, objInfo, opts, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
+		rwPoolUnlocker()
+		nsUnlocker()
 		return nil, err
 	}
 
@@ -777,7 +779,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn)
+	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // getObject - wrapper for GetObject

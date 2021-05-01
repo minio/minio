@@ -936,16 +936,16 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		objInfo.Size = rngInfo.Size
 		rs = nil
 	}
-	var nsUnlocker = func() {}
+
 	// For a directory, we need to send an reader that returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
+		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 		return gr, numHits, gerr
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, numHits, nErr
 	}
