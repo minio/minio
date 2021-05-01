@@ -453,6 +453,7 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
+		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
 		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
 		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
@@ -500,6 +501,7 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
+		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
 		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
 		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
@@ -525,6 +527,7 @@ func newCustomHTTPTransportWithHTTP2(tlsConfig *tls.Config, dialTimeout time.Dur
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
+		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 1 * time.Minute,
@@ -564,6 +567,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
+		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
 		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
 		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
@@ -650,6 +654,7 @@ func NewRemoteTargetHTTPTransport() *http.Transport {
 			Timeout:   15 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
+		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
 		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
 		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default

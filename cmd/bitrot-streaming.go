@@ -25,6 +25,7 @@ import (
 	"hash"
 	"io"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
 )
@@ -118,6 +119,14 @@ func (b *streamingBitrotReader) Close() error {
 		return nil
 	}
 	if closer, ok := b.rc.(io.Closer); ok {
+		// drain the body for connection re-use at network layer.
+		xhttp.DrainBody(struct {
+			io.Reader
+			io.Closer
+		}{
+			Reader: b.rc,
+			Closer: closeWrapper(func() error { return nil }),
+		})
 		return closer.Close()
 	}
 	return nil

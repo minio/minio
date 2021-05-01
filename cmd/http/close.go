@@ -32,12 +32,13 @@ func DrainBody(respBody io.ReadCloser) {
 	// If resp.Body is not closed, the Client's underlying RoundTripper
 	// (typically Transport) may not be able to re-use a persistent TCP
 	// connection to the server for a subsequent "keep-alive" request.
+	maxSplurpSize := int64(2 << 10)
 	if respBody != nil {
 		// Drain any remaining Body and then close the connection.
 		// Without this closing connection would disallow re-using
 		// the same connection for future uses.
 		//  - http://stackoverflow.com/a/17961593/4465767
 		defer respBody.Close()
-		io.Copy(ioutil.Discard, respBody)
+		io.CopyN(ioutil.Discard, respBody, maxSplurpSize)
 	}
 }

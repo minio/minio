@@ -208,17 +208,17 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	}()
 	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
 	defer xhttp.DrainBody(respBody)
+	pr.Close()
 	if err != nil {
-		pr.Close()
 		return cache, err
 	}
-	pr.Close()
 
 	var newCache dataUsageCache
 	pr, pw = io.Pipe()
 	go func() {
 		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
+
 	err = newCache.deserialize(pr)
 	pr.CloseWithError(err)
 	return newCache, err
