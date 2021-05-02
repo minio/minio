@@ -58,10 +58,6 @@ type ServerSystemConfig struct {
 
 // Diff - returns error on first difference found in two configs.
 func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
-	if s1.MinioPlatform != s2.MinioPlatform {
-		return fmt.Errorf("Expected platform '%s', found to be running '%s'",
-			s1.MinioPlatform, s2.MinioPlatform)
-	}
 	if s1.MinioEndpoints.NEndpoints() != s2.MinioEndpoints.NEndpoints() {
 		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.NEndpoints(),
 			s2.MinioEndpoints.NEndpoints())
