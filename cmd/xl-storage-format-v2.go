@@ -1278,11 +1278,11 @@ func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, erro
 		fi := &versions[filled]
 		switch version.Type {
 		case ObjectType:
-			fi, err = version.ObjectV2.ToFileInfo(fi, volume, path)
+			_, err = version.ObjectV2.ToFileInfo(fi, volume, path)
 		case DeleteType:
 			_, err = version.DeleteMarker.ToFileInfo(&versions[i], volume, path)
 		case LegacyType:
-			fi, err = version.ObjectV1.ToFileInfo(fi, volume, path)
+			_, err = version.ObjectV1.ToFileInfo(fi, volume, path)
 		default:
 			continue
 		}
