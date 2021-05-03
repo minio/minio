@@ -201,12 +201,10 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 				}
 			}
 		}
-		if objInfo.TransitionStatus == lifecycle.TransitionComplete {
+		if objInfo.IsRemote() {
 			// Check if object is being restored. For more information on x-amz-restore header see
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
-			if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
-				w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionTier}
-			}
+			w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionTier}
 		}
 		ruleID, transitionTime := lc.PredictTransitionTime(lifecycle.ObjectOpts{
 			Name:             objInfo.Name,
