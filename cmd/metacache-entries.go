@@ -121,7 +121,7 @@ func (e *metaCacheEntry) isLatestDeleteMarker() bool {
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.
 func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
-	if e.cached == nil {
+	if e.cached != nil {
 		return e.cached, nil
 	}
 	if e.isDir() {
@@ -130,8 +130,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
 			Name:   e.name,
 			Mode:   uint32(os.ModeDir),
 		}
-	}
-	if e.cached == nil {
+	} else {
 		fi, err := getFileInfo(e.metadata, bucket, e.name, "", false)
 		if err != nil {
 			return nil, err

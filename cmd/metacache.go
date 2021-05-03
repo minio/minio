@@ -76,7 +76,7 @@ func (m *metacache) finished() bool {
 
 // matches returns whether the metacache matches the options given.
 func (m *metacache) matches(o *listPathOptions, extend time.Duration) bool {
-	if o == nil {
+	if m == nil || o == nil {
 		return false
 	}
 
