@@ -100,10 +100,10 @@ func (e metaCacheEntry) isInDir(dir, separator string) bool {
 	return false
 }
 
-// isLatestDeletemarker returns whether the latest version is a delete marker.
+// isLatestDeleteMarker returns whether the latest version is a delete marker.
 // If metadata is NOT versioned false will always be returned.
 // If v2 and UNABLE to load metadata true will be returned.
-func (e *metaCacheEntry) isLatestDeletemarker() bool {
+func (e *metaCacheEntry) isLatestDeleteMarker() bool {
 	if e.cached != nil {
 		return e.cached.Deleted
 	}
@@ -121,19 +121,22 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.
 func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
+	if e.cached == nil {
+		return e.cached, nil
+	}
 	if e.isDir() {
-		return &FileInfo{
+		e.cached = &FileInfo{
 			Volume: bucket,
 			Name:   e.name,
 			Mode:   uint32(os.ModeDir),
-		}, nil
+		}
 	}
 	if e.cached == nil {
 		fi, err := getFileInfo(e.metadata, bucket, e.name, "", false)
 		if err != nil {
 			return nil, err
 		}
-		e.cached = &fi
+		e.cached = fi
 	}
 	return e.cached, nil
 }

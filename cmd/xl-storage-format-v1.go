@@ -181,12 +181,15 @@ const (
 	legacyDataDir = "legacy"
 )
 
-func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
+func (m *xlMetaV1Object) ToFileInfo(dst *FileInfo, volume, path string) (*FileInfo, error) {
 	if !m.valid() {
-		return FileInfo{}, errFileCorrupt
+		return nil, errFileCorrupt
 	}
 
-	fi := FileInfo{
+	if dst == nil {
+		dst = &FileInfo{}
+	}
+	*dst = FileInfo{
 		Volume:    volume,
 		Name:      path,
 		ModTime:   m.Stat.ModTime,
@@ -197,7 +200,7 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		VersionID: m.VersionID,
 		DataDir:   m.DataDir,
 	}
-	return fi, nil
+	return dst, nil
 }
 
 // XL metadata constants.

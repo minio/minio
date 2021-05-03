@@ -1064,10 +1064,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID, readData)
+	fip, err := getFileInfo(buf, volume, path, versionID, readData)
 	if err != nil {
 		return fi, err
 	}
+	fi = *fip
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
@@ -2005,7 +2006,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	var oldDstDataPath string
 	if fi.VersionID == "" {
 		// return the latest "null" versionId info
-		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
+		ofi, err := xlMeta.ToFileInfo(nil, dstVolume, dstPath, nullVersionID)
 		if err == nil && !ofi.Deleted {
 			if xlMeta.SharedDataDirCountStr(nullVersionID, ofi.DataDir) == 0 {
 				// Purge the destination path as we are not preserving anything

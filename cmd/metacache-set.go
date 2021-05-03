@@ -170,7 +170,7 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				o.debugln("not in dir", o.Prefix, o.Separator)
 				continue
 			}
-			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
+			if !o.InclDeleted && entry.isObject() && entry.isLatestDeleteMarker() {
 				o.debugln("latest is delete marker")
 				continue
 			}
@@ -331,7 +331,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			if !entry.isInDir(o.Prefix, o.Separator) {
 				return true
 			}
-			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
+			if !o.InclDeleted && entry.isObject() && entry.isLatestDeleteMarker() {
 				return entries.len() < o.Limit
 			}
 			entries.o = append(entries.o, entry)

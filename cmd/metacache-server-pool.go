@@ -189,7 +189,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 					if err != nil {
 						return true
 					}
-					oFIV, err := existing.fileInfo(o.Bucket)
+					oFIV, err := other.fileInfo(o.Bucket)
 					if err != nil {
 						return false
 					}

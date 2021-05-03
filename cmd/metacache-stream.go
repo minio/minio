@@ -478,7 +478,7 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 	}
 
 	if r.current.name != "" {
-		if (inclDeleted || !r.current.isLatestDeletemarker()) && r.current.hasPrefix(prefix) && (inclDirs || r.current.isObject()) {
+		if (inclDeleted || !r.current.isLatestDeleteMarker()) && r.current.hasPrefix(prefix) && (inclDirs || r.current.isObject()) {
 			res = append(res, r.current)
 		}
 		r.current.name = ""
@@ -521,7 +521,7 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 		if !inclDirs && meta.isDir() {
 			continue
 		}
-		if !inclDeleted && meta.isLatestDeletemarker() {
+		if !inclDeleted && meta.isLatestDeleteMarker() {
 			continue
 		}
 		res = append(res, meta)

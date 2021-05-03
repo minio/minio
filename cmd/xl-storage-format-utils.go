@@ -59,7 +59,7 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 		return FileInfoVersions{}, errFileCorrupt
 	}
 
-	fi, err := xlMeta.ToFileInfo(volume, path)
+	fi, err := xlMeta.ToFileInfo(nil, volume, path)
 	if err != nil {
 		return FileInfoVersions{}, err
 	}
@@ -69,18 +69,18 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	return FileInfoVersions{
 		Volume:        volume,
 		Name:          path,
-		Versions:      []FileInfo{fi},
+		Versions:      []FileInfo{*fi},
 		LatestModTime: fi.ModTime,
 	}, nil
 }
 
-func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
+func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (*FileInfo, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var xlMeta xlMetaV2
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
-			return FileInfo{}, err
+			return nil, err
 		}
-		fi, err := xlMeta.ToFileInfo(volume, path, versionID)
+		fi, err := xlMeta.ToFileInfo(nil, volume, path, versionID)
 		if !data || err != nil {
 			return fi, err
 		}
@@ -101,15 +101,17 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	xlMeta := &xlMetaV1Object{}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaBuf, xlMeta); err != nil {
-		return FileInfo{}, errFileCorrupt
+		return nil, errFileCorrupt
 	}
 
-	fi, err := xlMeta.ToFileInfo(volume, path)
+	fi, err := xlMeta.ToFileInfo(nil, volume, path)
 	if err == errFileNotFound && versionID != "" {
 		return fi, errFileVersionNotFound
 	}
-	fi.IsLatest = true // No versions so current version is latest.
-	fi.XLV1 = true     // indicates older version
+	if fi != nil {
+		fi.IsLatest = true // No versions so current version is latest.
+		fi.XLV1 = true     // indicates older version
+	}
 	return fi, err
 }
 
