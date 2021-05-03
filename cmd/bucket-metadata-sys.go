@@ -26,7 +26,6 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -170,7 +170,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		}
 		meta.ReplicationConfigXML = configData
 	case bucketTargetsFile:
-		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(meta.Name, configData, crypto.Context{
+		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(meta.Name, configData, kms.Context{
 			bucket:            meta.Name,
 			bucketTargetsFile: bucketTargetsFile,
 		})
