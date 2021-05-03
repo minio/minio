@@ -41,4 +41,6 @@ const (
 	EnvEndpoints = "MINIO_ENDPOINTS" // legacy
 	EnvWorm      = "MINIO_WORM"      // legacy
 	EnvRegion    = "MINIO_REGION"    // legacy
+
+	EnvIAMRefreshSecInterval = "MINIO_IAM_REFRESH_SEC_INTERVAL"
 )

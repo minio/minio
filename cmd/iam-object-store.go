@@ -21,7 +21,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -599,8 +602,20 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 
 func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
 	// Refresh IAMSys.
+	sleepDuration := globalRefreshIAMInterval
+
+	if env.IsSet(config.EnvIAMRefreshSecInterval) {
+		sleepDurationInt, err := strconv.ParseInt(env.Get(config.EnvIAMRefreshSecInterval, ""), 10, 64)
+
+		if err == nil {
+			if sleepDurationInt > 0 {
+				sleepDuration = time.Duration(sleepDurationInt) * time.Second
+			}
+		}
+	}
+
 	for {
-		time.Sleep(globalRefreshIAMInterval)
+		time.Sleep(time.Duration(sleepDuration))
 		if err := iamOS.loadAll(ctx, sys); err != nil {
 			logger.LogIf(ctx, err)
 		}
