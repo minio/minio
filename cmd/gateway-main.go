@@ -263,6 +263,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add server metrics router
 	registerMetricsRouter(router)
 
+	// Register web router when its enabled.
+	if globalBrowserEnabled {
+		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
+	}
+
 	// Add API router.
 	registerAPIRouter(router)
 

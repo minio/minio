@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -57,6 +58,7 @@ const (
 	// JWT claim keys
 	expClaim = "exp"
 	subClaim = "sub"
+	issClaim = "iss"
 
 	// JWT claim to check the parent user
 	parentClaim = "parent"
@@ -322,6 +324,21 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var subFromToken string
+	if v, ok := m[subClaim]; ok {
+		subFromToken, _ = v.(string)
+	}
+
+	if subFromToken == "" {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
+		return
+	}
+
+	var issFromToken string
+	if v, ok := m[issClaim]; ok {
+		issFromToken, _ = v.(string)
+	}
+
 	// JWT has requested a custom claim with policy value set.
 	// This is a MinIO STS API specific value, this value should
 	// be set and configured on your identity provider as part of
@@ -371,10 +388,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var subFromToken string
-	if v, ok := m[subClaim]; ok {
-		subFromToken, _ = v.(string)
-	}
+	// https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability
+	// claim is only considered stable when subject and iss are used together
+	// this is to ensure that ParentUser doesn't change and we get to use
+	// parentUser as per the requirements for service accounts for OpenID
+	// based logins.
+	cred.ParentUser = "jwt:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {

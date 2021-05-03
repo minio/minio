@@ -439,12 +439,12 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 // if partial object is cached.
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
 	cLock := c.NewNSLockFn(cacheObjPath)
-	ctx, cancel, err := cLock.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return
 	}
-
-	defer cLock.RUnlock(cancel)
+	ctx = lkctx.Context()
+	defer cLock.RUnlock(lkctx.Cancel)
 	return c.statCache(ctx, cacheObjPath)
 }
 
@@ -520,11 +520,12 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachedPath)
-	ctx, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer cLock.Unlock(lkctx.Cancel)
 	return c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly)
 }
 
@@ -698,11 +699,12 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachePath)
-	ctx, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer cLock.Unlock(cancel)
+	ctx = lkctx.Context()
+	defer cLock.Unlock(lkctx.Cancel)
 
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
@@ -913,11 +915,12 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cacheObjPath)
-	ctx, cancel, err := cLock.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return nil, numHits, err
 	}
-	defer cLock.RUnlock(cancel)
+	ctx = lkctx.Context()
+	defer cLock.RUnlock(lkctx.Cancel)
 
 	var objInfo ObjectInfo
 	var rngInfo RangeInfo
@@ -933,16 +936,16 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		objInfo.Size = rngInfo.Size
 		rs = nil
 	}
-	var nsUnlocker = func() {}
+
 	// For a directory, we need to send an reader that returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
+		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 		return gr, numHits, gerr
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, numHits, nErr
 	}
@@ -978,11 +981,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
 	cLock := c.NewNSLockFn(cacheObjPath)
-	_, cancel, err := cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock(cancel)
+	defer cLock.Unlock(lkctx.Cancel)
 	return removeAll(cacheObjPath)
 }
 

@@ -852,25 +852,6 @@ func arrayCompare(op string, left, right []Value) (bool, error) {
 	}
 }
 
-func timestampCompare(op string, left, right time.Time) bool {
-	switch op {
-	case opLt:
-		return left.Before(right)
-	case opLte:
-		return left.Before(right) || left.Equal(right)
-	case opGt:
-		return left.After(right)
-	case opGte:
-		return left.After(right) || left.Equal(right)
-	case opEq:
-		return left.Equal(right)
-	case opIneq:
-		return !left.Equal(right)
-	}
-	// This case does not happen
-	return false
-}
-
 func isValidArithOperator(op string) bool {
 	switch op {
 	case opPlus:

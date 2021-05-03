@@ -68,6 +68,11 @@ export KRB5USERNAME=hdfs
 export KRB5REALM=REALM.COM
 ```
 
+## Test using MinIO Browser
+*MinIO gateway* comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+
+![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
+
 ## Test using MinIO Client `mc`
 
 `mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.

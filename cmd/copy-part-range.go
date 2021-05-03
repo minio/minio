@@ -24,18 +24,18 @@ import (
 )
 
 // Writes S3 compatible copy part range error.
-func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url *url.URL) {
+func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url *url.URL, browser bool) {
 	switch err {
 	case errInvalidRange:
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url, browser)
 		return
 	case errInvalidRangeSource:
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
 		return
 	default:
 		apiErr := errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource)
 		apiErr.Description = err.Error()
-		writeErrorResponse(ctx, w, apiErr, url)
+		writeErrorResponse(ctx, w, apiErr, url, browser)
 		return
 	}
 }
