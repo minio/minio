@@ -1324,7 +1324,8 @@ func getModTimeFromVersion(v xlMetaV2Version) time.Time {
 func (z xlMetaV2) ToFileInfo(dst *FileInfo, volume, path, versionID string) (*FileInfo, error) {
 	var uv uuid.UUID
 	if versionID != "" && versionID != nullVersionID {
-		_, err := uuid.Parse(versionID)
+		var err error
+		uv, err = uuid.Parse(versionID)
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return nil, errFileVersionNotFound
