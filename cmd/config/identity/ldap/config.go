@@ -382,6 +382,8 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 
 // Connect connect to ldap server.
 func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
+	var tlsConfig *tls.Config
+	var host string
 	if l == nil {
 		return nil, errors.New("LDAP is not configured")
 	}
@@ -400,10 +402,15 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		if err != nil {
 			return nil, err
 		}
-		err = conn.StartTLS(&tls.Config{
+		tlsConfig = &tls.Config{
 			InsecureSkipVerify: l.tlsSkipVerify,
 			RootCAs:            l.rootCAs,
-		})
+		}
+		if !l.tlsSkipVerify {
+			host, _, _ = net.SplitHostPort(l.ServerAddr)
+			tlsConfig.ServerName = host
+		}
+		err = conn.StartTLS(tlsConfig)
 		return conn, err
 	}
 
