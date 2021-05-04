@@ -23,6 +23,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
 // TestParseRestoreObjStatus tests parseRestoreObjStatus
@@ -153,5 +154,63 @@ func TestIsRestoredObjectOnDisk(t *testing.T) {
 		if actual := isRestoredObjectOnDisk(tc.meta); actual != tc.ondisk {
 			t.Fatalf("Test %d: expected %v but got %v for %v", i+1, tc.ondisk, actual, tc.meta)
 		}
+	}
+}
+
+func TestObjectIsRemote(t *testing.T) {
+	fi := newFileInfo("object", 8, 8)
+	fi.Erasure.Index = 1
+	if !fi.IsValid() {
+		t.Fatalf("unable to get xl meta")
+	}
+
+	testCases := []struct {
+		meta   map[string]string
+		remote bool
+	}{
+		{
+			// restore in progress
+			meta: map[string]string{
+				xhttp.AmzRestore: ongoingRestoreObj().String(),
+			},
+			remote: true,
+		},
+		{
+			// restore completed
+			meta: map[string]string{
+				xhttp.AmzRestore: completedRestoreObj(time.Now().Add(time.Hour)).String(),
+			},
+			remote: false,
+		},
+		{
+			// restore completed but expired
+			meta: map[string]string{
+				xhttp.AmzRestore: completedRestoreObj(time.Now().Add(-time.Hour)).String(),
+			},
+			remote: true,
+		},
+		{
+			// restore never initiated
+			meta:   map[string]string{},
+			remote: true,
+		},
+	}
+	for i, tc := range testCases {
+		// Set transition status to complete
+		fi.TransitionStatus = lifecycle.TransitionComplete
+		fi.Metadata = tc.meta
+		if got := fi.IsRemote(); got != tc.remote {
+			t.Fatalf("Test %d.a: expected %v got %v", i+1, tc.remote, got)
+		}
+		oi := fi.ToObjectInfo("bucket", "object")
+		if got := oi.IsRemote(); got != tc.remote {
+			t.Fatalf("Test %d.b: expected %v got %v", i+1, tc.remote, got)
+		}
+	}
+	// Reset transition status; An object that's not transitioned is not remote.
+	fi.TransitionStatus = ""
+	fi.Metadata = nil
+	if got := fi.IsRemote(); got != false {
+		t.Fatalf("Expected object not to be remote but got %v", got)
 	}
 }

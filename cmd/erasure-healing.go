@@ -509,7 +509,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// dataDir should be empty when
 		// - transitionStatus is complete and not in restored state
-		if partsMetadata[i].TransitionStatus == lifecycle.TransitionComplete && !isRestoredObjectOnDisk(partsMetadata[i].Metadata) {
+		if partsMetadata[i].IsRemote() {
 			partsMetadata[i].DataDir = ""
 		}
 		// Attempt a rename now from healed data to final location.
