@@ -101,3 +101,4 @@ require (
 	honnef.co/go/tools v0.0.1-2020.1.6 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+replace github.com/minio/minio-go/v7 => ../minio-go

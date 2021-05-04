@@ -591,7 +591,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		return
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
-	if tgt == nil {
+	if tgt == nil || tgt.IsOffline() {
 		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, cfg.RoleArn))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
@@ -1083,7 +1083,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		return nil, oi, false, nil
 	}
 	tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
-	if tgt == nil {
+	if tgt == nil || tgt.IsOffline() {
 		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
 	// if proxying explicitly disabled on remote target
