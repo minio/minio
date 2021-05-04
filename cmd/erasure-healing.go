@@ -451,7 +451,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize(), true)
 				}
 			}
-			err = erasure.Heal(ctx, readers, writers, partSize)
+			err = erasure.Heal(ctx, readers, writers, partSize, er.bp)
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {
