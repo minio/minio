@@ -105,12 +105,12 @@ func (rpcClient *ReconnectRPCClient) Lock(ctx context.Context, args LockArgs) (s
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) RUnlock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.RUnlock", &args, &status)
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) Unlock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) Unlock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.Unlock", &args, &status)
 	return status, err
 }
