@@ -880,7 +880,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		// This mapping is necessary to ensure that valid credentials
 		// have necessary ParentUser present - this is mainly for only
 		// webIdentity based STS tokens.
-		if cred.IsTemp() && cred.ParentUser != "" {
+		if cred.IsTemp() && cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
 			if _, ok := sys.iamUserPolicyMap[cred.ParentUser]; !ok {
 				if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
 					sys.store.unlock()
@@ -1114,14 +1114,10 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if parentUser == globalActiveCred.AccessKey {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
 	cr, ok := sys.iamUsersMap[parentUser]
 	if !ok {
-		// For LDAP users we would need this fallback
-		if sys.usersSysType != MinIOUsersSysType {
+		// For LDAP/OpenID users we would need this fallback
+		if sys.usersSysType != MinIOUsersSysType && parentUser != globalActiveCred.ParentUser {
 			_, ok = sys.iamUserPolicyMap[parentUser]
 			if !ok {
 				var found bool
@@ -1479,7 +1475,12 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			// temporary credentials or service accounts
 			// must have their parent in UsersMap
-			_, ok = sys.iamUserPolicyMap[cred.ParentUser]
+			if cred.ParentUser == globalActiveCred.AccessKey {
+				// parent exists, so allow temporary and service accounts.
+				ok = true
+			} else {
+				_, ok = sys.iamUserPolicyMap[cred.ParentUser]
+			}
 		}
 		// for LDAP service accounts with ParentUser set
 		// we have no way to validate, either because user
@@ -1865,13 +1866,17 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 	var u auth.Credentials
 	var ok bool
 	if sys.usersSysType == MinIOUsersSysType {
+		if name == globalActiveCred.AccessKey {
+			return []string{"consoleAdmin"}, nil
+		}
+
 		// When looking for a user's policies, we also check if the user
 		// and the groups they are member of are enabled.
-
 		u, ok = sys.iamUsersMap[name]
 		if !ok {
 			return nil, errNoSuchUser
 		}
+
 		if !u.IsValid() {
 			return nil, nil
 		}
