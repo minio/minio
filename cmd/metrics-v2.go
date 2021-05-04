@@ -120,6 +120,8 @@ const (
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
 	upTime           = "uptime_seconds"
+	memory           = "resident_memory_bytes"
+	cpu              = "cpu_total_seconds"
 )
 
 const (
@@ -821,6 +823,24 @@ func getMinIOProcessUptimeMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getMinIOProcessResidentMemory() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      memory,
+		Help:      "Resident memory size in bytes.",
+		Type:      gaugeMetric,
+	}
+}
+func getMinIOProcessCPUTime() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      cpu,
+		Help:      "Total user and system CPU time spent in seconds.",
+		Type:      counterMetric,
+	}
+}
 func getMinioProcMetrics() MetricsGroup {
 	return MetricsGroup{
 		id:         "MinioProcMetrics",
@@ -912,6 +932,16 @@ func getMinioProcMetrics() MetricsGroup {
 				Metric{
 					Description: getMinIOProcessUptimeMD(),
 					Value:       time.Since(globalBootTime).Seconds(),
+				})
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessResidentMemory(),
+					Value:       float64(stat.ResidentMemory()),
+				})
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessCPUTime(),
+					Value:       float64(stat.CPUTime()),
 				})
 			return
 		},
