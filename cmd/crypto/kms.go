@@ -1,189 +1,32 @@
-// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+// Copyright (c) 2015-2021 MinIO, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This file is part of MinIO Object Storage stack
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
 import (
-	"bytes"
-	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"errors"
-	"io"
-	"sort"
-
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/sio"
+	"github.com/minio/minio/pkg/kms"
 )
 
 // Context is a list of key-value pairs cryptographically
 // associated with a certain object.
-type Context map[string]string
-
-// MarshalText returns a canonical text representation of
-// the Context.
-
-// MarshalText sorts the context keys and writes the sorted
-// key-value pairs as canonical JSON object. The sort order
-// is based on the un-escaped keys.
-func (c Context) MarshalText() ([]byte, error) {
-	if len(c) == 0 {
-		return []byte{'{', '}'}, nil
-	}
-
-	// Pre-allocate a buffer - 128 bytes is an arbitrary
-	// heuristic value that seems like a good starting size.
-	var b = bytes.NewBuffer(make([]byte, 0, 128))
-	if len(c) == 1 {
-		for k, v := range c {
-			b.WriteString(`{"`)
-			EscapeStringJSON(b, k)
-			b.WriteString(`":"`)
-			EscapeStringJSON(b, v)
-			b.WriteString(`"}`)
-		}
-		return b.Bytes(), nil
-	}
-
-	sortedKeys := make([]string, 0, len(c))
-	for k := range c {
-		sortedKeys = append(sortedKeys, k)
-	}
-	sort.Strings(sortedKeys)
-
-	b.WriteByte('{')
-	for i, k := range sortedKeys {
-		b.WriteByte('"')
-		EscapeStringJSON(b, k)
-		b.WriteString(`":"`)
-		EscapeStringJSON(b, c[k])
-		b.WriteByte('"')
-		if i < len(sortedKeys)-1 {
-			b.WriteByte(',')
-		}
-	}
-	b.WriteByte('}')
-	return b.Bytes(), nil
-}
+type Context = kms.Context
 
 // KMS represents an active and authenticted connection
 // to a Key-Management-Service. It supports generating
 // data key generation and unsealing of KMS-generated
 // data keys.
-type KMS interface {
-	// DefaultKeyID returns the default master key ID. It should be
-	// used for SSE-S3 and whenever a S3 client requests SSE-KMS but
-	// does not specify an explicit SSE-KMS key ID.
-	DefaultKeyID() string
-
-	// CreateKey creates a new master key with the given key ID
-	// at the KMS.
-	CreateKey(keyID string) error
-
-	// GenerateKey generates a new random data key using
-	// the master key referenced by the keyID. It returns
-	// the plaintext key and the sealed plaintext key
-	// on success.
-	//
-	// The context is cryptographically bound to the
-	// generated key. The same context must be provided
-	// again to unseal the generated key.
-	GenerateKey(keyID string, context Context) (key [32]byte, sealedKey []byte, err error)
-
-	// UnsealKey unseals the sealedKey using the master key
-	// referenced by the keyID. The provided context must
-	// match the context used to generate the sealed key.
-	UnsealKey(keyID string, sealedKey []byte, context Context) (key [32]byte, err error)
-
-	// Info returns descriptive information about the KMS,
-	// like the default key ID and authentication method.
-	Info() KMSInfo
-}
-
-type masterKeyKMS struct {
-	keyID     string
-	masterKey [32]byte
-}
-
-// KMSInfo contains some describing information about
-// the KMS.
-type KMSInfo struct {
-	Endpoints []string
-	Name      string
-	AuthType  string
-}
-
-// NewMasterKey returns a basic KMS implementation from a single 256 bit master key.
-//
-// The KMS accepts any keyID but binds the keyID and context cryptographically
-// to the generated keys.
-func NewMasterKey(keyID string, key [32]byte) KMS { return &masterKeyKMS{keyID: keyID, masterKey: key} }
-
-func (kms *masterKeyKMS) DefaultKeyID() string {
-	return kms.keyID
-}
-
-func (kms *masterKeyKMS) CreateKey(keyID string) error {
-	return errors.New("crypto: creating keys is not supported by a static master key")
-}
-
-func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
-		logger.CriticalIf(context.Background(), errOutOfEntropy)
-	}
-
-	var (
-		buffer     bytes.Buffer
-		derivedKey = kms.deriveKey(keyID, ctx)
-	)
-	if n, err := sio.Encrypt(&buffer, bytes.NewReader(key[:]), sio.Config{Key: derivedKey[:]}); err != nil || n != 64 {
-		logger.CriticalIf(context.Background(), errors.New("KMS: unable to encrypt data key"))
-	}
-	sealedKey = buffer.Bytes()
-	return key, sealedKey, nil
-}
-
-// KMS is configured directly using master key
-func (kms *masterKeyKMS) Info() (info KMSInfo) {
-	return KMSInfo{
-		Endpoints: []string{},
-		Name:      "",
-		AuthType:  "master-key",
-	}
-}
-
-func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
-	var (
-		derivedKey = kms.deriveKey(keyID, ctx)
-	)
-	out, err := sio.DecryptBuffer(key[:0], sealedKey, sio.Config{Key: derivedKey[:]})
-	if err != nil || len(out) != 32 {
-		return key, err // TODO(aead): upgrade sio to use sio.Error
-	}
-	return key, nil
-}
-
-func (kms *masterKeyKMS) deriveKey(keyID string, context Context) (key [32]byte) {
-	if context == nil {
-		context = Context{}
-	}
-	ctxBytes, _ := context.MarshalText()
-
-	mac := hmac.New(sha256.New, kms.masterKey[:])
-	mac.Write([]byte(keyID))
-	mac.Write(ctxBytes)
-	mac.Sum(key[:0])
-	return key
-}
+type KMS = kms.KMS

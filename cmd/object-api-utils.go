@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -44,7 +45,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/trie"
@@ -554,12 +554,18 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 // GetObjectReader is a type that wraps a reader with a lock to
 // provide a ReadCloser interface that unlocks on Close()
 type GetObjectReader struct {
-	ObjInfo ObjectInfo
-	pReader io.Reader
-
+	io.Reader
+	ObjInfo    ObjectInfo
 	cleanUpFns []func()
 	opts       ObjectOptions
 	once       sync.Once
+}
+
+// WithCleanupFuncs sets additional cleanup functions to be called when closing
+// the GetObjectReader.
+func (g *GetObjectReader) WithCleanupFuncs(fns ...func()) *GetObjectReader {
+	g.cleanUpFns = append(g.cleanUpFns, fns...)
+	return g
 }
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
@@ -574,7 +580,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 	}
 	return &GetObjectReader{
 		ObjInfo:    oi,
-		pReader:    r,
+		Reader:     r,
 		cleanUpFns: cleanupFns,
 		opts:       opts,
 	}, nil
@@ -587,25 +593,15 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
-// are called on Close() in reverse order as passed here. NOTE: It is
+// are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cleanUpFns ...func()) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 	fn ObjReaderFn, off, length int64, err error) {
 
 	if rs == nil && opts.PartNumber > 0 {
 		rs = partNumberToRangeSpec(oi, opts.PartNumber)
 	}
-
-	// Call the clean-up functions immediately in case of exit
-	// with error
-	defer func() {
-		if err != nil {
-			for i := len(cleanUpFns) - 1; i >= 0; i-- {
-				cleanUpFns[i]()
-			}
-		}
-	}()
 
 	_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
 	isCompressed, err := oi.IsCompressedOK()
@@ -613,8 +609,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		return nil, 0, 0, err
 	}
 
-	// if object is encrypted, transition content without decrypting.
-	if opts.TransitionStatus == lifecycle.TransitionPending && (isEncrypted || isCompressed) {
+	// if object is encrypted and it is a restore request, fetch content without decrypting.
+	if opts.Transition.RestoreRequest != nil {
 		isEncrypted = false
 		isCompressed = false
 	}
@@ -658,11 +654,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			}
 		}
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			cFns = append(cleanUpFns, cFns...)
 			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
+				for _, cFn := range cFns {
+					cFn()
 				}
 				return nil, PreConditionFailed{}
 			}
@@ -672,8 +666,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
+					for _, cFn := range cFns {
+						cFn()
 					}
 					return nil, err
 				}
@@ -685,8 +679,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			if decOff > 0 {
 				if err = s2Reader.Skip(decOff); err != nil {
 					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
+					for _, cFn := range cFns {
+						cFn()
 					}
 					return nil, err
 				}
@@ -697,9 +691,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				rah, err := readahead.NewReaderSize(decReader, compReadAheadBuffers, compReadAheadBufSize)
 				if err == nil {
 					decReader = rah
-					cFns = append(cFns, func() {
+					cFns = append([]func(){func() {
 						rah.Close()
-					})
+					}}, cFns...)
 				}
 			}
 			oi.Size = decLength
@@ -707,7 +701,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			// Assemble the GetObjectReader
 			r = &GetObjectReader{
 				ObjInfo:    oi,
-				pReader:    decReader,
+				Reader:     decReader,
 				cleanUpFns: cFns,
 				opts:       opts,
 			}
@@ -741,7 +735,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
-			cFns = append(cleanUpFns, cFns...)
 			// Attach decrypter on inputReader
 			var decReader io.Reader
 			decReader, err = DecryptBlocksRequestR(inputReader, h, seqNumber, partStart, oi, copySource)
@@ -770,7 +763,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			// Assemble the GetObjectReader
 			r = &GetObjectReader{
 				ObjInfo:    oi,
-				pReader:    decReader,
+				Reader:     decReader,
 				cleanUpFns: cFns,
 				opts:       opts,
 			}
@@ -783,7 +776,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			return nil, 0, 0, err
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			cFns = append(cleanUpFns, cFns...)
 			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {
@@ -793,7 +785,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
-				pReader:    inputReader,
+				Reader:     inputReader,
 				cleanUpFns: cFns,
 				opts:       opts,
 			}
@@ -813,11 +805,6 @@ func (g *GetObjectReader) Close() error {
 		}
 	})
 	return nil
-}
-
-// Read - to implement Reader interface.
-func (g *GetObjectReader) Read(p []byte) (n int, err error) {
-	return g.pReader.Read(p)
 }
 
 //SealMD5CurrFn seals md5sum with object encryption key and returns sealed

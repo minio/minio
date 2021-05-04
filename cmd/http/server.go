@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package http
 
@@ -33,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/fips"
 )
 
 const (
@@ -159,28 +161,6 @@ func (srv *Server) Shutdown() error {
 	}
 }
 
-// Secure Go implementations of modern TLS ciphers
-// The following ciphers are excluded because:
-//  - RC4 ciphers:              RC4 is broken
-//  - 3DES ciphers:             Because of the 64 bit blocksize of DES (Sweet32)
-//  - CBC-SHA256 ciphers:       No countermeasures against Lucky13 timing attack
-//  - CBC-SHA ciphers:          Legacy ciphers (SHA-1) and non-constant time
-//                              implementation of CBC.
-//                              (CBC-SHA ciphers can be enabled again if required)
-//  - RSA key exchange ciphers: Disabled because of dangerous PKCS1-v1.5 RSA
-//                              padding scheme. See Bleichenbacher attacks.
-var secureCipherSuites = []uint16{
-	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-}
-
-// Go only provides constant-time implementations of Curve25519 and NIST P-256 curve.
-var secureCurves = []tls.CurveID{tls.X25519, tls.CurveP256}
-
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
 	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
@@ -188,17 +168,15 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 	var tlsConfig *tls.Config
 	if getCert != nil {
 		tlsConfig = &tls.Config{
-			// TLS hardening
 			PreferServerCipherSuites: true,
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
+			GetCertificate:           getCert,
 		}
-		tlsConfig.GetCertificate = getCert
-	}
-
-	if secureCiphers && tlsConfig != nil {
-		tlsConfig.CipherSuites = secureCipherSuites
-		tlsConfig.CurvePreferences = secureCurves
+		if secureCiphers || fips.Enabled() {
+			tlsConfig.CipherSuites = fips.CipherSuitesTLS()
+			tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+		}
 	}
 
 	httpServer := &Server{

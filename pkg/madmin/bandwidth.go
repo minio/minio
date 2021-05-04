@@ -1,19 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package madmin
 
@@ -23,14 +23,23 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/minio/minio/pkg/bandwidth"
 )
+
+// BandwidthDetails for the measured bandwidth
+type BandwidthDetails struct {
+	LimitInBytesPerSecond            int64   `json:"limitInBits"`
+	CurrentBandwidthInBytesPerSecond float64 `json:"currentBandwidth"`
+}
+
+// BucketBandwidthReport captures the details for all buckets.
+type BucketBandwidthReport struct {
+	BucketStats map[string]BandwidthDetails `json:"bucketStats,omitempty"`
+}
 
 // Report includes the bandwidth report or the error encountered.
 type Report struct {
-	Report bandwidth.Report `json:"report"`
-	Err    error            `json:"error,omitempty"`
+	Report BucketBandwidthReport `json:"report"`
+	Err    error                 `json:"error,omitempty"`
 }
 
 // GetBucketBandwidth - Gets a channel reporting bandwidth measurements for replication buckets. If no buckets
@@ -49,11 +58,11 @@ func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...strin
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	if err != nil {
 		defer closeResponse(resp)
-		ch <- Report{bandwidth.Report{}, err}
+		ch <- Report{Err: err}
 		return ch
 	}
 	if resp.StatusCode != http.StatusOK {
-		ch <- Report{bandwidth.Report{}, httpRespToErrorResponse(resp)}
+		ch <- Report{Err: httpRespToErrorResponse(resp)}
 		return ch
 	}
 
@@ -65,16 +74,16 @@ func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...strin
 			close(ch)
 		}()
 		for {
-			var report bandwidth.Report
+			var report BucketBandwidthReport
 
 			if err = dec.Decode(&report); err != nil {
-				ch <- Report{bandwidth.Report{}, err}
+				ch <- Report{Err: err}
 				return
 			}
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- Report{Report: report, Err: err}:
+			case ch <- Report{Report: report}:
 			}
 		}
 	}(ctx, ch, resp)

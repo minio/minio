@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -36,7 +37,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -698,6 +698,16 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 
 }
 
+func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadTransitionTierConfig, nil, nil, 0)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceErr, strconv.FormatBool(traceOpts.OnlyErrors))
@@ -912,7 +922,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 }
 
 // MonitorBandwidth - send http trace request to peer nodes
-func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.Report, error) {
+func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*madmin.BucketBandwidthReport, error) {
 	values := make(url.Values)
 	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
@@ -922,7 +932,7 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 	defer http.DrainBody(respBody)
 
 	dec := gob.NewDecoder(respBody)
-	var bandwidthReport bandwidth.Report
+	var bandwidthReport madmin.BucketBandwidthReport
 	err = dec.Decode(&bandwidthReport)
 	return &bandwidthReport, err
 }

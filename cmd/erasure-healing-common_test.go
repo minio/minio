@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -82,7 +83,7 @@ func TestCommonTime(t *testing.T) {
 	// common modtime. Tests fail if modtime does not match.
 	for i, testCase := range testCases {
 		// Obtain a common mod time from modTimes slice.
-		ctime, _ := commonTime(testCase.times)
+		ctime, _ := commonTime(testCase.times, nil)
 		if !testCase.time.Equal(ctime) {
 			t.Fatalf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
 		}
@@ -181,8 +182,8 @@ func TestListOnlineDisks(t *testing.T) {
 	z := obj.(*erasureServerPools)
 	erasureDisks := z.serverPools[0].sets[0].getDisks()
 	for i, test := range testCases {
+		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
-
 			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 			if err != nil {
 				t.Fatalf("Failed to putObject %v", err)
@@ -196,7 +197,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 			for j := range partsMetadata {
 				if errs[j] != nil {
-					t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[j])
+					t.Fatalf("expected error to be nil: %s", errs[j])
 				}
 				partsMetadata[j].ModTime = test.modTimes[j]
 			}
@@ -215,8 +216,7 @@ func TestListOnlineDisks(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
 					if dErr != nil {
-						t.Fatalf("Test %d: Failed to delete %s - %v", i+1,
-							filepath.Join(object, "part.1"), dErr)
+						t.Fatalf("Failed to delete %s - %v", filepath.Join(object, "part.1"), dErr)
 					}
 					break
 				}
@@ -242,19 +242,22 @@ func TestListOnlineDisks(t *testing.T) {
 
 			}
 
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			onlineDisks, modTime, dataDir := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
 			if !modTime.Equal(test.expectedTime) {
-				t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
-					i+1, test.expectedTime, modTime)
+				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
+					test.expectedTime, modTime)
 			}
-
+			if fi.DataDir != dataDir {
+				t.Fatalf("Expected dataDir to be equal to %v but was found to be %v",
+					fi.DataDir, dataDir)
+			}
 			availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
 			test.errs = newErrs
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
-					t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
-						i+1, erasureDisks[tamperedIndex])
+					t.Fatalf("disk (%v) with part.1 missing is not a disk with available data",
+						erasureDisks[tamperedIndex])
 				}
 			}
 		})
@@ -354,22 +357,22 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	z := obj.(*erasureServerPools)
 	erasureDisks := z.serverPools[0].sets[0].getDisks()
 	for i, test := range testCases {
+		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
-
 			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 			if err != nil {
 				t.Fatalf("Failed to putObject %v", err)
 			}
 
 			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			_, err := getLatestFileInfo(ctx, partsMetadata, errs)
+			fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
 
 			for j := range partsMetadata {
 				if errs[j] != nil {
-					t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[j])
+					t.Fatalf("expected error to be nil: %s", errs[j])
 				}
 				partsMetadata[j].ModTime = test.modTimes[j]
 			}
@@ -392,8 +395,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 					if dErr != nil {
-						t.Fatalf("Test %d: Failed to delete %s - %v", i+1,
-							pathJoin(object, xlStorageFormatFile), dErr)
+						t.Fatalf("Failed to delete %s - %v", pathJoin(object, xlStorageFormatFile), dErr)
 					}
 					break
 				}
@@ -424,10 +426,15 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
 
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			onlineDisks, modTime, dataDir := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
 			if !modTime.Equal(test.expectedTime) {
-				t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
-					i+1, test.expectedTime, modTime)
+				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
+					test.expectedTime, modTime)
+			}
+
+			if fi.DataDir != dataDir {
+				t.Fatalf("Expected dataDir to be equal to %v but was found to be %v",
+					fi.DataDir, dataDir)
 			}
 
 			availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
@@ -435,8 +442,8 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
-					t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
-						i+1, erasureDisks[tamperedIndex])
+					t.Fatalf("disk (%v) with part.1 missing is not a disk with available data",
+						erasureDisks[tamperedIndex])
 				}
 			}
 		})

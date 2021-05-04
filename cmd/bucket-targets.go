@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,9 +23,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	minio "github.com/minio/minio-go/v7"
@@ -105,7 +104,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalIsErasure {
-			return NotImplemented{}
+			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
@@ -117,45 +116,27 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if vcfg.Status != string(versioning.Enabled) {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
-	}
-	if tgt.Type == madmin.ILMService {
-		if globalBucketVersioningSys.Enabled(bucket) {
-			vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
-			if err != nil {
-				if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
-					return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
-				}
-				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
-			}
-			if vcfg.Status != string(versioning.Enabled) {
-				return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
-			}
+		if tgt.ReplicationSync && tgt.BandwidthLimit > 0 {
+			return NotImplemented{Message: "Synchronous replication does not support bandwidth limits"}
 		}
 	}
 	sys.Lock()
 	defer sys.Unlock()
 
 	tgts := sys.targetsMap[bucket]
+
 	newtgts := make([]madmin.BucketTarget, len(tgts))
-	labels := make(map[string]struct{}, len(tgts))
 	found := false
 	for idx, t := range tgts {
-		labels[t.Label] = struct{}{}
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn && !update {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
-			}
-			if t.Label == tgt.Label && !update {
-				return BucketRemoteLabelInUse{Bucket: t.TargetBucket}
 			}
 			newtgts[idx] = *tgt
 			found = true
 			continue
 		}
 		newtgts[idx] = t
-	}
-	if _, ok := labels[tgt.Label]; ok && !update {
-		return BucketRemoteLabelInUse{Bucket: tgt.TargetBucket}
 	}
 	if !found && !update {
 		newtgts = append(newtgts, *tgt)
@@ -171,30 +152,27 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if globalIsGateway {
 		return nil
 	}
+	if !globalIsErasure {
+		return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
+	}
+
 	if arnStr == "" {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
+
 	arn, err := madmin.ParseARN(arnStr)
 	if err != nil {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
+
 	if arn.Type == madmin.ReplicationService {
-		if !globalIsErasure {
-			return NotImplemented{}
-		}
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil && rcfg.RoleArn == arnStr {
-			if _, ok := sys.arnRemotesMap[arnStr]; ok {
-				return BucketRemoteRemoveDisallowed{Bucket: bucket}
-			}
-		}
-	}
-	if arn.Type == madmin.ILMService {
-		// reject removal of remote target if lifecycle transition uses this arn
-		config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
-		if err == nil && transitionSCInUse(ctx, config, bucket, arnStr) {
-			if _, ok := sys.arnRemotesMap[arnStr]; ok {
+			sys.RLock()
+			_, ok := sys.arnRemotesMap[arnStr]
+			sys.RUnlock()
+			if ok {
 				return BucketRemoteRemoveDisallowed{Bucket: bucket}
 			}
 		}
@@ -231,42 +209,19 @@ func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn strin
 	return sys.arnRemotesMap[arn]
 }
 
-// GetRemoteTargetWithLabel returns bucket target given a target label
-func (sys *BucketTargetSys) GetRemoteTargetWithLabel(ctx context.Context, bucket, targetLabel string) *madmin.BucketTarget {
+// GetRemoteBucketTargetByArn returns BucketTarget for a ARN
+func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, bucket, arn string) madmin.BucketTarget {
 	sys.RLock()
 	defer sys.RUnlock()
+	var tgt madmin.BucketTarget
 	for _, t := range sys.targetsMap[bucket] {
-		if strings.ToUpper(t.Label) == strings.ToUpper(targetLabel) {
-			tgt := t.Clone()
-			return &tgt
+		if t.Arn == arn {
+			tgt = t.Clone()
+			tgt.Credentials = t.Credentials
+			return tgt
 		}
 	}
-	return nil
-}
-
-// GetRemoteArnWithLabel returns bucket target's ARN given its target label
-func (sys *BucketTargetSys) GetRemoteArnWithLabel(ctx context.Context, bucket, tgtLabel string) *madmin.ARN {
-	tgt := sys.GetRemoteTargetWithLabel(ctx, bucket, tgtLabel)
-	if tgt == nil {
-		return nil
-	}
-	arn, err := madmin.ParseARN(tgt.Arn)
-	if err != nil {
-		return nil
-	}
-	return arn
-}
-
-// GetRemoteLabelWithArn returns a bucket target's label given its ARN
-func (sys *BucketTargetSys) GetRemoteLabelWithArn(ctx context.Context, bucket, arnStr string) string {
-	sys.RLock()
-	defer sys.RUnlock()
-	for _, t := range sys.targetsMap[bucket] {
-		if t.Arn == arnStr {
-			return t.Label
-		}
-	}
-	return ""
+	return tgt
 }
 
 // NewBucketTargetSys - creates new replication system.
@@ -358,9 +313,8 @@ var getRemoteTargetInstanceTransportOnce sync.Once
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*TargetClient, error) {
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
-
 	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
+		getRemoteTargetInstanceTransport = NewRemoteTargetHTTPTransport()
 	})
 	api, err := minio.New(tcfg.Endpoint, &miniogo.Options{
 		Creds:     creds,
@@ -378,10 +332,11 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	tc := &TargetClient{
 		Client:              api,
 		healthCheckDuration: hcDuration,
-		bucket:              tcfg.TargetBucket,
 		replicateSync:       tcfg.ReplicationSync,
+		Bucket:              tcfg.TargetBucket,
+		StorageClass:        tcfg.StorageClass,
+		disableProxy:        tcfg.DisableProxy,
 	}
-	go tc.healthCheck()
 	return tc, nil
 }
 
@@ -453,25 +408,9 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 // TargetClient is the struct for remote target client.
 type TargetClient struct {
 	*miniogo.Client
-	up                  int32
 	healthCheckDuration time.Duration
-	bucket              string // remote bucket target
+	Bucket              string // remote bucket target
 	replicateSync       bool
-}
-
-func (tc *TargetClient) isOffline() bool {
-	return atomic.LoadInt32(&tc.up) == 0
-}
-
-func (tc *TargetClient) healthCheck() {
-	for {
-		_, err := tc.BucketExists(GlobalContext, tc.bucket)
-		if err != nil {
-			atomic.StoreInt32(&tc.up, 0)
-			time.Sleep(tc.healthCheckDuration)
-			continue
-		}
-		atomic.StoreInt32(&tc.up, 1)
-		time.Sleep(tc.healthCheckDuration)
-	}
+	StorageClass        string // storage class on remote
+	disableProxy        bool
 }

@@ -1,16 +1,19 @@
-// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+// Copyright (c) 2015-2021 MinIO, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This file is part of MinIO Object Storage stack
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -22,6 +25,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/sio"
 )
@@ -76,12 +80,12 @@ func (sse ssecCopy) UnsealObjectKey(h http.Header, metadata map[string]string, b
 	if err != nil {
 		return
 	}
-	return unsealObjectKey(clientKey, metadata, bucket, object)
+	return unsealObjectKey(clientKey[:], metadata, bucket, object)
 }
 
 // unsealObjectKey decrypts and returns the sealed object key
 // from the metadata using the SSE-C client key.
-func unsealObjectKey(clientKey [32]byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func unsealObjectKey(clientKey []byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	sealedKey, err := SSEC.ParseMetadata(metadata)
 	if err != nil {
 		return
@@ -93,7 +97,7 @@ func unsealObjectKey(clientKey [32]byte, metadata map[string]string, bucket, obj
 // EncryptSinglePart encrypts an io.Reader which must be the
 // the body of a single-part PUT request.
 func EncryptSinglePart(r io.Reader, key ObjectKey) io.Reader {
-	r, err := sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, Key: key[:]})
+	r, err := sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, Key: key[:], CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to encrypt io.Reader using object key"))
 	}
@@ -115,7 +119,7 @@ func DecryptSinglePart(w io.Writer, offset, length int64, key ObjectKey) io.Writ
 	const PayloadSize = 1 << 16 // DARE 2.0
 	w = ioutil.LimitedWriter(w, offset%PayloadSize, length)
 
-	decWriter, err := sio.DecryptWriter(w, sio.Config{Key: key[:]})
+	decWriter, err := sio.DecryptWriter(w, sio.Config{Key: key[:], CipherSuites: fips.CipherSuitesDARE()})
 	if err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to decrypt io.Writer using object key"))
 	}

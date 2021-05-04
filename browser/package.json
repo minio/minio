@@ -21,8 +21,7 @@
     "type": "git",
     "url": "https://github.com/minio/minio"
   },
-  "author": "MinIO Inc",
-  "license": "Apache-2.0",
+  "author": "MinIO, Inc.",
   "bugs": {
     "url": "https://github.com/minio/minio/issues"
   },

@@ -1,6 +1,6 @@
 # MinIO File Browser
 
-``MinIO Browser`` provides minimal set of UI to manage buckets and objects on ``minio`` server. ``MinIO Browser`` is written in javascript and released under [Apache 2.0 License](./LICENSE).
+``MinIO Browser`` provides minimal set of UI to manage buckets and objects on ``minio`` server.
 
 
 ## Installation
@@ -19,11 +19,13 @@ npm install
 
 ## Generating Assets
 
+> NOTE: if you are not part of MinIO organization please do not run this yourself and submit in a PR. Static assets in PRs are allowed only for authorized users.
+
 ```sh
 npm run release
 ```
 
-This generates `production` in the current directory. 
+This generates `release` in the current directory.
 
 
 ## Run MinIO Browser with live reload
@@ -99,71 +101,3 @@ Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with
 ## Run tests
 
     npm run test
-
-
-## Docker development environment
-
-This approach will download the sources on your machine such that you are able to use your IDE or editor of choice.
-A Docker container will be used in order to provide a controlled build environment without messing with your host system.
-
-### Prepare host system
-
-Install [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) and [Docker](https://docs.docker.com/get-docker/).
-
-### Development within container
-
-Prepare and build container
-```
-git clone git@github.com:minio/minio.git
-cd minio
-docker build -t minio-dev -f Dockerfile.dev.browser .
-```
-
-Run container, build and run core
-```sh
-docker run -it --rm --name minio-dev -v "$PWD":/minio minio-dev
-
-cd /minio/browser
-npm install
-npm run release
-cd /minio
-make
-./minio server /data
-```
-Note `Endpoint` IP (the one which is _not_ `127.0.0.1`), `AccessKey` and `SecretKey` (both default to `minioadmin`) in order to enter them in the browser later.
-
-
-Open another terminal.
-Connect to container
-```sh
-docker exec -it minio-dev bash
-```
-
-Apply patch to allow access from outside container
-```sh
-cd /minio
-git apply --ignore-whitespace <<EOF
-diff --git a/browser/webpack.config.js b/browser/webpack.config.js
-index 8bdbba53..139f6049 100644
---- a/browser/webpack.config.js
-+++ b/browser/webpack.config.js
-@@ -71,6 +71,7 @@ var exports = {
-     historyApiFallback: {
-       index: '/minio/'
-     },
-+    host: '0.0.0.0',
-     proxy: {
-       '/minio/webrpc': {
-         target: 'http://localhost:9000',
-EOF
-```
-
-Build and run frontend with auto-reload
-```sh
-cd /minio/browser
-npm install
-npm run dev
-```
-
-Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with the application.
-

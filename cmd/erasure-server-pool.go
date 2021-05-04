@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -614,17 +615,19 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		lock := z.NewNSLock(bucket, object)
 		switch lockType {
 		case writeLock:
-			ctx, err = lock.GetLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.Unlock
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
 		case readLock:
-			ctx, err = lock.GetRLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.RUnlock
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
 		}
 		unlockOnDefer = true
 	}
@@ -683,11 +686,12 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 
 	// Lock the object before reading.
 	lk := z.NewNSLock(bucket, object)
-	ctx, err = lk.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	defer lk.RUnlock()
+	ctx = lkctx.Context()
+	defer lk.RUnlock(lkctx.Cancel)
 
 	errs := make([]error, len(z.serverPools))
 	objInfos := make([]ObjectInfo, len(z.serverPools))
@@ -799,17 +803,17 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		}
 	}
 
-	var err error
 	// Acquire a bulk write lock across 'objects'
 	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
-	ctx, err = multiDeleteLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := multiDeleteLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		for i := range derrs {
 			derrs[i] = err
 		}
 		return dobjects, derrs
 	}
-	defer multiDeleteLock.Unlock()
+	ctx = lkctx.Context()
+	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
@@ -1035,10 +1039,23 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
-	// We don't know the exact size, so we ask for at least 1GiB file.
-	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
-	if err != nil {
-		return "", err
+	for idx, pool := range z.serverPools {
+		result, err := pool.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
+		if err != nil {
+			return "", err
+		}
+		// If there is a multipart upload with the same bucket/object name,
+		// create the new multipart in the same pool, this will avoid
+		// creating two multiparts uploads in two different pools
+		if len(result.Uploads) != 0 {
+			return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
+		}
+	}
+
+	// We multiply the size by 2 to account for erasure coding.
+	idx := z.getAvailablePoolIdx(ctx, (1<<30)*2)
+	if idx < 0 {
+		return "", toObjectErr(errDiskFull)
 	}
 
 	return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
@@ -1180,20 +1197,13 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
-	// Purge any existing object.
 	for _, pool := range z.serverPools {
-		pool.DeleteObject(ctx, bucket, object, opts)
-	}
-
-	for _, pool := range z.serverPools {
-		result, err := pool.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
-		if err != nil {
-			return objInfo, err
-		}
-		if result.Lookup(uploadID) {
+		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		if err == nil {
 			return pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		}
 	}
+
 	return objInfo, InvalidUploadID{
 		Bucket:   bucket,
 		Object:   object,
@@ -1364,14 +1374,14 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketI
 }
 
 func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
-	var err error
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(minioMetaBucket, formatConfigFile)
-	ctx, err = formatLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := formatLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return madmin.HealResultItem{}, err
 	}
-	defer formatLock.Unlock()
+	ctx = lkctx.Context()
+	defer formatLock.Unlock(lkctx.Cancel)
 
 	var r = madmin.HealResultItem{
 		Type:   madmin.HealItemMetadata,
@@ -1838,4 +1848,34 @@ func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object s
 	}
 
 	return z.serverPools[idx].GetObjectTags(ctx, bucket, object, opts)
+}
+
+// TransitionObject - transition object content to target tier.
+func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
+	}
+
+	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	if err != nil {
+		return err
+	}
+
+	return z.serverPools[idx].TransitionObject(ctx, bucket, object, opts)
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
+	}
+
+	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	if err != nil {
+		return err
+	}
+
+	return z.serverPools[idx].RestoreTransitionedObject(ctx, bucket, object, opts)
 }

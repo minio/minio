@@ -1,9 +1,9 @@
 # MinIO Quickstart Guide
-[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 [![MinIO](https://raw.githubusercontent.com/minio/minio/master/.github/logo.svg?sanitize=true)](https://min.io)
 
-MinIO is a High Performance Object Storage released under Apache License v2.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
+MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
 
 This README provides quickstart instructions on running MinIO on baremetal hardware, including Docker-based installations. For Kubernetes environments,
 use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md).
@@ -31,7 +31,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
@@ -51,7 +51,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: To deploy MinIO on Docker with persistent storage, you must map local persistent directories from the host OS to the container using the
@@ -88,7 +88,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 ## Binary Download
 
@@ -106,7 +106,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 # GNU/Linux
@@ -136,7 +136,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
@@ -164,7 +164,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
 require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically,
@@ -196,7 +196,7 @@ root credentials. You can use the Browser to create buckets, upload objects, and
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
 [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MINIO SDKS** in the navigation to view MinIO SDKs for supported languages.
+see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
@@ -309,4 +309,4 @@ mc admin update <minio alias, e.g., myminio>
 Please follow MinIO [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
 
 # License
-Use of MinIO is governed by the Apache 2.0 License found at [LICENSE](https://github.com/minio/minio/blob/master/LICENSE).
+Use of MinIO is governed by the GNU AGPLv3 license that can be found in the [LICENSE](https://github.com/minio/minio/blob/master/LICENSE) file.

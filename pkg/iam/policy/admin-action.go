@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package iampolicy
 
@@ -31,6 +32,8 @@ const (
 
 	// StorageInfoAdminAction - allow listing server info
 	StorageInfoAdminAction = "admin:StorageInfo"
+	// PrometheusAdminAction - prometheus info action
+	PrometheusAdminAction = "admin:Prometheus"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// ForceUnlockAdminAction - allow force unlocking locks
@@ -77,6 +80,17 @@ const (
 	// GetUserAdminAction - allows GET permission on user info
 	GetUserAdminAction = "admin:GetUser"
 
+	// Service account Actions
+
+	// CreateServiceAccountAdminAction - allow create a service account for a user
+	CreateServiceAccountAdminAction = "admin:CreateServiceAccount"
+	// UpdateServiceAccountAdminAction - allow updating a service account
+	UpdateServiceAccountAdminAction = "admin:UpdateServiceAccount"
+	// RemoveServiceAccountAdminAction - allow removing a service account
+	RemoveServiceAccountAdminAction = "admin:RemoveServiceAccount"
+	// ListServiceAccountsAdminAction - allow listing service accounts
+	ListServiceAccountsAdminAction = "admin:ListServiceAccounts"
+
 	// Group Actions
 
 	// AddUserToGroupAdminAction - allow adding user to group permission
@@ -119,49 +133,63 @@ const (
 	// GetBucketTargetAction - allow getting bucket targets
 	GetBucketTargetAction = "admin:GetBucketTarget"
 
+	// Remote Tier admin Actions
+
+	// SetTierAction - allow adding/editing a remote tier
+	SetTierAction = "admin:SetTier"
+	// ListTierAction - allow listing remote tiers
+	ListTierAction = "admin:ListTier"
+
 	// AllAdminActions - provides all admin permissions
 	AllAdminActions = "admin:*"
 )
 
 // List of all supported admin actions.
 var supportedAdminActions = map[AdminAction]struct{}{
-	HealAdminAction:                {},
-	StorageInfoAdminAction:         {},
-	DataUsageInfoAdminAction:       {},
-	TopLocksAdminAction:            {},
-	ProfilingAdminAction:           {},
-	TraceAdminAction:               {},
-	ConsoleLogAdminAction:          {},
-	KMSKeyStatusAdminAction:        {},
-	ServerInfoAdminAction:          {},
-	HealthInfoAdminAction:          {},
-	BandwidthMonitorAction:         {},
-	ServerUpdateAdminAction:        {},
-	ServiceRestartAdminAction:      {},
-	ServiceStopAdminAction:         {},
-	ConfigUpdateAdminAction:        {},
-	CreateUserAdminAction:          {},
-	DeleteUserAdminAction:          {},
-	ListUsersAdminAction:           {},
-	EnableUserAdminAction:          {},
-	DisableUserAdminAction:         {},
-	GetUserAdminAction:             {},
-	AddUserToGroupAdminAction:      {},
-	RemoveUserFromGroupAdminAction: {},
-	GetGroupAdminAction:            {},
-	ListGroupsAdminAction:          {},
-	EnableGroupAdminAction:         {},
-	DisableGroupAdminAction:        {},
-	CreatePolicyAdminAction:        {},
-	DeletePolicyAdminAction:        {},
-	GetPolicyAdminAction:           {},
-	AttachPolicyAdminAction:        {},
-	ListUserPoliciesAdminAction:    {},
-	SetBucketQuotaAdminAction:      {},
-	GetBucketQuotaAdminAction:      {},
-	SetBucketTargetAction:          {},
-	GetBucketTargetAction:          {},
-	AllAdminActions:                {},
+	HealAdminAction:                 {},
+	StorageInfoAdminAction:          {},
+	DataUsageInfoAdminAction:        {},
+	TopLocksAdminAction:             {},
+	ProfilingAdminAction:            {},
+	PrometheusAdminAction:           {},
+	TraceAdminAction:                {},
+	ConsoleLogAdminAction:           {},
+	KMSKeyStatusAdminAction:         {},
+	ServerInfoAdminAction:           {},
+	HealthInfoAdminAction:           {},
+	BandwidthMonitorAction:          {},
+	ServerUpdateAdminAction:         {},
+	ServiceRestartAdminAction:       {},
+	ServiceStopAdminAction:          {},
+	ConfigUpdateAdminAction:         {},
+	CreateUserAdminAction:           {},
+	DeleteUserAdminAction:           {},
+	ListUsersAdminAction:            {},
+	EnableUserAdminAction:           {},
+	DisableUserAdminAction:          {},
+	GetUserAdminAction:              {},
+	AddUserToGroupAdminAction:       {},
+	RemoveUserFromGroupAdminAction:  {},
+	GetGroupAdminAction:             {},
+	ListGroupsAdminAction:           {},
+	EnableGroupAdminAction:          {},
+	DisableGroupAdminAction:         {},
+	CreateServiceAccountAdminAction: {},
+	UpdateServiceAccountAdminAction: {},
+	RemoveServiceAccountAdminAction: {},
+	ListServiceAccountsAdminAction:  {},
+	CreatePolicyAdminAction:         {},
+	DeletePolicyAdminAction:         {},
+	GetPolicyAdminAction:            {},
+	AttachPolicyAdminAction:         {},
+	ListUserPoliciesAdminAction:     {},
+	SetBucketQuotaAdminAction:       {},
+	GetBucketQuotaAdminAction:       {},
+	SetBucketTargetAction:           {},
+	GetBucketTargetAction:           {},
+	SetTierAction:                   {},
+	ListTierAction:                  {},
+	AllAdminActions:                 {},
 }
 
 // IsValid - checks if action is valid or not.
@@ -172,40 +200,47 @@ func (action AdminAction) IsValid() bool {
 
 // adminActionConditionKeyMap - holds mapping of supported condition key for an action.
 var adminActionConditionKeyMap = map[Action]condition.KeySet{
-	AllAdminActions:                condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	HealAdminAction:                condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	StorageInfoAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ServerInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	DataUsageInfoAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	HealthInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	BandwidthMonitorAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	TraceAdminAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	KMSKeyStatusAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ServerUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ServiceRestartAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ServiceStopAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ConfigUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	CreateUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	DeleteUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ListUsersAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	EnableUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	DisableUserAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	GetUserAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	AddUserToGroupAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	RemoveUserFromGroupAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ListGroupsAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	EnableGroupAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	DisableGroupAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	CreatePolicyAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	DeletePolicyAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	GetPolicyAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	AttachPolicyAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ListUserPoliciesAdminAction:    condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	SetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	GetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	SetBucketTargetAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	GetBucketTargetAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	AllAdminActions:                 condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	HealAdminAction:                 condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	StorageInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServerInfoAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DataUsageInfoAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	HealthInfoAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	BandwidthMonitorAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	TopLocksAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ProfilingAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	TraceAdminAction:                condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ConsoleLogAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	KMSKeyStatusAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServerUpdateAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceRestartAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceStopAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ConfigUpdateAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	CreateUserAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DeleteUserAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListUsersAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	EnableUserAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DisableUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetUserAdminAction:              condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	AddUserToGroupAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	RemoveUserFromGroupAdminAction:  condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListGroupsAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	EnableGroupAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DisableGroupAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	CreateServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	UpdateServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	RemoveServiceAccountAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListServiceAccountsAdminAction:  condition.NewKeySet(condition.AllSupportedAdminKeys...),
+
+	CreatePolicyAdminAction:     condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DeletePolicyAdminAction:     condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetPolicyAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	AttachPolicyAdminAction:     condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListUserPoliciesAdminAction: condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetBucketQuotaAdminAction:   condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetBucketQuotaAdminAction:   condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetBucketTargetAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetBucketTargetAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetTierAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListTierAction:              condition.NewKeySet(condition.AllSupportedAdminKeys...),
 }

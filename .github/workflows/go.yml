@@ -47,4 +47,3 @@ jobs:
           make verify
           make verify-healing
           cd browser && npm install && npm run test && cd ..
-          bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'

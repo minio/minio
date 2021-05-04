@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -29,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -467,6 +469,7 @@ func (x *xlMetaInlineData) replace(key string, value []byte) {
 			plSize += len(foundVal)
 		}
 	}
+
 	// Add one more.
 	if !replaced {
 		keys = append(keys, []byte(key))
@@ -839,6 +842,16 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		if len(fi.Data) > 0 || fi.Size == 0 {
 			z.data.replace(fi.VersionID, fi.Data)
 		}
+
+		if fi.TransitionStatus != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+		}
+		if fi.TransitionedObjName != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+		}
+		if fi.TransitionTier != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+		}
 	}
 
 	if !ventry.Valid() {
@@ -908,6 +921,18 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	return fi, nil
 }
 
+// UsesDataDir returns true if this object version uses its data directory for
+// its contents and false otherwise.
+func (j *xlMetaV2Object) UsesDataDir() bool {
+	// Skip if this version is not transitioned, i.e it uses its data directory.
+	if !bytes.Equal(j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus], []byte(lifecycle.TransitionComplete)) {
+		return true
+	}
+
+	// Check if this transitioned object has been restored on disk.
+	return isRestoredObjectOnDisk(j.MetaUser)
+}
+
 func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	versionID := ""
 	var uv uuid.UUID
@@ -951,8 +976,6 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	for k, v := range j.MetaSys {
 		switch {
-		case equals(k, ReservedMetadataPrefixLower+"transition-status"):
-			fi.TransitionStatus = string(v)
 		case equals(k, VersionPurgeStatusKey):
 			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
 		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower):
@@ -970,7 +993,61 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
 
+	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus]; ok {
+		fi.TransitionStatus = string(st)
+	}
+	if o, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
+		fi.TransitionedObjName = string(o)
+	}
+	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
+		fi.TransitionTier = string(sc)
+	}
 	return fi, nil
+}
+
+func (z *xlMetaV2) SharedDataDirCountStr(versionID, dataDir string) int {
+	var (
+		uv   uuid.UUID
+		ddir uuid.UUID
+		err  error
+	)
+	if versionID == nullVersionID {
+		versionID = ""
+	}
+	if versionID != "" {
+		uv, err = uuid.Parse(versionID)
+		if err != nil {
+			return 0
+		}
+	}
+	ddir, err = uuid.Parse(dataDir)
+	if err != nil {
+		return 0
+	}
+	return z.SharedDataDirCount(uv, ddir)
+}
+
+func (z *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
+	// v2 object is inlined, if it is skip dataDir share check.
+	if z.data.find(uuid.UUID(versionID).String()) != nil {
+		return 0
+	}
+	var sameDataDirCount int
+	for _, version := range z.Versions {
+		switch version.Type {
+		case ObjectType:
+			if version.ObjectV2.VersionID == versionID {
+				continue
+			}
+			if version.ObjectV2.DataDir != dataDir {
+				continue
+			}
+			if version.ObjectV2.UsesDataDir() {
+				sameDataDirCount++
+			}
+		}
+	}
+	return sameDataDirCount
 }
 
 // DeleteVersion deletes the version specified by version id.
@@ -1039,11 +1116,6 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case LegacyType:
 			if version.ObjectV1.VersionID == fi.VersionID {
-				if fi.TransitionStatus != "" {
-					z.Versions[i].ObjectV1.Meta[ReservedMetadataPrefixLower+"transition-status"] = fi.TransitionStatus
-					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
-				}
-
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if fi.Deleted {
 					z.Versions = append(z.Versions, ventry)
@@ -1080,19 +1152,6 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		}
 	}
 
-	findDataDir := func(dataDir [16]byte, versions []xlMetaV2Version) int {
-		var sameDataDirCount int
-		for _, version := range versions {
-			switch version.Type {
-			case ObjectType:
-				if version.ObjectV2.DataDir == dataDir {
-					sameDataDirCount++
-				}
-			}
-		}
-		return sameDataDirCount
-	}
-
 	for i, version := range z.Versions {
 		if !version.Valid() {
 			return "", false, errFileCorrupt
@@ -1100,21 +1159,26 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case ObjectType:
 			if version.ObjectV2.VersionID == uv {
-				if fi.TransitionStatus != "" {
-					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+"transition-status"] = []byte(fi.TransitionStatus)
-					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+				switch {
+				case fi.ExpireRestored:
+					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestore)
+					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestoreExpiryDays)
+					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestoreRequestDate)
+				case fi.TransitionStatus == lifecycle.TransitionComplete:
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+				default:
+					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				}
-				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
-					if fi.Deleted {
-						z.Versions = append(z.Versions, ventry)
-					}
+
+				if fi.Deleted {
+					z.Versions = append(z.Versions, ventry)
+				}
+				if z.SharedDataDirCount(version.ObjectV2.VersionID, version.ObjectV2.DataDir) > 0 {
 					// Found that another version references the same dataDir
 					// we shouldn't remove it, and only remove the version instead
 					return "", len(z.Versions) == 0, nil
-				}
-				if fi.Deleted {
-					z.Versions = append(z.Versions, ventry)
 				}
 				return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
 			}
@@ -1201,6 +1265,7 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return FileInfo{}, errFileVersionNotFound
 		}
 	}
@@ -1238,7 +1303,6 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 			fi.IsLatest = true
 			fi.NumVersions = len(orderedVersions)
 			return fi, err
-
 		}
 		return FileInfo{}, errFileNotFound
 	}

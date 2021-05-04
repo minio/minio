@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -40,6 +41,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -157,11 +159,15 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -237,6 +243,9 @@ func newAllSubsystems() {
 
 	// Create new bucket replication subsytem
 	globalBucketTargetSys = NewBucketTargetSys()
+
+	// Create new ILM tier configuration subsystem
+	globalTierConfigMgr = NewTierConfigMgr()
 }
 
 func configRetriableErrors(err error) bool {
@@ -280,7 +289,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
-	var err error
 	for {
 		select {
 		case <-ctx.Done():
@@ -291,7 +299,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if _, err = txnLk.GetLock(ctx, lockTimeout); err != nil {
+		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
+		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -310,7 +319,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(ctx, newObject); err == nil {
-				txnLk.Unlock()
+				txnLk.Unlock(lkctx.Cancel)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -320,7 +329,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			}
 		}
 
-		txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		txnLk.Unlock(lkctx.Cancel)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
@@ -395,6 +405,13 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// Initialize bucket targets sub-system.
 	globalBucketTargetSys.Init(ctx, buckets, newObject)
 
+	if globalIsErasure {
+		// Initialize transition tier configuration manager
+		err = globalTierConfigMgr.Init(ctx, newObject)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -504,16 +521,15 @@ func serverMain(ctx *cli.Context) {
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
-
 	logger.SetDeploymentID(globalDeploymentID)
 
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
-		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
+	initBackgroundExpiry(GlobalContext, newObject)
 	initDataScanner(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
@@ -532,7 +548,12 @@ func serverMain(ctx *cli.Context) {
 
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)
+		globalTierJournal, err = initTierDeletionJournal(GlobalContext.Done())
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
+		}
 	}
+
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer

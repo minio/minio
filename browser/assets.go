@@ -2,7 +2,7 @@ package browser
 
 import "embed"
 
-//go:embed production/*
+//go:embed release/*
 var fs embed.FS
 
 // GetStaticAssets returns assets

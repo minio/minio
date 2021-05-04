@@ -1,19 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package madmin
 
@@ -36,13 +36,11 @@ type ServiceType string
 const (
 	// ReplicationService specifies replication service
 	ReplicationService ServiceType = "replication"
-	// ILMService specifies ilm service
-	ILMService ServiceType = "ilm"
 )
 
-// IsValid returns true if ARN type represents replication or ilm
+// IsValid returns true if ARN type represents replication
 func (t ServiceType) IsValid() bool {
-	return t == ReplicationService || t == ILMService
+	return t == ReplicationService
 }
 
 // ARN is a struct to define arn.
@@ -97,10 +95,11 @@ type BucketTarget struct {
 	Arn                 string            `json:"arn,omitempty"`
 	Type                ServiceType       `json:"type"`
 	Region              string            `json:"omitempty"`
-	Label               string            `json:"label,omitempty"`
 	BandwidthLimit      int64             `json:"bandwidthlimit,omitempty"`
 	ReplicationSync     bool              `json:"replicationSync"`
+	StorageClass        string            `json:"storageclass,omitempty"`
 	HealthCheckDuration time.Duration     `json:"healthCheckDuration,omitempty"`
+	DisableProxy        bool              `json:"disableProxy"`
 }
 
 // Clone returns shallow clone of BucketTarget without secret key in credentials
@@ -112,14 +111,15 @@ func (t *BucketTarget) Clone() BucketTarget {
 		Credentials:         &auth.Credentials{AccessKey: t.Credentials.AccessKey},
 		Secure:              t.Secure,
 		Path:                t.Path,
-		API:                 t.Path,
+		API:                 t.API,
 		Arn:                 t.Arn,
 		Type:                t.Type,
 		Region:              t.Region,
-		Label:               t.Label,
 		BandwidthLimit:      t.BandwidthLimit,
 		ReplicationSync:     t.ReplicationSync,
+		StorageClass:        t.StorageClass, // target storage class
 		HealthCheckDuration: t.HealthCheckDuration,
+		DisableProxy:        t.DisableProxy,
 	}
 }
 
@@ -237,8 +237,54 @@ func (adm *AdminClient) SetRemoteTarget(ctx context.Context, bucket string, targ
 	return arn, nil
 }
 
+// TargetUpdateType -  type of update on the remote target
+type TargetUpdateType int
+
+const (
+	// CredentialsUpdateType update creds
+	CredentialsUpdateType TargetUpdateType = 1 + iota
+	// SyncUpdateType update synchronous replication setting
+	SyncUpdateType
+	// ProxyUpdateType update proxy setting
+	ProxyUpdateType
+	// BandwidthLimitUpdateType update bandwidth limit
+	BandwidthLimitUpdateType
+	// HealthCheckDurationUpdateType update health check duration
+	HealthCheckDurationUpdateType
+	// PathUpdateType update Path
+	PathUpdateType
+)
+
+// GetTargetUpdateOps returns a slice of update operations being
+// performed with `mc admin bucket remote edit`
+func GetTargetUpdateOps(values url.Values) []TargetUpdateType {
+	var ops []TargetUpdateType
+	if values.Get("update") != "true" {
+		return ops
+	}
+	if values.Get("creds") == "true" {
+		ops = append(ops, CredentialsUpdateType)
+	}
+	if values.Get("sync") == "true" {
+		ops = append(ops, SyncUpdateType)
+	}
+	if values.Get("proxy") == "true" {
+		ops = append(ops, ProxyUpdateType)
+	}
+	if values.Get("healthcheck") == "true" {
+		ops = append(ops, HealthCheckDurationUpdateType)
+	}
+	if values.Get("bandwidth") == "true" {
+		ops = append(ops, BandwidthLimitUpdateType)
+	}
+	if values.Get("path") == "true" {
+		ops = append(ops, PathUpdateType)
+	}
+	return ops
+}
+
 // UpdateRemoteTarget updates credentials for a remote bucket target
-func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTarget) (string, error) {
+func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTarget, ops ...TargetUpdateType) (string, error) {
 	if target == nil {
 		return "", fmt.Errorf("target cannot be nil")
 	}
@@ -253,6 +299,23 @@ func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTa
 	queryValues := url.Values{}
 	queryValues.Set("bucket", target.SourceBucket)
 	queryValues.Set("update", "true")
+
+	for _, op := range ops {
+		switch op {
+		case CredentialsUpdateType:
+			queryValues.Set("creds", "true")
+		case SyncUpdateType:
+			queryValues.Set("sync", "true")
+		case ProxyUpdateType:
+			queryValues.Set("proxy", "true")
+		case BandwidthLimitUpdateType:
+			queryValues.Set("bandwidth", "true")
+		case HealthCheckDurationUpdateType:
+			queryValues.Set("healthcheck", "true")
+		case PathUpdateType:
+			queryValues.Set("path", "true")
+		}
+	}
 
 	reqData := requestData{
 		relPath:     adminAPIPrefix + "/set-remote-target",

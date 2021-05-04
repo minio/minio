@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -42,10 +43,10 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
@@ -1009,6 +1010,50 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusConflict,
 			}
+
+		// Tier admin API errors
+		case errors.Is(err, madmin.ErrTierNameEmpty):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierNameEmpty",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfig):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfig",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierInvalidConfigVersion):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInvalidConfigVersion",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, madmin.ErrTierTypeUnsupported):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierTypeUnsupported",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errTierBackendInUse):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierBackendInUse",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusConflict,
+			}
+		case errors.Is(err, errTierInsufficientCreds):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientCreds",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errIsTierPermError(err):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierInsufficientPermissions",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}
@@ -1260,18 +1305,23 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		return
+	}
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = GlobalKMS.DefaultKeyID()
+		keyID = stat.DefaultKey
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
 	}
 
-	kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1284,7 +1334,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Plaintext, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1297,7 +1347,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 3. Compare generated key with decrypted key
-	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
+	if subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
 		if err != nil {
@@ -1362,17 +1412,16 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
+	deadlinedCtx, deadlineCancel := context.WithTimeout(ctx, deadline)
+	defer deadlineCancel()
 
-	var err error
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
-	ctx, err = nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
+	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
 	if err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}
-	defer nsLock.Unlock()
+	defer nsLock.Unlock(lkctx.Cancel)
 
 	go func() {
 		defer close(healthInfoCh)
@@ -1514,7 +1563,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	setEventStreamHeaders(w)
-	reportCh := make(chan bandwidth.Report)
+	reportCh := make(chan madmin.BucketBandwidthReport)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")
@@ -1742,37 +1791,40 @@ func fetchKMSStatus() madmin.KMS {
 		kmsStat.Status = "disabled"
 		return kmsStat
 	}
-	keyID := GlobalKMS.DefaultKeyID()
-	kmsInfo := GlobalKMS.Info()
-	if len(kmsInfo.Endpoints) == 0 {
-		kmsStat.Status = "KMS configured using master key"
+
+	stat, err := GlobalKMS.Stat()
+	if err != nil {
+		kmsStat.Status = string(madmin.ItemOffline)
 		return kmsStat
 	}
-
-	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
+	if len(stat.Endpoints) == 0 {
+		kmsStat.Status = stat.Name
+		return kmsStat
+	}
+	if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
 		kmsStat.Status = string(madmin.ItemOffline)
+		return kmsStat
+	}
+	kmsStat.Status = string(madmin.ItemOnline)
+
+	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+	// 1. Generate a new key using the KMS.
+	key, err := GlobalKMS.GenerateKey("", kmsContext)
+	if err != nil {
+		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 	} else {
-		kmsStat.Status = string(madmin.ItemOnline)
+		kmsStat.Encrypt = "success"
+	}
 
-		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-		// 1. Generate a new key using the KMS.
-		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
-		if err != nil {
-			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-		} else {
-			kmsStat.Encrypt = "success"
-		}
-
-		// 2. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
-		switch {
-		case err != nil:
-			kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
-			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-		default:
-			kmsStat.Decrypt = "success"
-		}
+	// 2. Verify that we can indeed decrypt the (encrypted) key
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	switch {
+	case err != nil:
+		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+	case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+		kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
+	default:
+		kmsStat.Decrypt = "success"
 	}
 	return kmsStat
 }

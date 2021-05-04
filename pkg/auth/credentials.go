@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package auth
 
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio/cmd/jwt"
 )
 
 const (
@@ -210,16 +212,33 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	for i := 0; i < accessKeyMaxLen; i++ {
 		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
-	cred.AccessKey = string(keyBytes)
+	accessKey := string(keyBytes)
 
 	// Generate secret key.
 	keyBytes, err = readBytes(secretKeyMaxLen)
 	if err != nil {
 		return cred, err
 	}
-	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
+
+	secretKey := strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
 		"/", "+", -1)
 
+	return CreateNewCredentialsWithMetadata(accessKey, secretKey, m, tokenSecret)
+}
+
+// CreateNewCredentialsWithMetadata - creates new credentials using the specified access & secret keys
+// and generate a session token if a secret token is provided.
+func CreateNewCredentialsWithMetadata(accessKey, secretKey string, m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
+	if len(accessKey) < accessKeyMinLen || len(accessKey) > accessKeyMaxLen {
+		return Credentials{}, fmt.Errorf("access key length should be between %d and %d", accessKeyMinLen, accessKeyMaxLen)
+	}
+
+	if len(secretKey) < secretKeyMinLen || len(secretKey) > secretKeyMaxLen {
+		return Credentials{}, fmt.Errorf("secret key length should be between %d and %d", secretKeyMinLen, secretKeyMaxLen)
+	}
+
+	cred.AccessKey = accessKey
+	cred.SecretKey = secretKey
 	cred.Status = AccountOn
 
 	if tokenSecret == "" {
@@ -231,17 +250,39 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	if err != nil {
 		return cred, err
 	}
-
-	m["accessKey"] = cred.AccessKey
-	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
-
 	cred.Expiration = time.Unix(expiry, 0).UTC()
-	cred.SessionToken, err = jwt.SignedString([]byte(tokenSecret))
+
+	cred.SessionToken, err = JWTSignWithAccessKey(cred.AccessKey, m, tokenSecret)
 	if err != nil {
 		return cred, err
 	}
 
 	return cred, nil
+}
+
+// JWTSignWithAccessKey - generates a session token.
+func JWTSignWithAccessKey(accessKey string, m map[string]interface{}, tokenSecret string) (string, error) {
+	m["accessKey"] = accessKey
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
+	return jwt.SignedString([]byte(tokenSecret))
+}
+
+// ExtractClaims extracts JWT claims from a security token using a secret key
+func ExtractClaims(token, secretKey string) (*jwt.MapClaims, error) {
+	if token == "" || secretKey == "" {
+		return nil, errors.New("invalid argument")
+	}
+
+	claims := jwt.NewMapClaims()
+	stsTokenCallback := func(claims *jwt.MapClaims) ([]byte, error) {
+		return []byte(secretKey), nil
+	}
+
+	if err := jwt.ParseWithClaims(token, claims, stsTokenCallback); err != nil {
+		return nil, err
+	}
+
+	return claims, nil
 }
 
 // GetNewCredentials generates and returns new credential.

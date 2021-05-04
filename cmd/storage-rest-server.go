@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -272,7 +273,7 @@ func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// CreateFileHandler - fallocate() space for a file and copy the contents from the request.
+// CreateFileHandler - copy the contents from the request.
 func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -657,13 +658,25 @@ func (s *storageRESTServer) RenameDataHandler(w http.ResponseWriter, r *http.Req
 	if !s.IsValid(w, r) {
 		return
 	}
+
 	vars := mux.Vars(r)
 	srcVolume := vars[storageRESTSrcVolume]
 	srcFilePath := vars[storageRESTSrcPath]
-	dataDir := vars[storageRESTDataDir]
 	dstVolume := vars[storageRESTDstVolume]
 	dstFilePath := vars[storageRESTDstPath]
-	err := s.storage.RenameData(r.Context(), srcVolume, srcFilePath, dataDir, dstVolume, dstFilePath)
+
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	var fi FileInfo
+	if err := msgp.Decode(r.Body, &fi); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	err := s.storage.RenameData(r.Context(), srcVolume, srcFilePath, fi, dstVolume, dstFilePath)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -758,23 +771,6 @@ func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
 	}
 }
 
-// drainCloser can be used for wrapping an http response.
-// It will drain the body before closing.
-type drainCloser struct {
-	rc io.ReadCloser
-}
-
-// Read forwards the read operation.
-func (f drainCloser) Read(p []byte) (n int, err error) {
-	return f.rc.Read(p)
-}
-
-// Close drains the body and closes the upstream.
-func (f drainCloser) Close() error {
-	xhttp.DrainBody(f.rc)
-	return nil
-}
-
 // httpStreamResponse allows streaming a response, but still send an error.
 type httpStreamResponse struct {
 	done  chan error
@@ -866,7 +862,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		case 0:
 			// 0 is unbuffered, copy the rest.
 			_, err := io.Copy(w, respBody)
-			respBody.Close()
 			if err == io.EOF {
 				return nil
 			}
@@ -876,18 +871,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 			if err != nil {
 				return err
 			}
-			respBody.Close()
 			return errors.New(string(errorText))
-		case 3:
-			// gob style is already deprecated, we can remove this when
-			// storage API version will be greater or equal to 23.
-			defer respBody.Close()
-			dec := gob.NewDecoder(respBody)
-			var err error
-			if de := dec.Decode(&err); de == nil {
-				return err
-			}
-			return errors.New("rpc error")
 		case 2:
 			// Block of data
 			var tmp [4]byte
@@ -904,7 +888,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		case 32:
 			continue
 		default:
-			go xhttp.DrainBody(respBody)
 			return fmt.Errorf("unexpected filler byte: %d", tmp[0])
 		}
 	}
@@ -1051,7 +1034,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(httpTraceHdrs(server.ReadVersionHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTVersionID, storageRESTReadData)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodRenameData).HandlerFunc(httpTraceHdrs(server.RenameDataHandler)).
-				Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDataDir,
+				Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath,
 					storageRESTDstVolume, storageRESTDstPath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(httpTraceHdrs(server.CreateFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
