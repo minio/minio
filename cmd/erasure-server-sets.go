@@ -1495,10 +1495,9 @@ func (z *erasureServerSets) NewMultipartUpload(ctx context.Context, bucket, obje
 		}
 	}
 
-	// We multiply the size by 2 to account for erasure coding.
-	idx := z.getAvailableZoneIdx(ctx, (1<<30)*2)
-	if idx < 0 {
-		return "", toObjectErr(errDiskFull)
+	idx, err := z.getZoneIdx(ctx, bucket, object, ObjectOptions{}, 1<<30)
+	if err != nil {
+		return "", err
 	}
 
 	return z.serverSets[idx].NewMultipartUpload(ctx, bucket, object, opts)
