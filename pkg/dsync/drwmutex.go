@@ -49,7 +49,7 @@ const drwMutexAcquireTimeout = 1 * time.Second // 1 second.
 const drwMutexRefreshCallTimeout = 5 * time.Second
 
 // dRWMutexUnlockTimeout - timeout for the unlock call
-const drwMutexUnlockCallTimeout = 20 * time.Second
+const drwMutexUnlockCallTimeout = 30 * time.Second
 
 // dRWMutexRefreshInterval - the interval between two refresh calls
 const drwMutexRefreshInterval = 10 * time.Second
