@@ -47,8 +47,9 @@ import (
 const (
 	dataScannerSleepPerFolder     = time.Millisecond // Time to wait between folders.
 	dataUsageUpdateDirCycles      = 16               // Visit all folders every n cycles.
-	dataScannerCompactAtFolders   = 1000             // Compact when this many subfolders.
-	dataScannerCompactLeastObject = 1000             // Compact when there is less than this many objects.
+	dataScannerCompactAtFolders   = 10000            // Compact when this many subfolders in a branch.
+	dataScannerCompactLeastObject = 1000             // Compact when there is less than this many objects in a branch.
+	dataScannerCompactAtChildren  = 5000             // Compact when there are this many children in a branch.
 	dataScannerStartDelay         = 1 * time.Minute  // Time to wait on startup and between cycles.
 
 	healDeleteDangling    = true
@@ -191,6 +192,42 @@ type folderScanner struct {
 	disks []StorageAPI
 }
 
+// Cache structure and compaction:
+//
+// A cache structure will be kept with a tree of usages.
+// The cache is a tree structure where each keeps track of its children.
+//
+// An uncompacted branch contains a count of the files only directly at the
+// branch level, and contains link to children branches or leaves.
+//
+// The leaves are "compacted" based on a number of properties.
+// A compacted leaf contains the totals of all files beneath it.
+//
+// A leaf is only scanned once every dataUsageUpdateDirCycles,
+// rarer if the bloom filter for the path is clean and no lifecycles are applied.
+// Skipped leaves have their totals transferred from the previous cycle.
+//
+// A clean leaf will be included once every healFolderIncludeProb for partial heal scans.
+// When selected there is a one in healObjectSelectProb that any object will be chosen for heal scan.
+//
+// Compaction happens when either:
+//
+// 1) The folder (and subfolders) contains less than dataScannerCompactLeastObject objects.
+// 2) The folder itself contains more than dataScannerCompactAtFolders folders.
+//
+// A bucket root will never be compacted.
+//
+// Furthermore if a has more than dataScannerCompactAtChildren recursive children (uncompacted folders)
+// the tree will be recursively scanned and the branches with the least number of objects will be
+// compacted until the limit is reached.
+//
+// This ensures that any branch will never contain an unreasonable amount of other branches,
+// and also that small branches with few objects don't take up unreasonable amounts of space.
+//
+// Whenever a branch is scanned, it is assumed that it will be un-compacted
+// before it hits any of the above limits.
+// This will make the branch rebalance itself when scanned if the distribution of objects has changed.
+
 // scanDataFolder will scanner the basepath+cache.Info.Name and return an updated cache.
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
@@ -273,7 +310,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Finished scanner, %v entries %s\n", len(s.newCache.Cache), logSuffix)
+		console.Debugf(logPrefix+"Finished scanner, %v entries (%v) %s \n", len(s.newCache.Cache), s.newCache.listCache(), logSuffix)
 	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
@@ -288,6 +325,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
 	thisHash := hashPath(folder.name)
+	// Store initial compaction state.
+	wasCompacted := into.Compacted
 	for {
 		select {
 		case <-done:
@@ -364,8 +403,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 
 			if typ&os.ModeDir != 0 {
-				scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
-
 				h := hashPath(entName)
 				_, exists := f.oldCache.Cache[h.Key()]
 
@@ -429,44 +466,53 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		}
 
 		// If we have many subfolders, compact ourself.
-		if !into.Compacted && len(existingFolders)+len(newFolders) > dataScannerCompactAtFolders {
+		//console.Debugf(scannerLogPrefix+" Folder: %v, entries: %v, into compacted: %v, \n", folder.name, len(existingFolders)+len(newFolders), into.Compacted)
+
+		if !into.Compacted &&
+			f.newCache.Info.Name != folder.name &&
+			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders {
 			into.Compacted = true
+			newFolders = append(newFolders, existingFolders...)
+			existingFolders = nil
+			if f.dataUsageScannerDebug {
+				console.Debugf(scannerLogPrefix+" Preemptively compacting: %v, entries: %v\n", folder.name, len(existingFolders)+len(newFolders))
+			}
 		}
 
-		// Scan new...
-		for _, folder := range newFolders {
+		scanFolder := func(folder cachedFolder) {
+			if contextCanceled(ctx) {
+				return
+			}
 			dst := into
 			if !into.Compacted {
 				dst = &dataUsageEntry{Compacted: false}
 			}
 			if err := f.scanFolder(ctx, folder, dst); err != nil {
-				return err
+				logger.LogIf(ctx, err)
+				return
 			}
 			if !into.Compacted {
-				if !dst.Compacted {
-					// Compact is exceeding object count.
-					sz := f.newCache.sizeRecursive(folder.name)
-					if sz != nil && sz.Objects < dataScannerCompactLeastObject {
-						folderHash := dataUsageHash(folder.name)
-						f.newCache.deleteRecursive(folderHash)
-						sz.Compacted = true
-						f.newCache.replaceHashed(folderHash, folder.parent, *sz)
-					}
-				}
 				into.addChild(dataUsageHash(folder.name))
 			}
+		}
+
+		// Scan new...
+		for _, folder := range newFolders {
+			scanFolder(folder)
 		}
 
 		// Scan existing...
 		for _, folder := range existingFolders {
 			h := hashPath(folder.name)
 			// Check if we should skip scanning folder...
-			// We can only skip if we are not indexing into a compacted destination...
-			if !into.Compacted {
+			// We can only skip if we are not indexing into a compacted destination
+			// and the entry itself is compacted.
+			if !into.Compacted && f.oldCache.isCompacted(h) {
 				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
 					if !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 						// Transfer and add as child...
 						f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
+						into.addChild(h)
 						continue
 					}
 					folder.objectHealProbDiv = dataUsageUpdateDirCycles
@@ -481,6 +527,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 									console.Debugf(scannerLogPrefix+"Skipping non-updated folder: %v\n", folder)
 								}
 								f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
+								into.addChild(h)
 								continue
 							} else {
 								if f.dataUsageScannerDebug {
@@ -493,21 +540,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-
-			dst := into
-			if !into.Compacted {
-				dst = &dataUsageEntry{Compacted: false}
-			}
-			if err := f.scanFolder(ctx, folder, dst); err != nil {
-				continue
-			}
-			if !into.Compacted {
-				into.addChild(dataUsageHash(folder.name))
-			}
+			scanFolder(folder)
 		}
 
 		// Scan for healing
-		if f.healObjectSelect == 0 {
+		if f.healObjectSelect == 0 || len(abandonedChildren) == 0 {
 			// If we are not heal scanning, return now.
 			break
 		}
@@ -670,35 +707,29 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// Add unless healing returned an error.
 			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-				into.addChild(hashPath(k))
-				// FIXME: Scan
-				existingFolders = append(existingFolders, this)
+				scanFolder(this)
 			}
 		}
 		break
 	}
-
-	f.newCache.replaceHashed(thisHash, folder.parent, *into)
-	if !into.Compacted && f.newCache.Info.Name != folder.name {
-		var compact bool
-		flat := f.newCache.sizeRecursive(folder.name)
-		if flat.Objects < dataScannerCompactLeastObject {
-			compact = true
-		}
-		// Compact is exceeding uncompacted child count or there are no children.
-		sz := f.newCache.totalChildrenRec(folder.name)
-		if sz == 0 || sz > dataScannerCompactAtFolders {
-			compact = true
-		}
-		if compact {
-			folderHash := dataUsageHash(folder.name)
-			if flat != nil {
-				f.newCache.deleteRecursive(folderHash)
-				flat.Compacted = true
-				f.newCache.replaceHashed(folderHash, folder.parent, *flat)
-			}
-		}
+	if !wasCompacted {
+		f.newCache.replaceHashed(thisHash, folder.parent, *into)
 	}
+
+	if !into.Compacted && f.newCache.Info.Name != folder.name {
+		flat := f.newCache.sizeRecursive(folder.name)
+		if flat != nil && flat.Objects < dataScannerCompactLeastObject {
+			if f.dataUsageScannerDebug {
+				console.Debugf(scannerLogPrefix+" Only %d objects, compacting %s -> %+v\n", flat.Objects, folder.name, flat)
+			}
+			f.newCache.deleteRecursive(thisHash)
+			flat.Compacted = true
+			f.newCache.replaceHashed(thisHash, folder.parent, *flat)
+		}
+		// Compact if too many children...
+		f.newCache.reduceChildrenOf(thisHash, dataScannerCompactAtChildren)
+	}
+
 	return nil
 }
 

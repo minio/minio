@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/tinylib/msgp/msgp"
@@ -210,6 +212,16 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 	return &due
 }
 
+// isCompacted returns whether an entry is compacted.
+// Returns false if not found.
+func (d *dataUsageCache) isCompacted(h dataUsageHash) bool {
+	due, ok := d.Cache[h.Key()]
+	if !ok {
+		return false
+	}
+	return due.Compacted
+}
+
 // findChildrenCopy returns a copy of the children of the supplied hash.
 func (d *dataUsageCache) findChildrenCopy(h dataUsageHash) dataUsageHashMap {
 	ch := d.Cache[h.String()].Children
@@ -231,6 +243,7 @@ func (d *dataUsageCache) subCache(path string) dataUsageCache {
 	return dst
 }
 
+// deleteRecursive will delete an entry recursively, but not change its parent.
 func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 	if existing, ok := d.Cache[h.String()]; ok {
 		// Delete first if there should be a loop.
@@ -334,6 +347,16 @@ func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 	}
 }
 
+// listCache will return all cache paths.
+func (d *dataUsageCache) listCache() []string {
+	dst := make([]string, 0, len(d.Cache))
+	for k := range d.Cache {
+		dst = append(dst, k)
+	}
+	sort.Strings(dst)
+	return dst
+}
+
 // replaceHashed add or replaces an entry to the cache based on its hash.
 // If a parent is specified it will be added to that if not already there.
 // If the parent does not exist, it will be added.
@@ -375,6 +398,79 @@ func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHas
 	}
 }
 
+// reduceChildrenOf will reduce the recursive number of children to the limit
+// by compacting the children with the least number of objects.
+func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
+	e, ok := d.Cache[path.Key()]
+	if !ok {
+		return
+	}
+	if e.Compacted {
+		return
+	}
+	// If direct children have more, compact all.
+	if len(e.Children) > limit {
+		flat := d.sizeRecursive(path.Key())
+		flat.Compacted = true
+		d.deleteRecursive(path)
+		d.replaceHashed(path, nil, *flat)
+		return
+	}
+	total := d.totalChildrenRec(path.Key())
+	if total < limit {
+		return
+	}
+
+	console.Debugf(" %d children found, compacting %v\n", total, path)
+
+	var leaves = make([]struct {
+		objects uint64
+		path    dataUsageHash
+	}, total)
+	// Collect current leaves that have children.
+	leaves = leaves[:0]
+	remove := total - limit
+	var add func(path dataUsageHash)
+	add = func(path dataUsageHash) {
+		e, ok := d.Cache[path.Key()]
+		if !ok {
+			return
+		}
+		if len(e.Children) == 0 {
+			return
+		}
+		sz := d.sizeRecursive(path.Key())
+		leaves = append(leaves, struct {
+			objects uint64
+			path    dataUsageHash
+		}{objects: sz.Objects, path: path})
+		for ch := range e.Children {
+			add(dataUsageHash(ch))
+		}
+	}
+
+	// Add path recursively.
+	add(path)
+	sort.Slice(leaves, func(i, j int) bool {
+		return leaves[i].objects < leaves[j].objects
+	})
+	for remove > 0 && len(leaves) > 0 {
+		// Remove top entry.
+		e := leaves[0]
+		path := e.path
+		removing := d.totalChildrenRec(path.Key())
+		console.Debugf("compacting %v, removing %d children\n", path, removing)
+		flat := d.sizeRecursive(path.Key())
+		flat.Compacted = true
+		d.deleteRecursive(path)
+		d.replaceHashed(path, nil, *flat)
+
+		// Remove top entry and subtract removed children.
+		remove -= removing
+		leaves = leaves[1:]
+	}
+}
+
 // StringAll returns a detailed string representation of all entries in the cache.
 func (d *dataUsageCache) StringAll() string {
 	s := fmt.Sprintf("info:%+v\n", d.Info)
@@ -389,7 +485,7 @@ func (h dataUsageHash) String() string {
 	return string(h)
 }
 
-// String returns a human readable representation of the string.
+// Key returns the key.
 func (h dataUsageHash) Key() string {
 	return string(h)
 }
@@ -613,16 +709,17 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
 const (
-	dataUsageCacheVerV4 = 4
-	dataUsageCacheVerV3 = 3
-	dataUsageCacheVerV2 = 2
-	dataUsageCacheVerV1 = 1
+	dataUsageCacheVerCurrent = 5
+	dataUsageCacheVerV4      = 4
+	dataUsageCacheVerV3      = 3
+	dataUsageCacheVerV2      = 2
+	dataUsageCacheVerV1      = 1
 )
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serializeTo(dst io.Writer) error {
 	// Add version and compress.
-	_, err := dst.Write([]byte{dataUsageCacheVerV4})
+	_, err := dst.Write([]byte{dataUsageCacheVerCurrent})
 	if err != nil {
 		return err
 	}
@@ -656,7 +753,8 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 	if n != 1 {
 		return io.ErrUnexpectedEOF
 	}
-	switch b[0] {
+	ver := b[0]
+	switch ver {
 	case dataUsageCacheVerV1:
 		return errors.New("cache version deprecated (will autoupdate)")
 	case dataUsageCacheVerV2:
@@ -715,17 +813,26 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			d.Cache[k] = due
 		}
 		return nil
-	case dataUsageCacheVerV4:
+	case dataUsageCacheVerV4, dataUsageCacheVerCurrent:
 		// Zstd compressed.
 		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
 		if err != nil {
 			return err
 		}
 		defer dec.Close()
-
-		return d.DecodeMsg(msgp.NewReader(dec))
+		if err := d.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		if ver == dataUsageCacheVerV4 {
+			// Populate compacted value
+			for k, e := range d.Cache {
+				e.Compacted = len(e.Children) == 0 && k != d.Info.Name
+				d.Cache[k] = e
+			}
+		}
+		return nil
 	}
-	return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
+	return fmt.Errorf("dataUsageCache: unknown version: %d", int(ver))
 }
 
 // Trim this from start+end of hashes.
