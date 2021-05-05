@@ -122,24 +122,20 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 		if APIErrorCode(s3Err) != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
-		var owner bool
-		user, owner, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
+
+		user, _, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
 		if APIErrorCode(s3Err) != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
-		// Root credentials are not allowed to use STS API
-		if owner {
+
+		// Temporary credentials or Service accounts cannot generate further temporary credentials.
+		if user.IsTemp() || user.IsServiceAccount() {
 			return user, true, ErrSTSAccessDenied
 		}
 	}
 
 	// Session tokens are not allowed in STS AssumeRole requests.
 	if getSessionToken(r) != "" {
-		return user, true, ErrSTSAccessDenied
-	}
-
-	// Temporary credentials or Service accounts cannot generate further temporary credentials.
-	if user.IsTemp() || user.IsServiceAccount() {
 		return user, true, ErrSTSAccessDenied
 	}
 
@@ -157,6 +153,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		writeSTSErrorResponse(ctx, w, isErrCodeSTS, stsErr, nil)
 		return
 	}
+
 	if err := r.ParseForm(); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
