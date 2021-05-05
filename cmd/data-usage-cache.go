@@ -136,8 +136,8 @@ type dataUsageCacheInfo struct {
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
-	if summary.replicaSize > 0 || summary.pendingSize > 0 || summary.replicatedSize > 0 ||
-		summary.failedCount > 0 || summary.pendingCount > 0 || summary.failedSize > 0 {
+	empty := sizeSummary{}
+	if summary != empty {
 		if e.ReplicationStats == nil {
 			e.ReplicationStats = &replicationStats{}
 		}
@@ -155,8 +155,8 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Size += other.Size
 	ors := other.ReplicationStats
-	if ors != nil && (ors.ReplicaSize > 0 || ors.PendingSize > 0 || ors.ReplicatedSize > 0 ||
-		ors.FailedCount > 0 || ors.PendingCount > 0 || ors.FailedSize > 0) {
+	empty := replicationStats{}
+	if ors != nil && *ors != empty {
 		if e.ReplicationStats == nil {
 			e.ReplicationStats = &replicationStats{}
 		}
@@ -824,8 +824,13 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		if ver == dataUsageCacheVerV4 {
-			// Populate compacted value
+			// Populate compacted value and remove unneeded replica stats.
+			empty := replicationStats{}
 			for k, e := range d.Cache {
+				if e.ReplicationStats != nil && *e.ReplicationStats == empty {
+					e.ReplicationStats = nil
+				}
+
 				e.Compacted = len(e.Children) == 0 && k != d.Info.Name
 				d.Cache[k] = e
 			}
