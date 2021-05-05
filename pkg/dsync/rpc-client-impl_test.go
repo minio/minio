@@ -15,14 +15,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dsync_test
+package dsync
 
 import (
 	"context"
 	"net/rpc"
 	"sync"
-
-	. "github.com/minio/minio/pkg/dsync"
 )
 
 // ReconnectRPCClient is a wrapper type for rpc.Client which provides reconnect on first failure.
