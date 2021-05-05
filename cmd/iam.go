@@ -1203,6 +1203,10 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 		return errNoSuchServiceAccount
 	}
 
+	if !auth.IsSecretKeyValid(opts.secretKey) {
+		return auth.ErrInvalidSecretKeyLength
+	}
+
 	if opts.secretKey != "" {
 		cr.SecretKey = opts.secretKey
 	}
@@ -1346,6 +1350,14 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errIAMActionNotAllowed
 	}
 
+	if !auth.IsAccessKeyValid(accessKey) {
+		return auth.ErrInvalidAccessKeyLength
+	}
+
+	if !auth.IsSecretKeyValid(uinfo.SecretKey) {
+		return auth.ErrInvalidSecretKeyLength
+	}
+
 	sys.store.lock()
 	defer sys.store.unlock()
 
@@ -1386,6 +1398,14 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
+	}
+
+	if !auth.IsAccessKeyValid(accessKey) {
+		return auth.ErrInvalidAccessKeyLength
+	}
+
+	if !auth.IsSecretKeyValid(secretKey) {
+		return auth.ErrInvalidSecretKeyLength
 	}
 
 	sys.store.lock()
