@@ -525,12 +525,10 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	} else {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			if cred.ParentUser == "" {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+					errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
 				return
 			}
-			targetUser = cred.ParentUser
-		} else {
-			targetUser = cred.AccessKey
 		}
 		targetGroups = cred.Groups
 	}
