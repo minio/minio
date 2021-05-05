@@ -1114,31 +1114,35 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	cr, ok := sys.iamUsersMap[parentUser]
-	if !ok {
-		// For LDAP/OpenID users we would need this fallback
-		if sys.usersSysType != MinIOUsersSysType && parentUser != globalActiveCred.ParentUser {
-			_, ok = sys.iamUserPolicyMap[parentUser]
-			if !ok {
-				var found bool
-				for _, group := range groups {
-					_, ok = sys.iamGroupPolicyMap[group]
-					if !ok {
-						continue
-					}
-					found = true
-					break
+	cr, found := sys.iamUsersMap[parentUser]
+	switch {
+	// User found
+	case found:
+		// Disallow service accounts to further create more service accounts.
+		if cr.IsServiceAccount() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+	// Allow creating service accounts for root user
+	case parentUser == globalActiveCred.AccessKey:
+	// For LDAP/OpenID users we would need this fallback
+	case sys.usersSysType != MinIOUsersSysType:
+		_, ok := sys.iamUserPolicyMap[parentUser]
+		if !ok {
+			var groupHasPolicy bool
+			for _, group := range groups {
+				_, ok = sys.iamGroupPolicyMap[group]
+				if !ok {
+					continue
 				}
-				if !found {
-					return auth.Credentials{}, errNoSuchUser
-				}
+				groupHasPolicy = true
+				break
+			}
+			if !groupHasPolicy {
+				return auth.Credentials{}, errNoSuchUser
 			}
 		}
-	}
-
-	// Disallow service accounts to further create more service accounts.
-	if cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
+	default:
+		return auth.Credentials{}, errNoSuchUser
 	}
 
 	m := make(map[string]interface{})
