@@ -18,6 +18,7 @@
 package crypto
 
 import (
+	"encoding/base64"
 	"net/http"
 	"sort"
 	"testing"
@@ -96,27 +97,27 @@ var kmsParseHTTPTests = []struct {
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString("{}")},
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString([]byte("{}"))},
 	}, ShouldFail: false}, // 3
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQifQ=="},
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString([]byte(`{"bucket": "some-bucket"}`))},
 	}, ShouldFail: false}, // 4
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString(`{"bucket": "some-bucket"}`)},,
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString([]byte(`{"bucket": "some-bucket"}`))},
 	}, ShouldFail: false}, // 5
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"AES256"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString(`{"bucket": "some-bucket"}`)},,
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString([]byte(`{"bucket": "some-bucket"}`))},
 	}, ShouldFail: true}, // 6
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString(`{"bucket": "some-bucket"`)}  // invalid JSON
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString([]byte(`{"bucket": "some-bucket"`))}, // invalid JSON
 	}, ShouldFail: true}, // 7
 
 }
