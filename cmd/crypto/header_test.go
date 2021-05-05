@@ -116,7 +116,7 @@ var kmsParseHTTPTests = []struct {
 	{Header: http.Header{
 		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
 		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
-		"X-Amz-Server-Side-Encryption-Context":        []string{"eyJidWNrZXQiOiAic29tZS1idWNrZXQi"}, // invalid JSON
+		"X-Amz-Server-Side-Encryption-Context":        []string{base64.StdEncoding.EncodeToString(`{"bucket": "some-bucket"`)}  // invalid JSON
 	}, ShouldFail: true}, // 7
 
 }
