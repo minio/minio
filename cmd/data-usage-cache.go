@@ -72,6 +72,9 @@ type replicationStats struct {
 	AfterThresholdCount  uint64
 }
 
+//msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4
+//msgp:marshal ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4
+
 //msgp:tuple dataUsageEntryV2
 type dataUsageEntryV2 struct {
 	// These fields do no include any children.
@@ -94,12 +97,25 @@ type dataUsageEntryV3 struct {
 	Children               dataUsageHashMap
 }
 
-// dataUsageCache contains a cache of data usage entries latest version 4.
+//msgp:tuple dataUsageEntryV4
+type dataUsageEntryV4 struct {
+	Children dataUsageHashMap
+	// These fields do no include any children.
+	Size             int64
+	Objects          uint64
+	ObjSizes         sizeHistogram
+	ReplicationStats replicationStats
+}
+
+// dataUsageCache contains a cache of data usage entries latest version.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntry
 	Disks []string
 }
+
+//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4
+//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4
 
 // dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
@@ -113,6 +129,13 @@ type dataUsageCacheV3 struct {
 	Info  dataUsageCacheInfo
 	Disks []string
 	Cache map[string]dataUsageEntryV3
+}
+
+// dataUsageCache contains a cache of data usage entries version 4.
+type dataUsageCacheV4 struct {
+	Info  dataUsageCacheInfo
+	Disks []string
+	Cache map[string]dataUsageEntryV4
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -774,10 +797,11 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			d.Cache[k] = dataUsageEntry{
-				Size:     v.Size,
-				Objects:  v.Objects,
-				ObjSizes: v.ObjSizes,
-				Children: v.Children,
+				Size:      v.Size,
+				Objects:   v.Objects,
+				ObjSizes:  v.ObjSizes,
+				Children:  v.Children,
+				Compacted: len(v.Children) == 0 && k != d.Info.Name,
 			}
 		}
 		return nil
@@ -810,32 +834,58 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 					PendingSize:    v.ReplicationPendingSize,
 				}
 			}
+			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
+
 			d.Cache[k] = due
 		}
 		return nil
-	case dataUsageCacheVerV4, dataUsageCacheVerCurrent:
+	case dataUsageCacheVerV4:
 		// Zstd compressed.
 		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
 		if err != nil {
 			return err
 		}
 		defer dec.Close()
-		if err := d.DecodeMsg(msgp.NewReader(dec)); err != nil {
+		dold := &dataUsageCacheV4{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
 			return err
 		}
-		if ver == dataUsageCacheVerV4 {
-			// Populate compacted value and remove unneeded replica stats.
-			empty := replicationStats{}
-			for k, e := range d.Cache {
-				if e.ReplicationStats != nil && *e.ReplicationStats == empty {
-					e.ReplicationStats = nil
-				}
-
-				e.Compacted = len(e.Children) == 0 && k != d.Info.Name
-				d.Cache[k] = e
+		d.Info = dold.Info
+		d.Disks = dold.Disks
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			due := dataUsageEntry{
+				Size:     v.Size,
+				Objects:  v.Objects,
+				ObjSizes: v.ObjSizes,
+				Children: v.Children,
 			}
+			empty := replicationStats{}
+			if v.ReplicationStats != empty {
+				due.ReplicationStats = &v.ReplicationStats
+			}
+			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
+
+			d.Cache[k] = due
 		}
-		return nil
+
+		// Populate compacted value and remove unneeded replica stats.
+		empty := replicationStats{}
+		for k, e := range d.Cache {
+			if e.ReplicationStats != nil && *e.ReplicationStats == empty {
+				e.ReplicationStats = nil
+			}
+
+			d.Cache[k] = e
+		}
+	case dataUsageCacheVerCurrent:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
+		return d.DecodeMsg(msgp.NewReader(dec))
 	}
 	return fmt.Errorf("dataUsageCache: unknown version: %d", int(ver))
 }
