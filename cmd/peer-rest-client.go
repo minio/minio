@@ -33,14 +33,13 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/trace"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -740,7 +739,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan st
 
 	dec := gob.NewDecoder(respBody)
 	for {
-		var info trace.Info
+		var info madmin.TraceInfo
 		if err = dec.Decode(&info); err != nil {
 			return
 		}

@@ -31,13 +31,14 @@ import (
 	"github.com/dswarbrick/smart/ioctl"
 	"github.com/dswarbrick/smart/scsi"
 	"github.com/dswarbrick/smart/utils"
+	"github.com/minio/madmin-go"
 
 	"gopkg.in/yaml.v2"
 )
 
 // GetInfo - gets info about device
-func GetInfo(device string) (Info, error) {
-	info := Info{
+func GetInfo(device string) (madmin.SmartInfo, error) {
+	info := madmin.SmartInfo{
 		Device: device,
 	}
 
@@ -89,9 +90,9 @@ func GetInfo(device string) (Info, error) {
 	return info, nil
 }
 
-func getNvmeInfo(d *NVMeDevice) (*NvmeInfo, error) {
+func getNvmeInfo(d *NVMeDevice) (*madmin.SmartNvmeInfo, error) {
 	buf := make([]byte, 4096)
-	nvmeInfo := &NvmeInfo{}
+	nvmeInfo := &madmin.SmartNvmeInfo{}
 
 	cmd := nvmePassthruCommand{
 		opcode:  NvmeAdminIdentify,
@@ -145,10 +146,10 @@ func getNvmeInfo(d *NVMeDevice) (*NvmeInfo, error) {
 	return nvmeInfo, nil
 }
 
-func getScsiInfo(d *scsi.SCSIDevice) (*ScsiInfo, error) {
-	return &ScsiInfo{}, nil
+func getScsiInfo(d *scsi.SCSIDevice) (*madmin.SmartScsiInfo, error) {
+	return &madmin.SmartScsiInfo{}, nil
 }
 
-func getAtaInfo(d *scsi.SATDevice) (*AtaInfo, error) {
-	return &AtaInfo{}, nil
+func getAtaInfo(d *scsi.SATDevice) (*madmin.SmartAtaInfo, error) {
+	return &madmin.SmartAtaInfo{}, nil
 }

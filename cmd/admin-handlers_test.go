@@ -30,8 +30,8 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // adminErasureTestBed - encapsulates subsystems that need to be setup for
