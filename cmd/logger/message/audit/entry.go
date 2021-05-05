@@ -54,6 +54,7 @@ type Entry struct {
 	Trigger string `json:"trigger,omitempty"`
 }
 
+// NewEntry initializes a new audit entry
 func NewEntry(deploymentID string) Entry {
 	return Entry{
 		Version:      Version,
