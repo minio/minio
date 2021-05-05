@@ -28,7 +28,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -236,9 +238,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	// Encrypt json encoded tier configurations
 	metadata := make(map[string]string)
-	sseS3 := true
-	var extKey [32]byte
-	encBr, oek, err := newEncryptReader(hr, extKey[:], minioMetaBucket, tierConfigPath, metadata, sseS3)
+	encBr, oek, err := newEncryptReader(hr, crypto.S3KMS, "", nil, minioMetaBucket, tierConfigPath, metadata, kms.Context{})
 	if err != nil {
 		return nil, nil, err
 	}
