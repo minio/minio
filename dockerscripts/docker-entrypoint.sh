@@ -57,8 +57,8 @@ docker_secrets_env() {
     fi
 }
 
-## Set KMS_MASTER_KEY from docker secrets if provided
-docker_kms_encryption_env() {
+## Set KMS_SECRET_KEY from docker secrets if provided
+docker_kms_secret_encryption_env() {
     if [ -f "$MINIO_KMS_SECRET_KEY_FILE" ]; then
         KMS_SECRET_KEY_FILE="$MINIO_KMS_SECRET_KEY_FILE"
     else
@@ -72,13 +72,13 @@ docker_kms_encryption_env() {
 }
 
 ## Legacy
-## Set SSE_MASTER_KEY from docker secrets if provided
-docker_sse_encryption_env() {
-    KMS_SECRET_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
+## Set KMS_MASTER_KEY from docker secrets if provided
+docker_kms_master_encryption_env() {
+    KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
 
-    if [ -f "$KMS_SECRET_KEY_FILE" ]; then
-        MINIO_KMS_SECRET_KEY="$(cat "$KMS_SECRET_KEY_FILE")"
-        export MINIO_KMS_SECRET_KEY
+    if [ -f "$KMS_MASTER_KEY_FILE" ]; then
+        MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
+        export MINIO_KMS_MASTER_KEY
     fi
 }
 
@@ -98,17 +98,17 @@ docker_switch_user() {
     fi
 }
 
-## Set access env from secrets if necessary.
+## Set access env from secrets if necessary. Legacy
 docker_secrets_env_old
 
-## Set access env from secrets if necessary.
+## Set access env from secrets if necessary. Override
 docker_secrets_env
 
-## Set kms encryption from secrets if necessary.
-docker_kms_encryption_env
-
 ## Set sse encryption from secrets if necessary. Legacy
-docker_sse_encryption_env
+docker_kms_master_encryption_env
+
+## Set kms encryption from secrets if necessary. Override
+docker_kms_secret_encryption_env
 
 ## Switch to user if applicable.
 docker_switch_user "$@"
