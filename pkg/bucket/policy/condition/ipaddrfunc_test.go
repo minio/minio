@@ -18,12 +18,18 @@
 package condition
 
 import (
+	"net"
 	"reflect"
 	"testing"
 )
 
-func TestIPAddressFuncEvaluate(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+func TestIPAddrFuncEvaluate(t *testing.T) {
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -37,6 +43,10 @@ func TestIPAddressFuncEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{"SourceIp": {"192.168.2.10"}}, false},
 		{case1Function, map[string][]string{}, false},
 		{case1Function, map[string][]string{"delimiter": {"/"}}, false},
+		{case2Function, map[string][]string{"SourceIp": {"192.168.1.10"}}, false},
+		{case2Function, map[string][]string{"SourceIp": {"192.168.2.10"}}, true},
+		{case2Function, map[string][]string{}, true},
+		{case2Function, map[string][]string{"delimiter": {"/"}}, true},
 	}
 
 	for i, testCase := range testCases {
@@ -46,10 +56,14 @@ func TestIPAddressFuncEvaluate(t *testing.T) {
 			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 		}
 	}
+
+	if _, err := newIPAddressFunc(S3Prefix, NewValueSet(NewStringValue("192.168.1.0/24")), ""); err == nil {
+		t.Fatalf("expected error")
+	}
 }
 
-func TestIPAddressFuncKey(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+func TestIPAddrFuncKey(t *testing.T) {
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -70,19 +84,47 @@ func TestIPAddressFuncKey(t *testing.T) {
 	}
 }
 
-func TestIPAddressFuncToMap(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+func TestIPAddrFuncName(t *testing.T) {
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")))
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	testCases := []struct {
+		function       Function
+		expectedResult name
+	}{
+		{case1Function, name{name: ipAddress}},
+		{case2Function, name{name: notIPAddress}},
+	}
+
+	for i, testCase := range testCases {
+		result := testCase.function.name()
+
+		if result != testCase.expectedResult {
+			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+		}
+	}
+}
+
+func TestIPAddrFuncToMap(t *testing.T) {
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := map[Key]ValueSet{
 		AWSSourceIP: NewValueSet(NewStringValue("192.168.1.0/24")),
+	}
+
+	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := map[Key]ValueSet{
@@ -95,7 +137,7 @@ func TestIPAddressFuncToMap(t *testing.T) {
 	}{
 		{case1Function, case1Result},
 		{case2Function, case2Result},
-		{&ipAddressFunc{}, nil},
+		{&ipaddrFunc{}, nil},
 	}
 
 	for i, testCase := range testCases {
@@ -107,84 +149,64 @@ func TestIPAddressFuncToMap(t *testing.T) {
 	}
 }
 
-func TestNotIPAddressFuncEvaluate(t *testing.T) {
-	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+func TestIPAddrFuncClone(t *testing.T) {
+	_, IPNet1, err := net.ParseCIDR("192.168.1.0/24")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	testCases := []struct {
-		function       Function
-		values         map[string][]string
-		expectedResult bool
-	}{
-		{case1Function, map[string][]string{"SourceIp": {"192.168.2.10"}}, true},
-		{case1Function, map[string][]string{}, true},
-		{case1Function, map[string][]string{"delimiter": {"/"}}, true},
-		{case1Function, map[string][]string{"SourceIp": {"192.168.1.10"}}, false},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.function.evaluate(testCase.values)
-
-		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestNotIPAddressFuncKey(t *testing.T) {
-	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	_, IPNet2, err := net.ParseCIDR("10.1.10.1/32")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	testCases := []struct {
-		function       Function
-		expectedResult Key
-	}{
-		{case1Function, AWSSourceIP},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.function.key()
-
-		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestNotIPAddressFuncToMap(t *testing.T) {
-	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")))
+	case1Result := &ipaddrFunc{
+		n:      name{name: ipAddress},
+		k:      AWSSourceIP,
+		values: []*net.IPNet{IPNet1},
+		negate: false,
+	}
+
+	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Result := map[Key]ValueSet{
-		AWSSourceIP: NewValueSet(NewStringValue("192.168.1.0/24")),
+	case2Result := &ipaddrFunc{
+		n:      name{name: ipAddress},
+		k:      AWSSourceIP,
+		values: []*net.IPNet{IPNet1, IPNet2},
+		negate: false,
 	}
 
-	case2Result := map[Key]ValueSet{
-		AWSSourceIP: NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")),
+	case3Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case3Result := &ipaddrFunc{
+		n:      name{name: notIPAddress},
+		k:      AWSSourceIP,
+		values: []*net.IPNet{IPNet1},
+		negate: true,
 	}
 
 	testCases := []struct {
 		f              Function
-		expectedResult map[Key]ValueSet
+		expectedResult Function
 	}{
 		{case1Function, case1Result},
 		{case2Function, case2Result},
-		{&notIPAddressFunc{}, nil},
+		{case3Function, case3Result},
 	}
 
 	for i, testCase := range testCases {
-		result := testCase.f.toMap()
+		result := testCase.f.clone()
 
 		if !reflect.DeepEqual(result, testCase.expectedResult) {
 			t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
@@ -193,12 +215,12 @@ func TestNotIPAddressFuncToMap(t *testing.T) {
 }
 
 func TestNewIPAddressFunc(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")))
+	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -220,7 +242,7 @@ func TestNewIPAddressFunc(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := newIPAddressFunc(testCase.key, testCase.values)
+		result, err := newIPAddressFunc(testCase.key, testCase.values, "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -236,12 +258,12 @@ func TestNewIPAddressFunc(t *testing.T) {
 }
 
 func TestNewNotIPAddressFunc(t *testing.T) {
-	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")))
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -263,7 +285,7 @@ func TestNewNotIPAddressFunc(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := newNotIPAddressFunc(testCase.key, testCase.values)
+		result, err := newNotIPAddressFunc(testCase.key, testCase.values, "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {

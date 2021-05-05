@@ -23,12 +23,12 @@ import (
 )
 
 func TestBooleanFuncEvaluate(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)))
+	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -49,10 +49,14 @@ func TestBooleanFuncEvaluate(t *testing.T) {
 			t.Errorf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 		}
 	}
+
+	if _, err := newBooleanFunc(S3Prefix, NewValueSet(NewBoolValue(true)), ""); err == nil {
+		t.Errorf("error expected")
+	}
 }
 
 func TestBooleanFuncKey(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -73,8 +77,30 @@ func TestBooleanFuncKey(t *testing.T) {
 	}
 }
 
+func TestBooleanFuncName(t *testing.T) {
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	testCases := []struct {
+		function       Function
+		expectedResult name
+	}{
+		{case1Function, name{name: boolean}},
+	}
+
+	for i, testCase := range testCases {
+		result := testCase.function.name()
+
+		if result != testCase.expectedResult {
+			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+		}
+	}
+}
+
 func TestBooleanFuncToMap(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -83,7 +109,7 @@ func TestBooleanFuncToMap(t *testing.T) {
 		AWSSecureTransport: NewValueSet(NewStringValue("true")),
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)))
+	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -109,13 +135,45 @@ func TestBooleanFuncToMap(t *testing.T) {
 	}
 }
 
-func TestNewBooleanFunc(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)))
+func TestBooleanFuncClone(t *testing.T) {
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)))
+	case1Result := &booleanFunc{k: AWSSecureTransport, value: "true"}
+
+	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case2Result := &booleanFunc{k: AWSSecureTransport, value: "false"}
+
+	testCases := []struct {
+		f              Function
+		expectedResult Function
+	}{
+		{case1Function, case1Result},
+		{case2Function, case2Result},
+	}
+
+	for i, testCase := range testCases {
+		result := testCase.f.clone()
+
+		if !reflect.DeepEqual(result, testCase.expectedResult) {
+			t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+		}
+	}
+}
+
+func TestNewBooleanFunc(t *testing.T) {
+	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -137,7 +195,7 @@ func TestNewBooleanFunc(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := newBooleanFunc(testCase.key, testCase.values)
+		result, err := newBooleanFunc(testCase.key, testCase.values, "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {

@@ -20,10 +20,18 @@ package condition
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 )
+
+func getValuesByKey(m map[string][]string, key string) []string {
+	if values, found := m[http.CanonicalHeaderKey(key)]; found {
+		return values
+	}
+	return m[key]
+}
 
 // Splits an incoming path into bucket and object components.
 func path2BucketAndObject(path string) (bucket, object string) {

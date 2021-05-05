@@ -28,14 +28,16 @@ func TestNameIsValid(t *testing.T) {
 		n              name
 		expectedResult bool
 	}{
-		{stringEquals, true},
-		{stringNotEquals, true},
-		{stringLike, true},
-		{stringNotLike, true},
-		{ipAddress, true},
-		{notIPAddress, true},
-		{null, true},
-		{name("foo"), false},
+		{name{name: stringEquals}, true},
+		{name{name: stringNotEquals}, true},
+		{name{name: stringLike}, true},
+		{name{name: stringNotLike}, true},
+		{name{name: ipAddress}, true},
+		{name{name: notIPAddress}, true},
+		{name{name: null}, true},
+		{name{name: "foo"}, false},
+		{name{qualifier: forAllValues, name: stringEquals}, true},
+		{name{qualifier: forAnyValue, name: stringNotEquals}, true},
 	}
 
 	for i, testCase := range testCases {
@@ -53,14 +55,16 @@ func TestNameMarshalJSON(t *testing.T) {
 		expectedResult []byte
 		expectErr      bool
 	}{
-		{stringEquals, []byte(`"StringEquals"`), false},
-		{stringNotEquals, []byte(`"StringNotEquals"`), false},
-		{stringLike, []byte(`"StringLike"`), false},
-		{stringNotLike, []byte(`"StringNotLike"`), false},
-		{ipAddress, []byte(`"IpAddress"`), false},
-		{notIPAddress, []byte(`"NotIpAddress"`), false},
-		{null, []byte(`"Null"`), false},
-		{name("foo"), nil, true},
+		{name{name: stringEquals}, []byte(`"StringEquals"`), false},
+		{name{name: stringNotEquals}, []byte(`"StringNotEquals"`), false},
+		{name{name: stringLike}, []byte(`"StringLike"`), false},
+		{name{name: stringNotLike}, []byte(`"StringNotLike"`), false},
+		{name{name: ipAddress}, []byte(`"IpAddress"`), false},
+		{name{name: notIPAddress}, []byte(`"NotIpAddress"`), false},
+		{name{name: null}, []byte(`"Null"`), false},
+		{name{name: "foo"}, nil, true},
+		{name{qualifier: forAllValues, name: stringEquals}, []byte(`"ForAllValues:StringEquals"`), false},
+		{name{qualifier: forAnyValue, name: stringNotEquals}, []byte(`"ForAnyValue:StringNotEquals"`), false},
 	}
 
 	for i, testCase := range testCases {
@@ -85,8 +89,10 @@ func TestNameUnmarshalJSON(t *testing.T) {
 		expectedResult name
 		expectErr      bool
 	}{
-		{[]byte(`"StringEquals"`), stringEquals, false},
-		{[]byte(`"foo"`), name(""), true},
+		{[]byte(`"StringEquals"`), name{name: stringEquals}, false},
+		{[]byte(`"foo"`), name{name: ""}, true},
+		{[]byte(`"ForAllValues:StringEquals"`), name{qualifier: forAllValues, name: stringEquals}, false},
+		{[]byte(`"ForAnyValue:StringNotEquals"`), name{qualifier: forAnyValue, name: stringNotEquals}, false},
 	}
 
 	for i, testCase := range testCases {

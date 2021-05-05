@@ -177,6 +177,7 @@ func TestStatementIsValid(t *testing.T) {
 	}
 
 	func2, err := condition.NewStringEqualsFunc(
+		"",
 		condition.S3XAmzCopySource,
 		"mybucket/myobject",
 	)
@@ -185,6 +186,7 @@ func TestStatementIsValid(t *testing.T) {
 	}
 
 	func3, err := condition.NewStringEqualsFunc(
+		"",
 		condition.AWSUserAgent,
 		"NSPlayer",
 	)

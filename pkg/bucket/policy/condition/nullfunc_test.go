@@ -23,12 +23,12 @@ import (
 )
 
 func TestNullFuncEvaluate(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)))
+	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -60,7 +60,7 @@ func TestNullFuncEvaluate(t *testing.T) {
 }
 
 func TestNullFuncKey(t *testing.T) {
-	case1Function, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -81,8 +81,30 @@ func TestNullFuncKey(t *testing.T) {
 	}
 }
 
+func TestNullFuncName(t *testing.T) {
+	case1Function, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	testCases := []struct {
+		function       Function
+		expectedResult name
+	}{
+		{case1Function, name{name: null}},
+	}
+
+	for i, testCase := range testCases {
+		result := testCase.function.name()
+
+		if result != testCase.expectedResult {
+			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+		}
+	}
+}
+
 func TestNullFuncToMap(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)))
+	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -91,7 +113,7 @@ func TestNullFuncToMap(t *testing.T) {
 		S3Prefix: NewValueSet(NewBoolValue(true)),
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)))
+	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -118,13 +140,51 @@ func TestNullFuncToMap(t *testing.T) {
 	}
 }
 
-func TestNewNullFunc(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)))
+func TestNullFuncClone(t *testing.T) {
+	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)))
+	case1Result := &nullFunc{
+		k:     S3Prefix,
+		value: true,
+	}
+
+	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case2Result := &nullFunc{
+		k:     S3Prefix,
+		value: false,
+	}
+
+	testCases := []struct {
+		f              Function
+		expectedResult Function
+	}{
+		{case1Function, case1Result},
+		{case2Function, case2Result},
+	}
+
+	for i, testCase := range testCases {
+		result := testCase.f.clone()
+
+		if !reflect.DeepEqual(result, testCase.expectedResult) {
+			t.Fatalf("case %v: result: expected: %+v, got: %+v\n", i+1, testCase.expectedResult, result)
+		}
+	}
+}
+
+func TestNewNullFunc(t *testing.T) {
+	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -146,7 +206,7 @@ func TestNewNullFunc(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := newNullFunc(testCase.key, testCase.values)
+		result, err := newNullFunc(testCase.key, testCase.values, "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {

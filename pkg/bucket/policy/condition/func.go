@@ -23,6 +23,17 @@ import (
 	"sort"
 )
 
+type condition int
+
+const (
+	equals condition = iota + 1
+	notEquals
+	greaterThan
+	greaterThanEquals
+	lessThan
+	lessThanEquals
+)
+
 // Function - condition function interface.
 type Function interface {
 	// evaluate() - evaluates this condition function with given values.
@@ -39,6 +50,9 @@ type Function interface {
 
 	// toMap - returns map representation of this function.
 	toMap() map[Key]ValueSet
+
+	// clone - returns copy of this function.
+	clone() Function
 }
 
 // Functions - list of functions.
@@ -70,15 +84,9 @@ func (functions Functions) Keys() KeySet {
 // Clone clones Functions structure
 func (functions Functions) Clone() Functions {
 	funcs := []Function{}
-
 	for _, f := range functions {
-		vfn := conditionFuncMap[f.name()]
-		for key, values := range f.toMap() {
-			function, _ := vfn(key, values.Clone())
-			funcs = append(funcs, function)
-		}
+		funcs = append(funcs, f.clone())
 	}
-
 	return funcs
 }
 
@@ -103,17 +111,18 @@ func (functions Functions) Equals(funcs Functions) bool {
 	return true
 }
 
-// MarshalJSON - encodes Functions to  JSON data.
+// MarshalJSON - encodes Functions to JSON data.
 func (functions Functions) MarshalJSON() ([]byte, error) {
-	nm := make(map[name]map[Key]ValueSet)
+	nm := make(map[string]map[Key]ValueSet)
 
 	for _, f := range functions {
-		if _, ok := nm[f.name()]; ok {
+		fname := f.name().String()
+		if _, ok := nm[fname]; ok {
 			for k, v := range f.toMap() {
-				nm[f.name()][k] = v
+				nm[fname][k] = v
 			}
 		} else {
-			nm[f.name()] = f.toMap()
+			nm[fname] = f.toMap()
 		}
 	}
 
@@ -131,7 +140,7 @@ func (functions Functions) String() string {
 	return fmt.Sprintf("%v", funcStrings)
 }
 
-var conditionFuncMap = map[name]func(Key, ValueSet) (Function, error){
+var conditionFuncMap = map[string]func(Key, ValueSet, string) (Function, error){
 	stringEquals:              newStringEqualsFunc,
 	stringNotEquals:           newStringNotEqualsFunc,
 	stringEqualsIgnoreCase:    newStringEqualsIgnoreCaseFunc,
@@ -189,12 +198,12 @@ func (functions *Functions) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			vfn, ok := conditionFuncMap[n]
+			fn, ok := conditionFuncMap[n.name]
 			if !ok {
 				return fmt.Errorf("condition %v is not handled", n)
 			}
 
-			f, err := vfn(key, values)
+			f, err := fn(key, values, n.qualifier)
 			if err != nil {
 				return err
 			}

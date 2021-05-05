@@ -183,6 +183,7 @@ func TestStatementIsValid(t *testing.T) {
 	}
 
 	func2, err := condition.NewStringEqualsFunc(
+		"",
 		condition.S3XAmzCopySource,
 		"mybucket/myobject",
 	)

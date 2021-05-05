@@ -20,40 +20,25 @@ package condition
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"sort"
 )
 
-func toIPAddressFuncString(n name, key Key, values []*net.IPNet) string {
-	valueStrings := []string{}
-	for _, value := range values {
-		valueStrings = append(valueStrings, value.String())
-	}
-	sort.Strings(valueStrings)
-
-	return fmt.Sprintf("%v:%v:%v", n, key, valueStrings)
-}
-
-// ipAddressFunc - IP address function. It checks whether value by Key in given
+// ipaddrFunc - IP address function. It checks whether value by Key in given
 // values is in IP network.  Here Key must be AWSSourceIP.
 // For example,
 //   - if values = [192.168.1.0/24], at evaluate() it returns whether IP address
 //     in value map for AWSSourceIP falls in the network 192.168.1.10/24.
-type ipAddressFunc struct {
+type ipaddrFunc struct {
+	n      name
 	k      Key
 	values []*net.IPNet
+	negate bool
 }
 
-// evaluate() - evaluates to check whether IP address in values map for AWSSourceIP
-// falls in one of network or not.
-func (f ipAddressFunc) evaluate(values map[string][]string) bool {
+func (f ipaddrFunc) eval(values map[string][]string) bool {
+	rvalues := getValuesByKey(values, f.k.Name())
 	IPs := []net.IP{}
-	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
-	if !ok {
-		requestValue = values[f.k.Name()]
-	}
-
-	for _, s := range requestValue {
+	for _, s := range rvalues {
 		IP := net.ParseIP(s)
 		if IP == nil {
 			panic(fmt.Errorf("invalid IP address '%v'", s))
@@ -73,23 +58,39 @@ func (f ipAddressFunc) evaluate(values map[string][]string) bool {
 	return false
 }
 
+// evaluate() - evaluates to check whether IP address in values map for AWSSourceIP
+// falls in one of network or not.
+func (f ipaddrFunc) evaluate(values map[string][]string) bool {
+	result := f.eval(values)
+	if f.negate {
+		return !result
+	}
+	return result
+}
+
 // key() - returns condition key which is used by this condition function.
 // Key is always AWSSourceIP.
-func (f ipAddressFunc) key() Key {
+func (f ipaddrFunc) key() Key {
 	return f.k
 }
 
 // name() - returns "IpAddress" condition name.
-func (f ipAddressFunc) name() name {
-	return ipAddress
+func (f ipaddrFunc) name() name {
+	return f.n
 }
 
-func (f ipAddressFunc) String() string {
-	return toIPAddressFuncString(ipAddress, f.k, f.values)
+func (f ipaddrFunc) String() string {
+	valueStrings := []string{}
+	for _, value := range f.values {
+		valueStrings = append(valueStrings, value.String())
+	}
+	sort.Strings(valueStrings)
+
+	return fmt.Sprintf("%v:%v:%v", f.n, f.k, valueStrings)
 }
 
 // toMap - returns map representation of this function.
-func (f ipAddressFunc) toMap() map[Key]ValueSet {
+func (f ipaddrFunc) toMap() map[Key]ValueSet {
 	if !f.k.IsValid() {
 		return nil
 	}
@@ -104,31 +105,21 @@ func (f ipAddressFunc) toMap() map[Key]ValueSet {
 	}
 }
 
-// notIPAddressFunc - Not IP address function. It checks whether value by Key in given
-// values is NOT in IP network.  Here Key must be AWSSourceIP.
-// For example,
-//   - if values = [192.168.1.0/24], at evaluate() it returns whether IP address
-//     in value map for AWSSourceIP does not fall in the network 192.168.1.10/24.
-type notIPAddressFunc struct {
-	ipAddressFunc
+func (f ipaddrFunc) clone() Function {
+	values := []*net.IPNet{}
+	for _, value := range f.values {
+		_, IPNet, _ := net.ParseCIDR(value.String())
+		values = append(values, IPNet)
+	}
+	return &ipaddrFunc{
+		n:      f.n,
+		k:      f.k,
+		values: values,
+		negate: f.negate,
+	}
 }
 
-// evaluate() - evaluates to check whether IP address in values map for AWSSourceIP
-// does not fall in one of network.
-func (f notIPAddressFunc) evaluate(values map[string][]string) bool {
-	return !f.ipAddressFunc.evaluate(values)
-}
-
-// name() - returns "NotIpAddress" condition name.
-func (f notIPAddressFunc) name() name {
-	return notIPAddress
-}
-
-func (f notIPAddressFunc) String() string {
-	return toIPAddressFuncString(notIPAddress, f.ipAddressFunc.k, f.ipAddressFunc.values)
-}
-
-func valuesToIPNets(n name, values ValueSet) ([]*net.IPNet, error) {
+func valuesToIPNets(n string, values ValueSet) ([]*net.IPNet, error) {
 	IPNets := []*net.IPNet{}
 	for v := range values {
 		s, err := v.GetString()
@@ -148,8 +139,21 @@ func valuesToIPNets(n name, values ValueSet) ([]*net.IPNet, error) {
 	return IPNets, nil
 }
 
+func newIPAddrFunc(n string, key Key, values []*net.IPNet, negate bool) (Function, error) {
+	if key != AWSSourceIP {
+		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSourceIP, n)
+	}
+
+	return &ipaddrFunc{
+		n:      name{name: n},
+		k:      key,
+		values: values,
+		negate: negate,
+	}, nil
+}
+
 // newIPAddressFunc - returns new IP address function.
-func newIPAddressFunc(key Key, values ValueSet) (Function, error) {
+func newIPAddressFunc(key Key, values ValueSet, qualifier string) (Function, error) {
 	IPNets, err := valuesToIPNets(ipAddress, values)
 	if err != nil {
 		return nil, err
@@ -160,15 +164,11 @@ func newIPAddressFunc(key Key, values ValueSet) (Function, error) {
 
 // NewIPAddressFunc - returns new IP address function.
 func NewIPAddressFunc(key Key, IPNets ...*net.IPNet) (Function, error) {
-	if key != AWSSourceIP {
-		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSourceIP, ipAddress)
-	}
-
-	return &ipAddressFunc{key, IPNets}, nil
+	return newIPAddrFunc(ipAddress, key, IPNets, false)
 }
 
 // newNotIPAddressFunc - returns new Not IP address function.
-func newNotIPAddressFunc(key Key, values ValueSet) (Function, error) {
+func newNotIPAddressFunc(key Key, values ValueSet, qualifier string) (Function, error) {
 	IPNets, err := valuesToIPNets(notIPAddress, values)
 	if err != nil {
 		return nil, err
@@ -179,9 +179,5 @@ func newNotIPAddressFunc(key Key, values ValueSet) (Function, error) {
 
 // NewNotIPAddressFunc - returns new Not IP address function.
 func NewNotIPAddressFunc(key Key, IPNets ...*net.IPNet) (Function, error) {
-	if key != AWSSourceIP {
-		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSourceIP, notIPAddress)
-	}
-
-	return &notIPAddressFunc{ipAddressFunc{key, IPNets}}, nil
+	return newIPAddrFunc(notIPAddress, key, IPNets, true)
 }

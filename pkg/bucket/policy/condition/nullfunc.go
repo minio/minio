@@ -19,7 +19,6 @@ package condition
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"strconv"
 )
@@ -40,16 +39,11 @@ type nullFunc struct {
 // evaluate() - evaluates to check whether Key is present in given values or not.
 // Depending on condition boolean value, this function returns true or false.
 func (f nullFunc) evaluate(values map[string][]string) bool {
-	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
-	if !ok {
-		requestValue = values[f.k.Name()]
-	}
-
+	rvalues := getValuesByKey(values, f.k.Name())
 	if f.value {
-		return len(requestValue) == 0
+		return len(rvalues) == 0
 	}
-
-	return len(requestValue) != 0
+	return len(rvalues) != 0
 }
 
 // key() - returns condition key which is used by this condition function.
@@ -59,7 +53,7 @@ func (f nullFunc) key() Key {
 
 // name() - returns "Null" condition name.
 func (f nullFunc) name() name {
-	return null
+	return name{name: null}
 }
 
 func (f nullFunc) String() string {
@@ -77,7 +71,14 @@ func (f nullFunc) toMap() map[Key]ValueSet {
 	}
 }
 
-func newNullFunc(key Key, values ValueSet) (Function, error) {
+func (f nullFunc) clone() Function {
+	return &nullFunc{
+		k:     f.k,
+		value: f.value,
+	}
+}
+
+func newNullFunc(key Key, values ValueSet, qualifier string) (Function, error) {
 	if len(values) != 1 {
 		return nil, fmt.Errorf("only one value is allowed for Null condition")
 	}
@@ -103,5 +104,5 @@ func newNullFunc(key Key, values ValueSet) (Function, error) {
 
 // NewNullFunc - returns new Null function.
 func NewNullFunc(key Key, value bool) (Function, error) {
-	return &nullFunc{key, value}, nil
+	return newNullFunc(key, NewValueSet(NewBoolValue(value)), "")
 }

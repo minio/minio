@@ -19,7 +19,6 @@ package condition
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"strconv"
 )
@@ -34,16 +33,11 @@ type booleanFunc struct {
 // evaluate() - evaluates to check whether Key is present in given values or not.
 // Depending on condition boolean value, this function returns true or false.
 func (f booleanFunc) evaluate(values map[string][]string) bool {
-	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
-	if !ok {
-		requestValue = values[f.k.Name()]
-	}
-
-	if len(requestValue) == 0 {
+	rvalues := getValuesByKey(values, f.k.Name())
+	if len(rvalues) == 0 {
 		return false
 	}
-
-	return f.value == requestValue[0]
+	return f.value == rvalues[0]
 }
 
 // key() - returns condition key which is used by this condition function.
@@ -53,7 +47,7 @@ func (f booleanFunc) key() Key {
 
 // name() - returns "Bool" condition name.
 func (f booleanFunc) name() name {
-	return boolean
+	return name{name: boolean}
 }
 
 func (f booleanFunc) String() string {
@@ -71,7 +65,14 @@ func (f booleanFunc) toMap() map[Key]ValueSet {
 	}
 }
 
-func newBooleanFunc(key Key, values ValueSet) (Function, error) {
+func (f booleanFunc) clone() Function {
+	return &booleanFunc{
+		k:     f.k,
+		value: f.value,
+	}
+}
+
+func newBooleanFunc(key Key, values ValueSet, qualifier string) (Function, error) {
 	if key != AWSSecureTransport {
 		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSecureTransport, boolean)
 	}
@@ -105,6 +106,6 @@ func newBooleanFunc(key Key, values ValueSet) (Function, error) {
 }
 
 // NewBoolFunc - returns new Bool function.
-func NewBoolFunc(key Key, value string) (Function, error) {
-	return &booleanFunc{key, value}, nil
+func NewBoolFunc(key Key, value bool) (Function, error) {
+	return newBooleanFunc(key, NewValueSet(NewBoolValue(value)), "")
 }

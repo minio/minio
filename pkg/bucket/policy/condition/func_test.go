@@ -24,22 +24,22 @@ import (
 )
 
 func TestFunctionsEvaluate(t *testing.T) {
-	func1, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)))
+	func1, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	func2, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func3, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")))
+	func3, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func4, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject*")))
+	func4, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject*")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -86,22 +86,22 @@ func TestFunctionsEvaluate(t *testing.T) {
 }
 
 func TestFunctionsKeys(t *testing.T) {
-	func1, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)))
+	func1, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")))
+	func2, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func3, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")))
+	func3, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func4, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject*")))
+	func4, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject*")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -123,39 +123,39 @@ func TestFunctionsKeys(t *testing.T) {
 }
 
 func TestFunctionsMarshalJSON(t *testing.T) {
-	func1, err := newStringLikeFunc(S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")))
+	func1, err := newStringLikeFunc(S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")))
+	func2, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func3, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption, NewValueSet(NewStringValue("AES256")))
+	func3, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption, NewValueSet(NewStringValue("AES256")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	func4, err := newNotIPAddressFunc(AWSSourceIP,
-		NewValueSet(NewStringValue("10.1.10.0/24")))
+		NewValueSet(NewStringValue("10.1.10.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func5, err := newStringNotLikeFunc(S3XAmzStorageClass, NewValueSet(NewStringValue("STANDARD")))
+	func5, err := newStringNotLikeFunc(S3XAmzStorageClass, NewValueSet(NewStringValue("STANDARD")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)))
+	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	func7, err := newIPAddressFunc(AWSSourceIP,
-		NewValueSet(NewStringValue("192.168.1.0/24")))
+		NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -221,39 +221,39 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
         ]
     }
 }`)
-	func1, err := newStringLikeFunc(S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")))
+	func1, err := newStringLikeFunc(S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")))
+	func2, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func3, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption, NewValueSet(NewStringValue("AES256")))
+	func3, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption, NewValueSet(NewStringValue("AES256")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	func4, err := newNotIPAddressFunc(AWSSourceIP,
-		NewValueSet(NewStringValue("10.1.10.0/24"), NewStringValue("10.10.1.0/24")))
+		NewValueSet(NewStringValue("10.1.10.0/24"), NewStringValue("10.10.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func5, err := newStringNotLikeFunc(S3XAmzStorageClass, NewValueSet(NewStringValue("STANDARD")))
+	func5, err := newStringNotLikeFunc(S3XAmzStorageClass, NewValueSet(NewStringValue("STANDARD")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)))
+	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	func7, err := newIPAddressFunc(AWSSourceIP,
-		NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("192.168.2.0/24")))
+		NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("192.168.2.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -306,17 +306,17 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
     }
 }`)
 
-	func2_1, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")))
+	func2_1, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2_2, err := newStringEqualsFunc(S3Prefix, NewValueSet(NewStringValue(""), NewStringValue("home/")))
+	func2_2, err := newStringEqualsFunc(S3Prefix, NewValueSet(NewStringValue(""), NewStringValue("home/")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func2_3, err := newStringEqualsFunc(S3Delimiter, NewValueSet(NewStringValue("/")))
+	func2_3, err := newStringEqualsFunc(S3Delimiter, NewValueSet(NewStringValue("/")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}

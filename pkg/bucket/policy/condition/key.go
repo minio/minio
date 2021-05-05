@@ -113,10 +113,10 @@ const (
 	AWSUsername Key = "aws:username"
 
 	// S3SignatureVersion - identifies the version of AWS Signature that you want to support for authenticated requests.
-	S3SignatureVersion = "s3:signatureversion"
+	S3SignatureVersion Key = "s3:signatureversion"
 
 	// S3AuthType - optionally use this condition key to restrict incoming requests to use a specific authentication method.
-	S3AuthType = "s3:authType"
+	S3AuthType Key = "s3:authType"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
@@ -168,18 +168,6 @@ var CommonKeys = append([]Key{
 	AWSUsername,
 	LDAPUser,
 }, JWTKeys...)
-
-func substFuncFromValues(values map[string][]string) func(string) string {
-	return func(v string) string {
-		for _, key := range CommonKeys {
-			// Empty values are not supported for policy variables.
-			if rvalues, ok := values[key.Name()]; ok && rvalues[0] != "" {
-				v = strings.Replace(v, key.VarName(), rvalues[0], -1)
-			}
-		}
-		return v
-	}
-}
 
 // IsValid - checks if key is valid or not.
 func (key Key) IsValid() bool {

@@ -20,72 +20,94 @@ package condition
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
-
-type name string
 
 const (
-	stringEquals              name = "StringEquals"
-	stringNotEquals                = "StringNotEquals"
-	stringEqualsIgnoreCase         = "StringEqualsIgnoreCase"
-	stringNotEqualsIgnoreCase      = "StringNotEqualsIgnoreCase"
-	stringLike                     = "StringLike"
-	stringNotLike                  = "StringNotLike"
-	binaryEquals                   = "BinaryEquals"
-	ipAddress                      = "IpAddress"
-	notIPAddress                   = "NotIpAddress"
-	null                           = "Null"
-	boolean                        = "Bool"
-	numericEquals                  = "NumericEquals"
-	numericNotEquals               = "NumericNotEquals"
-	numericLessThan                = "NumericLessThan"
-	numericLessThanEquals          = "NumericLessThanEquals"
-	numericGreaterThan             = "NumericGreaterThan"
-	numericGreaterThanEquals       = "NumericGreaterThanEquals"
-	dateEquals                     = "DateEquals"
-	dateNotEquals                  = "DateNotEquals"
-	dateLessThan                   = "DateLessThan"
-	dateLessThanEquals             = "DateLessThanEquals"
-	dateGreaterThan                = "DateGreaterThan"
-	dateGreaterThanEquals          = "DateGreaterThanEquals"
+	// names
+	stringEquals              = "StringEquals"
+	stringNotEquals           = "StringNotEquals"
+	stringEqualsIgnoreCase    = "StringEqualsIgnoreCase"
+	stringNotEqualsIgnoreCase = "StringNotEqualsIgnoreCase"
+	stringLike                = "StringLike"
+	stringNotLike             = "StringNotLike"
+	binaryEquals              = "BinaryEquals"
+	ipAddress                 = "IpAddress"
+	notIPAddress              = "NotIpAddress"
+	null                      = "Null"
+	boolean                   = "Bool"
+	numericEquals             = "NumericEquals"
+	numericNotEquals          = "NumericNotEquals"
+	numericLessThan           = "NumericLessThan"
+	numericLessThanEquals     = "NumericLessThanEquals"
+	numericGreaterThan        = "NumericGreaterThan"
+	numericGreaterThanEquals  = "NumericGreaterThanEquals"
+	dateEquals                = "DateEquals"
+	dateNotEquals             = "DateNotEquals"
+	dateLessThan              = "DateLessThan"
+	dateLessThanEquals        = "DateLessThanEquals"
+	dateGreaterThan           = "DateGreaterThan"
+	dateGreaterThanEquals     = "DateGreaterThanEquals"
+
+	// qualifiers
+	// refer https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_multi-value-conditions.html#reference_policies_multi-key-or-value-conditions
+	forAllValues = "ForAllValues"
+	forAnyValue  = "ForAnyValue"
 )
 
-var supportedConditions = []name{
-	stringEquals,
-	stringNotEquals,
-	stringEqualsIgnoreCase,
-	stringNotEqualsIgnoreCase,
-	binaryEquals,
-	stringLike,
-	stringNotLike,
-	ipAddress,
-	notIPAddress,
-	null,
-	boolean,
-	numericEquals,
-	numericNotEquals,
-	numericLessThan,
-	numericLessThanEquals,
-	numericGreaterThan,
-	numericGreaterThanEquals,
-	dateEquals,
-	dateNotEquals,
-	dateLessThan,
-	dateLessThanEquals,
-	dateGreaterThan,
-	dateGreaterThanEquals,
-	// Add new conditions here.
+var names = map[string]struct{}{
+	stringEquals:              {},
+	stringNotEquals:           {},
+	stringEqualsIgnoreCase:    {},
+	stringNotEqualsIgnoreCase: {},
+	binaryEquals:              {},
+	stringLike:                {},
+	stringNotLike:             {},
+	ipAddress:                 {},
+	notIPAddress:              {},
+	null:                      {},
+	boolean:                   {},
+	numericEquals:             {},
+	numericNotEquals:          {},
+	numericLessThan:           {},
+	numericLessThanEquals:     {},
+	numericGreaterThan:        {},
+	numericGreaterThanEquals:  {},
+	dateEquals:                {},
+	dateNotEquals:             {},
+	dateLessThan:              {},
+	dateLessThanEquals:        {},
+	dateGreaterThan:           {},
+	dateGreaterThanEquals:     {},
+}
+
+var qualifiers = map[string]struct{}{
+	forAllValues: {},
+	forAnyValue:  {},
+}
+
+type name struct {
+	qualifier string
+	name      string
+}
+
+func (n name) String() string {
+	if n.qualifier != "" {
+		return n.qualifier + ":" + n.name
+	}
+	return n.name
 }
 
 // IsValid - checks if name is valid or not.
 func (n name) IsValid() bool {
-	for _, supn := range supportedConditions {
-		if n == supn {
-			return true
+	if n.qualifier != "" {
+		if _, found := qualifiers[n.qualifier]; !found {
+			return false
 		}
 	}
 
-	return false
+	_, found := names[n.name]
+	return found
 }
 
 // MarshalJSON - encodes name to JSON data.
@@ -94,7 +116,7 @@ func (n name) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("invalid name %v", n)
 	}
 
-	return json.Marshal(string(n))
+	return json.Marshal(n.String())
 }
 
 // UnmarshalJSON - decodes JSON data to condition name.
@@ -114,7 +136,16 @@ func (n *name) UnmarshalJSON(data []byte) error {
 }
 
 func parseName(s string) (name, error) {
-	n := name(s)
+	tokens := strings.Split(s, ":")
+	var n name
+	switch len(tokens) {
+	case 0, 1:
+		n = name{name: s}
+	case 2:
+		n = name{qualifier: tokens[0], name: tokens[1]}
+	default:
+		return n, fmt.Errorf("invalid condition name '%v'", s)
+	}
 
 	if n.IsValid() {
 		return n, nil
