@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // Detects change in underlying disk.
@@ -37,6 +38,10 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 		return false
 	}
 	return storedDiskID == p.diskID
+}
+
+func (p *xlStorageDiskIDCheck) LastConn() time.Time {
+	return p.storage.LastConn()
 }
 
 func (p *xlStorageDiskIDCheck) IsLocal() bool {

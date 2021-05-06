@@ -83,6 +83,7 @@ type Client struct {
 	url          *url.URL
 	newAuthToken func(audience string) string
 	connected    int32
+	lastConn     int64
 }
 
 // URL query separator constants
@@ -173,6 +174,7 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 		url:                 url,
 		newAuthToken:        newAuthToken,
 		connected:           online,
+		lastConn:            time.Now().UnixNano(),
 		MaxErrResponseSize:  4096,
 		HealthCheckInterval: 200 * time.Millisecond,
 		HealthCheckTimeout:  time.Second,
@@ -182,6 +184,10 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 // IsOnline returns whether the client is likely to be online.
 func (c *Client) IsOnline() bool {
 	return atomic.LoadInt32(&c.connected) == online
+}
+
+func (c *Client) LastConn() time.Time {
+	return time.Unix(0, atomic.LoadInt64(&c.lastConn))
 }
 
 // MarkOffline - will mark a client as being offline and spawns
@@ -198,6 +204,7 @@ func (c *Client) MarkOffline() {
 				}
 				if c.HealthCheckFn() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
+					atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
 					return
 				}
 				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))

@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -52,6 +53,10 @@ func (d *naughtyDisk) IsOnline() bool {
 		return err == errDiskNotFound
 	}
 	return d.disk.IsOnline()
+}
+
+func (d *naughtyDisk) LastConn() time.Time {
+	return d.disk.LastConn()
 }
 
 func (d *naughtyDisk) IsLocal() bool {

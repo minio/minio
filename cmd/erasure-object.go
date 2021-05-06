@@ -786,6 +786,18 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
+func (er erasureObjects) getConnectedDisks() []StorageAPI {
+	var storageDisks []StorageAPI
+	for _, d := range er.getDisks() {
+		if d == nil || !d.IsOnline() {
+			storageDisks = append(storageDisks, nil)
+		} else {
+			storageDisks = append(storageDisks, d)
+		}
+	}
+	return storageDisks
+}
+
 // DeleteObjects deletes objects/versions in bulk, this function will still automatically split objects list
 // into smaller bulks if some object names are found to be duplicated in the delete list, splitting
 // into smaller bulks will avoid holding twice the write lock of the duplicated object names.
@@ -794,7 +806,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	dobjects := make([]DeletedObject, len(objects))
 	writeQuorums := make([]int, len(objects))
 
-	storageDisks := er.getDisks()
+	storageDisks := er.getConnectedDisks()
 
 	for i := range objects {
 		// Assume (N/2 + 1) quorums for all objects
@@ -926,7 +938,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 	defer lk.Unlock()
 
-	storageDisks := er.getDisks()
+	storageDisks := er.getConnectedDisks()
 	writeQuorum := len(storageDisks)/2 + 1
 
 	if opts.VersionID == "" {
