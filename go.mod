@@ -48,7 +48,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
-	github.com/minio/madmin-go v1.0.1
+	github.com/minio/madmin-go v1.0.2
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/rpc v1.0.0
