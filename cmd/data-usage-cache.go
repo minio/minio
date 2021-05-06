@@ -159,8 +159,8 @@ type dataUsageCacheInfo struct {
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
-	empty := sizeSummary{}
-	if summary != empty {
+	if summary.replicaSize > 0 || summary.pendingSize > 0 || summary.replicatedSize > 0 ||
+		summary.failedCount > 0 || summary.pendingCount > 0 || summary.failedSize > 0 {
 		if e.ReplicationStats == nil {
 			e.ReplicationStats = &replicationStats{}
 		}
@@ -916,6 +916,10 @@ func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 	zb0002, err = dc.ReadArrayHeader()
 	if err != nil {
 		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 == 0 {
+		*z = nil
 		return
 	}
 	*z = make(dataUsageHashMap, zb0002)

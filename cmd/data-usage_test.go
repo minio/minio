@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -561,6 +562,20 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e := want.find("abucket/dir2")
+	e.ReplicationStats = &replicationStats{
+		PendingSize:          1,
+		ReplicatedSize:       2,
+		FailedSize:           3,
+		ReplicaSize:          4,
+		FailedCount:          5,
+		PendingCount:         6,
+		MissedThresholdSize:  7,
+		AfterThresholdSize:   8,
+		MissedThresholdCount: 9,
+		AfterThresholdCount:  10,
+	}
+	want.replace("abucket/dir2", "", *e)
 	var buf bytes.Buffer
 	err = want.serializeTo(&buf)
 	if err != nil {
@@ -584,9 +599,21 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	}
 	for wkey, wval := range want.Cache {
 		gotv := got.Cache[wkey]
-		if fmt.Sprint(gotv) != fmt.Sprint(wval) {
-			t.Errorf("deserialize mismatch, key %v\nwant: %+v\ngot:  %+v", wkey, wval, gotv)
+		if !equalAsJSON(gotv, wval) {
+			t.Errorf("deserialize mismatch, key %v\nwant: %#v\ngot:  %#v", wkey, wval, gotv)
 		}
 	}
+}
 
+// equalAsJSON returns whether the values are equal when encoded as JSON.
+func equalAsJSON(a, b interface{}) bool {
+	aj, err := json.Marshal(a)
+	if err != nil {
+		panic(err)
+	}
+	bj, err := json.Marshal(b)
+	if err != nil {
+		panic(err)
+	}
+	return bytes.Equal(aj, bj)
 }
