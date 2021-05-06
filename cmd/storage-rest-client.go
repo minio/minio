@@ -29,6 +29,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -142,6 +143,11 @@ func (client *storageRESTClient) String() string {
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
 	return client.restClient.IsOnline()
+}
+
+// LastConn - returns when the disk is seen to be connected the last time
+func (client *storageRESTClient) LastConn() time.Time {
+	return client.restClient.LastConn()
 }
 
 func (client *storageRESTClient) IsLocal() bool {

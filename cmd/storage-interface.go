@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // StorageAPI interface.
@@ -28,6 +29,8 @@ type StorageAPI interface {
 
 	// Storage operations.
 	IsOnline() bool // Returns true if disk is online.
+	LastConn() time.Time
+
 	IsLocal() bool
 
 	Hostname() string   // Returns host name if remote host.
