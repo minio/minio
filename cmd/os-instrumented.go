@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/pkg/disk"
-	trace "github.com/minio/minio/pkg/trace"
 )
 
 //go:generate stringer -type=osMetric -trimprefix=osMetric $GOFILE
@@ -46,13 +46,13 @@ const (
 	osMetricLast
 )
 
-func osTrace(s osMetric, startTime time.Time, duration time.Duration, path string) trace.Info {
-	return trace.Info{
-		TraceType: trace.OS,
+func osTrace(s osMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceOS,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "os." + s.String(),
-		OSStats: trace.OSStats{
+		OSStats: madmin.TraceOSStats{
 			Duration: duration,
 			Path:     path,
 		},
