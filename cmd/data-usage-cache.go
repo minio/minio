@@ -972,6 +972,10 @@ func (z *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	if zb0002 == 0 {
+		*z = nil
+		return bts, nil
+	}
 	*z = make(dataUsageHashMap, zb0002)
 	for i := uint32(0); i < zb0002; i++ {
 		{
