@@ -93,6 +93,7 @@ const (
 	timestampTotal MetricName = "timestamp_total"
 	writeTotal     MetricName = "write_total"
 	total          MetricName = "total"
+	freeInodes     MetricName = "free_inodes"
 
 	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
@@ -348,6 +349,16 @@ func getClusterDisksTotalMD() MetricDescription {
 		Subsystem: diskSubsystem,
 		Name:      total,
 		Help:      "Total disks.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterDisksFreeInodes() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      freeInodes,
+		Help:      "Total free inodes.",
 		Type:      gaugeMetric,
 	}
 }
@@ -1384,6 +1395,12 @@ func getLocalStorageMetrics() MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDiskTotalBytesMD(),
 					Value:          float64(disk.TotalSpace),
+					VariableLabels: map[string]string{"disk": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getClusterDisksFreeInodes(),
+					Value:          float64(disk.FreeInodes),
 					VariableLabels: map[string]string{"disk": disk.DrivePath},
 				})
 			}
