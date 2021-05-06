@@ -20,30 +20,44 @@ package cmd
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bpool"
 )
 
 // Heal heals the shard files on non-nil writers. Note that the quorum passed is 1
 // as healing should continue even if it has been successful healing only one shard file.
-func (e Erasure) Heal(ctx context.Context, readers []io.ReaderAt, writers []io.Writer, size int64) error {
+func (e Erasure) Heal(ctx context.Context, readers []io.ReaderAt, writers []io.Writer, size int64, bp *bpool.BytePoolCap) error {
 	r, w := io.Pipe()
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		if _, err := e.Decode(ctx, w, readers, 0, size, size, nil); err != nil {
-			w.CloseWithError(err)
-			return
-		}
-		w.Close()
+		defer wg.Done()
+		_, err := e.Decode(ctx, w, readers, 0, size, size, nil)
+		w.CloseWithError(err)
 	}()
-	buf := make([]byte, e.blockSize)
+
+	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
+	var buffer []byte
+	switch {
+	case size == 0:
+		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size >= e.blockSize:
+		buffer = bp.Get()
+		defer bp.Put(buffer)
+	case size < e.blockSize:
+		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
+		buffer = make([]byte, size, 2*size+int64(e.parityBlocks+e.dataBlocks-1))
+	}
+
 	// quorum is 1 because CreateFile should continue writing as long as we are writing to even 1 disk.
-	n, err := e.Encode(ctx, r, writers, buf, 1)
-	if err != nil {
-		return err
-	}
-	if n != size {
+	n, err := e.Encode(ctx, r, writers, buffer, 1)
+	if err == nil && n != size {
 		logger.LogIf(ctx, errLessData)
-		return errLessData
+		err = errLessData
 	}
-	return nil
+	r.CloseWithError(err)
+	wg.Wait()
+	return err
 }
