@@ -1482,6 +1482,12 @@ func (z *erasureServerSets) NewMultipartUpload(ctx context.Context, bucket, obje
 		return z.serverSets[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
+	ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, "newMultipartObject.lck"))
+	if err := ns.GetLock(ctx, globalOperationTimeout); err != nil {
+		return "", err
+	}
+	defer ns.Unlock()
+
 	for idx, zone := range z.serverSets {
 		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
