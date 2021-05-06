@@ -75,6 +75,7 @@ func (n *NetworkError) Unwrap() error {
 // Client - http based RPC client.
 type Client struct {
 	connected int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	lastConn  int64
 
 	// HealthCheckFn is the function set to test for health.
 	// If not set the client will not keep track of health.
@@ -196,6 +197,7 @@ func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string)
 		url:                 url,
 		newAuthToken:        newAuthToken,
 		connected:           online,
+		lastConn:            time.Now().UnixNano(),
 		MaxErrResponseSize:  4096,
 		HealthCheckInterval: 200 * time.Millisecond,
 		HealthCheckTimeout:  time.Second,
@@ -205,6 +207,11 @@ func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string)
 // IsOnline returns whether the client is likely to be online.
 func (c *Client) IsOnline() bool {
 	return atomic.LoadInt32(&c.connected) == online
+}
+
+// LastConn returns when the disk was (re-)connected
+func (c *Client) LastConn() time.Time {
+	return time.Unix(0, atomic.LoadInt64(&c.lastConn))
 }
 
 // MarkOffline - will mark a client as being offline and spawns
@@ -223,6 +230,7 @@ func (c *Client) MarkOffline() bool {
 				if c.HealthCheckFn() {
 					if atomic.CompareAndSwapInt32(&c.connected, offline, online) {
 						logger.Info("Client %s online", c.url.String())
+						atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
 					}
 					return
 				}
