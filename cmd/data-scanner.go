@@ -360,13 +360,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						console.Debugf(scannerLogPrefix+" Skipping non-updated folder: %v\n", folder.name)
 					}
 					return nil
-				} else {
-					if f.dataUsageScannerDebug {
-						console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
-					}
-					// If probability was already scannerHealFolderInclude, keep it.
-					folder.objectHealProbDiv = f.healFolderInclude
 				}
+				if f.dataUsageScannerDebug {
+					console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
+				}
+				// If probability was already scannerHealFolderInclude, keep it.
+				folder.objectHealProbDiv = f.healFolderInclude
 			}
 		}
 		scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
