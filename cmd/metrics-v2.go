@@ -1041,6 +1041,10 @@ func getNodeHealthMetrics() MetricsGroup {
 		id:         "NodeHealthMetrics",
 		cachedRead: cachedRead,
 		read: func(_ context.Context) (metrics []Metric) {
+			if globalIsGateway {
+				return
+			}
+			metrics = make([]Metric, 0, 16)
 			nodesUp, nodesDown := GetPeerOnlineCount()
 			metrics = append(metrics, Metric{
 				Description: getNodeOnlineTotalMD(),
@@ -1276,17 +1280,13 @@ func getBucketUsageMetrics() MetricsGroup {
 		id:         "BucketUsageMetrics",
 		cachedRead: cachedRead,
 		read: func(ctx context.Context) (metrics []Metric) {
-			metrics = make([]Metric, 0, 50)
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil {
+			if objLayer == nil || globalIsGateway {
 				return
 			}
 
-			if globalIsGateway {
-				return
-			}
-
+			metrics = make([]Metric, 0, 50)
 			dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 			if err != nil {
 				return
@@ -1369,11 +1369,7 @@ func getLocalStorageMetrics() MetricsGroup {
 		read: func(ctx context.Context) (metrics []Metric) {
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil {
-				return
-			}
-
-			if globalIsGateway {
+			if objLayer == nil || globalIsGateway {
 				return
 			}
 
@@ -1415,11 +1411,7 @@ func getClusterStorageMetrics() MetricsGroup {
 		read: func(ctx context.Context) (metrics []Metric) {
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil {
-				return
-			}
-
-			if globalIsGateway {
+			if objLayer == nil || globalIsGateway {
 				return
 			}
 
