@@ -317,15 +317,37 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
-		globalActiveCred, _ = auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
-	}
-
-	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
-		globalActiveCred, err = auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
+	// Check if the supported credential env vars, "MINIO_ROOT_USER" and
+	// "MINIO_ROOT_PASSWORD" is provided
+	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")
+		}
+		globalActiveCred = cred
+	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the shell environment")
+		}
+		msg := fmt.Sprintf("%s and %s are deprecated.\nPlease use %s and %s",
+			config.EnvAccessKey, config.EnvSecretKey, config.EnvRootUser, config.EnvRootPassword)
+		logger.StartupMessage(color.RedString(msg))
+		globalActiveCred = cred
+	} else {
+		if !env.IsSet(config.EnvRootUser) {
+			logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "")
+		}
+		if !env.IsSet(config.EnvRootPassword) {
+			logger.Fatal(config.ErrMissingEnvCredentialRootPassword(nil), "")
+		}
+		if !env.IsSet(config.EnvAccessKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialAccessKey(nil), "")
+		}
+		if !env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialSecretKey(nil), "")
 		}
 	}
 

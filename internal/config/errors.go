@@ -139,6 +139,30 @@ var (
 		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
+	ErrMissingEnvCredentialRootUser = newErrFn(
+		"Env var \""+EnvRootUser+"\" is missing",
+		"Please set your credential env var, \""+EnvRootUser+"\"",
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+	)
+
+	ErrMissingEnvCredentialRootPassword = newErrFn(
+		"Env var \""+EnvRootPassword+"\" is missing",
+		"Please set your credential env var, \""+EnvRootPassword+"\"",
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+	)
+
+	ErrMissingEnvCredentialAccessKey = newErrFn(
+		"Env var \""+AccessKey+"\" is deprecated",
+		"Please set your credential env var, \""+EnvRootUser+"\"",
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+	)
+
+	ErrMissingEnvCredentialSecretKey = newErrFn(
+		"Env var \""+SecretKey+"\" is deprecated",
+		"Please set your credential env var, \""+EnvRootPassword+"\"",
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+	)
+
 	ErrInvalidErasureEndpoints = newErrFn(
 		"Invalid endpoint(s) in erasure mode",
 		"Please provide correct combination of local/remote paths",
