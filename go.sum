@@ -445,8 +445,8 @@ github.com/minio/csvparser v1.0.0 h1:xJEHcYK8ZAjeW4hNV9Zu30u+/2o4UyPnYgyjWp8b7ZU
 github.com/minio/csvparser v1.0.0/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA/g=
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
-github.com/minio/madmin-go v1.0.1 h1:6hte9D9Wjv+GvGtk9n4XK2C9YCSQ4L2hOLDn3XZB3r0=
-github.com/minio/madmin-go v1.0.1/go.mod h1:6Hox3cho6WUdTzFt3GjA4Y0abFOs11Axn25sZXiyR9M=
+github.com/minio/madmin-go v1.0.2 h1:ttwuuN6AopJNcikazBEwnXnw45BxQ74GZFqlJvcKOXc=
+github.com/minio/madmin-go v1.0.2/go.mod h1:6Hox3cho6WUdTzFt3GjA4Y0abFOs11Axn25sZXiyR9M=
 github.com/minio/md5-simd v1.1.0/go.mod h1:XpBqgZULrMYD3R+M28PcmP0CkI7PEMzB3U77ZrKZ0Gw=
 github.com/minio/md5-simd v1.1.1 h1:9ojcLbuZ4gXbB2sX53MKn8JUZ0sB/2wfwsEcRw+I08U=
 github.com/minio/md5-simd v1.1.1/go.mod h1:XpBqgZULrMYD3R+M28PcmP0CkI7PEMzB3U77ZrKZ0Gw=
