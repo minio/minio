@@ -550,6 +550,24 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 
 var errRestoreHDRMalformed = fmt.Errorf("x-amz-restore header malformed")
 
+// IsRemote returns true if this object version's contents are in its remote
+// tier.
+func (fi FileInfo) IsRemote() bool {
+	if fi.TransitionStatus != lifecycle.TransitionComplete {
+		return false
+	}
+	return !isRestoredObjectOnDisk(fi.Metadata)
+}
+
+// IsRemote returns true if this object version's contents are in its remote
+// tier.
+func (oi ObjectInfo) IsRemote() bool {
+	if oi.TransitionStatus != lifecycle.TransitionComplete {
+		return false
+	}
+	return !isRestoredObjectOnDisk(oi.UserDefined)
+}
+
 // restoreObjStatus represents a restore-object's status. It can be either
 // ongoing or completed.
 type restoreObjStatus struct {

@@ -21,8 +21,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // healTask represents what to heal along with options

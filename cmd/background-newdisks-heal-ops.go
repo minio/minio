@@ -30,11 +30,11 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (

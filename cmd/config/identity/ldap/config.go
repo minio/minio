@@ -386,7 +386,9 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		return nil, errors.New("LDAP is not configured")
 	}
 
-	if _, _, err = net.SplitHostPort(l.ServerAddr); err != nil {
+	serverHost, _, err := net.SplitHostPort(l.ServerAddr)
+	if err != nil {
+		serverHost = l.ServerAddr
 		// User default LDAP port if none specified "636"
 		l.ServerAddr = net.JoinHostPort(l.ServerAddr, "636")
 	}
@@ -395,22 +397,22 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		return ldap.Dial("tcp", l.ServerAddr)
 	}
 
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: l.tlsSkipVerify,
+		RootCAs:            l.rootCAs,
+		ServerName:         serverHost,
+	}
+
 	if l.serverStartTLS {
 		conn, err := ldap.Dial("tcp", l.ServerAddr)
 		if err != nil {
 			return nil, err
 		}
-		err = conn.StartTLS(&tls.Config{
-			InsecureSkipVerify: l.tlsSkipVerify,
-			RootCAs:            l.rootCAs,
-		})
+		err = conn.StartTLS(tlsConfig)
 		return conn, err
 	}
 
-	return ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{
-		InsecureSkipVerify: l.tlsSkipVerify,
-		RootCAs:            l.rootCAs,
-	})
+	return ldap.DialTLS("tcp", l.ServerAddr, tlsConfig)
 }
 
 // GetExpiryDuration - return parsed expiry duration.
