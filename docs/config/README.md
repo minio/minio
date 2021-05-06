@@ -12,7 +12,7 @@ Additionally `--config-dir` is now a legacy option which will is scheduled for r
 minio server /data
 ```
 
-MinIO also encrypts all the config, IAM and policies content with admin credentials.
+MinIO also encrypts all the config, IAM and policies content if KMS is configured. Please refer to how to encrypt your config and IAM credentials [here](https://github.com/minio/minio/blob/master/docs/kms/IAM.md)
 
 ### Certificate Directory
 
@@ -39,24 +39,6 @@ export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio13
 minio server /data
 ```
-
-##### Rotating encryption with new credentials
-
-Additionally if you wish to change the admin credentials, then MinIO will automatically detect this and re-encrypt with new credentials as shown below. For one time only special ENVs as shown below needs to be set for rotating the encryption config.
-
-> Old ENVs are never remembered in memory and are destroyed right after they are used to migrate your existing content with new credentials. You are safe to remove them after the server as successfully started, by restarting the services once again.
-
-```sh
-export MINIO_ROOT_USER=newminio
-export MINIO_ROOT_PASSWORD=newminio123
-export MINIO_ROOT_USER_OLD=minio
-export MINIO_ROOT_PASSWORD_OLD=minio123
-minio server /data
-```
-
-Once the migration is complete, server will automatically unset the `MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD` with in the process namespace.
-
-> **NOTE: Make sure to remove `MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD` in scripts or service files before next service restarts of the server to avoid double encryption of your existing contents.**
 
 #### Region
 ```

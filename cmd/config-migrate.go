@@ -27,6 +27,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
@@ -40,7 +41,6 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )

@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -35,7 +36,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -183,16 +183,13 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 			ObjInfo: objInfo,
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
-	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
-		if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
-			gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
-			if err != nil {
-				return nil, err
-			}
-			unlockOnDefer = false
-			return gr.WithCleanupFuncs(nsUnlocker), nil
+	if objInfo.IsRemote() {
+		gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+		if err != nil {
+			return nil, err
 		}
+		unlockOnDefer = false
+		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
 	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)

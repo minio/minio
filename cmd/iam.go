@@ -30,11 +30,11 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -880,7 +880,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		// This mapping is necessary to ensure that valid credentials
 		// have necessary ParentUser present - this is mainly for only
 		// webIdentity based STS tokens.
-		if cred.IsTemp() && cred.ParentUser != "" {
+		if cred.IsTemp() && cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
 			if _, ok := sys.iamUserPolicyMap[cred.ParentUser]; !ok {
 				if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
 					sys.store.unlock()
@@ -1114,35 +1114,35 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if parentUser == globalActiveCred.AccessKey {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	cr, ok := sys.iamUsersMap[parentUser]
-	if !ok {
-		// For LDAP users we would need this fallback
-		if sys.usersSysType != MinIOUsersSysType {
-			_, ok = sys.iamUserPolicyMap[parentUser]
-			if !ok {
-				var found bool
-				for _, group := range groups {
-					_, ok = sys.iamGroupPolicyMap[group]
-					if !ok {
-						continue
-					}
-					found = true
-					break
+	cr, found := sys.iamUsersMap[parentUser]
+	switch {
+	// User found
+	case found:
+		// Disallow service accounts to further create more service accounts.
+		if cr.IsServiceAccount() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+	// Allow creating service accounts for root user
+	case parentUser == globalActiveCred.AccessKey:
+	// For LDAP/OpenID users we would need this fallback
+	case sys.usersSysType != MinIOUsersSysType:
+		_, ok := sys.iamUserPolicyMap[parentUser]
+		if !ok {
+			var groupHasPolicy bool
+			for _, group := range groups {
+				_, ok = sys.iamGroupPolicyMap[group]
+				if !ok {
+					continue
 				}
-				if !found {
-					return auth.Credentials{}, errNoSuchUser
-				}
+				groupHasPolicy = true
+				break
+			}
+			if !groupHasPolicy {
+				return auth.Credentials{}, errNoSuchUser
 			}
 		}
-	}
-
-	// Disallow service accounts to further create more service accounts.
-	if cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
+	default:
+		return auth.Credentials{}, errNoSuchUser
 	}
 
 	m := make(map[string]interface{})
@@ -1201,6 +1201,10 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 	cr, ok := sys.iamUsersMap[accessKey]
 	if !ok || !cr.IsServiceAccount() {
 		return errNoSuchServiceAccount
+	}
+
+	if !auth.IsSecretKeyValid(opts.secretKey) {
+		return auth.ErrInvalidSecretKeyLength
 	}
 
 	if opts.secretKey != "" {
@@ -1346,6 +1350,14 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errIAMActionNotAllowed
 	}
 
+	if !auth.IsAccessKeyValid(accessKey) {
+		return auth.ErrInvalidAccessKeyLength
+	}
+
+	if !auth.IsSecretKeyValid(uinfo.SecretKey) {
+		return auth.ErrInvalidSecretKeyLength
+	}
+
 	sys.store.lock()
 	defer sys.store.unlock()
 
@@ -1386,6 +1398,14 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
+	}
+
+	if !auth.IsAccessKeyValid(accessKey) {
+		return auth.ErrInvalidAccessKeyLength
+	}
+
+	if !auth.IsSecretKeyValid(secretKey) {
+		return auth.ErrInvalidSecretKeyLength
 	}
 
 	sys.store.lock()
@@ -1479,7 +1499,12 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			// temporary credentials or service accounts
 			// must have their parent in UsersMap
-			_, ok = sys.iamUserPolicyMap[cred.ParentUser]
+			if cred.ParentUser == globalActiveCred.AccessKey {
+				// parent exists, so allow temporary and service accounts.
+				ok = true
+			} else {
+				_, ok = sys.iamUserPolicyMap[cred.ParentUser]
+			}
 		}
 		// for LDAP service accounts with ParentUser set
 		// we have no way to validate, either because user
@@ -1865,13 +1890,17 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 	var u auth.Credentials
 	var ok bool
 	if sys.usersSysType == MinIOUsersSysType {
+		if name == globalActiveCred.AccessKey {
+			return []string{"consoleAdmin"}, nil
+		}
+
 		// When looking for a user's policies, we also check if the user
 		// and the groups they are member of are enabled.
-
 		u, ok = sys.iamUsersMap[name]
 		if !ok {
 			return nil, errNoSuchUser
 		}
+
 		if !u.IsValid() {
 			return nil, nil
 		}

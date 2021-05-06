@@ -120,11 +120,6 @@ var (
 		"Please check the passed value",
 		"MINIO_CACHE_AFTER cannot be used with MINIO_CACHE_COMMIT setting",
 	)
-	ErrInvalidRotatingCredentialsBackendEncrypted = newErrFn(
-		"Invalid rotating credentials",
-		"Please set correct rotating credentials in the environment for decryption",
-		`Detected encrypted config backend, correct old access and secret keys should be specified via environment variables MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD to be able to re-encrypt the MinIO config, user IAM and policies with new credentials`,
-	)
 
 	ErrInvalidCredentialsBackendEncrypted = newErrFn(
 		"Invalid credentials",

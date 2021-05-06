@@ -26,7 +26,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "7.2.0"
+      "version": "7.5.5"
     },
     {
       "type": "panel",
@@ -39,12 +39,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "singlestat",
-      "name": "Singlestat",
-      "version": ""
     },
     {
       "type": "panel",
@@ -71,7 +65,6 @@
   "gnetId": 13502,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1607258286192,
   "links": [
     {
       "icon": "external link",
@@ -85,28 +78,11 @@
   ],
   "panels": [
     {
-      "collapsed": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 24,
-      "panels": [],
-      "title": "Overview",
-      "type": "row"
-    },
-    {
       "cacheTimeout": null,
       "datasource": "${DS_PROMETHEUS}",
       "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null
-          },
           "mappings": [
             {
               "id": 0,
@@ -116,7 +92,6 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
           "thresholds": {
             "mode": "percentage",
             "steps": [
@@ -134,7 +109,7 @@
         "h": 6,
         "w": 3,
         "x": 0,
-        "y": 1
+        "y": 0
       },
       "id": 1,
       "interval": null,
@@ -152,12 +127,14 @@
           "fields": "",
           "values": false
         },
+        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "time() - max(process_start_time_seconds)",
+          "exemplar": true,
+          "expr": "time() - max(minio_node_process_starttime_seconds)",
           "format": "time_series",
           "instant": true,
           "interval": "",
@@ -179,9 +156,6 @@
       "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null
-          },
           "mappings": [
             {
               "id": 0,
@@ -191,21 +165,16 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
-          "unit": "short"
+          "unit": "decbytes"
         },
         "overrides": []
       },
@@ -213,9 +182,9 @@
         "h": 3,
         "w": 3,
         "x": 3,
-        "y": 1
+        "y": 0
       },
-      "id": 9,
+      "id": 65,
       "interval": null,
       "links": [],
       "maxDataPoints": 100,
@@ -226,23 +195,24 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "last"
           ],
           "fields": "",
           "values": false
         },
+        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "sum(minio_disks_total)",
+          "expr": "sum by (instance) (minio_s3_traffic_received_bytes{job=\"minio-job\"})",
           "format": "table",
           "hide": false,
-          "instant": true,
+          "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Total online disks in MinIO Cluster",
+          "legendFormat": "{{instance}}",
           "metric": "process_start_time_seconds",
           "refId": "A",
           "step": 60
@@ -250,7 +220,7 @@
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Total Online disks",
+      "title": "Total S3 Traffic Inbound",
       "type": "stat"
     },
     {
@@ -258,7 +228,6 @@
       "datasource": "${DS_PROMETHEUS}",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "mappings": [
             {
               "id": 0,
@@ -268,7 +237,6 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -286,7 +254,7 @@
         "h": 6,
         "w": 3,
         "x": 6,
-        "y": 1
+        "y": 0
       },
       "id": 50,
       "interval": "1m",
@@ -302,12 +270,13 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "text": {}
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "topk(1, sum(bucket_usage_size) by (instance))",
+          "expr": "topk(1, sum(minio_cluster_capacity_usable_free_bytes) by (instance))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",
@@ -319,7 +288,7 @@
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Total Data",
+      "title": "Current Usable Capacity",
       "type": "gauge"
     },
     {
@@ -329,9 +298,7 @@
       "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
       "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
+        "defaults": {},
         "overrides": []
       },
       "fill": 1,
@@ -340,15 +307,15 @@
         "h": 6,
         "w": 7,
         "x": 9,
-        "y": 1
+        "y": 0
       },
       "hiddenSeries": false,
       "id": 68,
       "legend": {
         "avg": false,
-        "current": false,
-        "max": true,
-        "min": true,
+        "current": true,
+        "max": false,
+        "min": false,
         "show": true,
         "total": false,
         "values": true
@@ -360,7 +327,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -370,9 +337,9 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "topk(1, sum(bucket_usage_size) by (instance))",
+          "expr": "sum(minio_bucket_usage_total_bytes) by (instance)",
           "interval": "",
-          "legendFormat": "Total Storage Used",
+          "legendFormat": "Used Capacity",
           "refId": "A"
         }
       ],
@@ -380,7 +347,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Data Growth",
+      "title": "Data Usage Growth",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -423,10 +390,6 @@
       "datasource": "${DS_PROMETHEUS}",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null,
-            "filterable": false
-          },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -446,15 +409,15 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 8,
+        "w": 5,
         "x": 16,
-        "y": 1
+        "y": 0
       },
       "id": 52,
       "links": [],
       "options": {
-        "displayMode": "gradient",
-        "orientation": "auto",
+        "displayMode": "basic",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
             "mean"
@@ -462,17 +425,18 @@
           "fields": "",
           "values": false
         },
-        "showUnfilled": true
+        "showUnfilled": false,
+        "text": {}
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "max by (object_size) (bucket_objects_histogram)",
+          "expr": "max by (range) (minio_bucket_objects_size_distribution)",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{object_size}}",
+          "legendFormat": "{{range}}",
           "refId": "A",
           "step": 300
         }
@@ -484,107 +448,10 @@
     },
     {
       "cacheTimeout": null,
-      "colorBackground": false,
-      "colorPrefix": false,
-      "colorValue": true,
-      "colors": [
-        "rgba(50, 172, 45, 0.97)",
-        "rgba(237, 129, 40, 0.89)",
-        "rgba(245, 54, 54, 0.9)"
-      ],
-      "datasource": "${DS_PROMETHEUS}",
-      "decimals": null,
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
-        "overrides": []
-      },
-      "format": "short",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": false
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 4
-      },
-      "id": 10,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": true
-      },
-      "tableColumn": "",
-      "targets": [
-        {
-          "expr": "sum(minio_disks_offline)",
-          "format": "time_series",
-          "instant": true,
-          "interval": "",
-          "intervalFactor": 2,
-          "legendFormat": "Total offline disks in MinIO Cluster",
-          "metric": "process_start_time_seconds",
-          "refId": "A",
-          "step": 60
-        }
-      ],
-      "thresholds": "1,2",
-      "title": "Total Offline disks",
-      "type": "singlestat",
-      "valueFontSize": "80%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "N/A",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
-      "cacheTimeout": null,
       "datasource": "${DS_PROMETHEUS}",
       "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null
-          },
           "mappings": [
             {
               "id": 0,
@@ -594,347 +461,6 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 3,
-        "x": 0,
-        "y": 7
-      },
-      "id": 53,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.2.0",
-      "targets": [
-        {
-          "expr": "count by (instances) (minio_version_info)",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "process_start_time_seconds",
-          "refId": "A",
-          "step": 60
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Total Online Servers",
-      "type": "stat"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": null
-          },
-          "mappings": [
-            {
-              "id": 0,
-              "op": "=",
-              "text": "N/A",
-              "type": 1,
-              "value": "null"
-            }
-          ],
-          "nullValueMode": "connected",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 7
-      },
-      "id": 65,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.2.0",
-      "targets": [
-        {
-          "expr": "sum without (instance) (s3_rx_bytes_total)",
-          "format": "table",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "process_start_time_seconds",
-          "refId": "A",
-          "step": 60
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Total S3 Traffic Inbound",
-      "type": "stat"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "mappings": [
-            {
-              "id": 0,
-              "op": "=",
-              "text": "N/A",
-              "type": 1,
-              "value": "null"
-            }
-          ],
-          "nullValueMode": "connected",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "dark-yellow",
-                "value": 75000000
-              },
-              {
-                "color": "dark-red",
-                "value": 100000000
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 6,
-        "y": 7
-      },
-      "id": 66,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.2.0",
-      "targets": [
-        {
-          "expr": "count(count by (bucket) (bucket_objects_count))",
-          "format": "time_series",
-          "instant": false,
-          "interval": "1m",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Number of Buckets",
-      "type": "stat"
-    },
-    {
-      "aliasColors": {
-        "S3 Errors": "light-red",
-        "S3 Requests": "light-green"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 9,
-        "y": 7
-      },
-      "hiddenSeries": false,
-      "id": 60,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "sum without (instance,api)(rate(s3_requests_total[10m]))",
-          "interval": "1m",
-          "intervalFactor": 2,
-          "legendFormat": "S3 Requests",
-          "refId": "A"
-        },
-        {
-          "expr": "sum without (instance,api)(rate(s3_errors_total[10m]))",
-          "interval": "1m",
-          "intervalFactor": 2,
-          "legendFormat": "S3 Errors",
-          "refId": "B"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "S3 API Request & Error Rate",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "$$hashKey": "object:331",
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        },
-        {
-          "$$hashKey": "object:332",
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": null
-          },
-          "mappings": [
-            {
-              "id": 0,
-              "op": "=",
-              "text": "N/A",
-              "type": 1,
-              "value": "null"
-            }
-          ],
-          "nullValueMode": "connected",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -956,7 +482,7 @@
         "h": 3,
         "w": 3,
         "x": 21,
-        "y": 7
+        "y": 0
       },
       "id": 61,
       "interval": null,
@@ -969,17 +495,19 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "last"
           ],
           "fields": "",
           "values": false
         },
+        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "sum without (instance)(process_open_fds)",
+          "exemplar": true,
+          "expr": "sum (minio_node_file_descriptor_open_total)",
           "format": "table",
           "hide": false,
           "instant": false,
@@ -1002,9 +530,6 @@
       "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null
-          },
           "mappings": [
             {
               "id": 0,
@@ -1014,7 +539,6 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1032,7 +556,7 @@
         "h": 3,
         "w": 3,
         "x": 3,
-        "y": 10
+        "y": 3
       },
       "id": 64,
       "interval": null,
@@ -1045,17 +569,18 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "last"
           ],
           "fields": "",
           "values": false
         },
+        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "sum without (instance)(s3_tx_bytes_total)",
+          "expr": "sum by (instance) (minio_s3_traffic_sent_bytes{job=\"minio-job\"})",
           "format": "table",
           "hide": false,
           "instant": false,
@@ -1075,9 +600,9 @@
     {
       "cacheTimeout": null,
       "datasource": "${DS_PROMETHEUS}",
+      "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "mappings": [
             {
               "id": 0,
@@ -1087,7 +612,238 @@
               "value": "null"
             }
           ],
-          "nullValueMode": "connected",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 21,
+        "y": 3
+      },
+      "id": 62,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum without (server,instance) (minio_node_go_routine_total)",
+          "format": "table",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Total Goroutines",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 0,
+        "y": 6
+      },
+      "id": 53,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "expr": "minio_cluster_nodes_online_total",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Total Online Servers",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 3,
+        "y": 6
+      },
+      "id": 9,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_cluster_disk_online_total",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "Total online disks in MinIO Cluster",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Total Online Disks",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1113,9 +869,9 @@
         "h": 3,
         "w": 3,
         "x": 6,
-        "y": 10
+        "y": 6
       },
-      "id": 44,
+      "id": 66,
       "interval": null,
       "links": [],
       "maxDataPoints": 100,
@@ -1131,12 +887,13 @@
           "fields": "",
           "values": false
         },
+        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "topk(1, sum(bucket_objects_count) by (instance))",
+          "expr": "count(count by (bucket) (minio_bucket_usage_total_bytes))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",
@@ -1145,87 +902,7 @@
           "refId": "A"
         }
       ],
-      "title": "Number of Objects",
-      "type": "stat"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": null
-          },
-          "mappings": [
-            {
-              "id": 0,
-              "op": "=",
-              "text": "N/A",
-              "type": 1,
-              "value": "null"
-            }
-          ],
-          "nullValueMode": "connected",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 21,
-        "y": 10
-      },
-      "id": 62,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.2.0",
-      "targets": [
-        {
-          "expr": "sum without (instance) (go_goroutines)",
-          "format": "table",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "process_start_time_seconds",
-          "refId": "A",
-          "step": 60
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Total Goroutines",
+      "title": "Number of Buckets",
       "type": "stat"
     },
     {
@@ -1238,18 +915,16 @@
       "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
       "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
+        "defaults": {},
         "overrides": []
       },
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 13
+        "w": 7,
+        "x": 9,
+        "y": 6
       },
       "hiddenSeries": false,
       "id": 63,
@@ -1269,7 +944,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1279,25 +954,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance,api)(rate(s3_tx_bytes_total[5m]))",
+          "exemplar": true,
+          "expr": "sum by (server) (rate(minio_s3_traffic_received_bytes[$__interval]))",
           "interval": "1m",
           "intervalFactor": 2,
-          "legendFormat": "S3 Data Sent",
+          "legendFormat": "Data Received [{{server}}]",
           "refId": "A"
-        },
-        {
-          "expr": "sum without (instance,api)(rate(s3_rx_bytes_total[5m]))",
-          "interval": "1m",
-          "intervalFactor": 2,
-          "legendFormat": "S3 Data Received",
-          "refId": "B"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "S3 API Data Transfer",
+      "title": "S3 API Data Received Rate ",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1314,12 +983,12 @@
       "yaxes": [
         {
           "$$hashKey": "object:331",
-          "format": "short",
+          "format": "bytes",
           "label": null,
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": false
+          "show": true
         },
         {
           "$$hashKey": "object:332",
@@ -1337,67 +1006,46 @@
       }
     },
     {
-      "collapsed": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 19
-      },
-      "id": 34,
-      "panels": [],
-      "title": "API ",
-      "type": "row"
-    },
-    {
       "aliasColors": {
-        "10.13.1.25:9000 DELETE": "red",
-        "10.13.1.25:9000 GET": "green",
-        "10.13.1.25:9000 POST": "blue"
+        "S3 Errors": "light-red",
+        "S3 Requests": "light-green"
       },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
-      "description": "Total number of s3 bytes received and sent per MinIO server instance",
       "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "links": []
-        },
+        "defaults": {},
         "overrides": []
       },
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 20
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 6
       },
       "hiddenSeries": false,
-      "id": 7,
+      "id": 70,
       "legend": {
         "avg": false,
         "current": false,
         "max": false,
         "min": false,
-        "rightSide": false,
         "show": true,
         "total": false,
         "values": false
       },
       "lines": true,
       "linewidth": 1,
-      "links": [],
       "nullPointMode": "null",
       "options": {
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 5,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -1406,27 +1054,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (instance) (s3_rx_bytes_total)",
-          "format": "time_series",
-          "interval": "",
+          "exemplar": true,
+          "expr": "sum by (server) (rate(minio_s3_traffic_sent_bytes[$__interval]))",
+          "interval": "1m",
           "intervalFactor": 2,
-          "legendFormat": "S3 Bytes Received {{instance}}",
-          "metric": "minio_http_requests_duration_seconds_count",
-          "refId": "A",
-          "step": 4
-        },
-        {
-          "expr": "sum without (instance) (s3_tx_bytes_total)",
-          "interval": "",
-          "legendFormat": "S3 Bytes Sent {{instance}}",
-          "refId": "B"
+          "legendFormat": "Data Sent [{{server}}]",
+          "refId": "A"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Total S3 API Data Transfer",
+      "title": "S3 API Data Sent Rate ",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1442,7 +1082,7 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:211",
+          "$$hashKey": "object:331",
           "format": "bytes",
           "label": null,
           "logBase": 1,
@@ -1451,13 +1091,13 @@
           "show": true
         },
         {
-          "$$hashKey": "object:212",
-          "format": "s",
+          "$$hashKey": "object:332",
+          "format": "short",
           "label": null,
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ],
       "yaxis": {
@@ -1466,22 +1106,20 @@
       }
     },
     {
-      "aliasColors": {
-        "Received 10.13.1.25:9000": "blue"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
+      "cacheTimeout": null,
       "datasource": "${DS_PROMETHEUS}",
-      "decimals": null,
-      "description": "Total number of active s3 requests in current MinIO instance",
+      "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": null
-          },
-          "links": [],
-          "mappings": [],
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1494,41 +1132,386 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "short"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 0,
+        "y": 8
+      },
+      "id": 69,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "expr": "minio_cluster_nodes_offline_total",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Total Offline Servers",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 3,
+        "y": 8
+      },
+      "id": 78,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_cluster_disk_offline_total",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Total Offline Disks",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "id": 0,
+              "op": "=",
+              "text": "N/A",
+              "type": 1,
+              "value": "null"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "dark-yellow",
+                "value": 75000000
+              },
+              {
+                "color": "dark-red",
+                "value": 100000000
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 6,
+        "y": 9
+      },
+      "id": 44,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "expr": "topk(1, sum(minio_bucket_usage_object_total) by (instance))",
+          "format": "time_series",
+          "instant": false,
+          "interval": "1m",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Number of Objects",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ns"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 0,
+        "y": 10
+      },
+      "id": 80,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_heal_time_last_activity_nano_seconds",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{server}}",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Time Since Last Heal Activity",
+      "type": "stat"
+    },
+    {
+      "cacheTimeout": null,
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ns"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 3,
+        "y": 10
+      },
+      "id": 81,
+      "interval": null,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.5",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_usage_last_activity_nano_seconds",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{server}}",
+          "metric": "process_start_time_seconds",
+          "refId": "A",
+          "step": 60
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Time Since Last Scan Activity",
+      "type": "stat"
+    },
+    {
+      "aliasColors": {
+        "S3 Errors": "light-red",
+        "S3 Requests": "light-green"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
         "overrides": []
       },
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 12,
-        "x": 12,
-        "y": 20
+        "x": 0,
+        "y": 12
       },
       "hiddenSeries": false,
-      "id": 4,
-      "interval": "1s",
+      "id": 60,
       "legend": {
         "avg": false,
         "current": false,
         "max": false,
         "min": false,
-        "rightSide": false,
         "show": true,
         "total": false,
         "values": false
       },
       "lines": true,
       "linewidth": 1,
-      "links": [],
       "nullPointMode": "null",
       "options": {
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 5,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -1537,22 +1520,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "s3_requests_current{instance=~\"$instance\"}",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Instance {{instance}} function {{api}}",
-          "metric": "minio_network_sent_bytes_total",
-          "refId": "A",
-          "step": 10
+          "exemplar": true,
+          "expr": "sum by (server,api) (rate(minio_s3_requests_total[$__interval]))",
+          "interval": "1m",
+          "intervalFactor": 2,
+          "legendFormat": "{{server,api}}",
+          "refId": "A"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Active S3 Requests",
+      "title": "S3 API Request Rate",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1568,8 +1548,8 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:162",
-          "format": "short",
+          "$$hashKey": "object:331",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -1577,13 +1557,113 @@
           "show": true
         },
         {
-          "$$hashKey": "object:163",
-          "format": "decbytes",
+          "$$hashKey": "object:332",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "S3 Errors": "light-red",
+        "S3 Requests": "light-green"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "hiddenSeries": false,
+      "id": 71,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "rate(minio_s3_requests_errors_total[$__interval])",
+          "interval": "1m",
+          "intervalFactor": 2,
+          "legendFormat": "{{server,api}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "S3 API Request Error Rate",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:331",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
           "min": null,
           "show": true
+        },
+        {
+          "$$hashKey": "object:332",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
         }
       ],
       "yaxis": {
@@ -1597,25 +1677,24 @@
         "10.13.1.25:9000 GET": "green",
         "10.13.1.25:9000 POST": "blue"
       },
-      "bars": false,
+      "bars": true,
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
       "description": "Total number of bytes received and sent among all MinIO server instances",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
       },
-      "fill": 1,
-      "fillGradient": 0,
+      "fill": 10,
+      "fillGradient": 1,
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 22
       },
       "hiddenSeries": false,
       "id": 17,
@@ -1637,7 +1716,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1647,19 +1726,21 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "internode_rx_bytes_total{instance=~\"$instance\"}",
+          "exemplar": true,
+          "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"minio-job\"}[$__interval])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
-          "legendFormat": "Internode Bytes Received {{instance}}",
+          "legendFormat": "Internode Bytes Received [{{server}}]",
           "metric": "minio_http_requests_duration_seconds_count",
           "refId": "A",
           "step": 4
         },
         {
-          "expr": "internode_tx_bytes_total{instance=~\"$instance\"}",
+          "exemplar": true,
+          "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"minio-job\"}[$__interval])",
           "interval": "",
-          "legendFormat": "Internode Bytes Sent {{instance}}",
+          "legendFormat": "Internode Bytes Sent [{{server}}]",
           "refId": "B"
         }
       ],
@@ -1707,25 +1788,399 @@
       }
     },
     {
-      "collapsed": false,
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 36
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       },
-      "id": 36,
-      "panels": [],
-      "title": "Disks",
-      "type": "row"
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "hiddenSeries": false,
+      "id": 77,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "rate(minio_node_process_cpu_total_seconds[$__interval])",
+          "interval": "",
+          "legendFormat": "CPU Usage Rate [{{server}}]",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Node CPU Usage",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:1043",
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:1044",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "hiddenSeries": false,
+      "id": 76,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_node_process_resident_memory_bytes",
+          "interval": "",
+          "legendFormat": "Memory Used [{{server}}]",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Node Memory Usage",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:1043",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:1044",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "hiddenSeries": false,
+      "id": 74,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_node_disk_used_bytes",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Drive Used Capacity",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:381",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:382",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "hiddenSeries": false,
+      "id": 82,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "minio_cluster_disk_free_inodes",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Free Inodes [{{server}}:{{disk}}]",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Drives Free Inodes",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:381",
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:382",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     },
     {
       "aliasColors": {
         "Offline 10.13.1.25:9000": "dark-red",
         "Total 10.13.1.25:9000": "blue"
       },
-      "bars": false,
+      "bars": true,
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
@@ -1733,7 +2188,6 @@
       "description": "Number of online disks per MinIO Server",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -1744,7 +2198,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 47
       },
       "hiddenSeries": false,
       "id": 11,
@@ -1758,7 +2212,7 @@
         "total": false,
         "values": false
       },
-      "lines": true,
+      "lines": false,
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
@@ -1766,7 +2220,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1776,21 +2230,29 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "minio_disks_total{instance=~\"$instance\"} - minio_disks_offline{instance=~\"$instance\"}",
+          "exemplar": true,
+          "expr": "rate(minio_node_syscall_read_total[$__interval])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
-          "legendFormat": "Online Disks {{instance}}",
+          "legendFormat": "Read Syscalls [{{server}}]",
           "metric": "process_start_time_seconds",
           "refId": "A",
           "step": 60
+        },
+        {
+          "exemplar": true,
+          "expr": "rate(minio_node_syscall_write_total[$__interval])",
+          "interval": "",
+          "legendFormat": "Write Syscalls [{{server}}]",
+          "refId": "B"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Online Disks",
+      "title": "Node Syscalls",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1840,10 +2302,9 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS}",
-      "description": "Disk capacity used per MinIO Server",
+      "description": "",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -1854,7 +2315,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 47
       },
       "hiddenSeries": false,
       "id": 8,
@@ -1876,7 +2337,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "7.5.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1886,9 +2347,10 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "disk_storage_used{disk=~\"$disk\",instance=~\"$instance\"}",
+          "exemplar": true,
+          "expr": "minio_node_file_descriptor_open_total",
           "interval": "",
-          "legendFormat": "Used Capacity {{instance}} {{disk}}",
+          "legendFormat": "Open FDs [{{server}}]",
           "refId": "B"
         }
       ],
@@ -1896,7 +2358,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Disk Usage",
+      "title": "Node File Descriptors",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1914,7 +2376,7 @@
         {
           "$$hashKey": "object:212",
           "decimals": null,
-          "format": "decbytes",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -1923,6 +2385,111 @@
         },
         {
           "$$hashKey": "object:213",
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": "0",
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "hiddenSeries": false,
+      "id": 73,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "rate(minio_node_io_rchar_bytes[$__interval])",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Node RChar [{{server}}]",
+          "refId": "A"
+        },
+        {
+          "exemplar": true,
+          "expr": "rate(minio_node_io_wchar_bytes[$__interval])",
+          "interval": "",
+          "legendFormat": "Node WChar [{{server}}]",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Node IO",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:381",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:382",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1937,62 +2504,17 @@
       }
     }
   ],
-  "refresh": false,
-  "schemaVersion": 26,
+  "refresh": "10s",
+  "schemaVersion": 27,
   "style": "dark",
   "tags": [
     "minio"
   ],
   "templating": {
-    "list": [
-      {
-        "allValue": null,
-        "current": {},
-        "datasource": "${DS_PROMETHEUS}",
-        "definition": "label_values(minio_version_info,instance)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "MinIO Host",
-        "multi": true,
-        "name": "instance",
-        "options": [],
-        "query": "label_values(minio_version_info,instance)",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
-      },
-      {
-        "allValue": null,
-        "current": {},
-        "datasource": "${DS_PROMETHEUS}",
-        "definition": "label_values(disk_storage_total,disk)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Drive",
-        "multi": true,
-        "name": "disk",
-        "options": [],
-        "query": "label_values(disk_storage_total,disk)",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
-      }
-    ]
+    "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {
@@ -2022,5 +2544,5 @@
   "timezone": "",
   "title": "MinIO Overview",
   "uid": "pJnnS4hZz",
-  "version": 190
+  "version": 37
 }

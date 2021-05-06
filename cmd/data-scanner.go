@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/audit"
@@ -40,7 +41,6 @@ import (
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/willf/bloom"
 )
 

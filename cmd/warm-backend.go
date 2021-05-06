@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // WarmBackendGetOpts is used to express byte ranges within an object. The zero

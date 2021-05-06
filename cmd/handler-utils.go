@@ -32,11 +32,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (

@@ -29,13 +29,13 @@ import (
 	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/madmin"
 	etcd "go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 )

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -37,7 +38,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 func init() {

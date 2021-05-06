@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/versioning"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (

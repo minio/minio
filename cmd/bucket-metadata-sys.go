@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -34,7 +35,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
