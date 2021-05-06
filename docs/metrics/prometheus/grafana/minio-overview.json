@@ -206,7 +206,7 @@
       "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "sum by (instance) (minio_s3_traffic_received_bytes{job=\"minio-cluster\"})",
+          "expr": "sum by (instance) (minio_s3_traffic_received_bytes{job=\"minio-job\"})",
           "format": "table",
           "hide": false,
           "instant": false,
@@ -580,7 +580,7 @@
       "pluginVersion": "7.5.5",
       "targets": [
         {
-          "expr": "sum by (instance) (minio_s3_traffic_sent_bytes{job=\"minio-cluster\"})",
+          "expr": "sum by (instance) (minio_s3_traffic_sent_bytes{job=\"minio-job\"})",
           "format": "table",
           "hide": false,
           "instant": false,
@@ -1727,7 +1727,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"minio-cluster\"}[$__interval])",
+          "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"minio-job\"}[$__interval])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
@@ -1738,7 +1738,7 @@
         },
         {
           "exemplar": true,
-          "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"minio-cluster\"}[$__interval])",
+          "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"minio-job\"}[$__interval])",
           "interval": "",
           "legendFormat": "Internode Bytes Sent [{{server}}]",
           "refId": "B"
