@@ -54,11 +54,15 @@ type NetLocker interface {
 	// Do read unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
+	// Canceling the context will abort the remote call.
+	// In that case, the resource may or may not be unlocked.
 	RUnlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Do write unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
+	// Canceling the context will abort the remote call.
+	// In that case, the resource may or may not be unlocked.
 	Unlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Refresh the given lock to prevent it from becoming stale
