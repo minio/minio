@@ -28,8 +28,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 //go:generate msgp -file $GOFILE

@@ -23,7 +23,7 @@ import (
 	"io"
 
 	"cloud.google.com/go/storage"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"

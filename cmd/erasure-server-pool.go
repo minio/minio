@@ -30,11 +30,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )

@@ -28,12 +28,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // IAMObjectStore implements IAMStorageAPI
