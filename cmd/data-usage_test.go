@@ -61,6 +61,7 @@ func TestDataUsageUpdate(t *testing.T) {
 				return
 			}
 			sizeS.totalSize = s.Size()
+			sizeS.versions++
 			return sizeS, nil
 		}
 		return
@@ -129,6 +130,9 @@ func TestDataUsageUpdate(t *testing.T) {
 			}
 			if e.Objects != uint64(w.objs) {
 				t.Error("got objects", e.Objects, "want", w.objs)
+			}
+			if e.Versions != uint64(w.objs) {
+				t.Error("got versions", e.Versions, "want", w.objs)
 			}
 			if e.ObjSizes != w.oSizes {
 				t.Error("got histogram", e.ObjSizes, "want", w.oSizes)
@@ -235,6 +239,9 @@ func TestDataUsageUpdate(t *testing.T) {
 			if e.Objects != uint64(w.objs) {
 				t.Error("got objects", e.Objects, "want", w.objs)
 			}
+			if e.Versions != uint64(w.objs) {
+				t.Error("got versions", e.Versions, "want", w.objs)
+			}
 			if e.ObjSizes != w.oSizes {
 				t.Error("got histogram", e.ObjSizes, "want", w.oSizes)
 			}
@@ -276,6 +283,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 				return
 			}
 			sizeS.totalSize = s.Size()
+			sizeS.versions++
 			return
 		}
 		return
@@ -366,6 +374,9 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 			}
 			if e.Objects != uint64(w.objs) {
 				t.Error("got objects", e.Objects, "want", w.objs)
+			}
+			if e.Versions != uint64(w.objs) {
+				t.Error("got versions", e.Versions, "want", w.objs)
 			}
 			if e.ObjSizes != w.oSizes {
 				t.Error("got histogram", e.ObjSizes, "want", w.oSizes)
@@ -481,6 +492,9 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 			if e.Objects != uint64(w.objs) {
 				t.Error("got objects", e.Objects, "want", w.objs)
 			}
+			if e.Versions != uint64(w.objs) {
+				t.Error("got versions", e.Versions, "want", w.objs)
+			}
 			if e.ObjSizes != w.oSizes {
 				t.Error("got histogram", e.ObjSizes, "want", w.oSizes)
 			}
@@ -553,6 +567,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 			if err != nil {
 				return
 			}
+			sizeS.versions++
 			sizeS.totalSize = s.Size()
 			return
 		}

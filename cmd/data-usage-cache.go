@@ -53,6 +53,7 @@ type dataUsageEntry struct {
 	// These fields do no include any children.
 	Size             int64
 	Objects          uint64
+	Versions         uint64 // Versions that are not delete markers.
 	ObjSizes         sizeHistogram
 	ReplicationStats *replicationStats
 	Compacted        bool
@@ -159,6 +160,9 @@ type dataUsageCacheInfo struct {
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
+	e.Versions += summary.versions
+	e.ObjSizes.add(summary.totalSize)
+
 	if summary.replicaSize > 0 || summary.pendingSize > 0 || summary.replicatedSize > 0 ||
 		summary.failedCount > 0 || summary.pendingCount > 0 || summary.failedSize > 0 {
 		if e.ReplicationStats == nil {
@@ -176,6 +180,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 // merge other data usage entry into this, excluding children.
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
+	e.Versions += other.Versions
 	e.Size += other.Size
 	ors := other.ReplicationStats
 	empty := replicationStats{}
@@ -484,6 +489,10 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
 		removing := d.totalChildrenRec(path.Key())
 		console.Debugf("compacting %v, removing %d children\n", path, removing)
 		flat := d.sizeRecursive(path.Key())
+		if flat == nil {
+			leaves = leaves[1:]
+			continue
+		}
 		flat.Compacted = true
 		d.deleteRecursive(path)
 		d.replaceHashed(path, nil, *flat)

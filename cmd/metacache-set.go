@@ -157,21 +157,16 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 			if !o.IncludeDirectories && entry.isDir() {
 				continue
 			}
-			o.debugln("gather got:", entry.name)
 			if o.Marker != "" && entry.name < o.Marker {
-				o.debugln("pre marker")
 				continue
 			}
 			if !strings.HasPrefix(entry.name, o.Prefix) {
-				o.debugln("not in prefix")
 				continue
 			}
 			if !o.Recursive && !entry.isInDir(o.Prefix, o.Separator) {
-				o.debugln("not in dir", o.Prefix, o.Separator)
 				continue
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
-				o.debugln("latest is delete marker")
 				continue
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
@@ -184,7 +179,6 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				}
 				continue
 			}
-			o.debugln("adding...")
 			results.o = append(results.o, entry)
 		}
 		if resCh != nil {

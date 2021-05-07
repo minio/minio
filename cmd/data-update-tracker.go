@@ -498,9 +498,6 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		// Add all paths until done.
 		d.mu.Lock()
 		for i := range split {
-			if d.debug {
-				console.Debugln(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
-			}
 			d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
 		}
 		d.dirty = d.dirty || len(split) > 0
@@ -530,9 +527,6 @@ func (d *dataUpdateTracker) markDirty(in string) {
 	// Add all paths until done.
 	d.mu.Lock()
 	for i := range split {
-		if d.debug {
-			console.Debugln(dateUpdateTrackerLogPrefix + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
-		}
 		d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
 	}
 	d.dirty = d.dirty || len(split) > 0
