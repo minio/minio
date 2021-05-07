@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // throttleBandwidth gets the throttle for bucket with the configured value

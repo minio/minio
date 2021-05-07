@@ -69,8 +69,13 @@ func (ssekms) ParseHTTP(h http.Header) (string, Context, error) {
 
 	var ctx Context
 	if context, ok := h[xhttp.AmzServerSideEncryptionKmsContext]; ok {
+		b, err := base64.StdEncoding.DecodeString(context[0])
+		if err != nil {
+			return "", nil, err
+		}
+
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err := json.Unmarshal([]byte(context[0]), &ctx); err != nil {
+		if err := json.Unmarshal(b, &ctx); err != nil {
 			return "", nil, err
 		}
 	}
@@ -109,7 +114,7 @@ func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, ob
 // the modified metadata. If the keyID and the kmsKey is not empty it encodes
 // both into the metadata as well. It allocates a new metadata map if metadata
 // is nil.
-func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
+func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey, ctx Context) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
 		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
@@ -132,6 +137,10 @@ func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []
 	metadata[MetaAlgorithm] = sealedKey.Algorithm
 	metadata[MetaIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
 	metadata[MetaSealedKeyKMS] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
+	if len(ctx) > 0 {
+		b, _ := ctx.MarshalText()
+		metadata[MetaContext] = base64.StdEncoding.EncodeToString(b)
+	}
 	if len(kmsKey) > 0 && keyID != "" { // We use a KMS -> Store key ID and sealed KMS data key.
 		metadata[MetaKeyID] = keyID
 		metadata[MetaDataEncryptionKey] = base64.StdEncoding.EncodeToString(kmsKey)

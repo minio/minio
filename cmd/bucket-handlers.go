@@ -1011,16 +1011,28 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			var reader io.Reader
-			var key []byte
-			if crypto.SSEC.IsRequested(formValues) {
+			var (
+				reader io.Reader
+				keyID  string
+				key    []byte
+				kmsCtx crypto.Context
+			)
+			kind, _ := crypto.IsRequested(formValues)
+			switch kind {
+			case crypto.SSEC:
 				key, err = ParseSSECustomerHeader(formValues)
 				if err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
+			case crypto.S3KMS:
+				keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
+				if err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
 			}
-			reader, objectEncryptionKey, err = newEncryptReader(hashReader, key, bucket, object, metadata, crypto.S3.IsRequested(formValues))
+			reader, objectEncryptionKey, err = newEncryptReader(hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return

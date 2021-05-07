@@ -38,12 +38,12 @@ import (
 	"github.com/jcmturner/gokrb5/v8/credentials"
 	"github.com/jcmturner/gokrb5/v8/keytab"
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 )
 

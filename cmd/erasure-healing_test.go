@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // Tests both object and bucket healing.

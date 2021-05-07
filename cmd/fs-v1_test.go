@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // Tests for if parent directory is object

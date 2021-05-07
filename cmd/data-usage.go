@@ -24,9 +24,9 @@ import (
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
