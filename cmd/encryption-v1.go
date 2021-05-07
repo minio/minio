@@ -375,15 +375,14 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 // DecryptRequestWithSequenceNumberR - same as
 // DecryptRequestWithSequenceNumber but with a reader
 func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	if crypto.S3.IsEncrypted(metadata) {
-		return newDecryptReader(client, nil, bucket, object, seqNumber, metadata)
+	if crypto.SSEC.IsEncrypted(metadata) {
+		key, err := ParseSSECustomerHeader(h)
+		if err != nil {
+			return nil, err
+		}
+		return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
 	}
-
-	key, err := ParseSSECustomerHeader(h)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
+	return newDecryptReader(client, nil, bucket, object, seqNumber, metadata)
 }
 
 // DecryptCopyRequestR - same as DecryptCopyRequest, but with a
