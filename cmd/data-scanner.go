@@ -45,12 +45,12 @@ import (
 )
 
 const (
-	dataScannerSleepPerFolder     = time.Millisecond // Time to wait between folders.
-	dataUsageUpdateDirCycles      = 16               // Visit all folders every n cycles.
-	dataScannerCompactAtFolders   = 5000             // Compact when this many subfolders in a single folder.
-	dataScannerCompactLeastObject = 500              // Compact when there is less than this many objects in a branch.
-	dataScannerCompactAtChildren  = 2500             // Compact when there are this many children in a branch.
-	dataScannerStartDelay         = 1 * time.Minute  // Time to wait on startup and between cycles.
+	dataScannerSleepPerFolder     = time.Millisecond                 // Time to wait between folders.
+	dataUsageUpdateDirCycles      = 16                               // Visit all folders every n cycles.
+	dataScannerCompactLeastObject = 500                              // Compact when there is less than this many objects in a branch.
+	dataScannerCompactAtChildren  = 5000                             // Compact when there are this many children in a branch.
+	dataScannerCompactAtFolders   = dataScannerCompactAtChildren / 2 // Compact when this many subfolders in a single folder.
+	dataScannerStartDelay         = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
