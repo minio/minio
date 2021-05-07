@@ -852,11 +852,10 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
-		xlMeta.data.remove(versionID)
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch
-		xlMeta.data.remove(dataDir)
+		xlMeta.data.remove(versionID, dataDir)
 		filePath := pathJoin(volumeDir, path, dataDir)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -940,7 +939,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
-		xlMeta, err = newXLMetaV2(fi)
+		err = xlMeta.AddVersion(fi)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
