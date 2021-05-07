@@ -693,6 +693,9 @@ type objectIO interface {
 // Only backend errors are returned as errors.
 // If the object is not found or unable to deserialize d is cleared and nil error is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
+	// Abandon if more than 5 minutes, so we don't hold up scanner.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		switch err.(type) {
@@ -726,6 +729,9 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return err
 	}
 
+	// Abandon if more than 5 minutes, so we don't hold up scanner.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	_, err = store.PutObject(ctx,
 		dataUsageBucket,
 		name,

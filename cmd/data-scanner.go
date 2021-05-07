@@ -310,7 +310,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Finished scanner, %v entries (%v) %s \n", len(s.newCache.Cache), s.newCache.listCache(), logSuffix)
+		console.Debugf(logPrefix+"Finished scanner, %v entries (%+v) %s \n", len(s.newCache.Cache), *s.newCache.sizeRecursive(s.newCache.Info.Name), logSuffix)
 	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
