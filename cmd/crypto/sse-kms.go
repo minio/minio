@@ -28,6 +28,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/kms"
 )
 
 type ssekms struct{}
@@ -94,15 +95,17 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func (s3 ssekms) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	keyID, kmsKey, sealedKey, ctx, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
 	}
-	if _, ok := ctx[bucket]; !ok {
+	if ctx == nil {
+		ctx = kms.Context{bucket: path.Join(bucket, object)}
+	} else if _, ok := ctx[bucket]; !ok {
 		ctx[bucket] = path.Join(bucket, object)
 	}
-	unsealKey, err := kms.DecryptKey(keyID, kmsKey, ctx)
+	unsealKey, err := KMS.DecryptKey(keyID, kmsKey, ctx)
 	if err != nil {
 		return key, err
 	}
