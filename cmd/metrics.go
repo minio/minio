@@ -24,6 +24,7 @@ import (
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -334,6 +335,12 @@ func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 }
 
+// This is used by metrics to show the number of failed RPC calls between internodes
+func loadAndResetRPCNetworkErrsCounter() uint64 {
+	defer rest.ResetNetworkErrsCounter()
+	return rest.GetNetworkErrsCounter()
+}
+
 // collects network metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
@@ -358,6 +365,15 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(connStats.TotalInputBytes),
 	)
 
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("internode", "failed", "requests"),
+			"Total number of internode failed http requests",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(loadAndResetRPCNetworkErrsCounter()),
+	)
+
 	// Network Sent/Received Bytes (Outbound)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -376,6 +392,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 		prometheus.CounterValue,
 		float64(connStats.S3InputBytes),
 	)
+
 }
 
 // Populates prometheus with bucket usage metrics, this metrics
