@@ -447,7 +447,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 				} else {
 					writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
-						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize(), true)
+						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 				}
 			}
 			err = erasure.Heal(ctx, readers, writers, partSize, er.bp)
