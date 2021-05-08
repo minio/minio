@@ -260,6 +260,25 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !rootDisk {
+		// If for some reason we couldn't detect the
+		// root disk use - MINIO_ROOTDISK_THRESHOLD_SIZE
+		// to figure out if the disk is root disk or not.
+		if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+			info, err := disk.GetInfo(path)
+			if err != nil {
+				return nil, err
+			}
+			size, err := humanize.ParseBytes(rootDiskSize)
+			if err != nil {
+				return nil, err
+			}
+			// size of the disk is less than the threshold or
+			// equal to the size of the disk at path, treat
+			// such disks as rootDisks and reject them.
+			rootDisk = info.Total <= size
+		}
+	}
 
 	p := &xlStorage{
 		diskPath: path,
