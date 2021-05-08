@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -197,14 +198,17 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return nil, err
 	}
 	unlockOnDefer = false
-	pr, pw := io.Pipe()
+
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		pw.CloseWithError(er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks))
 	}()
 
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+	pipeCloser := func() {
+		pr.CloseWithError(nil)
+	}
 
 	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
 }
@@ -1359,17 +1363,18 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 
-	pr, pw := io.Pipe()
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		err := er.getObjectWithFileInfo(ctx, bucket, object, 0, fi.Size, pw, fi, metaArr, onlineDisks)
 		pw.CloseWithError(err)
 	}()
-	if err = tgtClient.Put(ctx, destObj, pr, fi.Size); err != nil {
-		pr.Close()
+
+	err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	pr.CloseWithError(err)
+	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
 		return err
 	}
-	pr.Close()
 	fi.TransitionStatus = lifecycle.TransitionComplete
 	fi.TransitionedObjName = destObj
 	fi.TransitionTier = opts.Transition.Tier
