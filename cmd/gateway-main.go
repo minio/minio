@@ -360,8 +360,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Prints the formatted startup message once object layer is initialized.
 	if !globalCLIContext.Quiet {
 		mode := globalMinioModeGatewayPrefix + gatewayName
-		// Check update mode.
-		checkUpdate(mode)
+		
+		if !globalInplaceUpdateDisabled{
+			// Check update mode.
+			checkUpdate(mode)
+		}
 
 		// Print a warning message if gateway is not ready for production before the startup banner.
 		if !gw.Production() {
