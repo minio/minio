@@ -468,8 +468,9 @@ github.com/minio/sha256-simd v1.0.0 h1:v1ta+49hkWZyvaKwrQB8elexRqm6Y0aMLjCNsrYxo
 github.com/minio/sha256-simd v1.0.0/go.mod h1:OuYzVNI5vcoYIAmbIvHPl3N3jUzVedXbKy5RFepssQM=
 github.com/minio/simdjson-go v0.2.1 h1:nxYlp4Qd0w2pwLlif00l5vTFL6PcNAKpyHq27/pageg=
 github.com/minio/simdjson-go v0.2.1/go.mod h1:JPUSkRykfSPS+AhO0YPA1h0l5vY7NqrF4zel2b12wxc=
-github.com/minio/sio v0.2.1 h1:NjzKiIMSMcHediVQR0AFVx2tp7Wxh9tKPfDI3kH7aHQ=
 github.com/minio/sio v0.2.1/go.mod h1:8b0yPp2avGThviy/+OCJBI6OMpvxoUuiLvE6F1lebhw=
+github.com/minio/sio v0.3.0 h1:syEFBewzOMOYVzSTFpp1MqpSZk8rUNbz8VIIc+PNzus=
+github.com/minio/sio v0.3.0/go.mod h1:8b0yPp2avGThviy/+OCJBI6OMpvxoUuiLvE6F1lebhw=
 github.com/mitchellh/cli v1.0.0/go.mod h1:hNIlj7HEI86fIcpObd7a0FcrxTWetlwJDGcceTlRvqc=
 github.com/mitchellh/go-homedir v1.0.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=

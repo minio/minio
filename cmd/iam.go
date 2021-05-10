@@ -1203,16 +1203,21 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 		return errNoSuchServiceAccount
 	}
 
-	if !auth.IsSecretKeyValid(opts.secretKey) {
-		return auth.ErrInvalidSecretKeyLength
-	}
-
 	if opts.secretKey != "" {
+		if !auth.IsSecretKeyValid(opts.secretKey) {
+			return auth.ErrInvalidSecretKeyLength
+		}
 		cr.SecretKey = opts.secretKey
 	}
 
-	if opts.status != "" {
+	switch opts.status {
+	// The caller did not ask to update status account, do nothing
+	case "":
+	// Update account status
+	case auth.AccountOn, auth.AccountOff:
 		cr.Status = opts.status
+	default:
+		return errors.New("unknown account status value")
 	}
 
 	if opts.sessionPolicy != nil {

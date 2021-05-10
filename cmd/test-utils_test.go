@@ -352,6 +352,8 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	initAllSubsystems(ctx, objLayer)
 
+	globalIAMSys.InitStore(objLayer)
+
 	return testServer
 }
 
@@ -1571,6 +1573,8 @@ func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerP
 
 	initAllSubsystems(ctx, z)
 
+	globalIAMSys.InitStore(z)
+
 	return z, nil
 }
 
@@ -1616,6 +1620,8 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	newAllSubsystems()
 
 	initAllSubsystems(context.Background(), obj)
+
+	globalIAMSys.InitStore(obj)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -1909,6 +1915,8 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	initAllSubsystems(ctx, objLayer)
 
+	globalIAMSys.InitStore(objLayer)
+
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
@@ -1927,6 +1935,8 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	defer objLayer.Shutdown(context.Background())
 
 	initAllSubsystems(ctx, objLayer)
+
+	globalIAMSys.InitStore(objLayer)
 
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for Erasure.
