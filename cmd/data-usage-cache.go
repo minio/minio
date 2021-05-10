@@ -34,7 +34,6 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -428,7 +427,7 @@ func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHas
 
 // reduceChildrenOf will reduce the recursive number of children to the limit
 // by compacting the children with the least number of objects.
-func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
+func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compactSelf bool) {
 	e, ok := d.Cache[path.Key()]
 	if !ok {
 		return
@@ -437,7 +436,7 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
 		return
 	}
 	// If direct children have more, compact all.
-	if len(e.Children) > limit {
+	if len(e.Children) > limit && compactSelf {
 		flat := d.sizeRecursive(path.Key())
 		flat.Compacted = true
 		d.deleteRecursive(path)
@@ -449,7 +448,8 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
 		return
 	}
 
-	console.Debugf(" %d children found, compacting %v\n", total, path)
+	// Appears to be printed with _MINIO_SERVER_DEBUG=off
+	// console.Debugf(" %d children found, compacting %v\n", total, path)
 
 	var leaves = make([]struct {
 		objects uint64
@@ -485,17 +485,24 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int) {
 	for remove > 0 && len(leaves) > 0 {
 		// Remove top entry.
 		e := leaves[0]
-		path := e.path
-		removing := d.totalChildrenRec(path.Key())
-		console.Debugf("compacting %v, removing %d children\n", path, removing)
-		flat := d.sizeRecursive(path.Key())
+		candidate := e.path
+		if candidate == path && !compactSelf {
+			// We should be the biggest,
+			// if we cannot compact ourself, we are done.
+			break
+		}
+		removing := d.totalChildrenRec(candidate.Key())
+		flat := d.sizeRecursive(candidate.Key())
 		if flat == nil {
 			leaves = leaves[1:]
 			continue
 		}
+		// Appears to be printed with _MINIO_SERVER_DEBUG=off
+		// console.Debugf("compacting %v, removing %d children\n", candidate, removing)
+
 		flat.Compacted = true
-		d.deleteRecursive(path)
-		d.replaceHashed(path, nil, *flat)
+		d.deleteRecursive(candidate)
+		d.replaceHashed(candidate, nil, *flat)
 
 		// Remove top entry and subtract removed children.
 		remove -= removing

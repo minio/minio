@@ -48,8 +48,8 @@ const (
 	dataScannerSleepPerFolder     = time.Millisecond                 // Time to wait between folders.
 	dataUsageUpdateDirCycles      = 16                               // Visit all folders every n cycles.
 	dataScannerCompactLeastObject = 500                              // Compact when there is less than this many objects in a branch.
-	dataScannerCompactAtChildren  = 5000                             // Compact when there are this many children in a branch.
-	dataScannerCompactAtFolders   = dataScannerCompactAtChildren / 2 // Compact when this many subfolders in a single folder.
+	dataScannerCompactAtChildren  = 10000                            // Compact when there are this many children in a branch.
+	dataScannerCompactAtFolders   = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
 	dataScannerStartDelay         = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling    = true
@@ -223,6 +223,7 @@ type folderScanner struct {
 //
 // This ensures that any branch will never contain an unreasonable amount of other branches,
 // and also that small branches with few objects don't take up unreasonable amounts of space.
+// This keeps the cache size at a reasonable size for all buckets.
 //
 // Whenever a branch is scanned, it is assumed that it will be un-compacted
 // before it hits any of the above limits.
@@ -727,8 +728,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			f.newCache.replaceHashed(thisHash, folder.parent, *flat)
 		}
 
-		// Compact if too many children...
-		f.newCache.reduceChildrenOf(thisHash, dataScannerCompactAtChildren)
+	}
+	// Compact if too many children...
+	if !into.Compacted {
+		f.newCache.reduceChildrenOf(thisHash, dataScannerCompactAtChildren, f.newCache.Info.Name != folder.name)
 	}
 
 	return nil
