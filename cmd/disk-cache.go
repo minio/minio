@@ -374,8 +374,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		wg.Done()
 	}()
 	cleanupBackend := func() {
-		bkReader.Close()
-		pw.CloseWithError(nil)
+		pw.CloseWithError(bkReader.Close())
 		wg.Wait()
 	}
 	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend)
