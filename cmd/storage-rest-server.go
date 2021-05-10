@@ -852,6 +852,8 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 // The returned reader contains the payload and must be closed if no error is returned.
 func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 	var tmp [1]byte
+	// 8K copy buffer, reused for less allocs...
+	var buf [8 << 10]byte
 	for {
 		_, err := io.ReadFull(respBody, tmp[:])
 		if err != nil {
@@ -861,7 +863,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		switch tmp[0] {
 		case 0:
 			// 0 is unbuffered, copy the rest.
-			_, err := io.Copy(w, respBody)
+			_, err := io.CopyBuffer(w, respBody, buf[:])
 			if err == io.EOF {
 				return nil
 			}
@@ -880,7 +882,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 				return err
 			}
 			length := binary.LittleEndian.Uint32(tmp[:])
-			_, err = io.CopyN(w, respBody, int64(length))
+			_, err = io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf[:])
 			if err != nil {
 				return err
 			}
