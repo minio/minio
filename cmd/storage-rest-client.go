@@ -201,7 +201,8 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
@@ -209,19 +210,43 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
-		pr.Close()
+		pr.CloseWithError(err)
 		return cache, err
 	}
 	pr.Close()
 
-	var newCache dataUsageCache
-	pr, pw = io.Pipe()
+	rr, rw := io.Pipe()
 	go func() {
-		pw.CloseWithError(waitForHTTPStream(respBody, pw))
+		rw.CloseWithError(waitForHTTPStream(respBody, rw))
 	}()
-	err = newCache.deserialize(pr)
-	pr.CloseWithError(err)
-	return newCache, err
+
+	ms := msgp.NewReader(rr)
+	for {
+		// Read whether it is an update.
+		upd, err := ms.ReadBool()
+		if err != nil {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		if !upd {
+			// No more updates... New cache follows.
+			break
+		}
+		var update dataUsageEntry
+		err = update.DecodeMsg(ms)
+		if err != nil || err == io.EOF {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		updates <- update
+	}
+	var newCache dataUsageCache
+	err = newCache.DecodeMsg(ms)
+	rr.CloseWithError(err)
+	if err == io.EOF {
+		err = nil
+	}
+	return cache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {

@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
@@ -178,17 +179,23 @@ type cachedFolder struct {
 }
 
 type folderScanner struct {
-	root       string
-	getSize    getSizeFn
-	oldCache   dataUsageCache
-	newCache   dataUsageCache
-	withFilter *bloomFilter
+	root        string
+	getSize     getSizeFn
+	oldCache    dataUsageCache
+	newCache    dataUsageCache
+	updateCache dataUsageCache
+	withFilter  *bloomFilter
 
 	dataUsageScannerDebug bool
 	healFolderInclude     uint32 // Include a clean folder one in n cycles.
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 
 	disks []StorageAPI
+
+	// If set updates will be sent regularly to this channel.
+	// Will not be closed when returned.
+	updates    chan<- dataUsageEntry `msg:"-"`
+	lastUpdate time.Time
 }
 
 // Cache structure and compaction:
@@ -255,9 +262,11 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		getSize:               getSize,
 		oldCache:              cache,
 		newCache:              dataUsageCache{Info: cache.Info},
+		updateCache:           dataUsageCache{Info: cache.Info},
 		dataUsageScannerDebug: intDataUpdateTracker.debug,
 		healFolderInclude:     0,
 		healObjectSelect:      0,
+		updates:               cache.Info.updates,
 	}
 
 	// Add disks for set healing.
@@ -318,6 +327,22 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	return s.newCache, nil
 }
 
+// sendUpdate() should be called on a regular basis when the newCache contains more recent total than previously.
+// May or may not send an update upstream.
+func (f *folderScanner) sendUpdate() {
+	// Send at most an update every minute.
+	if f.updates == nil || time.Since(f.lastUpdate) < time.Minute {
+		return
+	}
+	if flat := f.updateCache.sizeRecursive(f.newCache.Info.Name); flat != nil {
+		select {
+		case f.updates <- *flat:
+		default:
+		}
+		f.lastUpdate = time.Now()
+	}
+}
+
 // scanFolder will scan the provided folder.
 // Files found in the folders will be added to f.newCache.
 // If final is provided folders will be put into f.newFolders or f.existingFolders.
@@ -328,6 +353,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	thisHash := hashPath(folder.name)
 	// Store initial compaction state.
 	wasCompacted := into.Compacted
+
 	for {
 		select {
 		case <-done:
@@ -358,6 +384,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
 				if f.healObjectSelect == 0 || !thisHash.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
+					f.updateCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					if f.dataUsageScannerDebug {
 						console.Debugf(scannerLogPrefix+" Skipping non-updated folder: %v\n", folder.name)
 					}
@@ -412,6 +439,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				delete(abandonedChildren, h.Key()) // h.Key() already accounted for.
 				if exists {
 					existingFolders = append(existingFolders, this)
+					f.updateCache.copyWithChildren(&f.oldCache, h, &thisHash)
 				} else {
 					newFolders = append(newFolders, this)
 				}
@@ -497,11 +525,45 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			if !into.Compacted {
 				into.addChild(dataUsageHash(folder.name))
 			}
+			// We scanned a folder, optionally send update.
+			f.sendUpdate()
 		}
 
 		// Scan new...
 		for _, folder := range newFolders {
+			h := hashPath(folder.name)
+			// Add new folders to the update tree so totals update for these.
+			if !into.Compacted {
+				var foundAny bool
+				parent := thisHash
+				for parent != hashPath(f.updateCache.Info.Name) {
+					e := f.updateCache.find(parent.Key())
+					if e == nil || e.Compacted {
+						foundAny = true
+						break
+					}
+					if next := f.updateCache.searchParent(parent); next == nil {
+						foundAny = true
+						break
+					} else {
+						parent = *next
+					}
+				}
+				if !foundAny {
+					// Add non-compacted empty entry.
+					fmt.Println("Adding empty", folder.name)
+					f.updateCache.replaceHashed(h, &thisHash, dataUsageEntry{})
+				}
+			}
 			scanFolder(folder)
+			// Add new folders if this is new and we don't have existing.
+			if !into.Compacted {
+				parent := f.updateCache.find(thisHash.Key())
+				if parent != nil && !parent.Compacted {
+					f.updateCache.deleteRecursive(h)
+					f.updateCache.copyWithChildren(&f.newCache, h, &thisHash)
+				}
+			}
 		}
 
 		// Scan existing...
@@ -512,7 +574,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// and the entry itself is compacted.
 			if !into.Compacted && f.oldCache.isCompacted(h) {
 				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-					if !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
+					if f.healObjectSelect == 0 || !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 						// Transfer and add as child...
 						f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
 						into.addChild(h)
@@ -732,6 +794,13 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	// Compact if too many children...
 	if !into.Compacted {
 		f.newCache.reduceChildrenOf(thisHash, dataScannerCompactAtChildren, f.newCache.Info.Name != folder.name)
+	}
+	if _, ok := f.updateCache.Cache[thisHash.Key()]; !wasCompacted && ok {
+		// Replace if existed before.
+		if flat := f.newCache.sizeRecursive(thisHash.Key()); flat != nil {
+			f.updateCache.deleteRecursive(thisHash)
+			f.updateCache.replaceHashed(thisHash, folder.parent, *flat)
+		}
 	}
 
 	return nil

@@ -239,6 +239,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 
 // NSScanner returns data usage stats of the current FS deployment
 func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	defer close(updates)
 	// Load bucket totals
 	var totalCache dataUsageCache
 	err := totalCache.load(ctx, fs, dataUsageCacheName)
@@ -273,7 +274,21 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 			bCache.Info.Name = b.Name
 		}
 		bCache.Info.BloomFilter = totalCache.Info.BloomFilter
-
+		upds := make(chan dataUsageEntry, 1)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for update := range upds {
+				totalCache.replace(b.Name, dataUsageRoot, update)
+				if intDataUpdateTracker.debug {
+					logger.Info(color.Green("NSScanner:")+" Got update:", len(totalCache.Cache))
+				}
+				cloned := totalCache.clone()
+				updates <- cloned.dui(dataUsageRoot, buckets)
+			}
+		}()
+		bCache.Info.updates = upds
 		cache, err := fs.scanBucket(ctx, b.Name, bCache)
 		select {
 		case <-ctx.Done():
@@ -282,6 +297,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 		}
 		logger.LogIf(ctx, err)
 		cache.Info.BloomFilter = nil
+		wg.Wait()
 
 		if cache.root() == nil {
 			if intDataUpdateTracker.debug {
