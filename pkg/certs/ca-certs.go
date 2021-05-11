@@ -19,14 +19,25 @@ package certs
 
 import (
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 )
 
-// GetRootCAs - returns all the root CAs into certPool
-// at the input certsCADir
-func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
+// GetRootCAs loads all X.509 certificates at the given path and adds them
+// to the list of system root CAs, if available. The returned CA pool
+// is a conjunction of the system root CAs and the certificate(s) at
+// the given path.
+//
+// If path is a regular file, LoadCAs simply adds it to the CA pool
+// if the file contains a valid X.509 certificate
+//
+// If the path points to a directory, LoadCAs iterates over all top-level
+// files within the directory and adds them to the CA pool if they contain
+// a valid X.509 certificate.
+func GetRootCAs(path string) (*x509.CertPool, error) {
 	rootCAs, _ := loadSystemRoots()
 	if rootCAs == nil {
 		// In some systems system cert pool is not supported
@@ -35,23 +46,48 @@ func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 		rootCAs = x509.NewCertPool()
 	}
 
-	fis, err := ioutil.ReadDir(certsCAsDir)
+	// Open the file path and check whether its a regular file
+	// or a directory.
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return rootCAs, nil
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return rootCAs, nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) || os.IsPermission(err) {
-			// Return success if CA's directory is missing or permission denied.
-			return rootCAs, nil
-		}
+		return rootCAs, err
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
 		return rootCAs, err
 	}
 
-	// Load all custom CA files.
-	for _, fi := range fis {
-		caCert, err := ioutil.ReadFile(path.Join(certsCAsDir, fi.Name()))
-		if err == nil {
-			rootCAs.AppendCertsFromPEM(caCert)
+	// In case of a file add it to the root CAs.
+	if !stat.IsDir() {
+		bytes, err := ioutil.ReadAll(f)
+		if err != nil {
+			return rootCAs, err
 		}
-		// ignore files which are not readable.
+		if !rootCAs.AppendCertsFromPEM(bytes) {
+			return rootCAs, fmt.Errorf("cert: %q does not contain a valid X.509 PEM-encoded certificate", path)
+		}
+		return rootCAs, nil
 	}
 
+	// Otherwise iterate over the files in the directory
+	// and add each on to the root CAs.
+	files, err := f.Readdirnames(0)
+	if err != nil {
+		return rootCAs, err
+	}
+	for _, file := range files {
+		bytes, err := ioutil.ReadFile(filepath.Join(path, file))
+		if err == nil { // ignore files which are not readable.
+			rootCAs.AppendCertsFromPEM(bytes)
+		}
+	}
 	return rootCAs, nil
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/versioning"
+	"github.com/minio/minio/pkg/kms"
 )
 
 const (
@@ -390,7 +391,7 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 			return nil, err
 		}
 		if crypto.S3.IsEncrypted(meta) {
-			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{
+			if data, err = decryptBucketMetadata(cdata, bucket, meta, kms.Context{
 				bucket:            bucket,
 				bucketTargetsFile: bucketTargetsFile,
 			}); err != nil {
