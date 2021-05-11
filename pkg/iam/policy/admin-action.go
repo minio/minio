@@ -35,6 +35,8 @@ const (
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// TopLocksAdminAction - allow listing top locks
 	TopLocksAdminAction = "admin:TopLocksInfo"
+	// ForceUnlockAdminAction - allow force unlock locks
+	ForceUnlockAdminAction = "admin:ForceUnlock"
 	// ProfilingAdminAction - allow profiling
 	ProfilingAdminAction = "admin:Profiling"
 	// TraceAdminAction - allow listing server trace
@@ -127,6 +129,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	StorageInfoAdminAction:         {},
 	DataUsageInfoAdminAction:       {},
 	TopLocksAdminAction:            {},
+	ForceUnlockAdminAction:         {},
 	ProfilingAdminAction:           {},
 	TraceAdminAction:               {},
 	ConsoleLogAdminAction:          {},
@@ -178,6 +181,7 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	OBDInfoAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	BandwidthMonitorAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ForceUnlockAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TraceAdminAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),

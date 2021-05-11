@@ -215,6 +215,23 @@ func (l *localLocker) IsLocal() bool {
 	return true
 }
 
+func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+		l.mutex.Lock()
+		defer l.mutex.Unlock()
+		if len(args.UID) != 0 {
+			return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
+		}
+		for _, resource := range args.Resources {
+			delete(l.lockMap, resource) // Remove the lock (irrespective of write or read lock)
+		}
+		return true, nil
+	}
+}
+
 func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
 	select {
 	case <-ctx.Done():

@@ -60,6 +60,9 @@ type NetLocker interface {
 	// * an error on failure of unlock request operation.
 	Unlock(args LockArgs) (bool, error)
 
+	// Force unlock a resource
+	ForceUnlock(ctx context.Context, args LockArgs) (bool, error)
+
 	// Expired returns if current lock args has expired.
 	Expired(ctx context.Context, args LockArgs) (bool, error)
 
