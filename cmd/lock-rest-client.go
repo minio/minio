@@ -137,6 +137,11 @@ func (client *lockRESTClient) Expired(ctx context.Context, args dsync.LockArgs) 
 	return client.restCall(ctx, lockRESTMethodExpired, args)
 }
 
+// ForceUnlock calls force unlock handler to forcibly unlock an active lock.
+func (client *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodForceUnlock, args)
+}
+
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {
 	if endpoint.IsLocal {
 		return globalLockServers[endpoint]
