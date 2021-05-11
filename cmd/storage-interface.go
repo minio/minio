@@ -30,7 +30,7 @@ type StorageAPI interface {
 
 	// Storage operations.
 	IsOnline() bool      // Returns true if disk is online.
-	LastConn() time.Time // Returns the last time of this disk (re)-connection
+	LastConn() time.Time // Returns the last time this disk (re)-connected
 
 	IsLocal() bool
 
