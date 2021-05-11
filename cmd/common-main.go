@@ -327,6 +327,16 @@ func handleCommonEnvVars() {
 		}
 		globalActiveCred = cred
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+		// If depracated "ACCESS_KEY" and "SECRET_KEY" env vars are provided,
+		// but there is also one of "MINIO_ROOT_*" env var is defined, then
+		// we reject trying deprecated env vars and ask for the missing "MINIO_ROOT_*"
+		if env.IsSet(config.EnvRootUser) {
+			logger.Fatal(config.ErrMissingEnvCredentialRootPassword(nil), "")
+		} else if env.IsSet(config.EnvRootPassword) {
+			logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "")
+		}
+
+		// Try the deprecated "ACCESS_KEY" and "SECRET_KEY" env vars
 		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
