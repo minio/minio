@@ -564,7 +564,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 	})
 }
 
-// addSecurityHeaders adds various HTTP(S) response headers that 
+// SecurityHeaders adds various HTTP(S) response headers that 
 // enable various security protections behaviors in the client's browser.
 func addSecurityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
