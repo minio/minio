@@ -29,8 +29,8 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
-	IsOnline() bool // Returns true if disk is online.
-	LastConn() time.Time
+	IsOnline() bool      // Returns true if disk is online.
+	LastConn() time.Time // Returns the last time of this disk (re)-connection
 
 	IsLocal() bool
 

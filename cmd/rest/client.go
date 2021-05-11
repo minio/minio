@@ -75,6 +75,7 @@ func (n *NetworkError) Unwrap() error {
 // Client - http based RPC client.
 type Client struct {
 	connected int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	_         int32 // For 64 bits alignment
 	lastConn  int64
 
 	// HealthCheckFn is the function set to test for health.
