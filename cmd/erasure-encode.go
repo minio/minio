@@ -72,7 +72,7 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.
 func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer, buf []byte, quorum int) (total int64, err error) {
 	writer := &parallelWriter{
-		writers:     append(make([]io.Writer, 0, len(writers)), writers...), // copy since we modify.
+		writers:     writers,
 		writeQuorum: quorum,
 		errs:        make([]error, len(writers)),
 	}
