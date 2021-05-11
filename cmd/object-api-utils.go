@@ -800,6 +800,11 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			return r, nil
 		}
 	}
+	
+	if oi.Size == 0 {
+		return fn, off, -1, nil
+	}
+	
 	return fn, off, length, nil
 }
 
