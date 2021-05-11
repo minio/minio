@@ -95,16 +95,24 @@ type erasureSets struct {
 
 	disksStorageInfoCache timedValue
 
-	mrfMU         sync.Mutex
-	mrfOperations map[healSource]int
+	mrfMU                  sync.Mutex
+	mrfOperations          map[healSource]int
+	lastConnectDisksOpTime time.Time
 }
 
-func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
+// Return false if endpoint is not connected or has been reconnected after last check
+func isEndpointConnectionStable(diskMap map[string]StorageAPI, endpoint string, lastCheck time.Time) bool {
 	disk := diskMap[endpoint]
 	if disk == nil {
 		return false
 	}
-	return disk.IsOnline()
+	if !disk.IsOnline() {
+		return false
+	}
+	if disk.LastConn().After(lastCheck) {
+		return false
+	}
+	return true
 }
 
 func (s *erasureSets) getDiskMap() map[string]StorageAPI {
@@ -196,6 +204,10 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {
+	defer func() {
+		s.lastConnectDisksOpTime = time.Now()
+	}()
+
 	var wg sync.WaitGroup
 	var setsJustConnected = make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
@@ -204,7 +216,7 @@ func (s *erasureSets) connectDisks() {
 		if endpoint.IsLocal {
 			diskPath = endpoint.Path
 		}
-		if isEndpointConnected(diskMap, diskPath) {
+		if isEndpointConnectionStable(diskMap, diskPath, s.lastConnectDisksOpTime) {
 			continue
 		}
 		wg.Add(1)
