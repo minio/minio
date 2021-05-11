@@ -197,6 +197,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		// Top locks
 		if globalIsDistErasure {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
+			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/force-unlock").
+				Queries("paths", "{paths:.*}").HandlerFunc(httpTraceHdrs(adminAPI.ForceUnlockHandler))
 		}
 
 		// HTTP Trace

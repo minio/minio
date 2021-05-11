@@ -209,6 +209,25 @@ func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ForceUnlockHandler - query expired lock status.
+func (l *lockRESTServer) ForceUnlockHandler(w http.ResponseWriter, r *http.Request) {
+	if !l.IsValid(w, r) {
+		l.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	args, err := getLockArgs(r)
+	if err != nil {
+		l.writeErrorResponse(w, err)
+		return
+	}
+
+	if _, err = l.ll.ForceUnlock(r.Context(), args); err != nil {
+		l.writeErrorResponse(w, err)
+		return
+	}
+}
+
 // nameLockRequesterInfoPair is a helper type for lock maintenance
 type nameLockRequesterInfoPair struct {
 	name string
@@ -378,6 +397,7 @@ func registerLockRESTHandlers(router *mux.Router, endpointServerSets EndpointSer
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler))
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler))
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler))
+			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(lockServer.ForceUnlockHandler))
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodExpired).HandlerFunc(httpTraceAll(lockServer.ExpiredHandler))
 
 			globalLockServers[endpoint] = lockServer.ll

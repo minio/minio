@@ -21,18 +21,19 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v4" // Add Quorum query param
+	lockRESTVersion       = "v5" // Add Force unlock
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
 
 const (
-	lockRESTMethodHealth  = "/health"
-	lockRESTMethodLock    = "/lock"
-	lockRESTMethodRLock   = "/rlock"
-	lockRESTMethodUnlock  = "/unlock"
-	lockRESTMethodRUnlock = "/runlock"
-	lockRESTMethodExpired = "/expired"
+	lockRESTMethodHealth      = "/health"
+	lockRESTMethodLock        = "/lock"
+	lockRESTMethodRLock       = "/rlock"
+	lockRESTMethodUnlock      = "/unlock"
+	lockRESTMethodRUnlock     = "/runlock"
+	lockRESTMethodExpired     = "/expired"
+	lockRESTMethodForceUnlock = "/force-unlock"
 
 	// lockRESTOwner represents owner UUID
 	lockRESTOwner = "owner"

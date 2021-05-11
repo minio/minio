@@ -200,6 +200,7 @@ func (c *Client) IsOnline() bool {
 	return atomic.LoadInt32(&c.connected) == online
 }
 
+// LastConn returns the last date/time when the disk is connected/reconnected
 func (c *Client) LastConn() time.Time {
 	return time.Unix(0, atomic.LoadInt64(&c.lastConn))
 }
