@@ -27,6 +27,7 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/kms"
 )
 
 type sses3 struct{}
@@ -69,12 +70,12 @@ func (sses3) IsEncrypted(metadata map[string]string) bool {
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (s3 sses3) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	keyID, kmsKey, sealedKey, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
 	}
-	unsealKey, err := kms.DecryptKey(keyID, kmsKey, Context{bucket: path.Join(bucket, object)})
+	unsealKey, err := KMS.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
 	if err != nil {
 		return key, err
 	}

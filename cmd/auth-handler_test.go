@@ -357,6 +357,12 @@ func TestIsReqAuthenticated(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
+	newAllSubsystems()
+
+	initAllSubsystems(context.Background(), objLayer)
+
+	globalIAMSys.InitStore(objLayer)
+
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
 		t.Fatalf("unable create credential, %s", err)
@@ -441,6 +447,12 @@ func TestValidateAdminSignature(t *testing.T) {
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
+
+	newAllSubsystems()
+
+	initAllSubsystems(context.Background(), objLayer)
+
+	globalIAMSys.InitStore(objLayer)
 
 	creds, err := auth.CreateCredentials("admin", "mypassword")
 	if err != nil {

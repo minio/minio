@@ -37,9 +37,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/kes"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
@@ -1003,7 +1003,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusServiceUnavailable,
 			}
-		case errors.Is(err, crypto.ErrKESKeyExists):
+		case errors.Is(err, kes.ErrKeyExists):
 			apiErr = APIError{
 				Code:           "XMinioKMSKeyExists",
 				Description:    err.Error(),

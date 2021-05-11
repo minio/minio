@@ -49,7 +49,6 @@ import (
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/handlers"
-	"golang.org/x/net/http2"
 )
 
 const (
@@ -512,45 +511,6 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 		// gzip disable this feature, as we are always interested
 		// in raw stream.
 		DisableCompression: true,
-	}
-
-	return func() *http.Transport {
-		return tr
-	}
-}
-
-func newCustomHTTPTransportWithHTTP2(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
-	// For more details about various values used here refer
-	// https://golang.org/pkg/net/http/#Transport documentation
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
-		MaxIdleConnsPerHost:   1024,
-		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 1 * time.Minute,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
-		TLSClientConfig:       tlsConfig,
-		// Go net/http automatically unzip if content-type is
-		// gzip disable this feature, as we are always interested
-		// in raw stream.
-		DisableCompression: true,
-	}
-
-	if tlsConfig != nil {
-		trhttp2, _ := http2.ConfigureTransports(tr)
-		if trhttp2 != nil {
-			// ReadIdleTimeout is the timeout after which a health check using ping
-			// frame will be carried out if no frame is received on the
-			// connection. 5 minutes is sufficient time for any idle connection.
-			trhttp2.ReadIdleTimeout = 5 * time.Minute
-			// PingTimeout is the timeout after which the connection will be closed
-			// if a response to Ping is not received.
-			trhttp2.PingTimeout = dialTimeout
-			// DisableCompression, if true, prevents the Transport from
-			// requesting compression with an "Accept-Encoding: gzip"
-			trhttp2.DisableCompression = true
-		}
 	}
 
 	return func() *http.Transport {

@@ -320,9 +320,9 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, falloc
 	return bytesWritten, nil
 }
 
-// Renames source path to destination path, fails if the destination path
-// parents are not already created.
-func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
+// Renames source path to destination path, creates all the
+// missing parents if they don't exist.
+func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
 	if err := checkPathLength(sourcePath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -332,9 +332,9 @@ func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error 
 		return err
 	}
 
-	if err := os.Rename(sourcePath, destPath); err != nil {
+	if err := renameAll(sourcePath, destPath); err != nil {
 		logger.LogIf(ctx, err)
-		return osErrToFileErr(err)
+		return err
 	}
 
 	return nil

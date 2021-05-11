@@ -41,13 +41,18 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 			p.errs[i] = errDiskNotFound
 			continue
 		}
-
+		if p.errs[i] != nil {
+			continue
+		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, p.errs[i] = p.writers[i].Write(blocks[i])
-			if p.errs[i] != nil {
-				p.writers[i] = nil
+			var n int
+			n, p.errs[i] = p.writers[i].Write(blocks[i])
+			if p.errs[i] == nil {
+				if n != len(blocks[i]) {
+					p.errs[i] = io.ErrShortWrite
+				}
 			}
 		}(i)
 	}
@@ -57,12 +62,7 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
 	// i.e if we do no return here in such a case, reduceWriteQuorumErrs() would
 	// return a quorum error to HealFile().
-	nilCount := 0
-	for _, err := range p.errs {
-		if err == nil {
-			nilCount++
-		}
-	}
+	nilCount := countErrs(p.errs, nil)
 	if nilCount >= p.writeQuorum {
 		return nil
 	}

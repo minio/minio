@@ -56,6 +56,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/s3select"
 	"github.com/minio/sio"
@@ -1120,7 +1121,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 		var oldKey, newKey []byte
 		var newKeyID string
-		var kmsCtx crypto.Context
+		var kmsCtx kms.Context
 		var objEncKey crypto.ObjectKey
 		sseCopyKMS := crypto.S3KMS.IsEncrypted(srcInfo.UserDefined)
 		sseCopyS3 := crypto.S3.IsEncrypted(srcInfo.UserDefined)
