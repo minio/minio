@@ -827,13 +827,15 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	readers := make([]*metacacheReader, askDisks)
 	for i := range disks {
 		r, w := io.Pipe()
-		d := disks[i]
+		// Make sure we close the pipe so blocked writes doesn't stay around.
+		defer r.CloseWithError(context.Canceled)
+
 		readers[i], err = newMetacacheReader(r)
 		if err != nil {
 			return err
 		}
-		// Make sure we close the pipe so blocked writes doesn't stay around.
-		defer r.CloseWithError(context.Canceled)
+		d := disks[i]
+
 		// Send request to each disk.
 		go func() {
 			werr := d.WalkDir(ctx, WalkDirOptions{

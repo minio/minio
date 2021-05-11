@@ -909,9 +909,9 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 // client closed the stream prematurely.
 func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 	pr, pw := io.Pipe()
-	comp := s2.NewWriter(pw)
 	// Copy input to compressor
 	go func() {
+		comp := s2.NewWriter(pw)
 		cn, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
@@ -926,12 +926,7 @@ func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 			return
 		}
 		// Close the stream.
-		if err = comp.Close(); err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		// Everything ok, do regular close.
-		pw.Close()
+		pw.CloseWithError(comp.Close())
 	}()
 	return pr
 }

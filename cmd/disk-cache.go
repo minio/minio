@@ -357,22 +357,27 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-	teeReader := io.TeeReader(bkReader, pipeWriter)
+	pr, pw := io.Pipe()
+	var wg sync.WaitGroup
+	teeReader := io.TeeReader(bkReader, pw)
 	userDefined := getMetadata(bkReader.ObjInfo)
+	wg.Add(1)
 	go func() {
 		_, putErr := dcache.Put(ctx, bucket, object,
-			io.LimitReader(pipeReader, bkReader.ObjInfo.Size),
+			io.LimitReader(pr, bkReader.ObjInfo.Size),
 			bkReader.ObjInfo.Size, rs, ObjectOptions{
 				UserDefined: userDefined,
 			}, false)
-		// close the write end of the pipe, so the error gets
-		// propagated to getObjReader
-		pipeWriter.CloseWithError(putErr)
+		// close the read end of the pipe, so the error gets
+		// propagated to teeReader
+		pr.CloseWithError(putErr)
+		wg.Done()
 	}()
-	cleanupBackend := func() { bkReader.Close() }
-	cleanupPipe := func() { pipeWriter.Close() }
-	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend, cleanupPipe)
+	cleanupBackend := func() {
+		pw.CloseWithError(bkReader.Close())
+		wg.Wait()
+	}
+	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend)
 }
 
 // Returns ObjectInfo from cache if available.

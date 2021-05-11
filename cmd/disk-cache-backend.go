@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/fips"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/sio"
 )
@@ -950,7 +951,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		return nil, numHits, nErr
 	}
 	filePath := pathJoin(cacheObjPath, cacheFile)
-	pr, pw := io.Pipe()
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		err := c.bitrotReadFromCache(ctx, filePath, off, length, pw)
 		if err != nil {
@@ -960,7 +961,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	}()
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+	pipeCloser := func() { pr.CloseWithError(nil) }
 
 	gr, gerr := fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 	if gerr != nil {
