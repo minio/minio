@@ -550,8 +550,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 23 {
-		err = msgp.ArrayError{Wanted: 23, Got: zb0001}
+	if zb0001 != 24 {
+		err = msgp.ArrayError{Wanted: 24, Got: zb0001}
 		return
 	}
 	z.Volume, err = dc.ReadString()
@@ -592,6 +592,11 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	z.TransitionTier, err = dc.ReadString()
 	if err != nil {
 		err = msgp.WrapError(err, "TransitionTier")
+		return
+	}
+	z.TransitionRemoteVersionID, err = dc.ReadString()
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionRemoteVersionID")
 		return
 	}
 	z.ExpireRestored, err = dc.ReadBool()
@@ -715,8 +720,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 23
-	err = en.Append(0xdc, 0x0, 0x17)
+	// array header, size 24
+	err = en.Append(0xdc, 0x0, 0x18)
 	if err != nil {
 		return
 	}
@@ -758,6 +763,11 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.TransitionTier)
 	if err != nil {
 		err = msgp.WrapError(err, "TransitionTier")
+		return
+	}
+	err = en.WriteString(z.TransitionRemoteVersionID)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionRemoteVersionID")
 		return
 	}
 	err = en.WriteBool(z.ExpireRestored)
@@ -860,8 +870,8 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 23
-	o = append(o, 0xdc, 0x0, 0x17)
+	// array header, size 24
+	o = append(o, 0xdc, 0x0, 0x18)
 	o = msgp.AppendString(o, z.Volume)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendString(o, z.VersionID)
@@ -870,6 +880,7 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.TransitionStatus)
 	o = msgp.AppendString(o, z.TransitionedObjName)
 	o = msgp.AppendString(o, z.TransitionTier)
+	o = msgp.AppendString(o, z.TransitionRemoteVersionID)
 	o = msgp.AppendBool(o, z.ExpireRestored)
 	o = msgp.AppendString(o, z.DataDir)
 	o = msgp.AppendBool(o, z.XLV1)
@@ -911,8 +922,8 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 23 {
-		err = msgp.ArrayError{Wanted: 23, Got: zb0001}
+	if zb0001 != 24 {
+		err = msgp.ArrayError{Wanted: 24, Got: zb0001}
 		return
 	}
 	z.Volume, bts, err = msgp.ReadStringBytes(bts)
@@ -953,6 +964,11 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.TransitionTier, bts, err = msgp.ReadStringBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "TransitionTier")
+		return
+	}
+	z.TransitionRemoteVersionID, bts, err = msgp.ReadStringBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionRemoteVersionID")
 		return
 	}
 	z.ExpireRestored, bts, err = msgp.ReadBoolBytes(bts)
@@ -1077,7 +1093,7 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfo) Msgsize() (s int) {
-	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
+	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.TransitionRemoteVersionID) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
 	if z.Metadata != nil {
 		for za0001, za0002 := range z.Metadata {
 			_ = za0002

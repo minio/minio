@@ -56,14 +56,17 @@ func (s3 *warmBackendS3) getDest(object string) string {
 	return destObj
 }
 
-func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, length int64) error {
-	_, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{StorageClass: s3.StorageClass})
-	return s3.ToObjectError(err, object)
+func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
+	res, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{StorageClass: s3.StorageClass})
+	return remoteVersionID(res.VersionID), s3.ToObjectError(err, object)
 }
 
-func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts WarmBackendGetOpts) (io.ReadCloser, error) {
+func (s3 *warmBackendS3) Get(ctx context.Context, object string, rv remoteVersionID, opts WarmBackendGetOpts) (io.ReadCloser, error) {
 	gopts := minio.GetObjectOptions{}
 
+	if rv != "" {
+		gopts.VersionID = string(rv)
+	}
 	if opts.startOffset >= 0 && opts.length > 0 {
 		if err := gopts.SetRange(opts.startOffset, opts.startOffset+opts.length-1); err != nil {
 			return nil, s3.ToObjectError(err, object)
@@ -78,8 +81,12 @@ func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts WarmBacken
 	return r, nil
 }
 
-func (s3 *warmBackendS3) Remove(ctx context.Context, object string) error {
-	err := s3.client.RemoveObject(ctx, s3.Bucket, s3.getDest(object), minio.RemoveObjectOptions{})
+func (s3 *warmBackendS3) Remove(ctx context.Context, object string, rv remoteVersionID) error {
+	ropts := minio.RemoveObjectOptions{}
+	if rv != "" {
+		ropts.VersionID = string(rv)
+	}
+	err := s3.client.RemoveObject(ctx, s3.Bucket, s3.getDest(object), ropts)
 	return s3.ToObjectError(err, object)
 }
 

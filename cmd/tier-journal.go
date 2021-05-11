@@ -42,13 +42,18 @@ type tierJournal struct {
 }
 
 type jentry struct {
-	ObjName  string `msg:"obj"`
-	TierName string `msg:"tier"`
+	ObjName         string `msg:"obj"`
+	RemoteVersionID string `msg:"rvid"`
+	TierName        string `msg:"tier"`
 }
 
 const (
 	tierJournalVersion = 1
 	tierJournalHdrLen  = 2 // 2 bytes
+)
+
+var (
+	errUnsupportedJournalVersion = errors.New("unsupported pending deletes journal version")
 )
 
 func initTierDeletionJournal(done <-chan struct{}) (*tierJournal, error) {
@@ -84,7 +89,7 @@ func (j *tierJournal) rotate() error {
 	return j.Open()
 }
 
-type walkFn func(objName, tierName string) error
+type walkFn func(objName, rvID, tierName string) error
 
 func (j *tierJournal) ReadOnlyPath() string {
 	return filepath.Join(j.diskPath, minioMetaBucket, "ilm", "deletion-journal.ro.bin")
@@ -111,6 +116,7 @@ func (j *tierJournal) WalkEntries(fn walkFn) {
 	}
 	defer ro.Close()
 	mr := msgp.NewReader(ro)
+
 	done := false
 	for {
 		var entry jentry
@@ -123,9 +129,11 @@ func (j *tierJournal) WalkEntries(fn walkFn) {
 			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to decode journal entry %s", err))
 			break
 		}
-		err = fn(entry.ObjName, entry.TierName)
+		err = fn(entry.ObjName, entry.RemoteVersionID, entry.TierName)
 		if err != nil && !isErrObjectNotFound(err) {
 			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to delete transitioned object %s from %s due to %s", entry.ObjName, entry.TierName, err))
+			// We add the entry into the active journal to try again
+			// later.
 			j.AddEntry(entry)
 		}
 	}
@@ -134,12 +142,12 @@ func (j *tierJournal) WalkEntries(fn walkFn) {
 	}
 }
 
-func deleteObjectFromRemoteTier(objName, tierName string) error {
+func deleteObjectFromRemoteTier(objName, rvID, tierName string) error {
 	w, err := globalTierConfigMgr.getDriver(tierName)
 	if err != nil {
 		return err
 	}
-	err = w.Remove(context.Background(), objName)
+	err = w.Remove(context.Background(), objName, remoteVersionID(rvID))
 	if err != nil {
 		return err
 	}
@@ -263,8 +271,15 @@ func (j *tierJournal) OpenRO() (io.ReadCloser, error) {
 
 	switch binary.LittleEndian.Uint16(data[:]) {
 	case tierJournalVersion:
+		return file, nil
 	default:
-		return nil, errors.New("unsupported pending deletes journal version")
+		return nil, errUnsupportedJournalVersion
 	}
-	return file, nil
+}
+
+// jentryV1 represents the entry in the journal before RemoteVersionID was
+// added. It remains here for use in tests for the struct element addition.
+type jentryV1 struct {
+	ObjName  string `msg:"obj"`
+	TierName string `msg:"tier"`
 }

@@ -41,14 +41,15 @@ import (
 //     logger.LogIf(ctx, err)
 // }
 type objSweeper struct {
-	Object           string
-	Bucket           string
-	ReqVersion       string // version ID set by application, applies only to DeleteObject and DeleteObjects APIs
-	Versioned        bool
-	Suspended        bool
-	TransitionStatus string
-	TransitionTier   string
-	RemoteObject     string
+	Object                    string
+	Bucket                    string
+	ReqVersion                string // version ID set by application, applies only to DeleteObject and DeleteObjects APIs
+	Versioned                 bool
+	Suspended                 bool
+	TransitionStatus          string
+	TransitionTier            string
+	TransitionRemoteVersionID string
+	RemoteObject              string
 }
 
 // newObjSweeper returns an objSweeper for a given bucket and object.
@@ -116,6 +117,7 @@ func (os *objSweeper) SetTransitionState(info ObjectInfo) {
 	os.TransitionTier = info.TransitionTier
 	os.TransitionStatus = info.TransitionStatus
 	os.RemoteObject = info.transitionedObjName
+	os.TransitionRemoteVersionID = info.transitionRemoteVersionID
 }
 
 // shouldRemoveRemoteObject determines if a transitioned object should be
@@ -142,7 +144,11 @@ func (os *objSweeper) shouldRemoveRemoteObject() (jentry, bool) {
 		delTier = true
 	}
 	if delTier {
-		return jentry{ObjName: os.RemoteObject, TierName: os.TransitionTier}, true
+		return jentry{
+			ObjName:         os.RemoteObject,
+			RemoteVersionID: os.TransitionRemoteVersionID,
+			TierName:        os.TransitionTier,
+		}, true
 	}
 	return jentry{}, false
 }

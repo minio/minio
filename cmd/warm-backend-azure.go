@@ -53,19 +53,23 @@ func (az *warmBackendAzure) tier() azblob.AccessTierType {
 	}
 	return azblob.AccessTierType("")
 }
-func (az *warmBackendAzure) Put(ctx context.Context, object string, r io.Reader, length int64) error {
+
+// FIXME: add support for remote version ID in Azure remote tier and remove
+// this. Currently it's a no-op.
+
+func (az *warmBackendAzure) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
 	blobURL := az.serviceURL.NewContainerURL(az.Bucket).NewBlockBlobURL(az.getDest(object))
 	// set tier if specified -
 	if az.StorageClass != "" {
 		if _, err := blobURL.SetTier(ctx, az.tier(), azblob.LeaseAccessConditions{}); err != nil {
-			return azureToObjectError(err, az.Bucket, object)
+			return "", azureToObjectError(err, az.Bucket, object)
 		}
 	}
-	_, err := azblob.UploadStreamToBlockBlob(ctx, r, blobURL, azblob.UploadStreamToBlockBlobOptions{})
-	return azureToObjectError(err, az.Bucket, object)
+	res, err := azblob.UploadStreamToBlockBlob(ctx, r, blobURL, azblob.UploadStreamToBlockBlobOptions{})
+	return remoteVersionID(res.Version()), azureToObjectError(err, az.Bucket, object)
 }
 
-func (az *warmBackendAzure) Get(ctx context.Context, object string, opts WarmBackendGetOpts) (r io.ReadCloser, err error) {
+func (az *warmBackendAzure) Get(ctx context.Context, object string, rv remoteVersionID, opts WarmBackendGetOpts) (r io.ReadCloser, err error) {
 	if opts.startOffset < 0 {
 		return nil, InvalidRange{}
 	}
@@ -79,7 +83,7 @@ func (az *warmBackendAzure) Get(ctx context.Context, object string, opts WarmBac
 	return rc, nil
 }
 
-func (az *warmBackendAzure) Remove(ctx context.Context, object string) error {
+func (az *warmBackendAzure) Remove(ctx context.Context, object string, rv remoteVersionID) error {
 	blob := az.serviceURL.NewContainerURL(az.Bucket).NewBlobURL(az.getDest(object))
 	_, err := blob.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 	return azureToObjectError(err, az.Bucket, object)
