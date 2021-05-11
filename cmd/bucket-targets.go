@@ -21,11 +21,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/versioning"
+	"github.com/minio/minio/pkg/kms"
 )
 
 const (
@@ -385,12 +386,13 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 		return nil, nil
 	}
 	data = cdata
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if len(cmetadata) != 0 {
 		if err := json.Unmarshal(cmetadata, &meta); err != nil {
 			return nil, err
 		}
 		if crypto.S3.IsEncrypted(meta) {
-			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{
+			if data, err = decryptBucketMetadata(cdata, bucket, meta, kms.Context{
 				bucket:            bucket,
 				bucketTargetsFile: bucketTargetsFile,
 			}); err != nil {

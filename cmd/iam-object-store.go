@@ -28,6 +28,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -244,6 +245,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 			}
 		}
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Unmarshal(data, item)
 }
 

@@ -34,14 +34,13 @@ package fips
 
 import "crypto/tls"
 
-// Enabled returns true if and only if FIPS 140-2 support
-// is enabled.
+// Enabled indicates whether cryptographic primitives,
+// like AES or SHA-256, are implemented using a FIPS 140
+// certified module.
 //
-// FIPS 140-2 requires that only specifc cryptographic
-// primitives, like AES or SHA-256, are used and that
-// those primitives are implemented by a FIPS 140-2
-// certified cryptographic module.
-func Enabled() bool { return enabled }
+// If FIPS-140 is enabled no non-NIST/FIPS approved
+// primitives must be used.
+const Enabled = enabled
 
 // CipherSuitesDARE returns the supported cipher suites
 // for the DARE object encryption.

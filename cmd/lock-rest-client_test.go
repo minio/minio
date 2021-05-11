@@ -47,12 +47,12 @@ func TestLockRESTlient(t *testing.T) {
 		t.Fatal("Expected for Lock to fail")
 	}
 
-	_, err = lkClient.RUnlock(dsync.LockArgs{})
+	_, err = lkClient.RUnlock(context.Background(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for RUnlock to fail")
 	}
 
-	_, err = lkClient.Unlock(dsync.LockArgs{})
+	_, err = lkClient.Unlock(context.Background(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for Unlock to fail")
 	}

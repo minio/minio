@@ -3,7 +3,7 @@ module github.com/minio/minio
 go 1.16
 
 require (
-	cloud.google.com/go/storage v1.8.0
+	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Shopify/sarama v1.27.2
@@ -24,12 +24,12 @@ require (
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.0
+	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.10.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v2.0.0+incompatible
-	github.com/google/martian v2.1.1-0.20190517191504-25dcb96d9e51+incompatible // indirect
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
@@ -48,6 +48,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
+	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.0.2
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
 	github.com/minio/parquet-go v1.0.0
@@ -84,13 +85,13 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 	golang.org/x/mod v0.4.0 // indirect
-	golang.org/x/net v0.0.0-20210421230115-4e50805a0758
 	golang.org/x/sys v0.0.0-20210420072515-93ed5bcd2bfe
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	golang.org/x/tools v0.1.1-0.20210201201750-4d4ee958a9b7 // indirect
-	google.golang.org/api v0.25.0
-	google.golang.org/genproto v0.0.0-20200527145253-8367513e4ece // indirect
+	google.golang.org/api v0.31.0
 	gopkg.in/yaml.v2 v2.3.0
 	honnef.co/go/tools v0.0.1-2020.1.6 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.29.1

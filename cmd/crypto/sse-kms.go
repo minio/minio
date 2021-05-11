@@ -62,13 +62,13 @@ func (ssekms) IsRequested(h http.Header) bool {
 
 // ParseHTTP parses the SSE-KMS headers and returns the SSE-KMS key ID
 // and the KMS context on success.
-func (ssekms) ParseHTTP(h http.Header) (string, Context, error) {
+func (ssekms) ParseHTTP(h http.Header) (string, kms.Context, error) {
 	algorithm := h.Get(xhttp.AmzServerSideEncryption)
 	if algorithm != xhttp.AmzEncryptionKMS {
 		return "", nil, ErrInvalidEncryptionMethod
 	}
 
-	var ctx Context
+	var ctx kms.Context
 	if context, ok := h[xhttp.AmzServerSideEncryptionKmsContext]; ok {
 		b, err := base64.StdEncoding.DecodeString(context[0])
 		if err != nil {
@@ -117,7 +117,7 @@ func (s3 ssekms) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket
 // the modified metadata. If the keyID and the kmsKey is not empty it encodes
 // both into the metadata as well. It allocates a new metadata map if metadata
 // is nil.
-func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey, ctx Context) map[string]string {
+func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey, ctx kms.Context) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
 		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
@@ -157,7 +157,7 @@ func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []
 // KMS data key it returns both. If the metadata does not contain neither a
 // KMS master key ID nor a sealed KMS data key it returns an empty keyID and
 // KMS data key. Otherwise, it returns an error.
-func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, ctx Context, err error) {
+func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, ctx kms.Context, err error) {
 	// Extract all required values from object metadata
 	b64IV, ok := metadata[MetaIV]
 	if !ok {

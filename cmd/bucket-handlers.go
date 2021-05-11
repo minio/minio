@@ -50,6 +50,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -1015,7 +1016,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				reader io.Reader
 				keyID  string
 				key    []byte
-				kmsCtx crypto.Context
+				kmsCtx kms.Context
 			)
 			kind, _ := crypto.IsRequested(formValues)
 			switch kind {

@@ -118,7 +118,7 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 }
 
 // This function rotates old to new key.
-func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object string, metadata map[string]string, ctx crypto.Context) error {
+func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object string, metadata map[string]string, ctx kms.Context) error {
 	kind, _ := crypto.IsEncrypted(metadata)
 	switch kind {
 	case crypto.S3:
@@ -260,7 +260,7 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 	}
 }
 
-func newEncryptReader(content io.Reader, kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, ctx crypto.Context) (io.Reader, crypto.ObjectKey, error) {
+func newEncryptReader(content io.Reader, kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, ctx kms.Context) (io.Reader, crypto.ObjectKey, error) {
 	objectEncryptionKey, err := newEncryptMetadata(kind, keyID, key, bucket, object, metadata, ctx)
 	if err != nil {
 		return nil, crypto.ObjectKey{}, err
@@ -280,7 +280,7 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 	var (
 		key   []byte
 		keyID string
-		ctx   crypto.Context
+		ctx   kms.Context
 	)
 	kind, _ := crypto.IsRequested(r.Header)
 	switch kind {
@@ -312,7 +312,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	var (
 		key   []byte
 		keyID string
-		ctx   crypto.Context
+		ctx   kms.Context
 		err   error
 	)
 	kind, _ := crypto.IsRequested(r.Header)
@@ -334,7 +334,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch kind, _ := crypto.IsEncrypted(metadata); kind {
 	case crypto.S3:
-		var KMS crypto.KMS = GlobalKMS
+		var KMS kms.KMS = GlobalKMS
 		if isCacheEncrypted(metadata) {
 			KMS = globalCacheKMS
 		}

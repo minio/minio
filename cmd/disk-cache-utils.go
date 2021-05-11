@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/pkg/kms"
 )
 
 // CacheStatusType - whether the request was served from cache.
@@ -249,7 +250,7 @@ func decryptCacheObjectETag(info *ObjectInfo) error {
 		if err != nil {
 			return err
 		}
-		extKey, err := globalCacheKMS.DecryptKey(keyID, kmsKey, crypto.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
+		extKey, err := globalCacheKMS.DecryptKey(keyID, kmsKey, kms.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
 		if err != nil {
 			return err
 		}
