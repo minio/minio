@@ -34,6 +34,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
@@ -43,7 +44,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -362,10 +362,10 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi}, &sizeSummary{})
 		if sz >= 0 {
-			return sizeSummary{totalSize: sz}, nil
+			return sizeSummary{totalSize: sz, versions: 1}, nil
 		}
 
-		return sizeSummary{totalSize: fi.Size()}, nil
+		return sizeSummary{totalSize: fi.Size(), versions: 1}, nil
 	})
 
 	return cache, err

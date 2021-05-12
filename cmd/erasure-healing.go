@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -213,7 +213,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		return true
 	}
 	if erErr == nil {
-		if meta.TransitionStatus != lifecycle.TransitionComplete {
+		if !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			if IsErr(dataErr, []error{
 				errFileNotFound,
@@ -271,7 +271,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// List of disks having all parts as per latest er.meta.
 	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
-
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
 	// to be healed.
@@ -367,7 +366,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		nfi := fi
 		nfi.Erasure.Index = 0
 		nfi.Erasure.Checksums = nil
-		if fi.TransitionStatus != lifecycle.TransitionComplete {
+		if fi.IsRemote() {
 			nfi.Parts = nil
 		}
 		return nfi
@@ -401,7 +400,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
-	if !latestMeta.Deleted && latestMeta.TransitionStatus != lifecycle.TransitionComplete {
+	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		result.DataBlocks = latestMeta.Erasure.DataBlocks
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
 
@@ -451,7 +450,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize(), true)
 				}
 			}
-			err = erasure.Heal(ctx, readers, writers, partSize)
+			err = erasure.Heal(ctx, readers, writers, partSize, er.bp)
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {
@@ -509,7 +508,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// dataDir should be empty when
 		// - transitionStatus is complete and not in restored state
-		if partsMetadata[i].TransitionStatus == lifecycle.TransitionComplete && !isRestoredObjectOnDisk(partsMetadata[i].Metadata) {
+		if partsMetadata[i].IsRemote() {
 			partsMetadata[i].DataDir = ""
 		}
 		// Attempt a rename now from healed data to final location.

@@ -22,8 +22,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -280,11 +279,11 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// disk has a valid xl.meta but may not have all the
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
-			if partsMetadata[i].TransitionStatus != lifecycle.TransitionComplete {
+			if !partsMetadata[i].IsRemote() {
 				dataErrs[i] = onlineDisk.VerifyFile(ctx, bucket, object, partsMetadata[i])
 			}
 		case madmin.HealNormalScan:
-			if partsMetadata[i].TransitionStatus != lifecycle.TransitionComplete {
+			if !partsMetadata[i].IsRemote() {
 				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, partsMetadata[i])
 			}
 		}

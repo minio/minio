@@ -40,6 +40,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
@@ -47,7 +48,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (

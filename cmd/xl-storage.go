@@ -223,34 +223,27 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	if env.Get("MINIO_CI_CD", "") != "" {
 		rootDisk = true
 	} else {
-		if IsDocker() || IsKubernetes() {
-			// Start with overlay "/" to check if
-			// possible the path has device id as
-			// "overlay" that would mean the path
-			// is emphemeral and we should treat it
-			// as root disk from the baremetal
-			// terminology.
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
-			if err != nil {
-				return nil, err
-			}
-			if !rootDisk {
-				// No root disk was found, its possible that
-				// path is referenced at "/etc/hosts" which has
-				// different device ID that points to the original
-				// "/" on the host system, fall back to that instead
-				// to verify of the device id is same.
-				rootDisk, err = disk.IsRootDisk(path, "/etc/hosts")
+		rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
+		if err != nil {
+			return nil, err
+		}
+		if !rootDisk {
+			// If for some reason we couldn't detect the
+			// root disk use - MINIO_ROOTDISK_THRESHOLD_SIZE
+			// to figure out if the disk is root disk or not.
+			if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+				info, err := disk.GetInfo(path)
 				if err != nil {
 					return nil, err
 				}
-			}
-
-		} else {
-			// On baremetal setups its always "/" is the root disk.
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
-			if err != nil {
-				return nil, err
+				size, err := humanize.ParseBytes(rootDiskSize)
+				if err != nil {
+					return nil, err
+				}
+				// size of the disk is less than the threshold or
+				// equal to the size of the disk at path, treat
+				// such disks as rootDisks and reject them.
+				rootDisk = info.Total <= size
 			}
 		}
 	}
@@ -342,6 +335,10 @@ func (s *xlStorage) IsOnline() bool {
 	return true
 }
 
+func (s *xlStorage) LastConn() time.Time {
+	return time.Time{}
+}
+
 func (s *xlStorage) IsLocal() bool {
 	return true
 }
@@ -430,17 +427,18 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 			return sizeSummary{}, errSkipFile
 		}
 
-		var totalSize int64
-
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			totalSize += item.applyActions(ctx, objAPI, actionMeta{
+			sz := item.applyActions(ctx, objAPI, actionMeta{
 				oi:         oi,
 				bitRotScan: healOpts.Bitrot,
 			}, &sizeS)
+			if !oi.DeleteMarker && sz == oi.Size {
+				sizeS.versions++
+			}
+			sizeS.totalSize += sz
 		}
-		sizeS.totalSize = totalSize
 		return sizeS, nil
 	})
 
@@ -471,6 +469,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.Free = di.Free
 			dcinfo.Used = di.Used
 			dcinfo.UsedInodes = di.Files - di.Ffree
+			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
 
 			diskID, err := s.GetDiskID()
@@ -851,11 +850,10 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
-		xlMeta.data.remove(versionID)
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch
-		xlMeta.data.remove(dataDir)
+		xlMeta.data.remove(versionID, dataDir)
 		filePath := pathJoin(volumeDir, path, dataDir)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -939,7 +937,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
-		xlMeta, err = newXLMetaV2(fi)
+		err = xlMeta.AddVersion(fi)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err

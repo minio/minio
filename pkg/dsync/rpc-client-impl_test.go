@@ -15,14 +15,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dsync_test
+package dsync
 
 import (
 	"context"
 	"net/rpc"
 	"sync"
-
-	. "github.com/minio/minio/pkg/dsync"
 )
 
 // ReconnectRPCClient is a wrapper type for rpc.Client which provides reconnect on first failure.
@@ -105,12 +103,12 @@ func (rpcClient *ReconnectRPCClient) Lock(ctx context.Context, args LockArgs) (s
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) RUnlock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.RUnlock", &args, &status)
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) Unlock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) Unlock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.Unlock", &args, &status)
 	return status, err
 }

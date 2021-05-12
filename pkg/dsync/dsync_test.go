@@ -15,12 +15,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dsync_test
+package dsync
 
 import (
 	"context"
 	"fmt"
-	"log"
+	golog "log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -32,8 +32,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/minio/minio/pkg/dsync"
-	. "github.com/minio/minio/pkg/dsync"
 )
 
 const numberOfNodes = 5
@@ -56,7 +54,7 @@ func startRPCServers() {
 		server.HandleHTTP(rpcPaths[i], fmt.Sprintf("%s-debug", rpcPaths[i]))
 		l, e := net.Listen("tcp", ":"+strconv.Itoa(i+12345))
 		if e != nil {
-			log.Fatal("listen error:", e)
+			golog.Fatal("listen error:", e)
 		}
 		go http.Serve(l, nil)
 
@@ -244,6 +242,7 @@ func TestFailedRefreshLock(t *testing.T) {
 	// Simulate Refresh RPC response to return no locking found
 	for i := range lockServers {
 		lockServers[i].setRefreshReply(false)
+		defer lockServers[i].setRefreshReply(true)
 	}
 
 	dm := NewDRWMutex(ds, "aap")
@@ -256,7 +255,7 @@ func TestFailedRefreshLock(t *testing.T) {
 		wg.Done()
 	}
 
-	if !dm.GetLock(ctx, cancel, id, source, dsync.Options{Timeout: 5 * time.Minute}) {
+	if !dm.GetLock(ctx, cancel, id, source, Options{Timeout: 5 * time.Minute}) {
 		t.Fatal("GetLock() should be successful")
 	}
 
@@ -268,10 +267,35 @@ func TestFailedRefreshLock(t *testing.T) {
 
 	// Should be safe operation in all cases
 	dm.Unlock()
+}
 
-	// Revert Refresh RPC response to locking found
+// Test Unlock should not timeout
+func TestUnlockShouldNotTimeout(t *testing.T) {
+	dm := NewDRWMutex(ds, "aap")
+
+	if !dm.GetLock(context.Background(), nil, id, source, Options{Timeout: 5 * time.Minute}) {
+		t.Fatal("GetLock() should be successful")
+	}
+
+	// Add delay to lock server responses to ensure that lock does not timeout
 	for i := range lockServers {
-		lockServers[i].setRefreshReply(false)
+		lockServers[i].setResponseDelay(2 * drwMutexUnlockCallTimeout)
+		defer lockServers[i].setResponseDelay(0)
+	}
+
+	unlockReturned := make(chan struct{}, 1)
+	go func() {
+		dm.Unlock()
+		unlockReturned <- struct{}{}
+	}()
+
+	timer := time.NewTimer(2 * drwMutexUnlockCallTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-unlockReturned:
+		t.Fatal("Unlock timed out, which should not happen")
+	case <-timer.C:
 	}
 }
 

@@ -167,6 +167,11 @@ func (client *storageRESTClient) IsOnline() bool {
 	return client.restClient.IsOnline()
 }
 
+// LastConn - returns when the disk is seen to be connected the last time
+func (client *storageRESTClient) LastConn() time.Time {
+	return client.restClient.LastConn()
+}
+
 func (client *storageRESTClient) IsLocal() bool {
 	return false
 }
@@ -208,11 +213,10 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	}()
 	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
 	defer xhttp.DrainBody(respBody)
+	pr.CloseWithError(err)
 	if err != nil {
-		pr.Close()
 		return cache, err
 	}
-	pr.Close()
 
 	var newCache dataUsageCache
 	pr, pw = io.Pipe()

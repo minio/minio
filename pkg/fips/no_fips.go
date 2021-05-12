@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// +build !fips
+
 package fips
 
 import (
@@ -23,7 +25,7 @@ import (
 	"github.com/minio/sio"
 )
 
-var enabled = false
+const enabled = false
 
 func cipherSuitesDARE() []byte {
 	return []byte{sio.AES_256_GCM, sio.CHACHA20_POLY1305}

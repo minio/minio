@@ -37,8 +37,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/kes"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
@@ -47,9 +48,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	trace "github.com/minio/minio/pkg/trace"
 )
 
 const (
@@ -1004,7 +1003,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusServiceUnavailable,
 			}
-		case errors.Is(err, crypto.ErrKESKeyExists):
+		case errors.Is(err, kes.ErrKeyExists):
 			apiErr = APIError{
 				Code:           "XMinioKMSKeyExists",
 				Description:    err.Error(),
@@ -1061,13 +1060,13 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 	return apiErr
 }
 
-// Returns true if the trace.Info should be traced,
+// Returns true if the madmin.TraceInfo should be traced,
 // false if certain conditions are not met.
-// - input entry is not of the type *trace.Info*
+// - input entry is not of the type *madmin.TraceInfo*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
-// - trace.Info type is asked by opts
+// - madmin.TraceInfo type is asked by opts
 func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
-	trcInfo, ok := entry.(trace.Info)
+	trcInfo, ok := entry.(madmin.TraceInfo)
 	if !ok {
 		return false
 	}
@@ -1082,11 +1081,11 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 	if opts.Threshold > 0 {
 		var latency time.Duration
 		switch trcInfo.TraceType {
-		case trace.OS:
+		case madmin.TraceOS:
 			latency = trcInfo.OSStats.Duration
-		case trace.Storage:
+		case madmin.TraceStorage:
 			latency = trcInfo.StorageStats.Duration
-		case trace.HTTP:
+		case madmin.TraceHTTP:
 			latency = trcInfo.CallStats.Latency
 		}
 		if latency < opts.Threshold {
@@ -1094,19 +1093,19 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 		}
 	}
 
-	if opts.Internal && trcInfo.TraceType == trace.HTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
+	if opts.Internal && trcInfo.TraceType == madmin.TraceHTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
 		return true
 	}
 
-	if opts.S3 && trcInfo.TraceType == trace.HTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
+	if opts.S3 && trcInfo.TraceType == madmin.TraceHTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
 		return true
 	}
 
-	if opts.Storage && trcInfo.TraceType == trace.Storage {
+	if opts.Storage && trcInfo.TraceType == madmin.TraceStorage {
 		return true
 	}
 
-	return opts.OS && trcInfo.TraceType == trace.OS
+	return opts.OS && trcInfo.TraceType == madmin.TraceOS
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {

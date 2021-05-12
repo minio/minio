@@ -1,5 +1,3 @@
-// +build ignore
-
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
@@ -17,29 +15,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package crypto
 
 import (
-	"context"
-	"log"
-
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 )
 
-func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY and my-bucketname are
-	// dummy values, please replace them with original values.
+const (
+	// EnvKMSAutoEncryption is the environment variable used to en/disable
+	// SSE-S3 auto-encryption. SSE-S3 auto-encryption, if enabled,
+	// requires a valid KMS configuration and turns any non-SSE-C
+	// request into an SSE-S3 request.
+	// If present EnvAutoEncryption must be either "on" or "off".
+	EnvKMSAutoEncryption = "MINIO_KMS_AUTO_ENCRYPTION"
+)
 
-	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
-	// New returns an MinIO Admin client object.
-	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	dataUsageInfo, err := madmClnt.DataUsageInfo(context.Background())
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Println(dataUsageInfo)
+// LookupAutoEncryption returns true if and only if
+// the MINIO_KMS_AUTO_ENCRYPTION env. variable is
+// set to "on".
+func LookupAutoEncryption() bool {
+	auto, _ := config.ParseBool(env.Get(EnvKMSAutoEncryption, config.EnableOff))
+	return auto
 }

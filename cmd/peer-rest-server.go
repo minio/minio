@@ -30,11 +30,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	b "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/madmin"
-	trace "github.com/minio/minio/pkg/trace"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -981,7 +980,7 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			w.(http.Flusher).Flush()
 		case <-keepAliveTicker.C:
-			if err := enc.Encode(&trace.Info{}); err != nil {
+			if err := enc.Encode(&madmin.TraceInfo{}); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()

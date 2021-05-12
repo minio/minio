@@ -157,21 +157,16 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 			if !o.IncludeDirectories && entry.isDir() {
 				continue
 			}
-			o.debugln("gather got:", entry.name)
 			if o.Marker != "" && entry.name < o.Marker {
-				o.debugln("pre marker")
 				continue
 			}
 			if !strings.HasPrefix(entry.name, o.Prefix) {
-				o.debugln("not in prefix")
 				continue
 			}
 			if !o.Recursive && !entry.isInDir(o.Prefix, o.Separator) {
-				o.debugln("not in dir", o.Prefix, o.Separator)
 				continue
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
-				o.debugln("latest is delete marker")
 				continue
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
@@ -184,7 +179,6 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				}
 				continue
 			}
-			o.debugln("adding...")
 			results.o = append(results.o, entry)
 		}
 		if resCh != nil {
@@ -827,13 +821,15 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	readers := make([]*metacacheReader, askDisks)
 	for i := range disks {
 		r, w := io.Pipe()
-		d := disks[i]
+		// Make sure we close the pipe so blocked writes doesn't stay around.
+		defer r.CloseWithError(context.Canceled)
+
 		readers[i], err = newMetacacheReader(r)
 		if err != nil {
 			return err
 		}
-		// Make sure we close the pipe so blocked writes doesn't stay around.
-		defer r.CloseWithError(context.Canceled)
+		d := disks[i]
+
 		// Send request to each disk.
 		go func() {
 			werr := d.WalkDir(ctx, WalkDirOptions{

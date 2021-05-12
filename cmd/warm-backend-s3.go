@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 type warmBackendS3 struct {

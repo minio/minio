@@ -31,9 +31,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
-	trace "github.com/minio/minio/pkg/trace"
 	jsonrpc "github.com/minio/rpc"
 )
 
@@ -111,7 +111,7 @@ func getOpName(name string) (op string) {
 }
 
 // WebTrace gets trace of web request
-func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
+func WebTrace(ri *jsonrpc.RequestInfo) madmin.TraceInfo {
 	r := ri.Request
 	w := ri.ResponseWriter
 
@@ -126,7 +126,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 	}
 
 	now := time.Now().UTC()
-	t := trace.Info{TraceType: trace.HTTP, FuncName: name, Time: now}
+	t := madmin.TraceInfo{TraceType: madmin.TraceHTTP, FuncName: name, Time: now}
 	t.NodeName = r.Host
 	if globalIsDistErasure {
 		t.NodeName = globalLocalNodeName
@@ -143,7 +143,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 	}
 
 	vars := mux.Vars(r)
-	rq := trace.RequestInfo{
+	rq := madmin.TraceRequestInfo{
 		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
@@ -155,7 +155,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 
 	rw, ok := w.(*logger.ResponseWriter)
 	if ok {
-		rs := trace.ResponseInfo{
+		rs := madmin.TraceResponseInfo{
 			Time:       time.Now().UTC(),
 			Headers:    rw.Header().Clone(),
 			StatusCode: rw.StatusCode,
@@ -167,7 +167,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 		}
 
 		t.RespInfo = rs
-		t.CallStats = trace.CallStats{
+		t.CallStats = madmin.TraceCallStats{
 			Latency:         rs.Time.Sub(rw.StartTime),
 			InputBytes:      int(r.ContentLength),
 			OutputBytes:     rw.Size(),
@@ -180,7 +180,7 @@ func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
 }
 
 // Trace gets trace of http request
-func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Request) trace.Info {
+func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Request) madmin.TraceInfo {
 	name := getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 
 	// Setup a http request body recorder
@@ -196,7 +196,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
 
 	now := time.Now().UTC()
-	t := trace.Info{TraceType: trace.HTTP, FuncName: name, Time: now}
+	t := madmin.TraceInfo{TraceType: madmin.TraceHTTP, FuncName: name, Time: now}
 
 	t.NodeName = r.Host
 	if globalIsDistErasure {
@@ -214,7 +214,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	rq := trace.RequestInfo{
+	rq := madmin.TraceRequestInfo{
 		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
@@ -231,7 +231,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	// Execute call.
 	f(rw, r)
 
-	rs := trace.ResponseInfo{
+	rs := madmin.TraceResponseInfo{
 		Time:       time.Now().UTC(),
 		Headers:    rw.Header().Clone(),
 		StatusCode: rw.StatusCode,
@@ -248,7 +248,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	t.ReqInfo = rq
 	t.RespInfo = rs
 
-	t.CallStats = trace.CallStats{
+	t.CallStats = madmin.TraceCallStats{
 		Latency:         rs.Time.Sub(rw.StartTime),
 		InputBytes:      reqBodyRecorder.Size(),
 		OutputBytes:     rw.Size(),

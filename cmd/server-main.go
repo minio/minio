@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -42,7 +43,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/fips"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 

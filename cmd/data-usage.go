@@ -20,13 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -41,6 +40,7 @@ const (
 // storeDataUsageInBackend will store all objects sent on the gui channel until closed.
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan madmin.DataUsageInfo) {
 	for dataUsageInfo := range dui {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
