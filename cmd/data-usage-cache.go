@@ -798,7 +798,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 	if n != 1 {
 		return io.ErrUnexpectedEOF
 	}
-	ver := b[0]
+	ver := int(b[0])
 	switch ver {
 	case dataUsageCacheVerV1:
 		return errors.New("cache version deprecated (will autoupdate)")
@@ -900,6 +900,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 
 			d.Cache[k] = e
 		}
+		return nil
 	case dataUsageCacheVerCurrent:
 		// Zstd compressed.
 		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
@@ -908,8 +909,9 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		}
 		defer dec.Close()
 		return d.DecodeMsg(msgp.NewReader(dec))
+	default:
+		return fmt.Errorf("dataUsageCache: unknown version: %d", ver)
 	}
-	return fmt.Errorf("dataUsageCache: unknown version: %d", int(ver))
 }
 
 // Trim this from start+end of hashes.
