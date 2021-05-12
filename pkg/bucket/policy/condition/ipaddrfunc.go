@@ -36,7 +36,7 @@ type ipaddrFunc struct {
 }
 
 func (f ipaddrFunc) eval(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	IPs := []net.IP{}
 	for _, s := range rvalues {
 		IP := net.ParseIP(s)
@@ -140,7 +140,7 @@ func valuesToIPNets(n string, values ValueSet) ([]*net.IPNet, error) {
 }
 
 func newIPAddrFunc(n string, key Key, values []*net.IPNet, negate bool) (Function, error) {
-	if key != AWSSourceIP {
+	if !key.Is(AWSSourceIP) {
 		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSourceIP, n)
 	}
 

@@ -39,7 +39,7 @@ type nullFunc struct {
 // evaluate() - evaluates to check whether Key is present in given values or not.
 // Depending on condition boolean value, this function returns true or false.
 func (f nullFunc) evaluate(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	if f.value {
 		return len(rvalues) == 0
 	}

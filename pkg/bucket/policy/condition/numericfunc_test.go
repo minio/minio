@@ -58,78 +58,78 @@ func testNumericFuncEvaluate(t *testing.T, funcs ...Function) {
 func TestNumericFuncEvaluate(t *testing.T) {
 	valueSet := NewValueSet(NewIntValue(16))
 
-	case1Function, err := newNumericEqualsFunc(S3MaxKeys, valueSet, "")
+	case1Function, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNumericNotEqualsFunc(S3MaxKeys, valueSet, "")
+	case2Function, err := newNumericNotEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newNumericGreaterThanFunc(S3MaxKeys, valueSet, "")
+	case3Function, err := newNumericGreaterThanFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newNumericGreaterThanEqualsFunc(S3MaxKeys, valueSet, "")
+	case4Function, err := newNumericGreaterThanEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := newNumericLessThanFunc(S3MaxKeys, valueSet, "")
+	case5Function, err := newNumericLessThanFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := newNumericLessThanEqualsFunc(S3MaxKeys, valueSet, "")
+	case6Function, err := newNumericLessThanEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	testNumericFuncEvaluate(t, case1Function, case2Function, case3Function, case4Function, case5Function, case6Function)
 
-	if _, err := newNumericEqualsFunc(S3MaxKeys, NewValueSet(NewIntValue(16), NewStringValue("16")), ""); err == nil {
+	if _, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), NewValueSet(NewIntValue(16), NewStringValue("16")), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 
-	if _, err := newNumericEqualsFunc(S3MaxKeys, NewValueSet(NewStringValue("sixy one")), ""); err == nil {
+	if _, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), NewValueSet(NewStringValue("sixy one")), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 
-	if _, err := newNumericEqualsFunc(S3MaxKeys, NewValueSet(NewBoolValue(true)), ""); err == nil {
+	if _, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), NewValueSet(NewBoolValue(true)), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 }
 
 func TestNewNumericFuncEvaluate(t *testing.T) {
-	case1Function, err := NewNumericEqualsFunc(S3MaxKeys, 16)
+	case1Function, err := NewNumericEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := NewNumericNotEqualsFunc(S3MaxKeys, 16)
+	case2Function, err := NewNumericNotEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := NewNumericGreaterThanFunc(S3MaxKeys, 16)
+	case3Function, err := NewNumericGreaterThanFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := NewNumericGreaterThanEqualsFunc(S3MaxKeys, 16)
+	case4Function, err := NewNumericGreaterThanEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := NewNumericLessThanFunc(S3MaxKeys, 16)
+	case5Function, err := NewNumericLessThanFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := NewNumericLessThanEqualsFunc(S3MaxKeys, 16)
+	case6Function, err := NewNumericLessThanEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -138,7 +138,7 @@ func TestNewNumericFuncEvaluate(t *testing.T) {
 }
 
 func TestNumericFuncKey(t *testing.T) {
-	case1Function, err := newNumericEqualsFunc(S3MaxKeys, NewValueSet(NewStringValue("16")), "")
+	case1Function, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), NewValueSet(NewStringValue("16")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -147,7 +147,7 @@ func TestNumericFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, S3MaxKeys},
+		{case1Function, S3MaxKeys.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -162,32 +162,32 @@ func TestNumericFuncKey(t *testing.T) {
 func TestNumericFuncName(t *testing.T) {
 	valueSet := NewValueSet(NewStringValue("16"))
 
-	case1Function, err := newNumericEqualsFunc(S3MaxKeys, valueSet, "")
+	case1Function, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNumericNotEqualsFunc(S3MaxKeys, valueSet, "")
+	case2Function, err := newNumericNotEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newNumericGreaterThanFunc(S3MaxKeys, valueSet, "")
+	case3Function, err := newNumericGreaterThanFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newNumericGreaterThanEqualsFunc(S3MaxKeys, valueSet, "")
+	case4Function, err := newNumericGreaterThanEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := newNumericLessThanFunc(S3MaxKeys, valueSet, "")
+	case5Function, err := newNumericLessThanFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := newNumericLessThanEqualsFunc(S3MaxKeys, valueSet, "")
+	case6Function, err := newNumericLessThanEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -215,12 +215,12 @@ func TestNumericFuncName(t *testing.T) {
 
 func TestNumericFuncToMap(t *testing.T) {
 	valueSet := NewValueSet(NewIntValue(16))
-	case1Function, err := newNumericEqualsFunc(S3MaxKeys, valueSet, "")
+	case1Function, err := newNumericEqualsFunc(S3MaxKeys.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Result := map[Key]ValueSet{S3MaxKeys: valueSet}
+	case1Result := map[Key]ValueSet{S3MaxKeys.ToKey(): valueSet}
 
 	testCases := []struct {
 		f              Function
@@ -239,74 +239,74 @@ func TestNumericFuncToMap(t *testing.T) {
 }
 
 func TestNumericFuncClone(t *testing.T) {
-	case1Function, err := NewNumericEqualsFunc(S3MaxKeys, 16)
+	case1Function, err := NewNumericEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := &numericFunc{
 		n:     name{name: numericEquals},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     equals,
 	}
 
-	case2Function, err := NewNumericNotEqualsFunc(S3MaxKeys, 16)
+	case2Function, err := NewNumericNotEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := &numericFunc{
 		n:     name{name: numericNotEquals},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     notEquals,
 	}
 
-	case3Function, err := NewNumericGreaterThanFunc(S3MaxKeys, 16)
+	case3Function, err := NewNumericGreaterThanFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case3Result := &numericFunc{
 		n:     name{name: numericGreaterThan},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     greaterThan,
 	}
 
-	case4Function, err := NewNumericGreaterThanEqualsFunc(S3MaxKeys, 16)
+	case4Function, err := NewNumericGreaterThanEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case4Result := &numericFunc{
 		n:     name{name: numericGreaterThanEquals},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     greaterThanEquals,
 	}
 
-	case5Function, err := NewNumericLessThanFunc(S3MaxKeys, 16)
+	case5Function, err := NewNumericLessThanFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case5Result := &numericFunc{
 		n:     name{name: numericLessThan},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     lessThan,
 	}
 
-	case6Function, err := NewNumericLessThanEqualsFunc(S3MaxKeys, 16)
+	case6Function, err := NewNumericLessThanEqualsFunc(S3MaxKeys.ToKey(), 16)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case6Result := &numericFunc{
 		n:     name{name: numericLessThanEquals},
-		k:     S3MaxKeys,
+		k:     S3MaxKeys.ToKey(),
 		value: 16,
 		c:     lessThanEquals,
 	}

@@ -59,47 +59,47 @@ func testDateFuncEvaluate(t *testing.T, funcs ...Function) {
 func TestDateFuncEvaluate(t *testing.T) {
 	valueSet := NewValueSet(NewStringValue("2009-11-10T15:00:00Z"))
 
-	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newDateNotEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case2Function, err := newDateNotEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newDateGreaterThanFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case3Function, err := newDateGreaterThanFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case4Function, err := newDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := newDateLessThanFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case5Function, err := newDateLessThanFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := newDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case6Function, err := newDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	testDateFuncEvaluate(t, case1Function, case2Function, case3Function, case4Function, case5Function, case6Function)
 
-	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, NewValueSet(NewIntValue(20091110), NewStringValue("2009-11-10T15:00:00Z")), ""); err == nil {
+	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), NewValueSet(NewIntValue(20091110), NewStringValue("2009-11-10T15:00:00Z")), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 
-	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, NewValueSet(NewStringValue("Mon, 02 Jan 2006 15:04:05 MST")), ""); err == nil {
+	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), NewValueSet(NewStringValue("Mon, 02 Jan 2006 15:04:05 MST")), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 
-	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, NewValueSet(NewIntValue(20091110)), ""); err == nil {
+	if _, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), NewValueSet(NewIntValue(20091110)), ""); err == nil {
 		t.Fatalf("error expected")
 	}
 }
@@ -107,32 +107,32 @@ func TestDateFuncEvaluate(t *testing.T) {
 func TestNewDateFuncEvaluate(t *testing.T) {
 	dateValue := time.Date(2009, time.November, 10, 15, 0, 0, 0, time.UTC)
 
-	case1Function, err := NewDateEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case1Function, err := NewDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := NewDateNotEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case2Function, err := NewDateNotEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := NewDateGreaterThanFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case3Function, err := NewDateGreaterThanFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := NewDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case4Function, err := NewDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := NewDateLessThanFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case5Function, err := NewDateLessThanFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := NewDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case6Function, err := NewDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -141,7 +141,7 @@ func TestNewDateFuncEvaluate(t *testing.T) {
 }
 
 func TestDateFuncKey(t *testing.T) {
-	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, NewValueSet(NewStringValue("2009-11-10T15:00:00Z")), "")
+	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), NewValueSet(NewStringValue("2009-11-10T15:00:00Z")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -150,7 +150,7 @@ func TestDateFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, S3ObjectLockRetainUntilDate},
+		{case1Function, S3ObjectLockRetainUntilDate.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -165,32 +165,32 @@ func TestDateFuncKey(t *testing.T) {
 func TestDateFuncName(t *testing.T) {
 	valueSet := NewValueSet(NewStringValue("2009-11-10T15:00:00Z"))
 
-	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newDateNotEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case2Function, err := newDateNotEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newDateGreaterThanFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case3Function, err := newDateGreaterThanFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case4Function, err := newDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := newDateLessThanFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case5Function, err := newDateLessThanFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := newDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case6Function, err := newDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -218,12 +218,12 @@ func TestDateFuncName(t *testing.T) {
 
 func TestDateFuncToMap(t *testing.T) {
 	valueSet := NewValueSet(NewStringValue("2009-11-10T15:00:00Z"))
-	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate, valueSet, "")
+	case1Function, err := newDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), valueSet, "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Result := map[Key]ValueSet{S3ObjectLockRetainUntilDate: valueSet}
+	case1Result := map[Key]ValueSet{S3ObjectLockRetainUntilDate.ToKey(): valueSet}
 
 	testCases := []struct {
 		f              Function
@@ -244,74 +244,74 @@ func TestDateFuncToMap(t *testing.T) {
 func TestDateFuncClone(t *testing.T) {
 	dateValue := time.Date(2009, time.November, 10, 15, 0, 0, 0, time.UTC)
 
-	case1Function, err := NewDateEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case1Function, err := NewDateEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := &dateFunc{
 		n:     name{name: dateEquals},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     equals,
 	}
 
-	case2Function, err := NewDateNotEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case2Function, err := NewDateNotEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := &dateFunc{
 		n:     name{name: dateNotEquals},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     notEquals,
 	}
 
-	case3Function, err := NewDateGreaterThanFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case3Function, err := NewDateGreaterThanFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case3Result := &dateFunc{
 		n:     name{name: dateGreaterThan},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     greaterThan,
 	}
 
-	case4Function, err := NewDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case4Function, err := NewDateGreaterThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case4Result := &dateFunc{
 		n:     name{name: dateGreaterThanEquals},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     greaterThanEquals,
 	}
 
-	case5Function, err := NewDateLessThanFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case5Function, err := NewDateLessThanFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case5Result := &dateFunc{
 		n:     name{name: dateLessThan},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     lessThan,
 	}
 
-	case6Function, err := NewDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate, dateValue)
+	case6Function, err := NewDateLessThanEqualsFunc(S3ObjectLockRetainUntilDate.ToKey(), dateValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case6Result := &dateFunc{
 		n:     name{name: dateLessThanEquals},
-		k:     S3ObjectLockRetainUntilDate,
+		k:     S3ObjectLockRetainUntilDate.ToKey(),
 		value: dateValue,
 		c:     lessThanEquals,
 	}

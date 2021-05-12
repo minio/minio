@@ -24,12 +24,12 @@ import (
 )
 
 func TestIPAddrFuncEvaluate(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -57,13 +57,13 @@ func TestIPAddrFuncEvaluate(t *testing.T) {
 		}
 	}
 
-	if _, err := newIPAddressFunc(S3Prefix, NewValueSet(NewStringValue("192.168.1.0/24")), ""); err == nil {
+	if _, err := newIPAddressFunc(S3Prefix.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), ""); err == nil {
 		t.Fatalf("expected error")
 	}
 }
 
 func TestIPAddrFuncKey(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -72,7 +72,7 @@ func TestIPAddrFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, AWSSourceIP},
+		{case1Function, AWSSourceIP.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -85,12 +85,12 @@ func TestIPAddrFuncKey(t *testing.T) {
 }
 
 func TestIPAddrFuncName(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -113,22 +113,22 @@ func TestIPAddrFuncName(t *testing.T) {
 }
 
 func TestIPAddrFuncToMap(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := map[Key]ValueSet{
-		AWSSourceIP: NewValueSet(NewStringValue("192.168.1.0/24")),
+		AWSSourceIP.ToKey(): NewValueSet(NewStringValue("192.168.1.0/24")),
 	}
 
-	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
+	case2Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := map[Key]ValueSet{
-		AWSSourceIP: NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")),
+		AWSSourceIP.ToKey(): NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")),
 	}
 
 	testCases := []struct {
@@ -160,38 +160,38 @@ func TestIPAddrFuncClone(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := &ipaddrFunc{
 		n:      name{name: ipAddress},
-		k:      AWSSourceIP,
+		k:      AWSSourceIP.ToKey(),
 		values: []*net.IPNet{IPNet1},
 		negate: false,
 	}
 
-	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
+	case2Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := &ipaddrFunc{
 		n:      name{name: ipAddress},
-		k:      AWSSourceIP,
+		k:      AWSSourceIP.ToKey(),
 		values: []*net.IPNet{IPNet1, IPNet2},
 		negate: false,
 	}
 
-	case3Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case3Function, err := newNotIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case3Result := &ipaddrFunc{
 		n:      name{name: notIPAddress},
-		k:      AWSSourceIP,
+		k:      AWSSourceIP.ToKey(),
 		values: []*net.IPNet{IPNet1},
 		negate: true,
 	}
@@ -215,12 +215,12 @@ func TestIPAddrFuncClone(t *testing.T) {
 }
 
 func TestNewIPAddressFunc(t *testing.T) {
-	case1Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
+	case2Function, err := newIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -231,14 +231,14 @@ func TestNewIPAddressFunc(t *testing.T) {
 		expectedResult Function
 		expectErr      bool
 	}{
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), case1Function, false},
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), case2Function, false},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), case1Function, false},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), case2Function, false},
 		// Unsupported key error.
-		{S3Prefix, NewValueSet(NewStringValue("192.168.1.0/24")), nil, true},
+		{S3Prefix.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), nil, true},
 		// Invalid value error.
-		{AWSSourceIP, NewValueSet(NewStringValue("node1.example.org")), nil, true},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("node1.example.org")), nil, true},
 		// Invalid CIDR format error.
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0.0/24")), nil, true},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0.0/24")), nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -258,12 +258,12 @@ func TestNewIPAddressFunc(t *testing.T) {
 }
 
 func TestNewNotIPAddressFunc(t *testing.T) {
-	case1Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), "")
+	case1Function, err := newNotIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNotIPAddressFunc(AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
+	case2Function, err := newNotIPAddressFunc(AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -274,14 +274,14 @@ func TestNewNotIPAddressFunc(t *testing.T) {
 		expectedResult Function
 		expectErr      bool
 	}{
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24")), case1Function, false},
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), case2Function, false},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), case1Function, false},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24"), NewStringValue("10.1.10.1/32")), case2Function, false},
 		// Unsupported key error.
-		{S3Prefix, NewValueSet(NewStringValue("192.168.1.0/24")), nil, true},
+		{S3Prefix.ToKey(), NewValueSet(NewStringValue("192.168.1.0/24")), nil, true},
 		// Invalid value error.
-		{AWSSourceIP, NewValueSet(NewStringValue("node1.example.org")), nil, true},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("node1.example.org")), nil, true},
 		// Invalid CIDR format error.
-		{AWSSourceIP, NewValueSet(NewStringValue("192.168.1.0.0/24")), nil, true},
+		{AWSSourceIP.ToKey(), NewValueSet(NewStringValue("192.168.1.0.0/24")), nil, true},
 	}
 
 	for i, testCase := range testCases {

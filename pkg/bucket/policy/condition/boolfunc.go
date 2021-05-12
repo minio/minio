@@ -33,7 +33,7 @@ type booleanFunc struct {
 // evaluate() - evaluates to check whether Key is present in given values or not.
 // Depending on condition boolean value, this function returns true or false.
 func (f booleanFunc) evaluate(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	if len(rvalues) == 0 {
 		return false
 	}
@@ -73,7 +73,7 @@ func (f booleanFunc) clone() Function {
 }
 
 func newBooleanFunc(key Key, values ValueSet, qualifier string) (Function, error) {
-	if key != AWSSecureTransport {
+	if !key.Is(AWSSecureTransport) {
 		return nil, fmt.Errorf("only %v key is allowed for %v condition", AWSSecureTransport, boolean)
 	}
 

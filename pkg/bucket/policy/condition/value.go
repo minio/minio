@@ -26,11 +26,12 @@ import (
 	"strings"
 )
 
-func getValuesByKey(m map[string][]string, key string) []string {
-	if values, found := m[http.CanonicalHeaderKey(key)]; found {
+func getValuesByKey(m map[string][]string, key Key) []string {
+	name := key.Name()
+	if values, found := m[http.CanonicalHeaderKey(name)]; found {
 		return values
 	}
-	return m[key]
+	return m[name]
 }
 
 // Splits an incoming path into bucket and object components.

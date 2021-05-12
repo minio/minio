@@ -50,7 +50,7 @@ type stringFunc struct {
 }
 
 func (f stringFunc) eval(values map[string][]string) bool {
-	rvalues := set.CreateStringSet(getValuesByKey(values, f.k.Name())...)
+	rvalues := set.CreateStringSet(getValuesByKey(values, f.k)...)
 	fvalues := f.values.ApplyFunc(substitute(values))
 	if f.ignoreCase {
 		rvalues = rvalues.ApplyFunc(strings.ToLower)
@@ -130,7 +130,7 @@ type stringLikeFunc struct {
 }
 
 func (f stringLikeFunc) eval(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	if f.n.qualifier == forAllValues && len(rvalues) == 0 {
 		return true
 	}
@@ -184,8 +184,8 @@ func valuesToStringSlice(n string, values ValueSet) ([]string, error) {
 
 func validateStringValues(n string, key Key, values set.StringSet) error {
 	for _, s := range values.ToSlice() {
-		switch key {
-		case S3XAmzCopySource:
+		switch {
+		case key.Is(S3XAmzCopySource):
 			bucket, object := path2BucketAndObject(s)
 			if object == "" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzCopySource, n)
@@ -199,16 +199,16 @@ func validateStringValues(n string, key Key, values set.StringSet) error {
 			continue
 		}
 
-		switch key {
-		case S3XAmzServerSideEncryption, S3XAmzServerSideEncryptionCustomerAlgorithm:
+		switch {
+		case key.Is(S3XAmzServerSideEncryption), key.Is(S3XAmzServerSideEncryptionCustomerAlgorithm):
 			if s != "AES256" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzServerSideEncryption, n)
 			}
-		case S3XAmzMetadataDirective:
+		case key.Is(S3XAmzMetadataDirective):
 			if s != "COPY" && s != "REPLACE" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzMetadataDirective, n)
 			}
-		case S3XAmzContentSha256:
+		case key.Is(S3XAmzContentSha256):
 			if s == "" {
 				return fmt.Errorf("invalid empty value for '%v' for %v condition", S3XAmzContentSha256, n)
 			}

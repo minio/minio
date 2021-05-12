@@ -102,7 +102,7 @@ func TestPolicyIsAllowed(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func1, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
+		condition.AWSSourceIP.ToKey(),
 		IPNet,
 	)
 	if err != nil {
@@ -311,14 +311,14 @@ func TestPolicyIsValid(t *testing.T) {
 	}
 
 	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		true,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
+		condition.S3XAmzServerSideEncryption.ToKey(),
 		false,
 	)
 	if err != nil {
@@ -740,7 +740,7 @@ func TestPolicyUnmarshalJSONAndValidate(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func1, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
+		condition.AWSSourceIP.ToKey(),
 		IPNet1,
 	)
 	if err != nil {
@@ -901,7 +901,7 @@ func TestPolicyUnmarshalJSONAndValidate(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func2, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
+		condition.AWSSourceIP.ToKey(),
 		IPNet2,
 	)
 	if err != nil {
@@ -1114,14 +1114,14 @@ func TestPolicyValidate(t *testing.T) {
 	}
 
 	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		true,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
+		condition.S3XAmzServerSideEncryption.ToKey(),
 		false,
 	)
 	if err != nil {

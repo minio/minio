@@ -23,12 +23,12 @@ import (
 )
 
 func TestBooleanFuncEvaluate(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -50,13 +50,13 @@ func TestBooleanFuncEvaluate(t *testing.T) {
 		}
 	}
 
-	if _, err := newBooleanFunc(S3Prefix, NewValueSet(NewBoolValue(true)), ""); err == nil {
+	if _, err := newBooleanFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), ""); err == nil {
 		t.Errorf("error expected")
 	}
 }
 
 func TestBooleanFuncKey(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -65,7 +65,7 @@ func TestBooleanFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, AWSSecureTransport},
+		{case1Function, AWSSecureTransport.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -78,7 +78,7 @@ func TestBooleanFuncKey(t *testing.T) {
 }
 
 func TestBooleanFuncName(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -100,22 +100,22 @@ func TestBooleanFuncName(t *testing.T) {
 }
 
 func TestBooleanFuncToMap(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := map[Key]ValueSet{
-		AWSSecureTransport: NewValueSet(NewStringValue("true")),
+		AWSSecureTransport.ToKey(): NewValueSet(NewStringValue("true")),
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := map[Key]ValueSet{
-		AWSSecureTransport: NewValueSet(NewStringValue("false")),
+		AWSSecureTransport.ToKey(): NewValueSet(NewStringValue("false")),
 	}
 
 	testCases := []struct {
@@ -136,19 +136,19 @@ func TestBooleanFuncToMap(t *testing.T) {
 }
 
 func TestBooleanFuncClone(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Result := &booleanFunc{k: AWSSecureTransport, value: "true"}
+	case1Result := &booleanFunc{k: AWSSecureTransport.ToKey(), value: "true"}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Result := &booleanFunc{k: AWSSecureTransport, value: "false"}
+	case2Result := &booleanFunc{k: AWSSecureTransport.ToKey(), value: "false"}
 
 	testCases := []struct {
 		f              Function
@@ -168,12 +168,12 @@ func TestBooleanFuncClone(t *testing.T) {
 }
 
 func TestNewBooleanFunc(t *testing.T) {
-	case1Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newBooleanFunc(AWSSecureTransport, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newBooleanFunc(AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -184,14 +184,14 @@ func TestNewBooleanFunc(t *testing.T) {
 		expectedResult Function
 		expectErr      bool
 	}{
-		{AWSSecureTransport, NewValueSet(NewBoolValue(true)), case1Function, false},
-		{AWSSecureTransport, NewValueSet(NewStringValue("false")), case2Function, false},
+		{AWSSecureTransport.ToKey(), NewValueSet(NewBoolValue(true)), case1Function, false},
+		{AWSSecureTransport.ToKey(), NewValueSet(NewStringValue("false")), case2Function, false},
 		// Multiple values error.
-		{AWSSecureTransport, NewValueSet(NewStringValue("true"), NewStringValue("false")), nil, true},
+		{AWSSecureTransport.ToKey(), NewValueSet(NewStringValue("true"), NewStringValue("false")), nil, true},
 		// Invalid boolean string error.
-		{AWSSecureTransport, NewValueSet(NewStringValue("foo")), nil, true},
+		{AWSSecureTransport.ToKey(), NewValueSet(NewStringValue("foo")), nil, true},
 		// Invalid value error.
-		{AWSSecureTransport, NewValueSet(NewIntValue(7)), nil, true},
+		{AWSSecureTransport.ToKey(), NewValueSet(NewIntValue(7)), nil, true},
 	}
 
 	for i, testCase := range testCases {

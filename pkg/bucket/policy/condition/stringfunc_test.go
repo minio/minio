@@ -26,27 +26,32 @@ import (
 )
 
 func TestStringEqualsFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringEqualsFunc(S3LocationConstraint, NewValueSet(NewStringValue("eu-west-1"), NewStringValue("ap-southeast-1")), "")
+	case2Function, err := newStringEqualsFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("eu-west-1"), NewStringValue("ap-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringEqualsFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAllValues)
+	case3Function, err := newStringEqualsFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringEqualsFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAnyValue)
+	case4Function, err := newStringEqualsFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case5Function, err := newStringEqualsFunc(S3LocationConstraint, NewValueSet(NewStringValue(S3LocationConstraint.VarName())), "")
+	case5Function, err := newStringEqualsFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue(S3LocationConstraint.ToKey().VarName())), "")
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
+	case6Function, err := newStringEqualsFunc(NewKey(ExistingObjectTag, "security"), NewValueSet(NewStringValue("public")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -78,6 +83,10 @@ func TestStringEqualsFuncEvaluate(t *testing.T) {
 		{case4Function, map[string][]string{"delimiter": {"/"}}, false},
 
 		{case5Function, map[string][]string{"LocationConstraint": {"us-west-1"}}, true},
+
+		{case6Function, map[string][]string{"ExistingObjectTag/security": {"public"}}, true},
+		{case6Function, map[string][]string{"ExistingObjectTag/security": {"private"}}, false},
+		{case6Function, map[string][]string{"ExistingObjectTag/project": {"foo"}}, false},
 	}
 
 	for i, testCase := range testCases {
@@ -90,22 +99,22 @@ func TestStringEqualsFuncEvaluate(t *testing.T) {
 }
 
 func TestStringNotEqualsFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringNotEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringNotEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringNotEqualsFunc(S3LocationConstraint, NewValueSet(NewStringValue("eu-west-1"), NewStringValue("ap-southeast-1")), "")
+	case2Function, err := newStringNotEqualsFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("eu-west-1"), NewStringValue("ap-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringNotEqualsFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAllValues)
+	case3Function, err := newStringNotEqualsFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringNotEqualsFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAnyValue)
+	case4Function, err := newStringNotEqualsFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -147,22 +156,22 @@ func TestStringNotEqualsFuncEvaluate(t *testing.T) {
 }
 
 func TestStringEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case1Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringEqualsIgnoreCaseFunc(S3LocationConstraint, NewValueSet(NewStringValue("EU-WEST-1"), NewStringValue("AP-southeast-1")), "")
+	case2Function, err := newStringEqualsIgnoreCaseFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("EU-WEST-1"), NewStringValue("AP-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringEqualsIgnoreCaseFunc(JWTGroups, NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAllValues)
+	case3Function, err := newStringEqualsIgnoreCaseFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringEqualsIgnoreCaseFunc(JWTGroups, NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAnyValue)
+	case4Function, err := newStringEqualsIgnoreCaseFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -204,22 +213,22 @@ func TestStringEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
 }
 
 func TestStringNotEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case1Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringNotEqualsIgnoreCaseFunc(S3LocationConstraint, NewValueSet(NewStringValue("EU-WEST-1"), NewStringValue("AP-southeast-1")), "")
+	case2Function, err := newStringNotEqualsIgnoreCaseFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("EU-WEST-1"), NewStringValue("AP-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringNotEqualsIgnoreCaseFunc(JWTGroups, NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAllValues)
+	case3Function, err := newStringNotEqualsIgnoreCaseFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringNotEqualsIgnoreCaseFunc(JWTGroups, NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAnyValue)
+	case4Function, err := newStringNotEqualsIgnoreCaseFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("Prod"), NewStringValue("Art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -262,7 +271,7 @@ func TestStringNotEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
 
 func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 	case1Function, err := newBinaryEqualsFunc(
-		S3XAmzCopySource,
+		S3XAmzCopySource.ToKey(),
 		NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
 		"",
 	)
@@ -271,7 +280,7 @@ func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 	}
 
 	case2Function, err := newBinaryEqualsFunc(
-		S3LocationConstraint,
+		S3LocationConstraint.ToKey(),
 		NewValueSet(
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("eu-west-1"))),
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("ap-southeast-1"))),
@@ -283,7 +292,7 @@ func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 	}
 
 	case3Function, err := newBinaryEqualsFunc(
-		JWTGroups,
+		JWTGroups.ToKey(),
 		NewValueSet(
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("prod"))),
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("art"))),
@@ -295,7 +304,7 @@ func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 	}
 
 	case4Function, err := newBinaryEqualsFunc(
-		JWTGroups,
+		JWTGroups.ToKey(),
 		NewValueSet(NewStringValue(
 			base64.StdEncoding.EncodeToString([]byte("prod"))),
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("art"))),
@@ -343,22 +352,22 @@ func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 }
 
 func TestStringLikeFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringLikeFunc(S3LocationConstraint, NewValueSet(NewStringValue("eu-west-*"), NewStringValue("ap-southeast-1")), "")
+	case2Function, err := newStringLikeFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("eu-west-*"), NewStringValue("ap-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringLikeFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art*")), forAllValues)
+	case3Function, err := newStringLikeFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art*")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringLikeFunc(JWTGroups, NewValueSet(NewStringValue("prod*"), NewStringValue("art")), forAnyValue)
+	case4Function, err := newStringLikeFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod*"), NewStringValue("art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -401,22 +410,22 @@ func TestStringLikeFuncEvaluate(t *testing.T) {
 }
 
 func TestStringNotLikeFuncEvaluate(t *testing.T) {
-	case1Function, err := newStringNotLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringNotLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringNotLikeFunc(S3LocationConstraint, NewValueSet(NewStringValue("eu-west-*"), NewStringValue("ap-southeast-1")), "")
+	case2Function, err := newStringNotLikeFunc(S3LocationConstraint.ToKey(), NewValueSet(NewStringValue("eu-west-*"), NewStringValue("ap-southeast-1")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringNotLikeFunc(JWTGroups, NewValueSet(NewStringValue("prod"), NewStringValue("art*")), forAllValues)
+	case3Function, err := newStringNotLikeFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod"), NewStringValue("art*")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringNotLikeFunc(JWTGroups, NewValueSet(NewStringValue("prod*"), NewStringValue("art")), forAnyValue)
+	case4Function, err := newStringNotLikeFunc(JWTGroups.ToKey(), NewValueSet(NewStringValue("prod*"), NewStringValue("art")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -459,7 +468,7 @@ func TestStringNotLikeFuncEvaluate(t *testing.T) {
 }
 
 func TestStringFuncKey(t *testing.T) {
-	case1Function, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -468,7 +477,7 @@ func TestStringFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, S3XAmzCopySource},
+		{case1Function, S3XAmzCopySource.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -481,28 +490,28 @@ func TestStringFuncKey(t *testing.T) {
 }
 
 func TestStringFuncName(t *testing.T) {
-	case1Function, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newStringNotEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case2Function, err := newStringNotEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case5Function, err := newBinaryEqualsFunc(
-		S3XAmzCopySource,
+		S3XAmzCopySource.ToKey(),
 		NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
 		"",
 	)
@@ -510,22 +519,22 @@ func TestStringFuncName(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case6Function, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case6Function, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case7Function, err := newStringNotLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case7Function, err := newStringNotLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case8Function, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), forAllValues)
+	case8Function, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case9Function, err := newStringNotLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), forAnyValue)
+	case9Function, err := newStringNotLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -555,16 +564,16 @@ func TestStringFuncName(t *testing.T) {
 }
 
 func TestStringEqualsFuncToMap(t *testing.T) {
-	case1Function, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := map[Key]ValueSet{
-		S3XAmzCopySource: NewValueSet(NewStringValue("mybucket/myobject")),
+		S3XAmzCopySource.ToKey(): NewValueSet(NewStringValue("mybucket/myobject")),
 	}
 
-	case2Function, err := newStringEqualsFunc(S3XAmzCopySource,
+	case2Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(),
 		NewValueSet(
 			NewStringValue("mybucket/myobject"),
 			NewStringValue("yourbucket/myobject"),
@@ -576,23 +585,23 @@ func TestStringEqualsFuncToMap(t *testing.T) {
 	}
 
 	case2Result := map[Key]ValueSet{
-		S3XAmzCopySource: NewValueSet(
+		S3XAmzCopySource.ToKey(): NewValueSet(
 			NewStringValue("mybucket/myobject"),
 			NewStringValue("yourbucket/myobject"),
 		),
 	}
 
-	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case3Result := map[Key]ValueSet{
-		S3XAmzCopySource: NewValueSet(NewStringValue("mybucket/MYOBJECT")),
+		S3XAmzCopySource.ToKey(): NewValueSet(NewStringValue("mybucket/MYOBJECT")),
 	}
 
 	case4Function, err := newBinaryEqualsFunc(
-		S3XAmzCopySource,
+		S3XAmzCopySource.ToKey(),
 		NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
 		"",
 	)
@@ -601,7 +610,7 @@ func TestStringEqualsFuncToMap(t *testing.T) {
 	}
 
 	case4Result := map[Key]ValueSet{
-		S3XAmzCopySource: NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
+		S3XAmzCopySource.ToKey(): NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
 	}
 
 	testCases := []struct {
@@ -625,56 +634,56 @@ func TestStringEqualsFuncToMap(t *testing.T) {
 }
 
 func TestStringFuncClone(t *testing.T) {
-	case1Function, err := newStringEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case1Function, err := newStringEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := &stringFunc{
 		n:          name{name: stringEquals},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
 		negate:     false,
 	}
 
-	case2Function, err := newStringNotEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case2Function, err := newStringNotEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := &stringFunc{
 		n:          name{name: stringNotEquals},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
 		negate:     true,
 	}
 
-	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case3Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case3Result := &stringFunc{
 		n:          name{name: stringEqualsIgnoreCase},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/MYOBJECT"),
 		ignoreCase: true,
 		base64:     false,
 		negate:     false,
 	}
 
-	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
+	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/MYOBJECT")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case4Result := &stringFunc{
 		n:          name{name: stringNotEqualsIgnoreCase},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/MYOBJECT"),
 		ignoreCase: true,
 		base64:     false,
@@ -682,7 +691,7 @@ func TestStringFuncClone(t *testing.T) {
 	}
 
 	case5Function, err := newBinaryEqualsFunc(
-		S3XAmzCopySource,
+		S3XAmzCopySource.ToKey(),
 		NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("mybucket/myobject")))),
 		"",
 	)
@@ -692,63 +701,63 @@ func TestStringFuncClone(t *testing.T) {
 
 	case5Result := &stringFunc{
 		n:          name{name: binaryEquals},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     true,
 		negate:     false,
 	}
 
-	case6Function, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case6Function, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case6Result := &stringLikeFunc{stringFunc{
 		n:          name{name: stringLike},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
 		negate:     false,
 	}}
 
-	case7Function, err := newStringNotLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "")
+	case7Function, err := newStringNotLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case7Result := &stringLikeFunc{stringFunc{
 		n:          name{name: stringNotLike},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
 		negate:     true,
 	}}
 
-	case8Function, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), forAllValues)
+	case8Function, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), forAllValues)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case8Result := &stringLikeFunc{stringFunc{
 		n:          name{qualifier: forAllValues, name: stringLike},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
 		negate:     false,
 	}}
 
-	case9Function, err := newStringNotLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), forAnyValue)
+	case9Function, err := newStringNotLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), forAnyValue)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case9Result := &stringLikeFunc{stringFunc{
 		n:          name{qualifier: forAnyValue, name: stringNotLike},
-		k:          S3XAmzCopySource,
+		k:          S3XAmzCopySource.ToKey(),
 		values:     set.CreateStringSet("mybucket/myobject"),
 		ignoreCase: false,
 		base64:     false,
@@ -785,13 +794,13 @@ func TestNewStringFuncError(t *testing.T) {
 		values    ValueSet
 		qualifier string
 	}{
-		{S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject"), NewIntValue(7)), ""},
-		{S3XAmzCopySource, NewValueSet(NewStringValue("mybucket")), ""},
-		{S3XAmzServerSideEncryption, NewValueSet(NewStringValue("SSE-C")), ""},
-		{S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewStringValue("SSE-C")), ""},
-		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("DUPLICATE")), ""},
-		{S3XAmzContentSha256, NewValueSet(NewStringValue("")), ""},
-		{S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), "For_All_Values"},
+		{S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject"), NewIntValue(7)), ""},
+		{S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket")), ""},
+		{S3XAmzServerSideEncryption.ToKey(), NewValueSet(NewStringValue("SSE-C")), ""},
+		{S3XAmzServerSideEncryptionCustomerAlgorithm.ToKey(), NewValueSet(NewStringValue("SSE-C")), ""},
+		{S3XAmzMetadataDirective.ToKey(), NewValueSet(NewStringValue("DUPLICATE")), ""},
+		{S3XAmzContentSha256.ToKey(), NewValueSet(NewStringValue("")), ""},
+		{S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), "For_All_Values"},
 	}
 
 	for i, testCase := range testCases {
@@ -800,11 +809,11 @@ func TestNewStringFuncError(t *testing.T) {
 		}
 	}
 
-	if _, err := newBinaryEqualsFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket/myobject")), ""); err == nil {
+	if _, err := newBinaryEqualsFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket/myobject")), ""); err == nil {
 		t.Errorf("error expected")
 	}
 
-	if _, err := newStringLikeFunc(S3XAmzCopySource, NewValueSet(NewStringValue("mybucket")), ""); err == nil {
+	if _, err := newStringLikeFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewStringValue("mybucket")), ""); err == nil {
 		t.Errorf("error expected")
 	}
 }

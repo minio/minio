@@ -310,117 +310,126 @@ func parseAction(s string) (Action, error) {
 	return action, Errorf("unsupported action '%v'", s)
 }
 
-// actionConditionKeyMap - holds mapping of supported condition key for an action.
-var actionConditionKeyMap = map[Action]condition.KeySet{
-	AbortMultipartUploadAction: condition.NewKeySet(condition.CommonKeys...),
+func createActionConditionKeyMap() map[Action]condition.KeySet {
+	commonKeys := []condition.Key{}
+	for _, keyName := range condition.CommonKeys {
+		commonKeys = append(commonKeys, keyName.ToKey())
+	}
 
-	CreateBucketAction: condition.NewKeySet(condition.CommonKeys...),
+	return map[Action]condition.KeySet{
+		AbortMultipartUploadAction: condition.NewKeySet(commonKeys...),
 
-	DeleteObjectAction: condition.NewKeySet(condition.CommonKeys...),
+		CreateBucketAction: condition.NewKeySet(commonKeys...),
 
-	GetBucketLocationAction: condition.NewKeySet(condition.CommonKeys...),
+		DeleteObjectAction: condition.NewKeySet(commonKeys...),
 
-	GetBucketPolicyStatusAction: condition.NewKeySet(condition.CommonKeys...),
+		GetBucketLocationAction: condition.NewKeySet(commonKeys...),
 
-	GetObjectAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3XAmzServerSideEncryption,
-			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
-		}, condition.CommonKeys...)...),
+		GetBucketPolicyStatusAction: condition.NewKeySet(commonKeys...),
 
-	HeadBucketAction: condition.NewKeySet(condition.CommonKeys...),
+		GetObjectAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3XAmzServerSideEncryption.ToKey(),
+				condition.S3XAmzServerSideEncryptionCustomerAlgorithm.ToKey(),
+			}, commonKeys...)...),
 
-	ListAllMyBucketsAction: condition.NewKeySet(condition.CommonKeys...),
+		HeadBucketAction: condition.NewKeySet(commonKeys...),
 
-	ListBucketAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3Prefix,
-			condition.S3Delimiter,
-			condition.S3MaxKeys,
-		}, condition.CommonKeys...)...),
+		ListAllMyBucketsAction: condition.NewKeySet(commonKeys...),
 
-	ListBucketVersionsAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3Prefix,
-			condition.S3Delimiter,
-			condition.S3MaxKeys,
-		}, condition.CommonKeys...)...),
+		ListBucketAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3Prefix.ToKey(),
+				condition.S3Delimiter.ToKey(),
+				condition.S3MaxKeys.ToKey(),
+			}, commonKeys...)...),
 
-	ListBucketMultipartUploadsAction: condition.NewKeySet(condition.CommonKeys...),
+		ListBucketVersionsAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3Prefix.ToKey(),
+				condition.S3Delimiter.ToKey(),
+				condition.S3MaxKeys.ToKey(),
+			}, commonKeys...)...),
 
-	ListenNotificationAction: condition.NewKeySet(condition.CommonKeys...),
+		ListBucketMultipartUploadsAction: condition.NewKeySet(commonKeys...),
 
-	ListenBucketNotificationAction: condition.NewKeySet(condition.CommonKeys...),
+		ListenNotificationAction: condition.NewKeySet(commonKeys...),
 
-	ListMultipartUploadPartsAction: condition.NewKeySet(condition.CommonKeys...),
+		ListenBucketNotificationAction: condition.NewKeySet(commonKeys...),
 
-	PutObjectAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3XAmzCopySource,
-			condition.S3XAmzServerSideEncryption,
-			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
-			condition.S3XAmzMetadataDirective,
-			condition.S3XAmzStorageClass,
-			condition.S3ObjectLockRetainUntilDate,
-			condition.S3ObjectLockMode,
-			condition.S3ObjectLockLegalHold,
-		}, condition.CommonKeys...)...),
+		ListMultipartUploadPartsAction: condition.NewKeySet(commonKeys...),
 
-	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
-	// LockLegalHold is not supported with PutObjectRetentionAction
-	PutObjectRetentionAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3ObjectLockRemainingRetentionDays,
-			condition.S3ObjectLockRetainUntilDate,
-			condition.S3ObjectLockMode,
-		}, condition.CommonKeys...)...),
+		PutObjectAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3XAmzCopySource.ToKey(),
+				condition.S3XAmzServerSideEncryption.ToKey(),
+				condition.S3XAmzServerSideEncryptionCustomerAlgorithm.ToKey(),
+				condition.S3XAmzMetadataDirective.ToKey(),
+				condition.S3XAmzStorageClass.ToKey(),
+				condition.S3ObjectLockRetainUntilDate.ToKey(),
+				condition.S3ObjectLockMode.ToKey(),
+				condition.S3ObjectLockLegalHold.ToKey(),
+			}, commonKeys...)...),
 
-	GetObjectRetentionAction: condition.NewKeySet(condition.CommonKeys...),
-	PutObjectLegalHoldAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3ObjectLockLegalHold,
-		}, condition.CommonKeys...)...),
-	GetObjectLegalHoldAction: condition.NewKeySet(condition.CommonKeys...),
+		// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
+		// LockLegalHold is not supported with PutObjectRetentionAction
+		PutObjectRetentionAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3ObjectLockRemainingRetentionDays.ToKey(),
+				condition.S3ObjectLockRetainUntilDate.ToKey(),
+				condition.S3ObjectLockMode.ToKey(),
+			}, commonKeys...)...),
 
-	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
-	BypassGovernanceRetentionAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3ObjectLockRemainingRetentionDays,
-			condition.S3ObjectLockRetainUntilDate,
-			condition.S3ObjectLockMode,
-			condition.S3ObjectLockLegalHold,
-		}, condition.CommonKeys...)...),
+		GetObjectRetentionAction: condition.NewKeySet(commonKeys...),
+		PutObjectLegalHoldAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3ObjectLockLegalHold.ToKey(),
+			}, commonKeys...)...),
+		GetObjectLegalHoldAction: condition.NewKeySet(commonKeys...),
 
-	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
-	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
-	GetBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
-	PutBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
-	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
-	GetObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
-	DeleteObjectTaggingAction:              condition.NewKeySet(condition.CommonKeys...),
+		// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
+		BypassGovernanceRetentionAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3ObjectLockRemainingRetentionDays.ToKey(),
+				condition.S3ObjectLockRetainUntilDate.ToKey(),
+				condition.S3ObjectLockMode.ToKey(),
+				condition.S3ObjectLockLegalHold.ToKey(),
+			}, commonKeys...)...),
 
-	PutObjectVersionTaggingAction: condition.NewKeySet(condition.CommonKeys...),
-	GetObjectVersionAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3VersionID,
-		}, condition.CommonKeys...)...),
-	GetObjectVersionTaggingAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3VersionID,
-		}, condition.CommonKeys...)...),
-	DeleteObjectVersionAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3VersionID,
-		}, condition.CommonKeys...)...),
-	DeleteObjectVersionTaggingAction: condition.NewKeySet(
-		append([]condition.Key{
-			condition.S3VersionID,
-		}, condition.CommonKeys...)...),
-	GetReplicationConfigurationAction:    condition.NewKeySet(condition.CommonKeys...),
-	PutReplicationConfigurationAction:    condition.NewKeySet(condition.CommonKeys...),
-	ReplicateObjectAction:                condition.NewKeySet(condition.CommonKeys...),
-	ReplicateDeleteAction:                condition.NewKeySet(condition.CommonKeys...),
-	ReplicateTagsAction:                  condition.NewKeySet(condition.CommonKeys...),
-	GetObjectVersionForReplicationAction: condition.NewKeySet(condition.CommonKeys...),
-	RestoreObjectAction:                  condition.NewKeySet(condition.CommonKeys...),
+		GetBucketObjectLockConfigurationAction: condition.NewKeySet(commonKeys...),
+		PutBucketObjectLockConfigurationAction: condition.NewKeySet(commonKeys...),
+		GetBucketTaggingAction:                 condition.NewKeySet(commonKeys...),
+		PutBucketTaggingAction:                 condition.NewKeySet(commonKeys...),
+		PutObjectTaggingAction:                 condition.NewKeySet(commonKeys...),
+		GetObjectTaggingAction:                 condition.NewKeySet(commonKeys...),
+		DeleteObjectTaggingAction:              condition.NewKeySet(commonKeys...),
+
+		PutObjectVersionTaggingAction: condition.NewKeySet(commonKeys...),
+		GetObjectVersionAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3VersionID.ToKey(),
+			}, commonKeys...)...),
+		GetObjectVersionTaggingAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3VersionID.ToKey(),
+			}, commonKeys...)...),
+		DeleteObjectVersionAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3VersionID.ToKey(),
+			}, commonKeys...)...),
+		DeleteObjectVersionTaggingAction: condition.NewKeySet(
+			append([]condition.Key{
+				condition.S3VersionID.ToKey(),
+			}, commonKeys...)...),
+		GetReplicationConfigurationAction:    condition.NewKeySet(commonKeys...),
+		PutReplicationConfigurationAction:    condition.NewKeySet(commonKeys...),
+		ReplicateObjectAction:                condition.NewKeySet(commonKeys...),
+		ReplicateDeleteAction:                condition.NewKeySet(commonKeys...),
+		ReplicateTagsAction:                  condition.NewKeySet(commonKeys...),
+		GetObjectVersionForReplicationAction: condition.NewKeySet(commonKeys...),
+		RestoreObjectAction:                  condition.NewKeySet(commonKeys...),
+	}
 }
+
+// actionConditionKeyMap - holds mapping of supported condition key for an action.
+var actionConditionKeyMap = createActionConditionKeyMap()

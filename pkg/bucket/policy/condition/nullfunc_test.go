@@ -23,12 +23,12 @@ import (
 )
 
 func TestNullFuncEvaluate(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -60,7 +60,7 @@ func TestNullFuncEvaluate(t *testing.T) {
 }
 
 func TestNullFuncKey(t *testing.T) {
-	case1Function, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -69,7 +69,7 @@ func TestNullFuncKey(t *testing.T) {
 		function       Function
 		expectedResult Key
 	}{
-		{case1Function, S3XAmzCopySource},
+		{case1Function, S3XAmzCopySource.ToKey()},
 	}
 
 	for i, testCase := range testCases {
@@ -82,7 +82,7 @@ func TestNullFuncKey(t *testing.T) {
 }
 
 func TestNullFuncName(t *testing.T) {
-	case1Function, err := newNullFunc(S3XAmzCopySource, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3XAmzCopySource.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -104,22 +104,22 @@ func TestNullFuncName(t *testing.T) {
 }
 
 func TestNullFuncToMap(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := map[Key]ValueSet{
-		S3Prefix: NewValueSet(NewBoolValue(true)),
+		S3Prefix.ToKey(): NewValueSet(NewBoolValue(true)),
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := map[Key]ValueSet{
-		S3Prefix: NewValueSet(NewBoolValue(false)),
+		S3Prefix.ToKey(): NewValueSet(NewBoolValue(false)),
 	}
 
 	testCases := []struct {
@@ -141,23 +141,23 @@ func TestNullFuncToMap(t *testing.T) {
 }
 
 func TestNullFuncClone(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case1Result := &nullFunc{
-		k:     S3Prefix,
+		k:     S3Prefix.ToKey(),
 		value: true,
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
 	case2Result := &nullFunc{
-		k:     S3Prefix,
+		k:     S3Prefix.ToKey(),
 		value: false,
 	}
 
@@ -179,12 +179,12 @@ func TestNullFuncClone(t *testing.T) {
 }
 
 func TestNewNullFunc(t *testing.T) {
-	case1Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(true)), "")
+	case1Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case2Function, err := newNullFunc(S3Prefix, NewValueSet(NewBoolValue(false)), "")
+	case2Function, err := newNullFunc(S3Prefix.ToKey(), NewValueSet(NewBoolValue(false)), "")
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -195,14 +195,14 @@ func TestNewNullFunc(t *testing.T) {
 		expectedResult Function
 		expectErr      bool
 	}{
-		{S3Prefix, NewValueSet(NewBoolValue(true)), case1Function, false},
-		{S3Prefix, NewValueSet(NewStringValue("false")), case2Function, false},
+		{S3Prefix.ToKey(), NewValueSet(NewBoolValue(true)), case1Function, false},
+		{S3Prefix.ToKey(), NewValueSet(NewStringValue("false")), case2Function, false},
 		// Multiple values error.
-		{S3Prefix, NewValueSet(NewBoolValue(true), NewBoolValue(false)), nil, true},
+		{S3Prefix.ToKey(), NewValueSet(NewBoolValue(true), NewBoolValue(false)), nil, true},
 		// Invalid boolean string error.
-		{S3Prefix, NewValueSet(NewStringValue("foo")), nil, true},
+		{S3Prefix.ToKey(), NewValueSet(NewStringValue("foo")), nil, true},
 		// Invalid value error.
-		{S3Prefix, NewValueSet(NewIntValue(7)), nil, true},
+		{S3Prefix.ToKey(), NewValueSet(NewIntValue(7)), nil, true},
 	}
 
 	for i, testCase := range testCases {

@@ -48,7 +48,7 @@ func TestStatementIsAllowed(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func1, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
+		condition.AWSSourceIP.ToKey(),
 		IPNet1,
 	)
 	if err != nil {
@@ -175,7 +175,7 @@ func TestStatementIsValid(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func1, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
+		condition.AWSSourceIP.ToKey(),
 		IPNet1,
 	)
 	if err != nil {
@@ -184,7 +184,7 @@ func TestStatementIsValid(t *testing.T) {
 
 	func2, err := condition.NewStringEqualsFunc(
 		"",
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		"mybucket/myobject",
 	)
 	if err != nil {
@@ -282,7 +282,7 @@ func TestStatementMarshalJSON(t *testing.T) {
 	case1Data := []byte(`{"Sid":"SomeId1","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]}`)
 
 	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		true,
 	)
 	if err != nil {
@@ -298,7 +298,7 @@ func TestStatementMarshalJSON(t *testing.T) {
 	case2Data := []byte(`{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"],"Condition":{"Null":{"s3:x-amz-copy-source":[true]}}}`)
 
 	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
+		condition.S3XAmzServerSideEncryption.ToKey(),
 		false,
 	)
 	if err != nil {
@@ -378,7 +378,7 @@ func TestStatementUnmarshalJSON(t *testing.T) {
     }
 }`)
 	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		true,
 	)
 	if err != nil {
@@ -409,7 +409,7 @@ func TestStatementUnmarshalJSON(t *testing.T) {
     }
 }`)
 	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
+		condition.S3XAmzServerSideEncryption.ToKey(),
 		false,
 	)
 	if err != nil {
@@ -531,14 +531,14 @@ func TestStatementValidate(t *testing.T) {
 	)
 
 	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
+		condition.S3XAmzCopySource.ToKey(),
 		true,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
+		condition.S3XAmzServerSideEncryption.ToKey(),
 		false,
 	)
 	if err != nil {

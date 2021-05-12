@@ -28,18 +28,18 @@ func TestKeyIsValid(t *testing.T) {
 		key            Key
 		expectedResult bool
 	}{
-		{S3XAmzCopySource, true},
-		{S3XAmzServerSideEncryption, true},
-		{S3XAmzServerSideEncryptionCustomerAlgorithm, true},
-		{S3XAmzMetadataDirective, true},
-		{S3XAmzStorageClass, true},
-		{S3LocationConstraint, true},
-		{S3Prefix, true},
-		{S3Delimiter, true},
-		{S3MaxKeys, true},
-		{AWSReferer, true},
-		{AWSSourceIP, true},
-		{Key("foo"), false},
+		{S3XAmzCopySource.ToKey(), true},
+		{S3XAmzServerSideEncryption.ToKey(), true},
+		{S3XAmzServerSideEncryptionCustomerAlgorithm.ToKey(), true},
+		{S3XAmzMetadataDirective.ToKey(), true},
+		{S3XAmzStorageClass.ToKey(), true},
+		{S3LocationConstraint.ToKey(), true},
+		{S3Prefix.ToKey(), true},
+		{S3Delimiter.ToKey(), true},
+		{S3MaxKeys.ToKey(), true},
+		{AWSReferer.ToKey(), true},
+		{AWSSourceIP.ToKey(), true},
+		{Key{name: "foo"}, false},
 	}
 
 	for i, testCase := range testCases {
@@ -57,8 +57,8 @@ func TestKeyMarshalJSON(t *testing.T) {
 		expectedResult []byte
 		expectErr      bool
 	}{
-		{S3XAmzCopySource, []byte(`"s3:x-amz-copy-source"`), false},
-		{Key("foo"), nil, true},
+		{S3XAmzCopySource.ToKey(), []byte(`"s3:x-amz-copy-source"`), false},
+		{Key{name: "foo"}, nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -82,8 +82,8 @@ func TestKeyName(t *testing.T) {
 		key            Key
 		expectedResult string
 	}{
-		{S3XAmzCopySource, "x-amz-copy-source"},
-		{AWSReferer, "Referer"},
+		{S3XAmzCopySource.ToKey(), "x-amz-copy-source"},
+		{AWSReferer.ToKey(), "Referer"},
 	}
 
 	for i, testCase := range testCases {
@@ -101,8 +101,8 @@ func TestKeyUnmarshalJSON(t *testing.T) {
 		expectedKey Key
 		expectErr   bool
 	}{
-		{[]byte(`"s3:x-amz-copy-source"`), S3XAmzCopySource, false},
-		{[]byte(`"foo"`), Key(""), true},
+		{[]byte(`"s3:x-amz-copy-source"`), S3XAmzCopySource.ToKey(), false},
+		{[]byte(`"foo"`), Key{name: ""}, true},
 	}
 
 	for i, testCase := range testCases {
@@ -128,8 +128,8 @@ func TestKeySetAdd(t *testing.T) {
 		key            Key
 		expectedResult KeySet
 	}{
-		{NewKeySet(), S3XAmzCopySource, NewKeySet(S3XAmzCopySource)},
-		{NewKeySet(S3XAmzCopySource), S3XAmzCopySource, NewKeySet(S3XAmzCopySource)},
+		{NewKeySet(), S3XAmzCopySource.ToKey(), NewKeySet(S3XAmzCopySource.ToKey())},
+		{NewKeySet(S3XAmzCopySource.ToKey()), S3XAmzCopySource.ToKey(), NewKeySet(S3XAmzCopySource.ToKey())},
 	}
 
 	for i, testCase := range testCases {
@@ -147,8 +147,8 @@ func TestKeySetDifference(t *testing.T) {
 		setToDiff      KeySet
 		expectedResult KeySet
 	}{
-		{NewKeySet(), NewKeySet(S3XAmzCopySource), NewKeySet()},
-		{NewKeySet(S3Prefix, S3Delimiter, S3MaxKeys), NewKeySet(S3Delimiter, S3MaxKeys), NewKeySet(S3Prefix)},
+		{NewKeySet(), NewKeySet(S3XAmzCopySource.ToKey()), NewKeySet()},
+		{NewKeySet(S3Prefix.ToKey(), S3Delimiter.ToKey(), S3MaxKeys.ToKey()), NewKeySet(S3Delimiter.ToKey(), S3MaxKeys.ToKey()), NewKeySet(S3Prefix.ToKey())},
 	}
 
 	for i, testCase := range testCases {
@@ -166,7 +166,7 @@ func TestKeySetIsEmpty(t *testing.T) {
 		expectedResult bool
 	}{
 		{NewKeySet(), true},
-		{NewKeySet(S3Delimiter), false},
+		{NewKeySet(S3Delimiter.ToKey()), false},
 	}
 
 	for i, testCase := range testCases {
@@ -184,7 +184,7 @@ func TestKeySetString(t *testing.T) {
 		expectedResult string
 	}{
 		{NewKeySet(), `[]`},
-		{NewKeySet(S3Delimiter), `[s3:delimiter]`},
+		{NewKeySet(S3Delimiter.ToKey()), `[s3:delimiter]`},
 	}
 
 	for i, testCase := range testCases {
@@ -202,7 +202,7 @@ func TestKeySetToSlice(t *testing.T) {
 		expectedResult []Key
 	}{
 		{NewKeySet(), []Key{}},
-		{NewKeySet(S3Delimiter), []Key{S3Delimiter}},
+		{NewKeySet(S3Delimiter.ToKey()), []Key{S3Delimiter.ToKey()}},
 	}
 
 	for i, testCase := range testCases {

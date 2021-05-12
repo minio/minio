@@ -31,7 +31,7 @@ type numericFunc struct {
 }
 
 func (f numericFunc) evaluate(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	if len(rvalues) == 0 {
 		return false
 	}

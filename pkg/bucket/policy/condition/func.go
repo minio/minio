@@ -113,16 +113,15 @@ func (functions Functions) Equals(funcs Functions) bool {
 
 // MarshalJSON - encodes Functions to JSON data.
 func (functions Functions) MarshalJSON() ([]byte, error) {
-	nm := make(map[string]map[Key]ValueSet)
+	nm := make(map[string]map[string]ValueSet)
 
 	for _, f := range functions {
 		fname := f.name().String()
-		if _, ok := nm[fname]; ok {
-			for k, v := range f.toMap() {
-				nm[fname][k] = v
-			}
-		} else {
-			nm[fname] = f.toMap()
+		if _, ok := nm[fname]; !ok {
+			nm[fname] = map[string]ValueSet{}
+		}
+		for k, v := range f.toMap() {
+			nm[fname][k.String()] = v
 		}
 	}
 

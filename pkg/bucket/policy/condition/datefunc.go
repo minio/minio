@@ -31,7 +31,7 @@ type dateFunc struct {
 }
 
 func (f dateFunc) evaluate(values map[string][]string) bool {
-	rvalues := getValuesByKey(values, f.k.Name())
+	rvalues := getValuesByKey(values, f.k)
 	if len(rvalues) == 0 {
 		return false
 	}
