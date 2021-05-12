@@ -1834,7 +1834,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_node_process_cpu_total_seconds[$__interval])",
+          "expr": "rate(minio_node_process_cpu_total_seconds[$__rate_interval])",
           "interval": "",
           "legendFormat": "CPU Usage Rate [{{server}}]",
           "refId": "A"
@@ -2445,7 +2445,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_node_io_rchar_bytes[$__interval])",
+          "expr": "rate(minio_node_io_rchar_bytes[$__rate_interval])",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -2454,7 +2454,7 @@
         },
         {
           "exemplar": true,
-          "expr": "rate(minio_node_io_wchar_bytes[$__interval])",
+          "expr": "rate(minio_node_io_wchar_bytes[$__rate_interval])",
           "interval": "",
           "legendFormat": "Node WChar [{{server}}]",
           "refId": "B"
@@ -2544,5 +2544,5 @@
   "timezone": "",
   "title": "MinIO Overview",
   "uid": "pJnnS4hZz",
-  "version": 37
+  "version": 4
 }
