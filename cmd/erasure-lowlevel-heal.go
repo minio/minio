@@ -20,20 +20,17 @@ package cmd
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 )
 
 // Heal heals the shard files on non-nil writers. Note that the quorum passed is 1
 // as healing should continue even if it has been successful healing only one shard file.
 func (e Erasure) Heal(ctx context.Context, readers []io.ReaderAt, writers []io.Writer, size int64, bp *bpool.BytePoolCap) error {
-	r, w := io.Pipe()
-	var wg sync.WaitGroup
-	wg.Add(1)
+	r, w := xioutil.WaitPipe()
 	go func() {
-		defer wg.Done()
 		_, err := e.Decode(ctx, w, readers, 0, size, size, nil)
 		w.CloseWithError(err)
 	}()
@@ -58,6 +55,5 @@ func (e Erasure) Heal(ctx context.Context, readers []io.ReaderAt, writers []io.W
 		err = errLessData
 	}
 	r.CloseWithError(err)
-	wg.Wait()
 	return err
 }

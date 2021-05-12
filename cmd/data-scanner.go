@@ -194,9 +194,47 @@ type folderScanner struct {
 
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
-	updates    chan<- dataUsageEntry `msg:"-"`
+	updates    chan<- dataUsageEntry
 	lastUpdate time.Time
 }
+
+// Cache structure and compaction:
+//
+// A cache structure will be kept with a tree of usages.
+// The cache is a tree structure where each keeps track of its children.
+//
+// An uncompacted branch contains a count of the files only directly at the
+// branch level, and contains link to children branches or leaves.
+//
+// The leaves are "compacted" based on a number of properties.
+// A compacted leaf contains the totals of all files beneath it.
+//
+// A leaf is only scanned once every dataUsageUpdateDirCycles,
+// rarer if the bloom filter for the path is clean and no lifecycles are applied.
+// Skipped leaves have their totals transferred from the previous cycle.
+//
+// A clean leaf will be included once every healFolderIncludeProb for partial heal scans.
+// When selected there is a one in healObjectSelectProb that any object will be chosen for heal scan.
+//
+// Compaction happens when either:
+//
+// 1) The folder (and subfolders) contains less than dataScannerCompactLeastObject objects.
+// 2) The folder itself contains more than dataScannerCompactAtFolders folders.
+// 3) The folder only contains objects and no subfolders.
+//
+// A bucket root will never be compacted.
+//
+// Furthermore if a has more than dataScannerCompactAtChildren recursive children (uncompacted folders)
+// the tree will be recursively scanned and the branches with the least number of objects will be
+// compacted until the limit is reached.
+//
+// This ensures that any branch will never contain an unreasonable amount of other branches,
+// and also that small branches with few objects don't take up unreasonable amounts of space.
+// This keeps the cache size at a reasonable size for all buckets.
+//
+// Whenever a branch is scanned, it is assumed that it will be un-compacted
+// before it hits any of the above limits.
+// This will make the branch rebalance itself when scanned if the distribution of objects has changed.
 
 // Cache structure and compaction:
 //

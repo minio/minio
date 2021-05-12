@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dsync_test
+package dsync
 
 import (
 	"context"
@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	. "github.com/minio/minio/pkg/dsync"
 )
 
 const (

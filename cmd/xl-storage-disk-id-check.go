@@ -138,6 +138,10 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
+func (p *xlStorageDiskIDCheck) LastConn() time.Time {
+	return p.storage.LastConn()
+}
+
 func (p *xlStorageDiskIDCheck) IsLocal() bool {
 	return p.storage.IsLocal()
 }

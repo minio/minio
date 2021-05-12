@@ -21,11 +21,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 
+	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/kms"
 	"github.com/secure-io/sio-go"
 	"github.com/secure-io/sio-go/sioutil"
@@ -62,7 +63,7 @@ func DecryptBytes(KMS kms.KMS, ciphertext []byte, context kms.Context) ([]byte, 
 // ciphertext.
 func Encrypt(KMS kms.KMS, plaintext io.Reader, context kms.Context) (io.Reader, error) {
 	var algorithm = sio.AES_256_GCM
-	if !sioutil.NativeAES() {
+	if !fips.Enabled && !sioutil.NativeAES() {
 		algorithm = sio.ChaCha20Poly1305
 	}
 
@@ -87,6 +88,7 @@ func Encrypt(KMS kms.KMS, plaintext io.Reader, context kms.Context) (io.Reader, 
 		header [5]byte
 		buffer bytes.Buffer
 	)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	metadata, err := json.Marshal(encryptedObject{
 		KeyID:     key.KeyID,
 		KMSKey:    key.Ciphertext,
@@ -138,8 +140,12 @@ func Decrypt(KMS kms.KMS, ciphertext io.Reader, context kms.Context) (io.Reader,
 	if _, err := io.ReadFull(ciphertext, metadataBuffer); err != nil {
 		return nil, err
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(metadataBuffer, &metadata); err != nil {
 		return nil, err
+	}
+	if fips.Enabled && metadata.Algorithm != sio.AES_256_GCM {
+		return nil, fmt.Errorf("config: unsupported encryption algorithm: %q is not supported in FIPS mode", metadata.Algorithm)
 	}
 
 	key, err := KMS.DecryptKey(metadata.KeyID, metadata.KMSKey, context)

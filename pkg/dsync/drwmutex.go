@@ -46,7 +46,10 @@ func log(format string, data ...interface{}) {
 const drwMutexAcquireTimeout = 1 * time.Second // 1 second.
 
 // dRWMutexRefreshTimeout - timeout for the refresh call
-const drwMutexRefreshTimeout = 5 * time.Second
+const drwMutexRefreshCallTimeout = 5 * time.Second
+
+// dRWMutexUnlockTimeout - timeout for the unlock call
+const drwMutexUnlockCallTimeout = 30 * time.Second
 
 // dRWMutexRefreshInterval - the interval between two refresh calls
 const drwMutexRefreshInterval = 10 * time.Second
@@ -275,7 +278,7 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 				Quorum:    quorum,
 			}
 
-			ctx, cancel := context.WithTimeout(ctx, drwMutexRefreshTimeout)
+			ctx, cancel := context.WithTimeout(ctx, drwMutexRefreshCallTimeout)
 			defer cancel()
 
 			refreshed, err := c.Refresh(ctx, args)
@@ -613,13 +616,16 @@ func sendRelease(ds *Dsync, c NetLocker, owner string, uid string, isReadLock bo
 		Resources: names,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), drwMutexUnlockCallTimeout)
+	defer cancel()
+
 	if isReadLock {
-		if _, err := c.RUnlock(args); err != nil {
+		if _, err := c.RUnlock(ctx, args); err != nil {
 			log("dsync: Unable to call RUnlock failed with %s for %#v at %s\n", err, args, c)
 			return false
 		}
 	} else {
-		if _, err := c.Unlock(args); err != nil {
+		if _, err := c.Unlock(ctx, args); err != nil {
 			log("dsync: Unable to call Unlock failed with %s for %#v at %s\n", err, args, c)
 			return false
 		}

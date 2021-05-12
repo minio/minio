@@ -29,6 +29,7 @@ import (
 	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -124,6 +125,7 @@ func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 			}
 		}
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Unmarshal(data, item)
 }
 

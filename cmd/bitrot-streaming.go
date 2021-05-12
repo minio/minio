@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -44,7 +45,7 @@ type streamingBitrotWriter struct {
 	closeWithErr func(err error) error
 	h            hash.Hash
 	shardSize    int64
-	canClose     chan struct{} // Needed to avoid race explained in Close() call.
+	canClose     *sync.WaitGroup
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
@@ -71,7 +72,7 @@ func (b *streamingBitrotWriter) Close() error {
 	// Now pipe.Close() can return before the data is read on the other end of the pipe and written to the disk
 	// Hence an immediate Read() on the file can return incorrect data.
 	if b.canClose != nil {
-		<-b.canClose
+		b.canClose.Wait()
 	}
 	return err
 }
@@ -86,8 +87,8 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 	r, w := io.Pipe()
 	h := algo.New()
 
-	bw := &streamingBitrotWriter{iow: w, closeWithErr: w.CloseWithError, h: h, shardSize: shardSize, canClose: make(chan struct{})}
-
+	bw := &streamingBitrotWriter{iow: w, closeWithErr: w.CloseWithError, h: h, shardSize: shardSize, canClose: &sync.WaitGroup{}}
+	bw.canClose.Add(1)
 	go func() {
 		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
 		if length != -1 {
@@ -95,7 +96,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 			totalFileSize = bitrotSumsTotalSize + length
 		}
 		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
-		close(bw.canClose)
+		bw.canClose.Done()
 	}()
 	return bw
 }
