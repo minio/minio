@@ -564,14 +564,15 @@ func addCustomHeaders(h http.Handler) http.Handler {
 	})
 }
 
-
+// addSecurityHeaders adds various HTTP(S) response headers.
+// Security Headers enable various security protections behaviors in the client's browser.
 func addSecurityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
-		header.Set("X-XSS-Protection", "1; mode=block")                  // Prevents against XSS attacks
-		header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
-		header.Set("X-Frame-Options", "deny") // Prevent against Clickjack attack
-		header.Set("X-Content-Type-Options", "nosniff") //  Prevent mime-sniff
+		header.Set("X-XSS-Protection", "1; mode=block")                                // Prevents against XSS attacks
+		header.Set("Content-Security-Policy", "block-all-mixed-content")               // prevent mixed (HTTP / HTTPS content)
+		header.Set("X-Frame-Options", "deny")                                          // Prevent against Clickjack attack
+		header.Set("X-Content-Type-Options", "nosniff")                                //  Prevent mime-sniff
 		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains") // HSTS mitigates variants of MiTM attacks
 		h.ServeHTTP(w, r)
 	})
