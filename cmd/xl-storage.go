@@ -335,6 +335,10 @@ func (s *xlStorage) IsOnline() bool {
 	return true
 }
 
+func (s *xlStorage) LastConn() time.Time {
+	return time.Time{}
+}
+
 func (s *xlStorage) IsLocal() bool {
 	return true
 }
@@ -423,17 +427,18 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 			return sizeSummary{}, errSkipFile
 		}
 
-		var totalSize int64
-
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			totalSize += item.applyActions(ctx, objAPI, actionMeta{
+			sz := item.applyActions(ctx, objAPI, actionMeta{
 				oi:         oi,
 				bitRotScan: healOpts.Bitrot,
 			}, &sizeS)
+			if !oi.DeleteMarker && sz == oi.Size {
+				sizeS.versions++
+			}
+			sizeS.totalSize += sz
 		}
-		sizeS.totalSize = totalSize
 		return sizeS, nil
 	})
 
