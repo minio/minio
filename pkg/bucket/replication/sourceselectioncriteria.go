@@ -58,10 +58,7 @@ func (s *SourceSelectionCriteria) UnmarshalXML(dec *xml.Decoder, start xml.Start
 	if len(ssc.ReplicaModifications.Status) == 0 {
 		ssc.ReplicaModifications.Status = Enabled
 	}
-	*s = SourceSelectionCriteria{
-		ReplicaModifications: ReplicaModifications{
-			Status: ssc.ReplicaModifications.Status,
-		}}
+	*s = SourceSelectionCriteria(ssc)
 	return nil
 }
 
