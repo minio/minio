@@ -992,12 +992,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
-	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
-		// This request header needs to be set prior to setting ObjectOptions
-		if !crypto.SSEC.IsRequested(r.Header) {
-			r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-		}
-	}
+	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
+	sseConfig.Apply(r.Header, globalAutoEncryption)
 
 	// get gateway encryption options
 	var opts ObjectOptions
