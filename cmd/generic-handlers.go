@@ -572,7 +572,7 @@ func addSecurityHeaders(h http.Handler) http.Handler {
 		header.Set("X-XSS-Protection", "1; mode=block")                                // Prevents against XSS attacks
 		header.Set("Content-Security-Policy", "block-all-mixed-content")               // prevent mixed (HTTP / HTTPS content)
 		header.Set("X-Frame-Options", "deny")                                          // Prevent against Clickjack attack
-		header.Set("X-Content-Type-Options", "nosniff")                                //  Prevent mime-sniff
+		header.Set("X-Content-Type-Options", "nosniff")                                // Prevent mime-sniff
 		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains") // HSTS mitigates variants of MITM attacks
 		h.ServeHTTP(w, r)
 	})
