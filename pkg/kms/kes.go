@@ -115,7 +115,7 @@ func (c *kesClient) GenerateKey(keyID string, ctx Context) (DEK, error) {
 	}
 	dek, err := c.client.GenerateKey(context.Background(), keyID, ctxBytes)
 	if err != nil {
-		return DEK{}, nil
+		return DEK{}, err
 	}
 	return DEK{
 		KeyID:      keyID,
