@@ -1502,21 +1502,23 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 
 	if ok && cred.IsValid() {
 		if cred.IsServiceAccount() || cred.IsTemp() {
-			// temporary credentials or service accounts
-			// must have their parent in UsersMap
-			if cred.ParentUser == globalActiveCred.AccessKey {
-				// parent exists, so allow temporary and service accounts.
-				ok = true
-			} else {
-				_, ok = sys.iamUserPolicyMap[cred.ParentUser]
+			policies, err := sys.policyDBGet(cred.ParentUser, false)
+			if err != nil {
+				// Reject if the policy map for user doesn't exist anymore.
+				logger.LogIf(context.Background(), fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
+				return auth.Credentials{}, false
 			}
+			for _, group := range cred.Groups {
+				ps, err := sys.policyDBGet(group, true)
+				if err != nil {
+					// Reject if the policy map for group doesn't exist anymore.
+					logger.LogIf(context.Background(), fmt.Errorf("'%s' group does not have a policy present", group))
+					return auth.Credentials{}, false
+				}
+				policies = append(policies, ps...)
+			}
+			ok = len(policies) > 0
 		}
-		// for LDAP service accounts with ParentUser set
-		// we have no way to validate, either because user
-		// doesn't need an explicit policy as it can come
-		// automatically from a group. We are safe to ignore
-		// this and continue as policies would fail eventually
-		// the policies are missing or not configured.
 	}
 	return cred, ok && cred.IsValid()
 }
