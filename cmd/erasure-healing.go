@@ -261,10 +261,26 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
-	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
-	// List of disks having all parts as per latest er.meta.
-	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
+	// make sure all parts metadata dataDir is same as returned by listOnlineDisks()
+	// the reason is its possible that some of the disks might have stale data, for those
+	// we simply override them with maximally occurring 'dataDir' - this ensures that
+	// disksWithAllParts() verifies same dataDir across all drives.
+	for i := range partsMetadata {
+		partsMetadata[i].DataDir = lfi.DataDir
+	}
+
+	// List of disks having all parts as per latest metadata.
+	// NOTE: do not pass in latestDisks to diskWithAllParts since
+	// the diskWithAllParts needs to reach the drive to ensure
+	// validity of the metadata content, we should make sure that
+	// we pass in disks as is for it to be verified. Once verified
+	// the disksWithAllParts() returns the actual disks that can be
+	// used here for reconstruction. This is done to ensure that
+	// we do not skip drives that have inconsistent metadata to be
+	// skipped from purging when they are stale.
+	availableDisks, dataErrs := disksWithAllParts(ctx, storageDisks, partsMetadata, errs, bucket, object, scanMode)
 
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
@@ -386,7 +402,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
 
 		// Reorder so that we have data disks first and parity disks next.
-		latestDisks = shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+		latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
 		outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 		partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 
@@ -770,6 +786,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 			corruptedErasureMeta++
 		}
 	}
+
 	var notFoundParts int
 	for i := range dataErrs {
 		// Only count part errors, if the error is not

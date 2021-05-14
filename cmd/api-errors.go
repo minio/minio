@@ -756,7 +756,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrSlowDown: {
 		Code:           "SlowDown",
-		Description:    "Please reduce your request",
+		Description:    "Resource requested is unreadable, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidPrefixMarker: {

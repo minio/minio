@@ -31,7 +31,6 @@ type parallelReader struct {
 	readers       []io.ReaderAt
 	orgReaders    []io.ReaderAt
 	dataBlocks    int
-	errs          []error
 	offset        int64
 	shardSize     int64
 	shardFileSize int64
@@ -48,7 +47,6 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 	return &parallelReader{
 		readers:       readers,
 		orgReaders:    readers,
-		errs:          make([]error, len(readers)),
 		dataBlocks:    e.dataBlocks,
 		offset:        (offset / e.blockSize) * e.ShardSize(),
 		shardSize:     e.ShardSize(),
@@ -172,7 +170,6 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 				// This will be communicated upstream.
 				p.orgReaders[bufIdx] = nil
 				p.readers[i] = nil
-				p.errs[i] = err
 
 				// Since ReadAt returned error, trigger another read.
 				readTriggerCh <- true
@@ -197,19 +194,8 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		return newBuf, nil
 	}
 
-	if countErrs(p.errs, nil) == len(p.errs) {
-		// We have success from all drives this can mean that
-		// all local drives succeeded, but all remote drives
-		// failed to read since p.readers[i] was already nil
-		// for such remote servers - this condition was missed
-		// we would return instead `nil, nil` from this
-		// function - it is safer to simply return Quorum error
-		// when all errs are nil but erasure coding cannot decode
-		// the content.
-		return nil, errErasureReadQuorum
-	}
-
-	return nil, reduceReadQuorumErrs(context.Background(), p.errs, objectOpIgnoredErrs, p.dataBlocks)
+	// If we cannot decode, just return read quorum error.
+	return nil, errErasureReadQuorum
 }
 
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.

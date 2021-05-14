@@ -296,6 +296,11 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	}
 	var healOnce sync.Once
 
+	// once we have obtained a common FileInfo i.e latest, we should stick
+	// to single dataDir to read the content to avoid reading from some other
+	// dataDir that has stale FileInfo{} to ensure that we fail appropriately
+	// during reads and expect the same dataDir everywhere.
+	dataDir := fi.DataDir
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -324,9 +329,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
-			partPath := pathJoin(object, metaArr[index].DataDir, fmt.Sprintf("part.%d", partNumber))
-			data := metaArr[index].Data
-			readers[index] = newBitrotReader(disk, data, bucket, partPath, tillOffset,
+			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
+			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 
 			// Prefer local disks
@@ -347,10 +351,12 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				var scan madmin.HealScanMode
 				if errors.Is(err, errFileNotFound) {
 					scan = madmin.HealNormalScan
+					logger.Info("Healing required, attempting to heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
 				} else if errors.Is(err, errFileCorrupt) {
 					scan = madmin.HealDeepScan
+					logger.Info("Healing required, attempting to heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
-				if scan != madmin.HealUnknownScan {
+				if scan == madmin.HealNormalScan || scan == madmin.HealDeepScan {
 					healOnce.Do(func() {
 						if _, healing := er.getOnlineDisksWithHealing(); !healing {
 							go healObject(bucket, object, fi.VersionID, scan)
@@ -538,7 +544,6 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dataDir, dstBucket, dstEntry string, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
 	dataDir = retainSlash(dataDir)
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -592,7 +597,6 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -636,14 +640,8 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer func() {
-		ObjectPathUpdated(pathJoin(bucket, object))
-	}()
-
 	data := r.Reader
 
-	uniqueID := mustGetUUID()
-	tempObj := uniqueID
 	// No metadata is set, allocate a new one.
 	if opts.UserDefined == nil {
 		opts.UserDefined = make(map[string]string)
@@ -692,7 +690,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			fi.VersionID = mustGetUUID()
 		}
 	}
+
 	fi.DataDir = mustGetUUID()
+	uniqueID := mustGetUUID()
+	tempObj := uniqueID
 
 	// Initialize erasure metadata.
 	for index := range partsMetadata {
