@@ -986,22 +986,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	deleteBucket := objectAPI.DeleteBucket
-
-	// Attempt to delete bucket.
-	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
-		if _, ok := err.(BucketNotEmpty); ok && (globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket)) {
-			apiErr := toAPIError(ctx, err)
-			apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
-			writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
-		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		}
-		return
-	}
-
-	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
@@ -1009,6 +993,27 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
+	deleteBucket := objectAPI.DeleteBucket
+
+	// Attempt to delete bucket.
+	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
+		apiErr := toAPIError(ctx, err)
+		if _, ok := err.(BucketNotEmpty); ok {
+			if globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket) {
+				apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
+			}
+		}
+		if globalDNSConfig != nil {
+			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, pl1ease fix it manually", err2))
+			}
+		}
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)
