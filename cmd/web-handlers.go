@@ -1201,10 +1201,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if bucket encryption is enabled
-	_, err = globalBucketSSEConfigSys.Get(bucket)
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-	}
+	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
+	sseConfig.Apply(r.Header, globalAutoEncryption)
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength

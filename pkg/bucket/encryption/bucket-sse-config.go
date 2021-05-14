@@ -21,6 +21,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"net/http"
+
+	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 const (
@@ -107,6 +111,49 @@ func ParseBucketSSEConfig(r io.Reader) (*BucketSSEConfig, error) {
 	if config.XMLNS == "" {
 		config.XMLNS = xmlNS
 	}
-
 	return &config, nil
+}
+
+// Apply applies the SSE bucket configuration on the given HTTP headers and
+// sets the specified SSE headers.
+//
+// Apply does not overwrite any existing SSE headers. Further, it will
+// set minimal SSE-KMS headers if autoEncrypt is true and the BucketSSEConfig
+// is nil.
+func (b *BucketSSEConfig) Apply(headers http.Header, autoEncrypt bool) {
+	if _, ok := crypto.IsRequested(headers); ok {
+		return
+	}
+	if b == nil {
+		if autoEncrypt {
+			headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+		}
+		return
+	}
+
+	switch b.Algorithm() {
+	case xhttp.AmzEncryptionAES:
+		headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+	case xhttp.AmzEncryptionKMS:
+		headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+		headers.Set(xhttp.AmzServerSideEncryptionKmsID, b.KeyID())
+	}
+}
+
+// Algorithm returns the SSE algorithm specified by the SSE configuration.
+func (b *BucketSSEConfig) Algorithm() SSEAlgorithm {
+	for _, rule := range b.Rules {
+		return rule.DefaultEncryptionAction.Algorithm
+	}
+	return ""
+}
+
+// KeyID returns the KMS key ID specified by the SSE configuration.
+// If the SSE configuration does not specify SSE-KMS it returns an
+// empty key ID.
+func (b *BucketSSEConfig) KeyID() string {
+	for _, rule := range b.Rules {
+		return rule.DefaultEncryptionAction.MasterKeyID
+	}
+	return ""
 }
