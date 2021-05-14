@@ -1311,17 +1311,16 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
+	deadlinedCtx, deadlineCancel := context.WithTimeout(ctx, deadline)
+	defer deadlineCancel()
 
-	var err error
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
-	ctx, err = nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
+	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
 	if err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}
-	defer nsLock.Unlock()
+	defer nsLock.Unlock(lkctx.Cancel)
 
 	go func() {
 		defer close(healthInfoCh)
