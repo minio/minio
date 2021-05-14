@@ -285,6 +285,11 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	}
 	var healOnce sync.Once
 
+	// once we have obtained a common FileInfo i.e latest, we should stick
+	// to single dataDir to read the content to avoid reading from some other
+	// dataDir that has stale FileInfo{} to ensure that we fail appropriately
+	// during reads and expect the same dataDir everywhere.
+	dataDir := fi.DataDir
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -313,9 +318,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
-			partPath := pathJoin(object, metaArr[index].DataDir, fmt.Sprintf("part.%d", partNumber))
-			data := metaArr[index].Data
-			readers[index] = newBitrotReader(disk, data, bucket, partPath, tillOffset,
+			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
+			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 
 			// Prefer local disks
@@ -336,10 +340,12 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				var scan madmin.HealScanMode
 				if errors.Is(err, errFileNotFound) {
 					scan = madmin.HealNormalScan
+					logger.Info("Healing required, attempting to heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
 				} else if errors.Is(err, errFileCorrupt) {
 					scan = madmin.HealDeepScan
+					logger.Info("Healing required, attempting to heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
-				if scan != madmin.HealUnknownScan {
+				if scan == madmin.HealNormalScan || scan == madmin.HealDeepScan {
 					healOnce.Do(func() {
 						if _, healing := er.getOnlineDisksWithHealing(); !healing {
 							go healObject(bucket, object, fi.VersionID, scan)

@@ -324,8 +324,8 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	}
 
 	err = xl.GetObject(ctx, bucket, object, 0, int64(len(buf)), ioutil.Discard, "", opts)
-	if err != toObjectErr(errFileNotFound, bucket, object) {
-		t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+		t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
 	}
 
 	// Test use case 2: Make 9 disks offline, which leaves less than quorum number of disks
