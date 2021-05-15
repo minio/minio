@@ -297,14 +297,24 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 		return n, cr.err
 	}
 
-	if cap(cr.buffer) < size {
-		cr.buffer = make([]byte, size)
+	// Choose whether to use internal buffer or use given buffer based on the size.
+	// This will allow us to remove copy call, and improve performance since this
+	// chuckreader is heavily used in minio
+	var chosenBuf []byte
+	internalBuf := len(buf) < size
+	if internalBuf {
+		if cap(cr.buffer) < size {
+			cr.buffer = make([]byte, size)
+		} else {
+			cr.buffer = cr.buffer[:size]
+		}
+		chosenBuf = cr.buffer
 	} else {
-		cr.buffer = cr.buffer[:size]
+		chosenBuf = buf[:size]
 	}
 
 	// Now, we read the payload and compute its SHA-256 hash.
-	_, err = io.ReadFull(cr.reader, cr.buffer)
+	_, err = io.ReadFull(cr.reader, chosenBuf)
 	if err == io.EOF && size != 0 {
 		err = io.ErrUnexpectedEOF
 	}
@@ -332,7 +342,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 
 	// Once we have read the entire chunk successfully, we verify
 	// that the received signature matches our computed signature.
-	cr.chunkSHA256Writer.Write(cr.buffer)
+	cr.chunkSHA256Writer.Write(chosenBuf)
 	newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil)))
 	if !compareSignatureV4(string(signature[16:]), newSignature) {
 		cr.err = errSignatureMismatch
@@ -347,9 +357,14 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 		cr.err = io.EOF
 		return n, cr.err
 	}
-
-	cr.offset = copy(buf, cr.buffer)
-	n += cr.offset
+	// since we have chosen internal buf
+	if internalBuf {
+		cr.offset = copy(buf, chosenBuf)
+		n += cr.offset
+	} else {
+		// looks like we had enough buf given by the caller to read.
+		n += size
+	}
 	return n, err
 }
 
