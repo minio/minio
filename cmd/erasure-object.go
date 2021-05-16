@@ -526,7 +526,6 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -567,7 +566,6 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -611,14 +609,8 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer func() {
-		ObjectPathUpdated(pathJoin(bucket, object))
-	}()
-
 	data := r.Reader
 
-	uniqueID := mustGetUUID()
-	tempObj := uniqueID
 	// No metadata is set, allocate a new one.
 	if opts.UserDefined == nil {
 		opts.UserDefined = make(map[string]string)
@@ -664,7 +656,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()
 	}
+
 	fi.DataDir = mustGetUUID()
+	uniqueID := mustGetUUID()
+	tempObj := uniqueID
 
 	// Initialize erasure metadata.
 	for index := range partsMetadata {
@@ -1444,9 +1439,6 @@ func (er erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, obje
 // restoreTransitionedObject for multipart object chunks the file stream from remote tier into the same number of parts
 // as in the xl.meta for this version and rehydrates the part.n into the fi.DataDir for this version as in the xl.meta
 func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket string, object string, opts ObjectOptions) error {
-	defer func() {
-		ObjectPathUpdated(pathJoin(bucket, object))
-	}()
 	setRestoreHeaderFn := func(oi ObjectInfo, rerr error) error {
 		er.updateRestoreMetadata(ctx, bucket, object, oi, opts, rerr)
 		return rerr

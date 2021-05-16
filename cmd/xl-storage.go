@@ -292,7 +292,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	_, _ = rand.Read(rnd[:])
 	tmpFile := ".writable-check-" + hex.EncodeToString(rnd[:]) + ".tmp"
 	filePath := pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile)
-	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
 		return p, err
 	}
@@ -1105,7 +1105,7 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 	var r io.ReadCloser
 	if requireDirectIO {
 		var f *os.File
-		f, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
+		f, err = OpenFileDirectIO(filePath, readMode, 0666)
 		r = &odirectReader{f, nil, nil, true, true, s, nil}
 	} else {
 		r, err = OpenFile(filePath, readMode, 0)
@@ -1394,7 +1394,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	var file *os.File
 	// O_DIRECT only supported if offset is zero
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
-		file, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
+		file, err = OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
 		// Open the file for reading.
 		file, err = OpenFile(filePath, readMode, 0666)
@@ -1515,7 +1515,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	if fileSize >= 0 && fileSize <= smallFileThreshold {
 		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
 		// and not O_DIRECT to avoid the complexities of aligned I/O.
-		w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 		if err != nil {
 			return err
 		}
