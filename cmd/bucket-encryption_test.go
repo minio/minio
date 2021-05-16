@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 )
 
@@ -47,12 +46,12 @@ func TestValidateBucketSSEConfig(t *testing.T) {
 			<Rule>
 			<ApplyServerSideEncryptionByDefault>
                         <SSEAlgorithm>aws:kms</SSEAlgorithm>
-                        <KMSMasterKeyID>arn:aws:kms:us-east-1:1234/5678example</KMSMasterKeyID>
+                        <KMSMasterKeyID>my-key</KMSMasterKeyID>
 			</ApplyServerSideEncryptionByDefault>
 			</Rule>
 			</ServerSideEncryptionConfiguration>`,
-			expectedErr: errors.New("Unsupported bucket encryption configuration"),
-			shouldPass:  false,
+			expectedErr: nil,
+			shouldPass:  true,
 		},
 	}
 

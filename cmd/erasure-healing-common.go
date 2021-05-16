@@ -200,7 +200,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
-
 	inconsistent := 0
 	for i, meta := range partsMetadata {
 		if !meta.IsValid() {
@@ -270,6 +269,9 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			if dataErrs[i] == nil {
 				// All parts verified, mark it as all data available.
 				availableDisks[i] = onlineDisk
+			} else {
+				// upon errors just make that disk's fileinfo invalid
+				partsMetadata[i] = FileInfo{}
 			}
 			continue
 		}
@@ -291,6 +293,9 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		if dataErrs[i] == nil {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
+		} else {
+			// upon errors just make that disk's fileinfo invalid
+			partsMetadata[i] = FileInfo{}
 		}
 	}
 

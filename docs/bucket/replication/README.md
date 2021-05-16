@@ -132,6 +132,11 @@ The replication configuration can now be added to the source bucket by applying 
       "Destination": {
         "Bucket": "arn:aws:s3:::destbucket",
         "StorageClass": "STANDARD"
+      },
+      "SourceSelectionCriteria": {
+        "ReplicaModifications": {
+          "Status": "Enabled"
+        }
       }
     }
   ]
@@ -149,6 +154,11 @@ To perform bi-directional replication, repeat the above process on the target si
 ![put](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/PUT_bucket_replication.png)
 
 ![head](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/HEAD_bucket_replication.png)
+
+## Replica Modification sync
+If bi-directional replication is set up between two clusters, any metadata update on the REPLICA object is by default reflected back in the source object when `ReplicaModifications` status in the `SourceSelectionCriteria` is `Enabled`. In MinIO, this is enabled by default. If a metadata update is performed on the "REPLICA" object, its `X-Amz-Replication-Status` will change from `PENDING` to `COMPLETE` or `FAILED`, and the source object version will show `X-Amz-Replication-Status` of `REPLICA` once the replication operation is complete.
+
+The replication configuration in use on a bucket can be viewed using the `mc replicate export alias/bucket` command.
 
 ## MinIO Extension
 ### Replicating Deletes
