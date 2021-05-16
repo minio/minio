@@ -756,8 +756,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
-	defer ObjectPathUpdated(pathJoin(bucket, object))
-
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 

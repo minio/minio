@@ -506,23 +506,18 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 }
 
 // markDirty adds the supplied path to the current bloom filter.
-func (d *dataUpdateTracker) markDirty(in string) {
-	bucket, _ := path2BucketObjectWithBasePath("", in)
+func (d *dataUpdateTracker) markDirty(bucket, prefix string) {
 	dateUpdateTrackerLogPrefix := color.Green("dataUpdateTracker:")
-	if bucket == "" {
-		if d.debug && len(in) > 0 {
-			console.Debugf(dateUpdateTrackerLogPrefix+" no bucket (%s)\n", in)
-		}
+	if bucket == "" && d.debug {
+		console.Debugf(dateUpdateTrackerLogPrefix + " no bucket specified\n")
 		return
 	}
 
-	if isReservedOrInvalidBucket(bucket, false) {
-		if d.debug && false {
-			console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, in)
-		}
+	if isReservedOrInvalidBucket(bucket, false) && d.debug {
+		console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, prefix)
 		return
 	}
-	split := splitPathDeterministic(in)
+	split := splitPathDeterministic(pathJoin(bucket, prefix))
 
 	// Add all paths until done.
 	d.mu.Lock()
@@ -679,10 +674,10 @@ type bloomFilterResponse struct {
 	Filter []byte
 }
 
-// ObjectPathUpdated indicates a path has been updated.
+// NSUpdated indicates namespace has been updated.
 // The function will block until the entry has been picked up.
-func ObjectPathUpdated(s string) {
+func NSUpdated(bucket, prefix string) {
 	if intDataUpdateTracker != nil {
-		intDataUpdateTracker.markDirty(s)
+		intDataUpdateTracker.markDirty(bucket, prefix)
 	}
 }
