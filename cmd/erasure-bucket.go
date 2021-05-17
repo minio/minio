@@ -36,6 +36,8 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
 // MakeBucket - make a bucket.
 func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
+	defer NSUpdated(bucket, slashSeparator)
+
 	// Verify if bucket is valid.
 	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
@@ -159,7 +161,8 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 // DeleteBucket - deletes a bucket.
 func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	// Collect if all disks report volume not found.
-	defer ObjectPathUpdated(bucket + slashSeparator)
+	defer NSUpdated(bucket, slashSeparator)
+
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))

@@ -37,7 +37,7 @@ import (
 func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	result madmin.HealResultItem, err error) {
 	if !opts.DryRun {
-		defer ObjectPathUpdated(bucket)
+		defer NSUpdated(bucket, slashSeparator)
 	}
 
 	storageDisks := er.getDisks()
@@ -234,6 +234,9 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (er erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
+	if !opts.DryRun {
+		defer NSUpdated(bucket, object)
+	}
 
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
@@ -376,7 +379,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, versionID)
 	}
-	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	cleanFileInfo := func(fi FileInfo) FileInfo {
 		// Returns a copy of the 'fi' with checksums and parts nil'ed.
@@ -584,7 +586,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 				}(index, disk)
 			}
 			wg.Wait()
-			ObjectPathUpdated(pathJoin(bucket, object))
+			NSUpdated(bucket, object)
 		}
 	}
 

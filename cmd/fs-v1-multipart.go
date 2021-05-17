@@ -558,7 +558,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return oi, toObjectErr(err, bucket)
 	}
-	defer ObjectPathUpdated(pathutil.Join(bucket, object))
+	defer NSUpdated(bucket, object)
 
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
