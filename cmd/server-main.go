@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -264,6 +265,7 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, errErasureWriteQuorum) ||
 		errors.Is(err, errErasureReadQuorum) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.As(err, &rquorum) ||
 		errors.As(err, &wquorum) ||
 		isErrBucketNotFound(err) ||
