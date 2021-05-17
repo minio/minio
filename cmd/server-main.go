@@ -473,8 +473,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
-		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
-			"Unable to initialize the server in distributed mode")
+		globalActiveCred = auth.DefaultCredentials
 	}
 
 	// Set system resources to maximum.
@@ -570,7 +569,7 @@ func serverMain(ctx *cli.Context) {
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
+		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately by setting 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment values", globalActiveCred)
 		logger.StartupMessage(color.RedBold(msg))
 	}
 

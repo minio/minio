@@ -245,14 +245,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 }
 
 func handleCommonEnvVars() {
-	wormEnabled, err := config.LookupWorm()
-	if err != nil {
-		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
-	}
-	if wormEnabled {
-		logger.Fatal(errors.New("WORM is deprecated"), "global MINIO_WORM support is removed, please downgrade your server or migrate to https://github.com/minio/minio/tree/master/docs/retention")
-	}
-
+	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
