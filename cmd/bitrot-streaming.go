@@ -57,9 +57,15 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 	hashBytes := b.h.Sum(nil)
 	_, err := b.iow.Write(hashBytes)
 	if err != nil {
+		b.closeWithErr(err)
 		return 0, err
 	}
-	return b.iow.Write(p)
+	n, err := b.iow.Write(p)
+	if err != nil {
+		b.closeWithErr(err)
+		return n, err
+	}
+	return n, err
 }
 
 func (b *streamingBitrotWriter) Close() error {
@@ -77,13 +83,17 @@ func (b *streamingBitrotWriter) Close() error {
 	return err
 }
 
-// Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
-	return &streamingBitrotWriter{iow: ioutil.NopCloser(w), h: algo.New(), shardSize: shardSize, canClose: nil}
+// newStreamingBitrotWriterBuffer returns streaming bitrot writer implementation.
+// The output is written to the supplied writer w.
+func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize int64) io.Writer {
+	return &streamingBitrotWriter{iow: ioutil.NopCloser(w), h: algo.New(), shardSize: shardSize, canClose: nil, closeWithErr: func(err error) error {
+		// Similar to CloseWithError on pipes we always return nil.
+		return nil
+	}}
 }
 
 // Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64, heal bool) io.Writer {
+func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
 

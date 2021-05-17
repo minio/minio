@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"io"
-
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
