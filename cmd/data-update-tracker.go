@@ -40,13 +40,13 @@ import (
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUpdateTrackerEstItems = 10000000
+	dataUpdateTrackerEstItems = 100000
 	// ... we want this false positive rate:
-	dataUpdateTrackerFP        = 0.99
+	dataUpdateTrackerFP        = 0.01
 	dataUpdateTrackerQueueSize = 0
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 4
+	dataUpdateTrackerVersion      = 5
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
@@ -404,8 +404,10 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case 1, 2, 3:
-		console.Println(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+	case 1, 2, 3, 4:
+		if intDataUpdateTracker.debug {
+			console.Debugln(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+		}
 		return nil
 	case dataUpdateTrackerVersion:
 	default:
