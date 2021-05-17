@@ -60,7 +60,7 @@ minio server --address :9003 http://192.168.10.1{1...4}/data/tenant3
 
 ![Example-3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)
 
-**Note**: On distributed systems, credentials must be defined and exported using the `MINIO_ROOT_USER` and  `MINIO_ROOT_PASSWORD` environment variables. If a domain is required, it must be specified by defining and exporting the `MINIO_DOMAIN` environment variable.
+**Note**: On distributed systems, root credentials are recommend to be defined by exporting the `MINIO_ROOT_USER` and  `MINIO_ROOT_PASSWORD` environment variables. If no value is set MinIO setup will assume `minioadmin/minioadmin` as default credentials. If a domain is required, it must be specified by defining and exporting the `MINIO_DOMAIN` environment variable.
 
 ## <a name="cloud-scale-deployment"></a>Cloud Scale Deployment
 

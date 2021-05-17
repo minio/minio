@@ -38,7 +38,7 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 
 __NOTE:__
 
-- All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, on all the nodes before executing MinIO server command.
+- All the nodes running distributed MinIO should share a common root credentials, for the nodes to connect and trust each other. To achieve this, it is __recommended__ to export root user and root password as environment variables, `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, on all the nodes before executing MinIO server command. If not exported, default `minioadmin/minioadmin` credentials shall be used.
 - __MinIO creates erasure-coding sets of *4* to *16* drives per set.  The number of drives you provide in total must be a multiple of one of those numbers.__
 - __MinIO chooses the largest EC set size which divides into the total number of drives or total number of nodes given - making sure to keep the uniform distribution i.e each node participates equal number of drives per set__.
 - __Each object is written to a single EC set, and therefore is spread over no more than 16 drives.__
