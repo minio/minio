@@ -164,7 +164,6 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 
 	h := algo.New()
 	hashBuf := make([]byte, h.Size())
-	buf := make([]byte, shardSize)
 	left := wantSize
 
 	// Calculate the size of the bitrot file and compare
@@ -172,6 +171,9 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 	if left != bitrotShardFileSize(partSize, shardSize, algo) {
 		return errFileCorrupt
 	}
+
+	bufp := xlPoolSmall.Get().(*[]byte)
+	defer xlPoolSmall.Put(bufp)
 
 	for left > 0 {
 		// Read expected hash...
@@ -186,13 +188,15 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 		if left < shardSize {
 			shardSize = left
 		}
-		read, err := io.CopyBuffer(h, io.LimitReader(r, shardSize), buf)
+
+		read, err := io.CopyBuffer(h, io.LimitReader(r, shardSize), *bufp)
 		if err != nil {
 			// Read's failed for object with right size, at different offsets.
-			return err
+			return errFileCorrupt
 		}
+
 		left -= read
-		if !bytes.Equal(h.Sum(nil), hashBuf) {
+		if !bytes.Equal(h.Sum(nil), hashBuf[:n]) {
 			return errFileCorrupt
 		}
 	}

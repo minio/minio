@@ -98,16 +98,33 @@ func isValidVolname(volname string) bool {
 	return true
 }
 
+var (
+	xlPoolReallyLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeReallyLarge)
+			return &b
+		},
+	}
+	xlPoolLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeLarge)
+			return &b
+		},
+	}
+	xlPoolSmall = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeSmall)
+			return &b
+		},
+	}
+)
+
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
 	diskPath string
 	endpoint Endpoint
 
 	globalSync bool
-
-	poolReallyLarge sync.Pool
-	poolLarge       sync.Pool
-	poolSmall       sync.Pool
 
 	rootDisk bool
 
@@ -254,26 +271,8 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	}
 
 	p := &xlStorage{
-		diskPath: path,
-		endpoint: ep,
-		poolReallyLarge: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeReallyLarge)
-				return &b
-			},
-		},
-		poolLarge: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeLarge)
-				return &b
-			},
-		},
-		poolSmall: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeSmall)
-				return &b
-			},
-		},
+		diskPath:   path,
+		endpoint:   ep,
 		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
 		ctx:        GlobalContext,
 		rootDisk:   rootDisk,
@@ -1323,9 +1322,9 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 	}
 	if o.buf == nil {
 		if o.smallFile {
-			o.bufp = o.s.poolSmall.Get().(*[]byte)
+			o.bufp = xlPoolSmall.Get().(*[]byte)
 		} else {
-			o.bufp = o.s.poolLarge.Get().(*[]byte)
+			o.bufp = xlPoolLarge.Get().(*[]byte)
 		}
 	}
 	if o.freshRead {
@@ -1367,9 +1366,9 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 // Close - Release the buffer and close the file.
 func (o *odirectReader) Close() error {
 	if o.smallFile {
-		o.s.poolSmall.Put(o.bufp)
+		xlPoolSmall.Put(o.bufp)
 	} else {
-		o.s.poolLarge.Put(o.bufp)
+		xlPoolLarge.Put(o.bufp)
 	}
 	return o.f.Close()
 }
@@ -1554,11 +1553,11 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	var bufp *[]byte
 	if fileSize > 0 && fileSize >= reallyLargeFileThreshold {
 		// use a larger 4MiB buffer for really large streams.
-		bufp = s.poolReallyLarge.Get().(*[]byte)
-		defer s.poolReallyLarge.Put(bufp)
+		bufp = xlPoolReallyLarge.Get().(*[]byte)
+		defer xlPoolReallyLarge.Put(bufp)
 	} else {
-		bufp = s.poolLarge.Get().(*[]byte)
-		defer s.poolLarge.Put(bufp)
+		bufp = xlPoolLarge.Get().(*[]byte)
+		defer xlPoolLarge.Put(bufp)
 	}
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
