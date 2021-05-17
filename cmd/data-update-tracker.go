@@ -40,9 +40,9 @@ import (
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUpdateTrackerEstItems = 100000
+	dataUpdateTrackerEstItems = 200000
 	// ... we want this false positive rate:
-	dataUpdateTrackerFP        = 0.01
+	dataUpdateTrackerFP        = 0.1
 	dataUpdateTrackerQueueSize = 0
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
@@ -50,14 +50,10 @@ const (
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
-var (
-	objectUpdatedCh      chan<- string
-	intDataUpdateTracker *dataUpdateTracker
-)
+var intDataUpdateTracker *dataUpdateTracker
 
 func init() {
 	intDataUpdateTracker = newDataUpdateTracker()
-	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 type dataUpdateTracker struct {
