@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -197,6 +197,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				RootDisk:       info.RootDisk,
 				Healing:        info.Healing,
 				State:          diskErrToDriveState(err),
+				FreeInodes:     info.FreeInodes,
 			}
 			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
 			if info.Healing {

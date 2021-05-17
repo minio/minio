@@ -38,14 +38,15 @@ import (
 	"github.com/fatih/color"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
+	"github.com/minio/kes"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/console"
+	"github.com/minio/minio/pkg/ellipses"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/kms"
@@ -361,20 +362,48 @@ func handleCommonEnvVars() {
 		}
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
-		kesEndpoints, err := crypto.ParseKESEndpoints(env.Get(config.EnvKESEndpoint, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KES endpoints inherited from the shell environment")
+		var endpoints []string
+		for _, endpoint := range strings.Split(env.Get(config.EnvKESEndpoint, ""), ",") {
+			if strings.TrimSpace(endpoint) == "" {
+				continue
+			}
+			if !ellipses.HasEllipses(endpoint) {
+				endpoints = append(endpoints, endpoint)
+				continue
+			}
+			patterns, err := ellipses.FindEllipsesPatterns(endpoint)
+			if err != nil {
+				logger.Fatal(err, fmt.Sprintf("Invalid KES endpoint %q", endpoint))
+			}
+			for _, lbls := range patterns.Expand() {
+				endpoints = append(endpoints, strings.Join(lbls, ""))
+			}
 		}
-		KMS, err := crypto.NewKes(crypto.KesConfig{
-			Enabled:      true,
-			Endpoint:     kesEndpoints,
-			DefaultKeyID: env.Get(config.EnvKESKeyName, ""),
-			CertFile:     env.Get(config.EnvKESClientCert, ""),
-			KeyFile:      env.Get(config.EnvKESClientKey, ""),
-			CAPath:       env.Get(config.EnvKESServerCA, globalCertsCADir.Get()),
-			Transport:    newCustomHTTPTransportWithHTTP2(&tls.Config{RootCAs: globalRootCAs}, defaultDialTimeout)(),
+		certificate, err := tls.LoadX509KeyPair(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to load KES client certificate as specified by the shell environment")
+		}
+		rootCAs, err := certs.GetRootCAs(env.Get(config.EnvKESServerCA, globalCertsCADir.Get()))
+		if err != nil {
+			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(config.EnvKESServerCA, globalCertsCADir.Get())))
+		}
+
+		var defaultKeyID = env.Get(config.EnvKESKeyName, "")
+		KMS, err := kms.NewWithConfig(kms.Config{
+			Endpoints:    endpoints,
+			DefaultKeyID: defaultKeyID,
+			Certificate:  certificate,
+			RootCAs:      rootCAs,
 		})
 		if err != nil {
+			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
+		}
+
+		// We check that the default key ID exists or try to create it otherwise.
+		// This implicitly checks that we can communicate to KES. We don't treat
+		// a policy error as failure condition since MinIO may not have the permission
+		// to create keys - just to generate/decrypt data encryption keys.
+		if err = KMS.CreateKey(defaultKeyID); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
 		GlobalKMS = KMS

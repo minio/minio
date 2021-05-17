@@ -28,6 +28,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/kms"
 )
 
 type ssekms struct{}
@@ -61,16 +62,21 @@ func (ssekms) IsRequested(h http.Header) bool {
 
 // ParseHTTP parses the SSE-KMS headers and returns the SSE-KMS key ID
 // and the KMS context on success.
-func (ssekms) ParseHTTP(h http.Header) (string, Context, error) {
+func (ssekms) ParseHTTP(h http.Header) (string, kms.Context, error) {
 	algorithm := h.Get(xhttp.AmzServerSideEncryption)
 	if algorithm != xhttp.AmzEncryptionKMS {
 		return "", nil, ErrInvalidEncryptionMethod
 	}
 
-	var ctx Context
+	var ctx kms.Context
 	if context, ok := h[xhttp.AmzServerSideEncryptionKmsContext]; ok {
+		b, err := base64.StdEncoding.DecodeString(context[0])
+		if err != nil {
+			return "", nil, err
+		}
+
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err := json.Unmarshal([]byte(context[0]), &ctx); err != nil {
+		if err := json.Unmarshal(b, &ctx); err != nil {
 			return "", nil, err
 		}
 	}
@@ -89,15 +95,17 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func (s3 ssekms) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	keyID, kmsKey, sealedKey, ctx, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
 	}
-	if _, ok := ctx[bucket]; !ok {
+	if ctx == nil {
+		ctx = kms.Context{bucket: path.Join(bucket, object)}
+	} else if _, ok := ctx[bucket]; !ok {
 		ctx[bucket] = path.Join(bucket, object)
 	}
-	unsealKey, err := kms.DecryptKey(keyID, kmsKey, ctx)
+	unsealKey, err := KMS.DecryptKey(keyID, kmsKey, ctx)
 	if err != nil {
 		return key, err
 	}
@@ -109,7 +117,7 @@ func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, ob
 // the modified metadata. If the keyID and the kmsKey is not empty it encodes
 // both into the metadata as well. It allocates a new metadata map if metadata
 // is nil.
-func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
+func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey, ctx kms.Context) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
 		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
@@ -132,6 +140,10 @@ func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []
 	metadata[MetaAlgorithm] = sealedKey.Algorithm
 	metadata[MetaIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
 	metadata[MetaSealedKeyKMS] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
+	if len(ctx) > 0 {
+		b, _ := ctx.MarshalText()
+		metadata[MetaContext] = base64.StdEncoding.EncodeToString(b)
+	}
 	if len(kmsKey) > 0 && keyID != "" { // We use a KMS -> Store key ID and sealed KMS data key.
 		metadata[MetaKeyID] = keyID
 		metadata[MetaDataEncryptionKey] = base64.StdEncoding.EncodeToString(kmsKey)
@@ -145,7 +157,7 @@ func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []
 // KMS data key it returns both. If the metadata does not contain neither a
 // KMS master key ID nor a sealed KMS data key it returns an empty keyID and
 // KMS data key. Otherwise, it returns an error.
-func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, ctx Context, err error) {
+func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, ctx kms.Context, err error) {
 	// Extract all required values from object metadata
 	b64IV, ok := metadata[MetaIV]
 	if !ok {

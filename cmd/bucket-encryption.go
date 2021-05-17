@@ -53,7 +53,7 @@ func validateBucketSSEConfig(r io.Reader) (*bucketsse.BucketSSEConfig, error) {
 		return nil, err
 	}
 
-	if len(encConfig.Rules) == 1 && encConfig.Rules[0].DefaultEncryptionAction.Algorithm == bucketsse.AES256 {
+	if len(encConfig.Rules) == 1 {
 		return encConfig, nil
 	}
 

@@ -28,12 +28,13 @@ import (
 	"time"
 	"unicode/utf8"
 
+	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -244,6 +245,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 			}
 		}
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Unmarshal(data, item)
 }
 

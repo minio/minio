@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -35,7 +36,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -183,16 +184,13 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 			ObjInfo: objInfo,
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
-	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
-		if onDisk := isRestoredObjectOnDisk(objInfo.UserDefined); !onDisk {
-			gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
-			if err != nil {
-				return nil, err
-			}
-			unlockOnDefer = false
-			return gr.WithCleanupFuncs(nsUnlocker), nil
+	if objInfo.IsRemote() {
+		gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+		if err != nil {
+			return nil, err
 		}
+		unlockOnDefer = false
+		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
 	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
@@ -200,14 +198,17 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return nil, err
 	}
 	unlockOnDefer = false
-	pr, pw := io.Pipe()
+
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		pw.CloseWithError(er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks))
 	}()
 
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+	pipeCloser := func() {
+		pr.CloseWithError(nil)
+	}
 
 	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
 }
@@ -284,6 +285,11 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	}
 	var healOnce sync.Once
 
+	// once we have obtained a common FileInfo i.e latest, we should stick
+	// to single dataDir to read the content to avoid reading from some other
+	// dataDir that has stale FileInfo{} to ensure that we fail appropriately
+	// during reads and expect the same dataDir everywhere.
+	dataDir := fi.DataDir
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -312,9 +318,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
-			partPath := pathJoin(object, metaArr[index].DataDir, fmt.Sprintf("part.%d", partNumber))
-			data := metaArr[index].Data
-			readers[index] = newBitrotReader(disk, data, bucket, partPath, tillOffset,
+			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
+			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 
 			// Prefer local disks
@@ -335,10 +340,12 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				var scan madmin.HealScanMode
 				if errors.Is(err, errFileNotFound) {
 					scan = madmin.HealNormalScan
+					logger.Info("Healing required, attempting to heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
 				} else if errors.Is(err, errFileCorrupt) {
 					scan = madmin.HealDeepScan
+					logger.Info("Healing required, attempting to heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
-				if scan != madmin.HealUnknownScan {
+				if scan == madmin.HealNormalScan || scan == madmin.HealDeepScan {
 					healOnce.Do(func() {
 						if _, healing := er.getOnlineDisksWithHealing(); !healing {
 							go healObject(bucket, object, fi.VersionID, scan)
@@ -519,7 +526,6 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -560,7 +566,6 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
-	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -604,14 +609,8 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer func() {
-		ObjectPathUpdated(pathJoin(bucket, object))
-	}()
-
 	data := r.Reader
 
-	uniqueID := mustGetUUID()
-	tempObj := uniqueID
 	// No metadata is set, allocate a new one.
 	if opts.UserDefined == nil {
 		opts.UserDefined = make(map[string]string)
@@ -657,7 +656,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()
 	}
+
 	fi.DataDir = mustGetUUID()
+	uniqueID := mustGetUUID()
+	tempObj := uniqueID
 
 	// Initialize erasure metadata.
 	for index := range partsMetadata {
@@ -1362,17 +1364,18 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 
-	pr, pw := io.Pipe()
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		err := er.getObjectWithFileInfo(ctx, bucket, object, 0, fi.Size, pw, fi, metaArr, onlineDisks)
 		pw.CloseWithError(err)
 	}()
-	if err = tgtClient.Put(ctx, destObj, pr, fi.Size); err != nil {
-		pr.Close()
+
+	err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	pr.CloseWithError(err)
+	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
 		return err
 	}
-	pr.Close()
 	fi.TransitionStatus = lifecycle.TransitionComplete
 	fi.TransitionedObjName = destObj
 	fi.TransitionTier = opts.Transition.Tier
@@ -1436,9 +1439,6 @@ func (er erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, obje
 // restoreTransitionedObject for multipart object chunks the file stream from remote tier into the same number of parts
 // as in the xl.meta for this version and rehydrates the part.n into the fi.DataDir for this version as in the xl.meta
 func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket string, object string, opts ObjectOptions) error {
-	defer func() {
-		ObjectPathUpdated(pathJoin(bucket, object))
-	}()
 	setRestoreHeaderFn := func(oi ObjectInfo, rerr error) error {
 		er.updateRestoreMetadata(ctx, bucket, object, oi, opts, rerr)
 		return rerr

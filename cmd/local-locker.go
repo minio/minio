@@ -109,7 +109,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 	return true, nil
 }
 
-func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -177,7 +177,7 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 	return reply, nil
 }
 
-func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) RUnlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	var lri []lockRequesterInfo

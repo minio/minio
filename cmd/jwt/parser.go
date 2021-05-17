@@ -26,7 +26,6 @@ import (
 	"crypto"
 	"crypto/hmac"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -188,6 +187,7 @@ func (c *MapClaims) Map() map[string]interface{} {
 
 // MarshalJSON marshals the MapClaims struct
 func (c *MapClaims) MarshalJSON() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(c.MapClaims)
 }
 

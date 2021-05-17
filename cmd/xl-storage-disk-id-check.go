@@ -26,7 +26,7 @@ import (
 	"time"
 
 	ewma "github.com/VividCortex/ewma"
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/madmin-go"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -136,6 +136,10 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 		return false
 	}
 	return storedDiskID == p.diskID
+}
+
+func (p *xlStorageDiskIDCheck) LastConn() time.Time {
+	return p.storage.LastConn()
 }
 
 func (p *xlStorageDiskIDCheck) IsLocal() bool {
@@ -607,13 +611,13 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	return p.storage.ReadAll(ctx, volume, path)
 }
 
-func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) trace.Info {
-	return trace.Info{
-		TraceType: trace.Storage,
+func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceStorage,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "storage." + s.String(),
-		StorageStats: trace.StorageStats{
+		StorageStats: madmin.TraceStorageStats{
 			Duration: duration,
 			Path:     path,
 		},

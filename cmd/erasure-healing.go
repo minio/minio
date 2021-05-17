@@ -26,9 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -213,7 +212,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		return true
 	}
 	if erErr == nil {
-		if meta.TransitionStatus != lifecycle.TransitionComplete {
+		if !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			if IsErr(dataErr, []error{
 				errFileNotFound,
@@ -267,10 +266,26 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
-	latestDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
+	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
-	// List of disks having all parts as per latest er.meta.
-	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
+	// make sure all parts metadata dataDir is same as returned by listOnlineDisks()
+	// the reason is its possible that some of the disks might have stale data, for those
+	// we simply override them with maximally occurring 'dataDir' - this ensures that
+	// disksWithAllParts() verifies same dataDir across all drives.
+	for i := range partsMetadata {
+		partsMetadata[i].DataDir = dataDir
+	}
+
+	// List of disks having all parts as per latest metadata.
+	// NOTE: do not pass in latestDisks to diskWithAllParts since
+	// the diskWithAllParts needs to reach the drive to ensure
+	// validity of the metadata content, we should make sure that
+	// we pass in disks as is for it to be verified. Once verified
+	// the disksWithAllParts() returns the actual disks that can be
+	// used here for reconstruction. This is done to ensure that
+	// we do not skip drives that have inconsistent metadata to be
+	// skipped from purging when they are stale.
+	availableDisks, dataErrs := disksWithAllParts(ctx, storageDisks, partsMetadata, errs, bucket, object, scanMode)
 
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
@@ -337,6 +352,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		// File is fully gone, fileInfo is empty.
 		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 	}
+
 	// If less than read quorum number of disks have all the parts
 	// of the data, we can't reconstruct the erasure-coded data.
 	if numAvailableDisks < result.DataBlocks {
@@ -367,7 +383,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		nfi := fi
 		nfi.Erasure.Index = 0
 		nfi.Erasure.Checksums = nil
-		if fi.TransitionStatus != lifecycle.TransitionComplete {
+		if fi.IsRemote() {
 			nfi.Parts = nil
 		}
 		return nfi
@@ -401,12 +417,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
-	if !latestMeta.Deleted && latestMeta.TransitionStatus != lifecycle.TransitionComplete {
+	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		result.DataBlocks = latestMeta.Erasure.DataBlocks
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
 
 		// Reorder so that we have data disks first and parity disks next.
-		latestDisks = shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+		latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
 		outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 		partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 		copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
@@ -451,7 +467,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize(), true)
 				}
 			}
-			err = erasure.Heal(ctx, readers, writers, partSize)
+			err = erasure.Heal(ctx, readers, writers, partSize, er.bp)
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {
@@ -509,7 +525,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// dataDir should be empty when
 		// - transitionStatus is complete and not in restored state
-		if partsMetadata[i].TransitionStatus == lifecycle.TransitionComplete && !isRestoredObjectOnDisk(partsMetadata[i].Metadata) {
+		if partsMetadata[i].IsRemote() {
 			partsMetadata[i].DataDir = ""
 		}
 		// Attempt a rename now from healed data to final location.
@@ -824,7 +840,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		break
 	}
 
-	if validMeta.Deleted || validMeta.TransitionStatus == lifecycle.TransitionComplete {
+	if validMeta.Deleted || validMeta.IsRemote() {
 		// notFoundParts is ignored since a
 		// - delete marker does not have any parts
 		// - transition status of complete has no parts

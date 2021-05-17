@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,11 +28,11 @@ import (
 	"sort"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
@@ -490,12 +491,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Disallow creating service accounts by root user.
-	if createReq.TargetUser == globalActiveCred.AccessKey {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
-		return
-	}
-
 	var (
 		targetUser   string
 		targetGroups []string
@@ -528,20 +523,38 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		// targerUser is set to bindDN at this point in time.
+		// targetGroups is set to the groups at this point in time.
 	} else {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			if cred.ParentUser == "" {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+					errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
 				return
 			}
-			targetUser = cred.ParentUser
-		} else {
-			targetUser = cred.AccessKey
+			if targetUser == "" {
+				targetUser = cred.ParentUser
+			}
 		}
-		targetGroups = cred.Groups
+		// targetGroups not yet set, so set this to cred.Groups
+		if len(targetGroups) == 0 {
+			targetGroups = cred.Groups
+		}
 	}
 
-	opts := newServiceAccountOpts{sessionPolicy: createReq.Policy, accessKey: createReq.AccessKey, secretKey: createReq.SecretKey}
+	var sp *iampolicy.Policy
+	if len(createReq.Policy) > 0 {
+		sp, err = iampolicy.ParseConfig(bytes.NewReader(createReq.Policy))
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	opts := newServiceAccountOpts{
+		accessKey:     createReq.AccessKey,
+		secretKey:     createReq.SecretKey,
+		sessionPolicy: sp,
+	}
 	newCred, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -557,7 +570,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	var createResp = madmin.AddServiceAccountResp{
-		Credentials: auth.Credentials{
+		Credentials: madmin.Credentials{
 			AccessKey: newCred.AccessKey,
 			SecretKey: newCred.SecretKey,
 		},
@@ -640,7 +653,19 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	opts := updateServiceAccountOpts{sessionPolicy: updateReq.NewPolicy, secretKey: updateReq.NewSecretKey, status: updateReq.NewStatus}
+	var sp *iampolicy.Policy
+	if len(updateReq.NewPolicy) > 0 {
+		sp, err = iampolicy.ParseConfig(bytes.NewReader(updateReq.NewPolicy))
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+	opts := updateServiceAccountOpts{
+		secretKey:     updateReq.NewSecretKey,
+		status:        updateReq.NewStatus,
+		sessionPolicy: sp,
+	}
 	err = globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -996,9 +1021,16 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	p := globalIAMSys.GetCombinedPolicy(policies...)
+	buf, err := json.Marshal(p)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	acctInfo := madmin.AccountInfo{
 		AccountName: accountName,
-		Policy:      globalIAMSys.GetCombinedPolicy(policies...),
+		Policy:      buf,
 	}
 
 	for _, bucket := range buckets {

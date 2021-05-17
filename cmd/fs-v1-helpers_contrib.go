@@ -18,13 +18,14 @@ package cmd
 
 import (
 	"context"
+	"os"
 
 	"github.com/minio/minio/cmd/logger"
 )
 
-// Renames source path to destination path, creates all the
-// missing parents if they don't exist.
-func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
+// Renames source path to destination path, fails if the destination path
+// parents are not already created.
+func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
 	if err := checkPathLength(sourcePath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -34,9 +35,9 @@ func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
 		return err
 	}
 
-	if err := renameAll(sourcePath, destPath); err != nil {
+	if err := os.Rename(sourcePath, destPath); err != nil {
 		logger.LogIf(ctx, err)
-		return err
+		return osErrToFileErr(err)
 	}
 
 	return nil

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // gets replication config associated to a given bucket name.
@@ -95,28 +95,28 @@ func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object strin
 	if permErr != ErrNone {
 		return
 	}
-	return mustReplicater(ctx, bucket, object, meta, replStatus)
+	return mustReplicater(ctx, bucket, object, meta, replStatus, false)
 }
 
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
-func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {
+func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, metadataOnly bool) (replicate bool, sync bool) {
 	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, "", r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
 		return
 	}
-	return mustReplicater(ctx, bucket, object, meta, replStatus)
+	return mustReplicater(ctx, bucket, object, meta, replStatus, metadataOnly)
 }
 
 // mustReplicater returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
-func mustReplicater(ctx context.Context, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {
+func mustReplicater(ctx context.Context, bucket, object string, meta map[string]string, replStatus string, metadataOnly bool) (replicate bool, sync bool) {
 	if globalIsGateway {
 		return replicate, sync
 	}
 	if rs, ok := meta[xhttp.AmzBucketReplicationStatus]; ok {
 		replStatus = rs
 	}
-	if replication.StatusType(replStatus) == replication.Replica {
+	if replication.StatusType(replStatus) == replication.Replica && !metadataOnly {
 		return replicate, sync
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
@@ -124,8 +124,9 @@ func mustReplicater(ctx context.Context, bucket, object string, meta map[string]
 		return replicate, sync
 	}
 	opts := replication.ObjectOpts{
-		Name: object,
-		SSEC: crypto.SSEC.IsEncrypted(meta),
+		Name:    object,
+		SSEC:    crypto.SSEC.IsEncrypted(meta),
+		Replica: replication.StatusType(replStatus) == replication.Replica,
 	}
 	tagStr, ok := meta[xhttp.AmzObjectTagging]
 	if ok {

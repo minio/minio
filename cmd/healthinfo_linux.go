@@ -25,7 +25,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/pkg/smart"
 	diskhw "github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"

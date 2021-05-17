@@ -50,6 +50,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -991,12 +992,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
-	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
-		// This request header needs to be set prior to setting ObjectOptions
-		if !crypto.SSEC.IsRequested(r.Header) {
-			r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-		}
-	}
+	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
+	sseConfig.Apply(r.Header, globalAutoEncryption)
 
 	// get gateway encryption options
 	var opts ObjectOptions
@@ -1011,16 +1008,28 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			var reader io.Reader
-			var key []byte
-			if crypto.SSEC.IsRequested(formValues) {
+			var (
+				reader io.Reader
+				keyID  string
+				key    []byte
+				kmsCtx kms.Context
+			)
+			kind, _ := crypto.IsRequested(formValues)
+			switch kind {
+			case crypto.SSEC:
 				key, err = ParseSSECustomerHeader(formValues)
 				if err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
+			case crypto.S3KMS:
+				keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
+				if err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
 			}
-			reader, objectEncryptionKey, err = newEncryptReader(hashReader, key, bucket, object, metadata, crypto.S3.IsRequested(formValues))
+			reader, objectEncryptionKey, err = newEncryptReader(hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1233,22 +1242,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	deleteBucket := objectAPI.DeleteBucket
-
-	// Attempt to delete bucket.
-	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
-		if _, ok := err.(BucketNotEmpty); ok && (globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket)) {
-			apiErr := toAPIError(ctx, err)
-			apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
-			writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
-		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		}
-		return
-	}
-
-	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
@@ -1256,6 +1249,27 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
+	deleteBucket := objectAPI.DeleteBucket
+
+	// Attempt to delete bucket.
+	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
+		apiErr := toAPIError(ctx, err)
+		if _, ok := err.(BucketNotEmpty); ok {
+			if globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket) {
+				apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
+			}
+		}
+		if globalDNSConfig != nil {
+			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, pl1ease fix it manually", err2))
+			}
+		}
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)

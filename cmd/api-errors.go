@@ -766,7 +766,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrSlowDown: {
 		Code:           "SlowDown",
-		Description:    "Please reduce your request",
+		Description:    "Resource requested is unreadable, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidPrefixMarker: {
@@ -1082,9 +1082,9 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrKMSNotConfigured: {
-		Code:           "InvalidArgument",
+		Code:           "NotImplemented",
 		Description:    "Server side encryption specified but KMS is not configured",
-		HTTPStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	ErrNoAccessKey: {
 		Code:           "AccessDenied",

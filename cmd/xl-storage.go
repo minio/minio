@@ -52,9 +52,10 @@ import (
 )
 
 const (
-	nullVersionID  = "null"
-	blockSizeLarge = 2 * humanize.MiByte   // Default r/w block size for larger objects.
-	blockSizeSmall = 128 * humanize.KiByte // Default r/w block size for smaller objects.
+	nullVersionID        = "null"
+	blockSizeSmall       = 128 * humanize.KiByte // Default r/w block size for smaller objects.
+	blockSizeLarge       = 2 * humanize.MiByte   // Default r/w block size for larger objects.
+	blockSizeReallyLarge = 4 * humanize.MiByte   // Default write block size for objects per shard >= 64MiB
 
 	// On regular files bigger than this;
 	readAheadSize = 16 << 20
@@ -62,6 +63,9 @@ const (
 	readAheadBuffers = 4
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
+
+	// Really large streams threshold per shard.
+	reallyLargeFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
 
 	// Small file threshold below which data accompanies metadata from storage layer.
 	smallFileThreshold = 128 * humanize.KiByte // Optimized for NVMe/SSDs
@@ -101,8 +105,9 @@ type xlStorage struct {
 
 	globalSync bool
 
-	poolLarge sync.Pool
-	poolSmall sync.Pool
+	poolReallyLarge sync.Pool
+	poolLarge       sync.Pool
+	poolSmall       sync.Pool
 
 	rootDisk bool
 
@@ -179,7 +184,7 @@ func getValidPath(path string) (string, error) {
 	}
 	if osIsNotExist(err) {
 		// Disk not found create it.
-		if err = reliableMkdirAll(path, 0777); err != nil {
+		if err = mkdirAll(path, 0777); err != nil {
 			return path, err
 		}
 	}
@@ -223,34 +228,27 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	if env.Get("MINIO_CI_CD", "") != "" {
 		rootDisk = true
 	} else {
-		if IsDocker() || IsKubernetes() {
-			// Start with overlay "/" to check if
-			// possible the path has device id as
-			// "overlay" that would mean the path
-			// is emphemeral and we should treat it
-			// as root disk from the baremetal
-			// terminology.
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
-			if err != nil {
-				return nil, err
-			}
-			if !rootDisk {
-				// No root disk was found, its possible that
-				// path is referenced at "/etc/hosts" which has
-				// different device ID that points to the original
-				// "/" on the host system, fall back to that instead
-				// to verify of the device id is same.
-				rootDisk, err = disk.IsRootDisk(path, "/etc/hosts")
+		rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
+		if err != nil {
+			return nil, err
+		}
+		if !rootDisk {
+			// If for some reason we couldn't detect the
+			// root disk use - MINIO_ROOTDISK_THRESHOLD_SIZE
+			// to figure out if the disk is root disk or not.
+			if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+				info, err := disk.GetInfo(path)
 				if err != nil {
 					return nil, err
 				}
-			}
-
-		} else {
-			// On baremetal setups its always "/" is the root disk.
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
-			if err != nil {
-				return nil, err
+				size, err := humanize.ParseBytes(rootDiskSize)
+				if err != nil {
+					return nil, err
+				}
+				// size of the disk is less than the threshold or
+				// equal to the size of the disk at path, treat
+				// such disks as rootDisks and reject them.
+				rootDisk = info.Total <= size
 			}
 		}
 	}
@@ -258,6 +256,12 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	p := &xlStorage{
 		diskPath: path,
 		endpoint: ep,
+		poolReallyLarge: sync.Pool{
+			New: func() interface{} {
+				b := disk.AlignedBlock(blockSizeReallyLarge)
+				return &b
+			},
+		},
 		poolLarge: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(blockSizeLarge)
@@ -288,7 +292,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	_, _ = rand.Read(rnd[:])
 	tmpFile := ".writable-check-" + hex.EncodeToString(rnd[:]) + ".tmp"
 	filePath := pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile)
-	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
 		return p, err
 	}
@@ -340,6 +344,10 @@ func (*xlStorage) Close() error {
 
 func (s *xlStorage) IsOnline() bool {
 	return true
+}
+
+func (s *xlStorage) LastConn() time.Time {
+	return time.Time{}
 }
 
 func (s *xlStorage) IsLocal() bool {
@@ -430,17 +438,18 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 			return sizeSummary{}, errSkipFile
 		}
 
-		var totalSize int64
-
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			totalSize += item.applyActions(ctx, objAPI, actionMeta{
+			sz := item.applyActions(ctx, objAPI, actionMeta{
 				oi:         oi,
 				bitRotScan: healOpts.Bitrot,
 			}, &sizeS)
+			if !oi.DeleteMarker && sz == oi.Size {
+				sizeS.versions++
+			}
+			sizeS.totalSize += sz
 		}
-		sizeS.totalSize = totalSize
 		return sizeS, nil
 	})
 
@@ -471,6 +480,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.Free = di.Free
 			dcinfo.Used = di.Used
 			dcinfo.UsedInodes = di.Files - di.Ffree
+			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
 
 			diskID, err := s.GetDiskID()
@@ -629,7 +639,7 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 		// Volume does not exist we proceed to create.
 		if osIsNotExist(err) {
 			// Make a volume entry, with mode 0777 mkdir honors system umask.
-			err = reliableMkdirAll(volumeDir, 0777)
+			err = mkdirAll(volumeDir, 0777)
 		}
 		if osIsPermission(err) {
 			return errDiskAccessDenied
@@ -851,11 +861,10 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
-		xlMeta.data.remove(versionID)
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch
-		xlMeta.data.remove(dataDir)
+		xlMeta.data.remove(versionID, dataDir)
 		filePath := pathJoin(volumeDir, path, dataDir)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -939,7 +948,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
-		xlMeta, err = newXLMetaV2(fi)
+		err = xlMeta.AddVersion(fi)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -1097,7 +1106,7 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 	var r io.ReadCloser
 	if requireDirectIO {
 		var f *os.File
-		f, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
+		f, err = OpenFileDirectIO(filePath, readMode, 0666)
 		r = &odirectReader{f, nil, nil, true, true, s, nil}
 	} else {
 		r, err = OpenFile(filePath, readMode, 0)
@@ -1386,7 +1395,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	var file *os.File
 	// O_DIRECT only supported if offset is zero
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
-		file, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
+		file, err = OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
 		// Open the file for reading.
 		file, err = OpenFile(filePath, readMode, 0666)
@@ -1507,7 +1516,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	if fileSize >= 0 && fileSize <= smallFileThreshold {
 		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
 		// and not O_DIRECT to avoid the complexities of aligned I/O.
-		w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 		if err != nil {
 			return err
 		}
@@ -1543,8 +1552,15 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		w.Close()
 	}()
 
-	bufp := s.poolLarge.Get().(*[]byte)
-	defer s.poolLarge.Put(bufp)
+	var bufp *[]byte
+	if fileSize > 0 && fileSize >= reallyLargeFileThreshold {
+		// use a larger 4MiB buffer for really large streams.
+		bufp = s.poolReallyLarge.Get().(*[]byte)
+		defer s.poolReallyLarge.Put(bufp)
+	} else {
+		bufp = s.poolLarge.Get().(*[]byte)
+		defer s.poolLarge.Put(bufp)
+	}
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
@@ -1987,7 +2003,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 		legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		// legacy data dir means its old content, honor system umask.
-		if err = reliableMkdirAll(legacyDataPath, 0777); err != nil {
+		if err = mkdirAll(legacyDataPath, 0777); err != nil {
 			return osErrToFileErr(err)
 		}
 

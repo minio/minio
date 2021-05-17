@@ -1,5 +1,3 @@
-// +build fips
-
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
@@ -17,6 +15,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// +build fips,linux,amd64
+
 package fips
 
 import (
@@ -25,7 +25,7 @@ import (
 	"github.com/minio/sio"
 )
 
-var enabled = true
+const enabled = true
 
 func cipherSuitesDARE() []byte {
 	return []byte{sio.AES_256_GCM}
