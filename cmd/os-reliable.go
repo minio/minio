@@ -92,8 +92,10 @@ func mkdirAll(dirPath string, mode os.FileMode) (err error) {
 			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
 		}
+		return osErrToFileErr(err)
 	}
-	return err
+
+	return nil
 }
 
 // Reliably retries os.MkdirAll if for some reason os.MkdirAll returns

@@ -20,7 +20,9 @@ Refer to sizing guide for more understanding on default values chosen depending 
 
 ### Consistency Guarantees
 
-MinIO follows strict **read-after-write** and **list-after-write** consistency model for all i/o operations both in distributed and standalone modes.
+MinIO follows strict **read-after-write** and **list-after-write** consistency model for all i/o operations both in distributed and standalone modes. This consistency model is only guaranteed if you use disk filesystems such as xfs, ext4 or zfs etc.. for distributed setup.
+
+**If MinIO distributed setup is using NFS volumes underneath it is not guaranteed MinIO will provide these consistency guarantees since NFS is not consistent filesystem by design (If you must use NFS we recommend that you atleast use NFSv4 instead of NFSv3).**
 
 # Get started
 
