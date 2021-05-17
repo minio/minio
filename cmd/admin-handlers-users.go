@@ -523,6 +523,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		// targerUser is set to bindDN at this point in time.
+		// targetGroups is set to the groups at this point in time.
 	} else {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			if cred.ParentUser == "" {
@@ -534,7 +535,10 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 				targetUser = cred.ParentUser
 			}
 		}
-		targetGroups = cred.Groups
+		// targetGroups not yet set, so set this to cred.Groups
+		if len(targetGroups) == 0 {
+			targetGroups = cred.Groups
+		}
 	}
 
 	var sp *iampolicy.Policy

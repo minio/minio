@@ -120,10 +120,10 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
 			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
 				tmpOld); err != nil && err != errFileNotFound {
-				return fmt.Errorf("unable to rename (%s -> %s) %w",
+				logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
 					pathJoin(epPath, minioMetaTmpBucket),
 					tmpOld,
-					osErrToFileErr(err))
+					osErrToFileErr(err)))
 			}
 
 			// Renames and schedules for puring all bucket metacache.
@@ -133,9 +133,9 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
 
 			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
-				return fmt.Errorf("unable to create (%s) %w",
+				logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
 					pathJoin(epPath, minioMetaTmpBucket),
-					err)
+					err))
 			}
 			return nil
 		}, index)
@@ -224,11 +224,10 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	for i, err := range errs {
 		if err != nil {
-			if err != errDiskNotFound {
-				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
-			}
-			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+			if err == errDiskNotFound && retryCount >= 5 {
+				logger.Info("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+			} else {
+				logger.Info("Unable to use the drive %s: %v", endpoints[i], err)
 			}
 		}
 	}
@@ -292,6 +291,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// the disk UUID association. Below function is called to handle and fix
 	// this regression, for more info refer https://github.com/minio/minio/issues/5667
 	if err = fixFormatErasureV3(storageDisks, endpoints, formatConfigs); err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
@@ -302,6 +302,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	format, err = getFormatErasureInQuorum(formatConfigs)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
@@ -311,6 +312,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 			return nil, nil, errNotFirstDisk
 		}
 		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format); err != nil {
+			logger.LogIf(GlobalContext, err)
 			return nil, nil, err
 		}
 	}
@@ -318,6 +320,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	globalDeploymentID = format.ID
 
 	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
