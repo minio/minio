@@ -545,6 +545,8 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+
+		logger.LogIf(GlobalContext, err)
 	}
 
 	if globalIsErasure { // to be done after config init
