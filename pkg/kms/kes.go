@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"time"
 
 	"github.com/minio/kes"
 )
@@ -79,6 +80,11 @@ var _ KMS = (*kesClient)(nil) // compiler check
 // Stat returns the current KES status containing a
 // list of KES endpoints and the default key ID.
 func (c *kesClient) Stat() (Status, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := c.client.Version(ctx); err != nil {
+		return Status{}, err
+	}
 	var endpoints = make([]string, len(c.client.Endpoints))
 	copy(endpoints, c.client.Endpoints)
 	return Status{
