@@ -18,9 +18,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"path"
 	"strings"
@@ -29,7 +27,6 @@ import (
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -171,6 +168,7 @@ func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
+			// if IAM format
 			return err
 		}
 	} else {
@@ -207,6 +205,7 @@ func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
 }
 
 func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -227,22 +226,12 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 	if err != nil {
 		return err
 	}
-	if !utf8.Valid(data) {
-		if GlobalKMS != nil {
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-				minioMetaBucket: path.Join(minioMetaBucket, objPath),
-			})
-			if err != nil {
-				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-			if err != nil {
-				return err
-			}
+	if !utf8.Valid(data) && GlobalKMS != nil {
+		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, objPath),
+		})
+		if err != nil {
+			return err
 		}
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

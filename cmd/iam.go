@@ -1135,6 +1135,13 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if err != nil {
 		return auth.Credentials{}, err
 	}
+	for _, group := range groups {
+		gpolicies, err := sys.policyDBGet(group, true)
+		if err != nil && err != errNoSuchGroup {
+			return auth.Credentials{}, err
+		}
+		policies = append(policies, gpolicies...)
+	}
 	if len(policies) == 0 {
 		return auth.Credentials{}, errNoSuchUser
 	}
@@ -1896,6 +1903,9 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 	var parentName string
 	u, ok := sys.iamUsersMap[name]
 	if ok {
+		if !u.IsValid() {
+			return nil, nil
+		}
 		parentName = u.ParentUser
 	}
 

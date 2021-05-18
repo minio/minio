@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,7 +29,6 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -107,22 +105,12 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 
 func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	var err error
-	if !utf8.Valid(data) {
-		if GlobalKMS != nil {
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-				minioMetaBucket: path.Join(minioMetaBucket, itemPath),
-			})
-			if err != nil {
-				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-			if err != nil {
-				return err
-			}
+	if !utf8.Valid(data) && GlobalKMS != nil {
+		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+		})
+		if err != nil {
+			return err
 		}
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

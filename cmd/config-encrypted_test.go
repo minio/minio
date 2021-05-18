@@ -49,17 +49,17 @@ func TestDecryptData(t *testing.T) {
 
 	tests := []struct {
 		edata   []byte
-		creds   []auth.Credentials
+		cred    auth.Credentials
 		success bool
 	}{
-		{edata1, []auth.Credentials{cred1, cred2}, true},
-		{edata2, []auth.Credentials{cred1, cred2}, true},
-		{data, []auth.Credentials{cred1, cred2}, false},
+		{edata1, cred1, true},
+		{edata2, cred2, true},
+		{data, cred1, false},
 	}
 
 	for _, test := range tests {
 		t.Run("", func(t *testing.T) {
-			ddata, err := decryptData(test.edata, test.creds...)
+			ddata, err := madmin.DecryptData(test.cred.String(), bytes.NewReader(test.edata))
 			if err != nil && test.success {
 				t.Errorf("Expected success, saw failure %v", err)
 			}
