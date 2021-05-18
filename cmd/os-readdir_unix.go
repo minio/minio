@@ -42,12 +42,21 @@ func access(name string) error {
 const blockSize = 8 << 10 // 8192
 
 // By default atleast 128 entries in single getdents call (1MiB buffer)
-var direntPool = sync.Pool{
-	New: func() interface{} {
-		buf := make([]byte, blockSize*128)
-		return &buf
-	},
-}
+var (
+	direntPool = sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, blockSize*128)
+			return &buf
+		},
+	}
+
+	direntNamePool = sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, blockSize)
+			return &buf
+		},
+	}
+)
 
 // unexpectedFileMode is a sentinel (and bogus) os.FileMode
 // value used to represent a syscall.DT_UNKNOWN Dirent.Type.
@@ -107,7 +116,10 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 	}
 	defer f.Close()
 
-	buf := make([]byte, blockSize)
+	bufp := direntPool.Get().(*[]byte)
+	defer direntPool.Put(bufp)
+	buf := *bufp
+
 	boff := 0 // starting read position in buf
 	nbuf := 0 // end valid data in buf
 
@@ -181,9 +193,10 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 
 	bufp := direntPool.Get().(*[]byte)
 	defer direntPool.Put(bufp)
+	buf := *bufp
 
-	nameTmp := direntPool.Get().(*[]byte)
-	defer direntPool.Put(nameTmp)
+	nameTmp := direntNamePool.Get().(*[]byte)
+	defer direntNamePool.Put(nameTmp)
 	tmp := *nameTmp
 
 	boff := 0 // starting read position in buf
@@ -192,7 +205,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	for count != 0 {
 		if boff >= nbuf {
 			boff = 0
-			nbuf, err = syscall.ReadDirent(int(f.Fd()), *bufp)
+			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return nil, errFileNotFound
@@ -203,7 +216,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				break
 			}
 		}
-		consumed, name, typ, err := parseDirEnt((*bufp)[boff:nbuf])
+		consumed, name, typ, err := parseDirEnt(buf[boff:nbuf])
 		if err != nil {
 			return nil, err
 		}
