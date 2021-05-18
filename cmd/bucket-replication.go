@@ -868,9 +868,12 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		replicaCh:       make(chan ReplicateObjectInfo, 100000),
 		replicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
 		mrfReplicaCh:    make(chan ReplicateObjectInfo, 100000),
+		workerKillCh:    make(chan struct{}, opts.Workers),
+		mrfWorkerKillCh: make(chan struct{}, opts.FailedWorkers),
 		ctx:             ctx,
 		objLayer:        o,
 	}
+
 	pool.ResizeWorkers(opts.Workers)
 	pool.ResizeFailedWorkers(opts.FailedWorkers)
 	return pool
@@ -888,6 +891,8 @@ func (p *ReplicationPool) AddMRFWorker() {
 				return
 			}
 			replicateObject(p.ctx, oi, p.objLayer)
+		case <-p.mrfWorkerKillCh:
+			return
 		}
 	}
 }
