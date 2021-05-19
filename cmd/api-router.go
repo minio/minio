@@ -90,7 +90,22 @@ type rejectedAPI struct {
 	path    string
 }
 
-var rejectedAPIs = []rejectedAPI{
+var rejectedObjAPIs = []rejectedAPI{
+	{
+		api:     "torrent",
+		methods: []string{http.MethodPut, http.MethodDelete, http.MethodGet},
+		queries: []string{"torrent", ""},
+		path:    "/{object:.+}",
+	},
+	{
+		api:     "acl",
+		methods: []string{http.MethodDelete},
+		queries: []string{"acl", ""},
+		path:    "/{object:.+}",
+	},
+}
+
+var rejectedBucketAPIs = []rejectedAPI{
 	{
 		api:     "inventory",
 		methods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},
@@ -127,18 +142,6 @@ var rejectedAPIs = []rejectedAPI{
 		queries: []string{"requestPayment", ""},
 	},
 	{
-		api:     "torrent",
-		methods: []string{http.MethodPut, http.MethodDelete, http.MethodGet},
-		queries: []string{"torrent", ""},
-		path:    "/{object:.+}",
-	},
-	{
-		api:     "acl",
-		methods: []string{http.MethodDelete},
-		queries: []string{"acl", ""},
-		path:    "/{object:.+}",
-	},
-	{
 		api:     "acl",
 		methods: []string{http.MethodDelete, http.MethodPut, http.MethodHead},
 		queries: []string{"acl", ""},
@@ -163,17 +166,6 @@ var rejectedAPIs = []rejectedAPI{
 		methods: []string{http.MethodDelete, http.MethodPut, http.MethodGet},
 		queries: []string{"analytics", ""},
 	},
-}
-
-func rejectUnsupportedAPIs(router *mux.Router) {
-	for _, r := range rejectedAPIs {
-		t := router.Methods(r.methods...).
-			HandlerFunc(collectAPIStats(r.api, httpTraceAll(notImplementedHandler))).
-			Queries(r.queries...)
-		if r.path != "" {
-			t.Path(r.path)
-		}
-	}
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
@@ -215,7 +207,14 @@ func registerAPIRouter(router *mux.Router) {
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
 	for _, router := range routers {
-		rejectUnsupportedAPIs(router)
+		// Register all rejected object APIs
+		for _, r := range rejectedObjAPIs {
+			t := router.Methods(r.methods...).
+				HandlerFunc(collectAPIStats(r.api, httpTraceAll(notImplementedHandler))).
+				Queries(r.queries...)
+			t.Path(r.path)
+		}
+
 		// Object operations
 		// HeadObject
 		router.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
@@ -422,16 +421,23 @@ func registerAPIRouter(router *mux.Router) {
 		// DeleteBucket
 		router.Methods(http.MethodDelete).HandlerFunc(
 			collectAPIStats("deletebucket", maxClients(httpTraceAll(api.DeleteBucketHandler))))
+
 		// MinIO extension API for replication.
 		//
 		// GetBucketReplicationMetrics
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(httpTraceAll(api.GetBucketReplicationMetricsHandler)))).Queries("replication-metrics", "")
 
+		// Register rejected bucket APIs
+		for _, r := range rejectedBucketAPIs {
+			router.Methods(r.methods...).
+				HandlerFunc(collectAPIStats(r.api, httpTraceAll(notImplementedHandler))).
+				Queries(r.queries...)
+		}
+
 		// S3 ListObjectsV1 (Legacy)
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
-
 	}
 
 	/// Root operation
