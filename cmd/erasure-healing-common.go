@@ -198,6 +198,9 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 //   a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo, errs []error, bucket,
 	object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+	// List of disks having latest version of the object er.meta  (by modtime)
+	_, modTime, dataDir := listOnlineDisks(onlineDisks, partsMetadata, errs)
+
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
 	inconsistent := 0
@@ -236,6 +239,13 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			continue
 		}
 		meta := partsMetadata[i]
+
+		if !meta.ModTime.Equal(modTime) || meta.DataDir != dataDir {
+			dataErrs[i] = errFileCorrupt
+			partsMetadata[i] = FileInfo{}
+			continue
+		}
+
 		if erasureDistributionReliable {
 			if !meta.IsValid() {
 				continue
