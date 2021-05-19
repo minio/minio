@@ -551,7 +551,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				}
 				if !foundAny {
 					// Add non-compacted empty entry.
-					fmt.Println("Adding empty", folder.name)
 					f.updateCache.replaceHashed(h, &thisHash, dataUsageEntry{})
 				}
 			}
