@@ -149,7 +149,6 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
 			err = objAPI.NSScanner(ctx, bf, results)
-			close(results)
 			logger.LogIf(ctx, err)
 			if err == nil {
 				// Store new cycle...

@@ -408,6 +408,9 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	// Updates must be closed before we return.
+	defer close(updates)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
