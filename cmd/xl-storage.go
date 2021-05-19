@@ -414,6 +414,19 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 	}
 
+	// Check if the current bucket has replication configuration
+	if rcfg, err := globalBucketMetadataSys.GetReplicationConfig(ctx, cache.Info.Name); err == nil {
+		if rcfg.HasActiveRules("", true) {
+			tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, cache.Info.Name, rcfg.RoleArn)
+			cache.Info.replication = replicationConfig{
+				Config:          rcfg,
+				ResetID:         tgt.ResetID,
+				ResetBeforeDate: tgt.ResetBeforeDate}
+			if intDataUpdateTracker.debug {
+				console.Debugln(color.Green("scannerDisk:") + " replication: Active rules found")
+			}
+		}
+	}
 	// return initialized object layer
 	objAPI := newObjectLayerFn()
 	// object layer not initialized, return.
@@ -452,7 +465,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
-
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())

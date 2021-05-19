@@ -170,6 +170,9 @@ const (
 	MinIOSourceProxyRequest = "X-Minio-Source-Proxy-Request"
 	// Header indicates that this request is a replication request to create a REPLICA
 	MinIOSourceReplicationRequest = "X-Minio-Source-Replication-Request"
+	// Header indicates replication reset status.
+	MinIOReplicationResetStatus = "X-Minio-Replication-Reset-Status"
+
 	// predicted date/time of transition
 	MinIOTransition = "X-Minio-Transition"
 )

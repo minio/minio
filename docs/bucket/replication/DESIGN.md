@@ -33,7 +33,13 @@ An additional header `X-Minio-Replication-Delete-Status` is returned which would
 
 Note that synchronous replication, i.e. when remote target is configured with --sync mode in `mc admin bucket remote add` does not apply to `DELETE` operations. The version being deleted on the source cluster needs to maintain state and ensure that the operation is mirrored to the target cluster prior to completing on the source object version. Since this needs to account for the target cluster availability and the need to serialize concurrent DELETE operations on different versions of the same object during multi DELETE operations, the current implementation queues the `DELETE` operations in both sync and async modes.
 
-Existing object replication, replica modification sync for 2-way replication and multi site replication are currently not supported.
+### Existing object replication
+Existing object replication works similar to regular replication. Objects qualifying for existing object replication are detected when scanner runs, and will be replicated if existing object replication is enabled and applicable replication rules are satisfied. Because replication depends on the immutability of versions, only pre-existing objects created while versioning was enabled can be replicated. Even if replication rules are disabled and re-enabled later, the objects created during the interim will be synced as the scanner queues them. For saving iops, objects qualifying for
+existing object replication are not marked as `PENDING` prior to replication.
+
+If the remote site is fully lost and objects previously replicated need to be re-synced, the `mc replicate reset` command with optional flag of `--older-than` needs to be used to trigger re-syncing of previously replicated objects. This command generates a ResetID which is a unique UUID saved to the remote target config along with the applicable date(defaults to time of initiating the reset). All objects created prior to this date are eligible for re-replication if existing object replication is enabled for the replication rule the object satisifes. At the time of completion of replication, `X-Minio-Replication-Reset-Status` is set in the metadata with the timestamp of replication and ResetID. For saving iops, the objects which are re-replicated are not first set to `PENDING` state.
+
+Multi site replication is currently not supported.
 
 ### Internal metadata for replication
 

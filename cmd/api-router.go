@@ -394,6 +394,9 @@ func registerAPIRouter(router *mux.Router) {
 		// PutBucketNotification
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketnotification", maxClients(httpTraceAll(api.PutBucketNotificationHandler)))).Queries("notification", "")
+		// ResetBucketReplicationState - MinIO extension API
+		router.Methods(http.MethodPut).HandlerFunc(
+			collectAPIStats("resetbucketreplicationstate", maxClients(httpTraceAll(api.ResetBucketReplicationStateHandler)))).Queries("replication-reset", "")
 		// PutBucket
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucket", maxClients(httpTraceAll(api.PutBucketHandler))))

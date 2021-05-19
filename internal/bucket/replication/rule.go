@@ -90,6 +90,43 @@ func (d *DeleteReplication) UnmarshalXML(dec *xml.Decoder, start xml.StartElemen
 	return nil
 }
 
+// ExistingObjectReplication - whether existing object replication is enabled
+type ExistingObjectReplication struct {
+	Status Status `xml:"Status"` // should be set to "Disabled" by default
+}
+
+// IsEmpty returns true if ExistingObjectReplication is not set
+func (e ExistingObjectReplication) IsEmpty() bool {
+	return len(e.Status) == 0
+}
+
+// Validate validates whether the status is disabled.
+func (e ExistingObjectReplication) Validate() error {
+	if e.IsEmpty() {
+		return nil
+	}
+	if e.Status != Disabled && e.Status != Enabled {
+		return errInvalidExistingObjectReplicationStatus
+	}
+	return nil
+}
+
+// UnmarshalXML - decodes XML data. Default to Disabled unless specified
+func (e *ExistingObjectReplication) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) (err error) {
+	// Make subtype to avoid recursive UnmarshalXML().
+	type existingObjectReplication ExistingObjectReplication
+	erep := existingObjectReplication{}
+
+	if err := dec.DecodeElement(&erep, &start); err != nil {
+		return err
+	}
+	if len(erep.Status) == 0 {
+		erep.Status = Disabled
+	}
+	e.Status = erep.Status
+	return nil
+}
+
 // Rule - a rule for replication configuration.
 type Rule struct {
 	XMLName                 xml.Name                `xml:"Rule" json:"Rule"`
@@ -98,22 +135,25 @@ type Rule struct {
 	Priority                int                     `xml:"Priority" json:"Priority"`
 	DeleteMarkerReplication DeleteMarkerReplication `xml:"DeleteMarkerReplication" json:"DeleteMarkerReplication"`
 	// MinIO extension to replicate versioned deletes
-	DeleteReplication       DeleteReplication       `xml:"DeleteReplication" json:"DeleteReplication"`
-	Destination             Destination             `xml:"Destination" json:"Destination"`
-	SourceSelectionCriteria SourceSelectionCriteria `xml:"SourceSelectionCriteria" json:"SourceSelectionCriteria"`
-	Filter                  Filter                  `xml:"Filter" json:"Filter"`
+	DeleteReplication         DeleteReplication         `xml:"DeleteReplication" json:"DeleteReplication"`
+	Destination               Destination               `xml:"Destination" json:"Destination"`
+	SourceSelectionCriteria   SourceSelectionCriteria   `xml:"SourceSelectionCriteria" json:"SourceSelectionCriteria"`
+	Filter                    Filter                    `xml:"Filter" json:"Filter"`
+	ExistingObjectReplication ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"ExistingObjectReplication,omitempty"`
 }
 
 var (
-	errInvalidRuleID                        = Errorf("ID must be less than 255 characters")
-	errEmptyRuleStatus                      = Errorf("Status should not be empty")
-	errInvalidRuleStatus                    = Errorf("Status must be set to either Enabled or Disabled")
-	errDeleteMarkerReplicationMissing       = Errorf("DeleteMarkerReplication must be specified")
-	errPriorityMissing                      = Errorf("Priority must be specified")
-	errInvalidDeleteMarkerReplicationStatus = Errorf("Delete marker replication status is invalid")
-	errDestinationSourceIdentical           = Errorf("Destination bucket cannot be the same as the source bucket.")
-	errDeleteReplicationMissing             = Errorf("Delete replication must be specified")
-	errInvalidDeleteReplicationStatus       = Errorf("Delete replication is either enable|disable")
+	errInvalidRuleID                          = Errorf("ID must be less than 255 characters")
+	errEmptyRuleStatus                        = Errorf("Status should not be empty")
+	errInvalidRuleStatus                      = Errorf("Status must be set to either Enabled or Disabled")
+	errDeleteMarkerReplicationMissing         = Errorf("DeleteMarkerReplication must be specified")
+	errPriorityMissing                        = Errorf("Priority must be specified")
+	errInvalidDeleteMarkerReplicationStatus   = Errorf("Delete marker replication status is invalid")
+	errDestinationSourceIdentical             = Errorf("Destination bucket cannot be the same as the source bucket.")
+	errDeleteReplicationMissing               = Errorf("Delete replication must be specified")
+	errInvalidDeleteReplicationStatus         = Errorf("Delete replication is either enable|disable")
+	errExistingObjectReplicationMissing       = Errorf("Existing object replication must be specified")
+	errInvalidExistingObjectReplicationStatus = Errorf("Existing object replication status is invalid")
 )
 
 // validateID - checks if ID is valid or not.
@@ -199,6 +239,9 @@ func (r Rule) Validate(bucket string, sameTarget bool) error {
 	}
 	if r.Destination.Bucket == bucket && sameTarget {
 		return errDestinationSourceIdentical
+	}
+	if err := r.ExistingObjectReplication.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
