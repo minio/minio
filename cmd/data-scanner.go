@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
