@@ -215,9 +215,6 @@ var (
 	// Hold the old server credentials passed by the environment
 	globalOldCred auth.Credentials
 
-	// Indicates if config is to be encrypted
-	globalConfigEncrypted bool
-
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests

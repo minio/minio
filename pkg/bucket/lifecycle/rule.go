@@ -65,7 +65,7 @@ func getNewUUID() (string, error) {
 
 // validateID - checks if ID is valid or not.
 func (r Rule) validateID() error {
-	IDLen := len(string(r.ID))
+	IDLen := len(r.ID)
 	// generate new ID when not provided
 	// cannot be longer than 255 characters
 	if IDLen == 0 {

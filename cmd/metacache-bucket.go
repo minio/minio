@@ -386,23 +386,6 @@ func interestingCaches(root string, cachesRoot map[string][]string) []string {
 	return interesting
 }
 
-// updateCache will update a cache by id.
-// If the cache cannot be found nil is returned.
-// The bucket cache will be locked until the done .
-func (b *bucketMetacache) updateCache(id string) (cache *metacache, done func()) {
-	b.mu.Lock()
-	c, ok := b.caches[id]
-	if !ok {
-		b.mu.Unlock()
-		return nil, func() {}
-	}
-	return &c, func() {
-		c.lastUpdate = UTCNow()
-		b.caches[id] = c
-		b.mu.Unlock()
-	}
-}
-
 // updateCacheEntry will update a cache.
 // Returns the updated status.
 func (b *bucketMetacache) updateCacheEntry(update metacache) (metacache, error) {
@@ -435,18 +418,6 @@ func (b *bucketMetacache) cloneCaches() (map[string]metacache, map[string][]stri
 	}
 
 	return dst, dst2
-}
-
-// getCache will return a clone of a specific metacache.
-// Will return nil if the cache doesn't exist.
-func (b *bucketMetacache) getCache(id string) *metacache {
-	b.mu.RLock()
-	c, ok := b.caches[id]
-	b.mu.RUnlock()
-	if !ok {
-		return nil
-	}
-	return &c
 }
 
 // deleteAll will delete all on disk data for ALL caches.

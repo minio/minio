@@ -111,7 +111,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			} else {
 				textPartData = textData[j*partSize:]
 			}
-			md5hex := getMD5Hash([]byte(textPartData))
+			md5hex := getMD5Hash(textPartData)
 			var partInfo PartInfo
 			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, j,
 				mustGetPutObjReader(b, bytes.NewReader(textPartData), int64(len(textPartData)), md5hex, sha256hex), ObjectOptions{})
@@ -206,7 +206,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for PutObject.
 
-	md5hex := getMD5Hash([]byte(textData))
+	md5hex := getMD5Hash(textData)
 	sha256hex := ""
 
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.

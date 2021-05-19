@@ -218,12 +218,6 @@ func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
 	return uint32(xxhash.Sum64String(string(h)))%cycles == cycle%cycles
 }
 
-// addChildString will add a child based on its name.
-// If it already exists it will not be added again.
-func (e *dataUsageEntry) addChildString(name string) {
-	e.addChild(hashPath(name))
-}
-
 // addChild will add a child based on its hash.
 // If it already exists it will not be added again.
 func (e *dataUsageEntry) addChild(hash dataUsageHash) {
@@ -291,17 +285,6 @@ func (d *dataUsageCache) searchParent(h dataUsageHash) *dataUsageHash {
 	return nil
 }
 
-// Returns nil if not found.
-func (d *dataUsageCache) subCache(path string) dataUsageCache {
-	dst := dataUsageCache{Info: dataUsageCacheInfo{
-		Name:        path,
-		LastUpdate:  d.Info.LastUpdate,
-		BloomFilter: d.Info.BloomFilter,
-	}}
-	dst.copyWithChildren(d, dataUsageHash(hashPath(path).Key()), nil)
-	return dst
-}
-
 // deleteRecursive will delete an entry recursively, but not change its parent.
 func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 	if existing, ok := d.Cache[h.String()]; ok {
@@ -311,37 +294,6 @@ func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 			d.deleteRecursive(dataUsageHash(child))
 		}
 	}
-}
-
-// deleteChildren will delete any children, but not the entry itself.
-func (d *dataUsageCache) deleteChildren(h dataUsageHash) {
-	if existing, ok := d.Cache[h.String()]; ok {
-		for child := range existing.Children {
-			d.deleteRecursive(dataUsageHash(child))
-		}
-	}
-}
-
-// replaceRootChild will replace the child of root in d with the root of 'other'.
-func (d *dataUsageCache) replaceRootChild(other dataUsageCache) {
-	otherRoot := other.root()
-	if otherRoot == nil {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Source has no root"))
-		return
-	}
-	thisRoot := d.root()
-	if thisRoot == nil {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of current not found"))
-		return
-	}
-	thisRootHash := d.rootHash()
-	otherRootHash := other.rootHash()
-	if thisRootHash == otherRootHash {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of child matches root of destination"))
-		return
-	}
-	d.deleteRecursive(other.rootHash())
-	d.copyWithChildren(&other, other.rootHash(), &thisRootHash)
 }
 
 // keepBuckets will keep only the buckets specified specified by delete all others.
@@ -413,16 +365,6 @@ func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 		p.addChild(hash)
 		d.Cache[phash.Key()] = p
 	}
-}
-
-// listCache will return all cache paths.
-func (d *dataUsageCache) listCache() []string {
-	dst := make([]string, 0, len(d.Cache))
-	for k := range d.Cache {
-		dst = append(dst, k)
-	}
-	sort.Strings(dst)
-	return dst
 }
 
 // replaceHashed add or replaces an entry to the cache based on its hash.
