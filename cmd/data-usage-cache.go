@@ -153,8 +153,15 @@ type dataUsageCacheInfo struct {
 	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool
-	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
-	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
+	BloomFilter []byte `msg:"BloomFilter,omitempty"`
+
+	// Active lifecycle, if any on the bucket
+	lifeCycle *lifecycle.Lifecycle `msg:"-"`
+
+	// optional updates channel.
+	// If set updates will be sent regularly to this channel.
+	// Will not be closed when returned.
+	updates chan<- dataUsageEntry `msg:"-"`
 }
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
@@ -259,6 +266,31 @@ func (d *dataUsageCache) findChildrenCopy(h dataUsageHash) dataUsageHashMap {
 	return res
 }
 
+// searchParent will search for the parent of h.
+// This is an O(N*N) operation if there is no parent or it cannot be guessed.
+func (d *dataUsageCache) searchParent(h dataUsageHash) *dataUsageHash {
+	want := h.Key()
+	if idx := strings.LastIndexByte(want, '/'); idx >= 0 {
+		if v := d.find(want[:idx]); v != nil {
+			for child := range v.Children {
+				if child == want {
+					found := hashPath(want[:idx])
+					return &found
+				}
+			}
+		}
+	}
+	for k, v := range d.Cache {
+		for child := range v.Children {
+			if child == want {
+				found := dataUsageHash(k)
+				return &found
+			}
+		}
+	}
+	return nil
+}
+
 // Returns nil if not found.
 func (d *dataUsageCache) subCache(path string) dataUsageCache {
 	dst := dataUsageCache{Info: dataUsageCacheInfo{
@@ -275,6 +307,15 @@ func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 	if existing, ok := d.Cache[h.String()]; ok {
 		// Delete first if there should be a loop.
 		delete(d.Cache, h.Key())
+		for child := range existing.Children {
+			d.deleteRecursive(dataUsageHash(child))
+		}
+	}
+}
+
+// deleteChildren will delete any children, but not the entry itself.
+func (d *dataUsageCache) deleteChildren(h dataUsageHash) {
+	if existing, ok := d.Cache[h.String()]; ok {
 		for child := range existing.Children {
 			d.deleteRecursive(dataUsageHash(child))
 		}
