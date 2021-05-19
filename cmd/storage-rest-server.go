@@ -31,6 +31,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tinylib/msgp/msgp"
@@ -1003,17 +1004,38 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
-	for _, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
+	storageDisks := make([][]*xlStorage, len(endpointServerPools))
+	for poolIdx, ep := range endpointServerPools {
+		storageDisks[poolIdx] = make([]*xlStorage, len(ep.Endpoints))
+	}
+	var wg sync.WaitGroup
+	for poolIdx, ep := range endpointServerPools {
+		for setIdx, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newXLStorage(endpoint)
-			if err != nil {
-				// if supported errors don't fail, we proceed to
-				// printing message and moving forward.
-				logFatalErrs(err, endpoint, false)
+			wg.Add(1)
+			go func(poolIdx, setIdx int, endpoint Endpoint) {
+				defer wg.Done()
+				var err error
+				storageDisks[poolIdx][setIdx], err = newXLStorage(endpoint)
+				if err != nil {
+					// if supported errors don't fail, we proceed to
+					// printing message and moving forward.
+					logFatalErrs(err, endpoint, false)
+				}
+			}(poolIdx, setIdx, endpoint)
+		}
+	}
+	wg.Wait()
+
+	for _, setDisks := range storageDisks {
+		for _, storage := range setDisks {
+			if storage == nil {
+				continue
 			}
+
+			endpoint := storage.Endpoint()
 
 			server := &storageRESTServer{storage: storage}
 
