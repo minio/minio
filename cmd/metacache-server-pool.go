@@ -188,11 +188,16 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 					if err != nil {
 						return true
 					}
-					oFIV, err := existing.fileInfo(o.Bucket)
+					oFIV, err := other.fileInfo(o.Bucket)
 					if err != nil {
 						return false
 					}
-					return oFIV.ModTime.After(eFIV.ModTime)
+					// Replace if modtime is newer
+					if !oFIV.ModTime.Equal(eFIV.ModTime) {
+						return oFIV.ModTime.After(eFIV.ModTime)
+					}
+					// Use NumVersions as a final tiebreaker.
+					return oFIV.NumVersions > eFIV.NumVersions
 				})
 				if entries.len() > o.Limit {
 					allAtEOF = false
