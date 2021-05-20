@@ -160,6 +160,14 @@ If bi-directional replication is set up between two clusters, any metadata updat
 
 The replication configuration in use on a bucket can be viewed using the `mc replicate export alias/bucket` command.
 
+To disable replica metadata modification syncing, use `mc replicate edit` with the --replicate flag.
+```
+$ mc replicate edit alias/bucket --id xyz.id --replicate "delete,delete-marker"
+```
+To re-enable replica metadata modification syncing,
+```
+$ mc replicate edit alias/bucket --id xyz.id --replicate "delete,delete-marker,replica-metadata-sync"
+```
 ## MinIO Extension
 ### Replicating Deletes
 
