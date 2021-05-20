@@ -418,11 +418,6 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 
 		// We got a stream to start at.
 		loadedPart := 0
-		buf := bufferPool.Get().(*bytes.Buffer)
-		defer func() {
-			buf.Reset()
-			bufferPool.Put(buf)
-		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -471,9 +466,27 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					}
 				}
 			}
-			buf.Reset()
-			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, buf, fi, metaArr, onlineDisks)
-			if err != nil {
+
+			pr, pw := io.Pipe()
+			go func() {
+				werr := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0,
+					fi.Size, pw, fi, metaArr, onlineDisks)
+				pw.CloseWithError(werr)
+			}()
+
+			tmp := newMetacacheReader(pr)
+			e, err := tmp.filter(o)
+			pr.CloseWithError(err)
+			entries.o = append(entries.o, e.o...)
+			if o.Limit > 0 && entries.len() > o.Limit {
+				entries.truncate(o.Limit)
+				return entries, nil
+			}
+			if err == nil {
+				// We stopped within the listing, we are done for now...
+				return entries, nil
+			}
+			if err != nil && err.Error() != io.EOF.Error() {
 				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
 				case ObjectNotFound:
 					retries++
@@ -487,24 +500,6 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					logger.LogIf(ctx, err)
 					return entries, err
 				}
-			}
-			tmp, err := newMetacacheReader(buf)
-			if err != nil {
-				return entries, err
-			}
-			e, err := tmp.filter(o)
-			entries.o = append(entries.o, e.o...)
-			if o.Limit > 0 && entries.len() > o.Limit {
-				entries.truncate(o.Limit)
-				return entries, nil
-			}
-			if err == nil {
-				// We stopped within the listing, we are done for now...
-				return entries, nil
-			}
-			if !errors.Is(err, io.EOF) {
-				logger.LogIf(ctx, err)
-				return entries, err
 			}
 
 			// We finished at the end of the block.
@@ -824,10 +819,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		// Make sure we close the pipe so blocked writes doesn't stay around.
 		defer r.CloseWithError(context.Canceled)
 
-		readers[i], err = newMetacacheReader(r)
-		if err != nil {
-			return err
-		}
+		readers[i] = newMetacacheReader(r)
 		d := disks[i]
 
 		// Send request to each disk.
