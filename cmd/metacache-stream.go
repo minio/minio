@@ -22,12 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
 )
@@ -776,14 +775,14 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 			current.n++
 			buf.Reset()
 			block.Reset(buf)
-			current.First = ""
+			current.first = ""
 		}
 		for o := range in {
 			if len(o.name) == 0 || w.streamErr != nil {
 				continue
 			}
-			if current.First == "" {
-				current.First = o.name
+			if current.first == "" {
+				current.first = o.name
 			}
 
 			if n >= w.blockEntries-1 {
@@ -796,10 +795,10 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 			if w.streamErr != nil {
 				continue
 			}
-			current.Last = o.name
+			current.last = o.name
 		}
 		if n > 0 || current.n == 0 {
-			current.EOS = true
+			current.eos = true
 			finishBlock()
 		}
 	}()
@@ -817,36 +816,62 @@ func (w *metacacheBlockWriter) Close() error {
 type metacacheBlock struct {
 	data  []byte
 	n     int
-	First string `json:"f"`
-	Last  string `json:"l"`
-	EOS   bool   `json:"eos,omitempty"`
+	first string
+	last  string
+	eos   bool
+}
+
+const metacacheBlockReservedHeaderPrefix = ReservedMetadataPrefixLower + "metacache-part-"
+
+// This code is specifically written in this form to avoid json unmarshalling
+//
+// BenchmarkKVSimple-4     13431099                88.15 ns/op           48 B/op          1 allocs/op
+// v/s
+// BenchmarkKVJSON-4        1510602               789.4 ns/op           224 B/op          4 allocs/op
+//
+// So that only allocation this function ever does is for strings.SplitN()
+func (b *metacacheBlock) loadHeaderKV(meta map[string]string, partKey string) error {
+	v, ok := meta[partKey]
+	if !ok {
+		return io.ErrUnexpectedEOF
+	}
+	parts := strings.SplitN(v, ":", 3)
+	if len(parts) != 3 {
+		return io.ErrUnexpectedEOF
+	}
+	b.first = parts[0]
+	b.last = parts[1]
+	b.eos = parts[2] == "true"
+	return nil
 }
 
 func (b metacacheBlock) headerKV() map[string]string {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	v, err := json.Marshal(b)
-	if err != nil {
-		logger.LogIf(context.Background(), err) // Unlikely
-		return nil
-	}
-	return map[string]string{fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, b.n): string(v)}
+	// Code specifically written like this to avoid any allocations
+	// BenchmarkKVSimple-4     29415350                40.29 ns/op            0 B/op          0 allocs/op
+	// v/s
+	// BenchmarkKVJSON-4        3852229               267.3 ns/op            24 B/op          1 allocs/op
+	//
+	// So that only allocation this function ever does is for its returned value.
+	key := metacacheBlockReservedHeaderPrefix + strconv.Itoa(b.n)
+	value := b.first + ":" + b.last + ":" + strconv.FormatBool(b.eos)
+	return map[string]string{key: value}
 }
 
 // pastPrefix returns true if the given prefix is before start of the block.
 func (b metacacheBlock) pastPrefix(prefix string) bool {
-	if prefix == "" || strings.HasPrefix(b.First, prefix) {
+	if prefix == "" || strings.HasPrefix(b.first, prefix) {
 		return false
 	}
 	// We have checked if prefix matches, so we can do direct compare.
-	return b.First > prefix
+	return b.first > prefix
 }
 
 // endedPrefix returns true if the given prefix ends within the block.
 func (b metacacheBlock) endedPrefix(prefix string) bool {
-	if prefix == "" || strings.HasPrefix(b.Last, prefix) {
+	if prefix == "" || strings.HasPrefix(b.last, prefix) {
 		return false
 	}
 
 	// We have checked if prefix matches, so we can do direct compare.
-	return b.Last > prefix
+	return b.last > prefix
 }

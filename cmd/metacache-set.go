@@ -21,16 +21,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
@@ -194,7 +193,7 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 // findFirstPart will find the part with 0 being the first that corresponds to the marker in the options.
 // io.ErrUnexpectedEOF is returned if the place containing the marker hasn't been scanned yet.
 // io.EOF indicates the marker is beyond the end of the stream and does not exist.
-func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
+func (o *listPathOptions) findFirstPart(meta map[string]string) (int, error) {
 	search := o.Marker
 	if search == "" {
 		search = o.Prefix
@@ -203,37 +202,29 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 		return 0, nil
 	}
 	o.debugln("searching for ", search)
-	var tmp metacacheBlock
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var b = &metacacheBlock{}
 	i := 0
 	for {
-		partKey := fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, i)
-		v, ok := fi.Metadata[partKey]
-		if !ok {
+		if err := b.loadHeaderKV(meta, metacacheBlockReservedHeaderPrefix+strconv.Itoa(i)); err != nil {
 			o.debugln("no match in metadata, waiting")
-			return -1, io.ErrUnexpectedEOF
-		}
-		err := json.Unmarshal([]byte(v), &tmp)
-		if !ok {
-			logger.LogIf(context.Background(), err)
 			return -1, err
 		}
-		if tmp.First == "" && tmp.Last == "" && tmp.EOS {
+		if b.first == "" && b.last == "" && b.eos {
 			return 0, errFileNotFound
 		}
-		if tmp.First >= search {
-			o.debugln("First >= search", v)
+		if b.first >= search {
+			o.debugln("First >= search")
 			return i, nil
 		}
-		if tmp.Last >= search {
-			o.debugln("Last >= search", v)
+		if b.last >= search {
+			o.debugln("Last >= search")
 			return i, nil
 		}
-		if tmp.EOS {
-			o.debugln("no match, at EOS", v)
+		if b.eos {
+			o.debugln("no match, at EOS")
 			return -3, io.EOF
 		}
-		o.debugln("First ", tmp.First, "<", search, " search", i)
+		o.debugln("First ", b.first, "<", search, " search", i)
 		i++
 	}
 }
@@ -249,14 +240,9 @@ func (o *listPathOptions) updateMetacacheListing(m metacache, rpc *peerRESTClien
 	return rpc.UpdateMetacacheListing(context.Background(), m)
 }
 
-func getMetacacheBlockInfo(fi FileInfo, block int) (*metacacheBlock, error) {
-	var tmp metacacheBlock
-	partKey := fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, block)
-	v, ok := fi.Metadata[partKey]
-	if !ok {
-		return nil, io.ErrUnexpectedEOF
-	}
-	return &tmp, json.Unmarshal([]byte(v), &tmp)
+func getMetacacheBlockInfo(meta map[string]string, block int) (*metacacheBlock, error) {
+	var tmp = &metacacheBlock{}
+	return tmp, tmp.loadHeaderKV(meta, metacacheBlockReservedHeaderPrefix+strconv.Itoa(block))
 }
 
 const metacachePrefix = ".metacache"
@@ -382,9 +368,9 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		}
 
 		// Read metadata associated with the object from all disks.
-		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{}, true)
+		info, err := er.GetObjectInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
 		if err != nil {
-			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
+			switch err.(type) {
 			case ObjectNotFound:
 				retries++
 				time.Sleep(retryDelay)
@@ -398,7 +384,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}
 		}
 
-		partN, err := o.findFirstPart(fi)
+		partN, err := o.findFirstPart(info.UserDefined)
 		switch {
 		case err == nil:
 		case errors.Is(err, io.ErrUnexpectedEOF):
@@ -450,15 +436,16 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						continue
 					}
 				}
+
 				// Load first part metadata...
-				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{}, true)
+				info, err := er.GetObjectInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{})
 				if err != nil {
 					time.Sleep(retryDelay)
 					retries++
 					continue
 				}
 				loadedPart = partN
-				bi, err := getMetacacheBlockInfo(fi, partN)
+				bi, err := getMetacacheBlockInfo(info.UserDefined, partN)
 				logger.LogIf(ctx, err)
 				if err == nil {
 					if bi.pastPrefix(o.Prefix) {
@@ -467,16 +454,26 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 			}
 
-			pr, pw := io.Pipe()
-			go func() {
-				werr := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0,
-					fi.Size, pw, fi, metaArr, onlineDisks)
-				pw.CloseWithError(werr)
-			}()
+			gr, err := er.GetObjectNInfo(ctx, minioMetaBucket, o.objectPath(partN), nil, http.Header{}, readLock, ObjectOptions{})
+			if err != nil {
+				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
+				case ObjectNotFound:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				case InsufficientReadQuorum:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				default:
+					logger.LogIf(ctx, err)
+					return entries, err
+				}
+			}
 
-			tmp := newMetacacheReader(pr)
+			tmp := newMetacacheReader(gr)
 			e, err := tmp.filter(o)
-			pr.CloseWithError(err)
+			gr.Close()
 			entries.o = append(entries.o, e.o...)
 			if o.Limit > 0 && entries.len() > o.Limit {
 				entries.truncate(o.Limit)
@@ -504,9 +501,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 
 			// We finished at the end of the block.
 			// And should not expect any more results.
-			bi, err := getMetacacheBlockInfo(fi, partN)
-			logger.LogIf(ctx, err)
-			if err != nil || bi.EOS {
+			bi, err := getMetacacheBlockInfo(info.UserDefined, partN)
+			if err != nil || bi.eos {
 				// We are done and there are no more parts.
 				return entries, io.EOF
 			}
@@ -654,10 +650,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				o.debugln(color.Green("listPath:")+" saving block", b.n, "to", o.objectPath(b.n))
 				r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
 				logger.LogIf(ctx, err)
+
 				custom := b.headerKV()
 				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
 					UserDefined:    custom,
-					NoLock:         true, // No need to hold namespace lock, each prefix caches uniquely.
 					ParentIsObject: nil,
 				})
 				if err != nil {
@@ -676,14 +672,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				// Update block 0 metadata.
 				var retries int
 				for {
-					meta := b.headerKV()
-					fi := FileInfo{
-						Metadata: make(map[string]string, len(meta)),
-					}
-					for k, v := range meta {
-						fi.Metadata[k] = v
-					}
-					err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), fi)
+					_, err := er.PutObjectMetadata(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{
+						UserDefined: b.headerKV(),
+					})
 					if err == nil {
 						break
 					}
