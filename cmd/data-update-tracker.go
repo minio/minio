@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -39,24 +40,20 @@ import (
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUpdateTrackerEstItems = 10000000
+	dataUpdateTrackerEstItems = 200000
 	// ... we want this false positive rate:
-	dataUpdateTrackerFP        = 0.99
+	dataUpdateTrackerFP        = 0.1
 	dataUpdateTrackerQueueSize = 0
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 4
+	dataUpdateTrackerVersion      = 5
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
-var (
-	objectUpdatedCh      chan<- string
-	intDataUpdateTracker *dataUpdateTracker
-)
+var intDataUpdateTracker *dataUpdateTracker
 
 func init() {
 	intDataUpdateTracker = newDataUpdateTracker()
-	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 type dataUpdateTracker struct {
@@ -403,8 +400,10 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case 1, 2, 3:
-		console.Println(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+	case 1, 2, 3, 4:
+		if intDataUpdateTracker.debug {
+			console.Debugln(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+		}
 		return nil
 	case dataUpdateTrackerVersion:
 	default:
@@ -497,9 +496,6 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		// Add all paths until done.
 		d.mu.Lock()
 		for i := range split {
-			if d.debug {
-				console.Debugln(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
-			}
 			d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
 		}
 		d.dirty = d.dirty || len(split) > 0
@@ -508,30 +504,22 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 }
 
 // markDirty adds the supplied path to the current bloom filter.
-func (d *dataUpdateTracker) markDirty(in string) {
-	bucket, _ := path2BucketObjectWithBasePath("", in)
+func (d *dataUpdateTracker) markDirty(bucket, prefix string) {
 	dateUpdateTrackerLogPrefix := color.Green("dataUpdateTracker:")
-	if bucket == "" {
-		if d.debug && len(in) > 0 {
-			console.Debugf(dateUpdateTrackerLogPrefix+" no bucket (%s)\n", in)
-		}
+	if bucket == "" && d.debug {
+		console.Debugf(dateUpdateTrackerLogPrefix + " no bucket specified\n")
 		return
 	}
 
-	if isReservedOrInvalidBucket(bucket, false) {
-		if d.debug && false {
-			console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, in)
-		}
+	if isReservedOrInvalidBucket(bucket, false) && d.debug {
+		console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, prefix)
 		return
 	}
-	split := splitPathDeterministic(in)
+	split := splitPathDeterministic(pathJoin(bucket, prefix))
 
 	// Add all paths until done.
 	d.mu.Lock()
 	for i := range split {
-		if d.debug {
-			console.Debugln(dateUpdateTrackerLogPrefix + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
-		}
 		d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
 	}
 	d.dirty = d.dirty || len(split) > 0
@@ -684,10 +672,10 @@ type bloomFilterResponse struct {
 	Filter []byte
 }
 
-// ObjectPathUpdated indicates a path has been updated.
+// NSUpdated indicates namespace has been updated.
 // The function will block until the entry has been picked up.
-func ObjectPathUpdated(s string) {
+func NSUpdated(bucket, prefix string) {
 	if intDataUpdateTracker != nil {
-		intDataUpdateTracker.markDirty(s)
+		intDataUpdateTracker.markDirty(bucket, prefix)
 	}
 }

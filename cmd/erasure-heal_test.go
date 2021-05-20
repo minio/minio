@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,6 +24,9 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/bpool"
 )
 
 var erasureHealTests = []struct {
@@ -87,8 +91,7 @@ func TestErasureHeal(t *testing.T) {
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "testobject",
-				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
+			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -131,12 +134,18 @@ func TestErasureHeal(t *testing.T) {
 				continue
 			}
 			os.Remove(pathJoin(disk.String(), "testbucket", "testobject"))
-			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject",
-				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
+			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 
+		// Number of buffers, max 2GB
+		n := (2 * humanize.GiByte) / (int(test.blocksize) * 2)
+
+		// Initialize byte pool once for all sets, bpool size is set to
+		// setCount * setDriveCount with each memory upto blockSizeV2.
+		bp := bpool.NewBytePoolCap(n, int(test.blocksize), int(test.blocksize)*2)
+
 		// test case setup is complete - now call Heal()
-		err = erasure.Heal(context.Background(), readers, staleWriters, test.size)
+		err = erasure.Heal(context.Background(), readers, staleWriters, test.size, bp)
 		closeBitrotReaders(readers)
 		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {

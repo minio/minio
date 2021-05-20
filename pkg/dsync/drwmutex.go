@@ -1,18 +1,19 @@
-/*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package dsync
 
@@ -45,7 +46,10 @@ func log(format string, data ...interface{}) {
 const drwMutexAcquireTimeout = 1 * time.Second // 1 second.
 
 // dRWMutexRefreshTimeout - timeout for the refresh call
-const drwMutexRefreshTimeout = 5 * time.Second
+const drwMutexRefreshCallTimeout = 5 * time.Second
+
+// dRWMutexUnlockTimeout - timeout for the unlock call
+const drwMutexUnlockCallTimeout = 30 * time.Second
 
 // dRWMutexRefreshInterval - the interval between two refresh calls
 const drwMutexRefreshInterval = 10 * time.Second
@@ -274,7 +278,7 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 				Quorum:    quorum,
 			}
 
-			ctx, cancel := context.WithTimeout(ctx, drwMutexRefreshTimeout)
+			ctx, cancel := context.WithTimeout(ctx, drwMutexRefreshCallTimeout)
 			defer cancel()
 
 			refreshed, err := c.Refresh(ctx, args)
@@ -612,13 +616,16 @@ func sendRelease(ds *Dsync, c NetLocker, owner string, uid string, isReadLock bo
 		Resources: names,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), drwMutexUnlockCallTimeout)
+	defer cancel()
+
 	if isReadLock {
-		if _, err := c.RUnlock(args); err != nil {
+		if _, err := c.RUnlock(ctx, args); err != nil {
 			log("dsync: Unable to call RUnlock failed with %s for %#v at %s\n", err, args, c)
 			return false
 		}
 	} else {
-		if _, err := c.Unlock(args); err != nil {
+		if _, err := c.Unlock(ctx, args); err != nil {
 			log("dsync: Unable to call Unlock failed with %s for %#v at %s\n", err, args, c)
 			return false
 		}

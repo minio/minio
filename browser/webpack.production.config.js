@@ -1,11 +1,11 @@
 /*
- * Isomorphic Javascript library for MinIO Browser JSON-RPC API, (C) 2016 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,12 +22,12 @@ var PurgecssPlugin = require('purgecss-webpack-plugin')
 
 var exports = {
   context: __dirname,
-  mode: 'production',
+  mode: 'release',
   entry: [
     path.resolve(__dirname, 'app/index.js')
   ],
   output: {
-    path: path.resolve(__dirname, 'production'),
+    path: path.resolve(__dirname, 'release'),
     filename: 'index_bundle.js'
   },
   module: {

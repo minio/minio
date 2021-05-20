@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,10 +23,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // CheckPreconditionFn returns true if precondition check failed.
@@ -44,21 +45,31 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker                  bool                                                  // Is only set in DELETE operations for delete marker replication
-	UserDefined                   map[string]string                                     // only set in case of POST/PUT operations
-	PartNumber                    int                                                   // only useful in case of GetObject/HeadObject
-	CheckPrecondFn                CheckPreconditionFn                                   // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	DeleteMarkerReplicationStatus string                                                // Is only set in DELETE operations
-	VersionPurgeStatus            VersionPurgeStatusType                                // Is only set in DELETE operations for delete marker version to be permanently deleted.
-	TransitionStatus              string                                                // status of the transition
-	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet                bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ParentIsObject                func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
+	UserDefined                   map[string]string      // only set in case of POST/PUT operations
+	PartNumber                    int                    // only useful in case of GetObject/HeadObject
+	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
+	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
+	Transition                    TransitionOptions
 
-	// Use the maximum parity (N/2), used when
-	// saving server configuration files
+	NoLock         bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest   bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ParentIsObject func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+
+	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
+}
+
+// TransitionOptions represents object options for transition ObjectLayer operation
+type TransitionOptions struct {
+	Status         string
+	Tier           string
+	ETag           string
+	RestoreRequest *RestoreObjectRequest
+	RestoreExpiry  time.Time
+	ExpireRestored bool
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -122,6 +133,8 @@ type ObjectLayer interface {
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
+	TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
+	RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)

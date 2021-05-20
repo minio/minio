@@ -1,3 +1,20 @@
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package replication
 
 import (
@@ -123,7 +140,7 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 }
 func TestReplicate(t *testing.T) {
 	cfgs := []Config{
-		{ //Config0 - Replication config has no filters, all replication enabled
+		{ // Config0 - Replication config has no filters, all replication enabled
 			Rules: []Rule{
 				{
 					Status:                  Enabled,
@@ -134,7 +151,7 @@ func TestReplicate(t *testing.T) {
 				},
 			},
 		},
-		{ //Config1 - Replication config has no filters, delete,delete-marker replication disabled
+		{ // Config1 - Replication config has no filters, delete,delete-marker replication disabled
 			Rules: []Rule{
 				{
 					Status:                  Enabled,
@@ -145,7 +162,7 @@ func TestReplicate(t *testing.T) {
 				},
 			},
 		},
-		{ //Config2 - Replication config has filters and more than 1 matching rule, delete,delete-marker replication disabled
+		{ // Config2 - Replication config has filters and more than 1 matching rule, delete,delete-marker replication disabled
 			Rules: []Rule{
 				{
 					Status:                  Enabled,
@@ -163,7 +180,7 @@ func TestReplicate(t *testing.T) {
 				},
 			},
 		},
-		{ //Config3 - Replication config has filters and no overlapping rules
+		{ // Config3 - Replication config has filters and no overlapping rules
 			Rules: []Rule{
 				{
 					Status:                  Enabled,
@@ -178,6 +195,17 @@ func TestReplicate(t *testing.T) {
 					DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled},
 					DeleteReplication:       DeleteReplication{Status: Disabled},
 					Filter:                  Filter{Prefix: "abc"},
+				},
+			},
+		},
+		{ // Config4 - Replication config has filters and SourceSelectionCriteria Disabled
+			Rules: []Rule{
+				{
+					Status:                  Enabled,
+					Priority:                2,
+					DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled},
+					DeleteReplication:       DeleteReplication{Status: Enabled},
+					SourceSelectionCriteria: SourceSelectionCriteria{ReplicaModifications: ReplicaModifications{Status: Disabled}},
 				},
 			},
 		},
@@ -232,7 +260,9 @@ func TestReplicate(t *testing.T) {
 		{ObjectOpts{Name: "abc/c4test", DeleteMarker: true, OpType: DeleteReplicationType}, cfgs[3], true},                                      //36. matches rule 2 - DeleteMarker replication allowed by rule
 		{ObjectOpts{Name: "abc/c4test", DeleteMarker: true, VersionID: "vid", OpType: DeleteReplicationType}, cfgs[3], false},                   //37. matches rule 2 - DeleteReplication disallowed by rule for permanent delete of DeleteMarker
 		{ObjectOpts{Name: "abc/c4test", VersionID: "vid", OpType: DeleteReplicationType}, cfgs[3], false},                                       //38. matches rule 2 - DeleteReplication disallowed by rule for permanent delete of version
-
+		//  using config 4 - with replica modification sync disabled.
+		{ObjectOpts{Name: "xy/c5test", UserTags: "k1=v1", Replica: true}, cfgs[4], false}, //39. replica syncing disabled, this object is a replica
+		{ObjectOpts{Name: "xa/c5test", UserTags: "k1=v1", Replica: false}, cfgs[4], true}, //40. replica syncing disabled, this object is NOT a replica
 	}
 
 	for i, testCase := range testCases {

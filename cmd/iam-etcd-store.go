@@ -1,23 +1,23 @@
-/*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,11 +28,13 @@ import (
 	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/kms"
 	etcd "go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 )
@@ -85,38 +87,42 @@ func (ies *IAMEtcdStore) runlock() {
 	ies.RUnlock()
 }
 
-func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error {
+func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, itemPath string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
-		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+	if GlobalKMS != nil {
+		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+		})
 		if err != nil {
 			return err
 		}
 	}
-	return saveKeyEtcd(ctx, ies.client, path, data, opts...)
+	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
 }
 
-func getIAMConfig(item interface{}, value []byte) error {
-	conf := value
+func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	var err error
-	if globalConfigEncrypted && !utf8.Valid(value) {
-		conf, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(conf))
+	if !utf8.Valid(data) && GlobalKMS != nil {
+		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+		})
 		if err != nil {
 			return err
 		}
 	}
-	return json.Unmarshal(conf, item)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	return json.Unmarshal(data, item)
 }
 
 func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item interface{}, path string) error {
-	pdata, err := readKeyEtcd(ctx, ies.client, path)
+	data, err := readKeyEtcd(ctx, ies.client, path)
 	if err != nil {
 		return err
 	}
-	return getIAMConfig(item, pdata)
+	return getIAMConfig(item, data, path)
 }
 
 func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error {
@@ -265,7 +271,7 @@ func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map
 
 func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]iampolicy.Policy) error {
 	var p iampolicy.Policy
-	err := getIAMConfig(&p, kvs.Value)
+	err := getIAMConfig(&p, kvs.Value, string(kvs.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy
@@ -298,7 +304,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 
 func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
 	var u UserIdentity
-	err := getIAMConfig(&u, userkv.Value)
+	err := getIAMConfig(&u, userkv.Value, string(userkv.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchUser
@@ -436,7 +442,7 @@ func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, user
 
 func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, basePrefix string) error {
 	var p MappedPolicy
-	err := getIAMConfig(&p, kv.Value)
+	err := getIAMConfig(&p, kv.Value, string(kv.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy

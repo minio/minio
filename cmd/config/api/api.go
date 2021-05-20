@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -29,24 +30,26 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax             = "requests_max"
-	apiRequestsDeadline        = "requests_deadline"
-	apiClusterDeadline         = "cluster_deadline"
-	apiCorsAllowOrigin         = "cors_allow_origin"
-	apiRemoteTransportDeadline = "remote_transport_deadline"
-	apiListQuorum              = "list_quorum"
-	apiExtendListCacheLife     = "extend_list_cache_life"
-	apiReplicationWorkers      = "replication_workers"
+	apiRequestsMax              = "requests_max"
+	apiRequestsDeadline         = "requests_deadline"
+	apiClusterDeadline          = "cluster_deadline"
+	apiCorsAllowOrigin          = "cors_allow_origin"
+	apiRemoteTransportDeadline  = "remote_transport_deadline"
+	apiListQuorum               = "list_quorum"
+	apiExtendListCacheLife      = "extend_list_cache_life"
+	apiReplicationWorkers       = "replication_workers"
+	apiReplicationFailedWorkers = "replication_failed_workers"
 
-	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
-	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
-	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
-	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
-	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
-	EnvAPIReplicationWorkers      = "MINIO_API_REPLICATION_WORKERS"
+	EnvAPIRequestsMax              = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline         = "MINIO_API_REQUESTS_DEADLINE"
+	EnvAPIClusterDeadline          = "MINIO_API_CLUSTER_DEADLINE"
+	EnvAPICorsAllowOrigin          = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPIRemoteTransportDeadline  = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPIListQuorum               = "MINIO_API_LIST_QUORUM"
+	EnvAPIExtendListCacheLife      = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
+	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
+	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
+	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
 )
 
 // Deprecated key and ENVs
@@ -90,19 +93,24 @@ var (
 			Key:   apiReplicationWorkers,
 			Value: "500",
 		},
+		config.KV{
+			Key:   apiReplicationFailedWorkers,
+			Value: "4",
+		},
 	}
 )
 
 // Config storage class configuration
 type Config struct {
-	RequestsMax             int           `json:"requests_max"`
-	RequestsDeadline        time.Duration `json:"requests_deadline"`
-	ClusterDeadline         time.Duration `json:"cluster_deadline"`
-	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
-	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
-	ListQuorum              string        `json:"list_strict_quorum"`
-	ExtendListLife          time.Duration `json:"extend_list_cache_life"`
-	ReplicationWorkers      int           `json:"replication_workers"`
+	RequestsMax              int           `json:"requests_max"`
+	RequestsDeadline         time.Duration `json:"requests_deadline"`
+	ClusterDeadline          time.Duration `json:"cluster_deadline"`
+	CorsAllowOrigin          []string      `json:"cors_allow_origin"`
+	RemoteTransportDeadline  time.Duration `json:"remote_transport_deadline"`
+	ListQuorum               string        `json:"list_strict_quorum"`
+	ExtendListLife           time.Duration `json:"extend_list_cache_life"`
+	ReplicationWorkers       int           `json:"replication_workers"`
+	ReplicationFailedWorkers int           `json:"replication_failed_workers"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -189,14 +197,24 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication workers should be 1")
 	}
 
+	replicationFailedWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationFailedWorkers, kvs.Get(apiReplicationFailedWorkers)))
+	if err != nil {
+		return cfg, err
+	}
+
+	if replicationFailedWorkers <= 0 {
+		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication failed workers should be 1")
+	}
+
 	return Config{
-		RequestsMax:             requestsMax,
-		RequestsDeadline:        requestsDeadline,
-		ClusterDeadline:         clusterDeadline,
-		CorsAllowOrigin:         corsAllowOrigin,
-		RemoteTransportDeadline: remoteTransportDeadline,
-		ListQuorum:              listQuorum,
-		ExtendListLife:          listLife,
-		ReplicationWorkers:      replicationWorkers,
+		RequestsMax:              requestsMax,
+		RequestsDeadline:         requestsDeadline,
+		ClusterDeadline:          clusterDeadline,
+		CorsAllowOrigin:          corsAllowOrigin,
+		RemoteTransportDeadline:  remoteTransportDeadline,
+		ListQuorum:               listQuorum,
+		ExtendListLife:           listLife,
+		ReplicationWorkers:       replicationWorkers,
+		ReplicationFailedWorkers: replicationFailedWorkers,
 	}, nil
 }

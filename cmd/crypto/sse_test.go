@@ -1,16 +1,19 @@
-// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+// Copyright (c) 2015-2021 MinIO, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This file is part of MinIO Object Storage stack
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -178,48 +181,6 @@ var sseCopyUnsealObjectKeyTests = []struct {
 func TestSSECopyUnsealObjectKey(t *testing.T) {
 	for i, test := range sseCopyUnsealObjectKeyTests {
 		if _, err := SSECopy.UnsealObjectKey(test.Headers, test.Metadata, test.Bucket, test.Object); err != test.ExpectedErr {
-			t.Errorf("Test %d: got: %v - want: %v", i, err, test.ExpectedErr)
-		}
-	}
-}
-
-var s3UnsealObjectKeyTests = []struct {
-	KMS            KMS
-	Bucket, Object string
-	Metadata       map[string]string
-
-	ExpectedErr error
-}{
-	{ // 0 - Valid KMS key-ID and valid metadata entries for bucket/object
-		KMS:    NewMasterKey("my-minio-key", [32]byte{}),
-		Bucket: "bucket",
-		Object: "object",
-		Metadata: map[string]string{
-			"X-Minio-Internal-Server-Side-Encryption-Iv":                "hhVY0LKR1YtZbzAKxTWUfZt5enDfYX6Fxz1ma8Kiudc=",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key":     "IAAfALhsOeD5AE3s5Zgq3DZ5VFGsOa3B0ksVC86veDcaj+fXv2U0VadhPaOKYr9Emd5ssOsO0uIhIIrKiOy9rA==",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key": "IAAfAMRS2iw45FsfiF3QXajSYVWj1lxMpQm6DxDGPtADCX6fJQQ4atHBtfpgqJFyeQmIHsm0FBI+UlHw1Lv4ug==",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id":     "test-key-1",
-			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm":    "DAREv2-HMAC-SHA256",
-		},
-		ExpectedErr: nil,
-	},
-	{ // 1 - Valid KMS key-ID for invalid metadata entries for bucket/object
-		KMS:    NewMasterKey("my-minio-key", [32]byte{}),
-		Bucket: "bucket",
-		Object: "object",
-		Metadata: map[string]string{
-			"X-Minio-Internal-Server-Side-Encryption-Iv":                "hhVY0LKR1YtZbzAKxTWUfZt5enDfYX6Fxz1ma8Kiudc=",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key":     "IAAfALhsOeD5AE3s5Zgq3DZ5VFGsOa3B0ksVC86veDcaj+fXv2U0VadhPaOKYr9Emd5ssOsO0uIhIIrKiOy9rA==",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key": "IAAfAMRS2iw45FsfiF3QXajSYVWj1lxMpQm6DxDGPtADCX6fJQQ4atHBtfpgqJFyeQmIHsm0FBI+UlHw1Lv4ug==",
-			"X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id":     "test-key-1",
-		},
-		ExpectedErr: errMissingInternalSealAlgorithm,
-	},
-}
-
-func TestS3UnsealObjectKey(t *testing.T) {
-	for i, test := range s3UnsealObjectKeyTests {
-		if _, err := S3.UnsealObjectKey(test.KMS, test.Metadata, test.Bucket, test.Object); err != test.ExpectedErr {
 			t.Errorf("Test %d: got: %v - want: %v", i, err, test.ExpectedErr)
 		}
 	}

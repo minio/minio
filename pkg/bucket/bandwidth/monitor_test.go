@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package bandwidth
 
@@ -22,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/minio/pkg/bandwidth"
+	"github.com/minio/madmin-go"
 )
 
 const (
@@ -90,8 +91,8 @@ func TestMonitor_GetReport(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   *bandwidth.Report
-		want2  *bandwidth.Report
+		want   *madmin.BucketBandwidthReport
+		want2  *madmin.BucketBandwidthReport
 	}{
 		{
 			name: "ZeroToOne",
@@ -103,11 +104,11 @@ func TestMonitor_GetReport(t *testing.T) {
 				update2:  oneMiB,
 				endTime2: start.Add(2 * time.Second),
 			},
-			want: &bandwidth.Report{
-				BucketStats: map[string]bandwidth.Details{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: 0}},
+			want: &madmin.BucketBandwidthReport{
+				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: 0}},
 			},
-			want2: &bandwidth.Report{
-				BucketStats: map[string]bandwidth.Details{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: (1024 * 1024) / start.Add(2*time.Second).Sub(start.Add(1*time.Second)).Seconds()}},
+			want2: &madmin.BucketBandwidthReport{
+				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: (1024 * 1024) / start.Add(2*time.Second).Sub(start.Add(1*time.Second)).Seconds()}},
 			},
 		},
 		{
@@ -120,11 +121,11 @@ func TestMonitor_GetReport(t *testing.T) {
 				update2:  2 * oneMiB,
 				endTime2: start.Add(2 * time.Second),
 			},
-			want: &bandwidth.Report{
-				BucketStats: map[string]bandwidth.Details{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: float64(oneMiB)}},
+			want: &madmin.BucketBandwidthReport{
+				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: float64(oneMiB)}},
 			},
-			want2: &bandwidth.Report{
-				BucketStats: map[string]bandwidth.Details{"bucket": {
+			want2: &madmin.BucketBandwidthReport{
+				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {
 					LimitInBytesPerSecond:            1024 * 1024,
 					CurrentBandwidthInBytesPerSecond: exponentialMovingAverage(betaBucket, float64(oneMiB), 2*float64(oneMiB))}},
 			},

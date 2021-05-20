@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -40,6 +41,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/fips"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/sio"
 )
@@ -437,13 +439,13 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 // statCachedMeta returns metadata from cache - including ranges cached, partial to indicate
 // if partial object is cached.
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
-
 	cLock := c.NewNSLockFn(cacheObjPath)
-	if ctx, err = cLock.GetRLock(ctx, globalOperationTimeout); err != nil {
+	lkctx, err := cLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return
 	}
-
-	defer cLock.RUnlock()
+	ctx = lkctx.Context()
+	defer cLock.RUnlock(lkctx.Cancel)
 	return c.statCache(ctx, cacheObjPath)
 }
 
@@ -517,14 +519,14 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 // saves object metadata to disk cache
 // incHitsOnly is true if metadata update is incrementing only the hit counter
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
-	var err error
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachedPath)
-	ctx, err = cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock()
+	ctx = lkctx.Context()
+	defer cLock.Unlock(lkctx.Cancel)
 	return c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly)
 }
 
@@ -698,11 +700,12 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachePath)
-	ctx, err = cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer cLock.Unlock()
+	ctx = lkctx.Context()
+	defer cLock.Unlock(lkctx.Cancel)
 
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
@@ -913,12 +916,13 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cacheObjPath)
-	ctx, err = cLock.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return nil, numHits, err
 	}
+	ctx = lkctx.Context()
+	defer cLock.RUnlock(lkctx.Cancel)
 
-	defer cLock.RUnlock()
 	var objInfo ObjectInfo
 	var rngInfo RangeInfo
 	if objInfo, rngInfo, numHits, err = c.statRange(ctx, bucket, object, rs); err != nil {
@@ -933,21 +937,21 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		objInfo.Size = rngInfo.Size
 		rs = nil
 	}
-	var nsUnlocker = func() {}
+
 	// For a directory, we need to send an reader that returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
+		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 		return gr, numHits, gerr
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, numHits, nErr
 	}
 	filePath := pathJoin(cacheObjPath, cacheFile)
-	pr, pw := io.Pipe()
+	pr, pw := xioutil.WaitPipe()
 	go func() {
 		err := c.bitrotReadFromCache(ctx, filePath, off, length, pw)
 		if err != nil {
@@ -957,7 +961,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	}()
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+	pipeCloser := func() { pr.CloseWithError(nil) }
 
 	gr, gerr := fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 	if gerr != nil {
@@ -978,11 +982,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
 	cLock := c.NewNSLockFn(cacheObjPath)
-	_, err = cLock.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock()
+	defer cLock.Unlock(lkctx.Cancel)
 	return removeAll(cacheObjPath)
 }
 

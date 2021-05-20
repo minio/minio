@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -26,6 +27,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
@@ -34,12 +36,11 @@ import (
 	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -2412,7 +2413,6 @@ func migrateV27ToV28() error {
 	}
 
 	srvConfig.Version = "28"
-	srvConfig.KMS = crypto.KMSConfig{}
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
@@ -2507,13 +2507,28 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 		return false, nil, err
 	}
 
-	if globalConfigEncrypted && !utf8.Valid(data) {
-		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-		if err != nil {
-			if err == madmin.ErrMaliciousData {
-				return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+	if !utf8.Valid(data) {
+		if GlobalKMS != nil {
+			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: path.Join(minioMetaBucket, configFile),
+			})
+			if err != nil {
+				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+				if err != nil {
+					if err == madmin.ErrMaliciousData {
+						return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+					}
+					return false, nil, err
+				}
 			}
-			return false, nil, err
+		} else {
+			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+			if err != nil {
+				if err == madmin.ErrMaliciousData {
+					return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+				}
+				return false, nil, err
+			}
 		}
 	}
 
@@ -2546,8 +2561,6 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "28"
-	cfg.KMS = crypto.KMSConfig{}
-
 	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
@@ -2739,7 +2752,6 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 		logger.SetLoggerHTTPAudit(newCfg, k, auditArgs)
 	}
 
-	crypto.SetKMSConfig(newCfg, cfg.KMS)
 	xldap.SetIdentityLDAP(newCfg, cfg.LDAPServerConfig)
 	openid.SetIdentityOpenID(newCfg, cfg.OpenID)
 	opa.SetPolicyOPAConfig(newCfg, cfg.Policy.OPA)

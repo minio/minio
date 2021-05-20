@@ -1,22 +1,21 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package smart
-
-import "math/big"
 
 // Defined in <linux/nvme_ioctl.h>
 //nolint:structcheck,deadcode
@@ -180,63 +179,4 @@ type nvmeSMARTLog struct {
 type NVMeDevice struct {
 	Name string
 	fd   int
-}
-
-// Info contains S.M.A.R.T data about the drive
-type Info struct {
-	Device string `json:"device"`
-
-	Scsi *ScsiInfo `json:"scsi,omitempty"`
-	Nvme *NvmeInfo `json:"nvme,omitempty"`
-	Ata  *AtaInfo  `json:"ata,omitempty"`
-
-	Error string `json:"error,omitempty"`
-}
-
-// AtaInfo contains ATA drive info
-type AtaInfo struct {
-	LUWWNDeviceID         string `json:"scsiLuWWNDeviceID,omitempty"`
-	SerialNum             string `json:"serialNum,omitempty"`
-	ModelNum              string `json:"modelNum,omitempty"`
-	FirmwareRevision      string `json:"firmwareRevision,omitempty"`
-	RotationRate          string `json:"RotationRate,omitempty"`
-	ATAMajorVersion       string `json:"MajorVersion,omitempty"`
-	ATAMinorVersion       string `json:"MinorVersion,omitempty"`
-	SmartSupportAvailable bool   `json:"smartSupportAvailable,omitempty"`
-	SmartSupportEnabled   bool   `json:"smartSupportEnabled,omitempty"`
-	ErrorLog              string `json:"smartErrorLog,omitempty"`
-	Transport             string `json:"transport,omitempty"`
-}
-
-// ScsiInfo contains SCSI drive Info
-type ScsiInfo struct {
-	CapacityBytes int64  `json:"scsiCapacityBytes,omitempty"`
-	ModeSenseBuf  string `json:"scsiModeSenseBuf,omitempty"`
-	RespLen       int64  `json:"scsirespLen,omitempty"`
-	BdLen         int64  `json:"scsiBdLen,omitempty"`
-	Offset        int64  `json:"scsiOffset,omitempty"`
-	RPM           int64  `json:"sciRpm,omitempty"`
-}
-
-// NvmeInfo contains NVMe drive info
-type NvmeInfo struct {
-	SerialNum       string `json:"serialNum,omitempty"`
-	VendorID        string `json:"vendorId,omitempty"`
-	FirmwareVersion string `json:"firmwareVersion,omitempty"`
-	ModelNum        string `json:"modelNum,omitempty"`
-	SpareAvailable  string `json:"spareAvailable,omitempty"`
-	SpareThreshold  string `json:"spareThreshold,omitempty"`
-	Temperature     string `json:"temperature,omitempty"`
-	CriticalWarning string `json:"criticalWarning,omitempty"`
-
-	MaxDataTransferPages        int      `json:"maxDataTransferPages,omitempty"`
-	ControllerBusyTime          *big.Int `json:"controllerBusyTime,omitempty"`
-	PowerOnHours                *big.Int `json:"powerOnHours,omitempty"`
-	PowerCycles                 *big.Int `json:"powerCycles,omitempty"`
-	UnsafeShutdowns             *big.Int `json:"unsafeShutdowns,omitempty"`
-	MediaAndDataIntegrityErrors *big.Int `json:"mediaAndDataIntgerityErrors,omitempty"`
-	DataUnitsReadBytes          *big.Int `json:"dataUnitsReadBytes,omitempty"`
-	DataUnitsWrittenBytes       *big.Int `json:"dataUnitsWrittenBytes,omitempty"`
-	HostReadCommands            *big.Int `json:"hostReadCommands,omitempty"`
-	HostWriteCommands           *big.Int `json:"hostWriteCommands,omitempty"`
 }

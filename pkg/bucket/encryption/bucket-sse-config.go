@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,6 +21,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"net/http"
+
+	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 const (
@@ -106,6 +111,49 @@ func ParseBucketSSEConfig(r io.Reader) (*BucketSSEConfig, error) {
 	if config.XMLNS == "" {
 		config.XMLNS = xmlNS
 	}
-
 	return &config, nil
+}
+
+// Apply applies the SSE bucket configuration on the given HTTP headers and
+// sets the specified SSE headers.
+//
+// Apply does not overwrite any existing SSE headers. Further, it will
+// set minimal SSE-KMS headers if autoEncrypt is true and the BucketSSEConfig
+// is nil.
+func (b *BucketSSEConfig) Apply(headers http.Header, autoEncrypt bool) {
+	if _, ok := crypto.IsRequested(headers); ok {
+		return
+	}
+	if b == nil {
+		if autoEncrypt {
+			headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+		}
+		return
+	}
+
+	switch b.Algorithm() {
+	case xhttp.AmzEncryptionAES:
+		headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+	case xhttp.AmzEncryptionKMS:
+		headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+		headers.Set(xhttp.AmzServerSideEncryptionKmsID, b.KeyID())
+	}
+}
+
+// Algorithm returns the SSE algorithm specified by the SSE configuration.
+func (b *BucketSSEConfig) Algorithm() SSEAlgorithm {
+	for _, rule := range b.Rules {
+		return rule.DefaultEncryptionAction.Algorithm
+	}
+	return ""
+}
+
+// KeyID returns the KMS key ID specified by the SSE configuration.
+// If the SSE configuration does not specify SSE-KMS it returns an
+// empty key ID.
+func (b *BucketSSEConfig) KeyID() string {
+	for _, rule := range b.Rules {
+		return rule.DefaultEncryptionAction.MasterKeyID
+	}
+	return ""
 }

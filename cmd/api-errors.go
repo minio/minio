@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -204,7 +205,6 @@ const (
 	ErrInvalidSSECustomerParameters
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
-	ErrKMSAuthFailure
 
 	ErrNoAccessKey
 	ErrInvalidToken
@@ -241,6 +241,7 @@ const (
 	ErrClientDisconnected
 	ErrOperationMaxedOut
 	ErrInvalidRequest
+	ErrTransitionStorageClassNotFoundError
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
@@ -765,7 +766,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrSlowDown: {
 		Code:           "SlowDown",
-		Description:    "Please reduce your request",
+		Description:    "Resource requested is unreadable, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidPrefixMarker: {
@@ -943,6 +944,12 @@ var errorCodes = errorCodeMap{
 		Description:    "Object restore is already in progress",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrTransitionStorageClassNotFoundError: {
+		Code:           "TransitionStorageClassNotFoundError",
+		Description:    "The transition storage class was not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+
 	/// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",
@@ -1075,14 +1082,9 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrKMSNotConfigured: {
-		Code:           "InvalidArgument",
+		Code:           "NotImplemented",
 		Description:    "Server side encryption specified but KMS is not configured",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrKMSAuthFailure: {
-		Code:           "InvalidArgument",
-		Description:    "Server side encryption specified but KMS authorization failed",
-		HTTPStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	ErrNoAccessKey: {
 		Code:           "AccessDenied",
@@ -1812,6 +1814,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
+	case errInvalidStorageClass:
+		apiErr = ErrInvalidStorageClass
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters
@@ -1837,8 +1841,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrIncompatibleEncryptionMethod
 	case errKMSNotConfigured:
 		apiErr = ErrKMSNotConfigured
-	case crypto.ErrKMSAuthLogin:
-		apiErr = ErrKMSAuthFailure
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
@@ -1979,6 +1981,11 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrRemoteTargetNotVersionedError
 	case BucketReplicationSourceNotVersioned:
 		apiErr = ErrReplicationSourceNotVersionedError
+	case TransitionStorageClassNotFound:
+		apiErr = ErrTransitionStorageClassNotFoundError
+	case InvalidObjectState:
+		apiErr = ErrInvalidObjectState
+
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:

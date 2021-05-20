@@ -1,18 +1,19 @@
-/*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package dsync
 
@@ -53,12 +54,16 @@ type NetLocker interface {
 	// Do read unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
-	RUnlock(args LockArgs) (bool, error)
+	// Canceling the context will abort the remote call.
+	// In that case, the resource may or may not be unlocked.
+	RUnlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Do write unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
-	Unlock(args LockArgs) (bool, error)
+	// Canceling the context will abort the remote call.
+	// In that case, the resource may or may not be unlocked.
+	Unlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Refresh the given lock to prevent it from becoming stale
 	Refresh(ctx context.Context, args LockArgs) (bool, error)

@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
@@ -42,7 +44,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -238,6 +239,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 
 // NSScanner returns data usage stats of the current FS deployment
 func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	defer close(updates)
 	// Load bucket totals
 	var totalCache dataUsageCache
 	err := totalCache.load(ctx, fs, dataUsageCacheName)
@@ -272,7 +274,21 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 			bCache.Info.Name = b.Name
 		}
 		bCache.Info.BloomFilter = totalCache.Info.BloomFilter
-
+		upds := make(chan dataUsageEntry, 1)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for update := range upds {
+				totalCache.replace(b.Name, dataUsageRoot, update)
+				if intDataUpdateTracker.debug {
+					logger.Info(color.Green("NSScanner:")+" Got update:", len(totalCache.Cache))
+				}
+				cloned := totalCache.clone()
+				updates <- cloned.dui(dataUsageRoot, buckets)
+			}
+		}()
+		bCache.Info.updates = upds
 		cache, err := fs.scanBucket(ctx, b.Name, bCache)
 		select {
 		case <-ctx.Done():
@@ -281,6 +297,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 		}
 		logger.LogIf(ctx, err)
 		cache.Info.BloomFilter = nil
+		wg.Wait()
 
 		if cache.root() == nil {
 			if intDataUpdateTracker.debug {
@@ -359,12 +376,12 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 		}
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
-		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
+		sz := item.applyActions(ctx, fs, actionMeta{oi: oi}, &sizeSummary{})
 		if sz >= 0 {
-			return sizeSummary{totalSize: sz}, nil
+			return sizeSummary{totalSize: sz, versions: 1}, nil
 		}
 
-		return sizeSummary{totalSize: fi.Size()}, nil
+		return sizeSummary{totalSize: fi.Size(), versions: 1}, nil
 	})
 
 	return cache, err
@@ -406,7 +423,8 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	defer ObjectPathUpdated(bucket + slashSeparator)
+	defer NSUpdated(bucket, slashSeparator)
+
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -552,6 +570,8 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
 func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+	defer NSUpdated(bucket, slashSeparator)
+
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -605,15 +625,16 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+	defer NSUpdated(dstBucket, dstObject)
 
 	if !cpSrcDstSame {
 		objectDWLock := fs.NewNSLock(dstBucket, dstObject)
-		ctx, err = objectDWLock.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := objectDWLock.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, err
 		}
-		defer objectDWLock.Unlock()
+		ctx = lkctx.Context()
+		defer objectDWLock.Unlock(lkctx.Cancel)
 	}
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
@@ -703,17 +724,19 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		lock := fs.NewNSLock(bucket, object)
 		switch lockType {
 		case writeLock:
-			ctx, err = lock.GetLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.Unlock
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
 		case readLock:
-			ctx, err = lock.GetRLock(ctx, globalOperationTimeout)
+			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
-			nsUnlocker = lock.RUnlock
+			ctx = lkctx.Context()
+			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
 		}
 	}
 
@@ -744,8 +767,10 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, err := NewGetObjectReader(rs, objInfo, opts, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
+		rwPoolUnlocker()
+		nsUnlocker()
 		return nil, err
 	}
 
@@ -773,7 +798,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn)
+	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // getObject - wrapper for GetObject
@@ -982,11 +1007,12 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetRLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
 	}
-	defer lk.RUnlock()
+	ctx = lkctx.Context()
+	defer lk.RUnlock(lkctx.Cancel)
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return oi, err
@@ -1021,19 +1047,20 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		lk := fs.NewNSLock(bucket, object)
-		ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 		err = fs.createFsJSON(object, fsMetaPath)
-		lk.Unlock()
+		lk.Unlock(lkctx.Cancel)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
 		oi, err = fs.getObjectInfoWithLock(ctx, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 	return oi, toObjectErr(err, bucket, object)
 }
@@ -1071,15 +1098,17 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, err
 	}
 
+	defer NSUpdated(bucket, object)
+
 	// Lock the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
-	defer lk.Unlock()
-	defer ObjectPathUpdated(path.Join(bucket, object))
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
@@ -1247,19 +1276,20 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 		}
 	}
 
+	defer NSUpdated(bucket, object)
+
 	// Acquire a write lock before deleting the object.
 	lk := fs.NewNSLock(bucket, object)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return objInfo, err
 	}
-	defer lk.Unlock()
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
 
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
-
-	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
@@ -1606,4 +1636,14 @@ func (fs *FSObjects) Health(ctx context.Context, opts HealthOptions) HealthResul
 func (fs *FSObjects) ReadHealth(ctx context.Context) bool {
 	_, err := os.Stat(fs.fsPath)
 	return err == nil
+}
+
+// TransitionObject - transition object content to target tier.
+func (fs *FSObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (fs *FSObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
 }

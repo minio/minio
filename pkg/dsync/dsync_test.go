@@ -1,27 +1,26 @@
-/*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// GOMAXPROCS=10 go test
-
-package dsync_test
+package dsync
 
 import (
 	"context"
 	"fmt"
-	"log"
+	golog "log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -33,8 +32,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/minio/minio/pkg/dsync"
-	. "github.com/minio/minio/pkg/dsync"
 )
 
 const numberOfNodes = 5
@@ -57,7 +54,7 @@ func startRPCServers() {
 		server.HandleHTTP(rpcPaths[i], fmt.Sprintf("%s-debug", rpcPaths[i]))
 		l, e := net.Listen("tcp", ":"+strconv.Itoa(i+12345))
 		if e != nil {
-			log.Fatal("listen error:", e)
+			golog.Fatal("listen error:", e)
 		}
 		go http.Serve(l, nil)
 
@@ -245,6 +242,7 @@ func TestFailedRefreshLock(t *testing.T) {
 	// Simulate Refresh RPC response to return no locking found
 	for i := range lockServers {
 		lockServers[i].setRefreshReply(false)
+		defer lockServers[i].setRefreshReply(true)
 	}
 
 	dm := NewDRWMutex(ds, "aap")
@@ -257,7 +255,7 @@ func TestFailedRefreshLock(t *testing.T) {
 		wg.Done()
 	}
 
-	if !dm.GetLock(ctx, cancel, id, source, dsync.Options{Timeout: 5 * time.Minute}) {
+	if !dm.GetLock(ctx, cancel, id, source, Options{Timeout: 5 * time.Minute}) {
 		t.Fatal("GetLock() should be successful")
 	}
 
@@ -269,10 +267,35 @@ func TestFailedRefreshLock(t *testing.T) {
 
 	// Should be safe operation in all cases
 	dm.Unlock()
+}
 
-	// Revert Refresh RPC response to locking found
+// Test Unlock should not timeout
+func TestUnlockShouldNotTimeout(t *testing.T) {
+	dm := NewDRWMutex(ds, "aap")
+
+	if !dm.GetLock(context.Background(), nil, id, source, Options{Timeout: 5 * time.Minute}) {
+		t.Fatal("GetLock() should be successful")
+	}
+
+	// Add delay to lock server responses to ensure that lock does not timeout
 	for i := range lockServers {
-		lockServers[i].setRefreshReply(false)
+		lockServers[i].setResponseDelay(2 * drwMutexUnlockCallTimeout)
+		defer lockServers[i].setResponseDelay(0)
+	}
+
+	unlockReturned := make(chan struct{}, 1)
+	go func() {
+		dm.Unlock()
+		unlockReturned <- struct{}{}
+	}()
+
+	timer := time.NewTimer(2 * drwMutexUnlockCallTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-unlockReturned:
+		t.Fatal("Unlock timed out, which should not happen")
+	case <-timer.C:
 	}
 }
 

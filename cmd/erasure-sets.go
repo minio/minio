@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
@@ -38,7 +40,6 @@ import (
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -94,16 +95,24 @@ type erasureSets struct {
 
 	disksStorageInfoCache timedValue
 
-	mrfMU         sync.Mutex
-	mrfOperations map[healSource]int
+	mrfMU                  sync.Mutex
+	mrfOperations          map[healSource]int
+	lastConnectDisksOpTime time.Time
 }
 
-func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
+// Return false if endpoint is not connected or has been reconnected after last check
+func isEndpointConnectionStable(diskMap map[string]StorageAPI, endpoint string, lastCheck time.Time) bool {
 	disk := diskMap[endpoint]
 	if disk == nil {
 		return false
 	}
-	return disk.IsOnline()
+	if !disk.IsOnline() {
+		return false
+	}
+	if disk.LastConn().After(lastCheck) {
+		return false
+	}
+	return true
 }
 
 func (s *erasureSets) getDiskMap() map[string]StorageAPI {
@@ -195,6 +204,10 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {
+	defer func() {
+		s.lastConnectDisksOpTime = time.Now()
+	}()
+
 	var wg sync.WaitGroup
 	var setsJustConnected = make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
@@ -203,7 +216,7 @@ func (s *erasureSets) connectDisks() {
 		if endpoint.IsLocal {
 			diskPath = endpoint.Path
 		}
-		if isEndpointConnected(diskMap, diskPath) {
+		if isEndpointConnectionStable(diskMap, diskPath, s.lastConnectDisksOpTime) {
 			continue
 		}
 		wg.Add(1)
@@ -1405,4 +1418,14 @@ func (s *erasureSets) healMRFRoutine() {
 			s.mrfMU.Unlock()
 		}
 	}
+}
+
+// TransitionObject - transition object content to target tier.
+func (s *erasureSets) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return s.getHashedSet(object).TransitionObject(ctx, bucket, object, opts)
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (s *erasureSets) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return s.getHashedSet(object).RestoreTransitionedObject(ctx, bucket, object, opts)
 }

@@ -1,11 +1,11 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -190,13 +190,12 @@ func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
 
 // Test for gcsParseProjectID
 func TestGCSParseProjectID(t *testing.T) {
-	f, err := ioutil.TempFile("", "")
+	f, err := ioutil.TempFile("", "TestGCSParseProjectID-*")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer os.Remove(f.Name())
-	defer f.Close()
 
 	contents := `
 {
@@ -205,6 +204,7 @@ func TestGCSParseProjectID(t *testing.T) {
 }
 `
 	f.WriteString(contents)
+	f.Close()
 	projectID, err := gcsParseProjectID(f.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +217,20 @@ func TestGCSParseProjectID(t *testing.T) {
 		t.Errorf(`Expected to fail but succeeded reading "non-existent"`)
 	}
 
-	f.WriteString(`,}`)
-
+	contents = `
+{
+  "type": "service_account",
+  "project_id": "miniotesting"
+},}
+`
+	f, err = ioutil.TempFile("", "TestGCSParseProjectID-*")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(f.Name())
+	f.WriteString(contents)
+	f.Close()
 	if _, err := gcsParseProjectID(f.Name()); err == nil {
 		t.Errorf(`Expected to fail reading corrupted credentials file`)
 	}

@@ -1,16 +1,19 @@
-// MinIO Cloud Storage, (C) 2021 MinIO, Inc.
+// Copyright (c) 2015-2021 MinIO, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This file is part of MinIO Object Storage stack
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package config
 
@@ -18,15 +21,40 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 
+	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/kms"
 	"github.com/secure-io/sio-go"
 	"github.com/secure-io/sio-go/sioutil"
 )
+
+// EncryptBytes encrypts the plaintext with a key managed by KMS.
+// The context is bound to the returned ciphertext.
+//
+// The same context must be provided when decrypting the
+// ciphertext.
+func EncryptBytes(KMS kms.KMS, plaintext []byte, context kms.Context) ([]byte, error) {
+	ciphertext, err := Encrypt(KMS, bytes.NewReader(plaintext), context)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(ciphertext)
+}
+
+// DecryptBytes decrypts the ciphertext using a key managed by the KMS.
+// The same context that have been used during encryption must be
+// provided.
+func DecryptBytes(KMS kms.KMS, ciphertext []byte, context kms.Context) ([]byte, error) {
+	plaintext, err := Decrypt(KMS, bytes.NewReader(ciphertext), context)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(plaintext)
+}
 
 // Encrypt encrypts the plaintext with a key managed by KMS.
 // The context is bound to the returned ciphertext.
@@ -35,7 +63,7 @@ import (
 // ciphertext.
 func Encrypt(KMS kms.KMS, plaintext io.Reader, context kms.Context) (io.Reader, error) {
 	var algorithm = sio.AES_256_GCM
-	if !sioutil.NativeAES() {
+	if !fips.Enabled && !sioutil.NativeAES() {
 		algorithm = sio.ChaCha20Poly1305
 	}
 
@@ -60,6 +88,7 @@ func Encrypt(KMS kms.KMS, plaintext io.Reader, context kms.Context) (io.Reader, 
 		header [5]byte
 		buffer bytes.Buffer
 	)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	metadata, err := json.Marshal(encryptedObject{
 		KeyID:     key.KeyID,
 		KMSKey:    key.Ciphertext,
@@ -111,8 +140,12 @@ func Decrypt(KMS kms.KMS, ciphertext io.Reader, context kms.Context) (io.Reader,
 	if _, err := io.ReadFull(ciphertext, metadataBuffer); err != nil {
 		return nil, err
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(metadataBuffer, &metadata); err != nil {
 		return nil, err
+	}
+	if fips.Enabled && metadata.Algorithm != sio.AES_256_GCM {
+		return nil, fmt.Errorf("config: unsupported encryption algorithm: %q is not supported in FIPS mode", metadata.Algorithm)
 	}
 
 	key, err := KMS.DecryptKey(metadata.KeyID, metadata.KMSKey, context)
