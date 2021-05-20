@@ -129,7 +129,7 @@ func (t *Transition) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement)
 	return nil
 }
 
-// Validate - validates the "Expiration" element
+// Validate - validates the "Transition" element
 func (t Transition) Validate() error {
 	if !t.set {
 		return nil
