@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"path"
 	"strings"
 	"sync"
@@ -76,12 +75,8 @@ func (iamOS *IAMObjectStore) runlock() {
 // location.
 //
 // 3. Migrate user identity json file to include version info.
-func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool) error {
+func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context) error {
 	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -110,9 +105,6 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 			// 2. copy policy file to new location.
 			mp := newMappedPolicy(policyName)
 			userType := regularUser
-			if isSTS {
-				userType = stsUser
-			}
 			if err := iamOS.saveMappedPolicy(ctx, user, userType, false, mp); err != nil {
 				return err
 			}
@@ -124,7 +116,9 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 	next:
 		// 4. check if user identity has old format.
 		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		var cred auth.Credentials
+		var cred = auth.Credentials{
+			AccessKey: user,
+		}
 		if err := iamOS.loadIAMConfig(ctx, &cred, identityPath); err != nil {
 			switch err {
 			case errConfigNotFound:
@@ -138,15 +132,11 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 		// If the file is already in the new format,
 		// then the parsed auth.Credentials will have
 		// the zero value for the struct.
-		var zeroCred auth.Credentials
-		if cred.Equal(zeroCred) {
+		if !cred.IsValid() {
 			// nothing to do
 			continue
 		}
 
-		// Found a id file in old format. Copy value
-		// into new format and save it.
-		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := iamOS.saveIAMConfig(ctx, u, identityPath); err != nil {
 			logger.LogIf(ctx, err)
@@ -171,26 +161,18 @@ func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
 			// if IAM format
 			return err
 		}
-	} else {
-		if iamFmt.Version >= iamFormatVersion1 {
-			// Nothing to do.
-			return nil
-		}
-		// This case should not happen
-		// (i.e. Version is 0 or negative.)
-		return errors.New("got an invalid IAM format version")
 	}
 
-	// Migrate long-term users
-	if err := iamOS.migrateUsersConfigToV1(ctx, false); err != nil {
+	if iamFmt.Version >= iamFormatVersion1 {
+		// Nothing to do.
+		return nil
+	}
+
+	if err := iamOS.migrateUsersConfigToV1(ctx); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
-	// Migrate STS users
-	if err := iamOS.migrateUsersConfigToV1(ctx, true); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
+
 	// Save iam format to version 1.
 	if err := iamOS.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
 		logger.LogIf(ctx, err)
