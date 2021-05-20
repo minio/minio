@@ -15,11 +15,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Forked from golang.org/pkg/os.ReadFile with NOATIME support.
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the https://golang.org/LICENSE file.
-
 package ioutil
 
 import (

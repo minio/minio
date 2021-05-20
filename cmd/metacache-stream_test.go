@@ -34,11 +34,7 @@ func loadMetacacheSample(t testing.TB) *metacacheReader {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := newMetacacheReader(bytes.NewReader(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
+	return newMetacacheReader(bytes.NewReader(b))
 }
 
 func loadMetacacheSampleEntries(t testing.TB) metaCacheEntriesSorted {
@@ -388,10 +384,7 @@ func Test_newMetacacheStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err = newMetacacheReader(&buf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r = newMetacacheReader(&buf)
 	defer r.Close()
 	names, err := r.readNames(-1)
 	if err != io.EOF {
