@@ -484,12 +484,13 @@ func (client *storageRESTClient) WalkSplunk(ctx context.Context, volume, dirPath
 	return ch, nil
 }
 
-func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
+func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
+	values.Set(storageRESTHealing, strconv.FormatBool(healing))
 	respBody, err := client.call(ctx, storageRESTMethodWalkVersions, values, nil, -1)
 	if err != nil {
 		return nil, err

@@ -142,11 +142,11 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	return p.storage.DeleteVol(ctx, volume, forceDelete)
 }
 
-func (p *xlStorageDiskIDCheck) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
+func (p *xlStorageDiskIDCheck) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
-	return p.storage.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
+	return p.storage.WalkVersions(ctx, volume, dirPath, marker, recursive, healing, endWalkCh)
 }
 
 func (p *xlStorageDiskIDCheck) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {

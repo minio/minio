@@ -49,7 +49,7 @@ type StorageAPI interface {
 	DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error)
 
 	// WalkVersions in sorted order directly on disk.
-	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
+	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
 	// Walk in sorted order directly on disk.
 	Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error)
 	// Walk in sorted order directly on disk.

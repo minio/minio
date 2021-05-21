@@ -33,6 +33,7 @@ import (
 	slashpath "path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -947,7 +948,13 @@ func (s *xlStorage) WalkSplunk(ctx context.Context, volume, dirPath, marker stri
 
 // WalkVersions - is a sorted walker which returns file entries in lexically sorted order,
 // additionally along with metadata version info about each of those entries.
-func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (ch chan FileInfoVersions, err error) {
+func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}) (ch chan FileInfoVersions, err error) {
+	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		delayMult = dataCrawlSleepDefMult
+	}
+
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -982,9 +989,13 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 	go func() {
 		defer close(ch)
 		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
+			t := time.Now()
 			entries, err := s.ListDir(ctx, volume, dirPath, -1)
 			if err != nil {
 				return false, nil, false
+			}
+			if healing {
+				sleepDuration(time.Since(t), delayMult)
 			}
 			if len(entries) == 0 {
 				return true, nil, false

@@ -1298,7 +1298,7 @@ func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, pref
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, false, endWalkCh, zone.listTolerancePerSet)
 		}
 		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
 		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
@@ -1770,7 +1770,7 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 	if opts.WalkVersions {
 		var serverSetsEntryChs [][]FileInfoVersionsCh
 		for _, zone := range z.serverSets {
-			serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+			serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, false, ctx.Done()))
 		}
 
 		var serverSetsEntriesInfos [][]FileInfoVersions
@@ -1844,7 +1844,7 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 
 	for _, zone := range z.serverSets {
 		serverSetsEntryChs = append(serverSetsEntryChs,
-			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh))
+			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, true, endWalkCh))
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 

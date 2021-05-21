@@ -560,11 +560,16 @@ func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.R
 		s.writeErrorResponse(w, err)
 		return
 	}
+	healing, err := strconv.ParseBool(vars[storageRESTHealing])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 
-	fch, err := s.storage.WalkVersions(r.Context(), volume, dirPath, markerPath, recursive, r.Context().Done())
+	fch, err := s.storage.WalkVersions(r.Context(), volume, dirPath, markerPath, recursive, healing, r.Context().Done())
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -1107,7 +1112,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerSets Endpoint
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkSplunk).HandlerFunc(httpTraceHdrs(server.WalkSplunkHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkVersions).HandlerFunc(httpTraceHdrs(server.WalkVersionsHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTHealing)...)
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(httpTraceHdrs(server.DeleteVersionsHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTTotalVersions)...)

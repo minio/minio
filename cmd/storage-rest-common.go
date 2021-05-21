@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v21" // Add checkDataDir in ReadVersion API
+	storageRESTVersion       = "v22" // WalkVersions to throttle for healing
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -72,6 +72,7 @@ const (
 	storageRESTCount         = "count"
 	storageRESTMarkerPath    = "marker"
 	storageRESTRecursive     = "recursive"
+	storageRESTHealing       = "healing"
 	storageRESTBitrotAlgo    = "bitrot-algo"
 	storageRESTBitrotHash    = "bitrot-hash"
 	storageRESTDiskID        = "disk-id"

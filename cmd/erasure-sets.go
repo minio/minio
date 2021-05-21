@@ -982,13 +982,13 @@ func (s *erasureSets) startMergeWalks(ctx context.Context, bucket, prefix, marke
 	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1, false)
 }
 
-func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
-	return s.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
+func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive, healing bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
+	return s.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, healing, endWalkCh, -1)
 }
 
 // Starts a walk versions channel across N number of disks and returns a slice.
 // FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoVersionsCh {
+func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, prefix, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoVersionsCh {
 	var entryChs []FileInfoVersionsCh
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
@@ -999,7 +999,7 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 			go func(i int, disk StorageAPI) {
 				defer wg.Done()
 
-				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
+				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, healing, endWalkCh)
 				if err != nil {
 					return
 				}
