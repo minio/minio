@@ -421,10 +421,26 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 
-		buf, err := xioutil.ReadFile(item.Path)
+		f, err := os.OpenFile(item.Path, readMode, 0)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
+		}
+		defer f.Close()
+		stat, err := f.Stat()
+		if err != nil {
+			if intDataUpdateTracker.debug {
+				console.Debugf(color.Green("scannerBucket:")+" stat failed: %v: %w\n", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
+		}
+
+		buf, err := readXLMetaNoData(f, stat.Size())
+		if err != nil {
+			if intDataUpdateTracker.debug {
+				console.Debugf(color.Green("scannerBucket:")+" readXLMetaNoData: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}

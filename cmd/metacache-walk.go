@@ -154,11 +154,24 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, current, entry))
+				f, err := os.OpenFile(pathJoin(volumeDir, current, entry), readMode, 0)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
+				stat, err := f.Stat()
+				if err != nil {
+					logger.LogIf(ctx, err)
+					f.Close()
+					continue
+				}
+				meta.metadata, err = readXLMetaNoData(f, stat.Size())
+				if err != nil {
+					logger.LogIf(ctx, err)
+					f.Close()
+					continue
+				}
+				f.Close()
 				meta.metadata = xlMetaV2TrimData(meta.metadata)
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
