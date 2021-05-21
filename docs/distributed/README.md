@@ -10,7 +10,7 @@ MinIO in distributed mode can help you setup a highly-available storage system w
 
 Distributed MinIO provides protection against multiple node/drive failures and [bit rot](https://github.com/minio/minio/blob/master/docs/erasure/README.md#what-is-bit-rot-protection) using [erasure code](https://docs.min.io/docs/minio-erasure-code-quickstart-guide). As the minimum disks required for distributed MinIO is 4 (same as minimum disks required for erasure coding), erasure code automatically kicks in as you launch distributed MinIO.
 
-If one or more disks are offline at the start of a PutObject or CreateMultipartUpload operation the object will have additional data protection bits added automatically to provide additional safety for these objects.
+If one or more disks are offline at the start of a PutObject or NewMultipartUpload operation the object will have additional data protection bits added automatically to provide additional safety for these objects.
 
 ### High availability
 
