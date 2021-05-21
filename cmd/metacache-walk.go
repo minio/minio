@@ -88,7 +88,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	// Fast exit track to check if we are listing an object with
 	// a trailing slash, this will avoid to list the object content.
 	if HasSuffix(opts.BaseDir, SlashSeparator) {
-		metadata, err := xioutil.ReadFile(pathJoin(volumeDir,
+		metadata, err := s.readMetadata(pathJoin(volumeDir,
 			opts.BaseDir[:len(opts.BaseDir)-1]+globalDirSuffix,
 			xlStorageFormatFile))
 		if err == nil {
@@ -97,7 +97,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// behavior.
 			out <- metaCacheEntry{
 				name:     opts.BaseDir,
-				metadata: xlMetaV2TrimData(metadata),
+				metadata: metadata,
 			}
 		} else {
 			if st, err := os.Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
@@ -154,25 +154,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				f, err := os.OpenFile(pathJoin(volumeDir, current, entry), readMode, 0)
+				meta.metadata, err = s.readMetadata(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				stat, err := f.Stat()
-				if err != nil {
-					logger.LogIf(ctx, err)
-					f.Close()
-					continue
-				}
-				meta.metadata, err = readXLMetaNoData(f, stat.Size())
-				if err != nil {
-					logger.LogIf(ctx, err)
-					f.Close()
-					continue
-				}
-				f.Close()
-				meta.metadata = xlMetaV2TrimData(meta.metadata)
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
@@ -233,7 +219,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
 			}
 
-			meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+			meta.metadata, err = s.readMetadata(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 			switch {
 			case err == nil:
 				// It was an object
