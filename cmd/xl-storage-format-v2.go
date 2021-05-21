@@ -1420,7 +1420,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 			err = readMore(size)
 			return buf, err
 		case 1, 2:
-			sz, tmp, err := ReadBytesHeader(tmp)
+			sz, tmp, err := msgp.ReadBytesHeader(tmp)
 			if err != nil {
 				return nil, err
 			}
@@ -1457,53 +1457,5 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		}
 	default:
 		return nil, errors.New("unknown major metadata version")
-	}
-}
-
-// ReadBytesHeader reads the 'bin' header size
-// off of 'b' and returns the size and remaining bytes.
-// Possible errors:
-// - ErrShortBytes (too few bytes)
-// - TypeError{} (not a bin object)
-// TODO: Replace when https://github.com/tinylib/msgp/pull/289 is merged.
-func ReadBytesHeader(b []byte) (sz uint32, o []byte, err error) {
-	if len(b) < 1 {
-		return 0, nil, msgp.ErrShortBytes
-	}
-	var big = binary.BigEndian
-
-	const (
-		mbin8  uint8 = 0xc4
-		mbin16 uint8 = 0xc5
-		mbin32 uint8 = 0xc6
-	)
-	switch b[0] {
-	case mbin8:
-		if len(b) < 2 {
-			err = msgp.ErrShortBytes
-			return
-		}
-		sz = uint32(b[1])
-		o = b[2:]
-		return
-	case mbin16:
-		if len(b) < 3 {
-			err = msgp.ErrShortBytes
-			return
-		}
-		sz = uint32(big.Uint16(b[1:]))
-		o = b[3:]
-		return
-	case mbin32:
-		if len(b) < 5 {
-			err = msgp.ErrShortBytes
-			return
-		}
-		sz = big.Uint32(b[1:])
-		o = b[5:]
-		return
-	default:
-		err = msgp.TypeError{Method: msgp.BinType, Encoded: msgp.NextType(b)}
-		return
 	}
 }
