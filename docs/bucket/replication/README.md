@@ -203,6 +203,6 @@ remote replication target using the `mc admin bucket remote add` command
 ```
 
 ## Explore Further
-- [MinIO Bucket Replication Design](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/DESIGN.md)
+- [MinIO Bucket Replication Design](https://github.com/minio/minio/blob/master/docs/bucket/replication/DESIGN.md)
 - [MinIO Bucket Versioning Implementation](https://docs.minio.io/docs/minio-bucket-versioning-guide.html)
 - [MinIO Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide.html)
