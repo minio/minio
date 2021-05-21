@@ -440,7 +440,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		buf, err := readXLMetaNoData(f, stat.Size())
 		if err != nil {
 			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
+				console.Debugf(color.Green("scannerBucket:")+" readXLMetaNoData: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}

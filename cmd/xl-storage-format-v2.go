@@ -1377,9 +1377,10 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 	// Read at most this much on initial read.
 	const readDefault = 4 << 10
 	initial := size
-	hasFull := initial > readDefault
-	if !hasFull {
+	hasFull := true
+	if initial > readDefault {
 		initial = readDefault
+		hasFull = false
 	}
 
 	buf := make([]byte, initial)
