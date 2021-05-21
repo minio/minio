@@ -630,8 +630,14 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		// If we have offline disks upgrade the number of erasure codes for this object.
 		ecOrg := parityDrives
 		for _, disk := range storageDisks {
+			if parityDrives >= len(storageDisks)/2 {
+				break
+			}
+			if disk == nil {
+				parityDrives++
+			}
 			di, err := disk.DiskInfo(ctx)
-			if (err != nil || di.ID == "") && parityDrives < len(storageDisks)/2 {
+			if err != nil || di.ID == "" {
 				parityDrives++
 			}
 		}
