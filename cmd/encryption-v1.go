@@ -71,14 +71,14 @@ const (
 // isEncryptedMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
-func isEncryptedMultipart(objInfo ObjectInfo) bool {
-	if len(objInfo.Parts) == 0 {
+func (o *ObjectInfo) isEncryptedMultipart() bool {
+	if len(o.Parts) == 0 {
 		return false
 	}
-	if !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !crypto.IsMultiPart(o.UserDefined) {
 		return false
 	}
-	for _, part := range objInfo.Parts {
+	for _, part := range o.Parts {
 		_, err := sio.DecryptedSize(uint64(part.Size))
 		if err != nil {
 			return false
@@ -87,7 +87,7 @@ func isEncryptedMultipart(objInfo ObjectInfo) bool {
 	// Further check if this object is uploaded using multipart mechanism
 	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
-	return !(objInfo.backendType == BackendErasure && len(objInfo.ETag) == 32)
+	return !(o.backendType == BackendErasure && len(o.ETag) == 32)
 }
 
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
@@ -427,7 +427,7 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint3
 
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case
-	if !isEncryptedMultipart(oi) {
+	if !oi.isEncryptedMultipart() {
 		var reader io.Reader
 		var err error
 		if copySource {
@@ -589,7 +589,7 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if _, ok := crypto.IsEncrypted(o.UserDefined); !ok {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	if !isEncryptedMultipart(*o) {
+	if !o.isEncryptedMultipart() {
 		size, err := sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered // assign correct error type
@@ -732,7 +732,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	// Assemble slice of (decrypted) part sizes in `sizes`
 	var sizes []int64
 	var decObjSize int64 // decrypted total object size
-	if isEncryptedMultipart(*o) {
+	if o.isEncryptedMultipart() {
 		sizes = make([]int64, len(o.Parts))
 		for i, part := range o.Parts {
 			var partSize uint64
