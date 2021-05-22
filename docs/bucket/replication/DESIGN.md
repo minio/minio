@@ -37,7 +37,7 @@ Existing object replication, replica modification sync for 2-way replication and
 
 ### Internal metadata for replication
 
-`xl.meta` that is in use for [versioning](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/DESIGN.md) has additional metadata for replication of objects,delete markers and versioned deletes.
+`xl.meta` that is in use for [versioning](https://github.com/minio/minio/blob/master/docs/bucket/versioning/DESIGN.md) has additional metadata for replication of objects,delete markers and versioned deletes.
 
 ### Metadata for object replication
 
