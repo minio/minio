@@ -211,6 +211,9 @@ type xlMetaV2Version struct {
 
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
+	if !j.Type.valid() {
+		return false
+	}
 	switch j.Type {
 	case LegacyType:
 		return j.ObjectV1 != nil &&

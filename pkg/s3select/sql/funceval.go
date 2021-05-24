@@ -65,7 +65,7 @@ func (e *FuncExpr) getFunctionName() FuncName {
 	case e.SFunc != nil:
 		return FuncName(strings.ToUpper(e.SFunc.FunctionName))
 	case e.Count != nil:
-		return FuncName(aggFnCount)
+		return aggFnCount
 	case e.Cast != nil:
 		return sqlFnCast
 	case e.Substring != nil:

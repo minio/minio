@@ -33,10 +33,11 @@ func GetInfo(path string) (info Info, err error) {
 	}
 	reservedBlocks := s.Bfree - s.Bavail
 	info = Info{
-		Total:  uint64(s.Frsize) * (s.Blocks - reservedBlocks),
-		Free:   uint64(s.Frsize) * s.Bavail,
-		Files:  s.Files,
-		Ffree:  s.Ffree,
+		Total: uint64(s.Frsize) * (s.Blocks - reservedBlocks),
+		Free:  uint64(s.Frsize) * s.Bavail,
+		Files: s.Files,
+		Ffree: s.Ffree,
+		//nolint:unconvert
 		FSType: getFSType(int64(s.Type)),
 	}
 	// Check for overflows.

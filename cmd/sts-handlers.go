@@ -119,12 +119,12 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 		return user, true, ErrSTSAccessDenied
 	case authTypeSigned:
 		s3Err := isReqAuthenticated(ctx, r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 
 		user, _, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 

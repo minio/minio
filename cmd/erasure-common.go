@@ -80,24 +80,6 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 	return newDisks
 }
 
-// getLoadBalancedNDisks - fetches load balanced (sufficiently randomized) disk slice
-// with N disks online. If ndisks is zero or negative, then it will returns all disks,
-// same if ndisks is greater than the number of all disks.
-func (er erasureObjects) getLoadBalancedNDisks(ndisks int) (newDisks []StorageAPI) {
-	disks := er.getLoadBalancedDisks(ndisks != -1)
-	for _, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		newDisks = append(newDisks, disk)
-		ndisks--
-		if ndisks == 0 {
-			break
-		}
-	}
-	return
-}
-
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 // ensures to skip disks if they are not healing and online.
 func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {

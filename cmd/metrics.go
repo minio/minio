@@ -181,7 +181,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Objects for which healing failed in current self healing run",
 				[]string{"mount_path", "volume_status"}, nil),
 			prometheus.GaugeValue,
-			float64(v), string(s[0]), string(s[1]),
+			float64(v), s[0], s[1],
 		)
 	}
 }

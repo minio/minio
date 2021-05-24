@@ -352,7 +352,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 			return tgt.Arn
 		}
 	}
-	if !madmin.ServiceType(target.Type).IsValid() {
+	if !target.Type.IsValid() {
 		return ""
 	}
 	return generateARN(target)

@@ -758,25 +758,6 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 	return nil
 }
 
-func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return false
-	}
-
-	if err = Access(pathJoin(volumeDir, leafPath, xlStorageFormatFile)); err == nil {
-		return true
-	}
-	if osIsNotExist(err) {
-		// We need a fallback code where directory might contain
-		// legacy `xl.json`, in such situation we just rename
-		// and proceed if rename is successful we know that it
-		// is the leaf since `xl.json` was present.
-		return s.renameLegacyMetadata(volumeDir, leafPath) == nil
-	}
-	return false
-}
-
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
