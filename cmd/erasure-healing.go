@@ -888,7 +888,9 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		versionID = nullVersionID
 	}
 
-	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
+	// Perform quick read without lock.
+	// This allows to quickly check if all is ok or all are missing.
+	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
 
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)
@@ -897,6 +899,14 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		}
 		// Nothing to do, file is already gone.
 		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
+	}
+
+	// Return early if all ok and not deep scanning.
+	if opts.ScanMode == madmin.HealNormalScan && fileInfoConsistent(ctx, partsMetadata, errs) {
+		fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
+		if err == nil && fi.VersionID == versionID {
+			return defaultHealResult(fi, storageDisks, storageEndpoints, errs, bucket, object, versionID, fi.Erasure.ParityBlocks), nil
+		}
 	}
 
 	// Heal the object.
