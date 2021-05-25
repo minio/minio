@@ -622,7 +622,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 	wg.Wait()
 
-	var found int = -1
+	var found = -1
 	for i, err := range errs {
 		if err == nil {
 			found = i
@@ -683,7 +683,7 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 	}
 	wg.Wait()
 
-	var found int = -1
+	var found = -1
 	for i, err := range errs {
 		if err == nil {
 			found = i

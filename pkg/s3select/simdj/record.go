@@ -181,11 +181,7 @@ allElems:
 		return err
 	}
 	w.Flush()
-	if err := w.Error(); err != nil {
-		return err
-	}
-
-	return nil
+	return w.Error()
 }
 
 // Raw - returns the underlying representation.

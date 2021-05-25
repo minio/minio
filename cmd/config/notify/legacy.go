@@ -27,7 +27,7 @@ import (
 )
 
 // SetNotifyKafka - helper for config migration from older config.
-func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
+func SetNotifyKafka(s config.Config, name string, cfg target.KafkaArgs) error {
 	if !cfg.Enable {
 		return nil
 	}
@@ -36,7 +36,7 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 		return err
 	}
 
-	s[config.NotifyKafkaSubSys][kName] = config.KVS{
+	s[config.NotifyKafkaSubSys][name] = config.KVS{
 		config.KV{
 			Key:   config.Enable,
 			Value: config.EnableOn,

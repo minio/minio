@@ -49,7 +49,7 @@ const (
 )
 
 // tierConfigPath refers to remote tier config object name
-var tierConfigPath string = path.Join(minioConfigPrefix, tierConfigFile)
+var tierConfigPath = path.Join(minioConfigPrefix, tierConfigFile)
 
 // TierConfigMgr holds the collection of remote tiers configured in this deployment.
 type TierConfigMgr struct {

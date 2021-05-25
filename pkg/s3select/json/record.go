@@ -145,11 +145,7 @@ func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 		return err
 	}
 	w.Flush()
-	if err := w.Error(); err != nil {
-		return err
-	}
-
-	return nil
+	return w.Error()
 }
 
 // Raw - returns the underlying representation.
