@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v34" // Streaming Usage Updates
+	storageRESTVersion       = "v35" // Inline bugfix needs all servers to be updated
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

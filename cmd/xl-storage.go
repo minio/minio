@@ -1076,6 +1076,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
+			if len(fi.Data) > 0 {
+				if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; !ok {
+					fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+				}
+			}
 			return fi, nil
 		}
 
@@ -2023,6 +2028,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// Purge the destination path as we are not preserving anything
 				// versioned object was not requested.
 				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
 	}

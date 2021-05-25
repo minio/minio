@@ -323,9 +323,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 	}
 
-	err = xl.GetObject(ctx, bucket, object, 0, int64(len(buf)), ioutil.Discard, "", opts)
-	if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-		t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+	gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+	if err != nil {
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+	}
+	if gr != nil {
+		_, err = io.Copy(ioutil.Discard, gr)
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+		gr.Close()
 	}
 
 	// Test use case 2: Make 9 disks offline, which leaves less than quorum number of disks
@@ -359,9 +368,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Fetch object from store.
-		err = xl.GetObject(ctx, bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
-		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+		gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+		if err != nil {
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+		}
+		if gr != nil {
+			_, err = io.Copy(ioutil.Discard, gr)
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+			gr.Close()
 		}
 	}
 
