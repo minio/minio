@@ -48,7 +48,12 @@ func (r Resource) IsValid() bool {
 	return r.Pattern != ""
 }
 
-// Match - matches object name with resource pattern.
+// MatchResource matches object name with resource pattern only.
+func (r Resource) MatchResource(resource string) bool {
+	return r.Match(resource, nil)
+}
+
+// Match - matches object name with resource pattern, including specific conditionals.
 func (r Resource) Match(resource string, conditionValues map[string][]string) bool {
 	pattern := r.Pattern
 	for _, key := range condition.CommonKeys {
