@@ -397,7 +397,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
-	if !latestMeta.Deleted || latestMeta.TransitionStatus != lifecycle.TransitionComplete {
+	if !latestMeta.Deleted && latestMeta.TransitionStatus != lifecycle.TransitionComplete {
 		result.DataBlocks = latestMeta.Erasure.DataBlocks
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
 
