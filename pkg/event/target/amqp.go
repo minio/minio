@@ -205,16 +205,12 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp.Channel) error {
 		return err
 	}
 
-	if err := ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
+	return ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
 		target.args.Immediate, amqp.Publishing{
 			ContentType:  "application/json",
 			DeliveryMode: target.args.DeliveryMode,
 			Body:         data,
-		}); err != nil {
-		return err
-	}
-
-	return nil
+		})
 }
 
 // Save - saves the events to the store which will be replayed when the amqp connection is active.

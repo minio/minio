@@ -140,10 +140,7 @@ func (r Rule) validateStatus() error {
 }
 
 func (r Rule) validateFilter() error {
-	if err := r.Filter.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return r.Filter.Validate()
 }
 
 // Prefix - a rule can either have prefix under <filter></filter> or under

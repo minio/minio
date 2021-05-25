@@ -315,10 +315,7 @@ func (c Config) DelFrom(r io.Reader) error {
 			return err
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-	return nil
+	return scanner.Err()
 }
 
 // ReadConfig - read content from input and write into c.
