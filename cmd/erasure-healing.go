@@ -854,7 +854,6 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	}
 
 	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
-
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)
 		if versionID != "" {

@@ -203,36 +203,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	return fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 }
 
-// GetObject - reads an object erasured coded across multiple
-// disks. Supports additional parameters like offset and length
-// which are synonymous with HTTP Range requests.
-//
-// startOffset indicates the starting read location of the object.
-// length indicates the total length of the object.
-func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
-	// Lock the object before reading.
-	lk := er.NewNSLock(bucket, object)
-	ctx, err = lk.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return err
-	}
-	defer lk.RUnlock()
-
-	// Start offset cannot be negative.
-	if startOffset < 0 {
-		logger.LogIf(ctx, errUnexpected, logger.Application)
-		return errUnexpected
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		logger.LogIf(ctx, errUnexpected)
-		return errUnexpected
-	}
-
-	return er.getObject(ctx, bucket, object, startOffset, length, writer, opts)
-}
-
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
 	// Reorder online disks based on erasure distribution order.
 	// Reorder parts metadata based on erasure distribution order.
@@ -272,6 +242,27 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+
+	// This hack is needed to avoid a bug found when overwriting
+	// the inline data object with a un-inlined version, for the
+	// time being we need this as we have released inline-data
+	// version already and this bug is already present in newer
+	// releases.
+	//
+	// This mainly happens with objects < smallFileThreshold when
+	// they are overwritten with un-inlined objects >= smallFileThreshold,
+	// due to a bug in RenameData() the fi.Data is not niled leading to
+	// GetObject thinking that fi.Data is valid while fi.Size has
+	// changed already.
+	if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; ok {
+		shardFileSize := erasure.ShardFileSize(fi.Size)
+		if shardFileSize >= 0 && shardFileSize >= smallFileThreshold {
+			for i := range metaArr {
+				metaArr[i].Data = nil
+			}
+		}
+	}
+
 	var healOnce sync.Once
 
 	for ; partIndex <= lastPartIndex; partIndex++ {
@@ -353,23 +344,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	} // End of read all parts loop.
 	// Return success.
 	return nil
-}
-
-// getObject wrapper for erasure GetObject
-func (er erasureObjects) getObject(ctx context.Context, bucket, object string, startOffset, length int64, writer io.Writer, opts ObjectOptions) error {
-	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-	if fi.Deleted {
-		if opts.VersionID == "" {
-			return toObjectErr(errFileNotFound, bucket, object)
-		}
-		// Make sure to return object info to provide extra information.
-		return toObjectErr(errMethodNotAllowed, bucket, object)
-	}
-
-	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, fi, metaArr, onlineDisks)
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
@@ -785,6 +759,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = opts.UserDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
+	}
+
+	if len(inlineBuffers) > 0 {
+		// Set an additional header when data is inlined.
+		for index := range partsMetadata {
+			partsMetadata[index].Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+		}
 	}
 
 	// Rename the successfully written temporary object to final location.
