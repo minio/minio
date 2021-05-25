@@ -520,6 +520,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		if partsMetadata[i].IsRemote() {
 			partsMetadata[i].DataDir = ""
 		}
+
 		// Attempt a rename now from healed data to final location.
 		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
 			logger.LogIf(ctx, err)
@@ -895,7 +896,6 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
-
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)
 		if versionID != "" {
