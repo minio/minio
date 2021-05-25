@@ -646,8 +646,19 @@ func defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints
 		VersionID: versionID,
 		DiskCount: len(storageDisks),
 	}
+
 	if lfi.IsValid() {
 		result.ObjectSize = lfi.Size
+		result.ParityBlocks = lfi.Erasure.ParityBlocks
+	} else {
+		// Default to most common configuration for erasure blocks.
+		result.ParityBlocks = defaultParityCount
+	}
+	result.DataBlocks = len(storageDisks) - result.ParityBlocks
+
+	if errs == nil {
+		// No disks related errors are provided, quit
+		return result
 	}
 
 	for index, disk := range storageDisks {
@@ -762,8 +773,13 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 	// remove we simply delete it from namespace.
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
-		writeQuorum := m.Erasure.DataBlocks
-		if m.Erasure.DataBlocks == 0 || m.Erasure.DataBlocks == m.Erasure.ParityBlocks {
+		parityBlocks := m.Erasure.ParityBlocks
+		if m.Erasure.ParityBlocks == 0 {
+			parityBlocks = er.defaultParityCount
+		}
+		dataBlocks := len(storageDisks) - parityBlocks
+		writeQuorum := dataBlocks
+		if dataBlocks == parityBlocks {
 			writeQuorum++
 		}
 		var err error
