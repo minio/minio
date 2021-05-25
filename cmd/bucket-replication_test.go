@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-
-	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/internal/bucket/replication"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 var configs = []replication.Config{
@@ -48,25 +48,30 @@ var configs = []replication.Config{
 
 var replicationConfigTests = []struct {
 	info         ObjectInfo
+	name         string
 	rcfg         replicationConfig
 	expectedSync bool
 }{
 	{ //1. no replication config
+		name:         "no replication config",
 		info:         ObjectInfo{Size: 100},
 		rcfg:         replicationConfig{Config: nil},
 		expectedSync: false,
 	},
 	{ //2. existing object replication config enabled, no versioning
+		name:         "existing object replication config enabled, no versioning",
 		info:         ObjectInfo{Size: 100},
 		rcfg:         replicationConfig{Config: &configs[0]},
 		expectedSync: false,
 	},
 	{ //3. existing object replication config enabled, versioning suspended
+		name:         "existing object replication config enabled, versioning suspended",
 		info:         ObjectInfo{Size: 100, VersionID: nullVersionID},
 		rcfg:         replicationConfig{Config: &configs[0]},
 		expectedSync: false,
 	},
 	{ //4. existing object replication enabled, versioning enabled; no reset in progress
+		name: "existing object replication enabled, versioning enabled; no reset in progress",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Completed,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -80,7 +85,7 @@ func TestReplicationResync(t *testing.T) {
 	ctx := context.Background()
 	for i, test := range replicationConfigTests {
 		if sync := test.rcfg.Resync(ctx, test.info); sync != test.expectedSync {
-			t.Errorf("Test %d: Resync  got %t , want %t", i+1, sync, test.expectedSync)
+			t.Errorf("Test%d (%s): Resync  got %t , want %t", i+1, test.name, sync, test.expectedSync)
 		}
 	}
 }
@@ -88,12 +93,14 @@ func TestReplicationResync(t *testing.T) {
 var start = UTCNow().AddDate(0, 0, -1)
 var replicationConfigTests2 = []struct {
 	info         ObjectInfo
+	name         string
 	replicate    bool
 	rcfg         replicationConfig
 	expectedSync bool
 }{
 	{ // Cases 1-4: existing object replication enabled, versioning enabled, no reset - replication status varies
 		// 1: Pending replication
+		name: "existing object replication on object in Pending replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Pending,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -102,6 +109,7 @@ var replicationConfigTests2 = []struct {
 		expectedSync: true,
 	},
 	{ // 2. replication status Failed
+		name: "existing object replication on object in Failed replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Failed,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -110,6 +118,7 @@ var replicationConfigTests2 = []struct {
 		expectedSync: true,
 	},
 	{ //3. replication status unset
+		name: "existing object replication on pre-existing unreplicated object",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.StatusType(""),
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -118,6 +127,7 @@ var replicationConfigTests2 = []struct {
 		expectedSync: true,
 	},
 	{ //4. replication status Complete
+		name: "existing object replication on object in Completed replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Completed,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -126,6 +136,7 @@ var replicationConfigTests2 = []struct {
 		expectedSync: false,
 	},
 	{ //5. existing object replication enabled, versioning enabled, replication status Pending & reset ID present
+		name: "existing object replication with reset in progress and object in Pending status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Pending,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -135,6 +146,7 @@ var replicationConfigTests2 = []struct {
 		rcfg:         replicationConfig{ResetID: "xyz", ResetBeforeDate: UTCNow()},
 	},
 	{ //6. existing object replication enabled, versioning enabled, replication status Failed & reset ID present
+		name: "existing object replication with reset in progress and object in Failed status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Failed,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -144,6 +156,7 @@ var replicationConfigTests2 = []struct {
 		rcfg:         replicationConfig{ResetID: "xyz", ResetBeforeDate: UTCNow()},
 	},
 	{ //7. existing object replication enabled, versioning enabled, replication status unset & reset ID present
+		name: "existing object replication with reset in progress and object never replicated before",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.StatusType(""),
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -153,15 +166,17 @@ var replicationConfigTests2 = []struct {
 		rcfg:         replicationConfig{ResetID: "xyz", ResetBeforeDate: UTCNow()},
 	},
 	{ //8. existing object replication enabled, versioning enabled, replication status Complete & reset ID present
+		name: "existing object replication enabled - reset in progress for an object in Completed status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Completed,
-			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
+			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df8",
 		},
 		replicate:    true,
 		expectedSync: true,
 		rcfg:         replicationConfig{ResetID: "xyz", ResetBeforeDate: UTCNow()},
 	},
 	{ //9. existing object replication enabled, versioning enabled, replication status Pending & reset ID different
+		name: "existing object replication enabled, newer reset in progress on object in Pending replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Pending,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -173,6 +188,7 @@ var replicationConfigTests2 = []struct {
 		rcfg:         replicationConfig{ResetID: "abc", ResetBeforeDate: UTCNow()},
 	},
 	{ //10. existing object replication enabled, versioning enabled, replication status Complete & reset done
+		name: "reset done on object in Completed Status - ineligbile for re-replication",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Completed,
 			VersionID:         "a3348c34-c352-4498-82f0-1098e8b34df9",
@@ -187,7 +203,7 @@ var replicationConfigTests2 = []struct {
 func TestReplicationResyncwrapper(t *testing.T) {
 	for i, test := range replicationConfigTests2 {
 		if sync := test.rcfg.resync(test.info, test.replicate); sync != test.expectedSync {
-			t.Errorf("Test %d: Replicationresync  got %t , want %t", i+1, sync, test.expectedSync)
+			t.Errorf("%s (%s): Replicationresync  got %t , want %t", fmt.Sprintf("Test%d - %s", i+1, time.Now().Format(http.TimeFormat)), test.name, sync, test.expectedSync)
 		}
 	}
 }

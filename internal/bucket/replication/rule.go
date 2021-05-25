@@ -152,7 +152,6 @@ var (
 	errDestinationSourceIdentical             = Errorf("Destination bucket cannot be the same as the source bucket.")
 	errDeleteReplicationMissing               = Errorf("Delete replication must be specified")
 	errInvalidDeleteReplicationStatus         = Errorf("Delete replication is either enable|disable")
-	errExistingObjectReplicationMissing       = Errorf("Existing object replication must be specified")
 	errInvalidExistingObjectReplicationStatus = Errorf("Existing object replication status is invalid")
 )
 
@@ -240,10 +239,7 @@ func (r Rule) Validate(bucket string, sameTarget bool) error {
 	if r.Destination.Bucket == bucket && sameTarget {
 		return errDestinationSourceIdentical
 	}
-	if err := r.ExistingObjectReplication.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return r.ExistingObjectReplication.Validate()
 }
 
 // MetadataReplicate  returns true if object is not a replica or in the case of replicas,

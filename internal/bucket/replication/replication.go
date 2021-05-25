@@ -131,12 +131,18 @@ type Type int
 
 // Types of replication
 const (
-	ObjectReplicationType Type = 1 + iota
+	UnsetReplicationType Type = 0 + iota
+	ObjectReplicationType
 	DeleteReplicationType
 	MetadataReplicationType
 	HealReplicationType
 	ExistingObjectReplicationType
 )
+
+// Valid returns true if replication type is set
+func (t Type) Valid() bool {
+	return t > 0
+}
 
 // ObjectOpts provides information to deduce whether replication
 // can be triggered on the resultant object.

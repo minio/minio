@@ -91,32 +91,70 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	return false, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
-func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) (replicate bool, sync bool) {
+type mustReplicateOptions struct {
+	meta   map[string]string
+	status replication.StatusType
+	opType replication.Type
+}
+
+func (o mustReplicateOptions) ReplicationStatus() (s replication.StatusType) {
+	if rs, ok := o.meta[xhttp.AmzBucketReplicationStatus]; ok {
+		return replication.StatusType(rs)
+	}
+	return s
+}
+func (o mustReplicateOptions) isExistingObjectReplication() bool {
+	return o.opType == replication.ExistingObjectReplicationType
+}
+
+func (o mustReplicateOptions) isMetadataReplication() bool {
+	return o.opType == replication.MetadataReplicationType
+}
+func getMustReplicateOptions(o ObjectInfo, op replication.Type) mustReplicateOptions {
+	if !op.Valid() {
+		op = replication.ObjectReplicationType
+		if o.metadataOnly {
+			op = replication.MetadataReplicationType
+		}
+	}
+	meta := cloneMSS(o.UserDefined)
+	if o.UserTags != "" {
+		meta[xhttp.AmzObjectTagging] = o.UserTags
+	}
+	return mustReplicateOptions{
+		meta:   meta,
+		status: o.ReplicationStatus,
+		opType: op,
+	}
+}
+func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus replication.StatusType, permErr APIErrorCode) (replicate bool, sync bool) {
 	if permErr != ErrNone {
 		return
 	}
-	return mustReplicater(ctx, bucket, object, meta, replStatus, false, false)
+	return mustReplicater(ctx, bucket, object, mustReplicateOptions{
+		meta:   meta,
+		status: replStatus,
+		opType: replication.ObjectReplicationType,
+	})
 }
 
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
-func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, metadataOnly, existingObject bool) (replicate bool, sync bool) {
+func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, opts mustReplicateOptions) (replicate bool, sync bool) {
 	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, "", r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
 		return
 	}
-	return mustReplicater(ctx, bucket, object, meta, replStatus, metadataOnly, existingObject)
+	return mustReplicater(ctx, bucket, object, opts)
 }
 
 // mustReplicater returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
-func mustReplicater(ctx context.Context, bucket, object string, meta map[string]string, replStatus string, metadataOnly, existingObject bool) (replicate bool, sync bool) {
+func mustReplicater(ctx context.Context, bucket, object string, mopts mustReplicateOptions) (replicate bool, sync bool) {
 	if globalIsGateway {
 		return replicate, sync
 	}
-	if rs, ok := meta[xhttp.AmzBucketReplicationStatus]; ok {
-		replStatus = rs
-	}
-	if replication.StatusType(replStatus) == replication.Replica && !metadataOnly {
+	replStatus := mopts.ReplicationStatus()
+	if replStatus == replication.Replica && !mopts.isMetadataReplication() {
 		return replicate, sync
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
@@ -125,11 +163,11 @@ func mustReplicater(ctx context.Context, bucket, object string, meta map[string]
 	}
 	opts := replication.ObjectOpts{
 		Name:           object,
-		SSEC:           crypto.SSEC.IsEncrypted(meta),
-		Replica:        replication.StatusType(replStatus) == replication.Replica,
-		ExistingObject: existingObject,
+		SSEC:           crypto.SSEC.IsEncrypted(mopts.meta),
+		Replica:        replStatus == replication.Replica,
+		ExistingObject: mopts.isExistingObjectReplication(),
 	}
-	tagStr, ok := meta[xhttp.AmzObjectTagging]
+	tagStr, ok := mopts.meta[xhttp.AmzObjectTagging]
 	if ok {
 		opts.UserTags = tagStr
 	}
@@ -1247,7 +1285,10 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo) bool {
 			replicate = true
 		}
 	} else {
-		replicate, _ = mustReplicater(ctx, oi.Bucket, oi.Name, oi.UserDefined, "", false, true)
+		// Ignore previous replication status when deciding if object can be re-replicated
+		objInfo := oi.Clone()
+		objInfo.ReplicationStatus = replication.StatusType("")
+		replicate, _ = mustReplicater(ctx, oi.Bucket, oi.Name, getMustReplicateOptions(objInfo, replication.ExistingObjectReplicationType))
 	}
 	return c.resync(oi, replicate)
 }
@@ -1261,8 +1302,8 @@ func (c replicationConfig) resync(oi ObjectInfo, replicate bool) bool {
 	}
 	rs, ok := oi.UserDefined[xhttp.MinIOReplicationResetStatus]
 	if !ok { // existing object replication is enabled and object version is unreplicated so far.
-		if c.ResetID != "" { // trigger replication if `mc replicate reset` requested
-			return oi.ModTime.Before(c.ResetBeforeDate)
+		if c.ResetID != "" && oi.ModTime.Before(c.ResetBeforeDate) { // trigger replication if `mc replicate reset` requested
+			return true
 		}
 		return oi.ReplicationStatus != replication.Completed
 	}
