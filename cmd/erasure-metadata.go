@@ -348,12 +348,16 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		return 0, 0, err
 	}
 
-	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if !latestFileInfo.IsValid() {
+		return 0, 0, errErasureReadQuorum
+	}
+
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
 	if parityBlocks <= 0 {
 		parityBlocks = defaultParityCount
 	}
 
+	dataBlocks := len(partsMetaData) - parityBlocks
 	writeQuorum := dataBlocks
 	if dataBlocks == parityBlocks {
 		writeQuorum++
