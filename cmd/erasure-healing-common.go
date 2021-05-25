@@ -193,7 +193,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 // Will return false if any fileinfo mismatches.
 func fileInfoConsistent(ctx context.Context, partsMetadata []FileInfo, errs []error) bool {
 	// There should be atleast half correct entries, if not return failure
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, len(partsMetadata)); reducedErr != nil {
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, len(partsMetadata)/2); reducedErr != nil {
 		return false
 	}
 	if len(partsMetadata) == 1 {
