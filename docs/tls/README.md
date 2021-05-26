@@ -2,16 +2,16 @@
 
 This guide explains how to configure MinIO Server with TLS certificates on Linux and Windows platforms.
 
-1. [Install MinIO Server](#install-minio-server) 
-2. [Use an Existing Key and Certificate with MinIO](#use-an-existing-key-and-certificate-with-minio) 
-3. [Generate and use Self-signed Keys and Certificates with MinIO](#generate-use-self-signed-keys-certificates) 
+1. [Install MinIO Server](#install-minio-server)
+2. [Use an Existing Key and Certificate with MinIO](#use-an-existing-key-and-certificate-with-minio)
+3. [Generate and use Self-signed Keys and Certificates with MinIO](#generate-use-self-signed-keys-certificates)
 4. [Install Certificates from Third-party CAs](#install-certificates-from-third-party-cas)
 
 ## <a name="install-minio-server"></a>1. Install MinIO Server
 
 Install MinIO Server using the instructions in the [MinIO Quickstart Guide](http://docs.min.io/docs/minio-quickstart-guide).
 
-## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with MinIO 
+## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with MinIO
 
 This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [Generate Let's Encrypt certificate using Certbot for MinIO](https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio.html).
 
@@ -28,39 +28,37 @@ Copy the existing private key and public certificate to the `certs` directory. T
 
 This section describes how to generate a self-signed certificate using various tools:
 
-* 3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
-* 3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
-* 3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
-* 3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls) 
+* 3.1 [Use certgen to Generate a Certificate](#using-go)
+* 3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl)
+* 3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip)
+* 3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
 
 **Note:**
 * MinIO only supports keys and certificates in PEM format on Linux and Windows.
 * MinIO doesn't currently support PFX certificates.
 
-### <a name="using-go"></a>3.1 Use generate_cert.go to Generate a Certificate
+### <a name="using-go"></a>3.1 Use `certgen` to Generate a Certificate
 
-Download [`generate_cert.go`](https://golang.org/src/crypto/tls/generate_cert.go?m=text).
+Download [`certgen`](https://github.com/minio/certgen/releases/latest) for your specific operating system and platform.
 
-`generate_cert.go` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
+`certgen` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
 
 ```sh
-go run generate_cert.go -ca --host "10.10.0.3"
+./certgen -ca -host "10.10.0.3,10.10.0.4,10.10.0.5"
 ```
 
 A response similar to this one should be displayed:
 
 ```
-2018/11/21 10:16:18 wrote cert.pem
-2018/11/21 10:16:18 wrote key.pem
+2018/11/21 10:16:18 wrote public.crt
+2018/11/21 10:16:18 wrote private.key
 ```
-
-Rename `cert.pem` to `public.crt` and `key.pem` to `private.key`.
 
 ### <a name="using-open-ssl"></a>3.2 Use OpenSSL to Generate a Certificate
 
 Use one of the following methods to generate a certificate using `openssl`:
 
-* 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
+* 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa)
 * 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
 * 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
 
