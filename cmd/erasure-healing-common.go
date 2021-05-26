@@ -189,6 +189,35 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 	return latestFileInfo, nil
 }
 
+// fileInfoConsistent whether all fileinfos are consistent with each other.
+// Will return false if any fileinfo mismatches.
+func fileInfoConsistent(ctx context.Context, partsMetadata []FileInfo, errs []error) bool {
+	// There should be atleast half correct entries, if not return failure
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, len(partsMetadata)/2); reducedErr != nil {
+		return false
+	}
+	if len(partsMetadata) == 1 {
+		return true
+	}
+	// Reference
+	ref := partsMetadata[0]
+	if !ref.IsValid() {
+		return false
+	}
+	for _, meta := range partsMetadata[1:] {
+		if !meta.IsValid() {
+			return false
+		}
+		if !meta.ModTime.Equal(ref.ModTime) {
+			return false
+		}
+		if meta.DataDir != ref.DataDir {
+			return false
+		}
+	}
+	return true
+}
+
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //
