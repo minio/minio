@@ -98,8 +98,6 @@ const (
 	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
-	pendingBytes  MetricName = "pending_bytes"
-	pendingCount  MetricName = "pending_count"
 	readBytes     MetricName = "read_bytes"
 	rcharBytes    MetricName = "rchar_bytes"
 	receivedBytes MetricName = "received_bytes"
@@ -400,15 +398,7 @@ func getBucketUsageObjectsTotalMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
-func getBucketRepPendingBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      pendingBytes,
-		Help:      "Total bytes pending to replicate.",
-		Type:      gaugeMetric,
-	}
-}
+
 func getBucketRepFailedBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -436,15 +426,7 @@ func getBucketRepReceivedBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
-func getBucketRepPendingOperationsMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      pendingCount,
-		Help:      "Total number of objects pending replication",
-		Type:      gaugeMetric,
-	}
-}
+
 func getBucketRepFailedOperationsMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -1319,11 +1301,6 @@ func getBucketUsageMetrics() MetricsGroup {
 
 				if stat.hasReplicationUsage() {
 					metrics = append(metrics, Metric{
-						Description:    getBucketRepPendingBytesMD(),
-						Value:          float64(stat.PendingSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
 						Description:    getBucketRepFailedBytesMD(),
 						Value:          float64(stat.FailedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
@@ -1336,11 +1313,6 @@ func getBucketUsageMetrics() MetricsGroup {
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepReceivedBytesMD(),
 						Value:          float64(stat.ReplicaSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepPendingOperationsMD(),
-						Value:          float64(stat.PendingCount),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
