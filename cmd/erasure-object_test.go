@@ -587,6 +587,77 @@ func TestPutObjectNoQuorumSmall(t *testing.T) {
 	}
 }
 
+// Test PutObject twice, one small and another bigger
+// than small data thresold and checks reading them again
+func TestPutObjectSmallInlineData(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const numberOfDisks = 4
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure(ctx, numberOfDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	bucket := "bucket"
+	object := "object"
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test: Upload a small file and read it.
+	smallData := []byte{'a'}
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(smallData), int64(len(smallData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	output := bytes.NewBuffer([]byte{})
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), smallData) {
+		t.Fatalf("Corrupted data is found")
+	}
+
+	// Test: Upload a file bigger than the small file threshold
+	// under the same bucket & key name and try to read it again.
+
+	output.Reset()
+	bigData := bytes.Repeat([]byte{'b'}, smallFileThreshold*numberOfDisks/2)
+
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bigData), int64(len(bigData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err = obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), bigData) {
+		t.Fatalf("Corrupted data found")
+	}
+}
+
 func TestObjectQuorumFromMeta(t *testing.T) {
 	ExecObjectLayerTestWithDirs(t, testObjectQuorumFromMeta)
 }
