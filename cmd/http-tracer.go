@@ -218,11 +218,16 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
-		Path:     r.URL.RawPath,
 		RawQuery: redactLDAPPwd(r.URL.RawQuery),
 		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 	}
+
+	path := r.URL.RawPath
+	if path == "" {
+		path = r.URL.Path
+	}
+	rq.Path = path
 
 	rw := logger.NewResponseWriter(w)
 	rw.LogErrBody = true
