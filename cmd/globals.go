@@ -107,6 +107,12 @@ const (
 
 	// diskFillFraction is the fraction of a disk we allow to be filled.
 	diskFillFraction = 0.95
+
+	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
+	diskAssumeUnknownSize = 1 << 30
+
+	// diskMinInodes is the minimum number of inodes we want free on a disk to perform writes.
+	diskMinInodes = 1000
 )
 
 var globalCLIContext = struct {
