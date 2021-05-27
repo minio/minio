@@ -23,7 +23,10 @@ import (
 	"errors"
 	errorsv1 "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,7 +56,21 @@ type IAMK8sStore struct {
 	maxUpdateAttempts int
 }
 
-func newIAMK8sStore(clientset kubernetes.Clientset, namespace string, configMapName string) *IAMK8sStore {
+func newIAMK8sStore() *IAMK8sStore {
+	// Currently config vars are harcoded and we use an out-of-cluster client configuration.
+	// Actual impl should get config vars from env and use in-cluster client configuration.
+	home := homedir.HomeDir()
+	kubeconfig := filepath.Join(home, ".kube", "config")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+	namespace := "default"
+	configMapName := "minioK8sConfigStore"
 	var k8sStore = &IAMK8sStore{
 		configMapsClient: clientset.CoreV1().ConfigMaps(namespace),
 		namespace: namespace,
