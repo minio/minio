@@ -1025,5 +1025,5 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 
 	// wantLeft is how much space there at least must be left.
 	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
-	return available <= wantLeft
+	return available > wantLeft
 }
