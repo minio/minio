@@ -344,7 +344,11 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		parityBlocks = defaultParityCount
 	}
 
-	dataBlocks := len(partsMetaData) - parityBlocks
+	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if dataBlocks == 0 {
+		dataBlocks = len(partsMetaData) - parityBlocks
+	}
+
 	writeQuorum := dataBlocks
 	if dataBlocks == parityBlocks {
 		writeQuorum++
