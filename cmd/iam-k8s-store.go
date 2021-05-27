@@ -23,10 +23,7 @@ import (
 	"errors"
 	errorsv1 "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,7 +33,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
@@ -57,26 +53,15 @@ func newIAMK8sStore() *IAMK8sStore {
 	// Currently config vars are harcoded and we use an out-of-cluster client configuration
 	// so we can test with e.g. minikube.
 	// Actual impl should get config vars from env and use in-cluster client configuration.
-	home := homedir.HomeDir()
-	kubeconfig := filepath.Join(home, ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err.Error())
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-	namespace := "default"
-	configMapName := "minio-k8s-config-store"
 	var k8sStore = &IAMK8sStore{
-		configMapsClient: clientset.CoreV1().ConfigMaps(namespace),
-		namespace: namespace,
-		configMapName: configMapName,
+		configMapsClient: globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
+		namespace: globalK8sIamStoreConfig.Namespace,
+		configMapName: globalK8sIamStoreConfig.ConfigMapName,
 		maxUpdateAttempts: 10,
 	}
 	k8sStore.ensureConfigMapExists()
-	logger.Info("New K8S IAM store configured. Namespace: " + namespace + ", ConfigMap: " + configMapName)
+	logger.Info("New K8S IAM store configured. Namespace: " + globalK8sIamStoreConfig.Namespace +
+		", ConfigMap: " + globalK8sIamStoreConfig.ConfigMapName)
 	return k8sStore
 }
 

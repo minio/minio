@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/cmd/config/k8s"
 	"strings"
 	"sync"
 
@@ -49,6 +50,7 @@ import (
 func initHelp() {
 	var kvs = map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
+		config.K8sSubSys:            k8s.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.CompressionSubSys:    compress.DefaultKVS,
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
@@ -293,6 +295,18 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 			etcdClnt.Close()
 		}
 	}
+	{
+		k8sCfg, err := k8s.LookupConfig(s[config.K8sSubSys][config.Default])
+		if err != nil {
+			return err
+		}
+		if k8sCfg.Enabled {
+			_, err := k8s.New(k8sCfg)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
@@ -364,9 +378,9 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 			globalEtcdClient, err = etcd.New(etcdCfg)
 			if err != nil {
 				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize etcd config")
+					logger.FatalIf(err, "Unable to initialize etcd client")
 				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd client: %w", err))
 				}
 			}
 		}
@@ -392,6 +406,18 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 					}
 				}
 			}
+		}
+	}
+
+	k8sCfg, err := k8s.LookupConfig(s[config.K8sSubSys][config.Default])
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize k8s config")
+	}
+	if k8sCfg.Enabled {
+		globalK8sClient, err = k8s.New(k8sCfg)
+		globalK8sIamStoreConfig = k8sCfg
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize k8s client")
 		}
 	}
 

@@ -69,6 +69,7 @@ const (
 	CacheSubSys          = "cache"
 	RegionSubSys         = "region"
 	EtcdSubSys           = "etcd"
+	K8sSubSys            = "k8s"
 	StorageClassSubSys   = "storage_class"
 	APISubSys            = "api"
 	CompressionSubSys    = "compression"
@@ -104,6 +105,7 @@ var SubSystems = set.CreateStringSet(
 	CredentialsSubSys,
 	RegionSubSys,
 	EtcdSubSys,
+	K8sSubSys,
 	CacheSubSys,
 	APISubSys,
 	StorageClassSubSys,

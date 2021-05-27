@@ -20,6 +20,8 @@ package cmd
 import (
 	"crypto/x509"
 	"errors"
+	"github.com/minio/minio/cmd/config/k8s"
+	"k8s.io/client-go/kubernetes"
 	"net/http"
 	"os"
 	"sync"
@@ -235,6 +237,10 @@ var (
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
+
+	// Initialized k8s clientset for k8s-native iam config store
+	globalK8sClient *kubernetes.Clientset
+	globalK8sIamStoreConfig k8s.Config
 
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
