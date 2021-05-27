@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -601,9 +602,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		// If we have offline disks upgrade the number of erasure codes for this object.
-		ecOrg := parityDrives
+		parityOrig := parityDrives
 		for _, disk := range storageDisks {
 			if parityDrives >= len(storageDisks)/2 {
+				parityDrives = len(storageDisks) / 2
 				break
 			}
 			if disk == nil {
@@ -614,8 +616,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				parityDrives++
 			}
 		}
-		if ecOrg != parityDrives {
-			opts.UserDefined[xhttp.MinIOErasureUpgraded] = fmt.Sprintf("%d->%d", ecOrg, parityDrives)
+		if parityOrig != parityDrives {
+			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 		}
 	}
 	dataDrives := len(storageDisks) - parityDrives
