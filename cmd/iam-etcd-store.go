@@ -57,7 +57,7 @@ func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 //  suffix := "config.json"
 //  result is foo
 func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
-	return pathClean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
+	return pathClean(strings.TrimSuffix(strings.TrimPrefix(s, prefix), suffix))
 }
 
 // IAMEtcdStore implements IAMStorageAPI
@@ -331,7 +331,7 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 				return []byte(globalOldCred.SecretKey), nil
 			}
 			if _, err := jwtgo.ParseWithClaims(u.Credentials.SessionToken, m, stsTokenCallback); err == nil {
-				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
+				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, m)
 				if token, err := jwt.SignedString([]byte(globalActiveCred.SecretKey)); err == nil {
 					u.Credentials.SessionToken = token
 					err := ies.saveIAMConfig(ctx, &u, getUserIdentityPath(user, userType))

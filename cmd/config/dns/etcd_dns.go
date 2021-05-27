@@ -137,7 +137,7 @@ func (c *CoreDNS) list(key string, domain bool) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, n := range r.Kvs {
 		var srvRecord SrvRecord
-		if err = json.Unmarshal([]byte(n.Value), &srvRecord); err != nil {
+		if err = json.Unmarshal(n.Value, &srvRecord); err != nil {
 			return nil, err
 		}
 		srvRecord.Key = strings.TrimPrefix(string(n.Key), key)

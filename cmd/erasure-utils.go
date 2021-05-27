@@ -84,7 +84,9 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
 			if err != nil {
-				if err != io.ErrClosedPipe {
+				// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
+				// The reader pipe might be closed at ListObjects io.EOF ignore it.
+				if err != io.ErrClosedPipe && err != io.EOF {
 					logger.LogIf(ctx, err)
 				}
 				return 0, err
@@ -97,7 +99,8 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
 			// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
-			if err != io.ErrClosedPipe {
+			// The reader pipe might be closed at ListObjects io.EOF ignore it.
+			if err != io.ErrClosedPipe && err != io.EOF {
 				logger.LogIf(ctx, err)
 			}
 			return 0, err

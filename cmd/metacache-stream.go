@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +29,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/tinylib/msgp/msgp"
+	"github.com/valyala/bytebufferpool"
 )
 
 // metadata stream format:
@@ -246,11 +246,11 @@ type metacacheReader struct {
 
 // newMetacacheReader creates a new cache reader.
 // Nothing will be read from the stream yet.
-func newMetacacheReader(r io.Reader) (*metacacheReader, error) {
+func newMetacacheReader(r io.Reader) *metacacheReader {
 	dec := s2DecPool.Get().(*s2.Reader)
 	dec.Reset(r)
 	mr := msgp.NewReader(dec)
-	m := metacacheReader{
+	return &metacacheReader{
 		mr: mr,
 		closer: func() {
 			dec.Reset(nil)
@@ -269,7 +269,6 @@ func newMetacacheReader(r io.Reader) (*metacacheReader, error) {
 			return nil
 		},
 	}
-	return &m, nil
 }
 
 func (r *metacacheReader) checkInit() {
@@ -747,12 +746,6 @@ type metacacheBlockWriter struct {
 	blockEntries int
 }
 
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
 // newMetacacheBlockWriter provides a streaming block writer.
 // Each block is the size of the capacity of the input channel.
 // The caller should close to indicate the stream has ended.
@@ -763,11 +756,13 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 		defer w.wg.Done()
 		var current metacacheBlock
 		var n int
-		buf := bufferPool.Get().(*bytes.Buffer)
+
+		buf := bytebufferpool.Get()
 		defer func() {
 			buf.Reset()
-			bufferPool.Put(buf)
+			bytebufferpool.Put(buf)
 		}()
+
 		block := newMetacacheWriter(buf, 1<<20)
 		defer block.Close()
 		finishBlock := func() {

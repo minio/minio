@@ -467,9 +467,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 	}
 
-	err = xl.GetObject(ctx, bucket, object, 0, int64(len(buf)), ioutil.Discard, "", opts)
-	if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-		t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+	gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+	if err != nil {
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+	}
+	if gr != nil {
+		_, err = io.Copy(ioutil.Discard, gr)
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+		gr.Close()
 	}
 
 	// Test use case 2: Make 9 disks offline, which leaves less than quorum number of disks
@@ -503,9 +512,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Fetch object from store.
-		err = xl.GetObject(ctx, bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
-		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+		gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+		if err != nil {
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+		}
+		if gr != nil {
+			_, err = io.Copy(ioutil.Discard, gr)
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+			gr.Close()
 		}
 	}
 
@@ -710,6 +728,77 @@ func TestPutObjectNoQuorumSmall(t *testing.T) {
 				t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 			}
 		})
+	}
+}
+
+// Test PutObject twice, one small and another bigger
+// than small data thresold and checks reading them again
+func TestPutObjectSmallInlineData(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const numberOfDisks = 4
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure(ctx, numberOfDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	bucket := "bucket"
+	object := "object"
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test: Upload a small file and read it.
+	smallData := []byte{'a'}
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(smallData), int64(len(smallData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	output := bytes.NewBuffer([]byte{})
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), smallData) {
+		t.Fatalf("Corrupted data is found")
+	}
+
+	// Test: Upload a file bigger than the small file threshold
+	// under the same bucket & key name and try to read it again.
+
+	output.Reset()
+	bigData := bytes.Repeat([]byte{'b'}, smallFileThreshold*numberOfDisks/2)
+
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bigData), int64(len(bigData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err = obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), bigData) {
+		t.Fatalf("Corrupted data found")
 	}
 }
 

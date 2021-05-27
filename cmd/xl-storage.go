@@ -384,6 +384,19 @@ func (s *xlStorage) Healing() *healingTracker {
 	return &h
 }
 
+func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
+	f, err := os.OpenFile(itemPath, readMode, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return readXLMetaNoData(f, stat.Size())
+}
+
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
 	// Updates must be closed before we return.
 	defer close(updates)
@@ -421,7 +434,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 
-		buf, err := xioutil.ReadFile(item.Path)
+		buf, err := s.readMetadata(item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -745,25 +758,6 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 	return nil
 }
 
-func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return false
-	}
-
-	if err = Access(pathJoin(volumeDir, leafPath, xlStorageFormatFile)); err == nil {
-		return true
-	}
-	if osIsNotExist(err) {
-		// We need a fallback code where directory might contain
-		// legacy `xl.json`, in such situation we just rename
-		// and proceed if rename is successful we know that it
-		// is the leaf since `xl.json` was present.
-		return s.renameLegacyMetadata(volumeDir, leafPath) == nil
-	}
-	return false
-}
-
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
@@ -1082,6 +1076,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
+			if len(fi.Data) > 0 {
+				if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; !ok {
+					fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+				}
+			}
 			return fi, nil
 		}
 
@@ -2029,6 +2028,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// Purge the destination path as we are not preserving anything
 				// versioned object was not requested.
 				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
 	}

@@ -952,7 +952,7 @@ func getMinioProcMetrics() MetricsGroup {
 			metrics = append(metrics,
 				Metric{
 					Description: getMinIOProcessCPUTime(),
-					Value:       float64(stat.CPUTime()),
+					Value:       stat.CPUTime(),
 				})
 			return
 		},

@@ -543,11 +543,6 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 		}
 	}
 
-	if isEncryptedMultipart(objectInfo) && firstPartIdx > 0 {
-		off, _, _, _, _, err := objectInfo.GetDecryptedRange(partNumberToRangeSpec(objectInfo, firstPartIdx))
-		logger.LogIf(context.Background(), err)
-		compressedOffset += off
-	}
 	return compressedOffset, offset - skipLength, firstPartIdx
 }
 
@@ -632,6 +627,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
+
 		off, length = int64(0), oi.Size
 		decOff, decLength := int64(0), actualSize
 		if rs != nil {
@@ -639,8 +635,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if err != nil {
 				return nil, 0, 0, err
 			}
+
 			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff, firstPart = getCompressedOffsets(oi, off)
+
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.

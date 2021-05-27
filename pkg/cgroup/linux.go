@@ -35,7 +35,7 @@ import (
 )
 
 // DO NOT EDIT following constants are chosen defaults for any kernel
-// after 3.x, please open a github issue https://github.com/minio/minio/issues
+// after 3.x, please open a GitHub issue https://github.com/minio/minio/issues
 // and discuss first if you wish to change this.
 const (
 	// Default string for looking for kernel memory param.

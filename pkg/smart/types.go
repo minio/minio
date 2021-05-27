@@ -113,43 +113,6 @@ type nvmeIdentController struct {
 	Vs           [1024]byte              // Vendor Specific
 } // 4096 bytes
 
-type nvmeLBAF struct {
-	Ms uint16
-	Ds uint8
-	Rp uint8
-}
-
-//nolint:deadcode
-type nvmeIdentNamespace struct {
-	Nsze    uint64
-	Ncap    uint64
-	Nuse    uint64
-	Nsfeat  uint8
-	Nlbaf   uint8
-	Flbas   uint8
-	Mc      uint8
-	Dpc     uint8
-	Dps     uint8
-	Nmic    uint8
-	Rescap  uint8
-	Fpi     uint8
-	Rsvd33  uint8
-	Nawun   uint16
-	Nawupf  uint16
-	Nacwu   uint16
-	Nabsn   uint16
-	Nabo    uint16
-	Nabspf  uint16
-	Rsvd46  [2]byte
-	Nvmcap  [16]byte
-	Rsvd64  [40]byte
-	Nguid   [16]byte
-	EUI64   [8]byte
-	Lbaf    [16]nvmeLBAF
-	Rsvd192 [192]byte
-	Vs      [3712]byte
-} // 4096 bytes
-
 //nolint:deadcode
 type nvmeSMARTLog struct {
 	CritWarning      uint8
