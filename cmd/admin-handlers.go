@@ -1267,6 +1267,37 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListPoolsHandler - GET /minio/admin/v3/pool/list
+func (a adminAPIHandlers) ListPoolsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListPools")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListPoolsAction)
+	if objectAPI == nil {
+		return
+	}
+
+	drives := globalLocalDrives
+	if len(drives) == 0 {
+		drives = globalEndpoints.LocalDrives()
+	}
+
+	v, err := loadVolumeMeta(drives)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	buf, err := json.Marshal(v.Pools)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	w.Write(buf)
+	w.(http.Flusher).Flush()
+}
+
 // KMSCreateKeyHandler - POST /minio/admin/v3/kms/key/create?key-id=<master-key-id>
 func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSCreateKey")

@@ -205,6 +205,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
 		if !globalIsGateway {
+			// Pool APIs
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/pool/list").HandlerFunc(httpTraceAll(adminAPI.ListPoolsHandler))
+
 			// Keep obdinfo for backward compatibility with mc
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
 				HandlerFunc(httpTraceHdrs(adminAPI.HealthInfoHandler))

@@ -257,19 +257,6 @@ func (l EndpointServerPools) Localhost() string {
 	return ""
 }
 
-// LocalDisksPaths returns the disk paths of the local disks
-func (l EndpointServerPools) LocalDisksPaths() []string {
-	var disks []string
-	for _, ep := range l {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.IsLocal {
-				disks = append(disks, endpoint.Path)
-			}
-		}
-	}
-	return disks
-}
-
 // FirstLocal returns true if the first endpoint is local.
 func (l EndpointServerPools) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
@@ -286,6 +273,82 @@ func (l EndpointServerPools) NEndpoints() (count int) {
 		count += len(ep.Endpoints)
 	}
 	return count
+}
+
+// LocalDrivesPool returns all drives local to this server,
+// belonging to a pool index.
+func (l EndpointServerPools) LocalDrivesPool(i int) []string {
+	foundSet := set.NewStringSet()
+	for _, endpoint := range l[i].Endpoints {
+		if endpoint.IsLocal {
+			foundSet.Add(endpoint.Path)
+		}
+	}
+	return foundSet.ToSlice()
+}
+
+// LocalDrives returns all drives local to this server
+func (l EndpointServerPools) LocalDrives() []string {
+	foundSet := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				foundSet.Add(endpoint.Path)
+			}
+		}
+	}
+	drives := foundSet.ToSlice()
+	if len(drives) == 0 {
+		// this is impossible to happen so we panic.
+		panic("no drives on the command line seems to be local to this host")
+	}
+	return drives
+}
+
+// LocalHostnames returns one localhostname per pool, i.e local
+// to this server.
+func (l EndpointServerPools) LocalHostnames() []string {
+	localhostnames := make([]string, len(l))
+	for i, ep := range l {
+		foundSet := set.NewStringSet()
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				foundSet.Add(endpoint.Host)
+			}
+		}
+		hostnames := foundSet.ToSlice()
+		if len(hostnames) == 0 {
+			continue
+		}
+		localhostnames[i] = hostnames[0]
+	}
+	return localhostnames
+}
+
+// RemoteHostnames returns list of remote hosts from command
+// line argument, returned list is exactly in the same
+// order as the input command, returned value is per pool.
+func (l EndpointServerPools) RemoteHostnames() [][]string {
+	poolRemoteHostnames := make([][]string, len(l))
+	for j, ep := range l {
+		var i = 0
+		orderedMap := make(map[string]int)
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+			if _, ok := orderedMap[endpoint.Host]; !ok {
+				orderedMap[endpoint.Host] = i
+				i++
+			}
+		}
+		hostnames := make([]string, len(orderedMap))
+		for k, v := range orderedMap {
+			hostnames[v] = k
+		}
+		poolRemoteHostnames[j] = hostnames
+	}
+	return poolRemoteHostnames
 }
 
 // Hostnames - returns list of unique hostnames

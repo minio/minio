@@ -57,7 +57,7 @@ var (
 )
 
 func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
-	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
+	for _, diskPath := range globalEndpoints.LocalDrives() {
 		j := &tierJournal{
 			diskPath: diskPath,
 		}

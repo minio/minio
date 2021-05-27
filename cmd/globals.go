@@ -202,6 +202,10 @@ var (
 
 	globalEndpoints EndpointServerPools
 
+	// This is to be set by
+	// $ minio server --drives "/mnt/data{1...4}"
+	globalLocalDrives []string
+
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName string
 

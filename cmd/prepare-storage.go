@@ -307,7 +307,8 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 	for {
 		select {
 		case <-ticker.C:
-			storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+			storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount,
+				setDriveCount, deploymentID, distributionAlgo)
 			if err != nil {
 				tries++
 				switch err {

@@ -44,6 +44,8 @@ type erasureServerPools struct {
 
 	serverPools []*erasureSets
 
+	volumeMeta *volumeMeta
+
 	// Shut down async operations
 	shutdown context.CancelFunc
 }
@@ -113,6 +115,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, err
 		}
 	}
+
+	z.volumeMeta, err = saveVolumeMeta(endpointServerPools)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
 	return z, nil

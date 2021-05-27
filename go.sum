@@ -492,8 +492,8 @@ github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78 h1:v7OMbUnWky
 github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78/go.mod h1:mTh2uJuAbEqdhMVl6CMIIZLUeiMiWtJR4JB8/5g2skw=
 github.com/minio/parquet-go v1.0.0 h1:fcWsEvub04Nsl/4hiRBDWlbqd6jhacQieV07a+nhiIk=
 github.com/minio/parquet-go v1.0.0/go.mod h1:aQlkSOfOq2AtQKkuou3mosNVMwNokd+faTacxxk/oHA=
-github.com/minio/pkg v1.0.4 h1:+BmaCENP6BaMm9PsGK6L1L5MKulWDxl4qobvJYf6m/E=
-github.com/minio/pkg v1.0.4/go.mod h1:obU54TZ9QlMv0TRaDgQ/JTzf11ZSXxnSfLrm4tMtBP8=
+github.com/minio/pkg v1.0.5 h1:8fmQ726eQhtdzmLYltj6MBWInGycDvSl4hSwiD0uz+0=
+github.com/minio/pkg v1.0.5/go.mod h1:obU54TZ9QlMv0TRaDgQ/JTzf11ZSXxnSfLrm4tMtBP8=
 github.com/minio/rpc v1.0.0 h1:tJCHyLfQF6k6HlMQFpKy2FO/7lc2WP8gLDGMZp18E70=
 github.com/minio/rpc v1.0.0/go.mod h1:b9xqF7J0xeMXr0cM4pnBlP7Te7PDsG5JrRxl5dG6Ldk=
 github.com/minio/selfupdate v0.3.1 h1:BWEFSNnrZVMUWXbXIgLDNDjbejkmpAmZvy/nCz1HlEs=

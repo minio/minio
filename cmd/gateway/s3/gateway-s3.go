@@ -350,6 +350,7 @@ func (l *s3Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error)
 
 	b := make([]minio.BucketInfo, len(buckets))
 	for i, bi := range buckets {
+		i := i
 		b[i] = minio.BucketInfo{
 			Name:    bi.Name,
 			Created: bi.CreationDate,

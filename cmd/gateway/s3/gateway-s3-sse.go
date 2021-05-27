@@ -655,6 +655,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 
 	// Validate each part and then commit to disk.
 	for i, part := range uploadedParts {
+		i := i
 		partMeta, err := l.getGWMetadata(ctx, bucket, getPartMetaPath(object, uploadID, part.PartNumber))
 		if err != nil || len(partMeta.Parts) == 0 {
 			return oi, minio.InvalidPart{}

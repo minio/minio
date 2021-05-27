@@ -18,7 +18,9 @@
 package auth
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -101,6 +103,13 @@ type Credentials struct {
 	Status       string    `xml:"-" json:"status,omitempty"`
 	ParentUser   string    `xml:"-" json:"parentUser,omitempty"`
 	Groups       []string  `xml:"-" json:"groups,omitempty"`
+}
+
+// Token generate common token for given access/secretKey
+func (cred Credentials) Token() string {
+	mac := hmac.New(sha256.New, []byte(cred.SecretKey))
+	mac.Write([]byte(cred.String()))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func (cred Credentials) String() string {
