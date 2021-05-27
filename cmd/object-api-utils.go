@@ -991,7 +991,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 	var total uint64
 	var nDisks int
 	for _, disk := range di {
-		if disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
 			// Disk offline, no inodes or something else is wrong.
 			continue
 		}
@@ -1007,7 +1007,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 	// Check we have enough on each disk, ignoring diskFillFraction.
 	perDisk := size / int64(nDisks)
 	for _, disk := range di {
-		if disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
 			continue
 		}
 		if int64(disk.Free) <= perDisk {
