@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
@@ -41,7 +42,6 @@ import (
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/willf/bloom"
 )
 
 const (

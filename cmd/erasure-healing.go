@@ -778,7 +778,10 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 		if m.Erasure.ParityBlocks == 0 {
 			parityBlocks = er.defaultParityCount
 		}
-		dataBlocks := len(storageDisks) - parityBlocks
+		dataBlocks := m.Erasure.DataBlocks
+		if m.Erasure.DataBlocks == 0 {
+			dataBlocks = len(storageDisks) - parityBlocks
+		}
 		writeQuorum := dataBlocks
 		if dataBlocks == parityBlocks {
 			writeQuorum++
