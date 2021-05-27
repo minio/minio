@@ -11,6 +11,7 @@ require (
 	github.com/alecthomas/participle v0.2.1
 	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
+	github.com/bits-and-blooms/bloom/v3 v3.0.1
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cheggaaa/pb v1.0.29
 	github.com/colinmarc/hdfs/v2 v2.2.0
@@ -80,7 +81,6 @@ require (
 	github.com/tinylib/msgp v1.1.6-0.20210521143832-0becd170c402
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
-	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.14.1
