@@ -239,7 +239,7 @@ var (
 	globalEtcdClient *etcd.Client
 
 	// Initialized k8s clientset for k8s-native iam config store
-	globalK8sClient *kubernetes.Clientset
+	globalK8sClient         *kubernetes.Clientset
 	globalK8sIamStoreConfig k8s.Config
 
 	// Is set to true when Bucket federation is requested

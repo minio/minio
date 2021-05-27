@@ -45,19 +45,19 @@ type IAMK8sStore struct {
 	// setup.
 	sync.RWMutex
 
-	configMapsClient typedcorev1.ConfigMapInterface
-	namespace string
-	configMapName string
+	configMapsClient  typedcorev1.ConfigMapInterface
+	namespace         string
+	configMapName     string
 	maxUpdateAttempts int
 }
 
-const ttlPurgeFrequencyMs = 120*1000
+const ttlPurgeFrequencyMs = 120 * 1000
 
 func newIAMK8sStore() *IAMK8sStore {
 	var k8sStore = &IAMK8sStore{
-		configMapsClient: globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
-		namespace: globalK8sIamStoreConfig.Namespace,
-		configMapName: globalK8sIamStoreConfig.ConfigMapName,
+		configMapsClient:  globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
+		namespace:         globalK8sIamStoreConfig.Namespace,
+		configMapName:     globalK8sIamStoreConfig.ConfigMapName,
 		maxUpdateAttempts: 10,
 	}
 	k8sStore.ensureConfigMapExists()
@@ -125,11 +125,11 @@ func toTtlExpKey(objPath string) string {
 }
 
 func trimTtlPrefix(ttlKey string) string {
-	return strings.TrimPrefix(ttlKey,"ttlExp_")
+	return strings.TrimPrefix(ttlKey, "ttlExp_")
 }
 
 func hasTtlPrefix(ttlKey string) bool {
-	return strings.HasPrefix(ttlKey,"ttlExp_")
+	return strings.HasPrefix(ttlKey, "ttlExp_")
 }
 
 func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
@@ -155,22 +155,22 @@ func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, 
 		objPath := objPathToK8sValid(objPath)
 		annotations[objPath] = string(data)
 		if len(opts) > 0 {
-			annotations[toTtlExpKey(objPath)] = strconv.FormatInt(time.Now().Unix() + opts[0].ttl, 10)
+			annotations[toTtlExpKey(objPath)] = strconv.FormatInt(time.Now().Unix()+opts[0].ttl, 10)
 		}
 		configMapUpdated := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: iamK8s.namespace,
-				Name: iamK8s.configMapName,
+				Namespace:       iamK8s.namespace,
+				Name:            iamK8s.configMapName,
 				ResourceVersion: configMap.ResourceVersion,
-				Annotations: annotations,
+				Annotations:     annotations,
 			},
 		}
 		_, err = iamK8s.configMapsClient.Update(ctx, configMapUpdated, metav1.UpdateOptions{})
 		if err != nil {
-			if (errorsv1.IsConflict(err)) {
+			if errorsv1.IsConflict(err) {
 				attempts += 1
 				continue
-			} else if (isRetryable(err)) {
+			} else if isRetryable(err) {
 				attempts += 1
 				backoffDefault(attempts)
 				continue
@@ -202,16 +202,16 @@ type iamConfigItem struct {
 }
 
 type iamConfigListResult struct {
-	iamConfigItems []iamConfigItem
+	iamConfigItems  []iamConfigItem
 	resourceVersion string
-	err error
+	err             error
 }
 
 func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string, includeTtlItems bool) iamConfigListResult {
 	configItems := []iamConfigItem{}
 	configMap, err := iamK8s.configMapsClient.Get(ctx, iamK8s.configMapName, metav1.GetOptions{})
 	if err != nil {
-		return iamConfigListResult{err:err}
+		return iamConfigListResult{err: err}
 	}
 
 	for objPath, data := range configMap.Annotations {
@@ -239,10 +239,10 @@ func (iamK8s *IAMK8sStore) deleteIAMConfig(ctx context.Context, path string) err
 		delete(annotations, path)
 		configMapUpdated := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: iamK8s.namespace,
-				Name: iamK8s.configMapName,
+				Namespace:       iamK8s.namespace,
+				Name:            iamK8s.configMapName,
 				ResourceVersion: configMap.ResourceVersion,
-				Annotations: annotations,
+				Annotations:     annotations,
 			},
 		}
 		_, err = iamK8s.configMapsClient.Update(ctx, configMapUpdated, metav1.UpdateOptions{})
@@ -501,15 +501,15 @@ func (iamK8s *IAMK8sStore) removeExpiredItems(ctx context.Context) {
 			}
 		}
 		filteredConfigItems := filterExpiredItems(result.iamConfigItems)
-		for _, configItem := range  filteredConfigItems{
+		for _, configItem := range filteredConfigItems {
 			annotations[objPathToK8sValid(configItem.objPath)] = configItem.data
 		}
 		configMapUpdated := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: iamK8s.namespace,
-				Name: iamK8s.configMapName,
+				Namespace:       iamK8s.namespace,
+				Name:            iamK8s.configMapName,
 				ResourceVersion: result.resourceVersion,
-				Annotations: annotations,
+				Annotations:     annotations,
 			},
 		}
 		_, err := iamK8s.configMapsClient.Update(ctx, configMapUpdated, metav1.UpdateOptions{})
@@ -518,10 +518,10 @@ func (iamK8s *IAMK8sStore) removeExpiredItems(ctx context.Context) {
 			logger.Info("Succesfully removed " + removedItems + " expired items from iam config store")
 			return
 		}
-		if (errorsv1.IsConflict(err)) {
+		if errorsv1.IsConflict(err) {
 			attempts += 1
 			continue
-		} else if (isRetryable(err)) {
+		} else if isRetryable(err) {
 			attempts += 1
 			backoffDefault(attempts)
 			continue

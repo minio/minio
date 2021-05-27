@@ -29,15 +29,15 @@ import (
 
 // k8s iam store environment values
 const (
-	IamStoreEnabled = "k8s_iam_store_enabled"
+	IamStoreEnabled       = "k8s_iam_store_enabled"
 	IamStoreNamespace     = "k8s_iam_store_namespace"
-	IamStoreConfigMapName    = "k8s_iam_store_config_map_name"
-	KubeConfigPath   = "k8s_kube_config_path"
+	IamStoreConfigMapName = "k8s_iam_store_config_map_name"
+	KubeConfigPath        = "k8s_kube_config_path"
 
-	EnvIamStoreEnabled = "MINIO_K8S_IAM_STORE_ENABLED"
+	EnvIamStoreEnabled       = "MINIO_K8S_IAM_STORE_ENABLED"
 	EnvIamStoreNamespace     = "MINIO_K8S_IAM_STORE_NAMESPACE"
-	EnvIamStoreConfigMapName    = "MINIO_K8S_IAM_STORE_CONFIG_MAP_NAME"
-	EnvKubeConfigPath   = "MINIO_K8S_KUBE_CONFIG_PATH"
+	EnvIamStoreConfigMapName = "MINIO_K8S_IAM_STORE_CONFIG_MAP_NAME"
+	EnvKubeConfigPath        = "MINIO_K8S_KUBE_CONFIG_PATH"
 )
 
 // DefaultKVS - default KV settings for k8s iam store.
@@ -56,7 +56,7 @@ var (
 			Value: "minio-k8s-iam-store",
 		},
 		config.KV{
-			Key: KubeConfigPath,
+			Key:   KubeConfigPath,
 			Value: "",
 		},
 	}
@@ -64,9 +64,9 @@ var (
 
 // Config - server k8s config.
 type Config struct {
-	Enabled     bool   `json:"enabled"`
-	Namespace  string `json:"namespace"`
-	ConfigMapName string `json:"configMapName"`
+	Enabled        bool   `json:"enabled"`
+	Namespace      string `json:"namespace"`
+	ConfigMapName  string `json:"configMapName"`
 	KubeConfigPath string `json:"kubeConfigPath"`
 }
 

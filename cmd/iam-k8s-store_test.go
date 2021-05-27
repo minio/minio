@@ -7,11 +7,11 @@ import (
 )
 
 func timeInFuture() string {
-	return strconv.FormatInt(time.Now().Unix() + 10*60, 10)
+	return strconv.FormatInt(time.Now().Unix()+10*60, 10)
 }
 
 func timeInPast() string {
-	return strconv.FormatInt(time.Now().Unix() - 10*60, 10)
+	return strconv.FormatInt(time.Now().Unix()-10*60, 10)
 }
 
 func TestFilterExpiredItems(t *testing.T) {
