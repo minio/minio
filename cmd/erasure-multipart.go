@@ -289,9 +289,10 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityDrives = er.defaultParityCount
 	}
 
-	ecOrg := parityDrives
+	parityOrig := parityDrives
 	for _, disk := range onlineDisks {
 		if parityDrives >= len(onlineDisks)/2 {
+			parityDrives = len(onlineDisks) / 2
 			break
 		}
 		if disk == nil {
@@ -303,8 +304,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 			parityDrives++
 		}
 	}
-	if ecOrg != parityDrives {
-		opts.UserDefined[xhttp.MinIOErasureUpgraded] = fmt.Sprintf("%d->%d", ecOrg, parityDrives)
+	if parityOrig != parityDrives {
+		opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
 
 	dataDrives := len(onlineDisks) - parityDrives

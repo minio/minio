@@ -32,6 +32,9 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+// Object was stored with additional erasure codes due to degraded system at upload time
+const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
+
 const erasureAlgorithm = "rs-vandermonde"
 
 // byObjectPartNumber is a collection satisfying sort.Interface.
