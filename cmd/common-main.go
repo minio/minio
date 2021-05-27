@@ -307,7 +307,6 @@ func handleCommonEnvVars() {
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
-
 	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
 		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
 		if err != nil {

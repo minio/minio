@@ -86,7 +86,6 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
-	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	golang.org/x/tools v0.1.1 // indirect
 	google.golang.org/api v0.31.0
 	gopkg.in/yaml.v2 v2.4.0

@@ -36,11 +36,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	corev1 "k8s.io/api/core/v1"
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	//"k8s.io/client-go/tools/clientcmd"
-	//"k8s.io/client-go/util/homedir"
 )
 
 // IAMK8sStore implements IAMStorageAPI
@@ -57,7 +54,8 @@ type IAMK8sStore struct {
 }
 
 func newIAMK8sStore() *IAMK8sStore {
-	// Currently config vars are harcoded and we use an out-of-cluster client configuration.
+	// Currently config vars are harcoded and we use an out-of-cluster client configuration
+	// so we can test with e.g. minikube.
 	// Actual impl should get config vars from env and use in-cluster client configuration.
 	home := homedir.HomeDir()
 	kubeconfig := filepath.Join(home, ".kube", "config")
@@ -70,21 +68,25 @@ func newIAMK8sStore() *IAMK8sStore {
 		panic(err.Error())
 	}
 	namespace := "default"
-	configMapName := "minioK8sConfigStore"
+	configMapName := "minio-k8s-config-store"
 	var k8sStore = &IAMK8sStore{
 		configMapsClient: clientset.CoreV1().ConfigMaps(namespace),
 		namespace: namespace,
 		configMapName: configMapName,
 		maxUpdateAttempts: 10,
 	}
-	k8sStore.createConfigMapIfNotExists()
+	k8sStore.ensureConfigMapExists()
+	logger.Info("New K8S IAM store configured. Namespace: " + namespace + ", ConfigMap: " + configMapName)
 	return k8sStore
 }
 
-func (iamK8s *IAMK8sStore) createConfigMapIfNotExists() {
+func (iamK8s *IAMK8sStore) ensureConfigMapExists() {
 	var objectMeta = metav1.ObjectMeta{Name: iamK8s.configMapName, Namespace: iamK8s.namespace}
 	var configMap = &corev1.ConfigMap{ObjectMeta: objectMeta}
-	_, _ = iamK8s.configMapsClient.Create(context.Background(), configMap, metav1.CreateOptions{})
+	_, err := iamK8s.configMapsClient.Create(context.Background(), configMap, metav1.CreateOptions{})
+	if err != nil && !errorsv1.IsAlreadyExists(err) {
+		panic(err)
+	}
 }
 
 func (iamK8s *IAMK8sStore) lock() {
@@ -103,21 +105,22 @@ func (iamK8s *IAMK8sStore) runlock() {
 	iamK8s.RUnlock()
 }
 
-func (iamK8s *IAMK8sStore) migrateUsersConfigToV1(ctx context.Context) error {
-	panic("Not implemented")
-}
-
-func (iamK8s *IAMK8sStore) migrateToV1(ctx context.Context) error {
-	panic("Not implemented")
-}
-
 // Should be called under config migration lock
 func (iamK8s *IAMK8sStore) migrateBackendFormat(ctx context.Context) error {
-	panic("Not implemented")
+	return nil
 }
 
 func isRetryable(err error) bool {
 	return errorsv1.IsTooManyRequests(err) || errorsv1.IsServiceUnavailable(err) || errorsv1.IsServerTimeout(err)
+}
+
+func objPathToK8sValid(objPath string) string {
+	objPath = strings.TrimSuffix(objPath, ".json")
+	return strings.Replace(objPath, "/", ".", -1)
+}
+
+func objPathFromK8sValid(objPath string) string {
+	return strings.Replace(objPath, ".", "/", -1)
 }
 
 func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
@@ -136,10 +139,14 @@ func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, 
 				return err
 			}
 		}
-		annotations := configMap.Annotations
+		annotations := make(map[string]string)
+		if configMap.Annotations != nil {
+			annotations = make(map[string]string)
+		}
+		objPath := objPathToK8sValid(objPath)
 		annotations[objPath] = string(data)
 		if len(opts) > 0 {
-			annotations["ttlExpiry:"+objPath] = strconv.FormatInt(time.Now().Unix() + opts[0].ttl, 10)
+			annotations["ttlExp_"+objPath] = strconv.FormatInt(time.Now().Unix() + opts[0].ttl, 10)
 		}
 		configMapUpdated := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -173,7 +180,7 @@ func (iamK8s *IAMK8sStore) loadIAMConfig(ctx context.Context, item interface{}, 
 	if err != nil {
 		return err
 	}
-	jsonData := configMap.Annotations[objPath]
+	jsonData := configMap.Annotations[objPathToK8sValid(objPath)]
 	if jsonData == "" {
 		return errors.New("No entry for key: " + objPath)
 	}
@@ -195,6 +202,7 @@ func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string
 		defer close(ch)
 
 		for objPath, jsonData := range configMap.Annotations {
+			objPath = objPathFromK8sValid(objPath)
 			trimmedObjPath := strings.TrimPrefix(objPath, pathPrefix)
 			trimmedObjPath = strings.TrimSuffix(trimmedObjPath, SlashSeparator)
 			if strings.HasPrefix(objPath, pathPrefix) {
@@ -390,8 +398,7 @@ func (iamK8s *IAMK8sStore) loadMappedPolicies(ctx context.Context, userType IAMU
 		if err := json.Unmarshal([]byte(item.jsonData), &p); err != nil {
 			return err
 		}
-		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		m[userOrGroupName] = p
+		m[policyFile] = p
 	}
 	return nil
 }

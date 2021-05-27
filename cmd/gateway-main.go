@@ -246,12 +246,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// avoid URL path encoding minio/minio#8950
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
-	if globalEtcdClient != nil {
-		// Enable STS router if etcd is enabled.
-		registerSTSRouter(router)
-	}
-
-	enableIAMOps := globalEtcdClient != nil
+	//if globalEtcdClient != nil {
+	//	// Enable STS router if etcd is enabled.
+	//	registerSTSRouter(router)
+	//}
+	//
+	//enableIAMOps := globalEtcdClient != nil
+	registerSTSRouter(router)
+	enableIAMOps := true
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
