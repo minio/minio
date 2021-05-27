@@ -23,6 +23,8 @@ import (
 	"errors"
 	errorsv1 "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"math"
+	"math/rand"
 	"path"
 	"strconv"
 	"strings"
@@ -49,10 +51,9 @@ type IAMK8sStore struct {
 	maxUpdateAttempts int
 }
 
+const ttlPurgeFrequencyMs = 120*1000
+
 func newIAMK8sStore() *IAMK8sStore {
-	// Currently config vars are harcoded and we use an out-of-cluster client configuration
-	// so we can test with e.g. minikube.
-	// Actual impl should get config vars from env and use in-cluster client configuration.
 	var k8sStore = &IAMK8sStore{
 		configMapsClient: globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
 		namespace: globalK8sIamStoreConfig.Namespace,
@@ -60,6 +61,7 @@ func newIAMK8sStore() *IAMK8sStore {
 		maxUpdateAttempts: 10,
 	}
 	k8sStore.ensureConfigMapExists()
+	go k8sStore.watchAndPurgeExpiredItems(ttlPurgeFrequencyMs)
 	logger.Info("New K8S IAM store configured. Namespace: " + globalK8sIamStoreConfig.Namespace +
 		", ConfigMap: " + globalK8sIamStoreConfig.ConfigMapName)
 	return k8sStore
@@ -99,6 +101,16 @@ func isRetryable(err error) bool {
 	return errorsv1.IsTooManyRequests(err) || errorsv1.IsServiceUnavailable(err) || errorsv1.IsServerTimeout(err)
 }
 
+func backoff(attempt int, backoffTimeMs float64) {
+	durationMs := math.Pow(2, float64(attempt)) * backoffTimeMs
+	withJitter := rand.Intn(int(durationMs))
+	time.Sleep(time.Duration(withJitter) * time.Millisecond)
+}
+
+func backoffDefault(attempt int) {
+	backoff(attempt, 100)
+}
+
 func objPathToK8sValid(objPath string) string {
 	objPath = strings.TrimSuffix(objPath, ".json")
 	return strings.Replace(objPath, "/", ".", -1)
@@ -106,6 +118,18 @@ func objPathToK8sValid(objPath string) string {
 
 func objPathFromK8sValid(objPath string) string {
 	return strings.Replace(objPath, ".", "/", -1)
+}
+
+func toTtlExpKey(objPath string) string {
+	return "ttlExp_" + objPath
+}
+
+func trimTtlPrefix(ttlKey string) string {
+	return strings.TrimPrefix(ttlKey,"ttlExp_")
+}
+
+func hasTtlPrefix(ttlKey string) bool {
+	return strings.HasPrefix(ttlKey,"ttlExp_")
 }
 
 func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
@@ -126,12 +150,12 @@ func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, 
 		}
 		annotations := make(map[string]string)
 		if configMap.Annotations != nil {
-			annotations = make(map[string]string)
+			annotations = configMap.Annotations
 		}
 		objPath := objPathToK8sValid(objPath)
 		annotations[objPath] = string(data)
 		if len(opts) > 0 {
-			annotations["ttlExp_"+objPath] = strconv.FormatInt(time.Now().Unix() + opts[0].ttl, 10)
+			annotations[toTtlExpKey(objPath)] = strconv.FormatInt(time.Now().Unix() + opts[0].ttl, 10)
 		}
 		configMapUpdated := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -148,7 +172,7 @@ func (iamK8s *IAMK8sStore) saveIAMConfig(ctx context.Context, item interface{}, 
 				continue
 			} else if (isRetryable(err)) {
 				attempts += 1
-				time.Sleep(100 * time.Millisecond)
+				backoffDefault(attempts)
 				continue
 			} else {
 				return err
@@ -165,42 +189,42 @@ func (iamK8s *IAMK8sStore) loadIAMConfig(ctx context.Context, item interface{}, 
 	if err != nil {
 		return err
 	}
-	jsonData := configMap.Annotations[objPathToK8sValid(objPath)]
-	if jsonData == "" {
+	data := configMap.Annotations[objPathToK8sValid(objPath)]
+	if data == "" {
 		return errors.New("No entry for key: " + objPath)
 	}
-	return json.Unmarshal([]byte(jsonData), item)
+	return json.Unmarshal([]byte(data), item)
 }
 
 type iamConfigItem struct {
 	objPath string
-	jsonData string
+	data    string
 }
 
-func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string) (<-chan iamConfigItem, error) {
-	ch := make(chan iamConfigItem)
+type iamConfigListResult struct {
+	iamConfigItems []iamConfigItem
+	resourceVersion string
+	err error
+}
+
+func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string, includeTtlItems bool) iamConfigListResult {
+	configItems := []iamConfigItem{}
 	configMap, err := iamK8s.configMapsClient.Get(ctx, iamK8s.configMapName, metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		return iamConfigListResult{err:err}
 	}
-	go func() {
-		defer close(ch)
 
-		for objPath, jsonData := range configMap.Annotations {
-			objPath = objPathFromK8sValid(objPath)
-			trimmedObjPath := strings.TrimPrefix(objPath, pathPrefix)
-			trimmedObjPath = strings.TrimSuffix(trimmedObjPath, SlashSeparator)
-			if strings.HasPrefix(objPath, pathPrefix) {
-				select {
-				case ch <- iamConfigItem{objPath: trimmedObjPath, jsonData: jsonData}:
-				case <- ctx.Done():
-					return
-				}
-			}
+	for objPath, data := range configMap.Annotations {
+		objPath = objPathFromK8sValid(objPath)
+		trimmedObjPath := strings.TrimPrefix(objPath, pathPrefix)
+		trimmedObjPath = strings.TrimSuffix(trimmedObjPath, SlashSeparator)
+		ttlOk := (includeTtlItems && strings.HasPrefix(trimTtlPrefix(objPath), pathPrefix))
+		if strings.HasPrefix(objPath, pathPrefix) || ttlOk {
+			configItems = append(configItems, iamConfigItem{objPath: trimmedObjPath, data: data})
 		}
-	}()
+	}
 
-	return ch, nil
+	return iamConfigListResult{configItems, configMap.ResourceVersion, nil}
 }
 
 func (iamK8s *IAMK8sStore) deleteIAMConfig(ctx context.Context, path string) error {
@@ -240,14 +264,14 @@ func (iamK8s *IAMK8sStore) loadPolicyDoc(ctx context.Context, policy string, m m
 }
 
 func (iamK8s *IAMK8sStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
-	ch, err := iamK8s.listIAMConfigs(ctx, iamConfigPoliciesPrefix)
-	if err != nil {
-		return err
+	result := iamK8s.listIAMConfigs(ctx, iamConfigPoliciesPrefix, false)
+	if result.err != nil {
+		return result.err
 	}
-	for item := range ch {
+	for _, item := range result.iamConfigItems {
 		policyName := path.Dir(item.objPath)
 		var p iampolicy.Policy
-		if err := json.Unmarshal([]byte(item.jsonData), &p); err != nil {
+		if err := json.Unmarshal([]byte(item.data), &p); err != nil {
 			return err
 		}
 		m[policyName] = p
@@ -295,14 +319,14 @@ func (iamK8s *IAMK8sStore) loadUsers(ctx context.Context, userType IAMUserType, 
 		basePrefix = iamConfigUsersPrefix
 	}
 
-	ch, err := iamK8s.listIAMConfigs(ctx, basePrefix)
-	if err != nil {
-		return err
+	result := iamK8s.listIAMConfigs(ctx, basePrefix, false)
+	if result.err != nil {
+		return result.err
 	}
-	for item := range ch {
+	for _, item := range result.iamConfigItems {
 		user := path.Dir(item.objPath)
 		var u UserIdentity
-		if err := json.Unmarshal([]byte(item.jsonData), &u); err != nil {
+		if err := json.Unmarshal([]byte(item.data), &u); err != nil {
 			return err
 		}
 		if iamK8s.deleteCredentialsIfExpired(ctx, u, user, userType) {
@@ -330,14 +354,14 @@ func (iamK8s *IAMK8sStore) loadGroup(ctx context.Context, group string, m map[st
 }
 
 func (iamK8s *IAMK8sStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
-	ch, err := iamK8s.listIAMConfigs(ctx, iamConfigGroupsPrefix)
-	if err != nil {
-		return err
+	result := iamK8s.listIAMConfigs(ctx, iamConfigGroupsPrefix, false)
+	if result.err != nil {
+		return result.err
 	}
-	for item := range ch {
+	for _, item := range result.iamConfigItems {
 		group := path.Dir(item.objPath)
 		var g GroupInfo
-		if err := json.Unmarshal([]byte(item.jsonData), &g); err != nil {
+		if err := json.Unmarshal([]byte(item.data), &g); err != nil {
 			return err
 		}
 		m[group] = g
@@ -373,14 +397,14 @@ func (iamK8s *IAMK8sStore) loadMappedPolicies(ctx context.Context, userType IAMU
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	ch, err := iamK8s.listIAMConfigs(ctx, basePath)
-	if err != nil {
-		return err
+	result := iamK8s.listIAMConfigs(ctx, basePath, false)
+	if result.err != nil {
+		return result.err
 	}
-	for item := range ch {
+	for _, item := range result.iamConfigItems {
 		policyFile := item.objPath
 		var p MappedPolicy
-		if err := json.Unmarshal([]byte(item.jsonData), &p); err != nil {
+		if err := json.Unmarshal([]byte(item.data), &p); err != nil {
 			return err
 		}
 		m[policyFile] = p
@@ -439,6 +463,84 @@ func (iamK8s *IAMK8sStore) deleteGroupInfo(ctx context.Context, name string) err
 		err = errNoSuchGroup
 	}
 	return err
+}
+
+func filterExpiredItems(items []iamConfigItem) []iamConfigItem {
+	keep := []string{}
+	for _, item := range items {
+		if hasTtlPrefix(item.objPath) {
+			expTime, _ := strconv.ParseInt(item.data, 10, 64)
+			if expTime > time.Now().Unix() {
+				// has not expired
+				keep = append(keep, item.objPath)
+				keep = append(keep, trimTtlPrefix(item.objPath))
+			}
+		}
+	}
+	filtered := []iamConfigItem{}
+	for _, item := range items {
+		if contains(keep, item.objPath) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func (iamK8s *IAMK8sStore) removeExpiredItems(ctx context.Context) {
+	attempts := 0
+	for attempts < iamK8s.maxUpdateAttempts {
+		annotations := make(map[string]string)
+		result := iamK8s.listIAMConfigs(ctx, "", true)
+		if result.err != nil {
+			if isRetryable(result.err) {
+				attempts += 1
+				backoffDefault(attempts)
+				continue
+			} else {
+				return
+			}
+		}
+		filteredConfigItems := filterExpiredItems(result.iamConfigItems)
+		for _, configItem := range  filteredConfigItems{
+			annotations[objPathToK8sValid(configItem.objPath)] = configItem.data
+		}
+		configMapUpdated := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: iamK8s.namespace,
+				Name: iamK8s.configMapName,
+				ResourceVersion: result.resourceVersion,
+				Annotations: annotations,
+			},
+		}
+		_, err := iamK8s.configMapsClient.Update(ctx, configMapUpdated, metav1.UpdateOptions{})
+		if err == nil {
+			removedItems := strconv.Itoa(len(result.iamConfigItems) - len(filteredConfigItems))
+			logger.Info("Succesfully removed " + removedItems + " expired items from iam config store")
+			return
+		}
+		if (errorsv1.IsConflict(err)) {
+			attempts += 1
+			continue
+		} else if (isRetryable(err)) {
+			attempts += 1
+			backoffDefault(attempts)
+			continue
+		} else {
+			logger.Info("Encountered unexpected error when removing expired items: ", err)
+			return
+		}
+	}
+	return
+}
+
+func (iamK8s *IAMK8sStore) watchAndPurgeExpiredItems(intervalms float64) {
+	ctx := context.Background()
+	for {
+		backoff(0, intervalms)
+		iamK8s.lock()
+		iamK8s.removeExpiredItems(ctx)
+		iamK8s.unlock()
+	}
 }
 
 func (iamK8s *IAMK8sStore) watch(ctx context.Context, sys *IAMSys) {
