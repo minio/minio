@@ -599,6 +599,24 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if parityDrives <= 0 {
 			parityDrives = er.defaultParityCount
 		}
+
+		// If we have offline disks upgrade the number of erasure codes for this object.
+		ecOrg := parityDrives
+		for _, disk := range storageDisks {
+			if parityDrives >= len(storageDisks)/2 {
+				break
+			}
+			if disk == nil {
+				parityDrives++
+			}
+			di, err := disk.DiskInfo(ctx)
+			if err != nil || di.ID == "" {
+				parityDrives++
+			}
+		}
+		if ecOrg != parityDrives {
+			opts.UserDefined[xhttp.MinIOErasureUpgraded] = fmt.Sprintf("%d->%d", ecOrg, parityDrives)
+		}
 	}
 	dataDrives := len(storageDisks) - parityDrives
 
