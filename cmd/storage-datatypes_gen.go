@@ -594,9 +594,9 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "TransitionTier")
 		return
 	}
-	z.TransitionRemoteVersionID, err = dc.ReadString()
+	z.TransitionVersionID, err = dc.ReadString()
 	if err != nil {
-		err = msgp.WrapError(err, "TransitionRemoteVersionID")
+		err = msgp.WrapError(err, "TransitionVersionID")
 		return
 	}
 	z.ExpireRestored, err = dc.ReadBool()
@@ -765,9 +765,9 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "TransitionTier")
 		return
 	}
-	err = en.WriteString(z.TransitionRemoteVersionID)
+	err = en.WriteString(z.TransitionVersionID)
 	if err != nil {
-		err = msgp.WrapError(err, "TransitionRemoteVersionID")
+		err = msgp.WrapError(err, "TransitionVersionID")
 		return
 	}
 	err = en.WriteBool(z.ExpireRestored)
@@ -880,7 +880,7 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.TransitionStatus)
 	o = msgp.AppendString(o, z.TransitionedObjName)
 	o = msgp.AppendString(o, z.TransitionTier)
-	o = msgp.AppendString(o, z.TransitionRemoteVersionID)
+	o = msgp.AppendString(o, z.TransitionVersionID)
 	o = msgp.AppendBool(o, z.ExpireRestored)
 	o = msgp.AppendString(o, z.DataDir)
 	o = msgp.AppendBool(o, z.XLV1)
@@ -966,9 +966,9 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "TransitionTier")
 		return
 	}
-	z.TransitionRemoteVersionID, bts, err = msgp.ReadStringBytes(bts)
+	z.TransitionVersionID, bts, err = msgp.ReadStringBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "TransitionRemoteVersionID")
+		err = msgp.WrapError(err, "TransitionVersionID")
 		return
 	}
 	z.ExpireRestored, bts, err = msgp.ReadBoolBytes(bts)
@@ -1093,7 +1093,7 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfo) Msgsize() (s int) {
-	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.TransitionRemoteVersionID) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
+	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.TransitionVersionID) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
 	if z.Metadata != nil {
 		for za0001, za0002 := range z.Metadata {
 			_ = za0002

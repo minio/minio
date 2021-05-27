@@ -118,7 +118,7 @@ type ObjectInfo struct {
 	// Name of transitioned object on remote tier
 	transitionedObjName string
 	// VersionID on the the remote tier
-	transitionRemoteVersionID string
+	transitionVersionID string
 	// Name of remote tier object has transitioned to
 	TransitionTier string
 

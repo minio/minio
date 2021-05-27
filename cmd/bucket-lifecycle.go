@@ -46,8 +46,8 @@ const (
 	TransitionStatus = "transition-status"
 	// TransitionedObjectName name of transitioned object
 	TransitionedObjectName = "transitioned-object"
-	// TransitionedRemoteVersionID is version of remote object
-	TransitionedRemoteVersionID = "transitioned-remote-ver-id"
+	// TransitionedVersionID is version of remote object
+	TransitionedVersionID = "transitioned-versionID"
 	// TransitionTier name of transition storage class
 	TransitionTier = "transition-tier"
 )
@@ -219,9 +219,9 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		// When an object is past expiry or when a transitioned object is being
 		// deleted, 'mark' the data in the remote tier for delete.
 		entry := jentry{
-			ObjName:         oi.transitionedObjName,
-			RemoteVersionID: oi.transitionRemoteVersionID,
-			TierName:        oi.TransitionTier,
+			ObjName:   oi.transitionedObjName,
+			VersionID: oi.transitionVersionID,
+			TierName:  oi.TransitionTier,
 		}
 		if err := globalTierJournal.AddEntry(entry); err != nil {
 			logger.LogIf(ctx, err)
@@ -335,7 +335,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		gopts.length = length
 	}
 
-	reader, err := tgtClient.Get(ctx, oi.transitionedObjName, remoteVersionID(oi.transitionRemoteVersionID), gopts)
+	reader, err := tgtClient.Get(ctx, oi.transitionedObjName, remoteVersionID(oi.transitionVersionID), gopts)
 	if err != nil {
 		return nil, err
 	}

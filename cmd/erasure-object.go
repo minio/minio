@@ -1358,7 +1358,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	fi.TransitionStatus = lifecycle.TransitionComplete
 	fi.TransitionedObjName = destObj
 	fi.TransitionTier = opts.Transition.Tier
-	fi.TransitionRemoteVersionID = string(rv)
+	fi.TransitionVersionID = string(rv)
 	eventName := event.ObjectTransitionComplete
 
 	storageDisks := er.getDisks()

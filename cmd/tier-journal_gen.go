@@ -30,10 +30,10 @@ func (z *jentry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ObjName")
 				return
 			}
-		case "rvid":
-			z.RemoteVersionID, err = dc.ReadString()
+		case "vid":
+			z.VersionID, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "RemoteVersionID")
+				err = msgp.WrapError(err, "VersionID")
 				return
 			}
 		case "tier":
@@ -66,14 +66,14 @@ func (z jentry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ObjName")
 		return
 	}
-	// write "rvid"
-	err = en.Append(0xa4, 0x72, 0x76, 0x69, 0x64)
+	// write "vid"
+	err = en.Append(0xa3, 0x76, 0x69, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.RemoteVersionID)
+	err = en.WriteString(z.VersionID)
 	if err != nil {
-		err = msgp.WrapError(err, "RemoteVersionID")
+		err = msgp.WrapError(err, "VersionID")
 		return
 	}
 	// write "tier"
@@ -96,9 +96,9 @@ func (z jentry) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "obj"
 	o = append(o, 0x83, 0xa3, 0x6f, 0x62, 0x6a)
 	o = msgp.AppendString(o, z.ObjName)
-	// string "rvid"
-	o = append(o, 0xa4, 0x72, 0x76, 0x69, 0x64)
-	o = msgp.AppendString(o, z.RemoteVersionID)
+	// string "vid"
+	o = append(o, 0xa3, 0x76, 0x69, 0x64)
+	o = msgp.AppendString(o, z.VersionID)
 	// string "tier"
 	o = append(o, 0xa4, 0x74, 0x69, 0x65, 0x72)
 	o = msgp.AppendString(o, z.TierName)
@@ -129,10 +129,10 @@ func (z *jentry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ObjName")
 				return
 			}
-		case "rvid":
-			z.RemoteVersionID, bts, err = msgp.ReadStringBytes(bts)
+		case "vid":
+			z.VersionID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "RemoteVersionID")
+				err = msgp.WrapError(err, "VersionID")
 				return
 			}
 		case "tier":
@@ -155,7 +155,7 @@ func (z *jentry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z jentry) Msgsize() (s int) {
-	s = 1 + 4 + msgp.StringPrefixSize + len(z.ObjName) + 5 + msgp.StringPrefixSize + len(z.RemoteVersionID) + 5 + msgp.StringPrefixSize + len(z.TierName)
+	s = 1 + 4 + msgp.StringPrefixSize + len(z.ObjName) + 4 + msgp.StringPrefixSize + len(z.VersionID) + 5 + msgp.StringPrefixSize + len(z.TierName)
 	return
 }
 

@@ -42,9 +42,9 @@ type tierJournal struct {
 }
 
 type jentry struct {
-	ObjName         string `msg:"obj"`
-	RemoteVersionID string `msg:"rvid"`
-	TierName        string `msg:"tier"`
+	ObjName   string `msg:"obj"`
+	VersionID string `msg:"vid"`
+	TierName  string `msg:"tier"`
 }
 
 const (
@@ -129,7 +129,7 @@ func (j *tierJournal) WalkEntries(fn walkFn) {
 			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to decode journal entry %s", err))
 			break
 		}
-		err = fn(entry.ObjName, entry.RemoteVersionID, entry.TierName)
+		err = fn(entry.ObjName, entry.VersionID, entry.TierName)
 		if err != nil && !isErrObjectNotFound(err) {
 			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to delete transitioned object %s from %s due to %s", entry.ObjName, entry.TierName, err))
 			// We add the entry into the active journal to try again

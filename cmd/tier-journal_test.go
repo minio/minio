@@ -107,9 +107,9 @@ func TestJEntryWriteNewToOldMix1(t *testing.T) {
 			// For old struct values, the RemoteVersionID will be
 			// empty
 			expectedJe = jentry{
-				ObjName:         oldStructVals[i].ObjName,
-				RemoteVersionID: "",
-				TierName:        oldStructVals[i].TierName,
+				ObjName:   oldStructVals[i].ObjName,
+				VersionID: "",
+				TierName:  oldStructVals[i].TierName,
 			}
 		} else {
 			expectedJe = newStructVals[i-len(oldStructVals)]
