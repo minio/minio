@@ -46,6 +46,8 @@ const (
 	TransitionStatus = "transition-status"
 	// TransitionedObjectName name of transitioned object
 	TransitionedObjectName = "transitioned-object"
+	// TransitionedRemoteVersionID is version of remote object
+	TransitionedRemoteVersionID = "transitioned-remote-ver-id"
 	// TransitionTier name of transition storage class
 	TransitionTier = "transition-tier"
 )

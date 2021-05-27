@@ -875,6 +875,9 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		if fi.TransitionedObjName != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
 		}
+		if fi.TransitionRemoteVersionID != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedRemoteVersionID] = []byte(fi.TransitionRemoteVersionID)
+		}
 		if fi.TransitionTier != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
 		}
@@ -1019,6 +1022,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	if o, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
 		fi.TransitionedObjName = string(o)
+	}
+	if rv, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedRemoteVersionID]; ok {
+		fi.TransitionRemoteVersionID = string(rv)
 	}
 	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
 		fi.TransitionTier = string(sc)
@@ -1188,6 +1194,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 				case fi.TransitionStatus == lifecycle.TransitionComplete:
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedRemoteVersionID] = []byte(fi.TransitionRemoteVersionID)
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
 				default:
 					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
