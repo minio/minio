@@ -25,11 +25,9 @@ import (
 )
 
 const (
-	adminPathPrefix         = minioReservedBucketPath + "/admin"
-	adminAPIVersionV2       = madmin.AdminAPIVersionV2
-	adminAPIVersion         = madmin.AdminAPIVersion
-	adminAPIVersionPrefix   = SlashSeparator + adminAPIVersion
-	adminAPIVersionV2Prefix = SlashSeparator + adminAPIVersionV2
+	adminPathPrefix       = minioReservedBucketPath + "/admin"
+	adminAPIVersion       = madmin.AdminAPIVersion
+	adminAPIVersionPrefix = SlashSeparator + adminAPIVersion
 )
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
@@ -46,7 +44,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	adminVersions := []string{
 		adminAPIVersionPrefix,
-		adminAPIVersionV2Prefix,
 	}
 
 	for _, adminVersion := range adminVersions {
@@ -127,19 +124,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(httpTraceHdrs(adminAPI.ListServiceAccounts))
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(httpTraceHdrs(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
-			if adminVersion == adminAPIVersionV2Prefix {
-				// Info policy IAM v2
-				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicyV2)).Queries("name", "{name:.*}")
-
-				// List policies v2
-				adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPoliciesV2))
-			} else {
-				// Info policy IAM latest
-				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
-
-				// List policies latest
-				adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
-			}
+			// Info policy IAM latest
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
+			// List policies latest
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketPolicies)).Queries("bucket", "{bucket:.*}")
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
 
 			// Remove policy IAM
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
@@ -153,11 +142,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
 
 			// List users
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketUsers)).Queries("bucket", "{bucket:.*}")
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
 
 			// User info
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
-
 			// Add/Remove members from group
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
 
