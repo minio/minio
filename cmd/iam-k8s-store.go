@@ -104,15 +104,15 @@ func objPathFromK8sValid(objPath string) string {
 	return strings.Replace(objPath, ".", "/", -1)
 }
 
-func addTtlPrefix(objPath string) string {
+func addTTLPrefix(objPath string) string {
 	return ttlPrefix + objPath
 }
 
-func trimTtlPrefix(ttlKey string) string {
+func trimTTLPrefix(ttlKey string) string {
 	return strings.TrimPrefix(ttlKey, ttlPrefix)
 }
 
-func hasTtlPrefix(ttlKey string) bool {
+func hasTTLPrefix(ttlKey string) bool {
 	return strings.HasPrefix(ttlKey, ttlPrefix)
 }
 
@@ -127,7 +127,7 @@ func (iamK8s *IAMK8sStore) saveIamConfigNoConflictRetry(ctx context.Context, obj
 	}
 	annotations[objPath] = data
 	if len(opts) > 0 {
-		annotations[addTtlPrefix(objPath)] = strconv.FormatInt(time.Now().Unix()+opts[0].ttl, 10)
+		annotations[addTTLPrefix(objPath)] = strconv.FormatInt(time.Now().Unix()+opts[0].ttl, 10)
 	}
 	return iamK8s.configMapsClient.UpdateConfigMap(ctx, configMap.ResourceVersion, annotations)
 }
@@ -171,7 +171,7 @@ type iamConfigListResult struct {
 	err             error
 }
 
-func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string, includeTtlItems bool) iamConfigListResult {
+func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string, includeTTLItems bool) iamConfigListResult {
 	configItems := []iamConfigItem{}
 	configMap, err := iamK8s.configMapsClient.GetConfigMap(ctx)
 	if err != nil {
@@ -182,7 +182,7 @@ func (iamK8s *IAMK8sStore) listIAMConfigs(ctx context.Context, pathPrefix string
 		objPath = objPathFromK8sValid(objPath)
 		trimmedObjPath := strings.TrimPrefix(objPath, pathPrefix)
 		trimmedObjPath = strings.TrimSuffix(trimmedObjPath, SlashSeparator)
-		ttlOk := (includeTtlItems && strings.HasPrefix(trimTtlPrefix(objPath), pathPrefix))
+		ttlOk := (includeTTLItems && strings.HasPrefix(trimTTLPrefix(objPath), pathPrefix))
 		if strings.HasPrefix(objPath, pathPrefix) || ttlOk {
 			configItems = append(configItems, iamConfigItem{objPath: trimmedObjPath, data: data})
 		}
@@ -436,12 +436,12 @@ func filterExpiredItems(items []iamConfigItem) []iamConfigItem {
 	keep := []string{}
 	now := time.Now().Unix()
 	for _, item := range items {
-		if hasTtlPrefix(item.objPath) {
+		if hasTTLPrefix(item.objPath) {
 			expTime, _ := strconv.ParseInt(item.data, 10, 64)
 			if expTime > now {
 				// has not expired
 				keep = append(keep, item.objPath)
-				keep = append(keep, trimTtlPrefix(item.objPath))
+				keep = append(keep, trimTTLPrefix(item.objPath))
 			}
 		}
 	}

@@ -60,7 +60,7 @@ func (cli *k8sConfigMapClientImpl) UpdateConfigMap(ctx context.Context, resource
 	for retries < cli.maxRetries && isRetryable(err) {
 		backoff(retries, 1000)
 		_, err = cli.configMapsClient.Update(ctx, configMapUpdated, metav1.UpdateOptions{})
-		retries += 1
+		retries++
 	}
 	return err
 }
@@ -71,7 +71,7 @@ func (cli *k8sConfigMapClientImpl) GetConfigMap(ctx context.Context) (*corev1.Co
 	for retries < cli.maxRetries && isRetryable(err) {
 		backoff(retries, 1000)
 		configMap, err = cli.configMapsClient.Get(ctx, cli.configMapName, metav1.GetOptions{})
-		retries += 1
+		retries++
 	}
 	return configMap, err
 }
