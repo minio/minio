@@ -18,6 +18,9 @@
 package condition
 
 const (
-	// LDAPUser - LDAP username, in MinIO this value is equal to your authenticating LDAP user.
+	// LDAPUser - LDAP user DN, in MinIO this value is equal to user DN of the authenticated user.
 	LDAPUser Key = "ldap:user"
+
+	// LDAPUsername - LDAP username, in MinIO is the authenticated simply user.
+	LDAPUsername Key = "ldap:username"
 )
