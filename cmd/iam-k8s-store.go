@@ -20,7 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	errorsv1 "k8s.io/apimachinery/pkg/api/errors"
 	"path"
 	"strconv"
@@ -62,8 +62,9 @@ func newIAMK8sStore() *IAMK8sStore {
 	}
 	k8sStore.configMapsClient.EnsureConfigMapExists(context.Background())
 	go k8sStore.watchExpiredItems()
-	logger.Info("New K8S IAM store configured. Namespace: " + globalK8sIamStoreConfig.Namespace +
-		", ConfigMap: " + globalK8sIamStoreConfig.ConfigMapName)
+	logger.Info(fmt.Sprintf("New K8S IAM store configured. Namespace: %s, ConfigMap: %s",
+		globalK8sIamStoreConfig.Namespace,
+		globalK8sIamStoreConfig.ConfigMapName))
 	return k8sStore
 }
 
@@ -153,11 +154,10 @@ func (iamK8s *IAMK8sStore) loadIAMConfig(ctx context.Context, item interface{}, 
 	if err != nil {
 		return err
 	}
-	data := configMap.Annotations[objPathToK8sValid(objPath)]
-	if data == "" {
-		return errors.New("No entry for key: " + objPath)
+	if data, ok := configMap.Annotations[objPathToK8sValid(objPath)]; ok {
+		return json.Unmarshal([]byte(data), item)
 	}
-	return json.Unmarshal([]byte(data), item)
+	return errConfigNotFound
 }
 
 type iamConfigItem struct {
