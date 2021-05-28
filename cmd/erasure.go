@@ -31,9 +31,9 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/console"
 )
 
 // OfflineDisk represents an unavailable disk.

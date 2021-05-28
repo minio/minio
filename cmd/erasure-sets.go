@@ -37,10 +37,10 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 )
 
 // setsDsyncLockers is encapsulated type for Close()

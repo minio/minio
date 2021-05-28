@@ -38,8 +38,8 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/mimedb"
 )
 
 // list all errors which can be ignored in object operations.

@@ -40,11 +40,11 @@ import (
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 // ServerFlags - server command specific flags

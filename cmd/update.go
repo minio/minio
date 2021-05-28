@@ -37,8 +37,8 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/pkg/env"
 	"github.com/minio/selfupdate"
 )
 
