@@ -27,7 +27,7 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/minio/minio/pkg/safe"
-	etcd "go.etcd.io/etcd/clientv3"
+	etcd "go.etcd.io/etcd/client/v3"
 )
 
 // Config - generic config interface functions
