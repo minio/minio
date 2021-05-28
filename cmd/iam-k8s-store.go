@@ -198,10 +198,10 @@ func (iamK8s *IAMK8sStore) deleteIAMConfigNoConflictRetry(ctx context.Context, p
 	}
 	annotations := configMap.Annotations
 	if _, ok := annotations[path]; ok {
-		return errConfigNotFound
-	} else {
 		delete(annotations, path)
 		return iamK8s.configMapsClient.UpdateConfigMap(ctx, configMap.ResourceVersion, annotations)
+	} else {
+		return errConfigNotFound
 	}
 }
 
