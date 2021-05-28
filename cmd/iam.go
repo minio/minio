@@ -451,10 +451,12 @@ func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
 	sys.Lock()
 	defer sys.Unlock()
 
-	if globalEtcdClient == nil {
-		sys.store = newIAMObjectStore(objAPI)
-	} else {
+	if globalEtcdClient != nil {
 		sys.store = newIAMEtcdStore()
+	} else if globalK8sClient != nil {
+		sys.store = newIAMK8sStore()
+	} else {
+		sys.store = newIAMObjectStore(objAPI)
 	}
 
 	if globalLDAPConfig.Enabled {

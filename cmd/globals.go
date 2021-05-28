@@ -25,6 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/config/k8s"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
@@ -235,6 +238,10 @@ var (
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
+
+	// Initialized k8s clientset for k8s-native iam config store
+	globalK8sClient         *kubernetes.Clientset
+	globalK8sIamStoreConfig k8s.Config
 
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
