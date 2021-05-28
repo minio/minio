@@ -488,10 +488,11 @@ func (iamK8s *IAMK8sStore) deleteGroupInfo(ctx context.Context, name string) err
 
 func filterExpiredItems(items []iamConfigItem) []iamConfigItem {
 	keep := []string{}
+	now := time.Now().Unix()
 	for _, item := range items {
 		if hasTtlPrefix(item.objPath) {
 			expTime, _ := strconv.ParseInt(item.data, 10, 64)
-			if expTime > time.Now().Unix() {
+			if expTime > now {
 				// has not expired
 				keep = append(keep, item.objPath)
 				keep = append(keep, trimTtlPrefix(item.objPath))
