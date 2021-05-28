@@ -68,6 +68,17 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
+func getCurrentMRFStatus() madmin.MRFStatus {
+	mrfInfo := globalMRFState.getCurrentMRFRoundInfo()
+	return madmin.MRFStatus{
+		BytesHealed: mrfInfo.bytesHealed,
+		ItemsHealed: mrfInfo.itemsHealed,
+		TotalItems:  mrfInfo.itemsHealed + mrfInfo.pendingItems,
+		TotalBytes:  mrfInfo.bytesHealed + mrfInfo.pendingBytes,
+		Started:     mrfInfo.triggeredAt,
+	}
+}
+
 // getBackgroundHealStatus will return the
 func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
@@ -79,12 +90,19 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		return madmin.BgHealState{}, false
 	}
 
+	status := madmin.BgHealState{
+		ScannedItemsCount: bgSeq.getScannedItemsCount(),
+	}
+
+	if globalMRFState != nil {
+		status.MRF = map[string]madmin.MRFStatus{
+			globalLocalNodeName: getCurrentMRFStatus(),
+		}
+	}
+
 	var healDisksMap = map[string]struct{}{}
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
-	}
-	status := madmin.BgHealState{
-		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 	}
 
 	if o == nil {
@@ -225,12 +243,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 					ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						// If not deleted, assume they failed.
-						tracker.ObjectsFailed++
+						tracker.ItemsFailed++
 						tracker.BytesFailed += uint64(version.Size)
 						logger.LogIf(ctx, err)
 					}
 				} else {
-					tracker.ObjectsHealed++
+					tracker.ItemsHealed++
 					tracker.BytesDone += uint64(version.Size)
 				}
 				bgSeq.logHeal(madmin.HealItemObject)
