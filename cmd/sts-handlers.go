@@ -64,7 +64,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser = "ldapUser"
+	ldapUser     = "ldapUser"
+	ldapUsername = "ldapUsername"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -525,8 +526,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim: UTCNow().Add(expiryDur).Unix(),
-		ldapUser: ldapUserDN,
+		expClaim:     UTCNow().Add(expiryDur).Unix(),
+		ldapUsername: ldapUsername,
+		ldapUser:     ldapUserDN,
 	}
 
 	if len(sessionPolicyStr) > 0 {

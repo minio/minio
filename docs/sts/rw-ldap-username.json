@@ -4,10 +4,10 @@
     {
       "Effect": "Allow",
       "Action": [
-        "s3:ListBucket"
+        "s3:*"
       ],
       "Resource": [
-        "arn:aws:s3:::${ldap:user}"
+        "arn:aws:s3:::${ldap:username}/*"
       ]
     }
   ]

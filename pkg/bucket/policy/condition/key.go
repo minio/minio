@@ -148,6 +148,7 @@ var AllSupportedKeys = append([]Key{
 	AWSUserID,
 	AWSUsername,
 	LDAPUser,
+	LDAPUsername,
 	// Add new supported condition keys.
 }, JWTKeys...)
 
@@ -167,6 +168,7 @@ var CommonKeys = append([]Key{
 	AWSUserID,
 	AWSUsername,
 	LDAPUser,
+	LDAPUsername,
 }, JWTKeys...)
 
 func substFuncFromValues(values map[string][]string) func(string) string {
