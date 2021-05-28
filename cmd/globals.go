@@ -42,9 +42,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	etcd "go.etcd.io/etcd/client/v3"
 
-	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
+	"github.com/minio/pkg/certs"
 )
 
 // minio configuration related constants.

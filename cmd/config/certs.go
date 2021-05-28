@@ -27,7 +27,7 @@ import (
 	"errors"
 	"io/ioutil"
 
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 // EnvCertPassword is the environment variable which contains the password used

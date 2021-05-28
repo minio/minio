@@ -31,7 +31,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/pkg/quick"
 )
 
 /////////////////// Config V1 ///////////////////

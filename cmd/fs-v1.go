@@ -44,8 +44,8 @@ import (
 	"github.com/minio/minio/pkg/color"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
+	"github.com/minio/pkg/mimedb"
 )
 
 // Default etag is used for pre-existing objects.

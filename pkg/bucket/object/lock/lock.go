@@ -29,7 +29,7 @@ import (
 
 	"github.com/beevik/ntp"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 // RetMode - object retention mode.

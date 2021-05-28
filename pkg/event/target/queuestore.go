@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/sys"
+	"github.com/minio/pkg/sys"
 )
 
 const (

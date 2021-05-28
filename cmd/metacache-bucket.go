@@ -32,8 +32,8 @@ import (
 
 	"github.com/klauspost/compress/s2"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/pkg/console"
 	"github.com/tinylib/msgp/msgp"
 )
 

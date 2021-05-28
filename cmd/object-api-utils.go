@@ -47,8 +47,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/trie"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/pkg/trie"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (

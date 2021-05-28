@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 // API sub-system constants

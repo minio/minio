@@ -23,9 +23,9 @@ import (
 	"sort"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/trie"
-	"github.com/minio/minio/pkg/words"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/trie"
+	"github.com/minio/pkg/words"
 )
 
 // GlobalFlags - global flags for minio.

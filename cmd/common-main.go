@@ -44,12 +44,12 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/ellipses"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/ellipses"
+	"github.com/minio/pkg/env"
 )
 
 // serverDebugLog will enable debug printing

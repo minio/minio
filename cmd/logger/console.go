@@ -26,7 +26,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/color"
-	c "github.com/minio/minio/pkg/console"
+	c "github.com/minio/pkg/console"
 )
 
 // Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
