@@ -20,12 +20,13 @@ package cmd
 import (
 	"crypto/x509"
 	"errors"
-	"github.com/minio/minio/cmd/config/k8s"
-	"k8s.io/client-go/kubernetes"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/cmd/config/k8s"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/bandwidth"

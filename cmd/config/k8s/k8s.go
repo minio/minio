@@ -18,10 +18,11 @@
 package k8s
 
 import (
+	"sort"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"sort"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"

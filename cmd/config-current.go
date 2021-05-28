@@ -21,9 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/minio/minio/cmd/config/k8s"
 	"strings"
 	"sync"
+
+	"github.com/minio/minio/cmd/config/k8s"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
