@@ -97,6 +97,16 @@ type Policy struct {
 	Statements []Statement `json:"Statement"`
 }
 
+// MatchResource matches resource with match resource patterns
+func (iamp Policy) MatchResource(resource string) bool {
+	for _, statement := range iamp.Statements {
+		if statement.Resources.MatchResource(resource) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (iamp Policy) IsAllowed(args Args) bool {
 	// Check all deny statements. If any one statement denies, return false.
