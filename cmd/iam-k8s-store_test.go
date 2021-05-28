@@ -26,9 +26,9 @@ func TestFilterExpiredItems(t *testing.T) {
 	t.Run("no expired items", func(t *testing.T) {
 		items := []iamConfigItem{
 			{objPath: "some-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-path"), data: timeInFuture()},
+			{objPath: addTtlPrefix("some-path"), data: timeInFuture()},
 			{objPath: "some-other-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-other-path"), data: timeInFuture()},
+			{objPath: addTtlPrefix("some-other-path"), data: timeInFuture()},
 		}
 		filteredItems := filterExpiredItems(items)
 		if len(filteredItems) != 4 {
@@ -39,9 +39,9 @@ func TestFilterExpiredItems(t *testing.T) {
 	t.Run("all expired items", func(t *testing.T) {
 		items := []iamConfigItem{
 			{objPath: "some-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-path"), data: timeInPast()},
+			{objPath: addTtlPrefix("some-path"), data: timeInPast()},
 			{objPath: "some-other-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-other-path"), data: timeInPast()},
+			{objPath: addTtlPrefix("some-other-path"), data: timeInPast()},
 		}
 		filteredItems := filterExpiredItems(items)
 		if len(filteredItems) != 0 {
@@ -52,9 +52,9 @@ func TestFilterExpiredItems(t *testing.T) {
 	t.Run("some expired items", func(t *testing.T) {
 		items := []iamConfigItem{
 			{objPath: "some-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-path"), data: timeInFuture()},
+			{objPath: addTtlPrefix("some-path"), data: timeInFuture()},
 			{objPath: "some-other-path", data: "jsonData"},
-			{objPath: toTtlExpKey("some-other-path"), data: timeInPast()},
+			{objPath: addTtlPrefix("some-other-path"), data: timeInPast()},
 		}
 		filteredItems := filterExpiredItems(items)
 		if len(filteredItems) != 2 {

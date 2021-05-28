@@ -414,8 +414,8 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		logger.FatalIf(err, "Unable to initialize k8s config")
 	}
 	if k8sCfg.Enabled {
-		globalK8sClient, err = k8s.New(k8sCfg)
 		globalK8sIamStoreConfig = k8sCfg
+		globalK8sClient, err = k8s.New(k8sCfg)
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize k8s client")
 		}

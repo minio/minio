@@ -71,28 +71,21 @@ type Config struct {
 }
 
 // New - initialize new k8s clientset.
-func New(cfg Config) (*kubernetes.Clientset, error) {
+func New(cfg Config) (clientset *kubernetes.Clientset, err error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
 	var k8sconfig *rest.Config
-	var err error
 	if cfg.KubeConfigPath != "" {
-		k8sconfig, err = clientcmd.BuildConfigFromFlags("", cfg.KubeConfigPath)
-		if err != nil {
+		if k8sconfig, err = clientcmd.BuildConfigFromFlags("", cfg.KubeConfigPath); err != nil {
 			return nil, err
 		}
 	} else {
-		k8sconfig, err = rest.InClusterConfig()
-		if err != nil {
+		if k8sconfig, err = rest.InClusterConfig(); err != nil {
 			return nil, err
 		}
 	}
-	clientset, err := kubernetes.NewForConfig(k8sconfig)
-	if err != nil {
-		return nil, err
-	}
-	return clientset, nil
+	return kubernetes.NewForConfig(k8sconfig)
 }
 
 func k8sIamStoreIsEnabled(enableValue string) bool {
