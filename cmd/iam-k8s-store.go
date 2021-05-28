@@ -37,9 +37,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
+
 const (
 	ttlPrefix = "ttlExp_"
 )
+
 // IAMK8sStore implements IAMStorageAPI
 type IAMK8sStore struct {
 	// Protect interation with k8s configmap within single process, but optimistic concurrency
@@ -47,20 +49,20 @@ type IAMK8sStore struct {
 	// setup.
 	sync.RWMutex
 
-	configMapsClient  	typedcorev1.ConfigMapInterface
-	namespace         	string
-	configMapName     	string
-	maxRetries 		  	int
+	configMapsClient    typedcorev1.ConfigMapInterface
+	namespace           string
+	configMapName       string
+	maxRetries          int
 	ttlPurgeFrequencyMs float64
 }
 
 func newIAMK8sStore() *IAMK8sStore {
 	var k8sStore = &IAMK8sStore{
-		configMapsClient:  globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
-		namespace:         globalK8sIamStoreConfig.Namespace,
-		configMapName:     globalK8sIamStoreConfig.ConfigMapName,
-		maxRetries: 10,
-		ttlPurgeFrequencyMs: 120*1000,
+		configMapsClient:    globalK8sClient.CoreV1().ConfigMaps(globalK8sIamStoreConfig.Namespace),
+		namespace:           globalK8sIamStoreConfig.Namespace,
+		configMapName:       globalK8sIamStoreConfig.ConfigMapName,
+		maxRetries:          10,
+		ttlPurgeFrequencyMs: 120 * 1000,
 	}
 	k8sStore.ensureConfigMapExists()
 	go k8sStore.watchExpiredItems()
