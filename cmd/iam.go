@@ -738,12 +738,18 @@ func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	v, ok := sys.iamPolicyDocsMap[policyName]
-	if !ok {
-		return iampolicy.Policy{}, errNoSuchPolicy
+	var combinedPolicy iampolicy.Policy
+	for _, policy := range strings.Split(policyName, ",") {
+		if policy == "" {
+			continue
+		}
+		v, ok := sys.iamPolicyDocsMap[policy]
+		if !ok {
+			return iampolicy.Policy{}, errNoSuchPolicy
+		}
+		combinedPolicy = combinedPolicy.Merge(v)
 	}
-
-	return v, nil
+	return combinedPolicy, nil
 }
 
 // ListPolicies - lists all canned policies.

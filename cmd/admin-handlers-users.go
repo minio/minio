@@ -784,7 +784,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		svcAccountPolicy = svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
 	}
 
-	policyJSON, err := json.Marshal(svcAccountPolicy)
+	policyJSON, err := json.MarshalIndent(svcAccountPolicy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1057,8 +1057,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := globalIAMSys.GetCombinedPolicy(policies...)
-	buf, err := json.Marshal(p)
+	buf, err := json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1115,11 +1114,12 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = json.NewEncoder(w).Encode(policy); err != nil {
+	buf, err := json.MarshalIndent(policy, "", " ")
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	w.(http.Flusher).Flush()
+	w.Write(buf)
 }
 
 // ListBucketPolicies - GET /minio/admin/v3/list-canned-policies?bucket={bucket}
