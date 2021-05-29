@@ -30,12 +30,12 @@ import (
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.

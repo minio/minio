@@ -26,8 +26,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/versioning"
+	"github.com/minio/pkg/bucket/policy"
 
 	"github.com/minio/madmin-go"
 )

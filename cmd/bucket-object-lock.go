@@ -26,8 +26,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // BucketObjectLockSys - map of bucket and retention configuration.

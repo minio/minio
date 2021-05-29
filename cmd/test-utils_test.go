@@ -65,8 +65,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // TestMain to set up global env.
