@@ -32,9 +32,9 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/pkg/env"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // Config - OpenID Config

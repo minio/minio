@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // UsersSysType - defines the type of users and groups system that is

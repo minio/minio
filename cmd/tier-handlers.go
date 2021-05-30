@@ -26,7 +26,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 var (

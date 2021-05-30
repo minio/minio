@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {

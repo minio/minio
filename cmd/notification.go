@@ -40,10 +40,10 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // NotificationSys - notification system.

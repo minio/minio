@@ -38,7 +38,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // gets replication config associated to a given bucket name.
