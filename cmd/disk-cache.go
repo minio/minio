@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (

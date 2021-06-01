@@ -127,12 +127,6 @@ var (
 		`Detected encrypted config backend, correct access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD to be able to decrypt the MinIO config, user IAM and policies`,
 	)
 
-	ErrMissingCredentialsBackendEncrypted = newErrFn(
-		"Credentials missing",
-		"Please set your credentials in the environment",
-		`Detected encrypted config backend, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD to be able to decrypt the MinIO config, user IAM and policies`,
-	)
-
 	ErrInvalidCredentials = newErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",
@@ -143,12 +137,6 @@ var (
 		"Credentials missing",
 		"Please set your credentials in the environment",
 		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
-	)
-
-	ErrEnvCredentialsMissingDistributed = newErrFn(
-		"Credentials missing",
-		"Please set your credentials in the environment",
-		`In distributed server mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
 	ErrInvalidErasureEndpoints = newErrFn(

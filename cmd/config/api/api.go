@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 // API sub-system constants
@@ -83,7 +83,7 @@ var (
 		},
 		config.KV{
 			Key:   apiListQuorum,
-			Value: "strict",
+			Value: "optimal",
 		},
 		config.KV{
 			Key:   apiExtendListCacheLife,
@@ -91,11 +91,11 @@ var (
 		},
 		config.KV{
 			Key:   apiReplicationWorkers,
-			Value: "500",
+			Value: "250",
 		},
 		config.KV{
 			Key:   apiReplicationFailedWorkers,
-			Value: "4",
+			Value: "8",
 		},
 	}
 )
@@ -107,7 +107,7 @@ type Config struct {
 	ClusterDeadline          time.Duration `json:"cluster_deadline"`
 	CorsAllowOrigin          []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline  time.Duration `json:"remote_transport_deadline"`
-	ListQuorum               string        `json:"list_strict_quorum"`
+	ListQuorum               string        `json:"list_quorum"`
 	ExtendListLife           time.Duration `json:"extend_list_cache_life"`
 	ReplicationWorkers       int           `json:"replication_workers"`
 	ReplicationFailedWorkers int           `json:"replication_failed_workers"`

@@ -45,10 +45,10 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -98,16 +98,33 @@ func isValidVolname(volname string) bool {
 	return true
 }
 
+var (
+	xlPoolReallyLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeReallyLarge)
+			return &b
+		},
+	}
+	xlPoolLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeLarge)
+			return &b
+		},
+	}
+	xlPoolSmall = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(blockSizeSmall)
+			return &b
+		},
+	}
+)
+
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
 	diskPath string
 	endpoint Endpoint
 
 	globalSync bool
-
-	poolReallyLarge sync.Pool
-	poolLarge       sync.Pool
-	poolSmall       sync.Pool
 
 	rootDisk bool
 
@@ -254,26 +271,8 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	}
 
 	p := &xlStorage{
-		diskPath: path,
-		endpoint: ep,
-		poolReallyLarge: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeReallyLarge)
-				return &b
-			},
-		},
-		poolLarge: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeLarge)
-				return &b
-			},
-		},
-		poolSmall: sync.Pool{
-			New: func() interface{} {
-				b := disk.AlignedBlock(blockSizeSmall)
-				return &b
-			},
-		},
+		diskPath:   path,
+		endpoint:   ep,
 		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
 		ctx:        GlobalContext,
 		rootDisk:   rootDisk,
@@ -385,7 +384,22 @@ func (s *xlStorage) Healing() *healingTracker {
 	return &h
 }
 
-func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
+	f, err := os.OpenFile(itemPath, readMode, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return readXLMetaNoData(f, stat.Size())
+}
+
+func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+	// Updates must be closed before we return.
+	defer close(updates)
 	var lc *lifecycle.Lifecycle
 	var err error
 
@@ -410,6 +424,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 	globalHealConfigMu.Lock()
 	healOpts := globalHealConfig
 	globalHealConfigMu.Unlock()
+	cache.Info.updates = updates
 
 	dataUsageInfo, err := scanDataFolder(ctx, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -419,7 +434,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache) (dataUs
 			return sizeSummary{}, errSkipFile
 		}
 
-		buf, err := xioutil.ReadFile(item.Path)
+		buf, err := s.readMetadata(item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -743,25 +758,6 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 	return nil
 }
 
-func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return false
-	}
-
-	if err = Access(pathJoin(volumeDir, leafPath, xlStorageFormatFile)); err == nil {
-		return true
-	}
-	if osIsNotExist(err) {
-		// We need a fallback code where directory might contain
-		// legacy `xl.json`, in such situation we just rename
-		// and proceed if rename is successful we know that it
-		// is the leaf since `xl.json` was present.
-		return s.renameLegacyMetadata(volumeDir, leafPath) == nil
-	}
-	return false
-}
-
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
@@ -1081,6 +1077,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
+			if len(fi.Data) > 0 {
+				if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; !ok {
+					fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+				}
+			}
 			return fi, nil
 		}
 
@@ -1324,9 +1325,9 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 	}
 	if o.buf == nil {
 		if o.smallFile {
-			o.bufp = o.s.poolSmall.Get().(*[]byte)
+			o.bufp = xlPoolSmall.Get().(*[]byte)
 		} else {
-			o.bufp = o.s.poolLarge.Get().(*[]byte)
+			o.bufp = xlPoolLarge.Get().(*[]byte)
 		}
 	}
 	if o.freshRead {
@@ -1368,9 +1369,9 @@ func (o *odirectReader) Read(buf []byte) (n int, err error) {
 // Close - Release the buffer and close the file.
 func (o *odirectReader) Close() error {
 	if o.smallFile {
-		o.s.poolSmall.Put(o.bufp)
+		xlPoolSmall.Put(o.bufp)
 	} else {
-		o.s.poolLarge.Put(o.bufp)
+		xlPoolLarge.Put(o.bufp)
 	}
 	return o.f.Close()
 }
@@ -1555,11 +1556,11 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	var bufp *[]byte
 	if fileSize > 0 && fileSize >= reallyLargeFileThreshold {
 		// use a larger 4MiB buffer for really large streams.
-		bufp = s.poolReallyLarge.Get().(*[]byte)
-		defer s.poolReallyLarge.Put(bufp)
+		bufp = xlPoolReallyLarge.Get().(*[]byte)
+		defer xlPoolReallyLarge.Put(bufp)
 	} else {
-		bufp = s.poolLarge.Get().(*[]byte)
-		defer s.poolLarge.Put(bufp)
+		bufp = xlPoolLarge.Get().(*[]byte)
+		defer xlPoolLarge.Put(bufp)
 	}
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
@@ -2028,6 +2029,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// Purge the destination path as we are not preserving anything
 				// versioned object was not requested.
 				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
 	}

@@ -65,8 +65,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // TestMain to set up global env.
@@ -77,8 +77,6 @@ func TestMain(m *testing.M) {
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
 	}
-
-	globalConfigEncrypted = true
 
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
@@ -1276,35 +1274,6 @@ func getRandomObjectName() string {
 func getRandomBucketName() string {
 	return randString(60)
 
-}
-
-// NewEOFWriter returns a Writer that writes to w,
-// but returns EOF error after writing n bytes.
-func NewEOFWriter(w io.Writer, n int64) io.Writer {
-	return &EOFWriter{w, n}
-}
-
-type EOFWriter struct {
-	w io.Writer
-	n int64
-}
-
-// io.Writer implementation designed to error out with io.EOF after reading `n` bytes.
-func (t *EOFWriter) Write(p []byte) (n int, err error) {
-	if t.n <= 0 {
-		return -1, io.EOF
-	}
-	// real write
-	n = len(p)
-	if int64(n) > t.n {
-		n = int(t.n)
-	}
-	n, err = t.w.Write(p[0:n])
-	t.n -= int64(n)
-	if err == nil {
-		n = len(p)
-	}
-	return
 }
 
 // construct URL for http requests for bucket operations.

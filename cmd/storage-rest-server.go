@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
@@ -31,6 +32,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tinylib/msgp/msgp"
@@ -173,13 +175,43 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	resp := streamHTTPResponse(w)
-	usageInfo, err := s.storage.NSScanner(r.Context(), cache)
+	respW := msgp.NewWriter(resp)
+
+	// Collect updates, stream them before the full cache is sent.
+	updates := make(chan dataUsageEntry, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for update := range updates {
+			// Write true bool to indicate update.
+			if err = respW.WriteBool(true); err == nil {
+				err = update.EncodeMsg(respW)
+			}
+			respW.Flush()
+			if err != nil {
+				cancel()
+				resp.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	usageInfo, err := s.storage.NSScanner(ctx, cache, updates)
 	if err != nil {
+		respW.Flush()
 		resp.CloseWithError(err)
 		return
 	}
-	resp.CloseWithError(usageInfo.serializeTo(resp))
+
+	// Write false bool to indicate we finished.
+	wg.Wait()
+	if err = respW.WriteBool(false); err == nil {
+		err = usageInfo.EncodeMsg(respW)
+	}
+	resp.CloseWithError(respW.Flush())
 }
 
 // MakeVolHandler - make a volume.
@@ -1003,17 +1035,38 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
-	for _, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
+	storageDisks := make([][]*xlStorage, len(endpointServerPools))
+	for poolIdx, ep := range endpointServerPools {
+		storageDisks[poolIdx] = make([]*xlStorage, len(ep.Endpoints))
+	}
+	var wg sync.WaitGroup
+	for poolIdx, ep := range endpointServerPools {
+		for setIdx, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newXLStorage(endpoint)
-			if err != nil {
-				// if supported errors don't fail, we proceed to
-				// printing message and moving forward.
-				logFatalErrs(err, endpoint, false)
+			wg.Add(1)
+			go func(poolIdx, setIdx int, endpoint Endpoint) {
+				defer wg.Done()
+				var err error
+				storageDisks[poolIdx][setIdx], err = newXLStorage(endpoint)
+				if err != nil {
+					// if supported errors don't fail, we proceed to
+					// printing message and moving forward.
+					logFatalErrs(err, endpoint, false)
+				}
+			}(poolIdx, setIdx, endpoint)
+		}
+	}
+	wg.Wait()
+
+	for _, setDisks := range storageDisks {
+		for _, storage := range setDisks {
+			if storage == nil {
+				continue
 			}
+
+			endpoint := storage.Endpoint()
 
 			server := &storageRESTServer{storage: storage}
 

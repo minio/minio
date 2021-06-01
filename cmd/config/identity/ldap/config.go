@@ -29,7 +29,7 @@ import (
 
 	ldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -189,7 +189,7 @@ func (l *Config) lookupBind(conn *ldap.Conn) error {
 		err = conn.Bind(l.LookupBindDN, l.LookupBindPassword)
 	}
 	if ldap.IsErrorWithCode(err, 49) {
-		return fmt.Errorf("LDAP Lookup Bind user invalid credentials error: %v", err)
+		return fmt.Errorf("LDAP Lookup Bind user invalid credentials error: %w", err)
 	}
 	return err
 }
@@ -214,7 +214,7 @@ func (l *Config) usernameFormatsBind(conn *ldap.Conn, username, password string)
 			bindDistNames = append(bindDistNames, bindDN)
 			successCount++
 		} else if !ldap.IsErrorWithCode(errs[i], 49) {
-			return "", fmt.Errorf("LDAP Bind request failed with unexpected error: %v", errs[i])
+			return "", fmt.Errorf("LDAP Bind request failed with unexpected error: %w", errs[i])
 		}
 	}
 	if successCount == 0 {
@@ -279,7 +279,7 @@ func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) (
 			var newGroups []string
 			newGroups, err := getGroups(conn, searchRequest)
 			if err != nil {
-				errRet := fmt.Errorf("Error finding groups of %s: %v", bindDN, err)
+				errRet := fmt.Errorf("Error finding groups of %s: %w", bindDN, err)
 				return nil, errRet
 			}
 
@@ -341,14 +341,14 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 		// Lookup user DN
 		bindDN, err = l.lookupUserDN(conn, username)
 		if err != nil {
-			errRet := fmt.Errorf("Unable to find user DN: %s", err)
+			errRet := fmt.Errorf("Unable to find user DN: %w", err)
 			return "", nil, errRet
 		}
 
 		// Authenticate the user credentials.
 		err = conn.Bind(bindDN, password)
 		if err != nil {
-			errRet := fmt.Errorf("LDAP auth failed for DN %s: %v", bindDN, err)
+			errRet := fmt.Errorf("LDAP auth failed for DN %s: %w", bindDN, err)
 			return "", nil, errRet
 		}
 
@@ -366,7 +366,7 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 		// Bind to the successful bindDN again.
 		err = conn.Bind(bindDN, password)
 		if err != nil {
-			errRet := fmt.Errorf("LDAP conn failed though auth for DN %s succeeded: %v", bindDN, err)
+			errRet := fmt.Errorf("LDAP conn failed though auth for DN %s succeeded: %w", bindDN, err)
 			return "", nil, errRet
 		}
 	}
@@ -423,12 +423,12 @@ func (l Config) GetExpiryDuration() time.Duration {
 func (l Config) testConnection() error {
 	conn, err := l.Connect()
 	if err != nil {
-		return fmt.Errorf("Error creating connection to LDAP server: %v", err)
+		return fmt.Errorf("Error creating connection to LDAP server: %w", err)
 	}
 	defer conn.Close()
 	if l.isUsingLookupBind {
 		if err = l.lookupBind(conn); err != nil {
-			return fmt.Errorf("Error connecting as LDAP Lookup Bind user: %v", err)
+			return fmt.Errorf("Error connecting as LDAP Lookup Bind user: %w", err)
 		}
 		return nil
 	}
@@ -449,7 +449,7 @@ func (l Config) testConnection() error {
 	} else if strings.HasPrefix(err.Error(), "All username formats failed due to invalid credentials: ") {
 		return nil
 	}
-	return fmt.Errorf("LDAP connection test error: %v", err)
+	return fmt.Errorf("LDAP connection test error: %w", err)
 }
 
 // Enabled returns if jwks is enabled.
@@ -547,7 +547,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 
 	// Test connection to LDAP server.
 	if err := l.testConnection(); err != nil {
-		return l, fmt.Errorf("Connection test for LDAP server failed: %v", err)
+		return l, fmt.Errorf("Connection test for LDAP server failed: %w", err)
 	}
 
 	// Group search params configuration

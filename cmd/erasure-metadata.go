@@ -32,6 +32,9 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+// Object was stored with additional erasure codes due to degraded system at upload time
+const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
+
 const erasureAlgorithm = "rs-vandermonde"
 
 // byObjectPartNumber is a collection satisfying sort.Interface.
@@ -239,7 +242,11 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 	return 0, 0, InvalidRange{}
 }
 
-func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
+func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (FileInfo, error) {
+	// with less quorum return error.
+	if quorum < 2 {
+		return FileInfo{}, errErasureReadQuorum
+	}
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
 	for i, meta := range metaArr {
@@ -278,7 +285,9 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 	for i, hash := range metaHashes {
 		if hash == maxHash {
-			return metaArr[i], nil
+			if metaArr[i].IsValid() {
+				return metaArr[i], nil
+			}
 		}
 	}
 
@@ -287,7 +296,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
-func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (FileInfo, error) {
 	return findFileInfoInQuorum(ctx, metaArr, modTime, dataDir, quorum)
 }
 
@@ -329,10 +338,18 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		return 0, 0, err
 	}
 
-	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if !latestFileInfo.IsValid() {
+		return 0, 0, errErasureReadQuorum
+	}
+
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
 	if parityBlocks <= 0 {
 		parityBlocks = defaultParityCount
+	}
+
+	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if dataBlocks == 0 {
+		dataBlocks = len(partsMetaData) - parityBlocks
 	}
 
 	writeQuorum := dataBlocks

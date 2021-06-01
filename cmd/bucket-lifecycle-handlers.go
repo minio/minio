@@ -26,7 +26,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 const (
@@ -80,7 +80,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	}
 
 	// Validate the transition storage ARNs
-	if err = validateLifecycleTransition(ctx, bucket, bucketLifecycle); err != nil {
+	if err = validateTransitionTier(ctx, bucketLifecycle); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

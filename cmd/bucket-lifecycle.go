@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -175,28 +176,16 @@ func initBackgroundTransition(ctx context.Context, objectAPI ObjectLayer) {
 	}
 }
 
-func validateLifecycleTransition(ctx context.Context, bucket string, lfc *lifecycle.Lifecycle) error {
-	for _, rule := range lfc.Rules {
-		if rule.Transition.StorageClass != "" {
-			err := validateTransitionDestination(rule.Transition.StorageClass)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
+var errInvalidStorageClass = errors.New("invalid storage class")
 
-// validateTransitionDestination returns error if transition destination bucket missing or not configured
-// It also returns true if transition destination is same as this server.
-func validateTransitionDestination(sc string) error {
-	backend, err := globalTierConfigMgr.getDriver(sc)
-	if err != nil {
-		return TransitionStorageClassNotFound{}
-	}
-	_, err = backend.Get(context.Background(), "probeobject", WarmBackendGetOpts{})
-	if !isErrObjectNotFound(err) {
-		return err
+func validateTransitionTier(ctx context.Context, lfc *lifecycle.Lifecycle) error {
+	for _, rule := range lfc.Rules {
+		if rule.Transition.StorageClass == "" {
+			continue
+		}
+		if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
+			return errInvalidStorageClass
+		}
 	}
 	return nil
 }

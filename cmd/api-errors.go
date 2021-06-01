@@ -38,10 +38,10 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // APIError structure
@@ -1814,6 +1814,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
+	case errInvalidStorageClass:
+		apiErr = ErrInvalidStorageClass
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters

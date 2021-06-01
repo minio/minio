@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,15 +29,14 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
-	etcd "go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/mvcc/mvccpb"
+	iampolicy "github.com/minio/pkg/iam/policy"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	etcd "go.etcd.io/etcd/client/v3"
 )
 
 var defaultContextTimeout = 30 * time.Second
@@ -59,7 +57,7 @@ func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 //  suffix := "config.json"
 //  result is foo
 func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
-	return pathClean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
+	return pathClean(strings.TrimSuffix(strings.TrimPrefix(s, prefix), suffix))
 }
 
 // IAMEtcdStore implements IAMStorageAPI
@@ -107,22 +105,12 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 
 func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	var err error
-	if !utf8.Valid(data) {
-		if GlobalKMS != nil {
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-				minioMetaBucket: path.Join(minioMetaBucket, itemPath),
-			})
-			if err != nil {
-				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-			if err != nil {
-				return err
-			}
+	if !utf8.Valid(data) && GlobalKMS != nil {
+		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
+		})
+		if err != nil {
+			return err
 		}
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -343,7 +331,7 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 				return []byte(globalOldCred.SecretKey), nil
 			}
 			if _, err := jwtgo.ParseWithClaims(u.Credentials.SessionToken, m, stsTokenCallback); err == nil {
-				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
+				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, m)
 				if token, err := jwt.SignedString([]byte(globalActiveCred.SecretKey)); err == nil {
 					u.Credentials.SessionToken = token
 					err := ies.saveIAMConfig(ctx, &u, getUserIdentityPath(user, userType))

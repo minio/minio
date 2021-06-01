@@ -44,12 +44,12 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/ellipses"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/ellipses"
+	"github.com/minio/pkg/env"
 )
 
 // serverDebugLog will enable debug printing
@@ -245,14 +245,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 }
 
 func handleCommonEnvVars() {
-	wormEnabled, err := config.LookupWorm()
-	if err != nil {
-		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
-	}
-	if wormEnabled {
-		logger.Fatal(errors.New("WORM is deprecated"), "global MINIO_WORM support is removed, please downgrade your server or migrate to https://github.com/minio/minio/tree/master/docs/retention")
-	}
-
+	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")

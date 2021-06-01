@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
@@ -39,11 +40,10 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/willf/bloom"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // NotificationSys - notification system.
@@ -470,75 +470,6 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 
 			if err != nil || !serverBF.Complete || bf == nil {
 				logger.LogOnceIf(ctx, err, fmt.Sprintf("host:%s, cycle:%d", client.host, current), client.cycleServerBloomFilter)
-				bf = nil
-				return nil
-			}
-
-			var tmp bloom.BloomFilter
-			_, err = tmp.ReadFrom(bytes.NewReader(serverBF.Filter))
-			if err != nil {
-				logger.LogIf(ctx, err)
-				bf = nil
-				return nil
-			}
-			if bf.BloomFilter == nil {
-				bf.BloomFilter = &tmp
-			} else {
-				err = bf.Merge(&tmp)
-				if err != nil {
-					logger.LogIf(ctx, err)
-					bf = nil
-					return nil
-				}
-			}
-			return nil
-		}, idx)
-	}
-	g.Wait()
-	return bf, nil
-}
-
-// collectBloomFilter will collect bloom filters from all servers from the specified cycle.
-func (sys *NotificationSys) collectBloomFilter(ctx context.Context, from uint64) (*bloomFilter, error) {
-	var req = bloomFilterRequest{
-		Current: 0,
-		Oldest:  from,
-	}
-
-	// Load initial state from local...
-	var bf *bloomFilter
-	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req)
-	logger.LogIf(ctx, err)
-	if err == nil && bfr.Complete {
-		nbf := intDataUpdateTracker.newBloomFilter()
-		bf = &nbf
-		_, err = bf.ReadFrom(bytes.NewReader(bfr.Filter))
-		logger.LogIf(ctx, err)
-	}
-	if !bfr.Complete {
-		// If local isn't complete just return early
-		return nil, nil
-	}
-
-	var mu sync.Mutex
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		g.Go(func() error {
-			serverBF, err := client.cycleServerBloomFilter(ctx, req)
-			if false && intDataUpdateTracker.debug {
-				b, _ := json.MarshalIndent(serverBF, "", "  ")
-				logger.Info("Disk %v, Bloom filter: %v", client.host.Name, string(b))
-			}
-			// Keep lock while checking result.
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil || !serverBF.Complete || bf == nil {
-				logger.LogIf(ctx, err)
 				bf = nil
 				return nil
 			}

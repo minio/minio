@@ -27,7 +27,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/env"
 )
 
 // Error config error type
@@ -315,10 +315,7 @@ func (c Config) DelFrom(r io.Reader) error {
 			return err
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-	return nil
+	return scanner.Err()
 }
 
 // ReadConfig - read content from input and write into c.

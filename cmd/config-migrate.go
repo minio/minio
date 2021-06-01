@@ -42,10 +42,10 @@ import (
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/pkg/quick"
 )
 
-// DO NOT EDIT following message template, please open a github issue to discuss instead.
+// DO NOT EDIT following message template, please open a GitHub issue to discuss instead.
 var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully."
 
 // Save config file to corresponding backend

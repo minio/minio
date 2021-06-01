@@ -238,8 +238,151 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
-	// quorum is available, we remove disks leaving quorum disks behind.
+
+	erasureDisks := xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		for i := range erasureDisks[:6] {
+			erasureDisks[i] = newNaughtyDisk(erasureDisks[i], nil, errFaultyDisk)
+		}
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Fatal(err)
+	}
+
+	// Create "obj" under "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove one more disk to 'lose' quorum, by taking 2 more drives offline.
+	erasureDisks = xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		erasureDisks[7] = nil
+		erasureDisks[8] = nil
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	}
+}
+
+func TestErasureDeleteObjectDiskNotFoundErasure4(t *testing.T) {
+	restoreGlobalStorageClass := globalStorageClass
+	defer func() {
+		globalStorageClass = restoreGlobalStorageClass
+	}()
+
+	globalStorageClass = storageclass.Config{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup backend directories
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	opts := ObjectOptions{}
+	// Create object "obj" under bucket "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Upload a good object
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create "obj" under "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove disks to 'lose' quorum for object, by setting 5 to nil.
+	erasureDisks := xl.getDisks()
+	z.serverPools[0].erasureDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		for i := range erasureDisks[:5] {
+			erasureDisks[i] = newNaughtyDisk(erasureDisks[i], nil, errFaultyDisk)
+		}
+		return erasureDisks
+	}
+
+	z.serverPools[0].erasureDisksMu.Unlock()
+	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
+	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
+	if !errors.Is(err, errErasureWriteQuorum) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	}
+}
+
+func TestErasureDeleteObjectDiskNotFoundErr(t *testing.T) {
+	restoreGlobalStorageClass := globalStorageClass
+	defer func() {
+		globalStorageClass = restoreGlobalStorageClass
+	}()
+
+	globalStorageClass = storageclass.Config{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup backend directories
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	opts := ObjectOptions{}
+	// Create object "obj" under bucket "bucket".
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// for a 16 disk setup, EC is 4, but will be upgraded up to 8.
+	// Remove 4 disks.
 	erasureDisks := xl.getDisks()
 	z.serverPools[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
@@ -261,20 +404,21 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Remove one more disk to 'lose' quorum, by setting it to nil.
+	// Object was uploaded with 4 known bad drives, so we should still be able to lose 3 drives and still write to the object.
 	erasureDisks = xl.getDisks()
 	z.serverPools[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		erasureDisks[7] = nil
 		erasureDisks[8] = nil
+		erasureDisks[9] = nil
 		return erasureDisks
 	}
 
 	z.serverPools[0].erasureDisksMu.Unlock()
 	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
-	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
-	if !errors.Is(err, errErasureWriteQuorum) {
-		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+	// since majority of disks are available, metaquorum achieved.
+	if err != nil {
+		t.Errorf("Expected deleteObject to not fail, but failed with %v", err)
 	}
 }
 
@@ -323,9 +467,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 	}
 
-	err = xl.GetObject(ctx, bucket, object, 0, int64(len(buf)), ioutil.Discard, "", opts)
-	if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-		t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+	gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+	if err != nil {
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+	}
+	if gr != nil {
+		_, err = io.Copy(ioutil.Discard, gr)
+		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+		}
+		gr.Close()
 	}
 
 	// Test use case 2: Make 9 disks offline, which leaves less than quorum number of disks
@@ -359,9 +512,18 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Fetch object from store.
-		err = xl.GetObject(ctx, bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
-		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
-			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
+		gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+		if err != nil {
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+		}
+		if gr != nil {
+			_, err = io.Copy(ioutil.Discard, gr)
+			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
+				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
+			}
+			gr.Close()
 		}
 	}
 
@@ -566,6 +728,77 @@ func TestPutObjectNoQuorumSmall(t *testing.T) {
 				t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 			}
 		})
+	}
+}
+
+// Test PutObject twice, one small and another bigger
+// than small data thresold and checks reading them again
+func TestPutObjectSmallInlineData(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const numberOfDisks = 4
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure(ctx, numberOfDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	bucket := "bucket"
+	object := "object"
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test: Upload a small file and read it.
+	smallData := []byte{'a'}
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(smallData), int64(len(smallData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	output := bytes.NewBuffer([]byte{})
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), smallData) {
+		t.Fatalf("Corrupted data is found")
+	}
+
+	// Test: Upload a file bigger than the small file threshold
+	// under the same bucket & key name and try to read it again.
+
+	output.Reset()
+	bigData := bytes.Repeat([]byte{'b'}, smallFileThreshold*numberOfDisks/2)
+
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(bigData), int64(len(bigData)), "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err = obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+	_, err = io.Copy(output, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+	if !bytes.Equal(output.Bytes(), bigData) {
+		t.Fatalf("Corrupted data found")
 	}
 }
 

@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/pkg/wildcard"
 )
 
 type erasureServerPools struct {
@@ -408,6 +408,9 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+	// Updates must be closed before we return.
+	defer close(updates)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -619,7 +622,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 	wg.Wait()
 
-	var found int = -1
+	var found = -1
 	for i, err := range errs {
 		if err == nil {
 			found = i
@@ -680,7 +683,7 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 	}
 	wg.Wait()
 
-	var found int = -1
+	var found = -1
 	for i, err := range errs {
 		if err == nil {
 			found = i

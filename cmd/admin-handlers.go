@@ -46,9 +46,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const (
@@ -1304,6 +1304,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
+
 	stat, err := GlobalKMS.Stat()
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
@@ -1333,7 +1334,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Plaintext, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1798,10 +1799,6 @@ func fetchKMSStatus() madmin.KMS {
 	}
 	if len(stat.Endpoints) == 0 {
 		kmsStat.Status = stat.Name
-		return kmsStat
-	}
-	if err := checkConnection(stat.Endpoints[0], 15*time.Second); err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
 		return kmsStat
 	}
 	kmsStat.Status = string(madmin.ItemOnline)

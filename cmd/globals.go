@@ -40,11 +40,11 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	etcd "go.etcd.io/etcd/clientv3"
+	etcd "go.etcd.io/etcd/client/v3"
 
-	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
+	"github.com/minio/pkg/certs"
 )
 
 // minio configuration related constants.
@@ -214,9 +214,6 @@ var (
 
 	// Hold the old server credentials passed by the environment
 	globalOldCred auth.Credentials
-
-	// Indicates if config is to be encrypted
-	globalConfigEncrypted bool
 
 	globalPublicCerts []*x509.Certificate
 

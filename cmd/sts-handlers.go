@@ -31,8 +31,8 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/wildcard"
+	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (
@@ -64,7 +64,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser = "ldapUser"
+	ldapUser     = "ldapUser"
+	ldapUsername = "ldapUsername"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -119,12 +120,12 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 		return user, true, ErrSTSAccessDenied
 	case authTypeSigned:
 		s3Err := isReqAuthenticated(ctx, r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 
 		user, _, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 
@@ -525,8 +526,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim: UTCNow().Add(expiryDur).Unix(),
-		ldapUser: ldapUserDN,
+		expClaim:     UTCNow().Add(expiryDur).Unix(),
+		ldapUsername: ldapUsername,
+		ldapUser:     ldapUserDN,
 	}
 
 	if len(sessionPolicyStr) > 0 {

@@ -29,30 +29,33 @@ import (
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
-	switch err {
-	case errVolumeNotFound:
+	if err == nil {
+		return nil
+	}
+	switch err.Error() {
+	case errVolumeNotFound.Error():
 		apiErr := BucketNotFound{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
 		}
 		return apiErr
-	case errVolumeNotEmpty:
+	case errVolumeNotEmpty.Error():
 		apiErr := BucketNotEmpty{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
 		}
 		return apiErr
-	case errVolumeExists:
+	case errVolumeExists.Error():
 		apiErr := BucketExists{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
 		}
 		return apiErr
-	case errDiskFull:
+	case errDiskFull.Error():
 		return StorageFull{}
-	case errTooManyOpenFiles:
+	case errTooManyOpenFiles.Error():
 		return SlowDown{}
-	case errFileAccessDenied:
+	case errFileAccessDenied.Error():
 		apiErr := PrefixAccessDenied{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -61,7 +64,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errFileParentIsFile:
+	case errFileParentIsFile.Error():
 		apiErr := ParentIsObject{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -70,7 +73,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errIsNotRegular:
+	case errIsNotRegular.Error():
 		apiErr := ObjectExistsAsDirectory{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -79,7 +82,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errFileVersionNotFound:
+	case errFileVersionNotFound.Error():
 		apiErr := VersionNotFound{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -91,7 +94,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.VersionID = params[2]
 		}
 		return apiErr
-	case errMethodNotAllowed:
+	case errMethodNotAllowed.Error():
 		apiErr := MethodNotAllowed{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -100,7 +103,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errFileNotFound:
+	case errFileNotFound.Error():
 		apiErr := ObjectNotFound{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -109,7 +112,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errUploadIDNotFound:
+	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -121,7 +124,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.UploadID = params[2]
 		}
 		return apiErr
-	case errFileNameTooLong:
+	case errFileNameTooLong.Error():
 		apiErr := ObjectNameInvalid{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -130,7 +133,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errDataTooLarge:
+	case errDataTooLarge.Error():
 		apiErr := ObjectTooLarge{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -139,7 +142,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errDataTooSmall:
+	case errDataTooSmall.Error():
 		apiErr := ObjectTooSmall{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -148,7 +151,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errErasureReadQuorum:
+	case errErasureReadQuorum.Error():
 		apiErr := InsufficientReadQuorum{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -157,7 +160,7 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case errErasureWriteQuorum:
+	case errErasureWriteQuorum.Error():
 		apiErr := InsufficientWriteQuorum{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
@@ -166,9 +169,9 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+	case io.ErrUnexpectedEOF.Error(), io.ErrShortWrite.Error():
 		return IncompleteBody{}
-	case context.Canceled, context.DeadlineExceeded:
+	case context.Canceled.Error(), context.DeadlineExceeded.Error():
 		return IncompleteBody{}
 	}
 	return err
@@ -558,7 +561,7 @@ type InvalidRange struct {
 }
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
+	return fmt.Sprintf("The requested range \"bytes %d -> %d of %d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
 }
 
 // ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.

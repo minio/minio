@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -39,11 +40,11 @@ import (
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/fips"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 // ServerFlags - server command specific flags
@@ -264,6 +265,7 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, errErasureWriteQuorum) ||
 		errors.Is(err, errErasureReadQuorum) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.As(err, &rquorum) ||
 		errors.As(err, &wquorum) ||
 		isErrBucketNotFound(err) ||
@@ -473,8 +475,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
-		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
-			"Unable to initialize the server in distributed mode")
+		globalActiveCred = auth.DefaultCredentials
 	}
 
 	// Set system resources to maximum.
@@ -544,6 +545,8 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+
+		logger.LogIf(GlobalContext, err)
 	}
 
 	if globalIsErasure { // to be done after config init
@@ -570,7 +573,7 @@ func serverMain(ctx *cli.Context) {
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
+		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately by setting 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment values", globalActiveCred)
 		logger.StartupMessage(color.RedBold(msg))
 	}
 

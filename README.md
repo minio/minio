@@ -187,7 +187,7 @@ service minio start
 Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.16](https://golang.org/dl/#stable)
 
 ```sh
-GO111MODULE=on go get github.com/minio/minio
+GO111MODULE=on go install github.com/minio/minio@latest
 ```
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded

@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -212,5 +214,35 @@ func TestObjectIsRemote(t *testing.T) {
 	fi.Metadata = nil
 	if got := fi.IsRemote(); got != false {
 		t.Fatalf("Expected object not to be remote but got %v", got)
+	}
+}
+
+func TestValidateTransitionTier(t *testing.T) {
+	globalTierConfigMgr = NewTierConfigMgr()
+	testCases := []struct {
+		xml         []byte
+		expectedErr error
+	}{
+		{
+			// non-existent storage-class
+			xml:         []byte(`<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Prefix /><Status>Enabled</Status><Transition><Days>1</Days><StorageClass>"NONEXISTENT"</StorageClass></Transition></Rule></LifecycleConfiguration>`),
+			expectedErr: errInvalidStorageClass,
+		},
+		{
+			// no transition rule
+			xml:         []byte(`<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Prefix /><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></LifecycleConfiguration>`),
+			expectedErr: nil,
+		},
+	}
+	for i, tc := range testCases {
+		lc, err := lifecycle.ParseLifecycleConfig(bytes.NewReader(tc.xml))
+		if err != nil {
+			t.Fatalf("Test %d: Failed to parse lifecycle config %v", i+1, err)
+		}
+
+		err = validateTransitionTier(context.Background(), lc)
+		if err != tc.expectedErr {
+			t.Fatalf("Test %d: Expected %v but got %v", i+1, tc.expectedErr, err)
+		}
 	}
 }

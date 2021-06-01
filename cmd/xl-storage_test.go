@@ -1787,7 +1787,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	algo = HighwayHash256S
 	shardSize := int64(1024 * 1024)
 	shard := make([]byte, shardSize)
-	w := newStreamingBitrotWriter(storage, volName, fileName, size, algo, shardSize, false)
+	w := newStreamingBitrotWriter(storage, volName, fileName, size, algo, shardSize)
 	reader := bytes.NewReader(data)
 	for {
 		// Using io.Copy instead of this loop will not work for us as io.Copy

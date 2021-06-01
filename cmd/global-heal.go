@@ -27,8 +27,8 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (

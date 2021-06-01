@@ -135,12 +135,12 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 			{
 				Status:     "Enabled",
 				Filter:     Filter{Prefix: Prefix{string: "prefix-1", set: true}},
-				Expiration: Expiration{Date: ExpirationDate(midnightTS)},
+				Expiration: Expiration{Date: midnightTS},
 			},
 			{
 				Status:                      "Enabled",
 				Filter:                      Filter{Prefix: Prefix{string: "prefix-1", set: true}},
-				Expiration:                  Expiration{Date: ExpirationDate(midnightTS)},
+				Expiration:                  Expiration{Date: midnightTS},
 				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: 2, StorageClass: "TEST"},
 			},
 		},

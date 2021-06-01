@@ -42,8 +42,8 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/pkg/env"
 )
 
 func initHelp() {

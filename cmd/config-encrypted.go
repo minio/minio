@@ -28,9 +28,8 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/kms"
-	etcd "go.etcd.io/etcd/clientv3"
+	etcd "go.etcd.io/etcd/client/v3"
 )
 
 func handleEncryptedConfigBackend(objAPI ObjectLayer) error {
@@ -62,23 +61,6 @@ func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
 		return false, err
 	}
 	return err == nil && bytes.Equal(data, backendEncryptedMigrationComplete), nil
-}
-
-// decryptData - decrypts input data with more that one credentials,
-func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
-	var err error
-	var data []byte
-	for _, cred := range creds {
-		data, err = madmin.DecryptData(cred.String(), bytes.NewReader(edata))
-		if err != nil {
-			if err == madmin.ErrMaliciousData {
-				continue
-			}
-			return nil, err
-		}
-		break
-	}
-	return data, err
 }
 
 func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
@@ -115,7 +97,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		}
 
 		if !utf8.Valid(data) {
-			data, err = decryptData(data, globalActiveCred)
+			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 			}
@@ -170,7 +152,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 			}
 
 			if !utf8.Valid(data) {
-				data, err = decryptData(data, globalActiveCred)
+				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 				if err != nil {
 					return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 				}

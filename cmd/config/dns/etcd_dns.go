@@ -29,7 +29,7 @@ import (
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"go.etcd.io/etcd/clientv3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
@@ -137,7 +137,7 @@ func (c *CoreDNS) list(key string, domain bool) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, n := range r.Kvs {
 		var srvRecord SrvRecord
-		if err = json.Unmarshal([]byte(n.Value), &srvRecord); err != nil {
+		if err = json.Unmarshal(n.Value, &srvRecord); err != nil {
 			return nil, err
 		}
 		srvRecord.Key = strings.TrimPrefix(string(n.Key), key)
