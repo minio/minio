@@ -6,6 +6,7 @@ version: '3.7'
 services:
   minio1:
     image: minio/minio:RELEASE.2021-05-27T22-06-31Z
+    hostname: minio1
     volumes:
       - data1-1:/data1
       - data1-2:/data2
@@ -23,6 +24,7 @@ services:
 
   minio2:
     image: minio/minio:RELEASE.2021-05-27T22-06-31Z
+    hostname: minio2
     volumes:
       - data2-1:/data1
       - data2-2:/data2
@@ -40,6 +42,7 @@ services:
 
   minio3:
     image: minio/minio:RELEASE.2021-05-27T22-06-31Z
+    hostname: minio3
     volumes:
       - data3-1:/data1
       - data3-2:/data2
@@ -57,6 +60,7 @@ services:
 
   minio4:
     image: minio/minio:RELEASE.2021-05-27T22-06-31Z
+    hostname: minio4
     volumes:
       - data4-1:/data1
       - data4-2:/data2
@@ -74,6 +78,7 @@ services:
 
   nginx:
     image: nginx:1.19.2-alpine
+    hostname: nginx
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
