@@ -31,9 +31,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	b "github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/event"
+	b "github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 

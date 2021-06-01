@@ -34,7 +34,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/bucket/policy"
 )
 

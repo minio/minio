@@ -22,7 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/internal/bucket/replication"
 )
 
 func (b *BucketReplicationStats) hasReplicationUsage() bool {

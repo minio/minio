@@ -29,7 +29,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config/storageclass"
+	"github.com/minio/minio/internal/config/storageclass"
 )
 
 func TestRepeatPutObjectPart(t *testing.T) {

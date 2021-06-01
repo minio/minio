@@ -34,12 +34,12 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/http"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/event"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/http"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/minio/internal/net"
+	"github.com/minio/minio/internal/rest"
 	"github.com/tinylib/msgp/msgp"
 )
 

@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/internal/bpool"
 )
 
 var erasureHealTests = []struct {

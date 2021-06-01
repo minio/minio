@@ -36,8 +36,8 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
-	xjwt "github.com/minio/minio/cmd/jwt"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
+	xjwt "github.com/minio/minio/internal/jwt"
 )
 
 // Implement a dummy flush writer.

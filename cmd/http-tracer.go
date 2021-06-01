@@ -32,8 +32,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/logger"
 	jsonrpc "github.com/minio/rpc"
 )
 

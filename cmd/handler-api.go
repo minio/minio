@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config/api"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sys"
 )
 

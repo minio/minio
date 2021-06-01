@@ -29,9 +29,9 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/crypto"
-	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/kms"
 )
 
 //go:generate msgp -file $GOFILE

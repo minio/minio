@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )

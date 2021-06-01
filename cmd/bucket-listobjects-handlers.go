@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/bucket/policy"
 )
 

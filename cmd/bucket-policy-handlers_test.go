@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/pkg/bucket/policy"
 	"github.com/minio/pkg/bucket/policy/condition"
 )

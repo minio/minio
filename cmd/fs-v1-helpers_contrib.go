@@ -20,7 +20,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // Renames source path to destination path, fails if the destination path
