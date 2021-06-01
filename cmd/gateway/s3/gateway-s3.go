@@ -130,7 +130,7 @@ func randString(n int, src rand.Source, prefix string) string {
 		cache >>= letterIdxBits
 		remain--
 	}
-	return prefix + string(b[0:30-len(prefix)])
+	return prefix + string(b[0:n-len(prefix)])
 }
 
 // Chains all credential types, in the following order:
@@ -220,7 +220,7 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		return nil, err
 	}
 
-	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+	probeBucketName := randString(30, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
 
 	// Check if the provided keys are valid.
 	if _, err = clnt.BucketExists(context.Background(), probeBucketName); err != nil {
