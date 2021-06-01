@@ -2,8 +2,9 @@
 .github
 docs
 default.etcd
-browser
 *.gz
 *.tar.gz
 *.bzip2
 *.zip
+browser/node_modules
+node_modules
