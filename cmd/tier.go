@@ -144,12 +144,16 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 	newCfg := config.Tiers[tierName]
 	switch tierType {
 	case madmin.S3:
-		if creds.AccessKey == "" || creds.SecretKey == "" {
+		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
 			return errTierInsufficientCreds
 		}
-		newCfg.S3.AccessKey = creds.AccessKey
-		newCfg.S3.SecretKey = creds.SecretKey
-
+		switch {
+		case creds.AWSRole:
+			newCfg.S3.AWSRole = true
+		default:
+			newCfg.S3.AccessKey = creds.AccessKey
+			newCfg.S3.SecretKey = creds.SecretKey
+		}
 	case madmin.Azure:
 		if creds.AccessKey == "" || creds.SecretKey == "" {
 			return errTierInsufficientCreds
