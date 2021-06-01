@@ -2,7 +2,7 @@
 
 Docker Compose allows defining and running single host, multi-container Docker applications.
 
-With Compose, you use a Compose file to configure MinIO services. Then, using a single command, you can create and launch all the Distributed MinIO instances from your configuration. Distributed MinIO instances will be deployed in multiple containers on the same host. This is a great way to set up development, testing, and staging environments, based on Distributed MinIO. 
+With Compose, you use a Compose file to configure MinIO services. Then, using a single command, you can create and launch all the Distributed MinIO instances from your configuration. Distributed MinIO instances will be deployed in multiple containers on the same host. This is a great way to set up development, testing, and staging environments, based on Distributed MinIO.
 
 ## 1. Prerequisites
 
@@ -20,6 +20,12 @@ docker-compose pull
 docker-compose up
 ```
 
+or
+
+```sh
+docker stack deploy --compose-file docker-compose.yaml minio
+```
+
 ### Windows
 
 ```sh
@@ -27,7 +33,11 @@ docker-compose.exe pull
 docker-compose.exe up
 ```
 
-> NOTE: We recommend that you use `docker-compose` instead of `docker stack deploy` - the containers started by `docker stack deploy` get deployed as a single container with a virtual networking layer at routing does not allow MinIO distributed setup to run properly.
+or
+
+```sh
+docker stack deploy --compose-file docker-compose.yaml minio
+```
 
 Distributed instances are now accessible on the host at ports 9000, proceed to access the Web browser at http://127.0.0.1:9000/. Here 4 MinIO server instances are reverse proxied through Nginx load balancing.
 
