@@ -43,5 +43,4 @@ Distributed instances are now accessible on the host at ports 9000, proceed to a
 ### Explore Further
 - [Overview of Docker Compose](https://docs.docker.com/compose/overview/)
 - [MinIO Docker Quickstart Guide](https://docs.min.io/docs/minio-docker-quickstart-guide)
-- [Deploy MinIO on Docker Swarm](https://docs.min.io/docs/deploy-minio-on-docker-swarm)
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
