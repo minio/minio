@@ -601,7 +601,25 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 		case stsPrefix:
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigSTSPrefix))
-			ies.loadUser(ctx, accessKey, stsUser, sys.iamUsersMap)
+			// Not using ies.loadUser due to the custom loading of an STS account
+			var u UserIdentity
+			if err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(accessKey, stsUser)); err == nil {
+				ies.addUser(ctx, accessKey, stsUser, u, sys.iamUsersMap)
+				// We are on purpose not persisting the policy map for parent
+				// user, although this is a hack, it is a good enough hack
+				// at this point in time - we need to overhaul our OIDC
+				// usage with service accounts with a more cleaner implementation
+				//
+				// This mapping is necessary to ensure that valid credentials
+				// have necessary ParentUser present - this is mainly for only
+				// webIdentity based STS tokens.
+				parentAccessKey := u.Credentials.ParentUser
+				if parentAccessKey != "" && parentAccessKey != globalActiveCred.AccessKey {
+					if _, ok := sys.iamUserPolicyMap[parentAccessKey]; !ok {
+						sys.iamUserPolicyMap[parentAccessKey] = sys.iamUserPolicyMap[accessKey]
+					}
+				}
+			}
 		case svcPrefix:
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigServiceAccountsPrefix))
