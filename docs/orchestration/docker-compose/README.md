@@ -27,6 +27,8 @@ docker-compose.exe pull
 docker-compose.exe up
 ```
 
+> NOTE: We recommend that you use `docker-compose` instead of `docker stack deploy` - the containers started by `docker stack deploy` get deployed as a single container with a virtual networking layer at routing does not allow MinIO distributed setup to run properly.
+
 Distributed instances are now accessible on the host at ports 9000, proceed to access the Web browser at http://127.0.0.1:9000/. Here 4 MinIO server instances are reverse proxied through Nginx load balancing.
 
 ### Notes
