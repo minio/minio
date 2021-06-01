@@ -26,8 +26,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 )
 
 var (

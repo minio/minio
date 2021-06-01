@@ -22,8 +22,8 @@ import (
 	"os"
 	"testing"
 
-	xjwt "github.com/minio/minio/cmd/jwt"
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
+	xjwt "github.com/minio/minio/internal/jwt"
 )
 
 func testAuthenticate(authType string, t *testing.T) {

@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"strings"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // objSweeper determines if a transitioned object needs to be removed from the remote tier.

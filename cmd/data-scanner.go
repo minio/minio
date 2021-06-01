@@ -33,14 +33,14 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config/heal"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/message/audit"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config/heal"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/pkg/console"
 )
 

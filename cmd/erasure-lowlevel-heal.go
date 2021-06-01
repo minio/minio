@@ -21,9 +21,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bpool"
-	xioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/internal/bpool"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
 )
 
 // Heal heals the shard files on non-nil writers. Note that the quorum passed is 1

@@ -26,7 +26,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio/browser"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 	jsonrpc "github.com/minio/rpc"
 	"github.com/minio/rpc/json2"
 )

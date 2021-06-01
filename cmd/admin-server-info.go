@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
@@ -61,6 +61,9 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		}
 	}
 
+	var memstats runtime.MemStats
+	runtime.ReadMemStats(&memstats)
+
 	props := madmin.ServerProperties{
 		State:    string(madmin.ItemInitializing),
 		Endpoint: addr,
@@ -68,8 +71,14 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		Version:  Version,
 		CommitID: CommitID,
 		Network:  network,
+		MemStats: madmin.MemStats{
+			Alloc:      memstats.Alloc,
+			TotalAlloc: memstats.TotalAlloc,
+			Mallocs:    memstats.Mallocs,
+			Frees:      memstats.Frees,
+			HeapAlloc:  memstats.HeapAlloc,
+		},
 	}
-	runtime.ReadMemStats(&props.MemStats)
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil && !globalIsGateway {
