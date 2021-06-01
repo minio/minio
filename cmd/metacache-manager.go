@@ -60,8 +60,8 @@ func (m *metacacheManager) initManager() {
 			time.Sleep(time.Second)
 			objAPI = newObjectLayerFn()
 		}
+
 		if !globalIsErasure {
-			logger.Info("metacacheManager was initialized in non-erasure mode, skipping save")
 			return
 		}
 

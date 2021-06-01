@@ -166,10 +166,7 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 }
 
 func shouldProxy() bool {
-	if newObjectLayerFn() == nil {
-		return true
-	}
-	return !globalIAMSys.Initialized()
+	return newObjectLayerFn() == nil
 }
 
 // Fetch redirect location if urlPath satisfies certain
