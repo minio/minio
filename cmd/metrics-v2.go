@@ -1383,7 +1383,7 @@ func getClusterStorageMetrics() MetricsGroup {
 		read: func(ctx context.Context) (metrics []Metric) {
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil || globalIsGateway {
+			if objLayer == nil || !globalIsErasure {
 				return
 			}
 
