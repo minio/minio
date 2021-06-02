@@ -814,7 +814,7 @@ next:
 			})
 
 			if replicateDel {
-				dobj := DeletedObjectVersionInfo{
+				dobj := DeletedObjectReplicationInfo{
 					DeletedObject: DeletedObject{
 						ObjectName:                    objectName,
 						DeleteMarkerVersionID:         oi.VersionID,
@@ -948,7 +948,7 @@ next:
 					Host:       sourceIP,
 				})
 				if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-					dv := DeletedObjectVersionInfo{
+					dv := DeletedObjectReplicationInfo{
 						DeletedObject: dobj,
 						Bucket:        args.BucketName,
 					}
@@ -1256,7 +1256,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	mustReplicate, sync := mustReplicateWeb(ctx, r, bucket, object, metadata, "", replPerms)
+	mustReplicate, sync := mustReplicateWeb(ctx, r, bucket, object, metadata, replication.StatusType(""), replPerms)
 	if mustReplicate {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}

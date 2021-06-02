@@ -125,6 +125,7 @@ const (
 	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
+	ErrReplicationNoMatchingRuleError
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
@@ -858,6 +859,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioAdminReplicationRemoteConnectionError",
 		Description:    "Remote service connection error - please check remote service credentials and target bucket",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationNoMatchingRuleError: {
+		Code:           "XMinioReplicationNoMatchingRule",
+		Description:    "No matching replication rule found for this object prefix",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketRemoteIdenticalToSource: {
 		Code:           "XMinioAdminRemoteIdenticalToSource",

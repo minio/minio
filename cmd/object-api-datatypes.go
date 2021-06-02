@@ -230,6 +230,7 @@ type ReplicateObjectInfo struct {
 	ObjectInfo
 	OpType     replication.Type
 	RetryCount uint32
+	ResetID    string
 }
 
 // MultipartInfo captures metadata information about the uploadId

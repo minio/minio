@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -611,7 +612,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		if replicateDeletes {
 			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-				dv := DeletedObjectVersionInfo{
+				dv := DeletedObjectReplicationInfo{
 					DeletedObject: dobj,
 					Bucket:        bucket,
 				}
@@ -1685,4 +1686,91 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		return
 	}
 	w.(http.Flusher).Flush()
+}
+
+// ResetBucketReplicationStateHandler - starts a replication reset for all objects in a bucket which
+// qualify for replication and re-sync the object(s) to target, provided ExistingObjectReplication is
+// enabled for the qualifying rule. This API is a MinIO only extension provided for situations where
+// remote target is entirely lost,and previously replicated objects need to be re-synced.
+func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ResetBucketReplicationState")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	durationStr := r.URL.Query().Get("older-than")
+	var (
+		days time.Duration
+		err  error
+	)
+	if durationStr != "" {
+		days, err = time.ParseDuration(durationStr)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, InvalidArgument{
+				Bucket: bucket,
+				Err:    fmt.Errorf("invalid query parameter older-than %s for %s : %w", durationStr, bucket, err),
+			}), r.URL, guessIsBrowserReq(r))
+		}
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.ResetBucketReplicationStateAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !config.HasActiveRules("", true) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNoMatchingRuleError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	target := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, bucket, config.RoleArn)
+	target.ResetBeforeDate = UTCNow().AddDate(0, 0, -1*int(days/24))
+	target.ResetID = mustGetUUID()
+	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, true); err != nil {
+		switch err.(type) {
+		case BucketRemoteConnectionErr:
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationRemoteConnectionError, err), r.URL)
+		default:
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		}
+		return
+	}
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	tgtBytes, err := json.Marshal(&targets)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	data, err := json.Marshal(target.ResetID)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	// Write success response.
+	writeSuccessResponseJSON(w, data)
 }

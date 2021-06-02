@@ -131,23 +131,31 @@ type Type int
 
 // Types of replication
 const (
-	ObjectReplicationType Type = 1 + iota
+	UnsetReplicationType Type = 0 + iota
+	ObjectReplicationType
 	DeleteReplicationType
 	MetadataReplicationType
 	HealReplicationType
+	ExistingObjectReplicationType
 )
+
+// Valid returns true if replication type is set
+func (t Type) Valid() bool {
+	return t > 0
+}
 
 // ObjectOpts provides information to deduce whether replication
 // can be triggered on the resultant object.
 type ObjectOpts struct {
-	Name         string
-	UserTags     string
-	VersionID    string
-	IsLatest     bool
-	DeleteMarker bool
-	SSEC         bool
-	OpType       Type
-	Replica      bool
+	Name           string
+	UserTags       string
+	VersionID      string
+	IsLatest       bool
+	DeleteMarker   bool
+	SSEC           bool
+	OpType         Type
+	Replica        bool
+	ExistingObject bool
 }
 
 // FilterActionableRules returns the rules actions that need to be executed
@@ -190,6 +198,9 @@ func (c Config) Replicate(obj ObjectOpts) bool {
 	for _, rule := range c.FilterActionableRules(obj) {
 		if rule.Status == Disabled {
 			continue
+		}
+		if obj.ExistingObject && rule.ExistingObjectReplication.Status == Disabled {
+			return false
 		}
 		if obj.OpType == DeleteReplicationType {
 			switch {

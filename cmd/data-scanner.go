@@ -375,7 +375,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 			filter = nil
 		}
-
+		// If there are replication rules for the prefix, remove the filter.
+		var replicationCfg replicationConfig
+		if !f.oldCache.Info.replication.Empty() && f.oldCache.Info.replication.Config.HasActiveRules(prefix, true) {
+			replicationCfg = f.oldCache.Info.replication
+			filter = nil
+		}
 		// Check if we can skip it due to bloom filter...
 		if filter != nil && ok && existing.Compacted {
 			// If folder isn't in filter and we have data, skip it completely.
@@ -449,16 +454,16 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 			// Get file size, ignore errors.
 			item := scannerItem{
-				Path:       path.Join(f.root, entName),
-				Typ:        typ,
-				bucket:     bucket,
-				prefix:     path.Dir(prefix),
-				objectName: path.Base(entName),
-				debug:      f.dataUsageScannerDebug,
-				lifeCycle:  activeLifeCycle,
-				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
+				Path:        path.Join(f.root, entName),
+				Typ:         typ,
+				bucket:      bucket,
+				prefix:      path.Dir(prefix),
+				objectName:  path.Base(entName),
+				debug:       f.dataUsageScannerDebug,
+				lifeCycle:   activeLifeCycle,
+				replication: replicationCfg,
+				heal:        thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
-
 			// if the drive belongs to an erasure set
 			// that is already being healed, skip the
 			// healing attempt on this drive.
@@ -808,12 +813,13 @@ type scannerItem struct {
 	Path string
 	Typ  os.FileMode
 
-	bucket     string // Bucket.
-	prefix     string // Only the prefix if any, does not have final object name.
-	objectName string // Only the object name without prefixes.
-	lifeCycle  *lifecycle.Lifecycle
-	heal       bool // Has the object been selected for heal check?
-	debug      bool
+	bucket      string // Bucket.
+	prefix      string // Only the prefix if any, does not have final object name.
+	objectName  string // Only the object name without prefixes.
+	lifeCycle   *lifecycle.Lifecycle
+	replication replicationConfig
+	heal        bool // Has the object been selected for heal check?
+	debug       bool
 }
 
 type sizeSummary struct {
@@ -1140,33 +1146,50 @@ func (i *scannerItem) objectPath() string {
 
 // healReplication will heal a scanned item that has failed replication.
 func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
+	existingObjResync := i.replication.Resync(ctx, oi)
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure
 		if oi.ReplicationStatus == replication.Pending ||
 			oi.ReplicationStatus == replication.Failed ||
 			oi.VersionPurgeStatus == Failed || oi.VersionPurgeStatus == Pending {
-			i.healReplicationDeletes(ctx, o, oi)
+			i.healReplicationDeletes(ctx, o, oi, existingObjResync)
 			return
 		}
+		// if replication status is Complete on DeleteMarker and existing object resync required
+		if existingObjResync && oi.ReplicationStatus == replication.Completed {
+			i.healReplicationDeletes(ctx, o, oi, existingObjResync)
+			return
+		}
+		return
+	}
+	roi := ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType}
+	if existingObjResync {
+		roi.OpType = replication.ExistingObjectReplicationType
+		roi.ResetID = i.replication.ResetID
 	}
 	switch oi.ReplicationStatus {
 	case replication.Pending:
 		sizeS.pendingCount++
 		sizeS.pendingSize += oi.Size
-		globalReplicationPool.queueReplicaTask(ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
+		globalReplicationPool.queueReplicaTask(roi)
+		return
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
 		sizeS.failedCount++
-		globalReplicationPool.queueReplicaTask(ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType})
+		globalReplicationPool.queueReplicaTask(roi)
+		return
 	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
 	}
+	if existingObjResync {
+		globalReplicationPool.queueReplicaTask(roi)
+	}
 }
 
 // healReplicationDeletes will heal a scanned deleted item that failed to replicate deletes.
-func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, oi ObjectInfo) {
+func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, oi ObjectInfo, existingObject bool) {
 	// handle soft delete and permanent delete failures here.
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		versionID := ""
@@ -1176,7 +1199,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 		} else {
 			versionID = oi.VersionID
 		}
-		globalReplicationPool.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+		doi := DeletedObjectReplicationInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    oi.Name,
 				DeleteMarkerVersionID:         dmVersionID,
@@ -1187,7 +1210,12 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 				VersionPurgeStatus:            oi.VersionPurgeStatus,
 			},
 			Bucket: oi.Bucket,
-		})
+		}
+		if existingObject {
+			doi.OpType = replication.ExistingObjectReplicationType
+			doi.ResetID = i.replication.ResetID
+		}
+		globalReplicationPool.queueReplicaDeleteTask(doi)
 	}
 }
 

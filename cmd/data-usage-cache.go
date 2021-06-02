@@ -161,7 +161,8 @@ type dataUsageCacheInfo struct {
 	// optional updates channel.
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
-	updates chan<- dataUsageEntry `msg:"-"`
+	updates     chan<- dataUsageEntry `msg:"-"`
+	replication replicationConfig     `msg:"-"`
 }
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
