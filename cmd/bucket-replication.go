@@ -127,16 +127,6 @@ func getMustReplicateOptions(o ObjectInfo, op replication.Type) mustReplicateOpt
 		opType: op,
 	}
 }
-func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus replication.StatusType, permErr APIErrorCode) (replicate bool, sync bool) {
-	if permErr != ErrNone {
-		return
-	}
-	return mustReplicater(ctx, bucket, object, mustReplicateOptions{
-		meta:   meta,
-		status: replStatus,
-		opType: replication.ObjectReplicationType,
-	})
-}
 
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.

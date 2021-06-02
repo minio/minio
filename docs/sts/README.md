@@ -92,11 +92,10 @@ This will open the login page of keycloak, upon successful login, STS credential
 
 These credentials can now be used to perform MinIO API operations.
 
-### Using MinIO Browser
+### Using MinIO Console
 
-- Open MinIO URL on the browser, lets say http://localhost:9000
-- Click on `Log in with OpenID`
-- Provide `Client ID` and press ENTER, if `client_id` is already configured for MinIO this page will automatically redirect to Keycloak user login page.
+- Open MinIO URL on the browser, lets say http://localhost:9000/
+- Click on `Login with SSO`
 - User will be redirected to the Keycloak user login page, upon successful login the user will be redirected to MinIO page and logged in automatically,
   the user should see now the buckets and objects they have access to.
 

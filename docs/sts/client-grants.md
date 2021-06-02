@@ -1,20 +1,5 @@
 # AssumeRoleWithClientGrants [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-**Table of Contents**
-
-- [Introduction](#introduction)
-- [API Request Parameters](#api-request-parameters)
-    - [Token](#token)
-    - [Version](#version)
-    - [DurationSeconds](#durationseconds)
-    - [Policy](#policy)
-    - [Response Elements](#response-elements)
-    - [Errors](#errors)
-- [Sample `POST` Request](#sample-post-request)
-- [Sample Response](#sample-response)
-- [Using ClientGrants API](#using-clientgrants-api)
-- [Explore Further](#explore-further)
-
 ## Introduction
 
 Returns a set of temporary security credentials for applications/clients who have been authenticated through client credential grants provided by identity provider. Example providers include KeyCloak, Okta etc.

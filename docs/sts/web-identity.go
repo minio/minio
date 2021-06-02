@@ -136,7 +136,7 @@ func main() {
 			AuthURL:  ddoc.AuthEndpoint,
 			TokenURL: ddoc.TokenEndpoint,
 		},
-		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
+		RedirectURL: fmt.Sprintf("http://10.0.0.67:%d/oauth2/callback", port),
 		Scopes:      scopes,
 	}
 
@@ -223,7 +223,7 @@ func main() {
 		w.Write(c)
 	})
 
-	address := fmt.Sprintf("localhost:%v", port)
+	address := fmt.Sprintf(":%v", port)
 	log.Printf("listening on http://%s/", address)
 	log.Fatal(http.ListenAndServe(address, nil))
 }

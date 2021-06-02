@@ -47,29 +47,29 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	if !objAPI.IsNotificationSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	_, err := objAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	config, err := globalBucketMetadataSys.GetNotificationConfig(bucketName)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 	config.SetRegion(globalServerRegion)
@@ -93,14 +93,14 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 				// notification configs.
 			}
 		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
 	}
 
 	configData, err := xml.Marshal(config)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -116,12 +116,12 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	if !objectAPI.IsNotificationSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -129,19 +129,19 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	bucketName := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// PutBucketNotification always needs a Content-Length.
 	if r.ContentLength <= 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
 		return
 	}
 
@@ -151,18 +151,18 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		if event.IsEventError(err) {
 			apiErr = toAPIError(ctx, err)
 		}
-		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
 	configData, err := xml.Marshal(config)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	if err = globalBucketMetadataSys.Update(bucketName, bucketNotificationConfig, configData); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 

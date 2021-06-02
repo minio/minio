@@ -1064,7 +1064,7 @@ func getMinioHealingMetrics() MetricsGroup {
 				Value:       float64(time.Since(bgSeq.lastHealActivity)),
 			})
 			metrics = append(metrics, getObjectsScanned(bgSeq)...)
-			metrics = append(metrics, getScannedItems(bgSeq)...)
+			metrics = append(metrics, getHealedItems(bgSeq)...)
 			metrics = append(metrics, getFailedItems(bgSeq)...)
 			return
 		},
@@ -1087,7 +1087,7 @@ func getFailedItems(seq *healSequence) (m []Metric) {
 	return
 }
 
-func getScannedItems(seq *healSequence) (m []Metric) {
+func getHealedItems(seq *healSequence) (m []Metric) {
 	items := seq.getHealedItemsMap()
 	m = make([]Metric, 0, len(items))
 	for k, v := range items {
@@ -1101,9 +1101,9 @@ func getScannedItems(seq *healSequence) (m []Metric) {
 }
 
 func getObjectsScanned(seq *healSequence) (m []Metric) {
-	items := seq.getHealedItemsMap()
+	items := seq.getScannedItemsMap()
 	m = make([]Metric, 0, len(items))
-	for k, v := range seq.getScannedItemsMap() {
+	for k, v := range items {
 		m = append(m, Metric{
 			Description:    getHealObjectsTotalMD(),
 			VariableLabels: map[string]string{"type": string(k)},
@@ -1112,6 +1112,7 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 	}
 	return
 }
+
 func getCacheMetrics() MetricsGroup {
 	return MetricsGroup{
 		id:         "CacheMetrics",
