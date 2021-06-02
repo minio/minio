@@ -1724,7 +1724,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if globalAPIConfig.s3ZipEnabled() && strings.HasSuffix(object, archiveExt) {
-		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object); err != nil {
+		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
+		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -3152,7 +3153,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	if globalAPIConfig.s3ZipEnabled() && strings.HasSuffix(object, archiveExt) {
-		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object); err != nil {
+		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
+		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}

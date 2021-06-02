@@ -28,18 +28,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/minio/minio/cmd/crypto"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/ioutil"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/minio/internal/net"
+	"github.com/minio/pkg/bucket/policy"
 	"github.com/minio/zipindex"
 )
 
 const (
 	archiveType            = "zip"
-	archiveExt             = "." + archiveType                            // ".zip"
-	archivePattern         = archiveExt + "/"                             // ".zip/"
+	archiveExt             = "." + archiveType // ".zip"
+	archiveSeparator       = "/"
+	archivePattern         = archiveExt + archiveSeparator                // ".zip/"
 	archiveTypeMetadataKey = ReservedMetadataPrefixLower + "archive-type" // "x-minio-internal-archive-type"
 	archiveInfoMetadataKey = ReservedMetadataPrefixLower + "archive-info" // "x-minio-internal-archive-info"
 )
@@ -129,7 +130,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
 
-	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, ObjectOptions{})
+	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -140,7 +141,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
 		zipInfo = []byte(z)
 	} else {
-		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object)
+		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 
 	if err != nil {
@@ -170,7 +171,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	if file.UncompressedSize64 > 0 {
 		rs := &HTTPRangeSpec{Start: file.Offset, End: file.Offset + int64(file.UncompressedSize64) - 1}
-		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, readLock, ObjectOptions{})
+		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, readLock, opts)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -240,7 +241,8 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
 		zipInfo = []byte(z)
 	} else {
-		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath)
+		// Always update the latest version
+		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, ObjectOptions{})
 	}
 
 	if err != nil {
@@ -268,7 +270,7 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 
 	// Open and iterate through the files in the archive.
 	for _, file := range files {
-		objName := zipObjInfo.Name + slashSeparator + file.Name
+		objName := zipObjInfo.Name + archiveSeparator + file.Name
 		if objName <= startAfter || objName <= token {
 			continue
 		}
@@ -309,12 +311,12 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 }
 
 // getFilesFromZIPObject reads a partial stream of a zip file to build the zipindex.Files index
-func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string) (zipindex.Files, ObjectInfo, error) {
+func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, opts ObjectOptions) (zipindex.Files, ObjectInfo, error) {
 	var size = 1 << 20
 	var objSize int64
 	for {
 		rs := &HTTPRangeSpec{IsSuffixLength: true, Start: int64(-size)}
-		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, rs, nil, readLock, ObjectOptions{})
+		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, rs, nil, readLock, opts)
 		if err != nil {
 			return nil, ObjectInfo{}, err
 		}
@@ -431,7 +433,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
 		zipInfo = []byte(z)
 	} else {
-		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object)
+		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -473,8 +475,8 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 }
 
 // Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc..
-func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer, bucket, object string) ([]byte, error) {
-	files, srcInfo, err := getFilesListFromZIPObject(ctx, objectAPI, bucket, object)
+func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer, bucket, object string, opts ObjectOptions) ([]byte, error) {
+	files, srcInfo, err := getFilesListFromZIPObject(ctx, objectAPI, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -488,9 +490,14 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	srcInfo.UserDefined[archiveInfoMetadataKey] = string(zipInfo)
 	srcInfo.metadataOnly = true
 
-	_, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, ObjectOptions{}, ObjectOptions{})
+	// Always update the same version id & modtime
+
+	// Passing opts twice as source & destination options will update the metadata
+	// of the same object version to avoid creating a new version.
+	_, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, opts, opts)
 	if err != nil {
 		return nil, err
 	}
+
 	return zipInfo, nil
 }
