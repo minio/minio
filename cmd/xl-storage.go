@@ -300,7 +300,15 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		return p, err
 	}
 	w.Close()
-	defer Remove(filePath)
+	Remove(filePath)
+
+	if err := formatErasureMigrate(p.diskPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return p, err
+	}
+
+	if err := formatErasureCleanupTmp(p.diskPath); err != nil {
+		return p, err
+	}
 
 	// Success.
 	return p, nil
