@@ -26,6 +26,7 @@ var (
 			Key:         ServerAddr,
 			Description: `AD/LDAP server address e.g. "myldapserver.com:636"`,
 			Type:        "address",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         STSExpiry,
@@ -38,12 +39,14 @@ var (
 			Description: `DN for LDAP read-only service account used to perform DN and group lookups`,
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         LookupBindPassword,
 			Description: `Password for LDAP read-only service account used to perform DN and group lookups`,
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
@@ -62,6 +65,7 @@ var (
 			Description: `";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
 			Optional:    true,
 			Type:        "list",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         GroupSearchFilter,
