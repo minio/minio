@@ -24,7 +24,7 @@ import (
 
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/sys"
+	"github.com/minio/pkg/sys"
 )
 
 type apiConfig struct {

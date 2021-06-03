@@ -43,8 +43,8 @@ import (
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/pkg/env"
 )
 
 const (

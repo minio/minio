@@ -46,9 +46,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/handlers"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/kms"
 	xnet "github.com/minio/minio/pkg/net"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const (

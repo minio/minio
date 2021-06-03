@@ -31,6 +31,9 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+// Timeout for the webhook http call
+const webhookCallTimeout = 5 * time.Second
+
 // Target implements logger.Target and sends the json
 // format of a log entry to the configured http endpoint.
 // An internal buffer of logs is maintained but when the
@@ -62,7 +65,7 @@ func (h *Target) String() string {
 
 // Validate validate the http target
 func (h *Target) Validate() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*webhookCallTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, strings.NewReader(`{}`))
@@ -111,7 +114,7 @@ func (h *Target) startHTTPLogger() {
 				continue
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 				h.endpoint, bytes.NewReader(logJSON))
 			if err != nil {

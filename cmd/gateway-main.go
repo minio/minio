@@ -31,9 +31,9 @@ import (
 	"github.com/minio/cli"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 var (

@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/pkg/ellipses"
+	"github.com/minio/pkg/ellipses"
 )
 
 // Config represents cache config settings

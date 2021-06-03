@@ -36,9 +36,7 @@ docker run -p 9000:9000 \
 ```
 
 ## Run Distributed MinIO on Docker
-Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose) or [Swarm mode](https://docs.min.io/docs/deploy-minio-on-docker-swarm). The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment.
-
-This means Docker Compose lets you quickly get started with Distributed MinIO on your computer - ideal for development, testing, staging environments. While deploying Distributed MinIO on Swarm offers a more robust, production level deployment.
+Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose). This means Docker Compose lets you quickly get started with Distributed MinIO on your computer - ideal for development, testing, staging environments. We recommend kubernetes based deployment for production level deployment https://github.com/minio/operator.
 
 ## MinIO Docker Tips
 
@@ -165,6 +163,5 @@ docker stats <container_id>
 ## Explore Further
 
 * [Deploy MinIO on Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose)
-* [Deploy MinIO on Docker Swarm](https://docs.min.io/docs/deploy-minio-on-docker-swarm)
 * [Distributed MinIO Quickstart Guide](https://docs.min.io/docs/distributed-minio-quickstart-guide)
 * [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)

@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -37,8 +38,8 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/mimedb"
 )
 
 // list all errors which can be ignored in object operations.
@@ -598,6 +599,25 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		parityDrives = globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 		if parityDrives <= 0 {
 			parityDrives = er.defaultParityCount
+		}
+
+		// If we have offline disks upgrade the number of erasure codes for this object.
+		parityOrig := parityDrives
+		for _, disk := range storageDisks {
+			if parityDrives >= len(storageDisks)/2 {
+				parityDrives = len(storageDisks) / 2
+				break
+			}
+			if disk == nil {
+				parityDrives++
+			}
+			di, err := disk.DiskInfo(ctx)
+			if err != nil || di.ID == "" {
+				parityDrives++
+			}
+		}
+		if parityOrig != parityDrives {
+			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 		}
 	}
 	dataDrives := len(storageDisks) - parityDrives

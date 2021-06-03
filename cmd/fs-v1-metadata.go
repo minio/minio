@@ -32,7 +32,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/pkg/mimedb"
 )
 
 // FS format, and object metadata.

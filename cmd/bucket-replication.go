@@ -38,7 +38,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // gets replication config associated to a given bucket name.
@@ -868,9 +868,12 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		replicaCh:       make(chan ReplicateObjectInfo, 100000),
 		replicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
 		mrfReplicaCh:    make(chan ReplicateObjectInfo, 100000),
+		workerKillCh:    make(chan struct{}, opts.Workers),
+		mrfWorkerKillCh: make(chan struct{}, opts.FailedWorkers),
 		ctx:             ctx,
 		objLayer:        o,
 	}
+
 	pool.ResizeWorkers(opts.Workers)
 	pool.ResizeFailedWorkers(opts.FailedWorkers)
 	return pool
@@ -888,6 +891,8 @@ func (p *ReplicationPool) AddMRFWorker() {
 				return
 			}
 			replicateObject(p.ctx, oi, p.objLayer)
+		case <-p.mrfWorkerKillCh:
+			return
 		}
 	}
 }

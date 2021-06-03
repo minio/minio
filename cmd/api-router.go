@@ -23,7 +23,7 @@ import (
 
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
 

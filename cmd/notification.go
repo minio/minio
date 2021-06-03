@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
@@ -39,11 +40,10 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/willf/bloom"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // NotificationSys - notification system.

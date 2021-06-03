@@ -26,8 +26,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 func concurrentDecryptETag(ctx context.Context, objects []ObjectInfo) {
