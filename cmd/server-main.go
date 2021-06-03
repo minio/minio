@@ -531,7 +531,6 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	initBackgroundExpiry(GlobalContext, newObject)
-	initDataScanner(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
@@ -548,6 +547,8 @@ func serverMain(ctx *cli.Context) {
 
 		logger.LogIf(GlobalContext, err)
 	}
+
+	initDataScanner(GlobalContext, newObject)
 
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)

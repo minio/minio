@@ -333,6 +333,8 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 // The updated cache for the bucket is returned.
 // A partially updated bucket may be returned.
 func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUsageCache) (dataUsageCache, error) {
+	defer close(cache.Info.updates)
+
 	// Get bucket policy
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(bucket)
