@@ -317,14 +317,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
-	if globalEtcdClient != nil {
-		// ****  WARNING ****
-		// Migrating to encrypted backend on etcd should happen before initialization of
-		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient),
-			"Unable to handle encrypted backend for iam and policies")
-	}
-
 	if enableIAMOps {
 		// Initialize users credentials and policies in background.
 		globalIAMSys.InitStore(newObject)

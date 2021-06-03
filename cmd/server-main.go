@@ -548,6 +548,9 @@ func serverMain(ctx *cli.Context) {
 		logger.LogIf(GlobalContext, err)
 	}
 
+	// Initialize users credentials and policies in background right after config has initialized.
+	go globalIAMSys.Init(GlobalContext, newObject)
+
 	initDataScanner(GlobalContext, newObject)
 
 	if globalIsErasure { // to be done after config init
@@ -566,9 +569,6 @@ func serverMain(ctx *cli.Context) {
 
 		setCacheObjectLayer(cacheAPI)
 	}
-
-	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject)
 
 	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 	printStartupMessage(getAPIEndpoints(), err)
