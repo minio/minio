@@ -6,10 +6,12 @@ ENV GOPATH /go
 ENV CGO_ENABLED 0
 ENV GO111MODULE on
 
-RUN  \
-     apk add --no-cache git && \
-     git clone https://github.com/minio/minio && cd minio && \
-     git checkout master && go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)"
+COPY . /go/minio/
+COPY browser /go/minio/browser
+
+WORKDIR /go/minio/
+
+RUN apk add --no-cache git && go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)"
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
 
@@ -29,9 +31,8 @@ COPY --from=builder /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
-     microdnf clean all && \
-     echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
+     microdnf install curl ca-certificates shadow-utils util-linux iproute iputils --nodocs && \
+     microdnf clean all
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
