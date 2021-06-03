@@ -1021,7 +1021,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 	}
 
 	// How much will be left after adding the file.
-	available -= -uint64(size)
+	available -= uint64(size)
 
 	// wantLeft is how much space there at least must be left.
 	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
