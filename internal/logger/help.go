@@ -28,12 +28,14 @@ var (
 			Key:         Endpoint,
 			Description: `HTTP(s) endpoint e.g. "http://localhost:8080/minio/logs/server"`,
 			Type:        "url",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         AuthToken,
 			Description: `opaque string or JWT authorization token`,
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -48,12 +50,14 @@ var (
 			Key:         Endpoint,
 			Description: `HTTP(s) endpoint e.g. "http://localhost:8080/minio/logs/audit"`,
 			Type:        "url",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         AuthToken,
 			Description: `opaque string or JWT authorization token`,
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -66,12 +70,14 @@ var (
 			Description: "mTLS certificate for Audit Webhook authentication",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         ClientKey,
 			Description: "mTLS certificate key for Audit Webhook authentication",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 	}
 )

@@ -345,36 +345,26 @@ func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
 
 // RedactSensitiveInfo - removes sensitive information
 // like urls and credentials from the configuration
-func (c Config) RedactSensitiveInfo() {
-	sensitiveConfigKeys := map[string][]string{
-		"notify_amqp":          {"url", "routing_key"},
-		"notify_nsq":           {"nsqd_address"},
-		"notify_postgres":      {"connection_string"},
-		"notify_kafka":         {"sasl_username", "sasl_password", "client_tls_cert", "client_tls_key"},
-		"notify_redis":         {"address", "key", "password"},
-		"notify_mqtt":          {"broker", "password", "username"},
-		"notify_mysql":         {"dsn_string"},
-		"notify_webhook":       {"endpoint", "client_cert", "client_key"},
-		"notify_elasticsearch": {"url", "username", "password"},
-		"notify_nats":          {"address", "username", "password", "token", "cert_authority", "client_cert", "client_key"},
-	}
+func (c Config) RedactSensitiveInfo() Config {
+	nc := c.Clone()
 
-	for configName, configVals := range c {
-		sensitiveKeys, isSensitiveConfig := sensitiveConfigKeys[configName]
-		if isSensitiveConfig {
-			for name, kvs := range configVals {
-				for _, sensitiveKey := range sensitiveKeys {
+	for configName, configVals := range nc {
+		for _, helpKV := range HelpSubSysMap[configName] {
+			if helpKV.Sensitive {
+				for name, kvs := range configVals {
 					for i := range kvs {
-						if kvs[i].Key == sensitiveKey && len(kvs[i].Value) > 0 {
+						if kvs[i].Key == helpKV.Key && len(kvs[i].Value) > 0 {
 							kvs[i].Value = "*redacted*"
 						}
 					}
+					configVals[name] = kvs
 				}
-				configVals[name] = kvs
 			}
-			c[configName] = configVals
 		}
+		nc[configName] = configVals
 	}
+
+	return nc
 }
 
 type configWriteTo struct {
