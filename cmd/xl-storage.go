@@ -982,10 +982,11 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 		for walkResult := range walkResultCh {
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) && walkResult.emptyDir {
-				// Avoid listing empty directory, they are not supposed to exist
+				// Avoid listing empty directory, they are not supposed to exist,
+				// if they are found delete them.
+				deleteFile(volumeDir, walkResult.entry, false)
 				continue
-			}
-			if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
+			} else if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
 				_, dirObj := dirObjects[walkResult.entry]
 				if dirObj {
 					continue
@@ -1090,10 +1091,11 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 		for walkResult := range walkResultCh {
 			var fi FileInfo
 			if HasSuffix(walkResult.entry, SlashSeparator) && walkResult.emptyDir {
-				// Avoid listing empty directory, they are not supposed to exist
+				// Avoid listing empty directory, they are not supposed to exist,
+				// if they are found delete them.
+				deleteFile(volumeDir, walkResult.entry, false)
 				continue
-			}
-			if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
+			} else if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
 				_, dirObj := dirObjects[walkResult.entry]
 				if dirObj {
 					continue
