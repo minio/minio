@@ -47,7 +47,7 @@ const (
 	EnvKESKeyName    = "MINIO_KMS_KES_KEY_NAME"
 	EnvKESClientKey  = "MINIO_KMS_KES_KEY_FILE"
 	EnvKESClientCert = "MINIO_KMS_KES_CERT_FILE"
-	EnvKESServerCA   = "MINIO_KMS_KES_CAPATH"
+	EnvKESServerCA   = "MINIO_KMS_KES_CA_PATH"
 
 	EnvEndpoints = "MINIO_ENDPOINTS" // legacy
 	EnvWorm      = "MINIO_WORM"      // legacy
