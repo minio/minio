@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
 )
 
 func TestDecryptData(t *testing.T) {

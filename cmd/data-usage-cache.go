@@ -32,9 +32,9 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -161,7 +161,8 @@ type dataUsageCacheInfo struct {
 	// optional updates channel.
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
-	updates chan<- dataUsageEntry `msg:"-"`
+	updates     chan<- dataUsageEntry `msg:"-"`
+	replication replicationConfig     `msg:"-"`
 }
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {

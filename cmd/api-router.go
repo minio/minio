@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
@@ -394,6 +394,9 @@ func registerAPIRouter(router *mux.Router) {
 		// PutBucketNotification
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketnotification", maxClients(httpTraceAll(api.PutBucketNotificationHandler)))).Queries("notification", "")
+		// ResetBucketReplicationState - MinIO extension API
+		router.Methods(http.MethodPut).HandlerFunc(
+			collectAPIStats("resetbucketreplicationstate", maxClients(httpTraceAll(api.ResetBucketReplicationStateHandler)))).Queries("replication-reset", "")
 		// PutBucket
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucket", maxClients(httpTraceAll(api.PutBucketHandler))))

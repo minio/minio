@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // localMetacacheMgr is the *local* manager for this peer.
@@ -60,8 +60,8 @@ func (m *metacacheManager) initManager() {
 			time.Sleep(time.Second)
 			objAPI = newObjectLayerFn()
 		}
+
 		if !globalIsErasure {
-			logger.Info("metacacheManager was initialized in non-erasure mode, skipping save")
 			return
 		}
 

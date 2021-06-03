@@ -22,7 +22,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // Writes in parallel to writers

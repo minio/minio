@@ -29,7 +29,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
 )
 
 func md5Header(data []byte) map[string]string {

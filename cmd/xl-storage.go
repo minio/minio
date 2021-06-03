@@ -40,13 +40,13 @@ import (
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/disk"
-	xioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/disk"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/env"
 )
@@ -414,6 +414,19 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 	}
 
+	// Check if the current bucket has replication configuration
+	if rcfg, err := globalBucketMetadataSys.GetReplicationConfig(ctx, cache.Info.Name); err == nil {
+		if rcfg.HasActiveRules("", true) {
+			tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, cache.Info.Name, rcfg.RoleArn)
+			cache.Info.replication = replicationConfig{
+				Config:          rcfg,
+				ResetID:         tgt.ResetID,
+				ResetBeforeDate: tgt.ResetBeforeDate}
+			if intDataUpdateTracker.debug {
+				console.Debugln(color.Green("scannerDisk:") + " replication: Active rules found")
+			}
+		}
+	}
 	// return initialized object layer
 	objAPI := newObjectLayerFn()
 	// object layer not initialized, return.
@@ -452,7 +465,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
-
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())

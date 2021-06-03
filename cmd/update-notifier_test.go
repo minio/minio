@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/internal/color"
 )
 
 // Tests update notifier string builder.
