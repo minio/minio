@@ -138,6 +138,9 @@ type FileInfo struct {
 	TransitionedObjName string
 	// TransitionTier is the storage class label assigned to remote tier.
 	TransitionTier string
+	// TransitionVersionID stores a version ID of the object associate
+	// with the remote tier.
+	TransitionVersionID string
 	// ExpireRestored indicates that the restored object is to be expired.
 	ExpireRestored bool
 
