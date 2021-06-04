@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -39,6 +40,7 @@ import (
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/kes"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
@@ -54,6 +56,7 @@ import (
 
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+var defaultAWSCredProvider []credentials.Provider
 
 func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -74,7 +77,6 @@ func init() {
 		// safe to assume a higher timeout upto 10 minutes.
 		globalDNSCache = xhttp.NewDNSCache(10*time.Minute, 5*time.Second, logger.LogOnceIf)
 	}
-
 	initGlobalContext()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
@@ -92,6 +94,14 @@ func init() {
 	console.SetColor("Debug", color.New())
 
 	gob.Register(StorageErr(""))
+
+	defaultAWSCredProvider = []credentials.Provider{
+		&credentials.IAM{
+			Client: &http.Client{
+				Transport: NewGatewayHTTPTransport(),
+			},
+		},
+	}
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {

@@ -106,7 +106,12 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
-	creds := credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
+	var creds *credentials.Credentials
+	if conf.AWSRole {
+		creds = credentials.NewChainCredentials(defaultAWSCredProvider)
+	} else {
+		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
+	}
 	getRemoteTargetInstanceTransportOnce.Do(func() {
 		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
 	})
