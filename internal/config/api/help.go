@@ -58,11 +58,5 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
-		config.HelpKV{
-			Key:         apiS3Zip,
-			Description: `enable S3 HEAD/GET and listing on a zip content`,
-			Optional:    true,
-			Type:        "off|on",
-		},
 	}
 )

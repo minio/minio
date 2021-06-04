@@ -1,34 +1,75 @@
 # Perform S3 operations in a ZIP content[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ### Overview
+
 MinIO implements an S3 extension to list, stat and download files inside a ZIP file stored in any bucket. A perfect use case scenario is when you have a lot of small files archived in multiple ZIP files. Uploading them is faster than uploading small files individually. Besides, your S3 applications will be able to access to the data with little performance overhead.
 
 The main limitation is that to update or delete content of a file inside a ZIP file the entire ZIP file must be replaced.
 
-### How to enable S3 ZIP extension ?
+### How to enable S3 ZIP behavior ?
 
-Just use mc to enable it: `mc admin config set <your-alias> api s3zip=on`
+Ensure to set the following header `x-minio-extract` to `true` in your S3 requests.
 
 ### How to access to files inside a ZIP archive
 
-After enabling S3 ZIP extension and uploading archives with '.zip' extension, you can access data by invoking regular S3 API, with modified path. 
-
-Accessing to a file inside the object `taxes.txt` inside `archive.zip` can be done with the following path `archive.zip/taxes.txt`.
+Accessing to contents inside an archive can be done using regular S3 API with a modified request path. You just need to append the path of the content inside the archive to the path of the archive itself.
 
 e.g.:
-```
-$ mc cp archive.zip myminio/testbucket/
-archive.zip:    791 B / 791 B ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 80 MiB/s 0s
-...
-$ mc ls -r myminio/testbucket/archive.zip/
-[2021-04-02 12:49:34 CET] 3.4KiB financial-2021-04.txt
-[2021-05-02 12:49:34 CET]   624B financial-2021-05.txt
-.... the rest of archive content list ..
-$ mc cat myminio/testbucket/archive.zip/financial-2021-05.txt
-.... financial csv content ...
-```
+To download `2021/taxes.csv` archived in `financial.zip` and stored under a bucket named `company-data`, you can issue a GET request using the following path 'company-data/financial.zip/2021/taxes.csv`
+
+### Contents properties
 
 All properties except the file size are tied to the zip file. This means that modification date, headers, tags, etc. can only be set for the zip file as a whole. In similar fashion, replication will replicate the zip file as a whole and not individual files.
+
+### Example of Golang code
+
+```
+package main
+
+import (
+        "context"
+        "io"
+        "log"
+        "net/http"
+        "os"
+
+        "github.com/minio/minio-go/v7"
+        "github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+type s3ExtensionTransport struct {
+        tr http.RoundTripper
+}
+
+func (t *s3ExtensionTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+        req.Header.Add("x-minio-extract", "true")
+        return t.tr.RoundTrip(req)
+}
+
+func main() {
+        tr, _ := minio.DefaultTransport(false)
+
+        s3Client, err := minio.New("localhost:9000", &minio.Options{
+                Creds:     credentials.NewStaticV4("minio", "minio123", ""),
+                Transport: &s3ExtensionTransport{tr},
+        })
+        if err != nil {
+                log.Fatalln(err)
+        }
+
+        // Download API.md from the archive
+        rd, err := s3Client.GetObject(context.Background(), "testbucket", "archive.zip/docs/API.md", minio.GetObjectOptions{})
+        if err != nil {
+                log.Fatalln(err)
+        }
+        _, err = io.Copy(os.Stdout, rd)
+        if err != nil {
+                log.Fatalln(err)
+        }
+
+        return
+}
+```
 
 ### Limitation
 - Listing only operates on the most recent version of your object.

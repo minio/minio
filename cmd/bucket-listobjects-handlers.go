@@ -241,7 +241,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		err               error
 	)
 
-	if globalAPIConfig.s3ZipEnabled() && strings.Contains(prefix, archivePattern) {
+	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(prefix, archivePattern) {
 		// Inititate a list objects operation inside a zip file based in the input params
 		listObjectsV2Info, err = listObjectsV2InArchive(ctx, objectAPI, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	} else {

@@ -40,7 +40,6 @@ type apiConfig struct {
 	totalDriveCount          int
 	replicationWorkers       int
 	replicationFailedWorkers int
-	s3zip                    bool
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -90,7 +89,6 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationFailedWorkers = cfg.ReplicationFailedWorkers
 	t.replicationWorkers = cfg.ReplicationWorkers
-	t.s3zip = cfg.S3Zip
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -183,11 +181,4 @@ func (t *apiConfig) getReplicationWorkers() int {
 	defer t.mu.RUnlock()
 
 	return t.replicationWorkers
-}
-
-func (t *apiConfig) s3ZipEnabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.s3zip
 }

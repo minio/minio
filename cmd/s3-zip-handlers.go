@@ -43,6 +43,9 @@ const (
 	archivePattern         = archiveExt + archiveSeparator                // ".zip/"
 	archiveTypeMetadataKey = ReservedMetadataPrefixLower + "archive-type" // "x-minio-internal-archive-type"
 	archiveInfoMetadataKey = ReservedMetadataPrefixLower + "archive-info" // "x-minio-internal-archive-info"
+
+	// Peek into a zip archive
+	xMinIOExtract = "x-minio-extract"
 )
 
 // splitZipExtensionPath splits the S3 path to the zip file and the path inside the zip:
