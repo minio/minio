@@ -610,6 +610,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			}
 			if disk == nil {
 				parityDrives++
+				continue
 			}
 			di, err := disk.DiskInfo(ctx)
 			if err != nil || di.ID == "" {
