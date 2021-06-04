@@ -668,8 +668,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		break
 	}
 
-	// Invalidate the old cred always, even upon error to avoid any leakage.
-	globalOldCred = auth.Credentials{}
 	go sys.store.watch(ctx, sys)
 
 	logger.Info("IAM initialization complete")
