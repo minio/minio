@@ -43,9 +43,9 @@ func consoleLog(console Logger, msg string, args ...interface{}) {
 		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
 	case quietFlag:
-		console.quiet(msg, args...)
+		console.quiet(msg+"\n", args...)
 	default:
-		console.pretty(msg, args...)
+		console.pretty(msg+"\n", args...)
 	}
 }
 
@@ -71,10 +71,17 @@ type fatalMsg struct {
 }
 
 func (f fatalMsg) json(msg string, args ...interface{}) {
+	var message string
+	if msg != "" {
+		message = fmt.Sprintf(msg, args...)
+	} else {
+		message = fmt.Sprint(args...)
+	}
 	logJSON, err := json.Marshal(&log.Entry{
-		Level: FatalLvl.String(),
-		Time:  time.Now().UTC().Format(time.RFC3339Nano),
-		Trace: &log.Trace{Message: fmt.Sprintf(msg, args...), Source: []string{getSource(6)}},
+		Level:   FatalLvl.String(),
+		Message: message,
+		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
 	})
 	if err != nil {
 		panic(err)
@@ -143,9 +150,15 @@ type infoMsg struct{}
 var info infoMsg
 
 func (i infoMsg) json(msg string, args ...interface{}) {
+	var message string
+	if msg != "" {
+		message = fmt.Sprintf(msg, args...)
+	} else {
+		message = fmt.Sprint(args...)
+	}
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   InformationLvl.String(),
-		Message: fmt.Sprintf(msg, args...),
+		Message: message,
 		Time:    time.Now().UTC().Format(time.RFC3339Nano),
 	})
 	if err != nil {
@@ -159,12 +172,54 @@ func (i infoMsg) quiet(msg string, args ...interface{}) {
 }
 
 func (i infoMsg) pretty(msg string, args ...interface{}) {
+	if msg == "" {
+		c.Println(args...)
+	}
 	c.Printf(msg, args...)
+}
+
+type errorMsg struct{}
+
+var errorm errorMsg
+
+func (i errorMsg) json(msg string, args ...interface{}) {
+	var message string
+	if msg != "" {
+		message = fmt.Sprintf(msg, args...)
+	} else {
+		message = fmt.Sprint(args...)
+	}
+	logJSON, err := json.Marshal(&log.Entry{
+		Level:   ErrorLvl.String(),
+		Message: message,
+		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(logJSON))
+}
+
+func (i errorMsg) quiet(msg string, args ...interface{}) {
+	i.pretty(msg, args...)
+}
+
+func (i errorMsg) pretty(msg string, args ...interface{}) {
+	if msg == "" {
+		c.Println(args...)
+	}
+	c.Printf(msg, args...)
+}
+
+// Error :
+func Error(msg string, data ...interface{}) {
+	consoleLog(errorm, msg, data...)
 }
 
 // Info :
 func Info(msg string, data ...interface{}) {
-	consoleLog(info, msg+"\n", data...)
+	consoleLog(info, msg, data...)
 }
 
 var startupMessage startUpMsg
@@ -184,5 +239,5 @@ func (s startUpMsg) pretty(msg string, args ...interface{}) {
 
 // StartupMessage :
 func StartupMessage(msg string, data ...interface{}) {
-	consoleLog(startupMessage, msg+"\n", data...)
+	consoleLog(startupMessage, msg, data...)
 }
