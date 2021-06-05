@@ -56,23 +56,28 @@ var (
 	errUnsupportedJournalVersion = errors.New("unsupported pending deletes journal version")
 )
 
-func initTierDeletionJournal(done <-chan struct{}) (*tierJournal, error) {
-	diskPath := globalEndpoints.FirstLocalDiskPath()
-	j := &tierJournal{
-		diskPath: diskPath,
+func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
+	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
+		j := &tierJournal{
+			diskPath: diskPath,
+		}
+
+		if err := os.MkdirAll(filepath.Dir(j.JournalPath()), os.FileMode(0700)); err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+
+		err := j.Open()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+
+		go j.deletePending(ctx.Done())
+		return j, nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(j.JournalPath()), os.FileMode(0700)); err != nil {
-		return nil, err
-	}
-
-	err := j.Open()
-	if err != nil {
-		return nil, err
-	}
-
-	go j.deletePending(done)
-	return j, nil
+	return nil, errors.New("no local disk found")
 }
 
 // rotate rotates the journal. If a read-only journal already exists it does

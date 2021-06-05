@@ -20,18 +20,15 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 var printEndpointError = func() func(Endpoint, error, bool) {
@@ -72,78 +69,37 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 	}
 }()
 
-// Migrates backend format of local disks.
-func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			err := formatErasureMigrate(epPath)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return nil
-		}, index)
+// Cleans up tmp directory of the local disk.
+func formatErasureCleanupTmp(diskPath string) error {
+	// Need to move temporary objects left behind from previous run of minio
+	// server to a unique directory under `minioMetaTmpBucket-old` to clean
+	// up `minioMetaTmpBucket` for the current run.
+	//
+	// /disk1/.minio.sys/tmp-old/
+	//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
+	//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
+	//
+	// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
+	// temporary objects from one of the previous runs of minio server.
+	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", mustGetUUID())
+	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
+		tmpOld); err != nil && err != errFileNotFound {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			tmpOld,
+			osErrToFileErr(err)))
 	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
-// Cleans up tmp directory of local disks.
-func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			// Need to move temporary objects left behind from previous run of minio
-			// server to a unique directory under `minioMetaTmpBucket-old` to clean
-			// up `minioMetaTmpBucket` for the current run.
-			//
-			// /disk1/.minio.sys/tmp-old/
-			//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
-			//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
-			//
-			// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
-			// temporary objects from one of the previous runs of minio server.
-			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
-			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
-				tmpOld); err != nil && err != errFileNotFound {
-				logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
-					pathJoin(epPath, minioMetaTmpBucket),
-					tmpOld,
-					osErrToFileErr(err)))
-			}
+	// Renames and schedules for purging all bucket metacache.
+	renameAllBucketMetacache(diskPath)
 
-			// Renames and schedules for puring all bucket metacache.
-			renameAllBucketMetacache(epPath)
+	// Removal of tmp-old folder is backgrounded completely.
+	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
 
-			// Removal of tmp-old folder is backgrounded completely.
-			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
-
-			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
-				logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
-					pathJoin(epPath, minioMetaTmpBucket),
-					err))
-			}
-			return nil
-		}, index)
-	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpBucket), 0777); err != nil {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			err))
 	}
 	return nil
 }
@@ -335,14 +291,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) ([]StorageAPI, *formatErasureV3, error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
-	}
-
-	if err := formatErasureMigrateLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
-	}
-
-	if err := formatErasureCleanupTmpLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
 	}
 
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
