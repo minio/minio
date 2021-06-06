@@ -356,10 +356,10 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 		expectErr  bool
 	}{
 		{"foo", "myobject", false},
-		// should removed by above case.
-		{"foo", "myobject", true},
-		// file not found error
-		{"foo", "yourobject", true},
+		// file not found not returned
+		{"foo", "myobject", false},
+		// file not found not returned
+		{"foo", "yourobject", false},
 	}
 
 	for i, testCase := range testCases {
