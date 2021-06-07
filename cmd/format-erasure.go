@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"sync"
 
@@ -183,6 +184,13 @@ func formatGetBackendErasureVersion(formatPath string) (string, error) {
 // first before it V2 migrates to V3.
 func formatErasureMigrate(export string) error {
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
+	if _, err := os.Stat(formatPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("unable to access (%s) %w", formatPath, err)
+	}
+
 	version, err := formatGetBackendErasureVersion(formatPath)
 	if err != nil {
 		return err

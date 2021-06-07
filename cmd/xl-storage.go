@@ -279,6 +279,14 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		rootDisk:         rootDisk,
 	}
 
+	if err := formatErasureMigrate(path); err != nil {
+		return nil, err
+	}
+
+	if err := formatErasureCleanupLocalTmp(path); err != nil {
+		return nil, err
+	}
+
 	// Success.
 	return p, nil
 }
