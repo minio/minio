@@ -20,14 +20,12 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"path"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
@@ -110,7 +108,14 @@ func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
 		})
 		if err != nil {
-			return err
+			// This fallback is needed because of a bug, in kms.Context{}
+			// construction during migration.
+			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: itemPath,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -129,12 +134,8 @@ func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error
 	return deleteKeyEtcd(ctx, ies.client, path)
 }
 
-func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool) error {
+func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context) error {
 	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 	r, err := ies.client.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
@@ -162,9 +163,6 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool)
 			// 2. copy policy to new loc.
 			mp := newMappedPolicy(policyName)
 			userType := regularUser
-			if isSTS {
-				userType = stsUser
-			}
 			path := getMappedPolicyPath(user, userType, false)
 			if err := ies.saveIAMConfig(ctx, mp, path); err != nil {
 				return err
@@ -220,34 +218,27 @@ func (ies *IAMEtcdStore) migrateToV1(ctx context.Context) error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
+			// if IAM format
 			return err
 		}
-	} else {
-		if iamFmt.Version >= iamFormatVersion1 {
-			// Already migrated to V1 of higher!
-			return nil
-		}
-		// This case should not happen
-		// (i.e. Version is 0 or negative.)
-		return errors.New("got an invalid IAM format version")
-
 	}
 
-	// Migrate long-term users
-	if err := ies.migrateUsersConfigToV1(ctx, false); err != nil {
+	if iamFmt.Version >= iamFormatVersion1 {
+		// Nothing to do.
+		return nil
+	}
+
+	if err := ies.migrateUsersConfigToV1(ctx); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
-	// Migrate STS users
-	if err := ies.migrateUsersConfigToV1(ctx, true); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	// Save iam version file.
+
+	// Save iam format to version 1.
 	if err := ies.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
+
 	return nil
 }
 
@@ -322,27 +313,6 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 		deleteKeyEtcd(ctx, ies.client, getMappedPolicyPath(user, userType, false))
 		return nil
 	}
-
-	// If this is a service account, rotate the session key if we are changing the server creds
-	if globalOldCred.IsValid() && u.Credentials.IsServiceAccount() {
-		if !globalOldCred.Equal(globalActiveCred) {
-			m := jwtgo.MapClaims{}
-			stsTokenCallback := func(t *jwtgo.Token) (interface{}, error) {
-				return []byte(globalOldCred.SecretKey), nil
-			}
-			if _, err := jwtgo.ParseWithClaims(u.Credentials.SessionToken, m, stsTokenCallback); err == nil {
-				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, m)
-				if token, err := jwt.SignedString([]byte(globalActiveCred.SecretKey)); err == nil {
-					u.Credentials.SessionToken = token
-					err := ies.saveIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
 	}

@@ -1068,7 +1068,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 	if restoredObject {
 		action = expireRestoredObj
 	}
-	if err := expireTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, action); err != nil {
+	if err := expireTransitionedObject(ctx, objLayer, &obj, lcOpts, action); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}

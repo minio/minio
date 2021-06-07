@@ -1565,7 +1565,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				}
 			} else {
 				healthInfo.Minio.Config = madmin.MinioConfig{
-					Config: config,
+					Config: config.RedactSensitiveInfo(),
 				}
 			}
 			partialWrite(healthInfo)

@@ -610,6 +610,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			}
 			if disk == nil {
 				parityDrives++
+				continue
 			}
 			di, err := disk.DiskInfo(ctx)
 			if err != nil || di.ID == "" {
@@ -1348,7 +1349,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		pw.CloseWithError(err)
 	}()
 
-	err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	var rv remoteVersionID
+	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
 	pr.CloseWithError(err)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
@@ -1357,6 +1359,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	fi.TransitionStatus = lifecycle.TransitionComplete
 	fi.TransitionedObjName = destObj
 	fi.TransitionTier = opts.Transition.Tier
+	fi.TransitionVersionID = string(rv)
 	eventName := event.ObjectTransitionComplete
 
 	storageDisks := er.getDisks()

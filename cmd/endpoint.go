@@ -257,18 +257,17 @@ func (l EndpointServerPools) Localhost() string {
 	return ""
 }
 
-// FirstLocalDiskPath returns the disk path of first (in cmdline args order)
-// local endpoint.
-func (l EndpointServerPools) FirstLocalDiskPath() string {
-	var diskPath string
+// LocalDisksPaths returns the disk paths of the local disks
+func (l EndpointServerPools) LocalDisksPaths() []string {
+	var disks []string
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.IsLocal {
-				return endpoint.Path
+				disks = append(disks, endpoint.Path)
 			}
 		}
 	}
-	return diskPath
+	return disks
 }
 
 // FirstLocal returns true if the first endpoint is local.

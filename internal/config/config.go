@@ -340,6 +340,30 @@ func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
 	return dynOnly, nil
 }
 
+// RedactSensitiveInfo - removes sensitive information
+// like urls and credentials from the configuration
+func (c Config) RedactSensitiveInfo() Config {
+	nc := c.Clone()
+
+	for configName, configVals := range nc {
+		for _, helpKV := range HelpSubSysMap[configName] {
+			if helpKV.Sensitive {
+				for name, kvs := range configVals {
+					for i := range kvs {
+						if kvs[i].Key == helpKV.Key && len(kvs[i].Value) > 0 {
+							kvs[i].Value = "*redacted*"
+						}
+					}
+					configVals[name] = kvs
+				}
+			}
+		}
+		nc[configName] = configVals
+	}
+
+	return nc
+}
+
 type configWriteTo struct {
 	Config
 	filterByKey string

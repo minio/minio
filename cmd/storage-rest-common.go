@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v35" // Inline bugfix needs all servers to be updated
+	storageRESTVersion       = "v36" // Changes to FileInfo for tier-journal
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

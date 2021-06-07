@@ -35,12 +35,14 @@ var (
 			Key:         target.WebhookEndpoint,
 			Description: "webhook server endpoint e.g. http://localhost:8080/minio/events",
 			Type:        "url",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.WebhookAuthToken,
 			Description: "opaque string or JWT authorization token",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.WebhookQueueDir,
@@ -65,12 +67,14 @@ var (
 			Description: "client cert for Webhook mTLS auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.WebhookClientKey,
 			Description: "client cert key for Webhook mTLS auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 	}
 
@@ -79,6 +83,7 @@ var (
 			Key:         target.AmqpURL,
 			Description: "AMQP server endpoint e.g. `amqp://myuser:mypassword@localhost:5672`",
 			Type:        "url",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.AmqpExchange,
@@ -97,6 +102,7 @@ var (
 			Description: "routing key for publishing",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.AmqpMandatory,
@@ -171,12 +177,14 @@ var (
 			Description: "username for SASL/PLAIN or SASL/SCRAM authentication",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.KafkaSASLPassword,
 			Description: "password for SASL/PLAIN or SASL/SCRAM authentication",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.KafkaSASLMechanism,
@@ -213,12 +221,14 @@ var (
 			Description: "path to client certificate for mTLS auth",
 			Optional:    true,
 			Type:        "path",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.KafkaClientTLSKey,
 			Description: "path to client key for mTLS auth",
 			Optional:    true,
 			Type:        "path",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.KafkaQueueDir,
@@ -251,6 +261,7 @@ var (
 			Key:         target.MqttBroker,
 			Description: "MQTT server endpoint e.g. `tcp://localhost:1883`",
 			Type:        "uri",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.MqttTopic,
@@ -262,12 +273,14 @@ var (
 			Description: "MQTT username",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.MqttPassword,
 			Description: "MQTT password",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.MqttQoS,
@@ -312,6 +325,7 @@ var (
 			Key:         target.PostgresConnectionString,
 			Description: `Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"`,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.PostgresTable,
@@ -355,6 +369,7 @@ var (
 			Description: `MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"`,
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.MySQLTable,
@@ -397,6 +412,7 @@ var (
 			Key:         target.NATSAddress,
 			Description: "NATS server address e.g. '0.0.0.0:4222'",
 			Type:        "address",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSSubject,
@@ -408,18 +424,21 @@ var (
 			Description: "NATS username",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSPassword,
 			Description: "NATS password",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSToken,
 			Description: "NATS token",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSTLS,
@@ -468,18 +487,21 @@ var (
 			Description: "path to certificate chain of the target NATS server",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSClientCert,
 			Description: "client cert for NATS mTLS auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSClientKey,
 			Description: "client cert key for NATS mTLS auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NATSQueueDir,
@@ -506,6 +528,7 @@ var (
 			Key:         target.NSQAddress,
 			Description: "NSQ server address e.g. '127.0.0.1:4150'",
 			Type:        "address",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.NSQTopic,
@@ -549,6 +572,7 @@ var (
 			Key:         target.ElasticURL,
 			Description: "Elasticsearch server's address, with optional authentication info",
 			Type:        "url",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.ElasticIndex,
@@ -577,12 +601,14 @@ var (
 			Description: "username for Elasticsearch basic-auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.ElasticPassword,
 			Description: "password for Elasticsearch basic-auth",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -597,11 +623,13 @@ var (
 			Key:         target.RedisAddress,
 			Description: "Redis server's address. For example: `localhost:6379`",
 			Type:        "address",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.RedisKey,
 			Description: "Redis key to store/update events, key is auto-created",
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.RedisFormat,
@@ -613,6 +641,7 @@ var (
 			Description: "Redis server password",
 			Optional:    true,
 			Type:        "string",
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         target.RedisQueueDir,

@@ -26,7 +26,7 @@ COPY LICENSE /licenses/LICENSE
 
 RUN \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux iproute iputils --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
      microdnf install minisign --nodocs && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE} -o /usr/bin/minio && \
