@@ -27,7 +27,7 @@ type HelpKV struct {
 
 	// Indicates if the value contains sensitive info
 	// that shouldn't be exposed in certain apis
-	Sensitive bool `json:"sensitive"`
+	Sensitive bool `json:"-"`
 
 	// Indicates if sub-sys supports multiple targets.
 	MultipleTargets bool `json:"multipleTargets"`
