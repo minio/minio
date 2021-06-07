@@ -694,7 +694,10 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 			// Instantiate a new rest client for healthcheck
 			// to avoid recursive healthCheckFn()
-			respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			healthCheckClient := rest.NewClient(serverURL, trFn, newAuthToken)
+			healthCheckClient.ExpectTimeouts = true
+			healthCheckClient.NoMetrics = true
+			respBody, err := healthCheckClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)
 			cancel()
 			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound

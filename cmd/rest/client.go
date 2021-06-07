@@ -92,6 +92,9 @@ type Client struct {
 	// This will not mark the client offline in these cases.
 	ExpectTimeouts bool
 
+	// NoMetrics to avoid updating networking metrics if set to true
+	NoMetrics bool
+
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
@@ -131,7 +134,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			atomic.AddUint64(&networkErrsCounter, 1)
+			if !c.NoMetrics {
+				atomic.AddUint64(&networkErrsCounter, 1)
+			}
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -161,6 +166,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+				if !c.NoMetrics {
+					atomic.AddUint64(&networkErrsCounter, 1)
+				}
 				c.MarkOffline()
 			}
 			return nil, err
