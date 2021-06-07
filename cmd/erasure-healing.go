@@ -443,7 +443,10 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 
 		erasureInfo := latestMeta.Erasure
-
+		bp := er.bp
+		if erasureInfo.BlockSize == blockSizeV1 {
+			bp = er.bpOld
+		}
 		for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 			partSize := latestMeta.Parts[partIndex].Size
 			partActualSize := latestMeta.Parts[partIndex].ActualSize
@@ -457,7 +460,8 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
-				readers[i] = newBitrotReader(disk, partsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
+				readers[i] = newBitrotReader(disk, partsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
+					checksumInfo.Hash, erasure.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -473,7 +477,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 				}
 			}
-			err = erasure.Heal(ctx, readers, writers, partSize, er.bp)
+			err = erasure.Heal(ctx, readers, writers, partSize, bp)
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {

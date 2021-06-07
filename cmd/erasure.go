@@ -74,6 +74,10 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
+	// Byte pools used for temporary i/o buffers,
+	// legacy objects.
+	bpOld *bpool.BytePoolCap
+
 	mrfOpCh chan partialOperation
 
 	deletedCleanupSleeper *dynamicSleeper
