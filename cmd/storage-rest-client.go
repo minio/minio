@@ -704,6 +704,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 		healthClient.ExpectTimeouts = true
+		healthClient.NoMetrics = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 			defer cancel()
