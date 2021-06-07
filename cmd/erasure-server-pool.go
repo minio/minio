@@ -174,8 +174,8 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 
 // getAvailablePoolIdx will return an index that can hold size bytes.
 // -1 is returned if no serverPools have available space for the size given.
-func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, size int64) int {
-	serverPools := z.getServerPoolsAvailableSpace(ctx, size)
+func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, bucket, object string, size int64) int {
+	serverPools := z.getServerPoolsAvailableSpace(ctx, bucket, object, size)
 	total := serverPools.TotalAvailable()
 	if total == 0 {
 		return -1
@@ -197,18 +197,16 @@ func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, size int64
 // getServerPoolsAvailableSpace will return the available space of each pool after storing the content.
 // If there is not enough space the pool will return 0 bytes available.
 // Negative sizes are seen as 0 bytes.
-func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, size int64) serverPoolsAvailableSpace {
-	if size < 0 {
-		size = 0
-	}
+func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, bucket, object string, size int64) serverPoolsAvailableSpace {
 	var serverPools = make(serverPoolsAvailableSpace, len(z.serverPools))
 
-	storageInfos := make([]StorageInfo, len(z.serverPools))
+	storageInfos := make([][]*DiskInfo, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.serverPools[index].StorageUsageInfo(ctx)
+			// Get the set where it would be placed.
+			storageInfos[index] = getDiskInfos(ctx, z.serverPools[index].getHashedSet(object).getDisks())
 			return nil
 		}, index)
 	}
@@ -218,24 +216,12 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, s
 
 	for i, zinfo := range storageInfos {
 		var available uint64
-		var total uint64
-		for _, disk := range zinfo.Disks {
-			total += disk.TotalSpace
-			available += disk.TotalSpace - disk.UsedSpace
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(zinfo, size) {
+			serverPools[i] = poolAvailableSpace{Index: i}
+			continue
 		}
-		// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
-		if available < uint64(size) {
-			available = 0
-		}
-		if available > 0 {
-			// How much will be left after adding the file.
-			available -= -uint64(size)
-
-			// wantLeft is how much space there at least must be left.
-			wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
-			if available <= wantLeft {
-				available = 0
-			}
+		for _, disk := range zinfo {
+			available += disk.Total - disk.Used
 		}
 		serverPools[i] = poolAvailableSpace{
 			Index:     i,
@@ -298,8 +284,7 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 	}
 
 	if isErrObjectNotFound(err) {
-		// We multiply the size by 2 to account for erasure coding.
-		idx = z.getAvailablePoolIdx(ctx, size*2)
+		idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
 		}
@@ -717,6 +702,9 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), data.Size()) {
+			return ObjectInfo{}, toObjectErr(errDiskFull)
+		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
@@ -1012,6 +1000,9 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), -1) {
+			return "", toObjectErr(errDiskFull)
+		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
@@ -1036,7 +1027,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		}
 	}
 
-	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
+	idx, err := z.getPoolIdx(ctx, bucket, object, -1)
 	if err != nil {
 		return "", err
 	}

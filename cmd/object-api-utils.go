@@ -76,10 +76,7 @@ const (
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
 func isMinioMetaBucketName(bucket string) bool {
-	return bucket == minioMetaBucket ||
-		bucket == minioMetaMultipartBucket ||
-		bucket == minioMetaTmpBucket ||
-		bucket == dataUsageBucket
+	return strings.HasPrefix(bucket, minioMetaBucket)
 }
 
 // IsValidBucketName verifies that a bucket name is in accordance with
@@ -964,4 +961,69 @@ func compressSelfTest() {
 		logger.Fatal(errSelfTestFailure, "compress: self-test roundtrip mismatch.")
 
 	}
+}
+
+// getDiskInfos returns the disk information for the provided disks.
+// If a disk is nil or an error is returned the result will be nil as well.
+func getDiskInfos(ctx context.Context, disks []StorageAPI) []*DiskInfo {
+	res := make([]*DiskInfo, len(disks))
+	for i, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		if di, err := disk.DiskInfo(ctx); err == nil {
+			res[i] = &di
+		}
+	}
+	return res
+}
+
+// hasSpaceFor returns whether the disks in `di` have space for and object of a given size.
+func hasSpaceFor(di []*DiskInfo, size int64) bool {
+	// We multiply the size by 2 to account for erasure coding.
+	size *= 2
+	if size < 0 {
+		// If no size, assume diskAssumeUnknownSize.
+		size = diskAssumeUnknownSize
+	}
+
+	var available uint64
+	var total uint64
+	var nDisks int
+	for _, disk := range di {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+			// Disk offline, no inodes or something else is wrong.
+			continue
+		}
+		nDisks++
+		total += disk.Total
+		available += disk.Total - disk.Used
+	}
+
+	if nDisks == 0 {
+		return false
+	}
+
+	// Check we have enough on each disk, ignoring diskFillFraction.
+	perDisk := size / int64(nDisks)
+	for _, disk := range di {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+			continue
+		}
+		if int64(disk.Free) <= perDisk {
+			return false
+		}
+	}
+
+	// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
+	if available < uint64(size) {
+		return false
+	}
+
+	// How much will be left after adding the file.
+	available -= uint64(size)
+
+	// wantLeft is how much space there at least must be left.
+	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
+	return available > wantLeft
 }
