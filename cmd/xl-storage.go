@@ -1802,7 +1802,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive bool) erro
 			// error on parent directories.
 			return nil
 		case osIsNotExist(err):
-			return errFileNotFound
+			return nil
 		case osIsPermission(err):
 			return errFileAccessDenied
 		case isSysErrIO(err):
@@ -2013,6 +2013,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
+	legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 	if legacyPreserved {
 		// Preserve all the legacy data, could be slow, but at max there can be 10,000 parts.
 		currentDataPath := pathJoin(dstVolumeDir, dstPath)
@@ -2021,9 +2022,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			return osErrToFileErr(err)
 		}
 
-		legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		// legacy data dir means its old content, honor system umask.
 		if err = mkdirAll(legacyDataPath, 0777); err != nil {
+			// any failed mkdir-calls delete them.
+			s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			return osErrToFileErr(err)
 		}
 
@@ -2034,6 +2036,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			}
 
 			if err = Rename(pathJoin(currentDataPath, entry), pathJoin(legacyDataPath, entry)); err != nil {
+				// Any failed rename calls un-roll previous transaction.
+				s.deleteFile(dstVolumeDir, legacyDataPath, true)
+
 				return osErrToFileErr(err)
 			}
 		}
@@ -2054,28 +2059,42 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	}
 
 	if err = xlMeta.AddVersion(fi); err != nil {
+		if legacyPreserved {
+			// Any failed rename calls un-roll previous transaction.
+			s.deleteFile(dstVolumeDir, legacyDataPath, true)
+		}
 		return err
 	}
 
 	dstBuf, err = xlMeta.AppendTo(nil)
 	if err != nil {
 		logger.LogIf(ctx, err)
+		if legacyPreserved {
+			// Any failed rename calls un-roll previous transaction.
+			s.deleteFile(dstVolumeDir, legacyDataPath, true)
+		}
 		return errFileCorrupt
 	}
 
 	if srcDataPath != "" {
 		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+			if legacyPreserved {
+				// Any failed rename calls un-roll previous transaction.
+				s.deleteFile(dstVolumeDir, legacyDataPath, true)
+			}
 			return err
-		}
-
-		if oldDstDataPath != "" {
-			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 		}
 
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
 			renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 			if err = renameAll(srcDataPath, dstDataPath); err != nil {
+				if legacyPreserved {
+					// Any failed rename calls un-roll previous transaction.
+					s.deleteFile(dstVolumeDir, legacyDataPath, true)
+				}
+				s.deleteFile(dstVolumeDir, dstDataPath, false)
+
 				logger.LogIf(ctx, err)
 				return osErrToFileErr(err)
 			}
@@ -2083,20 +2102,41 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 		// Commit meta-file
 		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+			if legacyPreserved {
+				// Any failed rename calls un-roll previous transaction.
+				s.deleteFile(dstVolumeDir, legacyDataPath, true)
+			}
+			s.deleteFile(dstVolumeDir, dstFilePath, false)
+
 			logger.LogIf(ctx, err)
 			return osErrToFileErr(err)
+		}
+
+		// additionally only purge older data at the end of the transaction of new data-dir
+		// movement, this is to ensure that previous data references can co-exist for
+		// any recoverability.
+		if oldDstDataPath != "" {
+			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 		}
 	} else {
 		// Write meta-file directly, no data
 		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
+			if legacyPreserved {
+				// Any failed rename calls un-roll previous transaction.
+				s.deleteFile(dstVolumeDir, legacyDataPath, true)
+			}
+			s.deleteFile(dstVolumeDir, dstFilePath, false)
+
 			logger.LogIf(ctx, err)
 			return err
 		}
 	}
 
-	// Remove parent dir of the source file if empty
-	parentDir := pathutil.Dir(srcFilePath)
-	s.deleteFile(srcVolumeDir, parentDir, false)
+	// srcFilePath is always in minioMetaTmpBucket, an attempt to
+	// remove the temporary folder is enough since at this point
+	// ideally all transaction should be complete.
+
+	Remove(pathutil.Dir(srcFilePath))
 	return nil
 }
 
