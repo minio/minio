@@ -391,6 +391,14 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	// setCount * setDriveCount with each memory upto blockSizeV2.
 	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
 
+	// Initialize byte pool for all sets, bpool size is set to
+	// setCount * setDriveCount with each memory upto blockSizeV1
+	//
+	// Number of buffers, max 10GiB
+	m := (10 * humanize.GiByte) / (blockSizeV1 * 2)
+
+	bpOld := bpool.NewBytePoolCap(m, blockSizeV1, blockSizeV1*2)
+
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
@@ -440,6 +448,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
 			nsMutex:               mutex,
 			bp:                    bp,
+			bpOld:                 bpOld,
 			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 	}
