@@ -963,11 +963,44 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 	return false, size
 }
 
+// applyTierObjSweep removes remote object pending deletion and the free-version
+// tracking this information.
+func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	if !meta.oi.tierFreeVersionMarker {
+		// nothing to be done
+		return
+	}
+
+	ignoreNotFoundErr := func(err error) error {
+		switch {
+		case isErrVersionNotFound(err), isErrObjectNotFound(err):
+			return nil
+		}
+		return err
+	}
+	// Remove the remote object
+	err := deleteObjectFromRemoteTier(meta.oi.transitionedObjName, meta.oi.transitionVersionID, meta.oi.TransitionTier)
+	if ignoreNotFoundErr(err) != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+
+	// Remove this free version
+	opts := ObjectOptions{}
+	opts.VersionID = meta.oi.VersionID
+	_, err = o.DeleteObject(ctx, meta.oi.Bucket, meta.oi.Name, opts)
+	if ignoreNotFoundErr(err) != nil {
+		logger.LogIf(ctx, err)
+	}
+}
+
 // applyActions will apply lifecycle checks on to a scanned item.
 // The resulting size on disk will always be returned.
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
 func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) int64 {
+	i.applyTierObjSweep(ctx, o, meta)
+
 	applied, size := i.applyLifecycle(ctx, o, meta)
 	// For instance, an applied lifecycle means we remove/transitioned an object
 	// from the current deployment, which means we don't have to call healing

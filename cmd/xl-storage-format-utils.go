@@ -39,6 +39,23 @@ func (v versionsSorter) sort() {
 }
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
+	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path)
+	if err != nil {
+		return fivs, err
+	}
+	n := 0
+	for _, fi := range fivs.Versions {
+		// Filter our tier object delete marker
+		if !fi.TierFreeVersionMarker() {
+			fivs.Versions[n] = fi
+			n++
+		}
+	}
+	fivs.Versions = fivs.Versions[:n]
+	return fivs, nil
+}
+
+func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var xlMeta xlMetaV2
 		if err := xlMeta.Load(xlMetaBuf); err != nil {

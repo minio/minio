@@ -113,6 +113,7 @@ type ObjectInfo struct {
 	// to a delete marker on an object.
 	DeleteMarker bool
 
+	tierFreeVersionMarker bool
 	// TransitionStatus indicates if transition is complete/pending
 	TransitionStatus string
 	// Name of transitioned object on remote tier

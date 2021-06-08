@@ -38,6 +38,8 @@ require (
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.11
 	github.com/lib/pq v1.9.0
+	github.com/mattn/go-runewidth v0.0.13 // indirect
+	github.com/mgechev/revive v1.0.7 // indirect
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
 	github.com/minio/console v0.7.5-0.20210628223511-b51d5505f375
