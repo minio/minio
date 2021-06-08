@@ -99,6 +99,9 @@ type Client struct {
 	// This will not mark the client offline in these cases.
 	ExpectTimeouts bool
 
+	// Avoid metrics update if set to true
+	NoMetrics bool
+
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
@@ -136,8 +139,10 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			atomic.AddUint64(&networkErrsCounter, 1)
+		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			if !c.NoMetrics {
+				atomic.AddUint64(&networkErrsCounter, 1)
+			}
 			if c.MarkOffline() {
 				logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 			}
@@ -169,7 +174,10 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+				if !c.NoMetrics {
+					atomic.AddUint64(&networkErrsCounter, 1)
+				}
 				if c.MarkOffline() {
 					logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 				}
