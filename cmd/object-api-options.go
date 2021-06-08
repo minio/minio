@@ -117,7 +117,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	}
 
 	deletePrefix := false
-	if d := r.Header.Get("x-minio-force-delete"); d != "" {
+	if d := r.Header.Get(xhttp.MinIOForcePrefixDeletion); d != "" {
 		if b, err := strconv.ParseBool(d); err != nil {
 			return opts, err
 		} else {

@@ -970,7 +970,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	forceDelete := false
-	if value := r.Header.Get(xhttp.MinIOForceDelete); value != "" {
+	if value := r.Header.Get(xhttp.MinIOForceBucketDeletion); value != "" {
 		var err error
 		forceDelete, err = strconv.ParseBool(value)
 		if err != nil {
