@@ -74,7 +74,7 @@ type StorageAPI interface {
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
 	CheckFile(ctx context.Context, volume string, path string) (err error)
-	DeleteFile(ctx context.Context, volume string, path string) (err error)
+	DeleteFile(ctx context.Context, volume string, path string, recursive bool) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 
 	// Write all data, syncs the data to disk.

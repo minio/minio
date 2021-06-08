@@ -116,11 +116,21 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}, nil
 	}
 
+	deletePrefix := false
+	if d := r.Header.Get("x-minio-force-delete"); d != "" {
+		if b, err := strconv.ParseBool(d); err != nil {
+			return opts, err
+		} else {
+			deletePrefix = b
+		}
+	}
+
 	// default case of passing encryption headers to backend
 	opts, err = getDefaultOpts(r.Header, false, nil)
 	if err != nil {
 		return opts, err
 	}
+	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
 	return opts, nil

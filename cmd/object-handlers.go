@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -2708,6 +2709,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+		if opts.DeletePrefix {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is not allowed on object locked buckets")), r.URL, guessIsBrowserReq(r))
+			return
+		}
 		if opts.VersionID != "" {
 			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
 				ObjectName: object,

@@ -565,10 +565,11 @@ func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath st
 }
 
 // DeleteFile - deletes a file.
-func (client *storageRESTClient) DeleteFile(ctx context.Context, volume string, path string) error {
+func (client *storageRESTClient) DeleteFile(ctx context.Context, volume string, path string, recursive bool) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -694,7 +695,10 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 			// Instantiate a new rest client for healthcheck
 			// to avoid recursive healthCheckFn()
-			respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			healthCheckClient := rest.NewClient(serverURL, trFn, newAuthToken)
+			healthCheckClient.ExpectTimeouts = true
+			healthCheckClient.NoMetrics = true
+			respBody, err := healthCheckClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)
 			cancel()
 			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound

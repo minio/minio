@@ -853,7 +853,10 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
+		healthCheckClient := rest.NewClient(serverURL, trFn, newAuthToken)
+		healthCheckClient.ExpectTimeouts = true
+		healthCheckClient.NoMetrics = true
+		respBody, err := healthCheckClient.Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError

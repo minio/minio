@@ -81,7 +81,7 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.meta is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = storageDisks[index].DeleteFile(context.TODO(), minioMetaMultipartBucket, curpartPath)
+			_ = storageDisks[index].DeleteFile(context.TODO(), minioMetaMultipartBucket, curpartPath, false)
 			return nil
 		}, index)
 	}

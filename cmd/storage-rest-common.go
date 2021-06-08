@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v21" // Add checkDataDir in ReadVersion API
+	storageRESTVersion       = "v22" // Add recursive flag to DeleteFile call
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

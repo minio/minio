@@ -29,7 +29,6 @@ import (
 	"github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 var printEndpointError = func() func(Endpoint, error, bool) {
@@ -70,94 +69,50 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 	}
 }()
 
-// Migrates backend format of local disks.
-func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
-			if _, err := os.Stat(formatPath); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
-			}
-			return formatErasureMigrate(epPath)
-		}, index)
-	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Cleans up tmp directory of local disks.
-func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			// If disk is not formatted there is nothing to be cleaned up.
-			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
-			if _, err := os.Stat(formatPath); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
-			}
-			if _, err := os.Stat(pathJoin(epPath, minioMetaTmpBucket+"-old")); err != nil {
-				if !os.IsNotExist(err) {
-					return fmt.Errorf("unable to access (%s) %w",
-						pathJoin(epPath, minioMetaTmpBucket+"-old"),
-						err)
-				}
-			}
-
-			// Need to move temporary objects left behind from previous run of minio
-			// server to a unique directory under `minioMetaTmpBucket-old` to clean
-			// up `minioMetaTmpBucket` for the current run.
-			//
-			// /disk1/.minio.sys/tmp-old/
-			//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
-			//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
-			//
-			// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
-			// temporary objects from one of the previous runs of minio server.
-			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
-			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
-				tmpOld); err != nil && err != errFileNotFound {
-				return fmt.Errorf("unable to rename (%s -> %s) %w",
-					pathJoin(epPath, minioMetaTmpBucket),
-					tmpOld,
-					osErrToFileErr(err))
-			}
-
-			// Removal of tmp-old folder is backgrounded completely.
-			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
-
-			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
-				return fmt.Errorf("unable to create (%s) %w",
-					pathJoin(epPath, minioMetaTmpBucket),
-					err)
-			}
+// Cleans up tmp directory of local disk.
+func formatErasureCleanupLocalTmp(diskPath string) error {
+	// If disk is not formatted there is nothing to be cleaned up.
+	formatPath := pathJoin(diskPath, minioMetaBucket, formatConfigFile)
+	if _, err := os.Stat(formatPath); err != nil {
+		if os.IsNotExist(err) {
 			return nil
-		}, index)
-	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
 		}
+		return fmt.Errorf("unable to access (%s) %w", formatPath, err)
+	}
+	if _, err := os.Stat(pathJoin(diskPath, minioMetaTmpBucket+"-old")); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("unable to access (%s) %w",
+				pathJoin(diskPath, minioMetaTmpBucket+"-old"),
+				err)
+		}
+	}
+
+	// Need to move temporary objects left behind from previous run of minio
+	// server to a unique directory under `minioMetaTmpBucket-old` to clean
+	// up `minioMetaTmpBucket` for the current run.
+	//
+	// /disk1/.minio.sys/tmp-old/
+	//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
+	//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
+	//
+	// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
+	// temporary objects from one of the previous runs of minio server.
+	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", mustGetUUID())
+	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
+		tmpOld); err != nil && err != errFileNotFound {
+		return fmt.Errorf("unable to rename (%s -> %s) %w",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			tmpOld,
+			osErrToFileErr(err))
+	}
+
+	// Removal of tmp-old folder is backgrounded completely.
+	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
+
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpBucket), 0777); err != nil {
+		return fmt.Errorf("unable to create (%s) %w",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			err)
 	}
 	return nil
 }
@@ -247,13 +202,13 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	for i, err := range errs {
 		if err != nil {
-			if err != errDiskNotFound {
-				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
-			}
-			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], IsServerResolvable(endpoints[i]))
+			if err == errDiskNotFound && retryCount >= 5 {
+				logger.Info("Unable to connect to %s: %v", endpoints[i], IsServerResolvable(endpoints[i]))
+			} else {
+				logger.Info("Unable to use the drive %s: %v", endpoints[i], err)
 			}
 		}
+
 	}
 
 	// Attempt to load all `format.json` from all disks.
@@ -355,14 +310,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 func waitForFormatErasure(firstDisk bool, endpoints Endpoints, zoneCount, setCount, setDriveCount int, deploymentID string) ([]StorageAPI, *formatErasureV3, error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
-	}
-
-	if err := formatErasureMigrateLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
-	}
-
-	if err := formatErasureCleanupTmpLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
 	}
 
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.

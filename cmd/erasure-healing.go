@@ -518,7 +518,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 				wg.Add(1)
 				go func(index int, disk StorageAPI) {
 					defer wg.Done()
-					_ = disk.DeleteFile(ctx, bucket, object)
+					_ = disk.DeleteFile(ctx, bucket, object, false)
 				}(index, disk)
 			}
 			wg.Wait()
