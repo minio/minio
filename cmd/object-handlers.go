@@ -2330,13 +2330,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
 
-	actualPartSize := srcInfo.Size
-	if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok {
-		actualPartSize, err = srcInfo.GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
+	actualPartSize, err := srcInfo.GetActualSize()
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
