@@ -757,8 +757,24 @@ func (s *erasureSets) GetObjectInfo(ctx context.Context, bucket, object string, 
 	return s.getHashedSet(object).GetObjectInfo(ctx, bucket, object, opts)
 }
 
+func (s *erasureSets) deletePrefix(ctx context.Context, bucket string, prefix string, opts ObjectOptions) error {
+	for _, s := range s.sets {
+		_, err := s.DeleteObject(ctx, bucket, prefix, opts)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DeleteObject - deletes an object from the hashedSet based on the object name.
 func (s *erasureSets) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if opts.DeletePrefix {
+		err := s.deletePrefix(ctx, bucket, object, opts)
+		return ObjectInfo{}, err
+	}
+
 	return s.getHashedSet(object).DeleteObject(ctx, bucket, object, opts)
 }
 

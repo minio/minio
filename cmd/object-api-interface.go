@@ -45,6 +45,9 @@ type ObjectOptions struct {
 	UserDefined          map[string]string   // only set in case of POST/PUT operations
 	PartNumber           int                 // only useful in case of GetObject/HeadObject
 	CheckPrecondFn       CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+
+	// Force performing action
+	DeletePrefix bool
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations

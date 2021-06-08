@@ -722,6 +722,29 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
+func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
+	fmt.Println("delete prefix")
+	disks := er.getDisks()
+	g := errgroup.WithNErrs(len(disks))
+
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return nil
+			}
+			return disks[index].DeleteFile(ctx, bucket, prefix, true)
+		}, index)
+	}
+
+	for _, err := range g.Wait() {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo) error {
 	disks := er.getDisks()
 
@@ -922,6 +945,12 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+
+	if opts.DeletePrefix {
+		err := er.deletePrefix(ctx, bucket, object)
+		return ObjectInfo{}, err
+	}
+
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {

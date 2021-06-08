@@ -368,7 +368,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) erro
 	tmpFormat := mustGetUUID()
 
 	// Purge any existing temporary file, okay to ignore errors here.
-	defer disk.DeleteFile(context.TODO(), minioMetaBucket, tmpFormat)
+	defer disk.DeleteFile(context.TODO(), minioMetaBucket, tmpFormat, false)
 
 	// write to unique file.
 	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, bytes.NewReader(formatBytes)); err != nil {
