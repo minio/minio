@@ -41,7 +41,6 @@ const (
 
 	EnvUpdate = "MINIO_UPDATE"
 
-	EnvKMSMasterKey  = "MINIO_KMS_MASTER_KEY" // legacy
 	EnvKMSSecretKey  = "MINIO_KMS_SECRET_KEY"
 	EnvKESEndpoint   = "MINIO_KMS_KES_ENDPOINT"
 	EnvKESKeyName    = "MINIO_KMS_KES_KEY_NAME"
