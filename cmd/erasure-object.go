@@ -723,7 +723,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 }
 
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
-	fmt.Println("delete prefix")
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 
