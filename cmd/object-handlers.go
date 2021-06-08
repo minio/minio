@@ -2710,7 +2710,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
 		if opts.DeletePrefix {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is not allowed on object locked buckets")), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if opts.VersionID != "" {
