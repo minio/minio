@@ -2753,7 +2753,6 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 	}
 
 	xldap.SetIdentityLDAP(newCfg, cfg.LDAPServerConfig)
-	openid.SetIdentityOpenID(newCfg, cfg.OpenID)
 	opa.SetPolicyOPAConfig(newCfg, cfg.Policy.OPA)
 	cache.SetCacheConfig(newCfg, cfg.Cache)
 	compress.SetCompressionConfig(newCfg, cfg.Compression)

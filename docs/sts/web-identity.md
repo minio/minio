@@ -8,13 +8,20 @@ By default, the temporary security credentials created by AssumeRoleWithWebIdent
 
 ## API Request Parameters
 ### WebIdentityToken
-The OAuth 2.0 access token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
+The OAuth 2.0 id_token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
 
-| Params               | Value                                          |
-| :--                  | :--                                            |
-| *Type*               | *String*                                       |
-| *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
-| *Required*           | *Yes*                                          |
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *Yes*    |
+
+### WebIdentityAccessToken (MinIO Extension)
+There are situations when identity provider does not provide user claims in `id_token` instead it needs to be retrieved from UserInfo endpoint, this extension is only useful in this scenario. This is rare so use it accordingly depending on your Identity provider implementation. `access_token` is available as part of the OIDC authentication flow similar to `id_token`.
+
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *No*     |
 
 ### Version
 Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
@@ -79,15 +86,16 @@ export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+export MINIO_IDENTITY_OPENID_CLIENT_SECRET="XsT_PgPdT1nO9DD45rMLJw7G"
 # Optional: Allow to specify the requested OpenID scopes (OpenID only requires the `openid` scope)
-#export MINIO_IDENTITY_OPENID_SCOPES="openid,profile,email"
+# export MINIO_IDENTITY_OPENID_SCOPES="openid,profile,email"
 minio server /mnt/export
 ```
 
 or using `mc`
 ```
 mc admin config get myminio identity_openid
-identity_openid config_url=https://accounts.google.com/.well-known/openid-configuration client_id=843351d4-1080-11ea-aa20-271ecba3924a
+identity_openid config_url=https://accounts.google.com/.well-known/openid-configuration client_id=843351d4-1080-11ea-aa20-271ecba3924a client_secret="XsT_PgPdT1nO9DD45rMLJw7G"
 ```
 
 Testing with an example
@@ -128,7 +136,7 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 To support WebIdentity based login for MinIO Console, set openid configuration and restart MinIO
 
 ```
-mc admin config set myminio identity_openid config_url="<CONFIG_URL>" client_id="<client_identifier>"
+mc admin config set myminio identity_openid config_url="<CONFIG_URL>" client_id="<client_identifier>" client_secret="<client_idenitifier_secret>"
 ```
 
 ```

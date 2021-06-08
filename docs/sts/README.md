@@ -47,6 +47,7 @@ export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+export MINIO_IDENTITY_OPENID_CLIENT_SECRET="XsT_PgPdT1nO9DD45rMLJw7G"
 minio server /mnt/data
 ```
 
@@ -60,6 +61,7 @@ export MINIO_ROOT_USER=aws_access_key
 export MINIO_ROOT_PASSWORD=aws_secret_key
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+export MINIO_IDENTITY_OPENID_CLIENT_SECRET="XsT_PgPdT1nO9DD45rMLJw7G"
 export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio gateway s3
 ```

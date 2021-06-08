@@ -2109,8 +2109,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			}
 			s.deleteFile(dstVolumeDir, dstFilePath, false)
-
-			logger.LogIf(ctx, err)
 			return osErrToFileErr(err)
 		}
 
