@@ -221,6 +221,9 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 			continue
 		}
 		for _, disk := range zinfo {
+			if disk == nil {
+				continue
+			}
 			available += disk.Total - disk.Used
 		}
 		serverPools[i] = poolAvailableSpace{
