@@ -21,55 +21,12 @@ To download `2021/taxes.csv` archived in `financial.zip` and stored under a buck
 
 All properties except the file size are tied to the zip file. This means that modification date, headers, tags, etc. can only be set for the zip file as a whole. In similar fashion, replication will replicate the zip file as a whole and not individual files.
 
-### Example of Golang code
+### Code Examples
 
-```
-package main
+[Using minio-go library](https://github.com/minio/minio/blob/master/docs/extensions/s3zip/examples/minio-go/main.go)
+[Using AWS JS SDK v2](https://github.com/minio/minio/blob/master/docs/extensions/s3zip/examples/aws-js/main.js)
+[Using boto3](https://github.com/minio/minio/blob/master/docs/extensions/s3zip/examples/boto3/main.py)
 
-import (
-        "context"
-        "io"
-        "log"
-        "net/http"
-        "os"
-
-        "github.com/minio/minio-go/v7"
-        "github.com/minio/minio-go/v7/pkg/credentials"
-)
-
-type s3ExtensionTransport struct {
-        tr http.RoundTripper
-}
-
-func (t *s3ExtensionTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-        req.Header.Add("x-minio-extract", "true")
-        return t.tr.RoundTrip(req)
-}
-
-func main() {
-        tr, _ := minio.DefaultTransport(false)
-
-        s3Client, err := minio.New("localhost:9000", &minio.Options{
-                Creds:     credentials.NewStaticV4("minio", "minio123", ""),
-                Transport: &s3ExtensionTransport{tr},
-        })
-        if err != nil {
-                log.Fatalln(err)
-        }
-
-        // Download API.md from the archive
-        rd, err := s3Client.GetObject(context.Background(), "testbucket", "archive.zip/docs/API.md", minio.GetObjectOptions{})
-        if err != nil {
-                log.Fatalln(err)
-        }
-        _, err = io.Copy(os.Stdout, rd)
-        if err != nil {
-                log.Fatalln(err)
-        }
-
-        return
-}
-```
 
 ### Requirements and limits
 - ListObjectsV2 can only list the most recent ZIP archive version of your object, applicable only for versioned buckets.
