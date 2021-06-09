@@ -1248,9 +1248,6 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
 func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
-	if z.SinglePool() {
-		return z.serverPools[0].DeleteBucket(ctx, bucket, forceDelete)
-	}
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Delete buckets in parallel across all serverPools.
@@ -1267,13 +1264,14 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 	// buckets operation by creating all the buckets again.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
+			if !z.SinglePool() {
 				undoDeleteBucketServerPools(ctx, bucket, z.serverPools, errs)
 			}
-
 			return err
 		}
 	}
+
+	deleteBucketMetadata(ctx, z, bucket)
 
 	// Success.
 	return nil
