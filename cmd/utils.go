@@ -930,3 +930,13 @@ func loadAndResetRPCNetworkErrsCounter() uint64 {
 	defer rest.ResetNetworkErrsCounter()
 	return rest.GetNetworkErrsCounter()
 }
+
+// Helper method to return total number of nodes in cluster
+func totalNodeCount() uint64 {
+	peers, _ := globalEndpoints.peers()
+	totalNodesCount := uint64(len(peers))
+	if totalNodesCount == 0 {
+		totalNodesCount = 1 // For standalone erasure coding
+	}
+	return totalNodesCount
+}
