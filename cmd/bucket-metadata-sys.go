@@ -262,6 +262,22 @@ func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Co
 // GetLifecycleConfig returns configured lifecycle config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+	if globalIsGateway && globalGatewayName == NASBackendGateway {
+		// Only needed in case of NAS gateway.
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+		if err != nil {
+			return nil, err
+		}
+		if meta.lifecycleConfig == nil {
+			return nil, BucketLifecycleNotFound{Bucket: bucket}
+		}
+		return meta.lifecycleConfig, nil
+	}
+
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
@@ -421,6 +437,7 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 	sys.Lock()
 	sys.metadataMap[bucket] = meta
 	sys.Unlock()
+
 	return meta, nil
 }
 
