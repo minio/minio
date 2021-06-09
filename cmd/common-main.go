@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -339,27 +338,10 @@ func handleCommonEnvVars() {
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
-	case env.IsSet(config.EnvKMSMasterKey) && env.IsSet(config.EnvKESEndpoint):
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSMasterKey, config.EnvKESEndpoint))
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
 		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-	} else if env.IsSet(config.EnvKMSMasterKey) {
-		// FIXME: remove this block by June 2021
-		logger.LogIf(GlobalContext, fmt.Errorf("legacy KMS configuration, this environment variable %q is deprecated and will be removed by June 2021", config.EnvKMSMasterKey))
-		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
-		if len(v) != 2 {
-			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		secretKey, err := hex.DecodeString(v[1])
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		GlobalKMS, err = kms.New(v[0], secretKey)
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
