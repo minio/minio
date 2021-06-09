@@ -71,10 +71,13 @@ func main() {
 }
 ```
 
-### Limitation
-- Listing only operates on the most recent version of your object.
+### Requirements and limits
+- ListObjectsV2 can only list the most recent ZIP archive version of your object, applicable only for versioned buckets.
 - ListObjectsV2 API calls must be used to list zip file content.
 - Names inside ZIP files are kept unmodified, but some may lead to invalid paths. See [Object key naming guidelines](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html) on safe names.
-- The following API calls supports operations on files inside ZIP files: `HeadObject`,  `GetObject`. Other calls can only operate on the zip file as a whole.
-- Keeping the number of files inside a single ZIP below 100,000 is recommended to keep individual files accesses fast.
+- This API behavior is limited for following **read** operations on files inside a zip archive:
+   - `HeadObject`
+   - `GetObject`
+   - `ListObjectsV2`
+- A maximum of 100,000 files inside a single ZIP archive is recommended for best performance and memory usage trade-off.
 - If the ZIP file directory isn't located within the last 100MB the file will not be parsed.
