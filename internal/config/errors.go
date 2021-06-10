@@ -133,34 +133,28 @@ var (
 		`Access key length should be at least 3, and secret key length at least 8 characters`,
 	)
 
-	ErrEnvCredentialsMissingGateway = newErrFn(
-		"Credentials missing",
-		"Please set your credentials in the environment",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
-	)
-
 	ErrMissingEnvCredentialRootUser = newErrFn(
-		"Env var \""+EnvRootUser+"\" is missing",
-		"Please set your credential env var, \""+EnvRootUser+"\"",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+		"Missing credential environment variable, \""+EnvRootUser+"\"",
+		"Environment variable \""+EnvRootUser+"\" is missing",
+		`Root user name (access key) and root password (secret key) are expected to be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
 	ErrMissingEnvCredentialRootPassword = newErrFn(
-		"Env var \""+EnvRootPassword+"\" is missing",
-		"Please set your credential env var, \""+EnvRootPassword+"\"",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+		"Missing credential environment variable, \""+EnvRootPassword+"\"",
+		"Environment variable \""+EnvRootPassword+"\" is missing",
+		`Root user name (access key) and root password (secret key) are expected to be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
 	ErrMissingEnvCredentialAccessKey = newErrFn(
-		"Env var \""+AccessKey+"\" is deprecated",
-		"Please set your credential env var, \""+EnvRootUser+"\"",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+		"Missing credential environment variable, \""+EnvAccessKey+"\"",
+		"Environment variables \""+EnvAccessKey+"\" and \""+EnvSecretKey+"\" are deprecated",
+		`Root user name (access key) and root password (secret key) are expected to be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
 	ErrMissingEnvCredentialSecretKey = newErrFn(
-		"Env var \""+SecretKey+"\" is deprecated",
-		"Please set your credential env var, \""+EnvRootPassword+"\"",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
+		"Missing credential environment variable, \""+EnvSecretKey+"\"",
+		"Environment variables \""+EnvSecretKey+"\" and \""+EnvAccessKey+"\" are deprecated",
+		`Root user name (access key) and root password (secret key) are expected to be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD respectively`,
 	)
 
 	ErrInvalidErasureEndpoints = newErrFn(
