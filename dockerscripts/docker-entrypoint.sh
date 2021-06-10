@@ -93,9 +93,6 @@ docker_secrets_env_old
 ## Set access env from secrets if necessary. Override
 docker_secrets_env
 
-## Set sse encryption from secrets if necessary. Legacy
-docker_kms_master_encryption_env
-
 ## Set kms encryption from secrets if necessary. Override
 docker_kms_secret_encryption_env
 
