@@ -29,9 +29,13 @@ import (
 	"github.com/minio/pkg/bucket/policy"
 )
 
-// CheckPreconditionFn returns true if precondition check failed.
+// CheckPreconditionFn returns nil if precondition tests succeeded.
 type CheckPreconditionFn func(o ObjectInfo) func()
 
+// Check will check is set and call it if it is.
+// It returns nil if precondition tests succeeded, or none is specified.
+// The returned function can be used to apply the precondition,
+// typically to the upstream response writer.
 func (c CheckPreconditionFn) Check(o ObjectInfo) (apply func()) {
 	if c == nil {
 		return nil
