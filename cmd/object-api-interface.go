@@ -30,7 +30,14 @@ import (
 )
 
 // CheckPreconditionFn returns true if precondition check failed.
-type CheckPreconditionFn func(o ObjectInfo) bool
+type CheckPreconditionFn func(o ObjectInfo) func()
+
+func (c CheckPreconditionFn) check(o ObjectInfo) (apply func()) {
+	if c == nil {
+		return nil
+	}
+	return c(o)
+}
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)

@@ -693,13 +693,23 @@ func isErrSignatureDoesNotMatch(err error) bool {
 }
 
 // PreConditionFailed - Check if copy precondition failed
-type PreConditionFailed struct{}
+type PreConditionFailed struct {
+	Apply func()
+}
 
 func (e PreConditionFailed) Error() string {
 	return "At least one of the pre-conditions you specified did not hold"
 }
 
-func isErrPreconditionFailed(err error) bool {
-	_, ok := err.(PreConditionFailed)
-	return ok
+// isErrPreconditionFailed will return whether the error is PreConditionFailed
+// If apply is true the wrapped function is called.
+func isErrPreconditionFailed(err error, apply bool) bool {
+	var pcf PreConditionFailed
+	if ok := errors.As(err, &pcf); !ok {
+		return false
+	}
+	if pcf.Apply != nil && apply {
+		pcf.Apply()
+	}
+	return true
 }

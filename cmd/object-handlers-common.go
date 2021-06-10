@@ -39,7 +39,7 @@ var (
 //  x-amz-copy-source-if-unmodified-since
 //  x-amz-copy-source-if-match
 //  x-amz-copy-source-if-none-match
-func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) func() {
 	return checkCopyObjectPreconditions(ctx, w, r, objInfo)
 }
 
@@ -49,20 +49,20 @@ func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter
 //  x-amz-copy-source-if-unmodified-since
 //  x-amz-copy-source-if-match
 //  x-amz-copy-source-if-none-match
-func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) func() {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodPut {
-		return false
+		return nil
 	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
 	// is obviously garbage (Unix time == 0), then ignore modtimes
 	// and don't process the If-Modified-Since header.
 	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
-		return false
+		return nil
 	}
 
 	// Headers to be set of object content is not going to be written to the client.
-	writeHeaders := func() {
+	writeError := func() {
 		// set common headers
 		setCommonHeaders(w)
 
@@ -72,6 +72,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		if objInfo.ETag != "" {
 			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 		}
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
 	}
 	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
 	// since the specified time otherwise return 412 (precondition failed).
@@ -80,9 +81,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
-				writeHeaders()
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-				return true
+				return writeError
 			}
 		}
 	}
@@ -94,9 +93,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
-				writeHeaders()
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-				return true
+				return writeError
 			}
 		}
 	}
@@ -107,9 +104,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	if ifMatchETagHeader != "" {
 		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-			return true
+			return writeError
 		}
 	}
 
@@ -119,13 +114,11 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	if ifNoneMatchETagHeader != "" {
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-			return true
+			return writeError
 		}
 	}
 	// Object content should be written to http.ResponseWriter
-	return false
+	return nil
 }
 
 // Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
@@ -134,16 +127,16 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 //  If-Unmodified-Since
 //  If-Match
 //  If-None-Match
-func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
+func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) func() {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		return false
+		return nil
 	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
 	// is obviously garbage (Unix time == 0), then ignore modtimes
 	// and don't process the If-Modified-Since header.
 	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
-		return false
+		return nil
 	}
 
 	// Headers to be set of object content is not going to be written to the client.
@@ -162,8 +155,9 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// Check if the part number is correct.
 	if opts.PartNumber > 1 && opts.PartNumber > len(objInfo.Parts) {
 		// According to S3 we don't need to set any object information here.
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL, guessIsBrowserReq(r))
-		return true
+		return func() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL, guessIsBrowserReq(r))
+		}
 	}
 
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
@@ -173,9 +167,10 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
-				writeHeaders()
-				w.WriteHeader(http.StatusNotModified)
-				return true
+				return func() {
+					writeHeaders()
+					w.WriteHeader(http.StatusNotModified)
+				}
 			}
 		}
 	}
@@ -187,9 +182,10 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
-				writeHeaders()
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-				return true
+				return func() {
+					writeHeaders()
+					writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
+				}
 			}
 		}
 	}
@@ -200,9 +196,10 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if ifMatchETagHeader != "" {
 		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
-			return true
+			return func() {
+				writeHeaders()
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
+			}
 		}
 	}
 
@@ -212,13 +209,14 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if ifNoneMatchETagHeader != "" {
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
+			return func() {
+				writeHeaders()
+				w.WriteHeader(http.StatusNotModified)
+			}
 		}
 	}
 	// Object content should be written to http.ResponseWriter
-	return false
+	return nil
 }
 
 // returns true if object was modified after givenTime.

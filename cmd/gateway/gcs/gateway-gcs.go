@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
@@ -936,8 +936,10 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
-	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
-		return minio.ObjectInfo{}, minio.PreConditionFailed{}
+	if srcOpts.CheckPrecondFn != nil {
+		if apply := srcOpts.CheckPrecondFn(srcInfo); apply != nil {
+			return minio.ObjectInfo{}, minio.PreConditionFailed{Apply: apply}
+		}
 	}
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)

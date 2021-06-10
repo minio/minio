@@ -414,11 +414,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo) func() {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return true
+				return func() {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				}
 			}
 		}
 
@@ -439,7 +440,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 		if reader == nil || !proxy {
-			if isErrPreconditionFailed(err) {
+			if isErrPreconditionFailed(err, true) {
 				return
 			}
 			if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
@@ -686,7 +687,8 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(ctx, w, r, objInfo, opts) {
+	if apply := checkPreconditions(ctx, w, r, objInfo, opts); apply != nil {
+		apply()
 		return
 	}
 
@@ -1000,16 +1002,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	checkCopyPrecondFn := func(o ObjectInfo) bool {
+	getOpts.CheckPrecondFn = func(o ObjectInfo) func() {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&o, r); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return true
+				return func() { writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r)) }
 			}
 		}
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
-	getOpts.CheckPrecondFn = checkCopyPrecondFn
 
 	// FIXME: a possible race exists between a parallel
 	// GetObject v/s CopyObject with metadata updates, ideally
@@ -1024,7 +1024,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
 	if err != nil {
-		if isErrPreconditionFailed(err) {
+		fmt.Printf("error: %v, %T\n", err, err)
+		if isErrPreconditionFailed(err, true) {
 			return
 		}
 		if globalBucketVersioningSys.Enabled(srcBucket) && gr != nil {
@@ -2291,29 +2292,32 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader)
 	}
 
-	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
+	getOpts.CheckPrecondFn = func(o ObjectInfo) func() {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&o, r); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return true
+				return func() {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				}
 			}
 		}
-		if checkCopyObjectPartPreconditions(ctx, w, r, o) {
-			return true
+		if fn := checkCopyObjectPartPreconditions(ctx, w, r, o); fn != nil {
+			return fn
 		}
 		if parseRangeErr != nil {
-			logger.LogIf(ctx, parseRangeErr)
-			writeCopyPartErr(ctx, w, parseRangeErr, r.URL, guessIsBrowserReq(r))
-			// Range header mismatch is pre-condition like failure
-			// so return true to indicate Range precondition failed.
-			return true
+			return func() {
+				logger.LogIf(ctx, parseRangeErr)
+
+				writeCopyPartErr(ctx, w, parseRangeErr, r.URL, guessIsBrowserReq(r))
+				// Range header mismatch is pre-condition like failure
+				// so return true to indicate Range precondition failed.
+			}
 		}
-		return false
+		return nil
 	}
-	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
+
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {
-		if isErrPreconditionFailed(err) {
+		if isErrPreconditionFailed(err, true) {
 			return
 		}
 		if globalBucketVersioningSys.Enabled(srcBucket) && gr != nil {
