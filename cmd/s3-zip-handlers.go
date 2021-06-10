@@ -122,11 +122,12 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	}
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo) func() {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return true
+				return func() {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				}
 			}
 		}
 
@@ -421,7 +422,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	var rs *HTTPRangeSpec
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo) func() {
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
 
