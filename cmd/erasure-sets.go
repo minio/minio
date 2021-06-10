@@ -842,9 +842,6 @@ func (s *erasureSets) DeleteBucket(ctx context.Context, bucket string, forceDele
 		}
 	}
 
-	// Delete all bucket metadata.
-	deleteBucketMetadata(ctx, s, bucket)
-
 	// Success.
 	return nil
 }
