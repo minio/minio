@@ -32,7 +32,7 @@ import (
 // CheckPreconditionFn returns true if precondition check failed.
 type CheckPreconditionFn func(o ObjectInfo) func()
 
-func (c CheckPreconditionFn) check(o ObjectInfo) (apply func()) {
+func (c CheckPreconditionFn) Check(o ObjectInfo) (apply func()) {
 	if c == nil {
 		return nil
 	}

@@ -563,14 +563,12 @@ func (g *GetObjectReader) WithCleanupFuncs(fns ...func()) *GetObjectReader {
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
 func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
-	if opts.CheckPrecondFn != nil {
-		if apply := opts.CheckPrecondFn(oi); apply != nil {
-			// Call the cleanup funcs
-			for i := len(cleanupFns) - 1; i >= 0; i-- {
-				cleanupFns[i]()
-			}
-			return nil, PreConditionFailed{Apply: apply}
+	if apply := opts.CheckPrecondFn.Check(oi); apply != nil {
+		// Call the cleanup funcs
+		for i := len(cleanupFns) - 1; i >= 0; i-- {
+			cleanupFns[i]()
 		}
+		return nil, PreConditionFailed{Apply: apply}
 	}
 	return &GetObjectReader{
 		ObjInfo:    oi,
@@ -651,13 +649,11 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			}
 		}
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil {
-				if apply := opts.CheckPrecondFn(oi); apply != nil {
-					for _, cFn := range cFns {
-						cFn()
-					}
-					return nil, PreConditionFailed{Apply: apply}
+			if apply := opts.CheckPrecondFn.Check(oi); apply != nil {
+				for _, cFn := range cFns {
+					cFn()
 				}
+				return nil, PreConditionFailed{Apply: apply}
 			}
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
@@ -745,14 +741,12 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return nil, err
 			}
 
-			if opts.CheckPrecondFn != nil {
-				if apply := opts.CheckPrecondFn(oi); apply != nil {
-					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
-					return nil, PreConditionFailed{Apply: apply}
+			if apply := opts.CheckPrecondFn.Check(oi); apply != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
 				}
+				return nil, PreConditionFailed{Apply: apply}
 			}
 
 			oi.ETag = getDecryptedETag(h, oi, false)
@@ -777,13 +771,11 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			return nil, 0, 0, err
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil {
-				if apply := opts.CheckPrecondFn(oi); apply != nil { // Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
-					return nil, PreConditionFailed{Apply: apply}
+			if apply := opts.CheckPrecondFn.Check(oi); apply != nil { // Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
 				}
+				return nil, PreConditionFailed{Apply: apply}
 			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
