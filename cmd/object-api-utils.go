@@ -805,6 +805,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 
 // Close - calls the cleanup actions in reverse order
 func (g *GetObjectReader) Close() error {
+	if g == nil {
+		return nil
+	}
 	// sync.Once is used here to ensure that Close() is
 	// idempotent.
 	g.once.Do(func() {
