@@ -3,7 +3,7 @@
 This document explains the design approach of server side bucket replication. If you're looking to get started with replication, we suggest you go through the [Bucket replication guide](https://github.com/minio/minio/blob/master/docs/bucket/replication/README.md) first.
 
 ## Overview
-Replication relies on immutability provided by versioning to sync objects between the configured source and replication target.
+Replication relies on immutability provided by versioning to sync objects between the configured source and replication target. Replication results in the object data, metadata, last modification time and version ID all being identical between the source and target. Thus version ordering is automatically guaranteed on the source and target clusters.
 
 ### Replication of object version and metadata
 If an object meets replication rules as set in the replication configuration, `X-Amz-Replication-Status` is first set to `PENDING` as the PUT operation completes and replication is queued (unless synchronous replication is in place). After replication is performed, the metadata on the source object version changes to `COMPLETED` or `FAILED` depending on whether replication succeeded. The object version on the target shows `X-Amz-Replication-Status` of `REPLICA`
