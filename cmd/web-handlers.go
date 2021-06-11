@@ -2248,7 +2248,10 @@ type LoginSTSArgs struct {
 	Token string `json:"token" form:"token"`
 }
 
-var errSTSNotInitialized = errors.New("STS API not initialized, please configure STS support")
+var (
+	errSTSNotInitialized        = errors.New("STS API not initialized, please configure STS support")
+	errSTSInvalidParameterValue = errors.New("An invalid or out-of-range value was supplied for the input parameter")
+)
 
 // LoginSTS - STS user login handler.
 func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
@@ -2267,6 +2270,21 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	m, err := v.Validate(args.Token, "")
 	if err != nil {
 		return toJSONError(ctx, err)
+	}
+
+	var subFromToken string
+	if v, ok := m[subClaim]; ok {
+		subFromToken, _ = v.(string)
+	}
+
+	if subFromToken == "" {
+		logger.LogIf(ctx, errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
+		return toJSONError(ctx, errSTSInvalidParameterValue)
+	}
+
+	var issFromToken string
+	if v, ok := m[issClaim]; ok {
+		issFromToken, _ = v.(string)
 	}
 
 	// JWT has requested a custom claim with policy value set.
@@ -2288,6 +2306,13 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
+
+	// https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability
+	// claim is only considered stable when subject and iss are used together
+	// this is to ensure that ParentUser doesn't change and we get to use
+	// parentUser as per the requirements for service accounts for OpenID
+	// based logins.
+	cred.ParentUser = "jwt:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
