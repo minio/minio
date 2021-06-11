@@ -317,22 +317,58 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
+	// Check if the supported credential env vars, "MINIO_ROOT_USER" and
+	// "MINIO_ROOT_PASSWORD" are provided
+	// Warn user if deprecated environment variables,
+	// "MINIO_ACCESS_KEY" and "MINIO_SECRET_KEY", are defined
+	// Check all error conditions first
+	if !env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "Unable to start MinIO")
+	} else if env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootPassword(nil), "Unable to start MinIO")
+	} else if !env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		if !env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialAccessKey(nil), "Unable to start MinIO")
+		} else if env.IsSet(config.EnvAccessKey) && !env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialSecretKey(nil), "Unable to start MinIO")
+		}
+	}
+
+	// At this point, either both environment variables
+	// are defined or both are not defined.
+	// Check both cases and authenticate them if correctly defined
+	var user, password string
+	haveRootCredentials := false
+	haveAccessCredentials := false
+	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		user = env.Get(config.EnvRootUser, "")
+		password = env.Get(config.EnvRootPassword, "")
+		haveRootCredentials = true
+	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+		user = env.Get(config.EnvAccessKey, "")
+		password = env.Get(config.EnvSecretKey, "")
+		haveAccessCredentials = true
+	}
+	if haveRootCredentials || haveAccessCredentials {
+		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")
+		}
+		if haveAccessCredentials {
+			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
+				"         Please use %s and %s",
+				config.EnvAccessKey, config.EnvSecretKey,
+				config.EnvRootUser, config.EnvRootPassword)
+			logger.StartupMessage(color.RedString(msg))
 		}
 		globalActiveCred = cred
 	}
-
-	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
-		}
-		globalActiveCred = cred
+	if !haveRootCredentials && !haveAccessCredentials {
+		msg := "No credential environment variables defined. Going with the defaults.\n" +
+			"It is strongly recommended to define your own credentials" +
+			" via environment variables %s and %s instead of using default values"
+		logger.StartupMessage(color.RedString(msg, config.EnvRootUser, config.EnvRootPassword))
 	}
 
 	switch {
