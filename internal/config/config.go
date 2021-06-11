@@ -506,7 +506,6 @@ func (c Config) Merge() Config {
 				rnSubSys, ok := renamedSubsys[subSys]
 				if !ok {
 					// A config subsystem was removed or server was downgraded.
-					Logger.Info("config: ignoring unknown subsystem config %q\n", subSys)
 					continue
 				}
 				// Copy over settings from previous sub-system
