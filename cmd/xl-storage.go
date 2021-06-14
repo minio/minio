@@ -2058,6 +2058,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
+		// Empty fi.VersionID indicates that versioning is either
+		// suspended or disabled on this bucket. RenameData will replace
+		// the 'null' version. We add a free-version to track its tiered
+		// content for asynchronous deletion.
 		xlMeta.AddFreeVersion(fi)
 	}
 

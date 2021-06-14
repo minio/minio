@@ -231,11 +231,11 @@ func (j xlMetaV2Version) Valid() bool {
 	return false
 }
 
-// IsFreeVersion returns true if j represents a free-version, false otherwise.
-func (j xlMetaV2Version) IsFreeVersion() bool {
+// FreeVersion returns true if j represents a free-version, false otherwise.
+func (j xlMetaV2Version) FreeVersion() bool {
 	switch j.Type {
 	case DeleteType:
-		return j.DeleteMarker.IsFreeVersion()
+		return j.DeleteMarker.FreeVersion()
 	}
 	return false
 }
@@ -956,7 +956,10 @@ func (z *xlMetaV2) AddFreeVersion(fi FileInfo) error {
 		switch version.Type {
 		case ObjectType:
 			if version.ObjectV2.VersionID == uv {
-				if freeVersion, toFree := version.ObjectV2.FreeVersion(fi); toFree {
+				// if uv has tiered content we add a
+				// free-version to track it for asynchronous
+				// deletion via scanner.
+				if freeVersion, toFree := version.ObjectV2.InitFreeVersion(fi); toFree {
 					z.Versions = append(z.Versions, freeVersion)
 				}
 				return nil
@@ -988,7 +991,7 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
 		}
 	}
-	if j.IsFreeVersion() {
+	if j.FreeVersion() {
 		fi.SetTierFreeVersionMarker()
 		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
 		fi.TransitionedObjName = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName])
@@ -1130,12 +1133,10 @@ func (z *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int 
 	return sameDataDirCount
 }
 
-// IsFreeVersion returns ture if j represents a free-version, false otherwise.
-func (j xlMetaV2DeleteMarker) IsFreeVersion() bool {
-	if _, ok := j.MetaSys[ReservedMetadataPrefixLower+freeVersion]; ok {
-		return true
-	}
-	return false
+// FreeVersion returns ture if j represents a free-version, false otherwise.
+func (j xlMetaV2DeleteMarker) FreeVersion() bool {
+	_, ok := j.MetaSys[ReservedMetadataPrefixLower+freeVersion]
+	return ok
 }
 
 // Free-version is a special version meant to track tiered content of a
@@ -1145,9 +1146,9 @@ func (j xlMetaV2DeleteMarker) IsFreeVersion() bool {
 
 const freeVersion = "free-version"
 
-// FreeVersion creates a free-version to track the tiered-content of j. If j has
+// InitFreeVersion creates a free-version to track the tiered-content of j. If j has
 // no tiered content, it returns false.
-func (j xlMetaV2Object) FreeVersion(fi FileInfo) (xlMetaV2Version, bool) {
+func (j xlMetaV2Object) InitFreeVersion(fi FileInfo) (xlMetaV2Version, bool) {
 	if status, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus]; ok && bytes.Equal(status, []byte(lifecycle.TransitionComplete)) {
 		vID, err := uuid.Parse(fi.TierFreeVersionID())
 		if err != nil {
@@ -1297,7 +1298,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
 				default:
 					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-					if freeVersion, toFree := version.ObjectV2.FreeVersion(fi); toFree {
+					// if uv has tiered content we add a
+					// free-version to track it for
+					// asynchronous deletion via scanner.
+					if freeVersion, toFree := version.ObjectV2.InitFreeVersion(fi); toFree {
 						z.Versions = append(z.Versions, freeVersion)
 					}
 				}
@@ -1415,7 +1419,8 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	copy(orderedVersions, z.Versions)
 	n := 0
 	for _, version := range orderedVersions {
-		if version.IsFreeVersion() && version.DeleteMarker.VersionID != uv {
+		// skip listing free-version unless explicitly requested via versionID
+		if version.FreeVersion() && version.DeleteMarker.VersionID != uv {
 			continue
 		}
 		orderedVersions[n] = version
