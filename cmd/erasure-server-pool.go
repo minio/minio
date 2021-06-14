@@ -666,9 +666,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		}
 		if !isErrObjectNotFound(res.err) && !isErrVersionNotFound(res.err) {
 			for _, res := range results {
-				if res.gr != nil {
-					res.gr.Close()
-				}
+				res.gr.Close()
 			}
 			return nil, res.err
 		}
