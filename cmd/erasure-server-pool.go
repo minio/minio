@@ -670,7 +670,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 					res.gr.Close()
 				}
 			}
-			return nil, err
+			return nil, res.err
 		}
 	}
 
