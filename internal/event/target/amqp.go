@@ -29,7 +29,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/event"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 	"github.com/streadway/amqp"
 )
 

@@ -31,7 +31,7 @@ import (
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 // DefaultTimeout - default REST timeout is 10 seconds.

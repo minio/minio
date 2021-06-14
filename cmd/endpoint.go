@@ -39,8 +39,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mountinfo"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.

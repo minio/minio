@@ -43,7 +43,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 var errDiskStale = errors.New("disk stale")

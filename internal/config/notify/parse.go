@@ -31,8 +31,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (

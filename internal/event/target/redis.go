@@ -30,7 +30,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/minio/minio/internal/event"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 // Redis constants

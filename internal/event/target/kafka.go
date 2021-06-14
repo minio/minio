@@ -29,7 +29,7 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/internal/event"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 
 	sarama "github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
