@@ -651,8 +651,10 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		}
 		return mtime1.After(mtime2)
 	}
-	sort.Slice(errs, less)
-	sort.Slice(grs, less)
+
+	// Must be a stable sort for both slices to be sorted the same.
+	sort.SliceStable(errs, less)
+	sort.SliceStable(grs, less)
 
 	var found = -1
 	for i, err := range errs {
@@ -735,8 +737,9 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 		mtime2 := objInfos[j].ModTime
 		return mtime1.After(mtime2)
 	}
-	sort.Slice(errs, less)
-	sort.Slice(objInfos, less)
+	// Must be a stable sort for both slices to be sorted the same.
+	sort.SliceStable(errs, less)
+	sort.SliceStable(objInfos, less)
 
 	var found = -1
 	for i, err := range errs {
