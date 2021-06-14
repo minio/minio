@@ -1039,8 +1039,7 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if opts.DeletePrefix {
-		err := er.deletePrefix(ctx, bucket, object)
-		return ObjectInfo{}, err
+		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
 	}
 
 	versionFound := true
