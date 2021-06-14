@@ -42,8 +42,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (

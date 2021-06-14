@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 // IPv4 addresses of local host.

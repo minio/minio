@@ -31,8 +31,8 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/bucket/policy"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/zipindex"
 )
 

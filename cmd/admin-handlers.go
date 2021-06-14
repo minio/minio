@@ -47,8 +47,8 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
-	xnet "github.com/minio/minio/internal/net"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (

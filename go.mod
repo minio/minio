@@ -44,10 +44,10 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.0.11
+	github.com/minio/madmin-go v1.0.12
 	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.0.4
+	github.com/minio/pkg v1.0.7
 	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
@@ -55,7 +55,7 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/minio/zipindex v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/montanaflynn/stats v0.5.0
+	github.com/montanaflynn/stats v0.6.6
 	github.com/nats-io/nats-server/v2 v2.1.9
 	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
 	github.com/nats-io/nats.go v1.10.0

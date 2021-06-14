@@ -41,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/pkg/quick"
 )
 

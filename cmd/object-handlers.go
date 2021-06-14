@@ -55,10 +55,10 @@ import (
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/sio"
 )
 

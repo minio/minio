@@ -29,7 +29,7 @@ import (
 	color "github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 // Documentation links, these are part of message printing code.
