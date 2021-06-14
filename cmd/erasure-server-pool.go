@@ -651,7 +651,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 			mtimeJ = results[j].gr.ObjInfo.ModTime
 		}
 		// On tiebreaks, choose the earliest.
-		if mtimeI == mtimeJ {
+		if mtimeI.Equal(mtimeJ) {
 			return results[i].zIdx < results[j].zIdx
 		}
 		return mtimeI.After(mtimeJ)
