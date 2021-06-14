@@ -27,7 +27,6 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/event"
-	"github.com/minio/pkg/sys"
 )
 
 const (
@@ -47,14 +46,6 @@ type QueueStore struct {
 func NewQueueStore(directory string, limit uint64) Store {
 	if limit == 0 {
 		limit = defaultLimit
-		_, maxRLimit, err := sys.GetMaxOpenFileLimit()
-		if err == nil {
-			// Limit the maximum number of entries
-			// to maximum open file limit
-			if maxRLimit < limit {
-				limit = maxRLimit
-			}
-		}
 	}
 
 	return &QueueStore{
