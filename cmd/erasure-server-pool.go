@@ -661,9 +661,6 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	for i, res := range results {
 		if res.err == nil {
 			// Select earliest result
-			if res.gr == nil {
-				panic(err)
-			}
 			found = i
 			break
 		}
