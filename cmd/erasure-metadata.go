@@ -156,7 +156,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.TransitionStatus = fi.TransitionStatus
 	objInfo.transitionedObjName = fi.TransitionedObjName
 	objInfo.transitionVersionID = fi.TransitionVersionID
-	objInfo.tierFreeVersionMarker = fi.TierFreeVersionMarker()
+	objInfo.tierFreeVersion = fi.TierFreeVersion()
 	objInfo.TransitionTier = fi.TransitionTier
 
 	// etag/md5Sum has already been extracted. We need to
@@ -369,7 +369,9 @@ const (
 	tierFVMarker = "tier-free-marker"
 )
 
-// SetTierFreeVersionID sets versionID as free-version's version id.
+// SetTierFreeVersionID sets free-version's versionID. This method is used by
+// object layer to pass down a versionID to set for a free-version that may be
+// created.
 func (fi *FileInfo) SetTierFreeVersionID(versionID string) {
 	if fi.Metadata == nil {
 		fi.Metadata = make(map[string]string)
@@ -382,16 +384,17 @@ func (fi *FileInfo) TierFreeVersionID() string {
 	return fi.Metadata[ReservedMetadataPrefixLower+tierFVID]
 }
 
-// SetTierFreeVersionMarker marks fi as a free-version.
-func (fi *FileInfo) SetTierFreeVersionMarker() {
+// SetTierFreeVersion sets fi as a free-version. This method is used by
+// lower layers to indicate a free-version.
+func (fi *FileInfo) SetTierFreeVersion() {
 	if fi.Metadata == nil {
 		fi.Metadata = make(map[string]string)
 	}
 	fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker] = ""
 }
 
-// TierFreeVersionMarker returns true if version has a free-marker.
-func (fi *FileInfo) TierFreeVersionMarker() bool {
+// TierFreeVersion returns true if version is a free-version.
+func (fi *FileInfo) TierFreeVersion() bool {
 	_, ok := fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker]
 	return ok
 }

@@ -46,7 +46,7 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	n := 0
 	for _, fi := range fivs.Versions {
 		// Filter our tier object delete marker
-		if !fi.TierFreeVersionMarker() {
+		if !fi.TierFreeVersion() {
 			fivs.Versions[n] = fi
 			n++
 		}

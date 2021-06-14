@@ -992,7 +992,7 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		}
 	}
 	if j.FreeVersion() {
-		fi.SetTierFreeVersionMarker()
+		fi.SetTierFreeVersion()
 		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
 		fi.TransitionedObjName = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName])
 		fi.TransitionVersionID = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID])

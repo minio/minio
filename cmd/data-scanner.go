@@ -966,7 +966,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 // applyTierObjSweep removes remote object pending deletion and the free-version
 // tracking this information.
 func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta actionMeta) {
-	if !meta.oi.tierFreeVersionMarker {
+	if !meta.oi.tierFreeVersion {
 		// nothing to be done
 		return
 	}
