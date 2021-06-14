@@ -4,35 +4,27 @@ import (
 	"context"
 	"io"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-type s3ExtensionTransport struct {
-	tr http.RoundTripper
-}
-
-func (t *s3ExtensionTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Add("x-minio-extract", "true")
-	return t.tr.RoundTrip(req)
-}
-
 func main() {
-	tr, _ := minio.DefaultTransport(false)
-
 	s3Client, err := minio.New("minio-server-address:9000", &minio.Options{
-		Creds:     credentials.NewStaticV4("access-key", "secret-key", ""),
-		Transport: &s3ExtensionTransport{tr},
+		Creds: credentials.NewStaticV4("access-key", "secret-key", ""),
 	})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	var opts minio.GetObjectOptions
+
+	// Add extract header to request:
+	opts.Set("x-minio-extract", "true")
+
 	// Download API.md from the archive
-	rd, err := s3Client.GetObject(context.Background(), "your-bucket", "path/to/file.zip/data.csv", minio.GetObjectOptions{})
+	rd, err := s3Client.GetObject(context.Background(), "your-bucket", "path/to/file.zip/data.csv", opts)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -40,6 +32,4 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	return
 }
