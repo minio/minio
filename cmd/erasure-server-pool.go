@@ -793,9 +793,24 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	return z.serverPools[idx].PutObject(ctx, bucket, object, data, opts)
 }
 
+func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
+	for _, zone := range z.serverPools {
+		_, err := zone.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
+	}
+
+	if opts.DeletePrefix {
+		err := z.deletePrefix(ctx, bucket, object)
+		return ObjectInfo{}, err
 	}
 
 	object = encodeDirObject(object)
