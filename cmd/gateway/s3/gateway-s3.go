@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -205,7 +204,7 @@ func newS3(urlStr string, tripper http.RoundTripper) (*miniogo.Core, error) {
 }
 
 // NewGatewayLayer returns s3 ObjectLayer.
-func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *S3) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	metrics := minio.NewMetrics()
 
 	t := &minio.MetricsTransport{
@@ -248,11 +247,6 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		return &encS, nil
 	}
 	return &s, nil
-}
-
-// Production - s3 gateway is production ready.
-func (g *S3) Production() bool {
-	return true
 }
 
 // s3Objects implements gateway for MinIO and S3 compatible object storage servers.

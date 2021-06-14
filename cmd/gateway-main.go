@@ -29,7 +29,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
-	"github.com/minio/minio/internal/color"
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
@@ -294,7 +294,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
-	newObject, err := gw.NewGatewayLayer(globalActiveCred)
+	newObject, err := gw.NewGatewayLayer(madmin.Credentials{
+		AccessKey: globalActiveCred.AccessKey,
+		SecretKey: globalActiveCred.SecretKey,
+	})
 	if err != nil {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
@@ -350,16 +353,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
 	// Prints the formatted startup message once object layer is initialized.
-	if !globalCLIContext.Quiet {
-		mode := globalMinioModeGatewayPrefix + gatewayName
+	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
 		// Check update mode.
-		checkUpdate(mode)
+		checkUpdate(globalMinioModeGatewayPrefix + gatewayName)
+	}
 
-		// Print a warning message if gateway is not ready for production before the startup banner.
-		if !gw.Production() {
-			logStartupMessage(color.Yellow("               *** Warning: Not Ready for Production ***"))
-		}
-
+	if !globalCLIContext.Quiet {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}

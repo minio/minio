@@ -22,7 +22,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/internal/auth"
 )
 
 func init() {
@@ -86,18 +85,13 @@ func (g *NAS) Name() string {
 }
 
 // NewGatewayLayer returns nas gatewaylayer.
-func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *NAS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
 	}
 	return &nasObjects{newObject}, nil
-}
-
-// Production - nas gateway is production ready.
-func (g *NAS) Production() bool {
-	return true
 }
 
 // IsListenSupported returns whether listen bucket notification is applicable for this gateway.
