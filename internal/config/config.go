@@ -374,8 +374,10 @@ func (c Config) RedactSensitiveInfo() Config {
 				}
 			}
 		}
-		nc[configName] = configVals
 	}
+
+	// Remove the server credentials altogether
+	nc.DelKVS(CredentialsSubSys)
 
 	return nc
 }

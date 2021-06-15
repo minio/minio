@@ -25,12 +25,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -1605,41 +1607,163 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 	defer nsLock.Unlock(lkctx.Cancel)
 
-	go func() {
-		defer close(healthInfoCh)
+	hostAnonymizer := createHostAnonymizer()
+	// anonAddr - Anonymizes hosts in given input string.
+	anonAddr := func(addr string) string {
+		newAddr, found := hostAnonymizer[addr]
+		if found {
+			return newAddr
+		}
 
-		partialWrite(healthInfo) // Write first message with only version populated
+		// If we reach here, it means that the given addr doesn't contain any of the hosts.
+		// Return it as is. Can happen for drive paths in non-distributed mode
+		return addr
+	}
 
+	// anonymizedAddr - Updated the addr of the node info with anonymized one
+	anonymizeAddr := func(info madmin.NodeInfo) {
+		info.SetAddr(anonAddr(info.GetAddr()))
+	}
+
+	getAndWriteCPUs := func() {
 		if query.Get("syscpu") == "true" {
-			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, madmin.GetCPUs(deadlinedCtx, r.Host))
-			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, globalNotificationSys.GetCPUs(deadlinedCtx)...)
+			localCPUInfo := madmin.GetCPUs(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localCPUInfo)
+			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, localCPUInfo)
+
+			peerCPUInfo := globalNotificationSys.GetCPUs(deadlinedCtx)
+			for _, cpuInfo := range peerCPUInfo {
+				anonymizeAddr(&cpuInfo)
+				healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, cpuInfo)
+			}
+
 			partialWrite(healthInfo)
 		}
+	}
 
+	getAndWritePartitions := func() {
 		if query.Get("sysdrivehw") == "true" {
-			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, madmin.GetPartitions(deadlinedCtx, r.Host))
-			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, globalNotificationSys.GetPartitions(deadlinedCtx)...)
+			localPartitions := madmin.GetPartitions(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localPartitions)
+			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, localPartitions)
+
+			peerPartitions := globalNotificationSys.GetPartitions(deadlinedCtx)
+			for _, p := range peerPartitions {
+				anonymizeAddr(&p)
+				healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, p)
+			}
 			partialWrite(healthInfo)
 		}
+	}
 
+	getAndWriteOSInfo := func() {
 		if query.Get("sysosinfo") == "true" {
-			healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, madmin.GetOSInfo(deadlinedCtx, r.Host))
-			healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, globalNotificationSys.GetOSInfo(deadlinedCtx)...)
+			localOSInfo := madmin.GetOSInfo(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localOSInfo)
+			healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, localOSInfo)
+
+			peerOSInfos := globalNotificationSys.GetOSInfo(deadlinedCtx)
+			for _, o := range peerOSInfos {
+				anonymizeAddr(&o)
+				healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, o)
+			}
 			partialWrite(healthInfo)
 		}
+	}
 
+	getAndWriteMemInfo := func() {
 		if query.Get("sysmem") == "true" {
-			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, madmin.GetMemInfo(deadlinedCtx, r.Host))
-			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, globalNotificationSys.GetMemInfo(deadlinedCtx)...)
+			localMemInfo := madmin.GetMemInfo(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localMemInfo)
+			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, localMemInfo)
+
+			peerMemInfos := globalNotificationSys.GetMemInfo(deadlinedCtx)
+			for _, m := range peerMemInfos {
+				anonymizeAddr(&m)
+				healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, m)
+			}
 			partialWrite(healthInfo)
 		}
+	}
 
+	anonymizeCmdLine := func(cmdLine string) string {
+		if !globalIsDistErasure {
+			// FS mode - single server - hard code to `server1`
+			return strings.Replace(cmdLine, globalLocalNodeName, "server1", -1)
+		}
+
+		// Server start command regex groups:
+		// 1 - minio server
+		// 2 - flags e.g. `--address :9000 --certs-dir /etc/minio/certs`
+		// 3 - pool args e.g. `https://node{01...16}.domain/data/disk{001...204} https://node{17...32}.domain/data/disk{001...204}`
+		re := regexp.MustCompile(`^(.*minio\s+server\s+)(--[^\s]+\s+[^\s]+\s+)*(.*)`)
+
+		// stays unchanged in the anonymized version
+		cmdLineWithoutPools := re.ReplaceAllString(cmdLine, `$1$2`)
+
+		// to be anonymized
+		poolsArgs := re.ReplaceAllString(cmdLine, `$3`)
+		var anonPools []string
+
+		if !(strings.Contains(poolsArgs, "{") && strings.Contains(poolsArgs, "}")) {
+			// No ellipses pattern. Anonymize host name from every pool arg
+			pools := strings.Fields(poolsArgs)
+			anonPools = make([]string, len(pools))
+			for _, arg := range pools {
+				anonPools = append(anonPools, anonAddr(arg))
+			}
+			return cmdLineWithoutPools + strings.Join(anonPools, " ")
+		}
+
+		// Ellipses pattern in pool args. Regex groups:
+		// 1 - server prefix
+		// 2 - number sequence for servers
+		// 3 - server suffix
+		// 4 - drive prefix (starting with /)
+		// 5 - number sequence for drives
+		// 6 - drive suffix
+		re = regexp.MustCompile(`([^\s^{]*)({\d+...\d+})?([^\s^{^/]*)(/[^\s^{]*)({\d+...\d+})?([^\s]*)`)
+		poolsMatches := re.FindAllStringSubmatch(poolsArgs, -1)
+
+		anonPools = make([]string, len(poolsMatches))
+		idxMap := map[int]string{
+			1: "spfx",
+			3: "ssfx",
+		}
+		for pi, poolsMatch := range poolsMatches {
+			// Replace the server prefix/suffix with anonymized ones
+			for idx, lbl := range idxMap {
+				if len(poolsMatch[idx]) > 0 {
+					poolsMatch[idx] = fmt.Sprintf("%s%d", lbl, crc32.ChecksumIEEE([]byte(poolsMatch[idx])))
+				}
+			}
+
+			// Remove the original pools args present at index 0
+			anonPools[pi] = strings.Join(poolsMatch[1:], "")
+		}
+		return cmdLineWithoutPools + strings.Join(anonPools, " ")
+	}
+
+	anonymizeProcInfo := func(p *madmin.ProcInfo) {
+		p.CmdLine = anonymizeCmdLine(p.CmdLine)
+		anonymizeAddr(p)
+	}
+
+	getAndWriteProcInfo := func() {
 		if query.Get("sysprocess") == "true" {
-			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, madmin.GetProcInfo(deadlinedCtx, r.Host))
-			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, globalNotificationSys.GetProcInfo(deadlinedCtx)...)
+			localProcInfo := madmin.GetProcInfo(deadlinedCtx, globalLocalNodeName)
+			anonymizeProcInfo(&localProcInfo)
+			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, localProcInfo)
+			peerProcInfos := globalNotificationSys.GetProcInfo(deadlinedCtx)
+			for _, p := range peerProcInfos {
+				anonymizeProcInfo(&p)
+				healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, p)
+			}
 			partialWrite(healthInfo)
 		}
+	}
 
+	getAndWriteMinioConfig := func() {
 		if query.Get("minioconfig") == "true" {
 			config, err := readServerConfig(ctx, objectAPI)
 			if err != nil {
@@ -1653,47 +1777,101 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			}
 			partialWrite(healthInfo)
 		}
+	}
 
+	getAndWriteDrivePerfInfo := func() {
 		if query.Get("perfdrive") == "true" {
-			healthInfo.Perf.Drives = append(healthInfo.Perf.Drives, getDrivePerfInfos(deadlinedCtx, r.Host))
+			localDPI := getDrivePerfInfos(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localDPI)
+			healthInfo.Perf.Drives = append(healthInfo.Perf.Drives, localDPI)
 			partialWrite(healthInfo)
 
 			perfCh := globalNotificationSys.GetDrivePerfInfos(deadlinedCtx)
 			for perfInfo := range perfCh {
+				anonymizeAddr(&perfInfo)
 				healthInfo.Perf.Drives = append(healthInfo.Perf.Drives, perfInfo)
 				partialWrite(healthInfo)
 			}
-
-			partialWrite(healthInfo)
 		}
+	}
 
+	anonymizeNetPerfInfo := func(npi *madmin.NetPerfInfo) {
+		anonymizeAddr(npi)
+		rps := npi.RemotePeers
+		for idx, peer := range rps {
+			anonymizeAddr(&peer)
+			rps[idx] = peer
+		}
+		npi.RemotePeers = rps
+	}
+
+	getAndWriteNetPerfInfo := func() {
 		if globalIsDistErasure && query.Get("perfnet") == "true" {
-			healthInfo.Perf.Net = append(healthInfo.Perf.Net, globalNotificationSys.GetNetPerfInfo(deadlinedCtx))
+			localNPI := globalNotificationSys.GetNetPerfInfo(deadlinedCtx)
+			anonymizeNetPerfInfo(&localNPI)
+			healthInfo.Perf.Net = append(healthInfo.Perf.Net, localNPI)
+
 			partialWrite(healthInfo)
 
 			netInfos := globalNotificationSys.DispatchNetPerfChan(deadlinedCtx)
 			for netInfo := range netInfos {
+				anonymizeNetPerfInfo(&netInfo)
 				healthInfo.Perf.Net = append(healthInfo.Perf.Net, netInfo)
 				partialWrite(healthInfo)
 			}
-			partialWrite(healthInfo)
 
-			healthInfo.Perf.NetParallel = globalNotificationSys.GetParallelNetPerfInfo(deadlinedCtx)
+			ppi := globalNotificationSys.GetParallelNetPerfInfo(deadlinedCtx)
+			anonymizeNetPerfInfo(&ppi)
+			healthInfo.Perf.NetParallel = ppi
 			partialWrite(healthInfo)
 		}
+	}
+
+	anonymizeNetwork := func(network map[string]string) map[string]string {
+		anonNetwork := map[string]string{}
+		for endpoint, status := range network {
+			anonEndpoint := anonAddr(endpoint)
+			anonNetwork[anonEndpoint] = status
+		}
+		return anonNetwork
+
+	}
+
+	anonymizeDrives := func(drives []madmin.Disk) []madmin.Disk {
+		anonDrives := []madmin.Disk{}
+		for _, drive := range drives {
+			drive.Endpoint = anonAddr(drive.Endpoint)
+			anonDrives = append(anonDrives, drive)
+		}
+		return anonDrives
+	}
+
+	go func() {
+		defer close(healthInfoCh)
+
+		partialWrite(healthInfo) // Write first message with only version populated
+		getAndWriteCPUs()
+		getAndWritePartitions()
+		getAndWriteOSInfo()
+		getAndWriteMemInfo()
+		getAndWriteProcInfo()
+		getAndWriteMinioConfig()
+		getAndWriteDrivePerfInfo()
+		getAndWriteNetPerfInfo()
 
 		if query.Get("minioinfo") == "true" {
 			infoMessage := getServerInfo(ctx, r)
 			servers := []madmin.ServerInfo{}
 			for _, server := range infoMessage.Servers {
+				anonEndpoint := anonAddr(server.Endpoint)
 				servers = append(servers, madmin.ServerInfo{
 					State:      server.State,
-					Endpoint:   server.Endpoint,
+					Endpoint:   anonEndpoint,
 					Uptime:     server.Uptime,
 					Version:    server.Version,
 					CommitID:   server.CommitID,
-					Network:    server.Network,
-					Drives:     server.Disks,
+					Network:    anonymizeNetwork(server.Network),
+					Drives:     anonymizeDrives(server.Disks),
 					PoolNumber: server.PoolNumber,
 					MemStats: madmin.MemStats{
 						Alloc:      server.MemStats.Alloc,
@@ -2098,4 +2276,86 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		return nil
 	})
 	logger.LogIf(ctx, err)
+}
+
+func createHostAnonymizerForFSMode() map[string]string {
+	hostAnonymizer := map[string]string{
+		globalLocalNodeName: "server1",
+	}
+
+	apiEndpoints := getAPIEndpoints()
+	for _, ep := range apiEndpoints {
+		if len(ep) > 0 {
+			if url, err := xnet.ParseHTTPURL(ep); err == nil {
+				// In FS mode the drive names don't include the host.
+				// So mapping just the host should be sufficient.
+				hostAnonymizer[url.Host] = "server1"
+			}
+		}
+	}
+	return hostAnonymizer
+}
+
+// anonymizeHost - Add entries related to given endpoint in the host anonymizer map
+// The health report data can contain the hostname in various forms e.g. host, host:port,
+// host:port/drivepath, full url (http://host:port/drivepath)
+// The anonymizer map will have mappings for all these varients for efficiently replacing
+// any of these strings to the anonymized versions at the time of health report generation.
+func anonymizeHost(hostAnonymizer map[string]string, endpoint Endpoint, poolNum int, srvrNum int) {
+	if len(endpoint.Host) == 0 {
+		return
+	}
+
+	currentURL := endpoint.String()
+
+	// mapIfNotPresent - Maps the given key to the value only if the key is not present in the map
+	mapIfNotPresent := func(m map[string]string, key string, val string) {
+		_, found := m[key]
+		if !found {
+			m[key] = val
+		}
+	}
+
+	_, found := hostAnonymizer[currentURL]
+	if !found {
+		// In distributed setup, anonymized addr = 'poolNum.serverNum'
+		newHost := fmt.Sprintf("pool%d.server%d", poolNum, srvrNum)
+
+		// Hostname
+		mapIfNotPresent(hostAnonymizer, endpoint.Hostname(), newHost)
+
+		newHostPort := newHost
+		if len(endpoint.Port()) > 0 {
+			// Host + port
+			newHostPort = newHost + ":" + endpoint.Port()
+			mapIfNotPresent(hostAnonymizer, endpoint.Host, newHostPort)
+		}
+
+		newHostPortPath := newHostPort
+		if len(endpoint.Path) > 0 {
+			// Host + port + path
+			currentHostPortPath := endpoint.Host + endpoint.Path
+			newHostPortPath = newHostPort + endpoint.Path
+			mapIfNotPresent(hostAnonymizer, currentHostPortPath, newHostPortPath)
+		}
+
+		// Full url
+		hostAnonymizer[currentURL] = endpoint.Scheme + "://" + newHostPortPath
+	}
+}
+
+// createHostAnonymizer - Creats a map of various strings to corresponding anonymized names
+func createHostAnonymizer() map[string]string {
+	if !globalIsDistErasure {
+		return createHostAnonymizerForFSMode()
+	}
+
+	hostAnonymizer := map[string]string{}
+
+	for poolIdx, pool := range globalEndpoints {
+		for srvrIdx, endpoint := range pool.Endpoints {
+			anonymizeHost(hostAnonymizer, endpoint, poolIdx+1, srvrIdx+1)
+		}
+	}
+	return hostAnonymizer
 }
