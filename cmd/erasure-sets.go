@@ -131,6 +131,10 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 			if !disk.IsOnline() {
 				continue
 			}
+			if disk.IsLocal() {
+				diskMap[disk.Endpoint().Path] = disk
+				continue
+			}
 			diskMap[disk.String()] = disk
 		}
 	}
