@@ -41,7 +41,7 @@ import (
 	"sync"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/handlers"
