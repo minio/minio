@@ -102,7 +102,7 @@ type erasureSets struct {
 }
 
 // Return false if endpoint is not connected or has been reconnected after last check
-func isEndpointConnectionStable(diskMap map[string]StorageAPI, endpoint string, lastCheck time.Time) bool {
+func isEndpointConnectionStable(diskMap map[Endpoint]StorageAPI, endpoint Endpoint, lastCheck time.Time) bool {
 	disk := diskMap[endpoint]
 	if disk == nil {
 		return false
@@ -116,8 +116,8 @@ func isEndpointConnectionStable(diskMap map[string]StorageAPI, endpoint string, 
 	return true
 }
 
-func (s *erasureSets) getDiskMap() map[string]StorageAPI {
-	diskMap := make(map[string]StorageAPI)
+func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
+	diskMap := make(map[Endpoint]StorageAPI)
 
 	s.erasureDisksMu.RLock()
 	defer s.erasureDisksMu.RUnlock()
@@ -131,7 +131,7 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 			if !disk.IsOnline() {
 				continue
 			}
-			diskMap[disk.String()] = disk
+			diskMap[disk.Endpoint()] = disk
 		}
 	}
 	return diskMap
@@ -213,11 +213,7 @@ func (s *erasureSets) connectDisks() {
 	var setsJustConnected = make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
 	for _, endpoint := range s.endpoints {
-		diskPath := endpoint.String()
-		if endpoint.IsLocal {
-			diskPath = endpoint.Path
-		}
-		if isEndpointConnectionStable(diskMap, diskPath, s.lastConnectDisksOpTime) {
+		if isEndpointConnectionStable(diskMap, endpoint, s.lastConnectDisksOpTime) {
 			continue
 		}
 		wg.Add(1)
