@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v36" // Changes to FileInfo for tier-journal
+	storageRESTVersion       = "v37" // cleanup behavior change at storage layer.
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
