@@ -49,6 +49,8 @@ Distributed instances are now accessible on the host at ports 9000, proceed to a
   * Replicate a service definition and change the name of the new service appropriately.
   * Update the command section in each service.
   * Add a new MinIO server instance to the upstream directive in the Nginx configuration file.
+  * Update the depends_on section in the nginx service
+  * Update volume links in the volumes section
 
   Read more about distributed MinIO [here](https://docs.min.io/docs/distributed-minio-quickstart-guide).
 
