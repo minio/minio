@@ -46,8 +46,6 @@ func Benchmark_bucketMetacache_findCache(b *testing.B) {
 			Recursive:    false,
 			Separator:    slashSeparator,
 			Create:       true,
-			CurrentCycle: uint64(i),
-			OldestCycle:  uint64(i - 1),
 		})
 	}
 	b.ReportAllocs()
@@ -65,8 +63,6 @@ func Benchmark_bucketMetacache_findCache(b *testing.B) {
 			Recursive:    false,
 			Separator:    slashSeparator,
 			Create:       true,
-			CurrentCycle: uint64(i % elements),
-			OldestCycle:  uint64(0),
 		})
 	}
 }
