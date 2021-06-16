@@ -46,7 +46,7 @@ Distributed instances are now accessible on the host at ports 9000, proceed to a
 * By default the Docker Compose file uses the Docker image for latest MinIO server release. You can change the image tag to pull a specific [MinIO Docker image](https://hub.docker.com/r/minio/minio/).
 
 * There are 4 minio distributed instances created by default. You can add more MinIO services (up to total 16) to your MinIO Compose deployment. To add a service
-  * Replicate a service definition and change the name of the new service appropriately.
+  * Replicate a service definition and change the name (and linked volume, if you want to make more volumes) of the new service appropriately.
   * Update the command section in each service.
   * Add a new MinIO server instance to the upstream directive in the Nginx configuration file.
   * Update the depends_on section in the nginx service
