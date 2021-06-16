@@ -82,13 +82,6 @@ type listPathOptions struct {
 	// Create indicates that the lister should not attempt to load an existing cache.
 	Create bool
 
-	// CurrentCycle indicates the current bloom cycle.
-	// Will be used if a new scan is started.
-	CurrentCycle uint64
-
-	// OldestCycle indicates the oldest cycle acceptable.
-	OldestCycle uint64
-
 	// Include pure directories.
 	IncludeDirectories bool
 
@@ -109,20 +102,18 @@ func init() {
 // newMetacache constructs a new metacache from the options.
 func (o listPathOptions) newMetacache() metacache {
 	return metacache{
-		id:           o.ID,
-		bucket:       o.Bucket,
-		root:         o.BaseDir,
-		recursive:    o.Recursive,
-		status:       scanStateStarted,
-		error:        "",
-		started:      UTCNow(),
-		lastHandout:  UTCNow(),
-		lastUpdate:   UTCNow(),
-		ended:        time.Time{},
-		startedCycle: o.CurrentCycle,
-		endedCycle:   0,
-		dataVersion:  metacacheStreamVersion,
-		filter:       o.FilterPrefix,
+		id:          o.ID,
+		bucket:      o.Bucket,
+		root:        o.BaseDir,
+		recursive:   o.Recursive,
+		status:      scanStateStarted,
+		error:       "",
+		started:     UTCNow(),
+		lastHandout: UTCNow(),
+		lastUpdate:  UTCNow(),
+		ended:       time.Time{},
+		dataVersion: metacacheStreamVersion,
+		filter:      o.FilterPrefix,
 	}
 }
 
@@ -273,9 +264,6 @@ func (o *listPathOptions) objectPath(block int) string {
 func (o *listPathOptions) SetFilter() {
 	switch {
 	case metacacheSharePrefix:
-		return
-	case o.CurrentCycle != o.OldestCycle:
-		// We have a clean bloom filter
 		return
 	case o.Prefix == o.BaseDir:
 		// No additional prefix
@@ -521,7 +509,53 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 }
 
 // Will return io.EOF if continuing would not yield more results.
-func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
+func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) (err error) {
+	defer close(results)
+	o.debugf(color.Green("listPath:")+" with options: %#v", o)
+
+	askDisks := o.AskDisks
+	listingQuorum := askDisks - 1
+	disks := er.getOnlineDisks()
+	// Special case: ask all disks if the drive count is 4
+	if askDisks == -1 || er.setDriveCount == 4 {
+		askDisks = len(disks) // with 'strict' quorum list on all online disks.
+		listingQuorum = getReadQuorum(er.setDriveCount)
+	}
+
+	// How to resolve results.
+	resolver := metadataResolutionParams{
+		dirQuorum: listingQuorum,
+		objQuorum: listingQuorum,
+		bucket:    o.Bucket,
+	}
+
+	return listPathRaw(ctx, listPathRawOptions{
+		disks:        disks,
+		bucket:       o.Bucket,
+		path:         o.BaseDir,
+		recursive:    o.Recursive,
+		filterPrefix: o.FilterPrefix,
+		minDisks:     listingQuorum,
+		forwardTo:    o.Marker,
+		agreed: func(entry metaCacheEntry) {
+			results <- entry
+		},
+		partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+			// Results Disagree :-(
+			entry, ok := entries.resolve(&resolver)
+			if ok {
+				if !o.discardResult {
+					results <- *entry
+				}
+				results <- *entry
+			}
+		},
+	})
+}
+
+// Will return io.EOF if continuing would not yield more results.
+//TODO: Remove when not needed.
+func (er *erasureObjects) listPathOld(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
 	// See if we have the listing stored.

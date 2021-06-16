@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"sort"
 	"strings"
@@ -429,6 +430,84 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 		return m.o[i].name > s
 	})
 	m.o = m.o[idx:]
+}
+
+// mergeEntryChannels will merge entries from in and return them sorted on out.
+// To signify no more results are on an input channel, close it.
+// The output channel will be closed when all inputs are emptied.
+// If file names are equal, compareMeta is called to select which one to choose.
+// The entry not chosen will be discarded.
+// If the context is canceled the function will return the error,
+// otherwise the function will return nil.
+func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<- metaCacheEntry, compareMeta func(existing, other *metaCacheEntry) (replace bool)) error {
+	defer close(out)
+	top := make([]*metaCacheEntry, len(in))
+	nDone := 0
+	ctxDone := ctx.Done()
+
+	selectFrom := func(idx int) error {
+		select {
+		case <-ctxDone:
+			return ctx.Err()
+		case entry, ok := <-in[idx]:
+			if !ok {
+				nDone++
+			} else {
+				top[idx] = &entry
+			}
+		}
+		return nil
+	}
+	// Populate all...
+	for i := range in {
+		if err := selectFrom(i); err != nil {
+			return err
+		}
+	}
+
+	// Choose the best to return.
+	for {
+		if nDone == len(in) {
+			return nil
+		}
+		best := top[0]
+		bestIdx := 0
+		for i, other := range top[1:] {
+			if other == nil {
+				continue
+			}
+			if best == nil {
+				best = other
+				bestIdx = i
+				continue
+			}
+			if best.name == other.name {
+				if compareMeta(best, other) {
+					// Replace "best"
+					if err := selectFrom(bestIdx); err != nil {
+						return err
+					}
+					best = other
+					bestIdx = i
+				} else {
+					// Keep best, replace "other"
+					if err := selectFrom(i); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if best.name > other.name {
+				best = other
+				bestIdx = i
+			}
+		}
+		out <- *best
+		// Replace entry we just sent.
+		if err := selectFrom(bestIdx); err != nil {
+			return err
+		}
+	}
 }
 
 // merge will merge other into m.

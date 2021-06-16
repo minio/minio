@@ -85,10 +85,6 @@ func (m *metacache) matches(o *listPathOptions, extend time.Duration) bool {
 		o.debugf("cache %s state or stream version mismatch", m.id)
 		return false
 	}
-	if m.startedCycle < o.OldestCycle {
-		o.debugf("cache %s cycle too old", m.id)
-		return false
-	}
 
 	// Root of what we are looking for must at least have the same
 	if !strings.HasPrefix(o.BaseDir, m.root) {
@@ -114,19 +110,6 @@ func (m *metacache) matches(o *listPathOptions, extend time.Duration) bool {
 		o.debugf("cache %s not running, time: %v", m.id, time.Since(m.lastUpdate))
 		// Abandoned
 		return false
-	}
-
-	if m.finished() && m.endedCycle <= o.OldestCycle {
-		if extend <= 0 {
-			// If scan has ended the oldest requested must be less.
-			o.debugf("cache %s ended and cycle (%v) <= oldest allowed (%v)", m.id, m.endedCycle, o.OldestCycle)
-			return false
-		}
-		if time.Since(m.lastUpdate) > metacacheMaxRunningAge+extend {
-			// Cache ended within bloom cycle, but we can extend the life.
-			o.debugf("cache %s ended (%v) and beyond extended life (%v)", m.id, m.lastUpdate, metacacheMaxRunningAge+extend)
-			return false
-		}
 	}
 
 	return true

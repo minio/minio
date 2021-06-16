@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	pathutil "path"
 	"strings"
 	"sync"
@@ -119,8 +118,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	var cache metacache
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.Create {
-		o.CurrentCycle = intDataUpdateTracker.current()
-		o.OldestCycle = globalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
@@ -160,56 +157,62 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		o.ID = cache.id
 	}
 
+	// Create output for our results.
+	// Create filter for results.
+	filterCh := make(chan metaCacheEntry, 100)
+	filteredResults := o.gatherResults(filterCh)
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var errs []error
 	allAtEOF := true
+	var inputs []chan metaCacheEntry
 	mu.Lock()
 	// Ask all sets and merge entries.
 	for _, pool := range z.serverPools {
 		for _, set := range pool.sets {
 			wg.Add(1)
+			results := make(chan metaCacheEntry, 100)
+			inputs = append(inputs, results)
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
-				e, err := set.listPath(ctx, o)
+				err := set.listPath(ctx, o, results)
 				mu.Lock()
 				defer mu.Unlock()
 				if err == nil {
 					allAtEOF = false
 				}
 				errs[i] = err
-				entries.merge(e, -1)
-
-				// Resolve non-trivial conflicts
-				entries.deduplicate(func(existing, other *metaCacheEntry) (replace bool) {
-					if existing.isDir() {
-						return false
-					}
-					eFIV, err := existing.fileInfo(o.Bucket)
-					if err != nil {
-						return true
-					}
-					oFIV, err := other.fileInfo(o.Bucket)
-					if err != nil {
-						return false
-					}
-					// Replace if modtime is newer
-					if !oFIV.ModTime.Equal(eFIV.ModTime) {
-						return oFIV.ModTime.After(eFIV.ModTime)
-					}
-					// Use NumVersions as a final tiebreaker.
-					return oFIV.NumVersions > eFIV.NumVersions
-				})
-				if entries.len() > o.Limit {
-					allAtEOF = false
-					entries.truncate(o.Limit)
-				}
 			}(len(errs), set)
 			errs = append(errs, nil)
 		}
 	}
 	mu.Unlock()
-	wg.Wait()
+	// Gather results to a single channel.
+	go func() {
+		_ = mergeEntryChannels(ctx, inputs, filterCh, func(existing, other *metaCacheEntry) (replace bool) {
+			if existing.isDir() {
+				// We don't care...
+				return false
+			}
+
+			eFIV, err := existing.fileInfo(o.Bucket)
+			if err != nil {
+				return true
+			}
+			oFIV, err := other.fileInfo(o.Bucket)
+			if err != nil {
+				return false
+			}
+			// Replace if modtime is newer
+			if !oFIV.ModTime.Equal(eFIV.ModTime) {
+				return oFIV.ModTime.After(eFIV.ModTime)
+			}
+			// Use NumVersions as a final tiebreaker.
+			return oFIV.NumVersions > eFIV.NumVersions
+		})
+	}()
+	entries, err = filteredResults()
 
 	if isAllNotFound(errs) {
 		// All sets returned not found.
