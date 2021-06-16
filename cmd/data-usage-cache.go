@@ -231,6 +231,13 @@ func (e *dataUsageEntry) addChild(hash dataUsageHash) {
 	e.Children[hash.Key()] = struct{}{}
 }
 
+// removeChild will remove a child based on its hash.
+func (e *dataUsageEntry) removeChild(hash dataUsageHash) {
+	if len(e.Children) > 0 {
+		delete(e.Children, hash.Key())
+	}
+}
+
 // find a path in the cache.
 // Returns nil if not found.
 func (d *dataUsageCache) find(path string) *dataUsageEntry {
@@ -308,7 +315,8 @@ func (d *dataUsageCache) keepBuckets(b []BucketInfo) {
 
 // keepRootChildren will keep the root children specified by delete all others.
 func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
-	if d.root() == nil {
+	root := d.root()
+	if root == nil {
 		return
 	}
 	rh := d.rootHash()
@@ -320,8 +328,17 @@ func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
 		if _, ok := list[h]; !ok {
 			delete(d.Cache, k)
 			d.deleteRecursive(h)
+			root.removeChild(h)
 		}
 	}
+	// Clean up abandoned children.
+	for k := range root.Children {
+		h := dataUsageHash(k)
+		if _, ok := list[h]; !ok {
+			delete(root.Children, k)
+		}
+	}
+	d.Cache[rh.Key()] = *root
 }
 
 // dui converts the flattened version of the path to madmin.DataUsageInfo.
