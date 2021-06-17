@@ -24,13 +24,13 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.0
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.12.0
+	github.com/filedrive-team/go-graphsplit v0.4.1 // indirect
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
-	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.11
 	github.com/klauspost/compress v1.12.2
@@ -86,4 +86,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-replace google.golang.org/grpc => google.golang.org/grpc v1.29.1
+replace (
+	github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
+	google.golang.org/grpc => google.golang.org/grpc v1.29.1
+)

@@ -23,12 +23,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/filedrive-team/go-graphsplit"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -2481,4 +2484,87 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 	apiErr := toWebAPIError(ctx, err)
 	w.WriteHeader(apiErr.HTTPStatusCode)
 	w.Write([]byte(apiErr.Description))
+}
+
+type DealVo struct {
+	CarSliceSize int64
+	Start        uint
+	Duration     uint
+	Price        string
+}
+
+func (d *DealVo) setDefault() {
+	if d.CarSliceSize == 0 {
+		d.CarSliceSize = 1065353216 // 1GB = 1024 *1024 *1024 *254 /256
+	}
+	if d.Start == 0 {
+		d.Start = 7 // 1 week = 7 days
+	}
+	if d.Duration == 0 {
+		d.Duration = 365 // 1 year = 365 days
+	}
+	if len(d.Price) == 0 {
+		d.Price = "0"
+	}
+}
+
+// SendDeal - send deal to filecoin network.
+func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
+
+	decoder := json.NewDecoder(r.Body)
+	var dealVo DealVo
+	err := decoder.Decode(&dealVo)
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
+	dealVo.setDefault()
+
+	{
+		localPaths := globalEndpoints.LocalDisksPaths()
+		if len(localPaths) != 1 {
+			return
+		}
+
+		localPath := localPaths[0]
+		vars := mux.Vars(r)
+		bucket := vars["bucket"]
+		object, err := unescapePath(vars["object"])
+		if err != nil {
+			writeWebErrorResponse(w, err)
+			return
+		}
+
+		carBucketName := strings.ToLower(object)
+		reg, err := regexp.Compile("[^a-z0-9\\-\\.]+")
+		if err != nil {
+			return
+		}
+		carBucketName = reg.ReplaceAllString(carBucketName, "")
+
+		sourceFileParentPath := filepath.Join(localPath, bucket)
+		sourceFilePath := filepath.Join(localPath, bucket, object)
+
+		carBucketPath := filepath.Join(sourceFileParentPath, carBucketName)
+		if _, err := os.Stat(carBucketPath); os.IsNotExist(err) {
+			err := os.Mkdir(carBucketPath, 0775)
+			if err != nil {
+				return
+			}
+		}
+
+		sliceSize := dealVo.CarSliceSize
+		carDir := carBucketPath
+		parentPath := sourceFilePath
+		targetPath := sourceFilePath
+		graphName := object
+		parallel := 4
+
+		ctx := context.Background()
+		var cb graphsplit.GraphBuildCallback
+
+		cb = graphsplit.CommPCallback(carDir)
+
+		graphsplit.Chunk(ctx, sliceSize, parentPath, targetPath, carDir, graphName, parallel, cb)
+	}
 }
