@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -499,6 +500,21 @@ type auditObjectOp struct {
 	Disks []string `json:"disks"`
 }
 
+type auditObjectErasureMap struct {
+	sync.Map
+}
+
+// Define how to marshal auditObjectErasureMap so it can be
+// printed in the audit webhook notification request.
+func (a *auditObjectErasureMap) MarshalJSON() ([]byte, error) {
+	mapCopy := make(map[string]auditObjectOp)
+	a.Range(func(k, v interface{}) bool {
+		mapCopy[k.(string)] = v.(auditObjectOp)
+		return true
+	})
+	return json.Marshal(mapCopy)
+}
+
 func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjects) {
 	if len(logger.AuditTargets) == 0 {
 		return
@@ -512,20 +528,20 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 		Disks: set.getEndpoints(),
 	}
 
-	var objectErasureSetTag map[string]auditObjectOp
+	var objectErasureSetTag *auditObjectErasureMap
 	reqInfo := logger.GetReqInfo(ctx)
 	for _, kv := range reqInfo.GetTags() {
 		if kv.Key == objectErasureMapKey {
-			objectErasureSetTag = kv.Val.(map[string]auditObjectOp)
+			objectErasureSetTag = kv.Val.(*auditObjectErasureMap)
 			break
 		}
 	}
 
 	if objectErasureSetTag == nil {
-		objectErasureSetTag = make(map[string]auditObjectOp)
+		objectErasureSetTag = &auditObjectErasureMap{}
 	}
 
-	objectErasureSetTag[object] = op
+	objectErasureSetTag.Store(object, op)
 	reqInfo.SetTags(objectErasureMapKey, objectErasureSetTag)
 }
 
