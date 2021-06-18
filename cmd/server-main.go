@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -53,6 +54,10 @@ var ServerFlags = []cli.Flag{
 		Name:  "address",
 		Value: ":" + GlobalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+	},
+	cli.StringFlag{
+		Name:  "console-address",
+		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
 	},
 }
 
@@ -139,9 +144,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalMinioAddr = globalCLIContext.Addr
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
@@ -417,6 +419,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	return nil
 }
 
+type nullWriter struct{}
+
+func (lw nullWriter) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	defer globalDNSCache.Stop()
@@ -496,6 +504,8 @@ func serverMain(ctx *cli.Context) {
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
+	// Turn-off random logging by Go internally
+	httpServer.ErrorLog = log.New(&nullWriter{}, "", 0)
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -574,11 +584,25 @@ func serverMain(ctx *cli.Context) {
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately by setting 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment values", globalActiveCred)
-		logger.StartupMessage(color.RedBold(msg))
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables", globalActiveCred)
+		logStartupMessage(color.RedBold(msg))
 	}
 
-	<-globalOSSignalCh
+	if globalBrowserEnabled {
+		consoleSrv, err := initConsoleServer()
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize console service")
+		}
+
+		go func() {
+			<-globalOSSignalCh
+			consoleSrv.Shutdown()
+		}()
+
+		consoleSrv.Serve()
+	} else {
+		<-globalOSSignalCh
+	}
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

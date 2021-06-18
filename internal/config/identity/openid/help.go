@@ -31,6 +31,11 @@ var (
 			Key:         ClientID,
 			Description: `unique public identifier for apps e.g. "292085223830.apps.googleusercontent.com"`,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         ClientSecret,
+			Description: `secret for the unique public identifier for apps e.g.`,
+			Type:        "string",
 			Optional:    true,
 		},
 		config.HelpKV{

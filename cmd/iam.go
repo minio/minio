@@ -669,8 +669,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	go sys.store.watch(ctx, sys)
-
-	logger.Info("IAM initialization complete")
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.

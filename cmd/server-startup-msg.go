@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"crypto/x509"
 	"fmt"
 	"net"
 	"runtime"
@@ -27,19 +26,8 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	color "github.com/minio/minio/internal/color"
-	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
-)
-
-// Documentation links, these are part of message printing code.
-const (
-	mcQuickStartGuide     = "https://docs.min.io/docs/minio-client-quickstart-guide"
-	goQuickStartGuide     = "https://docs.min.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide     = "https://docs.min.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide   = "https://docs.min.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide     = "https://docs.min.io/docs/python-client-quickstart-guide"
-	dotnetQuickStartGuide = "https://docs.min.io/docs/dotnet-client-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.
@@ -84,12 +72,10 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// Prints documentation message.
 	printObjectAPIMsg()
 
-	// SSL is configured reads certification chain, prints
-	// authority and expiry.
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		if globalIsTLS {
-			printCertificateMsg(globalPublicCerts)
-		}
+	if globalMinioConsolePortAuto && globalBrowserEnabled {
+		msg := fmt.Sprintf("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
+			globalMinioConsolePort)
+		logStartupMessage(color.RedBold(msg))
 	}
 }
 
@@ -137,7 +123,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
+	logStartupMessage(color.Blue("API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
 		logStartupMessage(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
@@ -148,9 +134,18 @@ func printServerCommonMsg(apiEndpoints []string) {
 	printEventNotifiers()
 
 	if globalBrowserEnabled {
-		logStartupMessage(color.Blue("\nBrowser Access:"))
-		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
+		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints()), " ")
+		logStartupMessage(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
+		if color.IsTerminal() && !globalCLIContext.Anonymous {
+			logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+			logStartupMessage(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		}
 	}
+}
+
+// Prints startup message for Object API acces, prints link to our SDK documentation.
+func printObjectAPIMsg() {
+	logStartupMessage(color.Blue("\nDocumentation: ") + "https://docs.min.io")
 }
 
 // Prints bucket notification configurations.
@@ -178,9 +173,11 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	// Get saved credentials.
 	cred := globalActiveCred
 
+	const mcQuickStartGuide = "https://docs.min.io/docs/minio-client-quickstart-guide"
+
 	// Configure 'mc', following block prints platform specific information for minio client.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		logStartupMessage(color.Blue("\nCommand-line Access: ") + mcQuickStartGuide)
+		logStartupMessage(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
 			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
@@ -191,16 +188,6 @@ func printCLIAccessMsg(endPoint string, alias string) {
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		}
 	}
-}
-
-// Prints startup message for Object API acces, prints link to our SDK documentation.
-func printObjectAPIMsg() {
-	logStartupMessage(color.Blue("\nObject API (Amazon S3 compatible):"))
-	logStartupMessage(color.Blue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
-	logStartupMessage(color.Blue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
-	logStartupMessage(color.Blue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
-	logStartupMessage(color.Blue("   JavaScript: ") + jsQuickStartGuide)
-	logStartupMessage(color.Blue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
 }
 
 // Get formatted disk/storage info message.
@@ -237,11 +224,4 @@ func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 		humanize.IBytes(storageInfo.Free),
 		humanize.IBytes(storageInfo.Total))
 	logStartupMessage(msg)
-}
-
-// Prints the certificate expiry message.
-func printCertificateMsg(certs []*x509.Certificate) {
-	for _, cert := range certs {
-		logStartupMessage(config.CertificateText(cert))
-	}
 }
