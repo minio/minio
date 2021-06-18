@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -578,6 +579,34 @@ func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 
 	// Customize response header timeout for gateway transport.
 	tr.ResponseHeaderTimeout = timeout
+	return tr
+}
+
+// NewRemoteTargetHTTPTransport returns a new http configuration
+// used while communicating with the remote replication targets.
+func NewRemoteTargetHTTPTransport() *http.Transport {
+	// For more details about various values used here refer
+	// https://golang.org/pkg/net/http/#Transport documentation
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   15 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConnsPerHost:   1024,
+		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
+		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
+		IdleConnTimeout:       15 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 5 * time.Second,
+		TLSClientConfig: &tls.Config{
+			RootCAs: globalRootCAs,
+		},
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}
 	return tr
 }
 
