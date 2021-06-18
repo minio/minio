@@ -26,7 +26,7 @@ import (
 
 // Prints the formatted startup message.
 func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
-	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+	strippedAPIEndpoints := stripStandardPorts(apiEndPoints, globalMinioHost)
 	// If cache layer is enabled, print cache capacity.
 	cacheAPI := newCachedObjectLayerFn()
 	if cacheAPI != nil {
@@ -65,7 +65,7 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	printEventNotifiers()
 
 	if globalBrowserEnabled {
-		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints()), " ")
+		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logStartupMessage(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
 		if color.IsTerminal() && !globalCLIContext.Anonymous {
 			logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))

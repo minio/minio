@@ -161,7 +161,7 @@ func guessIsBrowserReq(r *http.Request) bool {
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) {
+		if guessIsBrowserReq(r) && globalBrowserRedirect {
 			// Fetch the redirect location if any.
 			u := getRedirectLocation(r)
 			if u != nil {

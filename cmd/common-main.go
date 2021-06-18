@@ -115,6 +115,9 @@ func minioConfigToConsoleFeatures() {
 	if value := os.Getenv("MINIO_LOG_QUERY_URL"); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
 	}
+	if value := os.Getenv("MINIO_LOG_QUERY_AUTH_TOKEN"); value != "" {
+		os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
+	}
 	// Enable if prometheus URL is set.
 	if value := os.Getenv("MINIO_PROMETHEUS_URL"); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
@@ -337,39 +340,42 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	// Fetch address option
-	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
-		globalCLIContext.Addr = ctx.String("address")
+	addr := ctx.GlobalString("address")
+	if addr == "" || addr == ":"+GlobalMinioDefaultPort {
+		addr = ctx.String("address")
 	}
 
 	// Fetch console address option
-	globalCLIContext.ConsoleAddr = ctx.GlobalString("console-address")
-	if globalCLIContext.ConsoleAddr == "" {
-		globalCLIContext.ConsoleAddr = ctx.String("console-address")
+	consoleAddr := ctx.GlobalString("console-address")
+	if consoleAddr == "" {
+		consoleAddr = ctx.String("console-address")
 	}
 
-	if globalCLIContext.ConsoleAddr == "" {
+	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
 			logger.FatalIf(err, "Unable to get free port for console on the host")
 		}
 		globalMinioConsolePortAuto = true
-		globalCLIContext.ConsoleAddr = net.JoinHostPort("", p.String())
+		consoleAddr = net.JoinHostPort("", p.String())
 	}
 
-	if globalCLIContext.ConsoleAddr == globalCLIContext.Addr {
+	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
+		logger.FatalIf(err, "Unable to start listening on console port")
+	}
+
+	if consoleAddr == addr {
 		logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
 	}
 
-	globalMinioAddr = globalCLIContext.Addr
-	globalMinioConsoleAddr = globalCLIContext.ConsoleAddr
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(globalMinioConsoleAddr)
+	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 
 	if globalMinioPort == globalMinioConsolePort {
 		logger.FatalIf(errors.New("--console-address port cannot be same as --address port"), "Unable to start the server")
 	}
+
+	globalMinioAddr = addr
 
 	// Check "no-compat" flag from command line argument.
 	globalCLIContext.StrictS3Compat = true
@@ -399,6 +405,11 @@ func handleCommonEnvVars() {
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+
+	globalBrowserRedirect, err = config.ParseBool(env.Get(config.EnvBrowserRedirect, config.EnableOn))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER_REDIRECT value in environment variable")
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
