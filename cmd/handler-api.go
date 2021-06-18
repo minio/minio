@@ -159,7 +159,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),
-				r.URL, guessIsBrowserReq(r))
+				r.URL)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():

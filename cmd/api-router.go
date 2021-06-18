@@ -80,7 +80,7 @@ func getHost(r *http.Request) string {
 }
 
 func notImplementedHandler(w http.ResponseWriter, r *http.Request) {
-	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 }
 
 type rejectedAPI struct {

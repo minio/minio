@@ -119,6 +119,7 @@ var globalCLIContext = struct {
 	JSON, Quiet    bool
 	Anonymous      bool
 	Addr           string
+	ConsoleAddr    string
 	StrictS3Compat bool
 }{}
 
@@ -145,11 +146,19 @@ var (
 	globalServerRegion = globalMinioDefaultRegion
 
 	// MinIO local server address (in `host:port` format)
-	globalMinioAddr = ""
+	globalMinioAddr        = ""
+	globalMinioConsoleAddr = ""
+
 	// MinIO default port, can be changed through command line.
-	globalMinioPort = GlobalMinioDefaultPort
+	globalMinioPort            = GlobalMinioDefaultPort
+	globalMinioConsolePort     = "13333"
+	globalMinioConsolePortAuto = false
+
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+	// Holds the host that was passed using --console-address
+	globalMinioConsoleHost = ""
+
 	// Holds the possible host endpoint.
 	globalMinioEndpoint = ""
 
@@ -304,16 +313,3 @@ var (
 )
 
 var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
-
-// Returns minio global information, as a key value map.
-// returned list of global values is not an exhaustive
-// list. Feel free to add new relevant fields.
-func getGlobalInfo() (globalInfo map[string]interface{}) {
-	globalInfo = map[string]interface{}{
-		"serverRegion": globalServerRegion,
-		"domains":      globalDomainNames,
-		// Add more relevant global settings here.
-	}
-
-	return globalInfo
-}

@@ -20,9 +20,9 @@ package config
 // UI errors
 var (
 	ErrInvalidBrowserValue = newErrFn(
-		"Invalid browser value",
+		"Invalid console value",
 		"Please check the passed value",
-		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
+		"Environment can only accept `on` and `off` values. To disable Console access, set this value to `off`",
 	)
 
 	ErrInvalidFSOSyncValue = newErrFn(
