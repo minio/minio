@@ -251,6 +251,12 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 	if err != nil {
 		return err
 	}
+	if len(buckets) == 0 {
+		totalCache.keepBuckets(buckets)
+		updates <- totalCache.dui(dataUsageRoot, buckets)
+		return nil
+	}
+
 	totalCache.Info.BloomFilter = bf.bytes()
 
 	// Clear totals.
