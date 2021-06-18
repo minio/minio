@@ -20,7 +20,6 @@ import (
 	"context"
 	"net/http"
 	"sync"
-	"time"
 
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -282,7 +281,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*m
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
 	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(1 * time.Hour)
+		getRemoteTargetInstanceTransport = NewRemoteTargetHTTPTransport()
 	})
 
 	core, err := miniogo.NewCore(tcfg.Endpoint, &miniogo.Options{
