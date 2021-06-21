@@ -118,8 +118,6 @@ const (
 var globalCLIContext = struct {
 	JSON, Quiet    bool
 	Anonymous      bool
-	Addr           string
-	ConsoleAddr    string
 	StrictS3Compat bool
 }{}
 
@@ -139,6 +137,9 @@ var (
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
 
+	// This flag is set to 'true' by default.
+	globalBrowserRedirect = true
+
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
@@ -146,8 +147,7 @@ var (
 	globalServerRegion = globalMinioDefaultRegion
 
 	// MinIO local server address (in `host:port` format)
-	globalMinioAddr        = ""
-	globalMinioConsoleAddr = ""
+	globalMinioAddr = ""
 
 	// MinIO default port, can be changed through command line.
 	globalMinioPort            = GlobalMinioDefaultPort

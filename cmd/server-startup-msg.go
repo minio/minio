@@ -49,7 +49,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 		logStartupMessage(color.RedBold("Please use 'mc admin' commands to further investigate this issue"))
 	}
 
-	strippedAPIEndpoints := stripStandardPorts(apiEndpoints)
+	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
 	// If cache layer is enabled, print cache capacity.
 	cachedObjAPI := newCachedObjectLayerFn()
 	if cachedObjAPI != nil {
@@ -95,7 +95,7 @@ func isNotIPv4(host string) bool {
 // strip api endpoints list with standard ports such as
 // port "80" and "443" before displaying on the startup
 // banner.  Returns a new list of API endpoints.
-func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
+func stripStandardPorts(apiEndpoints []string, host string) (newAPIEndpoints []string) {
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
@@ -103,7 +103,7 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 		if err != nil {
 			continue
 		}
-		if globalMinioHost == "" && isNotIPv4(u.Host) {
+		if host == "" && isNotIPv4(u.Host) {
 			// Skip all non-IPv4 endpoints when we bind to all interfaces.
 			continue
 		}
@@ -134,7 +134,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	printEventNotifiers()
 
 	if globalBrowserEnabled {
-		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints()), " ")
+		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logStartupMessage(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
 		if color.IsTerminal() && !globalCLIContext.Anonymous {
 			logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
