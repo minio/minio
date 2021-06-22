@@ -806,7 +806,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn, rwPoolUnlocker, nsUnlocker)
+	return objReaderFn(reader, h, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.
