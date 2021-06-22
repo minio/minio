@@ -1,0 +1,41 @@
+name: Go
+
+on:
+  pull_request:
+    branches:
+    - master
+
+jobs:
+  build:
+    name: MinIO tests on ${{ matrix.go-version }} and ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go-version: [1.16.x]
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Build on ${{ matrix.os }}
+        if: matrix.os == 'windows-latest'
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+        run: |
+          go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
+          go test -v --timeout 50m ./...
+      - name: Build on ${{ matrix.os }}
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          nancy_version=$(curl --retry 10 -Ls -o /dev/null -w "%{url_effective}" https://github.com/sonatype-nexus-community/nancy/releases/latest | sed "s/https:\/\/github.com\/sonatype-nexus-community\/nancy\/releases\/tag\///")
+          curl -L -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/${nancy_version}/nancy-${nancy_version}-linux-amd64 && chmod +x nancy
+          go list -m all | ./nancy sleuth
+          make
+          make test-race

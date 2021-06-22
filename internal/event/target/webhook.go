@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/certs"
+	xnet "github.com/minio/pkg/net"
 )
 
 // Webhook constants

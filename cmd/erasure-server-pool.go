@@ -234,6 +234,13 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	return serverPools
 }
 
+// poolObjInfo represents the state of an object per pool
+type poolObjInfo struct {
+	PoolIndex int
+	ObjInfo   ObjectInfo
+	Err       error
+}
+
 // getPoolIdxExisting returns the (first) found object pool index containing an object.
 // If the object exists, but the latest version is a delete marker, the index with it is still returned.
 // If the object does not exist ObjectNotFound error is returned.
@@ -244,35 +251,49 @@ func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, obj
 		return 0, nil
 	}
 
-	errs := make([]error, len(z.serverPools))
-	objInfos := make([]ObjectInfo, len(z.serverPools))
+	poolObjInfos := make([]poolObjInfo, len(z.serverPools))
 
 	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
 		wg.Add(1)
 		go func(i int, pool *erasureSets) {
 			defer wg.Done()
-			objInfos[i], errs[i] = pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+			// remember the pool index, we may sort the slice original index might be lost.
+			pinfo := poolObjInfo{
+				PoolIndex: i,
+			}
+			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+			poolObjInfos[i] = pinfo
 		}(i, pool)
 	}
 	wg.Wait()
 
-	for i, err := range errs {
-		if err != nil && !isErrObjectNotFound(err) {
-			return -1, err
+	// Sort the objInfos such that we always serve latest
+	// this is a defensive change to handle any duplicate
+	// content that may have been created, we always serve
+	// the latest object.
+	sort.Slice(poolObjInfos, func(i, j int) bool {
+		mtime1 := poolObjInfos[i].ObjInfo.ModTime
+		mtime2 := poolObjInfos[j].ObjInfo.ModTime
+		return mtime1.After(mtime2)
+	})
+
+	for _, pinfo := range poolObjInfos {
+		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
+			return -1, pinfo.Err
 		}
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(pinfo.Err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
-			if objInfos[i].DeleteMarker && objInfos[i].Name != "" {
-				return i, nil
+			if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
+				return pinfo.PoolIndex, nil
 			}
 
 			// objInfo is not valid, truly the object doesn't
 			// exist proceed to next pool.
 			continue
 		}
-		return i, nil
+		return pinfo.PoolIndex, nil
 	}
 
 	return -1, toObjectErr(errFileNotFound, bucket, object)
@@ -596,45 +617,86 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		unlockOnDefer = true
 	}
 
-	errs := make([]error, len(z.serverPools))
-	grs := make([]*GetObjectReader, len(z.serverPools))
-
 	lockType = noLock // do not take locks at lower levels
+	checkPrecondFn := opts.CheckPrecondFn
+	opts.CheckPrecondFn = nil
+	results := make([]struct {
+		zIdx int
+		gr   *GetObjectReader
+		err  error
+	}, len(z.serverPools))
+
 	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
 		wg.Add(1)
 		go func(i int, pool *erasureSets) {
 			defer wg.Done()
-			grs[i], errs[i] = pool.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			results[i].zIdx = i
+			results[i].gr, results[i].err = pool.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		}(i, pool)
 	}
 	wg.Wait()
 
+	// Sort the objInfos such that we always serve latest
+	// this is a defensive change to handle any duplicate
+	// content that may have been created, we always serve
+	// the latest object.
+	sort.Slice(results, func(i, j int) bool {
+		var mtimeI, mtimeJ time.Time
+
+		if results[i].gr != nil {
+			mtimeI = results[i].gr.ObjInfo.ModTime
+		}
+		if results[j].gr != nil {
+			mtimeJ = results[j].gr.ObjInfo.ModTime
+		}
+		// On tiebreaks, choose the earliest.
+		if mtimeI.Equal(mtimeJ) {
+			return results[i].zIdx < results[j].zIdx
+		}
+		return mtimeI.After(mtimeJ)
+	})
+
 	var found = -1
-	for i, err := range errs {
-		if err == nil {
+	for i, res := range results {
+		if res.err == nil {
+			// Select earliest result
 			found = i
 			break
 		}
-		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			for _, grr := range grs {
-				if grr != nil {
-					grr.Close()
-				}
+		if !isErrObjectNotFound(res.err) && !isErrVersionNotFound(res.err) {
+			for _, res := range results {
+				res.gr.Close()
 			}
-			return gr, err
+			return nil, res.err
 		}
 	}
 
-	if found >= 0 {
-		return grs[found], nil
+	if found < 0 {
+		object = decodeDirObject(object)
+		if opts.VersionID != "" {
+			return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+		}
+		return gr, ObjectNotFound{Bucket: bucket, Object: object}
 	}
 
-	object = decodeDirObject(object)
-	if opts.VersionID != "" {
-		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	// Check preconditions.
+	if checkPrecondFn != nil && checkPrecondFn(results[found].gr.ObjInfo) {
+		for _, res := range results {
+			res.gr.Close()
+		}
+		return nil, PreConditionFailed{}
 	}
-	return gr, ObjectNotFound{Bucket: bucket, Object: object}
+
+	// Close all others
+	for i, res := range results {
+		if i == found {
+			continue
+		}
+		res.gr.Close()
+	}
+
+	return results[found].gr, nil
 }
 
 func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
@@ -657,35 +719,46 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 	ctx = lkctx.Context()
 	defer lk.RUnlock(lkctx.Cancel)
 
-	errs := make([]error, len(z.serverPools))
-	objInfos := make([]ObjectInfo, len(z.serverPools))
-
+	results := make([]struct {
+		zIdx int
+		oi   ObjectInfo
+		err  error
+	}, len(z.serverPools))
 	opts.NoLock = true // avoid taking locks at lower levels for multi-pool setups.
 	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
 		wg.Add(1)
 		go func(i int, pool *erasureSets) {
 			defer wg.Done()
-			objInfos[i], errs[i] = pool.GetObjectInfo(ctx, bucket, object, opts)
+			results[i].zIdx = i
+			results[i].oi, results[i].err = pool.GetObjectInfo(ctx, bucket, object, opts)
 		}(i, pool)
 	}
 	wg.Wait()
 
-	var found = -1
-	for i, err := range errs {
+	// Sort the objInfos such that we always serve latest
+	// this is a defensive change to handle any duplicate
+	// content that may have been created, we always serve
+	// the latest object.
+	sort.Slice(results, func(i, j int) bool {
+		a, b := results[i], results[j]
+		if a.oi.ModTime.Equal(b.oi.ModTime) {
+			// On tiebreak, select the lowest zone index.
+			return a.zIdx < b.zIdx
+		}
+		return a.oi.ModTime.After(b.oi.ModTime)
+	})
+	for _, res := range results {
+		// Return first found.
+		err := res.err
 		if err == nil {
-			found = i
-			break
+			return res.oi, nil
 		}
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			// some errors such as MethodNotAllowed for delete marker
 			// should be returned upwards.
-			return objInfos[i], err
+			return res.oi, err
 		}
-	}
-
-	if found >= 0 {
-		return objInfos[found], nil
 	}
 
 	object = decodeDirObject(object)
@@ -710,6 +783,16 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
+	if !opts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		opts.NoLock = true
+	}
 
 	idx, err := z.getPoolIdx(ctx, bucket, object, data.Size())
 	if err != nil {
@@ -720,9 +803,24 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	return z.serverPools[idx].PutObject(ctx, bucket, object, data, opts)
 }
 
+func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
+	for _, zone := range z.serverPools {
+		_, err := zone.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
+	}
+
+	if opts.DeletePrefix {
+		err := z.deletePrefix(ctx, bucket, object)
+		return ObjectInfo{}, err
 	}
 
 	object = encodeDirObject(object)
@@ -805,6 +903,17 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 	dstObject = encodeDirObject(dstObject)
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+
+	if !dstOpts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(dstBucket, dstObject, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		dstOpts.NoLock = true
+	}
 
 	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, srcInfo.Size)
 	if err != nil {

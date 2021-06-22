@@ -31,8 +31,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -1702,6 +1702,10 @@ var (
 			Value: "0",
 		},
 		config.KV{
+			Key:   target.AmqpPublisherConfirms,
+			Value: config.EnableOff,
+		},
+		config.KV{
 			Key:   target.AmqpQueueLimit,
 			Value: "0",
 		},
@@ -1779,6 +1783,10 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		if k != config.Default {
 			autoDeletedEnv = autoDeletedEnv + config.Default + k
 		}
+		publisherConfirmsEnv := target.EnvAMQPPublisherConfirms
+		if k != config.Default {
+			publisherConfirmsEnv = publisherConfirmsEnv + config.Default + k
+		}
 		queueDirEnv := target.EnvAMQPQueueDir
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
@@ -1792,20 +1800,21 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 			return nil, err
 		}
 		amqpArgs := target.AMQPArgs{
-			Enable:       enabled,
-			URL:          *url,
-			Exchange:     env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
-			RoutingKey:   env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
-			ExchangeType: env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),
-			DeliveryMode: uint8(deliveryMode),
-			Mandatory:    env.Get(mandatoryEnv, kv.Get(target.AmqpMandatory)) == config.EnableOn,
-			Immediate:    env.Get(immediateEnv, kv.Get(target.AmqpImmediate)) == config.EnableOn,
-			Durable:      env.Get(durableEnv, kv.Get(target.AmqpDurable)) == config.EnableOn,
-			Internal:     env.Get(internalEnv, kv.Get(target.AmqpInternal)) == config.EnableOn,
-			NoWait:       env.Get(noWaitEnv, kv.Get(target.AmqpNoWait)) == config.EnableOn,
-			AutoDeleted:  env.Get(autoDeletedEnv, kv.Get(target.AmqpAutoDeleted)) == config.EnableOn,
-			QueueDir:     env.Get(queueDirEnv, kv.Get(target.AmqpQueueDir)),
-			QueueLimit:   queueLimit,
+			Enable:            enabled,
+			URL:               *url,
+			Exchange:          env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
+			RoutingKey:        env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
+			ExchangeType:      env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),
+			DeliveryMode:      uint8(deliveryMode),
+			Mandatory:         env.Get(mandatoryEnv, kv.Get(target.AmqpMandatory)) == config.EnableOn,
+			Immediate:         env.Get(immediateEnv, kv.Get(target.AmqpImmediate)) == config.EnableOn,
+			Durable:           env.Get(durableEnv, kv.Get(target.AmqpDurable)) == config.EnableOn,
+			Internal:          env.Get(internalEnv, kv.Get(target.AmqpInternal)) == config.EnableOn,
+			NoWait:            env.Get(noWaitEnv, kv.Get(target.AmqpNoWait)) == config.EnableOn,
+			AutoDeleted:       env.Get(autoDeletedEnv, kv.Get(target.AmqpAutoDeleted)) == config.EnableOn,
+			PublisherConfirms: env.Get(publisherConfirmsEnv, kv.Get(target.AmqpPublisherConfirms)) == config.EnableOn,
+			QueueDir:          env.Get(queueDirEnv, kv.Get(target.AmqpQueueDir)),
+			QueueLimit:        queueLimit,
 		}
 		if err = amqpArgs.Validate(); err != nil {
 			return nil, err

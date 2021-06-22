@@ -186,9 +186,16 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessKey := cred.AccessKey
-	if cred.ParentUser != "" {
-		accessKey = cred.ParentUser
+	accessKey := cred.ParentUser
+	if accessKey == "" {
+		accessKey = cred.AccessKey
+	}
+
+	// For temporary credentials always
+	// the temporary credentials to check
+	// policy without implicit permissions.
+	if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
+		accessKey = cred.AccessKey
 	}
 
 	implicitPerm := name == accessKey
@@ -432,6 +439,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if !implicitPerm {
 		parentUser := cred.ParentUser
 		if parentUser == "" {
+			parentUser = cred.AccessKey
+		}
+		// For temporary credentials always
+		// the temporary credentials to check
+		// policy without implicit permissions.
+		if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
 			parentUser = cred.AccessKey
 		}
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
@@ -1017,7 +1030,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
 			dns.ErrDomainMissing) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 		for _, dnsRecords := range dnsBuckets {

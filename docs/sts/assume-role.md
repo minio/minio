@@ -1,22 +1,5 @@
 # AssumeRole [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-**Table of Contents**
-
-- [Introduction](#introduction)
-- [API Request Parameters](#api-request-parameters)
-    - [Version](#version)
-    - [AUTHPARAMS](#authparams)
-    - [DurationSeconds](#durationseconds)
-    - [Policy](#policy)
-    - [Response Elements](#response-elements)
-    - [Errors](#errors)
-- [Sample `POST` Request](#sample-post-request)
-- [Sample Response](#sample-response)
-- [Using AssumeRole API](#using-assumerole-api)
-- [Explore Further](#explore-further)
-
-<!-- markdown-toc end -->
-
 ## Introduction
 
 Returns a set of temporary security credentials that you can use to access MinIO resources. AssumeRole requires authorization credentials for an existing user on MinIO. The advantages of this API are

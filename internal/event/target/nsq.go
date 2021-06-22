@@ -29,7 +29,7 @@ import (
 	"github.com/nsqio/go-nsq"
 
 	"github.com/minio/minio/internal/event"
-	xnet "github.com/minio/minio/internal/net"
+	xnet "github.com/minio/pkg/net"
 )
 
 // NSQ constants

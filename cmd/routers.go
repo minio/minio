@@ -51,8 +51,6 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setAuthHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
-	// Adds cache control for all browser requests.
-	setBrowserCacheControlHandler,
 	// Validates if incoming request is for restricted buckets.
 	setReservedBucketHandler,
 	// Redirect some pre-defined browser request paths to a static location prefix.
@@ -89,13 +87,6 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Initialize distributed NS lock.
 	if globalIsDistErasure {
 		registerDistErasureRouters(router, endpointServerPools)
-	}
-
-	// Register web router when its enabled.
-	if globalBrowserEnabled {
-		if err := registerWebRouter(router); err != nil {
-			return nil, err
-		}
 	}
 
 	// Add Admin router, all APIs are enabled in server mode.

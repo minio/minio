@@ -141,6 +141,12 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         target.AmqpPublisherConfirms,
+			Description: "enable consumer acknowlegement and publisher confirms, use this along with queue_dir for guaranteed delivery of all events",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
 			Key:         target.AmqpQueueDir,
 			Description: queueDirComment,
 			Optional:    true,

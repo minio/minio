@@ -25,12 +25,11 @@ require (
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.12.0
 	github.com/go-ldap/ldap/v3 v3.2.4
+	github.com/go-openapi/loads v0.20.2
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.2
-	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
-	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.11
 	github.com/klauspost/compress v1.12.2
@@ -41,13 +40,14 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
+	github.com/minio/console v0.7.5-0.20210618230329-b10c4f51b1ef
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.0.11
-	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
+	github.com/minio/madmin-go v1.0.12
+	github.com/minio/minio-go/v7 v7.0.11-0.20210517200026-f0518ca447d6
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.0.4
+	github.com/minio/pkg v1.0.7
 	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
@@ -55,10 +55,11 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/minio/zipindex v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/montanaflynn/stats v0.5.0
+	github.com/montanaflynn/stats v0.6.6
 	github.com/nats-io/nats-server/v2 v2.1.9
 	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
 	github.com/nats-io/nats.go v1.10.0
+	github.com/nats-io/nkeys v0.2.0 // indirect
 	github.com/nats-io/stan.go v0.8.3
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8

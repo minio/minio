@@ -32,16 +32,22 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
+	fcolor "github.com/fatih/color"
+	"github.com/go-openapi/loads"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
+	consoleCerts "github.com/minio/console/pkg/certs"
+	"github.com/minio/console/restapi"
+	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -51,6 +57,7 @@ import (
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 // serverDebugLog will enable debug printing
@@ -62,10 +69,6 @@ func init() {
 
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
-
-	// Inject into config package.
-	config.Logger.Info = logger.Info
-	config.Logger.LogIf = logger.LogIf
 
 	if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsKubernetesReplicaSet() || IsPCFTile() {
 		// 30 seconds matches the orchestrator DNS TTLs, have
@@ -90,7 +93,7 @@ func init() {
 
 	globalTransitionState = newTransitionState()
 
-	console.SetColor("Debug", color.New())
+	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
 
@@ -101,6 +104,118 @@ func init() {
 			},
 		},
 	}
+}
+
+const consolePrefix = "CONSOLE_"
+
+func minioConfigToConsoleFeatures() {
+	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", restapi.RandomCharString(16))
+	os.Setenv("CONSOLE_PBKDF_SALT", restapi.RandomCharString(8))
+	os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
+	if value := os.Getenv("MINIO_LOG_QUERY_URL"); value != "" {
+		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
+	}
+	if value := os.Getenv("MINIO_LOG_QUERY_AUTH_TOKEN"); value != "" {
+		os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
+	}
+	// Enable if prometheus URL is set.
+	if value := os.Getenv("MINIO_PROMETHEUS_URL"); value != "" {
+		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
+	}
+	// Enable if LDAP is enabled.
+	if globalLDAPConfig.Enabled {
+		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
+	}
+	// if IDP is enabled, set IDP environment variables
+	if globalOpenIDConfig.URL != nil {
+		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.DiscoveryDoc.Issuer)
+		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
+		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ClientID)
+		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ClientSecret)
+	}
+	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
+	os.Setenv("CONSOLE_CERT_PASSWD", os.Getenv("MINIO_CERT_PASSWD"))
+	os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
+}
+
+func initConsoleServer() (*restapi.Server, error) {
+	// unset all console_ environment variables.
+	for _, cenv := range env.List(consolePrefix) {
+		os.Unsetenv(cenv)
+	}
+
+	// enable all console environment variables
+	minioConfigToConsoleFeatures()
+
+	// set certs dir to minio directory
+	consoleCerts.GlobalCertsDir = &consoleCerts.ConfigDir{
+		Path: globalCertsDir.Get(),
+	}
+	consoleCerts.GlobalCertsCADir = &consoleCerts.ConfigDir{
+		Path: globalCertsCADir.Get(),
+	}
+
+	swaggerSpec, err := loads.Embedded(restapi.SwaggerJSON, restapi.FlatSwaggerJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize MinIO loggers
+	restapi.LogInfo = logger.Info
+	restapi.LogError = logger.Error
+
+	api := operations.NewConsoleAPI(swaggerSpec)
+	api.Logger = func(_ string, _ ...interface{}) {
+		// nothing to log.
+	}
+
+	server := restapi.NewServer(api)
+	// register all APIs
+	server.ConfigureAPI()
+
+	restapi.GlobalRootCAs, restapi.GlobalPublicCerts, restapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
+
+	consolePort, _ := strconv.Atoi(globalMinioConsolePort)
+
+	server.Host = globalMinioConsoleHost
+	server.Port = consolePort
+	restapi.Port = globalMinioConsolePort
+	restapi.Hostname = globalMinioConsoleHost
+
+	if globalIsTLS {
+		// If TLS certificates are provided enforce the HTTPS.
+		server.EnabledListeners = []string{"https"}
+		server.TLSPort = consolePort
+		// Need to store tls-port, tls-host un config variables so secure.middleware can read from there
+		restapi.TLSPort = globalMinioConsolePort
+		restapi.Hostname = globalMinioConsoleHost
+	}
+
+	// subnet license refresh process
+	go func() {
+		// start refreshing subnet license after 5 seconds..
+		time.Sleep(time.Second * 5)
+
+		failedAttempts := 0
+		for {
+			if err := restapi.RefreshLicense(); err != nil {
+				failedAttempts++
+				// end license refresh after 3 consecutive failed attempts
+				if failedAttempts >= 3 {
+					return
+				}
+				// wait 5 minutes and retry again
+				time.Sleep(time.Minute * 5)
+				continue
+			}
+			// if license refreshed successfully reset the counter
+			failedAttempts = 0
+			// try to refresh license every 24 hrs
+			time.Sleep(time.Hour * 24)
+		}
+	}()
+
+	return server, nil
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -225,10 +340,42 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	// Fetch address option
-	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
-		globalCLIContext.Addr = ctx.String("address")
+	addr := ctx.GlobalString("address")
+	if addr == "" || addr == ":"+GlobalMinioDefaultPort {
+		addr = ctx.String("address")
 	}
+
+	// Fetch console address option
+	consoleAddr := ctx.GlobalString("console-address")
+	if consoleAddr == "" {
+		consoleAddr = ctx.String("console-address")
+	}
+
+	if consoleAddr == "" {
+		p, err := xnet.GetFreePort()
+		if err != nil {
+			logger.FatalIf(err, "Unable to get free port for console on the host")
+		}
+		globalMinioConsolePortAuto = true
+		consoleAddr = net.JoinHostPort("", p.String())
+	}
+
+	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
+		logger.FatalIf(err, "Unable to start listening on console port")
+	}
+
+	if consoleAddr == addr {
+		logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
+	}
+
+	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
+
+	if globalMinioPort == globalMinioConsolePort {
+		logger.FatalIf(errors.New("--console-address port cannot be same as --address port"), "Unable to start the server")
+	}
+
+	globalMinioAddr = addr
 
 	// Check "no-compat" flag from command line argument.
 	globalCLIContext.StrictS3Compat = true
@@ -258,6 +405,11 @@ func handleCommonEnvVars() {
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+
+	globalBrowserRedirect, err = config.ParseBool(env.Get(config.EnvBrowserRedirect, config.EnableOn))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER_REDIRECT value in environment variable")
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
@@ -317,20 +469,50 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
+	// Check if the supported credential env vars, "MINIO_ROOT_USER" and
+	// "MINIO_ROOT_PASSWORD" are provided
+	// Warn user if deprecated environment variables,
+	// "MINIO_ACCESS_KEY" and "MINIO_SECRET_KEY", are defined
+	// Check all error conditions first
+	if !env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "Unable to start MinIO")
+	} else if env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootPassword(nil), "Unable to start MinIO")
+	} else if !env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		if !env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialAccessKey(nil), "Unable to start MinIO")
+		} else if env.IsSet(config.EnvAccessKey) && !env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialSecretKey(nil), "Unable to start MinIO")
+		}
+	}
+
+	// At this point, either both environment variables
+	// are defined or both are not defined.
+	// Check both cases and authenticate them if correctly defined
+	var user, password string
+	haveRootCredentials := false
+	haveAccessCredentials := false
+	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		user = env.Get(config.EnvRootUser, "")
+		password = env.Get(config.EnvRootPassword, "")
+		haveRootCredentials = true
+	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+		user = env.Get(config.EnvAccessKey, "")
+		password = env.Get(config.EnvSecretKey, "")
+		haveAccessCredentials = true
+	}
+	if haveRootCredentials || haveAccessCredentials {
+		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")
 		}
-		globalActiveCred = cred
-	}
-
-	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
+		if haveAccessCredentials {
+			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
+				"         Please use %s and %s",
+				config.EnvAccessKey, config.EnvSecretKey,
+				config.EnvRootUser, config.EnvRootPassword)
+			logStartupMessage(color.RedBold(msg))
 		}
 		globalActiveCred = cred
 	}

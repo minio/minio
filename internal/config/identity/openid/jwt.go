@@ -32,9 +32,9 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	xnet "github.com/minio/minio/internal/net"
 	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	xnet "github.com/minio/pkg/net"
 )
 
 // Config - OpenID Config
@@ -48,6 +48,7 @@ type Config struct {
 	ClaimName    string    `json:"claimName,omitempty"`
 	DiscoveryDoc DiscoveryDoc
 	ClientID     string
+	ClientSecret string
 	publicKeys   map[string]crypto.PublicKey
 	transport    *http.Transport
 	closeRespFn  func(io.ReadCloser)
@@ -220,19 +221,21 @@ func (p *JWT) ID() ID {
 
 // OpenID keys and envs.
 const (
-	JwksURL     = "jwks_url"
-	ConfigURL   = "config_url"
-	ClaimName   = "claim_name"
-	ClaimPrefix = "claim_prefix"
-	ClientID    = "client_id"
-	Scopes      = "scopes"
+	JwksURL      = "jwks_url"
+	ConfigURL    = "config_url"
+	ClaimName    = "claim_name"
+	ClaimPrefix  = "claim_prefix"
+	ClientID     = "client_id"
+	ClientSecret = "client_secret"
+	Scopes       = "scopes"
 
-	EnvIdentityOpenIDClientID    = "MINIO_IDENTITY_OPENID_CLIENT_ID"
-	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
-	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
-	EnvIdentityOpenIDClaimName   = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
-	EnvIdentityOpenIDClaimPrefix = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
-	EnvIdentityOpenIDScopes      = "MINIO_IDENTITY_OPENID_SCOPES"
+	EnvIdentityOpenIDClientID     = "MINIO_IDENTITY_OPENID_CLIENT_ID"
+	EnvIdentityOpenIDClientSecret = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
+	EnvIdentityOpenIDJWKSURL      = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenIDURL          = "MINIO_IDENTITY_OPENID_CONFIG_URL"
+	EnvIdentityOpenIDClaimName    = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
+	EnvIdentityOpenIDClaimPrefix  = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDScopes       = "MINIO_IDENTITY_OPENID_SCOPES"
 )
 
 // DiscoveryDoc - parses the output from openid-configuration
@@ -290,6 +293,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   ClientSecret,
+			Value: "",
+		},
+		config.KV{
 			Key:   ClaimName,
 			Value: iampolicy.PolicyName,
 		},
@@ -325,13 +332,14 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	}
 
 	c = Config{
-		ClaimName:   env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
-		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
-		publicKeys:  make(map[string]crypto.PublicKey),
-		ClientID:    env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
-		transport:   transport,
-		closeRespFn: closeRespFn,
-		mutex:       &sync.Mutex{}, // allocate for copying
+		ClaimName:    env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
+		ClaimPrefix:  env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
+		publicKeys:   make(map[string]crypto.PublicKey),
+		ClientID:     env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
+		ClientSecret: env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
+		transport:    transport,
+		closeRespFn:  closeRespFn,
+		mutex:        &sync.Mutex{}, // allocate for copying
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))

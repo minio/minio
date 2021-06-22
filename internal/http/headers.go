@@ -141,7 +141,7 @@ const (
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
 
-	// Delete special flag to force delete a bucket
+	// Delete special flag to force delete a bucket or a prefix
 	MinIOForceDelete = "x-minio-force-delete"
 
 	// Header indicates if the mtime should be preserved by client

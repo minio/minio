@@ -233,6 +233,16 @@ func newLocalXLStorage(path string) (*xlStorage, error) {
 	})
 }
 
+// Sanitize - sanitizes the `format.json`, cleanup tmp.
+// all other future cleanups should be added here.
+func (s *xlStorage) Sanitize() error {
+	if err := formatErasureMigrate(s.diskPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	return formatErasureCleanupTmp(s.diskPath)
+}
+
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	path := ep.Path
@@ -301,14 +311,6 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	}
 	w.Close()
 	Remove(filePath)
-
-	if err := formatErasureMigrate(p.diskPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return p, err
-	}
-
-	if err := formatErasureCleanupTmp(p.diskPath); err != nil {
-		return p, err
-	}
 
 	// Success.
 	return p, nil
@@ -393,7 +395,7 @@ func (s *xlStorage) Healing() *healingTracker {
 }
 
 func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
-	f, err := os.OpenFile(itemPath, readMode, 0)
+	f, err := OpenFile(itemPath, readMode, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +758,7 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 	}
 
 	if forceDelete {
-		err = RemoveAll(volumeDir)
+		err = renameAll(volumeDir, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 	} else {
 		err = Remove(volumeDir)
 	}
