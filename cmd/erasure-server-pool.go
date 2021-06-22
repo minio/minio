@@ -618,8 +618,6 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 
 	lockType = noLock // do not take locks at lower levels
-	checkPrecondFn := opts.CheckPrecondFn
-	opts.CheckPrecondFn = nil
 	results := make([]struct {
 		zIdx int
 		gr   *GetObjectReader
@@ -678,14 +676,6 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 			return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 		}
 		return gr, ObjectNotFound{Bucket: bucket, Object: object}
-	}
-
-	// Check preconditions.
-	if checkPrecondFn != nil && checkPrecondFn(results[found].gr.ObjInfo) {
-		for _, res := range results {
-			res.gr.Close()
-		}
-		return nil, PreConditionFailed{}
 	}
 
 	// Close all others
