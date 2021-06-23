@@ -415,21 +415,19 @@ func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 
 	var args dsync.LockArgs
-	lockersMap := make(map[string]dsync.NetLocker)
+	var lockers []dsync.NetLocker
 	for _, path := range strings.Split(vars["paths"], ",") {
 		if path == "" {
 			continue
 		}
 		args.Resources = append(args.Resources, path)
-		lockers, _ := z.serverPools[0].getHashedSet(path).getLockers()
-		for _, locker := range lockers {
-			if locker != nil {
-				lockersMap[locker.String()] = locker
-			}
-		}
 	}
 
-	for _, locker := range lockersMap {
+	for _, lks := range z.serverPools[0].erasureLockers {
+		lockers = append(lockers, lks...)
+	}
+
+	for _, locker := range lockers {
 		locker.ForceUnlock(ctx, args)
 	}
 }

@@ -123,7 +123,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(globalMinioAddr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
@@ -144,7 +144,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
@@ -595,11 +595,11 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		go func() {
-			<-globalOSSignalCh
-			consoleSrv.Shutdown()
+			logger.FatalIf(consoleSrv.Serve(), "Unable to initialize console server")
 		}()
 
-		consoleSrv.Serve()
+		<-globalOSSignalCh
+		consoleSrv.Shutdown()
 	} else {
 		<-globalOSSignalCh
 	}

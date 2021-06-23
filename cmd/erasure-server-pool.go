@@ -783,6 +783,16 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
+	if !opts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		opts.NoLock = true
+	}
 
 	idx, err := z.getPoolIdx(ctx, bucket, object, data.Size())
 	if err != nil {
@@ -893,6 +903,17 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 	dstObject = encodeDirObject(dstObject)
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+
+	if !dstOpts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(dstBucket, dstObject, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		dstOpts.NoLock = true
+	}
 
 	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, srcInfo.Size)
 	if err != nil {
