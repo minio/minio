@@ -67,7 +67,7 @@ function start_minio_3_node() {
 
 
 function check_online() {
-    if grep -q 'Server switching to safe mode' ${WORK_DIR}/dist-minio-*.log; then
+    if grep -q 'Unable to initialize sub-systems' ${WORK_DIR}/dist-minio-*.log; then
         echo "1"
     fi
 }

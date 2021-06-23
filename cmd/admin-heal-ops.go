@@ -819,16 +819,6 @@ func (h *healSequence) healFromSourceCh() {
 }
 
 func (h *healSequence) healDiskMeta(objAPI ObjectLayer) error {
-	// Try to pro-actively heal backend-encrypted file.
-	if err := h.queueHealTask(healSource{
-		bucket: minioMetaBucket,
-		object: backendEncryptedFile,
-	}, madmin.HealItemBucketMetadata); err != nil {
-		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			return err
-		}
-	}
-
 	// Start healing the config prefix.
 	return h.healMinioSysMeta(objAPI, minioConfigPrefix)()
 }
