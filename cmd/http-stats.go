@@ -138,15 +138,15 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
+	rejectedRequestsAuth    uint64
+	rejectedRequestsTime    uint64
+	rejectedRequestsHeader  uint64
+	rejectedRequestsInvalid uint64
 	s3RequestsInQueue       int32
 	currentS3Requests       HTTPAPIStats
 	totalS3Requests         HTTPAPIStats
 	totalS3Errors           HTTPAPIStats
 	totalS3Canceled         HTTPAPIStats
-	rejectedRequestsAuth    uint64
-	rejectedRequestsTime    uint64
-	rejectedRequestsHeader  uint64
-	rejectedRequestsInvalid uint64
 }
 
 func (st *HTTPStats) addRequestsInQueue(i int32) {
