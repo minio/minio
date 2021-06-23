@@ -183,5 +183,5 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 	if encrypted && GlobalKMS != nil {
 		logger.Info("Migration of encrypted config data completed. All config data is now encrypted.")
 	}
-	return deleteConfig(GlobalContext, globalObjectAPI, backendEncryptedFile)
+	return deleteConfig(GlobalContext, objAPI, backendEncryptedFile)
 }
