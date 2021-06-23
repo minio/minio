@@ -112,7 +112,7 @@ func getIAMFormatFilePath() string {
 func getUserIdentityPath(user string, userType IAMUserType) string {
 	var basePath string
 	switch userType {
-	case srvAccUser:
+	case svcUser:
 		basePath = iamConfigServiceAccountsPrefix
 	case stsUser:
 		basePath = iamConfigSTSPrefix
@@ -135,7 +135,7 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 		return pathJoin(iamConfigPolicyDBGroupsPrefix, name+".json")
 	}
 	switch userType {
-	case srvAccUser:
+	case svcUser:
 		return pathJoin(iamConfigPolicyDBServiceAccountsPrefix, name+".json")
 	case stsUser:
 		return pathJoin(iamConfigPolicyDBSTSUsersPrefix, name+".json")
@@ -230,9 +230,9 @@ type IAMSys struct {
 type IAMUserType int
 
 const (
-	regularUser IAMUserType = iota
+	regUser IAMUserType = iota
 	stsUser
-	srvAccUser
+	svcUser
 )
 
 // key options
@@ -355,7 +355,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 
 	if globalEtcdClient == nil {
 		var err error
-		userType := regularUser
+		userType := regUser
 		if sys.usersSysType == LDAPUsersSysType {
 			userType = stsUser
 		}
@@ -432,7 +432,7 @@ func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
 	defer sys.store.unlock()
 
 	if globalEtcdClient == nil {
-		err := sys.store.loadUser(context.Background(), accessKey, srvAccUser, sys.iamUsersMap)
+		err := sys.store.loadUser(context.Background(), accessKey, svcUser, sys.iamUsersMap)
 		if err != nil {
 			return err
 		}
@@ -492,7 +492,7 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	setDefaultCannedPolicies(iamPolicyDocsMap)
 
 	if isMinIOUsersSys {
-		if err := store.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
+		if err := store.loadUsers(ctx, regUser, iamUsersMap); err != nil {
 			return err
 		}
 		if err := store.loadGroups(ctx, iamGroupsMap); err != nil {
@@ -501,16 +501,16 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	}
 
 	// load polices mapped to users
-	if err := store.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
+	if err := store.loadMappedPolicies(ctx, regUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
 
 	// load policies mapped to groups
-	if err := store.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
+	if err := store.loadMappedPolicies(ctx, regUser, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
-	if err := store.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
+	if err := store.loadUsers(ctx, svcUser, iamUsersMap); err != nil {
 		return err
 	}
 
@@ -545,33 +545,11 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	}
 
 	// purge any expired entries which became expired now.
-	var expiredEntries []string
 	for k, v := range sys.iamUsersMap {
 		if v.IsExpired() {
 			delete(sys.iamUsersMap, k)
 			delete(sys.iamUserPolicyMap, k)
-			expiredEntries = append(expiredEntries, k)
-			// Deleting on the disk is taken care of in the next cycle
-		}
-	}
-
-	for _, v := range sys.iamUsersMap {
-		if v.IsServiceAccount() {
-			for _, accessKey := range expiredEntries {
-				if v.ParentUser == accessKey {
-					_ = store.deleteUserIdentity(ctx, v.AccessKey, srvAccUser)
-					delete(sys.iamUsersMap, v.AccessKey)
-				}
-			}
-		}
-	}
-
-	// purge any expired entries which became expired now.
-	for k, v := range sys.iamUsersMap {
-		if v.IsExpired() {
-			delete(sys.iamUsersMap, k)
-			delete(sys.iamUserPolicyMap, k)
-			// Deleting on the etcd is taken care of in the next cycle
+			// deleting will be done in the next cycle.
 		}
 	}
 
@@ -668,6 +646,16 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		break
 	}
 
+	if globalOpenIDConfig.ProviderEnabled() {
+		go func() {
+			// Purge expired credentials
+			for {
+				time.Sleep(globalRefreshIAMInterval)
+				sys.purgeExpiredCredentialsForExternalSSO(ctx)
+			}
+		}()
+	}
+
 	go sys.store.watch(ctx, sys)
 }
 
@@ -708,7 +696,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 			if cr.IsTemp() {
 				sys.policyDBSet(u, strings.Join(pset.ToSlice(), ","), stsUser, false)
 			} else {
-				sys.policyDBSet(u, strings.Join(pset.ToSlice(), ","), regularUser, false)
+				sys.policyDBSet(u, strings.Join(pset.ToSlice(), ","), regUser, false)
 			}
 		}
 	}
@@ -718,7 +706,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 		pset := mp.policySet()
 		if pset.Contains(policyName) {
 			pset.Remove(policyName)
-			sys.policyDBSet(g, strings.Join(pset.ToSlice(), ","), regularUser, true)
+			sys.policyDBSet(g, strings.Join(pset.ToSlice(), ","), regUser, true)
 		}
 	}
 
@@ -823,7 +811,7 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		// Delete any service accounts if any first.
 		if u.IsServiceAccount() {
 			if u.ParentUser == accessKey {
-				_ = sys.store.deleteUserIdentity(context.Background(), u.AccessKey, srvAccUser)
+				_ = sys.store.deleteUserIdentity(context.Background(), u.AccessKey, svcUser)
 				delete(sys.iamUsersMap, u.AccessKey)
 			}
 		}
@@ -837,8 +825,8 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
-	sys.store.deleteMappedPolicy(context.Background(), accessKey, regularUser, false)
-	err := sys.store.deleteUserIdentity(context.Background(), accessKey, regularUser)
+	sys.store.deleteMappedPolicy(context.Background(), accessKey, regUser, false)
+	err := sys.store.deleteUserIdentity(context.Background(), accessKey, regUser)
 	if err == errNoSuchUser {
 		// ignore if user is already deleted.
 		err = nil
@@ -1153,7 +1141,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		}(),
 	})
 
-	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regularUser, uinfo); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regUser, uinfo); err != nil {
 		return err
 	}
 
@@ -1240,7 +1228,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 	u := newUserIdentity(cred)
 
-	if err := sys.store.saveUserIdentity(context.Background(), u.Credentials.AccessKey, srvAccUser, u); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), u.Credentials.AccessKey, svcUser, u); err != nil {
 		return auth.Credentials{}, err
 	}
 
@@ -1310,7 +1298,7 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 	}
 
 	u := newUserIdentity(cr)
-	if err := sys.store.saveUserIdentity(context.Background(), u.Credentials.AccessKey, srvAccUser, u); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), u.Credentials.AccessKey, svcUser, u); err != nil {
 		return err
 	}
 
@@ -1397,7 +1385,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
-	err := sys.store.deleteUserIdentity(context.Background(), accessKey, srvAccUser)
+	err := sys.store.deleteUserIdentity(context.Background(), accessKey, svcUser)
 	if err != nil {
 		// ignore if user is already deleted.
 		if err == errNoSuchUser {
@@ -1448,7 +1436,7 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 		}(),
 	})
 
-	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regularUser, u); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regUser, u); err != nil {
 		return err
 	}
 
@@ -1456,7 +1444,7 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 
 	// Set policy if specified.
 	if uinfo.PolicyName != "" {
-		return sys.policyDBSet(accessKey, uinfo.PolicyName, regularUser, false)
+		return sys.policyDBSet(accessKey, uinfo.PolicyName, regUser, false)
 	}
 	return nil
 }
@@ -1489,7 +1477,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 	cred.SecretKey = secretKey
 	u := newUserIdentity(cred)
-	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regularUser, u); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), accessKey, regUser, u); err != nil {
 		return err
 	}
 
@@ -1501,18 +1489,18 @@ func (sys *IAMSys) loadUserFromStore(accessKey string) {
 	sys.store.lock()
 	// If user is already found proceed.
 	if _, found := sys.iamUsersMap[accessKey]; !found {
-		sys.store.loadUser(context.Background(), accessKey, regularUser, sys.iamUsersMap)
+		sys.store.loadUser(context.Background(), accessKey, regUser, sys.iamUsersMap)
 		if _, found = sys.iamUsersMap[accessKey]; found {
 			// found user, load its mapped policies
-			sys.store.loadMappedPolicy(context.Background(), accessKey, regularUser, false, sys.iamUserPolicyMap)
+			sys.store.loadMappedPolicy(context.Background(), accessKey, regUser, false, sys.iamUserPolicyMap)
 		} else {
-			sys.store.loadUser(context.Background(), accessKey, srvAccUser, sys.iamUsersMap)
+			sys.store.loadUser(context.Background(), accessKey, svcUser, sys.iamUsersMap)
 			if svc, found := sys.iamUsersMap[accessKey]; found {
 				// Found service account, load its parent user and its mapped policies.
 				if sys.usersSysType == MinIOUsersSysType {
-					sys.store.loadUser(context.Background(), svc.ParentUser, regularUser, sys.iamUsersMap)
+					sys.store.loadUser(context.Background(), svc.ParentUser, regUser, sys.iamUsersMap)
 				}
-				sys.store.loadMappedPolicy(context.Background(), svc.ParentUser, regularUser, false, sys.iamUserPolicyMap)
+				sys.store.loadMappedPolicy(context.Background(), svc.ParentUser, regUser, false, sys.iamUserPolicyMap)
 			} else {
 				// None found fall back to STS users.
 				sys.store.loadUser(context.Background(), accessKey, stsUser, sys.iamUsersMap)
@@ -1532,6 +1520,54 @@ func (sys *IAMSys) loadUserFromStore(accessKey string) {
 	}
 
 	sys.buildUserGroupMemberships()
+	sys.store.unlock()
+}
+
+// purgeExpiredCredentialsForExternalSSO - validates if local credentials are still valid
+// by checking remote IDP if the relevant users are still active and present.
+func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
+	sys.store.lock()
+	parentUsersMap := make(map[string]auth.Credentials, len(sys.iamUsersMap))
+	for _, cred := range sys.iamUsersMap {
+		if cred.IsServiceAccount() || cred.IsTemp() {
+			userid, err := parseOpenIDParentUser(cred.ParentUser)
+			if err == errSkipFile {
+				continue
+			}
+			parentUsersMap[userid] = cred
+		}
+	}
+	sys.store.unlock()
+
+	expiredUsers := make([]auth.Credentials, 0, len(parentUsersMap))
+	for userid, cred := range parentUsersMap {
+		u, err := globalOpenIDConfig.LookupUser(userid)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+		// Disabled parentUser purge the entries locally
+		if !u.Enabled {
+			expiredUsers = append(expiredUsers, cred)
+		}
+	}
+
+	for _, cred := range expiredUsers {
+		userType := regUser
+		if cred.IsServiceAccount() {
+			userType = svcUser
+		} else if cred.IsTemp() {
+			userType = stsUser
+		}
+		sys.store.deleteIAMConfig(ctx, getUserIdentityPath(cred.AccessKey, userType))
+		sys.store.deleteIAMConfig(ctx, getMappedPolicyPath(cred.AccessKey, userType, false))
+	}
+
+	sys.store.lock()
+	for _, cred := range expiredUsers {
+		delete(sys.iamUsersMap, cred.AccessKey)
+		delete(sys.iamUserPolicyMap, cred.AccessKey)
+	}
 	sys.store.unlock()
 }
 
@@ -1693,7 +1729,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 		// Remove the group from storage. First delete the
 		// mapped policy. No-mapped-policy case is ignored.
-		if err := sys.store.deleteMappedPolicy(context.Background(), group, regularUser, true); err != nil && err != errNoSuchPolicy {
+		if err := sys.store.deleteMappedPolicy(context.Background(), group, regUser, true); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		if err := sys.store.deleteGroupInfo(context.Background(), group); err != nil && err != errNoSuchGroup {
@@ -1839,7 +1875,7 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 		return sys.policyDBSet(name, policy, stsUser, isGroup)
 	}
 
-	return sys.policyDBSet(name, policy, regularUser, isGroup)
+	return sys.policyDBSet(name, policy, regUser, isGroup)
 }
 
 // policyDBSet - sets a policy for user in the policy db. Assumes that caller
@@ -1867,7 +1903,7 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 			// Add a fallback removal towards previous content that may come back
 			// as a ghost user due to lack of delete, this change occurred
 			// introduced in PR #11840
-			sys.store.deleteMappedPolicy(context.Background(), name, regularUser, false)
+			sys.store.deleteMappedPolicy(context.Background(), name, regUser, false)
 		}
 		err := sys.store.deleteMappedPolicy(context.Background(), name, userType, isGroup)
 		if err != nil && err != errNoSuchPolicy {

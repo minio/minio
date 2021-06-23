@@ -249,7 +249,7 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var userType = regularUser
+	var userType = regUser
 	if temp {
 		userType = stsUser
 	}
