@@ -18,13 +18,16 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/filedrive-team/go-graphsplit"
+	csv "github.com/minio/csvparser"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -2487,15 +2490,31 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 }
 
 type DealVo struct {
-	CarSliceSize int64
-	Start        uint
-	Duration     uint
-	Price        string
+	SwanEndpoint string `json:"swan_endpoint,omitempty"`
+	CarSliceSize int64  `json:"car_slice_size,omitempty"`
+	Start        uint   `json:"start,omitempty"`
+	Duration     uint   `json:"duration,omitempty"`
+	Price        string `json:"price,omitempty"`
+	SwanApiToken string `json:"swan_api_token,omitempty"`
+	MinerId      string `json:"miner_id,omitempty"`
+}
+
+type OfflineDeal struct {
+	MinerId       string
+	PieceCid      string
+	PieceSize     string
+	DataCid       string
+	Duration      string
+	Start         string
+	FastRetrieval bool
+	DealCid       string
+	Filename      string
+	Price         string
 }
 
 func (d *DealVo) setDefault() {
 	if d.CarSliceSize == 0 {
-		d.CarSliceSize = 1065353216 // 1GB = 1024 *1024 *1024 *254 /256
+		d.CarSliceSize = 34091302912 // 32GB = 1024 *1024 *1024 *254 /256 *32
 	}
 	if d.Start == 0 {
 		d.Start = 7 // 1 week = 7 days
@@ -2506,6 +2525,19 @@ func (d *DealVo) setDefault() {
 	if len(d.Price) == 0 {
 		d.Price = "0"
 	}
+	if len(d.SwanEndpoint) == 0 {
+		d.SwanEndpoint = os.Getenv("SWAN_API")
+	} else {
+		os.Setenv("SWAN_API", d.SwanEndpoint)
+	}
+	if len(d.SwanApiToken) == 0 {
+		d.SwanApiToken = os.Getenv("SWAN_TOKEN")
+	} else {
+		os.Setenv("SWAN_TOKEN", d.SwanApiToken)
+	}
+	if len(d.MinerId) == 0 {
+		d.MinerId = "f0447183"
+	}
 }
 
 // SendDeal - send deal to filecoin network.
@@ -2514,57 +2546,213 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var dealVo DealVo
 	err := decoder.Decode(&dealVo)
-	if err != nil {
-		writeWebErrorResponse(w, err)
+	if err != nil && err != io.EOF {
 		return
 	}
 	dealVo.setDefault()
 
-	{
-		localPaths := globalEndpoints.LocalDisksPaths()
-		if len(localPaths) != 1 {
-			return
-		}
-
-		localPath := localPaths[0]
-		vars := mux.Vars(r)
-		bucket := vars["bucket"]
-		object, err := unescapePath(vars["object"])
-		if err != nil {
-			writeWebErrorResponse(w, err)
-			return
-		}
-
-		carBucketName := strings.ToLower(object)
-		reg, err := regexp.Compile("[^a-z0-9\\-\\.]+")
-		if err != nil {
-			return
-		}
-		carBucketName = reg.ReplaceAllString(carBucketName, "")
-
-		sourceFileParentPath := filepath.Join(localPath, bucket)
-		sourceFilePath := filepath.Join(localPath, bucket, object)
-
-		carBucketPath := filepath.Join(sourceFileParentPath, carBucketName)
-		if _, err := os.Stat(carBucketPath); os.IsNotExist(err) {
-			err := os.Mkdir(carBucketPath, 0775)
-			if err != nil {
-				return
+	_ = func(address string) (string, error) {
+		addr := net.ParseIP(address)
+		if addr != nil {
+			// Host is an ip address
+			err := errors.New("for dev env, please provide a header with valid Host, exp: a5a84b78-dd4a-45f4-bd90-31428fc23a21.cygnus.nbai.io")
+			return "", err
+		} else {
+			// Host is a host name
+			domainSegments := strings.Split(address, ".")
+			if len(domainSegments) > 1 {
+				return domainSegments[0], nil
+			} else {
+				err := errors.New(fmt.Sprintf("invalid Host in header %s", address))
+				return "", err
 			}
 		}
-
-		sliceSize := dealVo.CarSliceSize
-		carDir := carBucketPath
-		parentPath := sourceFilePath
-		targetPath := sourceFilePath
-		graphName := object
-		parallel := 4
-
-		ctx := context.Background()
-		var cb graphsplit.GraphBuildCallback
-
-		cb = graphsplit.CommPCallback(carDir)
-
-		graphsplit.Chunk(ctx, sliceSize, parentPath, targetPath, carDir, graphName, parallel, cb)
 	}
+
+	// generate car
+	localPaths := globalEndpoints.LocalDisksPaths()
+	if len(localPaths) != 1 {
+		return
+	}
+
+	localPath := localPaths[0]
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+	if err != nil {
+		return
+	}
+
+	carBucketName := strings.ToLower(object)
+	reg, err := regexp.Compile("[^a-z0-9\\-\\.]+")
+	if err != nil {
+
+		return
+	}
+	carBucketName = reg.ReplaceAllString(carBucketName, "")
+
+	sourceFileParentPath := filepath.Join(localPath, bucket)
+	sourceFilePath := filepath.Join(localPath, bucket, object)
+
+	carBucketPath := filepath.Join(sourceFileParentPath, carBucketName)
+	if _, err := os.Stat(carBucketPath); os.IsNotExist(err) {
+		err := os.Mkdir(carBucketPath, 0775)
+		if err != nil {
+			return
+		}
+	}
+
+	sliceSize := dealVo.CarSliceSize
+	carDir := carBucketPath
+	parentPath := sourceFilePath
+	targetPath := sourceFilePath
+	graphName := object
+	parallel := 4
+
+	Emptyctx := context.Background()
+	var cb graphsplit.GraphBuildCallback
+
+	cb = graphsplit.CommPCallback(carDir)
+
+	graphsplit.Chunk(Emptyctx, sliceSize, parentPath, targetPath, carDir, graphName, parallel, cb)
+
+	// send deal request to swan
+	offlineDeals, err := readManifestCsv(filepath.Join(carDir, "manifest.csv"))
+	logger.LogIf(Emptyctx, err)
+	if err != nil {
+		return
+	}
+
+	// todo send multiple deals
+	if len(offlineDeals) == 1 {
+		reply, err := sendDeal(offlineDeals[0], &dealVo)
+		if err != nil {
+			return
+		}
+		bodyByte, _ := json.Marshal(reply)
+		w.Write(bodyByte)
+	}
+	return
+
+}
+
+func NewOfflineDeal() *OfflineDeal {
+	return &OfflineDeal{FastRetrieval: true}
+}
+
+func readManifestCsv(_filepath string) ([]*OfflineDeal, error) {
+	csvFile, err := os.Open(_filepath)
+	if err != nil {
+		return nil, err
+	}
+	defer csvFile.Close()
+
+	reader := csv.NewReader(csvFile)
+	reader.LazyQuotes = true
+	reader.Comma = ','
+
+	//ignore values in detail
+	reader.FieldsPerRecord = -1
+	csvLines, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	var dealConfigs []*OfflineDeal
+	// playload_cid,filename,piece_cid,piece_size
+	for i, line := range csvLines {
+		if i == 0 {
+			// skip header line
+			continue
+		}
+
+		offlineDeal := NewOfflineDeal()
+
+		offlineDeal.DataCid = line[0]
+		offlineDeal.Filename = line[1]
+		offlineDeal.PieceCid = line[2]
+		offlineDeal.PieceSize = line[3]
+
+		dealConfigs = append(dealConfigs, offlineDeal)
+	}
+	return dealConfigs, nil
+}
+
+func sendDeal(offlineDeal *OfflineDeal, dealVo *DealVo) (*DealRequestVo, error) {
+	pieceSize, err := strconv.ParseInt(offlineDeal.PieceSize, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	dealRequestVo := &DealRequestVo{
+		PieceCid:  offlineDeal.PieceCid,
+		PieceSize: uint64(pieceSize),
+		DataCid:   offlineDeal.DataCid,
+		MinerId:   dealVo.MinerId,
+		Price:     dealVo.Price,
+		Start:     dealVo.Start,
+		Duration:  dealVo.Duration,
+	}
+
+	swanEndpoint := os.Getenv("SWAN_API")
+	swanToken := os.Getenv("SWAN_TOKEN")
+
+	_url := fmt.Sprintf("%s/offline_deal/send", swanEndpoint)
+
+	dealResponse, err := sendDealRequest(dealRequestVo, _url, swanToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return dealResponse, err
+}
+
+func sendDealRequest(dealRequestVo *DealRequestVo, _url string, token string) (*DealRequestVo, error) {
+	method := "POST"
+	jsonBody, err := json.Marshal(dealRequestVo)
+	if err != nil {
+		return nil, err
+	}
+	client := http.Client{Timeout: time.Minute}
+	req, err := http.NewRequest(method, _url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	dealResponse := DealResponseVo{}
+	bodyBytes, _ := io.ReadAll(res.Body)
+
+	err = json.Unmarshal(bodyBytes, &dealResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return dealResponse.Data, nil
+}
+
+type DealResponseVo struct {
+	Status string         `json:"status"`
+	Data   *DealRequestVo `json:"data"`
+}
+
+type DealRequestVo struct {
+	PieceCid     string `json:"piece_cid"`
+	PieceSize    uint64 `json:"piece_size"`
+	DataCid      string `json:"data_cid"`
+	MinerId      string `json:"miner_id"`
+	Duration     uint   `json:"duration"`
+	Price        string `json:"price,omitempty"`
+	Start        uint   `json:"start,omitempty"`
+	SenderWallet string `json:"sender_wallet,omitempty"`
+	StartEpoch   uint   `json:"start_epoch,omitempty"`
+	VerifiedDeal bool   `json:"verified_deal,omitempty"`
+	DealCost     string `json:"deal_cost,omitempty"`
+	TotalCost    string `json:"total_cost,omitempty"`
+	DealCid      string `json:"deal_cid,omitempty"`
 }
