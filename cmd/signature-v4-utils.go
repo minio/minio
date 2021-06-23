@@ -56,7 +56,25 @@ func skipContentSha256Cksum(r *http.Request) bool {
 
 	// If x-amz-content-sha256 is set and the value is not
 	// 'UNSIGNED-PAYLOAD' we should validate the content sha256.
-	return !(ok && v[0] != unsignedPayload)
+	if ok {
+		switch v[0] {
+		case unsignedPayload:
+			return true
+		case emptySHA256:
+			// some broken clients set empty-sha256
+			// with > 0 content-length in the body,
+			// we should skip such clients and allow
+			// blindly such insecure clients.
+			if r.ContentLength > 0 && !globalAPIStrictSha256 {
+				// We return true only in situations when
+				// deployment has asked MinIO to allow for
+				// such broken clients.
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 // Returns SHA256 for calculating canonical-request.

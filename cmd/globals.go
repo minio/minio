@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/internal/bucket/bandwidth"
-	"github.com/minio/minio/internal/handlers"
-	"github.com/minio/minio/internal/kms"
-
 	"github.com/dustin/go-humanize"
+
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
@@ -39,12 +39,15 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/kms"
 	etcd "go.etcd.io/etcd/client/v3"
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 // minio configuration related constants.
@@ -309,6 +312,9 @@ var (
 	globalTierJournal *tierJournal
 
 	globalDebugRemoteTiersImmediately []string
+
+	globalAPIStrictSha256 = env.Get(api.EnvAPIStrictSha256, config.EnableOn) == config.EnableOn
+
 	// Add new variable global values here.
 )
 

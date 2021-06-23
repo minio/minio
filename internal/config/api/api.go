@@ -47,7 +47,8 @@ const (
 	EnvAPIRemoteTransportDeadline  = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPIListQuorum               = "MINIO_API_LIST_QUORUM"
 	EnvAPIExtendListCacheLife      = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
-	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
+	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS" // default "on"
+	EnvAPIStrictSha256             = "MINIO_API_STRICT_SHA256"  // default "on"
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
 )

@@ -588,6 +588,10 @@ func serverMain(ctx *cli.Context) {
 		logStartupMessage(color.RedBold(msg))
 	}
 
+	if !globalAPIStrictSha256 {
+		logStartupMessage(color.RedBold("WARNING: Incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+	}
+
 	if globalBrowserEnabled {
 		consoleSrv, err := initConsoleServer()
 		if err != nil {
