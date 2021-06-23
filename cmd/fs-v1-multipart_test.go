@@ -58,9 +58,9 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	}, obj.SetDriveCounts())
 
 	defer func() {
-		globalAPIConfig = apiConfig{
-			listQuorum: 3,
-		}
+		globalAPIConfig.init(api.Config{
+			ListQuorum: "optimal",
+		}, obj.SetDriveCounts())
 	}()
 
 	var cleanupWg sync.WaitGroup
