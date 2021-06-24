@@ -37,7 +37,7 @@ import (
 
 	"github.com/tinylib/msgp/msgp"
 
-	jwtreq "github.com/dgrijalva/jwt-go/request"
+	jwtreq "github.com/golang-jwt/jwt/request"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
