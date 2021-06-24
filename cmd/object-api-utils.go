@@ -582,7 +582,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 // GetObjectReader and an error. Request headers are passed to provide
 // encryption parameters. cleanupFns allow cleanup funcs to be
 // registered for calling after usage of the reader.
-type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
+type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
 // are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
@@ -590,6 +590,10 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditi
 // not all run!).
 func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 	fn ObjReaderFn, off, length int64, err error) {
+
+	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+		return nil, 0, 0, PreConditionFailed{}
+	}
 
 	if rs == nil && opts.PartNumber > 0 {
 		rs = partNumberToRangeSpec(oi, opts.PartNumber)
@@ -648,21 +652,15 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return nil, 0, 0, errInvalidRange
 			}
 		}
-		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				for _, cFn := range cFns {
-					cFn()
-				}
-				return nil, PreConditionFailed{}
-			}
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
 				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
-					for _, cFn := range cFns {
-						cFn()
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
 					}
 					return nil, err
 				}
@@ -674,8 +672,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if decOff > 0 {
 				if err = s2Reader.Skip(decOff); err != nil {
 					// Call the cleanup funcs
-					for _, cFn := range cFns {
-						cFn()
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
 					}
 					return nil, err
 				}
@@ -727,7 +725,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		// a reader that returns the desired range of
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
-		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
 			// Attach decrypter on inputReader
@@ -739,14 +737,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 					cFns[i]()
 				}
 				return nil, err
-			}
-
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, PreConditionFailed{}
 			}
 
 			oi.ETag = getDecryptedETag(h, oi, false)
@@ -770,14 +760,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, PreConditionFailed{}
-			}
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			r = &GetObjectReader{
 				ObjInfo:    oi,
 				Reader:     inputReader,
