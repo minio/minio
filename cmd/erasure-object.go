@@ -212,7 +212,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		pr.CloseWithError(nil)
 	}
 
-	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
+	return fn(pr, h, pipeCloser, nsUnlocker)
 }
 
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {

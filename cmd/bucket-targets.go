@@ -84,6 +84,20 @@ func (sys *BucketTargetSys) ListBucketTargets(ctx context.Context, bucket string
 	return nil, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
+// Delete clears targets present for a bucket
+func (sys *BucketTargetSys) Delete(bucket string) {
+	sys.Lock()
+	defer sys.Unlock()
+	tgts, ok := sys.targetsMap[bucket]
+	if !ok {
+		return
+	}
+	for _, t := range tgts {
+		delete(sys.arnRemotesMap, t.Arn)
+	}
+	delete(sys.targetsMap, bucket)
+}
+
 // SetTarget - sets a new minio-go client target for this bucket.
 func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget, update bool) error {
 	if globalIsGateway {

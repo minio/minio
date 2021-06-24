@@ -17,7 +17,6 @@ require (
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/coredns/coredns v1.4.0
 	github.com/dchest/siphash v1.2.1
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/djherbis/atime v1.0.0
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
@@ -27,6 +26,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/loads v0.20.2
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.8.0
@@ -40,12 +40,12 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.7.5-0.20210618230329-b10c4f51b1ef
+	github.com/minio/console v0.7.5-0.20210624193841-58efbbbf60ee
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.0.12
-	github.com/minio/minio-go/v7 v7.0.11-0.20210517200026-f0518ca447d6
+	github.com/minio/minio-go/v7 v7.0.12-0.20210617160455-b7103728fb87
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.7
 	github.com/minio/rpc v1.0.0

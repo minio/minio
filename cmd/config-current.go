@@ -101,10 +101,6 @@ func initHelp() {
 			Description: "[DEPRECATED] enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
-			Key:         config.KmsKesSubSys,
-			Description: "enable external MinIO key encryption service",
-		},
-		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
 		},

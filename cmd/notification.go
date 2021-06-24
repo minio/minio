@@ -607,6 +607,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
 	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
+	globalBucketTargetSys.Delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}

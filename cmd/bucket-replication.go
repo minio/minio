@@ -1122,7 +1122,7 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	}
 	closeReader := func() { obj.Close() }
 
-	reader, err := fn(obj, h, opts.CheckPrecondFn, closeReader)
+	reader, err := fn(obj, h, closeReader)
 	if err != nil {
 		return nil, false
 	}

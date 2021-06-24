@@ -97,15 +97,17 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		if !utf8.Valid(data) {
 			pdata, err := madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 			if err != nil {
-				pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-					minioMetaBucket: path.Join(minioMetaBucket, string(kv.Key)),
-				})
-				if err != nil {
+				if GlobalKMS != nil {
 					pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-						minioMetaBucket: string(kv.Key),
+						minioMetaBucket: path.Join(minioMetaBucket, string(kv.Key)),
 					})
 					if err != nil {
-						return fmt.Errorf("Decrypting IAM config failed %w, possibly credentials are incorrect", err)
+						pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+							minioMetaBucket: string(kv.Key),
+						})
+						if err != nil {
+							return fmt.Errorf("Decrypting IAM config failed %w, possibly credentials are incorrect", err)
+						}
 					}
 				}
 			}

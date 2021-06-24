@@ -963,7 +963,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	// case of incomplete read.
 	pipeCloser := func() { pr.CloseWithError(nil) }
 
-	gr, gerr := fn(pr, h, opts.CheckPrecondFn, pipeCloser)
+	gr, gerr := fn(pr, h, pipeCloser)
 	if gerr != nil {
 		return gr, numHits, gerr
 	}
