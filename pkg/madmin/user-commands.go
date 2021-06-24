@@ -42,6 +42,8 @@ type BucketUsageInfo struct {
 	Size    uint64        `json:"size"`
 	Created time.Time     `json:"created"`
 	Access  AccountAccess `json:"access"`
+
+	PrefixesUsage map[string]uint64 `json:"prefixesUsage"`
 }
 
 // AccountUsageInfo represents the account usage info of an

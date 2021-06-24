@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -649,24 +650,52 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 		AccountName: accountName,
 	}
 
+	type bucketAccessInfo struct {
+		info        BucketInfo
+		read, write bool
+	}
+
+	var allowedAccessBuckets []bucketAccessInfo
 	for _, bucket := range buckets {
 		rd, wr := isAllowedAccess(bucket.Name)
 		if rd || wr {
-			var size uint64
-			// Fetch the data usage of the current bucket
-			if !dataUsageInfo.LastUpdate.IsZero() {
-				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
-			}
-			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketUsageInfo{
-				Name:    bucket.Name,
-				Created: bucket.Created,
-				Size:    size,
-				Access: madmin.AccountAccess{
-					Read:  rd,
-					Write: wr,
-				},
-			})
+			allowedAccessBuckets = append(allowedAccessBuckets, bucketAccessInfo{info: bucket, read: rd, write: wr})
 		}
+	}
+
+	pathsUsage, err := loadPathsUsageFromBackend(ctx, objectAPI, buckets)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	for _, bucket := range allowedAccessBuckets {
+		var size uint64
+		// Fetch the data usage of the current bucket
+		if !dataUsageInfo.LastUpdate.IsZero() {
+			size = dataUsageInfo.BucketsUsage[bucket.info.Name].Size
+		}
+
+		bucketUsage := madmin.BucketUsageInfo{
+			Name:    bucket.info.Name,
+			Created: bucket.info.Created,
+			Size:    size,
+			Access: madmin.AccountAccess{
+				Read:  bucket.read,
+				Write: bucket.write,
+			},
+		}
+
+		// Update prefixes usage for this bucket
+		bucketUsage.PrefixesUsage = make(map[string]uint64)
+		bucketPrefix := bucket.info.Name + slashSeparator
+		for prefix, usage := range pathsUsage {
+			if strings.HasPrefix(prefix, bucketPrefix) {
+				prefix := prefix[len(bucketPrefix):]
+				bucketUsage.PrefixesUsage[prefix] = usage
+			}
+		}
+
+		acctInfo.Buckets = append(acctInfo.Buckets, bucketUsage)
 	}
 
 	usageInfoJSON, err := json.Marshal(acctInfo)
