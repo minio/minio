@@ -40,12 +40,12 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.7.5-0.20210618230329-b10c4f51b1ef
+	github.com/minio/console v0.7.5-0.20210624193841-58efbbbf60ee
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.0.12
-	github.com/minio/minio-go/v7 v7.0.11-0.20210517200026-f0518ca447d6
+	github.com/minio/minio-go/v7 v7.0.12-0.20210617160455-b7103728fb87
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.7
 	github.com/minio/rpc v1.0.0
