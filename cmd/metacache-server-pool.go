@@ -95,31 +95,13 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 
 	// Decode and get the optional list id from the marker.
 	o.Marker, o.ID = parseMarker(o.Marker)
-	o.Create = o.ID == ""
-	if o.ID == "" {
-		o.ID = mustGetUUID()
-	}
-	o.BaseDir = baseDirFromPrefix(o.Prefix)
-	if o.discardResult {
-		// Override for single object.
-		o.BaseDir = o.Prefix
-	}
-
-	// For very small recursive listings, don't same cache.
-	// Attempts to avoid expensive listings to run for a long
-	// while when clients aren't interested in results.
-	// If the client DOES resume the listing a full cache
-	// will be generated due to the marker without ID and this check failing.
-	if o.Limit < 10 && o.Marker == "" && o.Create && o.Recursive {
-		o.discardResult = true
-		o.Transient = true
-	}
+	o.BaseDir = o.Prefix
 
 	var cache metacache
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.Create {
 		var cache metacache
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+		rpc := globalNotificationSys.restClientFromHash(o.ID)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
 			rpc = nil
 			o.Transient = true
@@ -159,9 +141,36 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 
 	// Create output for our results.
 	// Create filter for results.
-	filterCh := make(chan metaCacheEntry, 100)
+	filterCh := make(chan metaCacheEntry, o.Limit)
 	filteredResults := o.gatherResults(filterCh)
+	listCtx, cancelList := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	var listErr error
 
+	go func() {
+		defer wg.Done()
+		listErr = z.listMerged(listCtx, o, filterCh)
+	}()
+
+	entries, err = filteredResults()
+	cancelList()
+	wg.Done()
+	if listErr != nil && !errors.Is(listErr, context.Canceled) {
+		return entries, listErr
+	}
+	truncated := entries.len() > o.Limit || err == nil
+	entries.truncate(o.Limit)
+	if !o.discardResult {
+		entries.listID = o.ID
+	}
+	if !truncated {
+		return entries, io.EOF
+	}
+	return entries, nil
+}
+
+// listMerged will list across all sets and return a merged results stream.
+func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) error {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var errs []error
@@ -188,42 +197,48 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		}
 	}
 	mu.Unlock()
-	// Gather results to a single channel.
-	go func() {
-		_ = mergeEntryChannels(ctx, inputs, filterCh, func(existing, other *metaCacheEntry) (replace bool) {
-			if existing.isDir() {
-				// We don't care...
-				return false
-			}
 
-			eFIV, err := existing.fileInfo(o.Bucket)
-			if err != nil {
-				return true
-			}
-			oFIV, err := other.fileInfo(o.Bucket)
-			if err != nil {
-				return false
-			}
-			// Replace if modtime is newer
-			if !oFIV.ModTime.Equal(eFIV.ModTime) {
-				return oFIV.ModTime.After(eFIV.ModTime)
-			}
-			// Use NumVersions as a final tiebreaker.
-			return oFIV.NumVersions > eFIV.NumVersions
-		})
-	}()
-	entries, err = filteredResults()
+	// Gather results to a single channel.
+	err := mergeEntryChannels(ctx, inputs, results, func(existing, other *metaCacheEntry) (replace bool) {
+		if existing.isDir() {
+			// We don't care...
+			return false
+		}
+
+		eFIV, err := existing.fileInfo(o.Bucket)
+		if err != nil {
+			return true
+		}
+		oFIV, err := other.fileInfo(o.Bucket)
+		if err != nil {
+			return false
+		}
+		// Replace if modtime is newer
+		if !oFIV.ModTime.Equal(eFIV.ModTime) {
+			return oFIV.ModTime.After(eFIV.ModTime)
+		}
+		// Use NumVersions as a final tiebreaker.
+		return oFIV.NumVersions > eFIV.NumVersions
+	})
+
+	wg.Wait()
+	if err != nil {
+		return err
+	}
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
 
 	if isAllNotFound(errs) {
 		// All sets returned not found.
 		go func() {
 			// Update master cache with that information.
-			cache.status = scanStateSuccess
-			cache.fileNotFound = true
-			o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
+			//cache.status = scanStateSuccess
+			//cache.fileNotFound = true
+			//o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
 		}()
 		// cache returned not found, entries truncated.
-		return entries, io.EOF
+		return nil
 	}
 
 	for _, err := range errs {
@@ -235,15 +250,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 			continue
 		}
 		logger.LogIf(ctx, err)
-		return entries, err
+		return err
 	}
-	truncated := entries.len() > o.Limit || !allAtEOF
-	entries.truncate(o.Limit)
-	if !o.discardResult {
-		entries.listID = o.ID
-	}
-	if !truncated {
-		return entries, io.EOF
-	}
-	return entries, nil
+	return nil
 }

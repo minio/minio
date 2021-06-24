@@ -27,10 +27,10 @@ import (
 
 // markerTagVersion is the marker version.
 // Should not need to be updated unless a fundamental change is made to the marker format.
-const markerTagVersion = "v1"
+const markerTagVersion = "v2"
 
 // parseMarker will parse a marker possibly encoded with encodeMarker
-func parseMarker(s string) (marker, uuid string) {
+func (o listPathOptions) parseMarker(s string) (marker, uuid string) {
 	if !strings.Contains(s, "[minio_cache:"+markerTagVersion) {
 		return s, ""
 	}
@@ -60,12 +60,12 @@ func parseMarker(s string) (marker, uuid string) {
 
 // encodeMarker will encode a uuid and return it as a marker.
 // uuid cannot contain '[', ':' or ','.
-func encodeMarker(marker, uuid string) string {
-	if uuid == "" {
+func (o listPathOptions) encodeMarker(marker string) string {
+	if o.ID == "" {
 		return marker
 	}
-	if strings.ContainsAny(uuid, "[:,") {
-		logger.LogIf(context.Background(), fmt.Errorf("encodeMarker: uuid %s contained invalid characters", uuid))
+	if strings.ContainsAny(o.ID, "[:,") {
+		logger.LogIf(context.Background(), fmt.Errorf("encodeMarker: uuid %s contained invalid characters", o.ID))
 	}
-	return fmt.Sprintf("%s[minio_cache:%s,id:%s]", marker, markerTagVersion, uuid)
+	return fmt.Sprintf("%s[minio_cache:%s,id:%s]", marker, markerTagVersion, o.ID)
 }
