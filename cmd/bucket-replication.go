@@ -733,18 +733,6 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	} else {
-		target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
-			sendEvent(eventArgs{
-				EventName:  event.ObjectReplicationNotTracked,
-				BucketName: bucket,
-				Object:     objInfo,
-				Host:       "Internal: [Replication]",
-			})
-			return
-		}
-
 		putOpts, err := putReplicationOpts(ctx, dest, objInfo)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%w", bucket, cfg.RoleArn, err))
@@ -756,28 +744,18 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			})
 			return
 		}
-
-		// Setup bandwidth throttling
-		peers, _ := globalEndpoints.peers()
-		totalNodesCount := len(peers)
-		if totalNodesCount == 0 {
-			totalNodesCount = 1 // For standalone erasure coding
-		}
-
 		var headerSize int
 		for k, v := range putOpts.Header() {
 			headerSize += len(k) + len(v)
 		}
 
 		opts := &bandwidth.MonitorReaderOptions{
-			Bucket:               objInfo.Bucket,
-			Object:               objInfo.Name,
-			HeaderSize:           headerSize,
-			BandwidthBytesPerSec: target.BandwidthLimit / int64(totalNodesCount),
-			ClusterBandwidth:     target.BandwidthLimit,
+			Bucket:     objInfo.Bucket,
+			HeaderSize: headerSize,
 		}
-
-		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, gr, opts)
+		newCtx, cancel := context.WithTimeout(ctx, globalOperationTimeout.Timeout())
+		defer cancel()
+		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
 		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
