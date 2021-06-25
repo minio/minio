@@ -94,20 +94,23 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	}
 
 	// Decode and get the optional list id from the marker.
-	o.Marker, o.ID = parseMarker(o.Marker)
+	o.parseMarker()
 	o.BaseDir = o.Prefix
 
-	var cache metacache
+	// We have 2 cases:
+	// 1) Cold listing, just list.
+	// 2) Returning, but with no id. Start async listing.
+	// 3) Returning, with ID, stream from list.
+	//
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
-	if o.Create {
+	if o.ID != "" && o.Create {
+		// TODO:
 		var cache metacache
-		rpc := globalNotificationSys.restClientFromHash(o.ID)
+		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
 			rpc = nil
 			o.Transient = true
 		}
-		// Apply prefix filter if enabled.
-		o.SetFilter()
 		if rpc == nil || o.Transient {
 			// Local
 			cache = localMetacacheMgr.findCache(ctx, o)
@@ -139,6 +142,49 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		o.ID = cache.id
 	}
 
+	if !o.Create && o.ID != "" {
+		// We have an existing list ID, continue streaming.
+		entries, err := z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, o)
+		if err == nil {
+			return entries, nil
+		}
+		if IsErr(err, []error{
+			nil,
+			context.Canceled,
+			context.DeadlineExceeded,
+			// io.EOF is expected and should be returned but no need to log it.
+			io.EOF,
+		}...) {
+			// Expected good errors we don't need to return error.
+			return entries, err
+		}
+		entries.truncate(0)
+		// TODO: Cancel existing, bad listing...
+		o.Create = true
+		o.ID = mustGetUUID()
+	}
+
+	for o.Create && o.ID != "" {
+		// Use ID as the object name...
+		o.pool = z.getAvailablePoolIdx(ctx, minioMetaBucket, o.ID, 10<<20)
+		if o.pool < 0 {
+			// No space or similar, don't persist the listing.
+			o.pool = 0
+			o.Create = false
+			o.ID = ""
+			break
+		}
+		o.set = z.serverPools[o.pool].getHashedSetIndex(o.ID)
+		saver := z.serverPools[o.pool].sets[o.set]
+
+		// Disconnect from call above, but cancel on exit.
+		ctx, cancel := context.WithCancel(GlobalContext)
+		filterCh := make(chan metaCacheEntry, o.Limit)
+
+		go saver.saveMetaCacheStream(ctx, cancel)
+	}
+
+	// Do listing in-place.
 	// Create output for our results.
 	// Create filter for results.
 	filterCh := make(chan metaCacheEntry, o.Limit)

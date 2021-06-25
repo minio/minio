@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/logger"
@@ -30,12 +31,14 @@ import (
 const markerTagVersion = "v2"
 
 // parseMarker will parse a marker possibly encoded with encodeMarker
-func (o listPathOptions) parseMarker(s string) (marker, uuid string) {
+func (o *listPathOptions) parseMarker() {
+	s := o.Marker
 	if !strings.Contains(s, "[minio_cache:"+markerTagVersion) {
-		return s, ""
+		o.Create = true
+		return
 	}
 	start := strings.LastIndex(s, "[")
-	marker = s[:start]
+	o.Marker = s[:start]
 	end := strings.LastIndex(s, "]")
 	tag := strings.Trim(s[start:end], "[]")
 	tags := strings.Split(tag, ",")
@@ -50,7 +53,27 @@ func (o listPathOptions) parseMarker(s string) (marker, uuid string) {
 				break
 			}
 		case "id":
-			uuid = kv[1]
+			o.ID = kv[1]
+			o.Create = false
+		case "return":
+			o.ID = mustGetUUID()
+			o.Create = true
+		case "p": // pool
+			v, err := strconv.ParseInt(kv[1], 10, 64)
+			if err != nil {
+				o.ID = mustGetUUID()
+				o.Create = true
+				continue
+			}
+			o.pool = int(v)
+		case "s": // set
+			v, err := strconv.ParseInt(kv[1], 10, 64)
+			if err != nil {
+				o.ID = mustGetUUID()
+				o.Create = true
+				continue
+			}
+			o.set = int(v)
 		default:
 			// Ignore unknown
 		}
@@ -62,10 +85,11 @@ func (o listPathOptions) parseMarker(s string) (marker, uuid string) {
 // uuid cannot contain '[', ':' or ','.
 func (o listPathOptions) encodeMarker(marker string) string {
 	if o.ID == "" {
-		return marker
+		// Mark as returning listing...
+		return fmt.Sprintf("%s[minio_cache:%s,return:]", marker, markerTagVersion)
 	}
 	if strings.ContainsAny(o.ID, "[:,") {
 		logger.LogIf(context.Background(), fmt.Errorf("encodeMarker: uuid %s contained invalid characters", o.ID))
 	}
-	return fmt.Sprintf("%s[minio_cache:%s,id:%s]", marker, markerTagVersion, o.ID)
+	return fmt.Sprintf("%s[minio_cache:%s,id:%s,p:%d,s:%d]", marker, markerTagVersion, o.ID, o.pool, o.set)
 }

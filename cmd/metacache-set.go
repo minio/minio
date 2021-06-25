@@ -93,6 +93,9 @@ type listPathOptions struct {
 	// discardResult will not persist the cache to storage.
 	// When the initial results are returned listing will be canceled.
 	discardResult bool
+
+	// pool and set of where the cache is located.
+	pool, set int
 }
 
 func init() {
@@ -553,30 +556,147 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	})
 }
 
+func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, cancel context.CancelFunc, o listPathOptions, entries <-chan metaCacheEntry) (err error) {
+	o.debugf(color.Green("saveMetaCacheStream:")+" with options: %#v", o)
+
+	meta := o.newMetacache()
+	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	var metaMu sync.Mutex
+
+	defer func() {
+		o.debugln(color.Green("saveMetaCacheStream:")+"err:", err)
+		if err != nil && !errors.Is(err, io.EOF) {
+			go func(err string) {
+				metaMu.Lock()
+				if meta.status != scanStateError {
+					meta.error = err
+					meta.status = scanStateError
+				}
+				meta, _ = o.updateMetacacheListing(meta, rpc)
+				metaMu.Unlock()
+			}(err.Error())
+			cancel()
+		}
+	}()
+
+	defer cancel()
+	// Save continuous updates
+	go func() {
+		var err error
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		var exit bool
+		for !exit {
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				exit = true
+			}
+			metaMu.Lock()
+			meta.endedCycle = intDataUpdateTracker.current()
+			meta, err = o.updateMetacacheListing(meta, rpc)
+			if meta.status == scanStateError {
+				logger.LogIf(ctx, err)
+				cancel()
+				exit = true
+			}
+			metaMu.Unlock()
+		}
+	}()
+
+	const retryDelay = 200 * time.Millisecond
+	const maxTries = 5
+
+	var bw *metacacheBlockWriter
+	// Keep destination...
+	// Write results to disk.
+	bw = newMetacacheBlockWriter(entries, func(b *metacacheBlock) error {
+		// if the block is 0 bytes and its a first block skip it.
+		// skip only this for Transient caches.
+		if len(b.data) == 0 && b.n == 0 && o.Transient {
+			return nil
+		}
+		o.debugln(color.Green("listPath:")+" saving block", b.n, "to", o.objectPath(b.n))
+		r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
+		logger.LogIf(ctx, err)
+		custom := b.headerKV()
+		_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
+			UserDefined:    custom,
+			NoLock:         true, // No need to hold namespace lock, each prefix caches uniquely.
+			ParentIsObject: nil,
+		})
+		if err != nil {
+			metaMu.Lock()
+			if meta.error != "" {
+				meta.status = scanStateError
+				meta.error = err.Error()
+			}
+			metaMu.Unlock()
+			cancel()
+			return err
+		}
+		if b.n == 0 {
+			return nil
+		}
+		// Update block 0 metadata.
+		var retries int
+		for {
+			meta := b.headerKV()
+			fi := FileInfo{
+				Metadata: make(map[string]string, len(meta)),
+			}
+			for k, v := range meta {
+				fi.Metadata[k] = v
+			}
+			err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), fi)
+			if err == nil {
+				break
+			}
+			switch err.(type) {
+			case ObjectNotFound:
+				return err
+			case InsufficientReadQuorum:
+			default:
+				logger.LogIf(ctx, err)
+			}
+			if retries >= maxTries {
+				return err
+			}
+			retries++
+			time.Sleep(retryDelay)
+		}
+		return nil
+	})
+
+	metaMu.Lock()
+	if err != nil {
+		meta.status = scanStateError
+		meta.error = err.Error()
+	}
+	// Save success
+	if meta.error == "" {
+		meta.status = scanStateSuccess
+		meta.endedCycle = intDataUpdateTracker.current()
+	}
+
+	meta, _ = o.updateMetacacheListing(meta, rpc)
+	metaMu.Unlock()
+
+	if err := bw.Close(); err != nil {
+		metaMu.Lock()
+		meta.error = err.Error()
+		meta.status = scanStateError
+		meta, _ = o.updateMetacacheListing(meta, rpc)
+		metaMu.Unlock()
+	}
+
+	return
+}
+
 // Will return io.EOF if continuing would not yield more results.
 //TODO: Remove when not needed.
 func (er *erasureObjects) listPathOld(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
-
-	// See if we have the listing stored.
-	if !o.Create && !o.discardResult {
-		entries, err := er.streamMetadataParts(ctx, o)
-		if IsErr(err, []error{
-			nil,
-			context.Canceled,
-			context.DeadlineExceeded,
-		}...) {
-			// Expected good errors we don't need to return error.
-			return entries, nil
-		}
-
-		if !errors.Is(err, io.EOF) { // io.EOF is expected and should be returned but no need to log it.
-			// Log an return errors on unexpected errors.
-			logger.LogIf(ctx, err)
-		}
-
-		return entries, err
-	}
 
 	meta := o.newMetacache()
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
