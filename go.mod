@@ -47,7 +47,7 @@ require (
 	github.com/minio/madmin-go v1.0.12
 	github.com/minio/minio-go/v7 v7.0.12-0.20210617160455-b7103728fb87
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.0.7
+	github.com/minio/pkg v1.0.8
 	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
