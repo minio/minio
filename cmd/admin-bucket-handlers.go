@@ -207,7 +207,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 
 	// enforce minimum bandwidth limit as 100MBps
-	if target.BandwidthLimit < 100*1000*1000 {
+	if target.BandwidthLimit > 0 && target.BandwidthLimit < 100*1000*1000 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationBandwidthLimitError, err), r.URL)
 		return
 	}
