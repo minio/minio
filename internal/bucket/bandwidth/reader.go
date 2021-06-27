@@ -41,11 +41,13 @@ type MonitorReaderOptions struct {
 
 // Read implements a throttled read
 func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
+	if r.throttle == nil {
+		return r.r.Read(buf)
+	}
 	if r.lastErr != nil {
 		err = r.lastErr
 		return
 	}
-
 	b := r.throttle.Burst()  // maximum available tokens
 	need := len(buf)         // number of bytes requested by caller
 	hdr := r.opts.HeaderSize // remaining header bytes
