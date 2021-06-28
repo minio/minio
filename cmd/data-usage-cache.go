@@ -55,7 +55,13 @@ type dataUsageEntry struct {
 	Versions         uint64 // Versions that are not delete markers.
 	ObjSizes         sizeHistogram
 	ReplicationStats *replicationStats
+	TieringStats     map[string]*tieringStats
 	Compacted        bool
+}
+
+//msgp:tuple tieringStats
+type tieringStats struct {
+	TieredSize uint64
 }
 
 //msgp:tuple replicationStats
@@ -72,8 +78,8 @@ type replicationStats struct {
 	AfterThresholdCount  uint64
 }
 
-//msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4
-//msgp:marshal ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4
+//msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5
+//msgp:marshal ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5
 
 //msgp:tuple dataUsageEntryV2
 type dataUsageEntryV2 struct {
@@ -107,6 +113,18 @@ type dataUsageEntryV4 struct {
 	ReplicationStats replicationStats
 }
 
+//msgp:tuple dataUsageEntry
+type dataUsageEntryV5 struct {
+	Children dataUsageHashMap
+	// These fields do no include any children.
+	Size             int64
+	Objects          uint64
+	Versions         uint64 // Versions that are not delete markers.
+	ObjSizes         sizeHistogram
+	ReplicationStats *replicationStats
+	Compacted        bool
+}
+
 // dataUsageCache contains a cache of data usage entries latest version.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
@@ -114,8 +132,8 @@ type dataUsageCache struct {
 	Disks []string
 }
 
-//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4
-//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4
+//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5
+//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5
 
 // dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
@@ -136,6 +154,13 @@ type dataUsageCacheV4 struct {
 	Info  dataUsageCacheInfo
 	Disks []string
 	Cache map[string]dataUsageEntryV4
+}
+
+// dataUsageCache contains a cache of data usage entries version 5.
+type dataUsageCacheV5 struct {
+	Info  dataUsageCacheInfo
+	Disks []string
+	Cache map[string]dataUsageEntryV5
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -182,6 +207,9 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 		e.ReplicationStats.PendingCount += summary.pendingCount
 		e.ReplicationStats.FailedCount += summary.failedCount
 	}
+	for tier, sz := range summary.tieredSizes {
+		e.TieringStats[tier].TieredSize += sz
+	}
 }
 
 // merge other data usage entry into this, excluding children.
@@ -206,6 +234,10 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
+	}
+
+	for tier, stat := range other.TieringStats {
+		e.TieringStats[tier].TieredSize += stat.TieredSize
 	}
 }
 
@@ -767,7 +799,8 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
 const (
-	dataUsageCacheVerCurrent = 5
+	dataUsageCacheVerCurrent = 6
+	dataUsageCacheVerV5      = 5
 	dataUsageCacheVerV4      = 4
 	dataUsageCacheVerV3      = 3
 	dataUsageCacheVerV2      = 2
@@ -912,6 +945,32 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			}
 
 			d.Cache[k] = e
+		}
+		return nil
+	case dataUsageCacheVerV5:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
+		dold := &dataUsageCacheV5{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		d.Info = dold.Info
+		d.Disks = dold.Disks
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			due := dataUsageEntry{
+				Size:             v.Size,
+				Objects:          v.Objects,
+				ObjSizes:         v.ObjSizes,
+				Children:         v.Children,
+				ReplicationStats: v.ReplicationStats,
+				Compacted:        v.Compacted,
+			}
+			d.Cache[k] = due
 		}
 		return nil
 	case dataUsageCacheVerCurrent:

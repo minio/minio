@@ -485,6 +485,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			if !oi.DeleteMarker && sz == oi.Size {
 				sizeS.versions++
 			}
+			if oi.TransitionStatus == lifecycle.TransitionComplete {
+				sizeS.tieredSizes[oi.TransitionTier] += uint64(oi.Size)
+			}
 			sizeS.totalSize += sz
 		}
 		return sizeS, nil

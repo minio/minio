@@ -830,6 +830,7 @@ type sizeSummary struct {
 	replicaSize    int64
 	pendingCount   uint64
 	failedCount    uint64
+	tieredSizes    map[string]uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
