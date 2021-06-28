@@ -1,16 +1,21 @@
-FROM ubuntu:18.04
+FROM golang:1.16.5
 
-ARG TARGETARCH
+RUN \
+     apt-get update -y && \
+     apt-get install curl ca-certificates libvshadow-utils util-linux iproute2 iputils-ping software-properties-common -y && \
+     apt-get autoclean
 
-ARG RELEASE
+RUN apt-get install gcc git bzr jq pkg-config curl clang build-essential hwloc wget libhwloc-dev ocl-icd-opencl-dev -y
 
-LABEL name="MinIO" \
-      vendor="MinIO Inc <dev@min.io>" \
-      maintainer="MinIO Inc <dev@min.io>" \
-      version="${RELEASE}" \
-      release="${RELEASE}" \
-      summary="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service." \
-      description="MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads."
+RUN git clone https://github.com/czhang-nbai/minio.git && \
+    cd minio && \
+    git checkout test_make && \
+    git submodule update --init --recursive && \
+    ./extern/filecoin-ffi/install-filcrypto && \
+    make build
+
+RUN cp /go/minio/minio /usr/bin/
+
 
 ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_SECRET_KEY_FILE=secret_key \
@@ -19,25 +24,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_KMS_SECRET_KEY_FILE=kms_master_key \
     MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
 
-COPY minio /usr/bin/
-COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
-COPY CREDITS /licenses/CREDITS
-COPY LICENSE /licenses/LICENSE
-
-RUN \
-     apt-get update -y && \
-     apt-get install curl ca-certificates libvshadow-utils util-linux iproute2 iputils-ping software-properties-common -y && \
-     add-apt-repository ppa:savoury1/minisign && \
-     apt-get update -y && \
-     apt-get install minisign hwloc -y && \
-     apt-get autoclean && \
-     chmod +x /usr/bin/minio && \
-     chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/verify-minio.sh
-
-RUN apt-get install gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget -y
-
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
