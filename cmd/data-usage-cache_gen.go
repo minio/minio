@@ -1315,56 +1315,10 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 	}
-	var zb0003 uint32
-	zb0003, err = dc.ReadMapHeader()
+	err = z.TieringStats.DecodeMsg(dc)
 	if err != nil {
 		err = msgp.WrapError(err, "TieringStats")
 		return
-	}
-	if z.TieringStats == nil {
-		z.TieringStats = make(map[string]*tieringStats, zb0003)
-	} else if len(z.TieringStats) > 0 {
-		for key := range z.TieringStats {
-			delete(z.TieringStats, key)
-		}
-	}
-	for zb0003 > 0 {
-		zb0003--
-		var za0002 string
-		var za0003 *tieringStats
-		za0002, err = dc.ReadString()
-		if err != nil {
-			err = msgp.WrapError(err, "TieringStats")
-			return
-		}
-		if dc.IsNil() {
-			err = dc.ReadNil()
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002)
-				return
-			}
-			za0003 = nil
-		} else {
-			if za0003 == nil {
-				za0003 = new(tieringStats)
-			}
-			var zb0004 uint32
-			zb0004, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002)
-				return
-			}
-			if zb0004 != 1 {
-				err = msgp.ArrayError{Wanted: 1, Got: zb0004}
-				return
-			}
-			za0003.TieredSize, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002, "TieredSize")
-				return
-			}
-		}
-		z.TieringStats[za0002] = za0003
 	}
 	z.Compacted, err = dc.ReadBool()
 	if err != nil {
@@ -1425,34 +1379,10 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	err = en.WriteMapHeader(uint32(len(z.TieringStats)))
+	err = z.TieringStats.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "TieringStats")
 		return
-	}
-	for za0002, za0003 := range z.TieringStats {
-		err = en.WriteString(za0002)
-		if err != nil {
-			err = msgp.WrapError(err, "TieringStats")
-			return
-		}
-		if za0003 == nil {
-			err = en.WriteNil()
-			if err != nil {
-				return
-			}
-		} else {
-			// array header, size 1
-			err = en.Append(0x91)
-			if err != nil {
-				return
-			}
-			err = en.WriteUint64(za0003.TieredSize)
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002, "TieredSize")
-				return
-			}
-		}
 	}
 	err = en.WriteBool(z.Compacted)
 	if err != nil {
@@ -1488,16 +1418,10 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 			return
 		}
 	}
-	o = msgp.AppendMapHeader(o, uint32(len(z.TieringStats)))
-	for za0002, za0003 := range z.TieringStats {
-		o = msgp.AppendString(o, za0002)
-		if za0003 == nil {
-			o = msgp.AppendNil(o)
-		} else {
-			// array header, size 1
-			o = append(o, 0x91)
-			o = msgp.AppendUint64(o, za0003.TieredSize)
-		}
+	o, err = z.TieringStats.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "TieringStats")
+		return
 	}
 	o = msgp.AppendBool(o, z.Compacted)
 	return
@@ -1568,55 +1492,10 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 	}
-	var zb0003 uint32
-	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	bts, err = z.TieringStats.UnmarshalMsg(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "TieringStats")
 		return
-	}
-	if z.TieringStats == nil {
-		z.TieringStats = make(map[string]*tieringStats, zb0003)
-	} else if len(z.TieringStats) > 0 {
-		for key := range z.TieringStats {
-			delete(z.TieringStats, key)
-		}
-	}
-	for zb0003 > 0 {
-		var za0002 string
-		var za0003 *tieringStats
-		zb0003--
-		za0002, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err, "TieringStats")
-			return
-		}
-		if msgp.IsNil(bts) {
-			bts, err = msgp.ReadNilBytes(bts)
-			if err != nil {
-				return
-			}
-			za0003 = nil
-		} else {
-			if za0003 == nil {
-				za0003 = new(tieringStats)
-			}
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002)
-				return
-			}
-			if zb0004 != 1 {
-				err = msgp.ArrayError{Wanted: 1, Got: zb0004}
-				return
-			}
-			za0003.TieredSize, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TieringStats", za0002, "TieredSize")
-				return
-			}
-		}
-		z.TieringStats[za0002] = za0003
 	}
 	z.Compacted, bts, err = msgp.ReadBoolBytes(bts)
 	if err != nil {
@@ -1635,19 +1514,7 @@ func (z *dataUsageEntry) Msgsize() (s int) {
 	} else {
 		s += z.ReplicationStats.Msgsize()
 	}
-	s += msgp.MapHeaderSize
-	if z.TieringStats != nil {
-		for za0002, za0003 := range z.TieringStats {
-			_ = za0003
-			s += msgp.StringPrefixSize + len(za0002)
-			if za0003 == nil {
-				s += msgp.NilSize
-			} else {
-				s += 1 + msgp.Uint64Size
-			}
-		}
-	}
-	s += msgp.BoolSize
+	s += z.TieringStats.Msgsize() + msgp.BoolSize
 	return
 }
 
@@ -2548,76 +2415,5 @@ func (z *sizeHistogram) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *sizeHistogram) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size))
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *tieringStats) DecodeMsg(dc *msgp.Reader) (err error) {
-	var zb0001 uint32
-	zb0001, err = dc.ReadArrayHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	if zb0001 != 1 {
-		err = msgp.ArrayError{Wanted: 1, Got: zb0001}
-		return
-	}
-	z.TieredSize, err = dc.ReadUint64()
-	if err != nil {
-		err = msgp.WrapError(err, "TieredSize")
-		return
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z tieringStats) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 1
-	err = en.Append(0x91)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.TieredSize)
-	if err != nil {
-		err = msgp.WrapError(err, "TieredSize")
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z tieringStats) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// array header, size 1
-	o = append(o, 0x91)
-	o = msgp.AppendUint64(o, z.TieredSize)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *tieringStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	if zb0001 != 1 {
-		err = msgp.ArrayError{Wanted: 1, Got: zb0001}
-		return
-	}
-	z.TieredSize, bts, err = msgp.ReadUint64Bytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err, "TieredSize")
-		return
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z tieringStats) Msgsize() (s int) {
-	s = 1 + msgp.Uint64Size
 	return
 }

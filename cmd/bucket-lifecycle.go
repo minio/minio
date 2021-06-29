@@ -168,14 +168,13 @@ func (t *transitionState) addWorker(ctx context.Context, objectAPI ObjectLayer) 
 }
 
 func initBackgroundTransition(ctx context.Context, objectAPI ObjectLayer) {
-	if globalTransitionState == nil {
-		return
-	}
-
+	globalTransitionState = newTransitionState()
 	// Start with globalTransitionConcurrent.
 	for i := 0; i < globalTransitionConcurrent; i++ {
 		globalTransitionState.addWorker(ctx, objectAPI)
 	}
+
+	globalTieringStats = NewTieringStats(ctx, objectAPI)
 }
 
 var errInvalidStorageClass = errors.New("invalid storage class")

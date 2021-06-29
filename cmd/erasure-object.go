@@ -1435,6 +1435,9 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
+
+	globalTieringStats.Update(opts.Transition.Tier, tieringStats{TieredSize: uint64(fi.Size)})
+	fmt.Println("globalTieringStats", globalTieringStats)
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,

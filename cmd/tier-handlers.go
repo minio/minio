@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -190,4 +191,34 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 	globalNotificationSys.LoadTransitionTierConfig(ctx)
 
 	writeSuccessNoContent(w)
+}
+
+func (api adminAPIHandlers) GetTierStatsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetTierStats")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	objAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListTierAction)
+	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	tier := vars["tier"]
+	fmt.Println("fetching stats for", tier)
+	ts := globalNotificationSys.GetClusterTierStats(ctx, tier)
+
+	data, err := json.Marshal(ts)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	fmt.Println("ts", ts, "data", string(data))
+	writeSuccessResponseJSON(w, data)
 }

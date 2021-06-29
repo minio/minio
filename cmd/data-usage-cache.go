@@ -55,13 +55,8 @@ type dataUsageEntry struct {
 	Versions         uint64 // Versions that are not delete markers.
 	ObjSizes         sizeHistogram
 	ReplicationStats *replicationStats
-	TieringStats     map[string]*tieringStats
+	TieringStats     TierStatsCache
 	Compacted        bool
-}
-
-//msgp:tuple tieringStats
-type tieringStats struct {
-	TieredSize uint64
 }
 
 //msgp:tuple replicationStats
@@ -207,9 +202,10 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 		e.ReplicationStats.PendingCount += summary.pendingCount
 		e.ReplicationStats.FailedCount += summary.failedCount
 	}
-	for tier, sz := range summary.tieredSizes {
-		e.TieringStats[tier].TieredSize += sz
+	if e.TieringStats == nil {
+		e.TieringStats = make(TierStatsCache)
 	}
+	e.TieringStats.merge(summary.tierStats)
 }
 
 // merge other data usage entry into this, excluding children.
@@ -236,9 +232,13 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 		e.ObjSizes[i] += v
 	}
 
-	for tier, stat := range other.TieringStats {
-		e.TieringStats[tier].TieredSize += stat.TieredSize
+	if other.TieringStats != nil {
+		if e.TieringStats == nil {
+			e.TieringStats = make(TierStatsCache)
+		}
 	}
+
+	e.TieringStats.merge(other.TieringStats)
 }
 
 // mod returns true if the hash mod cycles == cycle.

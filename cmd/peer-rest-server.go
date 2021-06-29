@@ -526,6 +526,26 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	}
 }
 
+func (s *peerRESTServer) GetTierStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	tier := vars[peerRESTTier]
+	if tier == "" {
+		s.writeErrorResponse(w, errors.New("Tier name is missing"))
+		return
+	}
+
+	ts := globalTieringStats.Get(tier)
+	fmt.Println("peer server", "tier", tier, "ts", ts)
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, ts))
+
+}
+
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
 // returns BucketReplicationStatus
 func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
@@ -1139,4 +1159,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(httpTraceHdrs(server.UpdateMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetTierStats).HandlerFunc(httpTraceHdrs(server.GetTierStatsHandler)).Queries(restQueries(peerRESTTier)...)
+
 }

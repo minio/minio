@@ -830,7 +830,7 @@ type sizeSummary struct {
 	replicaSize    int64
 	pendingCount   uint64
 	failedCount    uint64
-	tieredSizes    map[string]uint64
+	tierStats      TierStatsCache
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -878,7 +878,7 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, meta acti
 	return res.ObjectSize
 }
 
-func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta actionMeta) (applied bool, size int64) {
+func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) (applied bool, size int64) {
 	size, err := meta.oi.GetActualSize()
 	if i.debug {
 		logger.LogIf(ctx, err)
@@ -1006,7 +1006,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta
 func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) int64 {
 	i.applyTierObjSweep(ctx, o, meta)
 
-	applied, size := i.applyLifecycle(ctx, o, meta)
+	applied, size := i.applyLifecycle(ctx, o, meta, sizeS)
 	// For instance, an applied lifecycle means we remove/transitioned an object
 	// from the current deployment, which means we don't have to call healing
 	// routine even if we are asked to do via heal flag.

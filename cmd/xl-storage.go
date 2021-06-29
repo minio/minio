@@ -476,6 +476,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 		sizeS := sizeSummary{}
+		sizeS.tierStats = make(TierStatsCache)
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			sz := item.applyActions(ctx, objAPI, actionMeta{
@@ -484,9 +485,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}, &sizeS)
 			if !oi.DeleteMarker && sz == oi.Size {
 				sizeS.versions++
-			}
-			if oi.TransitionStatus == lifecycle.TransitionComplete {
-				sizeS.tieredSizes[oi.TransitionTier] += uint64(oi.Size)
 			}
 			sizeS.totalSize += sz
 		}

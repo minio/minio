@@ -459,6 +459,22 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	return bs, msgp.Decode(respBody, &bs)
 }
 
+// GetTierStats - load tier statistics
+func (client *peerRESTClient) GetTierStats(tier string) (tieringStats, error) {
+	values := make(url.Values)
+	values.Set(peerRESTTier, tier)
+	respBody, err := client.call(peerRESTMethodGetTierStats, values, nil, -1)
+	if err != nil {
+		return tieringStats{}, err
+	}
+
+	var ts tieringStats
+	defer http.DrainBody(respBody)
+	err = msgp.Decode(respBody, &ts)
+	fmt.Println("tier", tier, "ts", ts, "Err", err)
+	return ts, err
+}
+
 // LoadBucketMetadata - load bucket metadata
 func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	values := make(url.Values)

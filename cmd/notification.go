@@ -612,6 +612,39 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	return bucketStats
 }
 
+// GetTierStats - calls GetTierStats call on all peers for a cluster statistics view.
+func (sys *NotificationSys) GetClusterTierStats(ctx context.Context, tier string) tieringStats {
+	ng := WithNPeers(len(sys.peerClients))
+	tss := make([]tieringStats, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		index := index
+		client := client
+		ng.Go(ctx, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			ts, err := client.GetTierStats(tier)
+			if err != nil {
+				return err
+			}
+			tss[index] = ts
+			return nil
+		}, index, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+
+	res := globalTieringStats.Get(tier)
+	for _, ts := range tss {
+		res = res.Add(ts)
+	}
+	return res
+}
+
 // LoadTransitionTierConfig notifies remote peers to load their remote tier
 // configs from config store.
 func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
