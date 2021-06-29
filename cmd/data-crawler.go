@@ -205,7 +205,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 
 	done := ctx.Done()
-	var flattenLevels = 1
+	var flattenLevels = 2
 
 	if s.dataUsageCrawlDebug {
 		logger.Info(logPrefix+"Cycle: %v, Entries: %v"+logSuffix, cache.Info.NextCycle, len(cache.Cache))
