@@ -80,6 +80,12 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
 		return eErr == oErr
 	}
 
+	// check both fileInfo's have same number of versions, if not skip
+	// the `other` entry.
+	if eFi.NumVersions != oFi.NumVersions {
+		return false
+	}
+
 	return eFi.ModTime.Equal(oFi.ModTime) && eFi.Size == oFi.Size && eFi.VersionID == oFi.VersionID
 }
 
@@ -202,12 +208,12 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 	dirExists := 0
 	objExists := 0
-	var selFIV *FileInfo
 	for i := range m {
 		entry := &m[i]
 		if entry.name == "" {
 			continue
 		}
+
 		if entry.isDir() {
 			dirExists++
 			selected = entry
@@ -215,19 +221,18 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		}
 
 		// Get new entry metadata
-		fiv, err := entry.fileInfo(r.bucket)
-		if err != nil {
+		if _, err := entry.fileInfo(r.bucket); err != nil {
 			continue
 		}
 
-		objExists++
-		if selFIV == nil {
+		if selected == nil {
+			objExists++
 			selected = entry
-			selFIV = fiv
 			continue
 		}
 
 		if selected.matches(entry, r.bucket) {
+			objExists++
 			continue
 		}
 	}
