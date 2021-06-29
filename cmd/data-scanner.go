@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/pkg/console"
 )
 
@@ -1342,12 +1341,12 @@ func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 	return nil
 }
 
+// ILMExpiryActivity - activity trail for ILM expiry
+const ILMExpiryActivity = "ilm:expiry"
+
 func auditLogLifecycle(ctx context.Context, bucket, object string) {
-	entry := audit.NewEntry(globalDeploymentID)
-	entry.Trigger = "internal-scanner"
-	entry.API.Name = "DeleteObject"
-	entry.API.Bucket = bucket
-	entry.API.Object = object
-	ctx = logger.SetAuditEntry(ctx, &entry)
-	logger.AuditLog(ctx, nil, nil, nil)
+	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+		Trigger: ILMExpiryActivity,
+		APIName: "s3:ExpireObject",
+	})
 }
