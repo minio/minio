@@ -123,12 +123,12 @@ func (m *metacache) worthKeeping() bool {
 	case !cache.finished() && time.Since(cache.lastUpdate) > metacacheMaxRunningAge:
 		// Not finished and update for metacacheMaxRunningAge, discard it.
 		return false
-	case cache.finished() && time.Since(cache.lastHandout) > 10*time.Minute:
-		// Keep only for 2 days. Fallback if scanner is clogged.
+	case cache.finished() && time.Since(cache.lastHandout) > 30*time.Minute:
+		// Keep only for 30 minutes.
 		return false
 	case cache.status == scanStateError || cache.status == scanStateNone:
 		// Remove failed listings after 5 minutes.
-		return false
+		return time.Since(cache.lastUpdate) > 5*time.Minute
 	}
 	return true
 }
@@ -160,6 +160,11 @@ func (m *metacache) update(update metacache) {
 
 	if m.status == scanStateStarted && update.status != scanStateStarted {
 		m.status = update.status
+	}
+
+	if m.status == scanStateStarted && time.Since(m.lastHandout) > 15*time.Minute {
+		m.status = scanStateError
+		m.error = "client not seen"
 	}
 
 	if m.error == "" && update.error != "" {
