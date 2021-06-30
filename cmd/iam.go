@@ -1583,7 +1583,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 				}
 				policies = append(policies, ps...)
 			}
-			ok = len(policies) > 0
+			ok = len(policies) > 0 || globalPolicyOPA != nil
 		}
 	}
 	return cred, ok && cred.IsValid()

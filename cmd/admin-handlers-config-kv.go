@@ -178,16 +178,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg := globalServerConfig
-	if newObjectLayerFn() == nil {
-		var err error
-		cfg, err = getValidConfig(objectAPI)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-	}
-
+	cfg := globalServerConfig.Clone()
 	vars := mux.Vars(r)
 	var buf = &bytes.Buffer{}
 	cw := config.NewConfigWriteTo(cfg, vars["key"])
@@ -421,11 +412,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	cfg := globalServerConfig.Clone()
 
 	var s strings.Builder
 	hkvs := config.HelpSubSysMap[""]

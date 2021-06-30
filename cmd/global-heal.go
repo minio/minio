@@ -158,13 +158,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
 	})
 
-	// Try to pro-actively heal backend-encrypted file.
-	if _, err := er.HealObject(ctx, minioMetaBucket, backendEncryptedFile, "", madmin.HealOpts{}); err != nil {
-		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			logger.LogIf(ctx, err)
-		}
-	}
-
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		if tracker.isHealed(bucket.Name) {

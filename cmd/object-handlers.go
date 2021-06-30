@@ -845,22 +845,14 @@ var (
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	if newObjectLayerFn() == nil {
-		return nil, errServerNotInitialized
-	}
-
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, &miniogo.Options{
+	return miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
-	if err != nil {
-		return nil, err
-	}
-	return core, nil
 }
 
 // Check if the destination bucket is on a remote site, this code only gets executed

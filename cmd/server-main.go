@@ -214,7 +214,7 @@ func newAllSubsystems() {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
+	globalBucketMonitor = bandwidth.NewMonitor(GlobalContext, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
