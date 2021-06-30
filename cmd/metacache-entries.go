@@ -445,12 +445,32 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 	nDone := 0
 	ctxDone := ctx.Done()
 
+	// Use simpler forwarder.
+	if len(in) == 1 {
+		for {
+			select {
+			case <-ctxDone:
+				return ctx.Err()
+			case v, ok := <-in[0]:
+				if !ok {
+					return nil
+				}
+				select {
+				case <-ctxDone:
+					return ctx.Err()
+				case out <- v:
+				}
+			}
+		}
+	}
+
 	selectFrom := func(idx int) error {
 		select {
 		case <-ctxDone:
 			return ctx.Err()
 		case entry, ok := <-in[idx]:
 			if !ok {
+				top[idx] = nil
 				nDone++
 			} else {
 				top[idx] = &entry
@@ -473,12 +493,13 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 		best := top[0]
 		bestIdx := 0
 		for i, other := range top[1:] {
+			otherIdx := i + 1
 			if other == nil {
 				continue
 			}
 			if best == nil {
 				best = other
-				bestIdx = i
+				bestIdx = otherIdx
 				continue
 			}
 			if best.name == other.name {
@@ -488,10 +509,10 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 						return err
 					}
 					best = other
-					bestIdx = i
+					bestIdx = otherIdx
 				} else {
 					// Keep best, replace "other"
-					if err := selectFrom(i); err != nil {
+					if err := selectFrom(otherIdx); err != nil {
 						return err
 					}
 				}
@@ -499,9 +520,10 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			}
 			if best.name > other.name {
 				best = other
-				bestIdx = i
+				bestIdx = otherIdx
 			}
 		}
+
 		out <- *best
 		// Replace entry we just sent.
 		if err := selectFrom(bestIdx); err != nil {

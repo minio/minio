@@ -286,11 +286,10 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 func (b *bucketMetacache) cleanup() {
 	// Entries to remove.
 	remove := make(map[string]struct{})
-	currentCycle := intDataUpdateTracker.current()
 
 	// Test on a copy
 	// cleanup is the only one deleting caches.
-	caches, rootIdx := b.cloneCaches()
+	caches, _ := b.cloneCaches()
 
 	for id, cache := range caches {
 		if b.transient && time.Since(cache.lastUpdate) > 10*time.Minute && time.Since(cache.lastHandout) > 10*time.Minute {
@@ -298,7 +297,7 @@ func (b *bucketMetacache) cleanup() {
 			remove[id] = struct{}{}
 			continue
 		}
-		if !cache.worthKeeping(currentCycle) {
+		if !cache.worthKeeping() {
 			b.debugf("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
 			continue
@@ -312,37 +311,6 @@ func (b *bucketMetacache) cleanup() {
 			logger.Info("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
 			remove[id] = struct{}{}
 			continue
-		}
-	}
-
-	// Check all non-deleted against eachother.
-	// O(n*n), but should still be rather quick.
-	for id, cache := range caches {
-		if b.transient {
-			break
-		}
-		if _, ok := remove[id]; ok {
-			continue
-		}
-
-		interesting := interestingCaches(cache.root, rootIdx)
-		for _, id2 := range interesting {
-			if _, ok := remove[id2]; ok || id2 == id {
-				// Don't check against one we are already removing
-				continue
-			}
-			cache2, ok := caches[id2]
-			if !ok {
-				continue
-			}
-
-			if cache.canBeReplacedBy(&cache2) {
-				b.debugf("cache %s can be replaced by %s", id, cache2.id)
-				remove[id] = struct{}{}
-				break
-			} else {
-				b.debugf("cache %s can be NOT replaced by %s", id, cache2.id)
-			}
 		}
 	}
 
@@ -372,18 +340,6 @@ func (b *bucketMetacache) cleanup() {
 	for id := range remove {
 		b.deleteCache(id)
 	}
-}
-
-// Potentially interesting caches.
-// Will only add root if request is for root.
-func interestingCaches(root string, cachesRoot map[string][]string) []string {
-	var interesting []string
-	rootSplit := strings.Split(root, slashSeparator)
-	for i := range rootSplit {
-		want := path.Join(rootSplit[:i+1]...)
-		interesting = append(interesting, cachesRoot[want]...)
-	}
-	return interesting
 }
 
 // updateCacheEntry will update a cache.

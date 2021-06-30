@@ -52,7 +52,7 @@ import (
 // Streams can be assumed to be sorted in ascending order.
 // If the stream ends before a false boolean it can be assumed it was truncated.
 
-const metacacheStreamVersion = 1
+const metacacheStreamVersion = 2
 
 // metacacheWriter provides a serializer of metacache objects.
 type metacacheWriter struct {
@@ -262,7 +262,7 @@ func newMetacacheReader(r io.Reader) *metacacheReader {
 				return err
 			}
 			switch v {
-			case metacacheStreamVersion:
+			case 1, 2:
 			default:
 				return fmt.Errorf("metacacheReader: Unknown version: %d", v)
 			}

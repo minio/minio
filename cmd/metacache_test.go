@@ -37,8 +37,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(time.Minute),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	1: {
@@ -53,8 +51,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(time.Minute),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	2: {
@@ -69,8 +65,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp,
 		lastUpdate:   metaCacheTestsetTimestamp,
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	3: {
@@ -85,8 +79,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(-20 * time.Minute),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(-20 * time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp.Add(-20 * time.Minute),
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	4: {
@@ -101,8 +93,6 @@ var metaCacheTestset = []metacache{
 		ended:        time.Time{},
 		lastUpdate:   metaCacheTestsetTimestamp.Add(-time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	5: {
@@ -117,8 +107,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(time.Minute),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 	6: {
@@ -133,8 +121,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(-8 * time.Minute),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(-8 * time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 6,
-		endedCycle:   8,
 		dataVersion:  metacacheStreamVersion,
 	},
 	7: {
@@ -149,8 +135,6 @@ var metaCacheTestset = []metacache{
 		ended:        time.Time{},
 		lastUpdate:   metaCacheTestsetTimestamp.Add(-1 * time.Minute),
 		lastHandout:  metaCacheTestsetTimestamp,
-		startedCycle: 10,
-		endedCycle:   0,
 		dataVersion:  metacacheStreamVersion,
 	},
 	8: {
@@ -165,8 +149,6 @@ var metaCacheTestset = []metacache{
 		ended:        metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
 		lastUpdate:   metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
 		lastHandout:  metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
-		startedCycle: 10,
-		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 }
@@ -222,45 +204,6 @@ func Test_baseDirFromPrefix(t *testing.T) {
 	}
 }
 
-func Test_metacache_canBeReplacedBy(t *testing.T) {
-	testAgainst := metacache{
-		id:           "case-1-modified",
-		bucket:       "bucket",
-		root:         "folder/prefix",
-		recursive:    true,
-		status:       scanStateSuccess,
-		fileNotFound: false,
-		error:        "",
-		started:      metaCacheTestsetTimestamp.Add(time.Minute),
-		ended:        metaCacheTestsetTimestamp.Add(2 * time.Minute),
-		lastUpdate:   metaCacheTestsetTimestamp.Add(2 * time.Minute),
-		lastHandout:  metaCacheTestsetTimestamp.Add(time.Minute),
-		startedCycle: 10,
-		endedCycle:   10,
-		dataVersion:  metacacheStreamVersion,
-	}
-	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: true, 5: false, 6: true, 7: false, 8: false}
-
-	for i, tt := range metaCacheTestset {
-		t.Run(tt.id, func(t *testing.T) {
-			var want bool
-			if i >= len(wantResults) {
-				t.Logf("no expected result for test #%d", i)
-			} else {
-				want = wantResults[i]
-			}
-			// Add an hour, otherwise it will never be replaced.
-			// We operated on a copy.
-			tt.lastHandout = tt.lastHandout.Add(-2 * time.Hour)
-			tt.lastUpdate = tt.lastHandout.Add(-2 * time.Hour)
-			got := tt.canBeReplacedBy(&testAgainst)
-			if got != want {
-				t.Errorf("#%d: want %v, got %v", i, want, got)
-			}
-		})
-	}
-}
-
 func Test_metacache_finished(t *testing.T) {
 	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: false, 5: true, 6: true, 7: false, 8: true}
 
@@ -282,7 +225,8 @@ func Test_metacache_finished(t *testing.T) {
 }
 
 func Test_metacache_worthKeeping(t *testing.T) {
-	wantResults := []bool{0: true, 1: true, 2: true, 3: false, 4: false, 5: true, 6: false, 7: false, 8: false}
+	// TODO: Update...
+	wantResults := []bool{0: true, 1: true, 2: true, 3: false, 4: false, 5: true, 6: true, 7: false, 8: false}
 
 	for i, tt := range metaCacheTestset {
 		t.Run(tt.id, func(t *testing.T) {
@@ -293,7 +237,7 @@ func Test_metacache_worthKeeping(t *testing.T) {
 				want = wantResults[i]
 			}
 
-			got := tt.worthKeeping(7 + dataUsageUpdateDirCycles)
+			got := tt.worthKeeping()
 			if got != want {
 				t.Errorf("#%d: want %v, got %v", i, want, got)
 			}

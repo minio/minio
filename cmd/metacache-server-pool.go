@@ -95,7 +95,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 
 	// Decode and get the optional list id from the marker.
 	o.parseMarker()
-	o.BaseDir = o.Prefix
+	o.BaseDir = baseDirFromPrefix(o.Prefix)
 
 	// We have 2 cases:
 	// 1) Cold listing, just list.
@@ -142,11 +142,18 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		o.ID = cache.id
 	}
 
-	if !o.Create && o.ID != "" {
+	if o.ID != "" {
 		// We have an existing list ID, continue streaming.
-		entries, err := z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, o)
-		if err == nil {
-			return entries, nil
+		if o.Create {
+			entries, err = z.listAndSave(ctx, o)
+			if err == nil {
+				return entries, nil
+			}
+		} else {
+			entries, err = z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, o)
+			if err == nil {
+				return entries, nil
+			}
 		}
 		if IsErr(err, []error{
 			nil,
@@ -164,26 +171,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		o.ID = mustGetUUID()
 	}
 
-	for o.Create && o.ID != "" {
-		// Use ID as the object name...
-		o.pool = z.getAvailablePoolIdx(ctx, minioMetaBucket, o.ID, 10<<20)
-		if o.pool < 0 {
-			// No space or similar, don't persist the listing.
-			o.pool = 0
-			o.Create = false
-			o.ID = ""
-			break
-		}
-		o.set = z.serverPools[o.pool].getHashedSetIndex(o.ID)
-		saver := z.serverPools[o.pool].sets[o.set]
-
-		// Disconnect from call above, but cancel on exit.
-		ctx, cancel := context.WithCancel(GlobalContext)
-		filterCh := make(chan metaCacheEntry, o.Limit)
-
-		go saver.saveMetaCacheStream(ctx, cancel)
-	}
-
 	// Do listing in-place.
 	// Create output for our results.
 	// Create filter for results.
@@ -191,6 +178,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	filteredResults := o.gatherResults(filterCh)
 	listCtx, cancelList := context.WithCancel(ctx)
 	var wg sync.WaitGroup
+	wg.Add(1)
 	var listErr error
 
 	go func() {
@@ -200,7 +188,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 
 	entries, err = filteredResults()
 	cancelList()
-	wg.Done()
+	wg.Wait()
 	if listErr != nil && !errors.Is(listErr, context.Canceled) {
 		return entries, listErr
 	}
@@ -216,6 +204,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 }
 
 // listMerged will list across all sets and return a merged results stream.
+// The result channel is closed when no more results are expected.
 func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) error {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -298,5 +287,67 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		logger.LogIf(ctx, err)
 		return err
 	}
+	if allAtEOF {
+		// TODO" Maybe, maybe not
+		return io.EOF
+	}
 	return nil
+}
+
+func (z *erasureServerPools) listAndSave(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
+	// Use ID as the object name...
+	o.pool = z.getAvailablePoolIdx(ctx, minioMetaBucket, o.ID, 10<<20)
+	if o.pool < 0 {
+		// No space or similar, don't persist the listing.
+		o.pool = 0
+		o.Create = false
+		o.ID = ""
+		return entries, errDiskFull
+	}
+	o.set = z.serverPools[o.pool].getHashedSetIndex(o.ID)
+	saver := z.serverPools[o.pool].sets[o.set]
+
+	// Disconnect from call above, but cancel on exit.
+	listCtx, cancel := context.WithCancel(GlobalContext)
+	saveCh := make(chan metaCacheEntry, metacacheBlockSize)
+	inCh := make(chan metaCacheEntry, metacacheBlockSize)
+	outCh := make(chan metaCacheEntry, o.Limit)
+
+	filteredResults := o.gatherResults(outCh)
+
+	mc := o.newMetacache()
+	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: o}
+
+	// Save listing...
+	go func() {
+		if err := saver.saveMetaCacheStream(listCtx, &meta, saveCh); err != nil {
+			meta.setErr(err.Error())
+		}
+		cancel()
+	}()
+
+	// Do listing...
+	go func() {
+		err := z.listMerged(listCtx, o, inCh)
+		if err != nil {
+			meta.setErr(err.Error())
+		}
+		// Indicate end...
+		close(inCh)
+	}()
+
+	// Write listing to results and saver.
+	go func() {
+		for entry := range inCh {
+			select {
+			case outCh <- entry:
+			default:
+			}
+			saveCh <- entry
+		}
+		close(outCh)
+		close(saveCh)
+	}()
+
+	return filteredResults()
 }

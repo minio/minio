@@ -556,25 +556,40 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	})
 }
 
-func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, cancel context.CancelFunc, o listPathOptions, entries <-chan metaCacheEntry) (err error) {
+type metaCacheRPC struct {
+	o      listPathOptions
+	mu     sync.Mutex
+	meta   *metacache
+	rpc    *peerRESTClient
+	cancel context.CancelFunc
+}
+
+func (m *metaCacheRPC) setErr(err string) {
+	m.mu.Lock()
+	defer m.mu.Lock()
+	meta := *m.meta
+	if meta.status != scanStateError {
+		meta.error = err
+		meta.status = scanStateError
+	} else {
+		// An error is already set.
+		return
+	}
+	meta, _ = m.o.updateMetacacheListing(meta, m.rpc)
+	*m.meta = meta
+}
+
+func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCacheRPC, entries <-chan metaCacheEntry) (err error) {
+	o := mc.o
 	o.debugf(color.Green("saveMetaCacheStream:")+" with options: %#v", o)
 
-	meta := o.newMetacache()
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-	var metaMu sync.Mutex
-
+	metaMu := &mc.mu
+	rpc := mc.rpc
+	cancel := mc.cancel
 	defer func() {
 		o.debugln(color.Green("saveMetaCacheStream:")+"err:", err)
 		if err != nil && !errors.Is(err, io.EOF) {
-			go func(err string) {
-				metaMu.Lock()
-				if meta.status != scanStateError {
-					meta.error = err
-					meta.status = scanStateError
-				}
-				meta, _ = o.updateMetacacheListing(meta, rpc)
-				metaMu.Unlock()
-			}(err.Error())
+			go mc.setErr(err.Error())
 			cancel()
 		}
 	}()
@@ -593,8 +608,9 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, cancel contex
 				exit = true
 			}
 			metaMu.Lock()
-			meta.endedCycle = intDataUpdateTracker.current()
+			meta := *mc.meta
 			meta, err = o.updateMetacacheListing(meta, rpc)
+			*mc.meta = meta
 			if meta.status == scanStateError {
 				logger.LogIf(ctx, err)
 				cancel()
@@ -626,12 +642,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, cancel contex
 			ParentIsObject: nil,
 		})
 		if err != nil {
-			metaMu.Lock()
-			if meta.error != "" {
-				meta.status = scanStateError
-				meta.error = err.Error()
-			}
-			metaMu.Unlock()
+			mc.setErr(err.Error())
 			cancel()
 			return err
 		}
@@ -670,253 +681,24 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, cancel contex
 
 	metaMu.Lock()
 	if err != nil {
-		meta.status = scanStateError
-		meta.error = err.Error()
+		mc.setErr(err.Error())
+		return
 	}
 	// Save success
-	if meta.error == "" {
-		meta.status = scanStateSuccess
-		meta.endedCycle = intDataUpdateTracker.current()
+	if mc.meta.error == "" {
+		mc.meta.status = scanStateSuccess
 	}
 
+	meta := *mc.meta
 	meta, _ = o.updateMetacacheListing(meta, rpc)
+	*mc.meta = meta
 	metaMu.Unlock()
 
 	if err := bw.Close(); err != nil {
-		metaMu.Lock()
-		meta.error = err.Error()
-		meta.status = scanStateError
-		meta, _ = o.updateMetacacheListing(meta, rpc)
-		metaMu.Unlock()
+		mc.setErr(err.Error())
 	}
 
 	return
-}
-
-// Will return io.EOF if continuing would not yield more results.
-//TODO: Remove when not needed.
-func (er *erasureObjects) listPathOld(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
-	o.debugf(color.Green("listPath:")+" with options: %#v", o)
-
-	meta := o.newMetacache()
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-	var metaMu sync.Mutex
-
-	o.debugln(color.Green("listPath:")+" scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
-
-	// Disconnect from call above, but cancel on exit.
-	ctx, cancel := context.WithCancel(GlobalContext)
-	// We need to ask disks.
-	disks := er.getOnlineDisks()
-
-	defer func() {
-		o.debugln(color.Green("listPath:")+" returning:", entries.len(), "err:", err)
-		if err != nil && !errors.Is(err, io.EOF) {
-			go func(err string) {
-				metaMu.Lock()
-				if meta.status != scanStateError {
-					meta.error = err
-					meta.status = scanStateError
-				}
-				meta, _ = o.updateMetacacheListing(meta, rpc)
-				metaMu.Unlock()
-			}(err.Error())
-			cancel()
-		}
-	}()
-
-	askDisks := o.AskDisks
-	listingQuorum := askDisks - 1
-	// Special case: ask all disks if the drive count is 4
-	if askDisks == -1 || er.setDriveCount == 4 {
-		askDisks = len(disks) // with 'strict' quorum list on all online disks.
-		listingQuorum = getReadQuorum(er.setDriveCount)
-	}
-
-	if len(disks) < askDisks {
-		err = InsufficientReadQuorum{}
-		logger.LogIf(ctx, fmt.Errorf("listPath: Insufficient disks, %d of %d needed are available", len(disks), askDisks))
-		cancel()
-		return
-	}
-
-	// Select askDisks random disks.
-	if len(disks) > askDisks {
-		disks = disks[:askDisks]
-	}
-
-	// Create output for our results.
-	var cacheCh chan metaCacheEntry
-	if !o.discardResult {
-		cacheCh = make(chan metaCacheEntry, metacacheBlockSize)
-	}
-
-	// Create filter for results.
-	filterCh := make(chan metaCacheEntry, 100)
-	filteredResults := o.gatherResults(filterCh)
-	closeChannels := func() {
-		if !o.discardResult {
-			close(cacheCh)
-		}
-		close(filterCh)
-	}
-
-	// Cancel listing on return if non-saved list.
-	if o.discardResult {
-		defer cancel()
-	}
-
-	go func() {
-		defer cancel()
-		// Save continuous updates
-		go func() {
-			var err error
-			ticker := time.NewTicker(10 * time.Second)
-			defer ticker.Stop()
-			var exit bool
-			for !exit {
-				select {
-				case <-ticker.C:
-				case <-ctx.Done():
-					exit = true
-				}
-				metaMu.Lock()
-				meta.endedCycle = intDataUpdateTracker.current()
-				meta, err = o.updateMetacacheListing(meta, rpc)
-				if meta.status == scanStateError {
-					logger.LogIf(ctx, err)
-					cancel()
-					exit = true
-				}
-				metaMu.Unlock()
-			}
-		}()
-
-		const retryDelay = 200 * time.Millisecond
-		const maxTries = 5
-
-		var bw *metacacheBlockWriter
-		// Don't save single object listings.
-		if !o.discardResult {
-			// Write results to disk.
-			bw = newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
-				// if the block is 0 bytes and its a first block skip it.
-				// skip only this for Transient caches.
-				if len(b.data) == 0 && b.n == 0 && o.Transient {
-					return nil
-				}
-				o.debugln(color.Green("listPath:")+" saving block", b.n, "to", o.objectPath(b.n))
-				r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
-				logger.LogIf(ctx, err)
-				custom := b.headerKV()
-				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
-					UserDefined:    custom,
-					NoLock:         true, // No need to hold namespace lock, each prefix caches uniquely.
-					ParentIsObject: nil,
-				})
-				if err != nil {
-					metaMu.Lock()
-					if meta.error != "" {
-						meta.status = scanStateError
-						meta.error = err.Error()
-					}
-					metaMu.Unlock()
-					cancel()
-					return err
-				}
-				if b.n == 0 {
-					return nil
-				}
-				// Update block 0 metadata.
-				var retries int
-				for {
-					meta := b.headerKV()
-					fi := FileInfo{
-						Metadata: make(map[string]string, len(meta)),
-					}
-					for k, v := range meta {
-						fi.Metadata[k] = v
-					}
-					err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), fi)
-					if err == nil {
-						break
-					}
-					switch err.(type) {
-					case ObjectNotFound:
-						return err
-					case InsufficientReadQuorum:
-					default:
-						logger.LogIf(ctx, err)
-					}
-					if retries >= maxTries {
-						return err
-					}
-					retries++
-					time.Sleep(retryDelay)
-				}
-				return nil
-			})
-		}
-
-		// How to resolve results.
-		resolver := metadataResolutionParams{
-			dirQuorum: listingQuorum,
-			objQuorum: listingQuorum,
-			bucket:    o.Bucket,
-		}
-
-		err := listPathRaw(ctx, listPathRawOptions{
-			disks:        disks,
-			bucket:       o.Bucket,
-			path:         o.BaseDir,
-			recursive:    o.Recursive,
-			filterPrefix: o.FilterPrefix,
-			minDisks:     listingQuorum,
-			agreed: func(entry metaCacheEntry) {
-				if !o.discardResult {
-					cacheCh <- entry
-				}
-				filterCh <- entry
-			},
-			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
-				// Results Disagree :-(
-				entry, ok := entries.resolve(&resolver)
-				if ok {
-					if !o.discardResult {
-						cacheCh <- *entry
-					}
-					filterCh <- *entry
-				}
-			},
-		})
-
-		metaMu.Lock()
-		if err != nil {
-			meta.status = scanStateError
-			meta.error = err.Error()
-		}
-		// Save success
-		if meta.error == "" {
-			meta.status = scanStateSuccess
-			meta.endedCycle = intDataUpdateTracker.current()
-		}
-
-		meta, _ = o.updateMetacacheListing(meta, rpc)
-		metaMu.Unlock()
-
-		closeChannels()
-		if !o.discardResult {
-			if err := bw.Close(); err != nil {
-				metaMu.Lock()
-				meta.error = err.Error()
-				meta.status = scanStateError
-				meta, _ = o.updateMetacacheListing(meta, rpc)
-				metaMu.Unlock()
-			}
-		}
-	}()
-
-	return filteredResults()
 }
 
 type listPathRawOptions struct {
