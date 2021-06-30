@@ -498,55 +498,6 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 	return bf, nil
 }
 
-// findEarliestCleanBloomFilter will find the earliest bloom filter across the cluster
-// where the directory is clean.
-// Due to how objects are stored this can include object names.
-func (sys *NotificationSys) findEarliestCleanBloomFilter(ctx context.Context, dir string) uint64 {
-
-	// Load initial state from local...
-	current := intDataUpdateTracker.current()
-	best := intDataUpdateTracker.latestWithDir(dir)
-	if best == current {
-		// If the current is dirty no need to check others.
-		return current
-	}
-
-	var req = bloomFilterRequest{
-		Current:     0,
-		Oldest:      best,
-		OldestClean: dir,
-	}
-
-	var mu sync.Mutex
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		g.Go(func() error {
-			serverBF, err := client.cycleServerBloomFilter(ctx, req)
-
-			// Keep lock while checking result.
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil {
-				// Error, don't assume clean.
-				best = current
-				logger.LogIf(ctx, err)
-				return nil
-			}
-			if serverBF.OldestIdx > best {
-				best = serverBF.OldestIdx
-			}
-			return nil
-		}, idx)
-	}
-	g.Wait()
-	return best
-}
-
 var errPeerNotReachable = errors.New("peer is not reachable")
 
 // GetLocks - makes GetLocks RPC call on all peers.

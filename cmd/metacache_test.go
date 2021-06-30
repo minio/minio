@@ -226,7 +226,7 @@ func Test_metacache_finished(t *testing.T) {
 
 func Test_metacache_worthKeeping(t *testing.T) {
 	// TODO: Update...
-	wantResults := []bool{0: true, 1: true, 2: true, 3: false, 4: false, 5: true, 6: true, 7: false, 8: false}
+	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: false, 5: true, 6: true, 7: false, 8: false}
 
 	for i, tt := range metaCacheTestset {
 		t.Run(tt.id, func(t *testing.T) {

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,10 +90,6 @@ type listPathOptions struct {
 	// This means the cache metadata will not be persisted on disk.
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
-
-	// discardResult will not persist the cache to storage.
-	// When the initial results are returned listing will be canceled.
-	discardResult bool
 
 	// pool and set of where the cache is located.
 	pool, set int
@@ -514,12 +511,18 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
 	askDisks := o.AskDisks
-	listingQuorum := askDisks - 1
+	listingQuorum := o.AskDisks - 1
 	disks := er.getOnlineDisks()
 	// Special case: ask all disks if the drive count is 4
 	if askDisks == -1 || er.setDriveCount == 4 {
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
 		listingQuorum = getReadQuorum(er.setDriveCount)
+	}
+	if askDisks > 0 && len(disks) > askDisks {
+		rand.Shuffle(len(disks), func(i, j int) {
+			disks[i] = disks[j]
+		})
+		disks = disks[askDisks:]
 	}
 
 	// How to resolve results.
@@ -617,10 +620,9 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 	const retryDelay = 200 * time.Millisecond
 	const maxTries = 5
 
-	var bw *metacacheBlockWriter
 	// Keep destination...
 	// Write results to disk.
-	bw = newMetacacheBlockWriter(entries, func(b *metacacheBlock) error {
+	bw := newMetacacheBlockWriter(entries, func(b *metacacheBlock) error {
 		// if the block is 0 bytes and its a first block skip it.
 		// skip only this for Transient caches.
 		if len(b.data) == 0 && b.n == 0 && o.Transient {

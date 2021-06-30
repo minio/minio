@@ -78,7 +78,6 @@ func (o *listPathOptions) parseMarker() {
 			// Ignore unknown
 		}
 	}
-	return
 }
 
 // encodeMarker will encode a uuid and return it as a marker.

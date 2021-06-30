@@ -91,22 +91,6 @@ func (m *metacacheManager) initManager() {
 	}()
 }
 
-// findCache will get a metacache.
-func (m *metacacheManager) findCache(ctx context.Context, o listPathOptions) metacache {
-	m.mu.RLock()
-	b, ok := m.buckets[o.Bucket]
-	if ok {
-		m.mu.RUnlock()
-		return b.findCache(o)
-	}
-	if meta, ok := m.trash[o.ID]; ok {
-		m.mu.RUnlock()
-		return meta
-	}
-	m.mu.RUnlock()
-	return m.getBucket(ctx, o.Bucket).findCache(o)
-}
-
 // updateCacheEntry will update non-transient state.
 func (m *metacacheManager) updateCacheEntry(update metacache) (metacache, error) {
 	m.mu.RLock()

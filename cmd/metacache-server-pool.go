@@ -305,6 +305,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o listPathOptions)
 		o.pool = 0
 		o.Create = false
 		o.ID = ""
+		o.Transient = true
 		return entries, errDiskFull
 	}
 	o.set = z.serverPools[o.pool].getHashedSetIndex(o.ID)

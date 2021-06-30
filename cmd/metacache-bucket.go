@@ -331,7 +331,6 @@ func (b *bucketMetacache) deleteAll() {
 	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
 	b.caches = make(map[string]metacache, 10)
 	b.cachesRoot = make(map[string][]string, 10)
-	return
 }
 
 // deleteCache will delete a specific cache and all files related to it across the cluster.
