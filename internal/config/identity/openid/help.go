@@ -51,6 +51,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         RedirectURI,
+			Description: `Configure custom redirect_uri for OpenID login flow callback`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         Scopes,
 			Description: `Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"`,
 			Optional:    true,
