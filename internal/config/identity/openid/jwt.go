@@ -43,23 +43,78 @@ type Config struct {
 	JWKS struct {
 		URL *xnet.URL `json:"url"`
 	} `json:"jwks"`
-	URL          *xnet.URL `json:"url,omitempty"`
-	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
-	ClaimName    string    `json:"claimName,omitempty"`
-	DiscoveryDoc DiscoveryDoc
-	ClientID     string
-	ClientSecret string
-	publicKeys   map[string]crypto.PublicKey
-	transport    *http.Transport
-	closeRespFn  func(io.ReadCloser)
-	mutex        *sync.Mutex
+	URL           *xnet.URL `json:"url,omitempty"`
+	ClaimPrefix   string    `json:"claimPrefix,omitempty"`
+	ClaimName     string    `json:"claimName,omitempty"`
+	ClaimUserinfo bool      `json:"claimUserInfo,omitempty"`
+	DiscoveryDoc  DiscoveryDoc
+	ClientID      string
+	ClientSecret  string
+	publicKeys    map[string]crypto.PublicKey
+	transport     *http.Transport
+	closeRespFn   func(io.ReadCloser)
+	mutex         *sync.Mutex
+}
+
+// UserInfo returns claims for authenticated user from userInfo endpoint.
+//
+// Some OIDC implementations such as GitLab do not support
+// claims as part of the normal oauth2 flow, instead rely
+// on service providers making calls to IDP to fetch additional
+// claims available from the UserInfo endpoint
+func (r *Config) UserInfo(idToken string) (map[string]interface{}, error) {
+	if r.JWKS.URL == nil || r.JWKS.URL.String() == "" {
+		return nil, errors.New("openid not configured")
+	}
+	transport := http.DefaultTransport
+	if r.transport != nil {
+		transport = r.transport
+	}
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	req, err := http.NewRequest(http.MethodPost, r.DiscoveryDoc.UserInfoEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if idToken != "" {
+		req.Header.Set("Authorization", "Bearer "+idToken)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer r.closeRespFn(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		// uncomment this for debugging when needed.
+		// reqBytes, _ := httputil.DumpRequest(req, false)
+		// fmt.Println(string(reqBytes))
+		// respBytes, _ := httputil.DumpResponse(resp, true)
+		// fmt.Println(string(respBytes))
+		return nil, errors.New(resp.Status)
+	}
+
+	dec := json.NewDecoder(resp.Body)
+	var claims = map[string]interface{}{}
+
+	if err = dec.Decode(&claims); err != nil {
+		// uncomment this for debugging when needed.
+		// reqBytes, _ := httputil.DumpRequest(req, false)
+		// fmt.Println(string(reqBytes))
+		// respBytes, _ := httputil.DumpResponse(resp, true)
+		// fmt.Println(string(respBytes))
+		return nil, err
+	}
+
+	return claims, nil
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
 func (r *Config) PopulatePublicKey() error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	if r.JWKS.URL == nil || r.JWKS.URL.String() == "" {
 		return nil
 	}
@@ -70,6 +125,10 @@ func (r *Config) PopulatePublicKey() error {
 	client := &http.Client{
 		Transport: transport,
 	}
+
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	resp, err := client.Get(r.JWKS.URL.String())
 	if err != nil {
 		return err
@@ -174,7 +233,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 }
 
 // Validate - validates the access token.
-func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
+func (p *JWT) Validate(token, accessToken, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512", "ES256", "ES384", "ES512",
@@ -211,6 +270,21 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	// If claim user info is enabled, get claims from userInfo
+	// and overwrite them with the claims from JWT.
+	if p.ClaimUserinfo {
+		if accessToken == "" {
+			return nil, errors.New("access_token is mandatory if user_info claim is enabled")
+		}
+		uclaims, err := p.UserInfo(accessToken)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range uclaims {
+			claims[k] = v
+		}
+	}
+
 	return claims, nil
 }
 
@@ -221,21 +295,23 @@ func (p *JWT) ID() ID {
 
 // OpenID keys and envs.
 const (
-	JwksURL      = "jwks_url"
-	ConfigURL    = "config_url"
-	ClaimName    = "claim_name"
-	ClaimPrefix  = "claim_prefix"
-	ClientID     = "client_id"
-	ClientSecret = "client_secret"
-	Scopes       = "scopes"
+	JwksURL       = "jwks_url"
+	ConfigURL     = "config_url"
+	ClaimName     = "claim_name"
+	ClaimPrefix   = "claim_prefix"
+	ClientID      = "client_id"
+	ClientSecret  = "client_secret"
+	ClaimUserinfo = "claim_userinfo"
+	Scopes        = "scopes"
 
-	EnvIdentityOpenIDClientID     = "MINIO_IDENTITY_OPENID_CLIENT_ID"
-	EnvIdentityOpenIDClientSecret = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
-	EnvIdentityOpenIDJWKSURL      = "MINIO_IDENTITY_OPENID_JWKS_URL"
-	EnvIdentityOpenIDURL          = "MINIO_IDENTITY_OPENID_CONFIG_URL"
-	EnvIdentityOpenIDClaimName    = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
-	EnvIdentityOpenIDClaimPrefix  = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
-	EnvIdentityOpenIDScopes       = "MINIO_IDENTITY_OPENID_SCOPES"
+	EnvIdentityOpenIDClientID      = "MINIO_IDENTITY_OPENID_CLIENT_ID"
+	EnvIdentityOpenIDClientSecret  = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
+	EnvIdentityOpenIDJWKSURL       = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenIDURL           = "MINIO_IDENTITY_OPENID_CONFIG_URL"
+	EnvIdentityOpenIDClaimName     = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
+	EnvIdentityOpenIDClaimPrefix   = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDScopes        = "MINIO_IDENTITY_OPENID_SCOPES"
+	EnvIdentityOpenIDClaimUserInfo = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
 )
 
 // DiscoveryDoc - parses the output from openid-configuration
@@ -301,11 +377,15 @@ var (
 			Value: iampolicy.PolicyName,
 		},
 		config.KV{
-			Key:   ClaimPrefix,
+			Key:   ClaimUserinfo,
 			Value: "",
 		},
 		config.KV{
 			Key:   Scopes,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClaimPrefix,
 			Value: "",
 		},
 		config.KV{
@@ -326,20 +406,16 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		return c, err
 	}
 
-	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
-	if jwksURL == "" {
-		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kvs.Get(JwksURL))
-	}
-
 	c = Config{
-		ClaimName:    env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
-		ClaimPrefix:  env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
-		publicKeys:   make(map[string]crypto.PublicKey),
-		ClientID:     env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
-		ClientSecret: env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
-		transport:    transport,
-		closeRespFn:  closeRespFn,
-		mutex:        &sync.Mutex{}, // allocate for copying
+		ClaimName:     env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
+		ClaimPrefix:   env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
+		ClientID:      env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
+		ClientSecret:  env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
+		ClaimUserinfo: env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == config.EnableOn,
+		publicKeys:    make(map[string]crypto.PublicKey),
+		transport:     transport,
+		closeRespFn:   closeRespFn,
+		mutex:         &sync.Mutex{}, // allocate for copying
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
@@ -352,6 +428,10 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		if err != nil {
 			return c, err
 		}
+	}
+
+	if c.ClaimUserinfo && configURL == "" {
+		return c, errors.New("please specify config_url to enable fetching claims from UserInfo endpoint")
 	}
 
 	if scopeList := env.Get(EnvIdentityOpenIDScopes, kvs.Get(Scopes)); scopeList != "" {
@@ -371,16 +451,12 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		c.ClaimName = iampolicy.PolicyName
 	}
 
-	if jwksURL == "" {
-		// Fallback to discovery document jwksURL
-		jwksURL = c.DiscoveryDoc.JwksURI
-	}
-
-	if jwksURL == "" {
+	if c.DiscoveryDoc.JwksURI == "" {
+		// OpenID will not be enabled.
 		return c, nil
 	}
 
-	c.JWKS.URL, err = xnet.ParseHTTPURL(jwksURL)
+	c.JWKS.URL, err = xnet.ParseHTTPURL(c.DiscoveryDoc.JwksURI)
 	if err != nil {
 		return c, err
 	}
