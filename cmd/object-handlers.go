@@ -3115,9 +3115,15 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setEventStreamHeaders(w)
 
+	opts, err := completeMultipartOpts(ctx, r, bucket, object)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(w)
-	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, ObjectOptions{})
+	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.
 	headerWritten := <-completeDoneCh
