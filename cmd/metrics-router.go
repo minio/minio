@@ -18,10 +18,10 @@
 package cmd
 
 import (
-	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -46,15 +46,13 @@ const (
 func registerMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	authType := strings.ToLower(os.Getenv(EnvPrometheusAuthType))
+	authType := strings.ToLower(env.Get(EnvPrometheusAuthType, string(prometheusJWT)))
 	switch prometheusAuthType(authType) {
 	case prometheusPublic:
 		metricsRouter.Handle(prometheusMetricsPathLegacy, metricsHandler())
 		metricsRouter.Handle(prometheusMetricsV2ClusterPath, metricsServerHandler())
 		metricsRouter.Handle(prometheusMetricsV2NodePath, metricsNodeHandler())
 	case prometheusJWT:
-		fallthrough
-	default:
 		metricsRouter.Handle(prometheusMetricsPathLegacy, AuthMiddleware(metricsHandler()))
 		metricsRouter.Handle(prometheusMetricsV2ClusterPath, AuthMiddleware(metricsServerHandler()))
 		metricsRouter.Handle(prometheusMetricsV2NodePath, AuthMiddleware(metricsNodeHandler()))

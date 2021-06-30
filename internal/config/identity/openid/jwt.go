@@ -46,6 +46,7 @@ type Config struct {
 	URL          *xnet.URL `json:"url,omitempty"`
 	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
 	ClaimName    string    `json:"claimName,omitempty"`
+	RedirectURI  string    `json:"redirectURI,omitempty"`
 	DiscoveryDoc DiscoveryDoc
 	ClientID     string
 	ClientSecret string
@@ -228,6 +229,7 @@ const (
 	ClientID     = "client_id"
 	ClientSecret = "client_secret"
 	Scopes       = "scopes"
+	RedirectURI  = "redirect_uri"
 
 	EnvIdentityOpenIDClientID     = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDClientSecret = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
@@ -235,6 +237,7 @@ const (
 	EnvIdentityOpenIDURL          = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimName    = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
 	EnvIdentityOpenIDClaimPrefix  = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDRedirectURI  = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
 	EnvIdentityOpenIDScopes       = "MINIO_IDENTITY_OPENID_SCOPES"
 )
 
@@ -305,6 +308,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   RedirectURI,
+			Value: "",
+		},
+		config.KV{
 			Key:   Scopes,
 			Value: "",
 		},
@@ -334,6 +341,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	c = Config{
 		ClaimName:    env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
 		ClaimPrefix:  env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
+		RedirectURI:  env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
 		publicKeys:   make(map[string]crypto.PublicKey),
 		ClientID:     env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
 		ClientSecret: env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
