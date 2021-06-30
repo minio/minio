@@ -235,7 +235,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		}
 
 		// Send audit for the lifecycle delete operation
-		auditLogLifecycle(ctx, oi.Bucket, oi.Name)
+		auditLogLifecycle(ctx, oi.Bucket, oi.Name, oi.VersionID, ILMExpiryActivity)
 
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
