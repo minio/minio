@@ -96,6 +96,10 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// Decode and get the optional list id from the marker.
 	o.parseMarker()
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
+	o.Transient = o.Transient || isMinioReservedBucket(o.Bucket)
+	if o.Transient {
+		o.Create = false
+	}
 
 	// We have 2 cases:
 	// 1) Cold listing, just list.
@@ -103,46 +107,45 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// 3) Returning, with ID, stream from list.
 	//
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
-	if o.ID != "" && o.Create {
-		// TODO:
+	if o.ID != "" && !o.Transient {
+		// Create or ping with handout...
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
-			rpc = nil
 			o.Transient = true
 		}
-		if rpc == nil || o.Transient {
-			// Local
-			cache = localMetacacheMgr.findCache(ctx, o)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		c, err := rpc.GetMetacacheListing(ctx, o)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// Context is canceled, return at once.
+				// request canceled, no entries to return
+				return entries, io.EOF
+			}
+			if !errors.Is(err, context.DeadlineExceeded) {
+				// TODO: Remove, not really informational.
+				logger.LogIf(ctx, err)
+			}
+			o.Transient = true
+			o.Create = false
+			o.ID = mustGetUUID()
 		} else {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			c, err := rpc.GetMetacacheListing(ctx, o)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					// Context is canceled, return at once.
-					// request canceled, no entries to return
-					return entries, io.EOF
-				}
-				if !errors.Is(err, context.DeadlineExceeded) {
-					logger.LogIf(ctx, err)
-				}
-				o.Transient = true
-				cache = localMetacacheMgr.findCache(ctx, o)
+			if cache.fileNotFound {
+				// No cache found, no entries found.
+				return entries, io.EOF
+			}
+			if cache.status == scanStateError || cache.status == scanStateNone {
+				o.ID = mustGetUUID()
+				o.Create = false
 			} else {
-				cache = *c
+				// Continue listing
+				o.ID = c.id
 			}
 		}
-		if cache.fileNotFound {
-			// No cache found, no entries found.
-			return entries, io.EOF
-		}
-		// Only create if we created a new.
-		o.Create = o.ID == cache.id
-		o.ID = cache.id
 	}
 
-	if o.ID != "" {
+	if o.ID != "" && !o.Transient {
 		// We have an existing list ID, continue streaming.
 		if o.Create {
 			entries, err = z.listAndSave(ctx, o)
@@ -194,7 +197,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	}
 	truncated := entries.len() > o.Limit || err == nil
 	entries.truncate(o.Limit)
-	if !o.discardResult {
+	if !o.Transient {
 		entries.listID = o.ID
 	}
 	if !truncated {

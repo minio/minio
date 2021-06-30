@@ -234,9 +234,6 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 
 // updateMetacacheListing will update the metacache listing.
 func (o *listPathOptions) updateMetacacheListing(m metacache, rpc *peerRESTClient) (metacache, error) {
-	if o.Transient {
-		return localMetacacheMgr.getTransient().updateCacheEntry(m)
-	}
 	if rpc == nil {
 		return localMetacacheMgr.updateCacheEntry(m)
 	}
@@ -547,9 +544,6 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 			// Results Disagree :-(
 			entry, ok := entries.resolve(&resolver)
 			if ok {
-				if !o.discardResult {
-					results <- *entry
-				}
 				results <- *entry
 			}
 		},

@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -988,16 +987,6 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
-	}
-
-	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
-	// It requests unique blocks with a specific prefix.
-	// We skip scanning the parent directory for
-	// more objects matching the prefix.
-	ri := logger.GetReqInfo(ctx)
-	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		opts.discardResult = true
-		opts.Transient = true
 	}
 
 	merged, err := z.listPath(ctx, opts)
