@@ -226,6 +226,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	storageInfo := StorageInfo{
 		Disks: []madmin.Disk{
 			{
+				State:          madmin.DriveStateOk,
 				TotalSpace:     di.Total,
 				UsedSpace:      di.Used,
 				AvailableSpace: di.Free,

@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -36,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -768,9 +770,17 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		newCtx, cancel := context.WithTimeout(ctx, globalOperationTimeout.Timeout())
 		defer cancel()
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
-			replicationStatus = replication.Failed
-			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+		if len(objInfo.Parts) > 1 {
+			if uploadID, err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object, r, objInfo, putOpts); err != nil {
+				replicationStatus = replication.Failed
+				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				defer c.AbortMultipartUpload(ctx, dest.Bucket, object, uploadID)
+			}
+		} else {
+			if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
+				replicationStatus = replication.Failed
+				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+			}
 		}
 	}
 	gr.Close()
@@ -837,6 +847,40 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		ri.RetryCount++
 		globalReplicationPool.queueReplicaFailedTask(ri)
 	}
+}
+
+func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts miniogo.PutObjectOptions) (uploadID string, err error) {
+	var uploadedParts []miniogo.CompletePart
+	uploadID, err = c.NewMultipartUpload(context.Background(), bucket, object, opts)
+	if err != nil {
+		return
+	}
+	var (
+		hr    *hash.Reader
+		pInfo miniogo.ObjectPart
+	)
+	for _, partInfo := range objInfo.Parts {
+		hr, err = hash.NewReader(r, partInfo.Size, "", "", partInfo.Size)
+		if err != nil {
+			return
+		}
+		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, "", "", opts.ServerSideEncryption)
+		if err != nil {
+			return
+		}
+		if pInfo.Size != partInfo.Size {
+			return uploadID, fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.Size)
+		}
+		uploadedParts = append(uploadedParts, miniogo.CompletePart{
+			PartNumber: pInfo.PartNumber,
+			ETag:       pInfo.ETag,
+		})
+	}
+	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{
+		SourceMTime:        objInfo.ModTime,
+		ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
+	}})
+	return
 }
 
 // filterReplicationStatusMetadata filters replication status metadata for COPY

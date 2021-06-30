@@ -518,6 +518,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
 		listingQuorum = getReadQuorum(er.setDriveCount)
 	}
+	if askDisks == 0 {
+		askDisks = globalAPIConfig.getListQuorum()
+		listingQuorum = askDisks
+	}
 	if askDisks > 0 && len(disks) > askDisks {
 		rand.Shuffle(len(disks), func(i, j int) {
 			disks[i] = disks[j]
