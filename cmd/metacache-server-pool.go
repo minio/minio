@@ -196,6 +196,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		defer wg.Done()
 		o.Limit = 0
 		listErr = z.listMerged(listCtx, o, filterCh)
+		o.debugln("listMerged returned with", listErr)
 	}(*o)
 
 	entries, err = filteredResults()
@@ -251,9 +252,9 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 
 	// Gather results to a single channel.
 	err := mergeEntryChannels(ctx, inputs, results, func(existing, other *metaCacheEntry) (replace bool) {
-		if existing.isDir() {
-			// We don't care...
-			return false
+		if existing.isDir() && !other.isDir() {
+			// Pick object over directory
+			return true
 		}
 
 		eFIV, err := existing.fileInfo(o.Bucket)

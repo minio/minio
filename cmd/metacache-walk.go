@@ -187,6 +187,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		sort.Strings(entries)
 		dirStack := make([]string, 0, 5)
 		prefix = "" // Remove prefix after first level.
+		if len(forward) > 0 {
+			idx := sort.SearchStrings(entries, forward)
+			if idx > 0 {
+				entries = entries[idx:]
+			}
+		}
 
 		for _, entry := range entries {
 			if entry == "" {
