@@ -70,11 +70,11 @@ func TestFreeVersion(t *testing.T) {
 				Hash:       nil,
 			}},
 		},
-		MarkDeleted:                   false,
-		DeleteMarkerReplicationStatus: "",
-		VersionPurgeStatus:            "",
-		NumVersions:                   1,
-		SuccessorModTime:              time.Time{},
+		MarkDeleted: false,
+		//DeleteMarkerReplicationStatus: "",
+		//VersionPurgeStatus:            "",
+		NumVersions:      1,
+		SuccessorModTime: time.Time{},
 	}
 	// Add a version with local content
 	xl.AddVersion(fi)

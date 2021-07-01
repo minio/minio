@@ -19,8 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"sync"
 	"time"
@@ -30,6 +28,7 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/kms"
@@ -139,17 +138,18 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	defer sys.Unlock()
 
 	tgts := sys.targetsMap[bucket]
-
 	newtgts := make([]madmin.BucketTarget, len(tgts))
 	found := false
 	for idx, t := range tgts {
 		if t.Type == tgt.Type {
-			if t.Arn == tgt.Arn && !update {
-				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
+			if t.Arn == tgt.Arn {
+				if !update {
+					return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
+				}
+				newtgts[idx] = *tgt
+				found = true
+				continue
 			}
-			newtgts[idx] = *tgt
-			found = true
-			continue
 		}
 		newtgts[idx] = t
 	}
@@ -160,7 +160,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if prevClnt, ok := sys.arnRemotesMap[tgt.Arn]; ok && prevClnt.healthCancelFn != nil {
 		prevClnt.healthCancelFn()
 	}
-
 	sys.targetsMap[bucket] = newtgts
 	sys.arnRemotesMap[tgt.Arn] = clnt
 	sys.updateBandwidthLimit(bucket, tgt.BandwidthLimit)
@@ -201,12 +200,16 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if arn.Type == madmin.ReplicationService {
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
-		if err == nil && rcfg.RoleArn == arnStr {
-			sys.RLock()
-			_, ok := sys.arnRemotesMap[arnStr]
-			sys.RUnlock()
-			if ok {
-				return BucketRemoteRemoveDisallowed{Bucket: bucket}
+		if err == nil {
+			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{}) {
+				if err == nil && (tgtArn == arnStr || rcfg.RoleArn == arnStr) {
+					sys.RLock()
+					_, ok := sys.arnRemotesMap[arnStr]
+					sys.RUnlock()
+					if ok {
+						return BucketRemoteRemoveDisallowed{Bucket: bucket}
+					}
+				}
 			}
 		}
 	}
@@ -385,6 +388,8 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		StorageClass:        tcfg.StorageClass,
 		disableProxy:        tcfg.DisableProxy,
 		healthCancelFn:      cancelFn,
+		ARN:                 tcfg.Arn,
+		ResetID:             tcfg.ResetID,
 	}
 	return tc, nil
 }
@@ -408,14 +413,9 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 
 // generate ARN that is unique to this target type
 func generateARN(t *madmin.BucketTarget) string {
-	hash := sha256.New()
-	hash.Write([]byte(t.Type))
-	hash.Write([]byte(t.Region))
-	hash.Write([]byte(t.TargetBucket))
-	hashSum := hex.EncodeToString(hash.Sum(nil))
 	arn := madmin.ARN{
 		Type:   t.Type,
-		ID:     hashSum,
+		ID:     mustGetUUID(),
 		Region: t.Region,
 		Bucket: t.TargetBucket,
 	}
@@ -464,4 +464,6 @@ type TargetClient struct {
 	StorageClass        string // storage class on remote
 	disableProxy        bool
 	healthCancelFn      context.CancelFunc // cancellation function for client healthcheck
+	ARN                 string             //ARN to uniquely identify remote target
+	ResetID             string
 }

@@ -7,7 +7,7 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
-func (z *BucketReplicationStats) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *BucketReplicationStat) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -25,37 +25,307 @@ func (z *BucketReplicationStats) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "PendingSize":
-			z.PendingSize, err = dc.ReadUint64()
+			z.PendingSize, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "PendingSize")
 				return
 			}
 		case "ReplicatedSize":
-			z.ReplicatedSize, err = dc.ReadUint64()
+			z.ReplicatedSize, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "ReplicatedSize")
 				return
 			}
 		case "ReplicaSize":
-			z.ReplicaSize, err = dc.ReadUint64()
+			z.ReplicaSize, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "ReplicaSize")
 				return
 			}
 		case "FailedSize":
-			z.FailedSize, err = dc.ReadUint64()
+			z.FailedSize, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "FailedSize")
 				return
 			}
 		case "PendingCount":
-			z.PendingCount, err = dc.ReadUint64()
+			z.PendingCount, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "PendingCount")
 				return
 			}
 		case "FailedCount":
-			z.FailedCount, err = dc.ReadUint64()
+			z.FailedCount, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "FailedCount")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *BucketReplicationStat) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 6
+	// write "PendingSize"
+	err = en.Append(0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.PendingSize)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingSize")
+		return
+	}
+	// write "ReplicatedSize"
+	err = en.Append(0xae, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.ReplicatedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	// write "ReplicaSize"
+	err = en.Append(0xab, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.ReplicaSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	// write "FailedSize"
+	err = en.Append(0xaa, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.FailedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedSize")
+		return
+	}
+	// write "PendingCount"
+	err = en.Append(0xac, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.PendingCount)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingCount")
+		return
+	}
+	// write "FailedCount"
+	err = en.Append(0xab, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.FailedCount)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedCount")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *BucketReplicationStat) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 6
+	// string "PendingSize"
+	o = append(o, 0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.PendingSize)
+	// string "ReplicatedSize"
+	o = append(o, 0xae, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.ReplicatedSize)
+	// string "ReplicaSize"
+	o = append(o, 0xab, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.ReplicaSize)
+	// string "FailedSize"
+	o = append(o, 0xaa, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.FailedSize)
+	// string "PendingCount"
+	o = append(o, 0xac, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+	o = msgp.AppendInt64(o, z.PendingCount)
+	// string "FailedCount"
+	o = append(o, 0xab, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+	o = msgp.AppendInt64(o, z.FailedCount)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BucketReplicationStat) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "PendingSize":
+			z.PendingSize, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PendingSize")
+				return
+			}
+		case "ReplicatedSize":
+			z.ReplicatedSize, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicatedSize")
+				return
+			}
+		case "ReplicaSize":
+			z.ReplicaSize, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicaSize")
+				return
+			}
+		case "FailedSize":
+			z.FailedSize, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FailedSize")
+				return
+			}
+		case "PendingCount":
+			z.PendingCount, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PendingCount")
+				return
+			}
+		case "FailedCount":
+			z.FailedCount, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FailedCount")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *BucketReplicationStat) Msgsize() (s int) {
+	s = 1 + 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *BucketReplicationStats) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Stats":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Stats")
+				return
+			}
+			if z.Stats == nil {
+				z.Stats = make(map[string]*BucketReplicationStat, zb0002)
+			} else if len(z.Stats) > 0 {
+				for key := range z.Stats {
+					delete(z.Stats, key)
+				}
+			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 *BucketReplicationStat
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Stats")
+					return
+				}
+				if dc.IsNil() {
+					err = dc.ReadNil()
+					if err != nil {
+						err = msgp.WrapError(err, "Stats", za0001)
+						return
+					}
+					za0002 = nil
+				} else {
+					if za0002 == nil {
+						za0002 = new(BucketReplicationStat)
+					}
+					err = za0002.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Stats", za0001)
+						return
+					}
+				}
+				z.Stats[za0001] = za0002
+			}
+		case "PendingSize":
+			z.PendingSize, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "PendingSize")
+				return
+			}
+		case "ReplicatedSize":
+			z.ReplicatedSize, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicatedSize")
+				return
+			}
+		case "ReplicaSize":
+			z.ReplicaSize, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicaSize")
+				return
+			}
+		case "FailedSize":
+			z.FailedSize, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "FailedSize")
+				return
+			}
+		case "PendingCount":
+			z.PendingCount, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "PendingCount")
+				return
+			}
+		case "FailedCount":
+			z.FailedCount, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "FailedCount")
 				return
@@ -73,13 +343,42 @@ func (z *BucketReplicationStats) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
-	// write "PendingSize"
-	err = en.Append(0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	// map header, size 7
+	// write "Stats"
+	err = en.Append(0x87, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x73)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.PendingSize)
+	err = en.WriteMapHeader(uint32(len(z.Stats)))
+	if err != nil {
+		err = msgp.WrapError(err, "Stats")
+		return
+	}
+	for za0001, za0002 := range z.Stats {
+		err = en.WriteString(za0001)
+		if err != nil {
+			err = msgp.WrapError(err, "Stats")
+			return
+		}
+		if za0002 == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = za0002.EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "Stats", za0001)
+				return
+			}
+		}
+	}
+	// write "PendingSize"
+	err = en.Append(0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.PendingSize)
 	if err != nil {
 		err = msgp.WrapError(err, "PendingSize")
 		return
@@ -89,7 +388,7 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.ReplicatedSize)
+	err = en.WriteInt64(z.ReplicatedSize)
 	if err != nil {
 		err = msgp.WrapError(err, "ReplicatedSize")
 		return
@@ -99,7 +398,7 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.ReplicaSize)
+	err = en.WriteInt64(z.ReplicaSize)
 	if err != nil {
 		err = msgp.WrapError(err, "ReplicaSize")
 		return
@@ -109,7 +408,7 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.FailedSize)
+	err = en.WriteInt64(z.FailedSize)
 	if err != nil {
 		err = msgp.WrapError(err, "FailedSize")
 		return
@@ -119,7 +418,7 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.PendingCount)
+	err = en.WriteInt64(z.PendingCount)
 	if err != nil {
 		err = msgp.WrapError(err, "PendingCount")
 		return
@@ -129,7 +428,7 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.FailedCount)
+	err = en.WriteInt64(z.FailedCount)
 	if err != nil {
 		err = msgp.WrapError(err, "FailedCount")
 		return
@@ -140,25 +439,40 @@ func (z *BucketReplicationStats) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketReplicationStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 7
+	// string "Stats"
+	o = append(o, 0x87, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x73)
+	o = msgp.AppendMapHeader(o, uint32(len(z.Stats)))
+	for za0001, za0002 := range z.Stats {
+		o = msgp.AppendString(o, za0001)
+		if za0002 == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			o, err = za0002.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Stats", za0001)
+				return
+			}
+		}
+	}
 	// string "PendingSize"
-	o = append(o, 0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendUint64(o, z.PendingSize)
+	o = append(o, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.PendingSize)
 	// string "ReplicatedSize"
 	o = append(o, 0xae, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendUint64(o, z.ReplicatedSize)
+	o = msgp.AppendInt64(o, z.ReplicatedSize)
 	// string "ReplicaSize"
 	o = append(o, 0xab, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendUint64(o, z.ReplicaSize)
+	o = msgp.AppendInt64(o, z.ReplicaSize)
 	// string "FailedSize"
 	o = append(o, 0xaa, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendUint64(o, z.FailedSize)
+	o = msgp.AppendInt64(o, z.FailedSize)
 	// string "PendingCount"
 	o = append(o, 0xac, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-	o = msgp.AppendUint64(o, z.PendingCount)
+	o = msgp.AppendInt64(o, z.PendingCount)
 	// string "FailedCount"
 	o = append(o, 0xab, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-	o = msgp.AppendUint64(o, z.FailedCount)
+	o = msgp.AppendInt64(o, z.FailedCount)
 	return
 }
 
@@ -180,38 +494,79 @@ func (z *BucketReplicationStats) UnmarshalMsg(bts []byte) (o []byte, err error) 
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "Stats":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Stats")
+				return
+			}
+			if z.Stats == nil {
+				z.Stats = make(map[string]*BucketReplicationStat, zb0002)
+			} else if len(z.Stats) > 0 {
+				for key := range z.Stats {
+					delete(z.Stats, key)
+				}
+			}
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 *BucketReplicationStat
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Stats")
+					return
+				}
+				if msgp.IsNil(bts) {
+					bts, err = msgp.ReadNilBytes(bts)
+					if err != nil {
+						return
+					}
+					za0002 = nil
+				} else {
+					if za0002 == nil {
+						za0002 = new(BucketReplicationStat)
+					}
+					bts, err = za0002.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Stats", za0001)
+						return
+					}
+				}
+				z.Stats[za0001] = za0002
+			}
 		case "PendingSize":
-			z.PendingSize, bts, err = msgp.ReadUint64Bytes(bts)
+			z.PendingSize, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "PendingSize")
 				return
 			}
 		case "ReplicatedSize":
-			z.ReplicatedSize, bts, err = msgp.ReadUint64Bytes(bts)
+			z.ReplicatedSize, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ReplicatedSize")
 				return
 			}
 		case "ReplicaSize":
-			z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+			z.ReplicaSize, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ReplicaSize")
 				return
 			}
 		case "FailedSize":
-			z.FailedSize, bts, err = msgp.ReadUint64Bytes(bts)
+			z.FailedSize, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FailedSize")
 				return
 			}
 		case "PendingCount":
-			z.PendingCount, bts, err = msgp.ReadUint64Bytes(bts)
+			z.PendingCount, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "PendingCount")
 				return
 			}
 		case "FailedCount":
-			z.FailedCount, bts, err = msgp.ReadUint64Bytes(bts)
+			z.FailedCount, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "FailedCount")
 				return
@@ -230,7 +585,19 @@ func (z *BucketReplicationStats) UnmarshalMsg(bts []byte) (o []byte, err error) 
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketReplicationStats) Msgsize() (s int) {
-	s = 1 + 12 + msgp.Uint64Size + 15 + msgp.Uint64Size + 12 + msgp.Uint64Size + 11 + msgp.Uint64Size + 13 + msgp.Uint64Size + 12 + msgp.Uint64Size
+	s = 1 + 6 + msgp.MapHeaderSize
+	if z.Stats != nil {
+		for za0001, za0002 := range z.Stats {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001)
+			if za0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += za0002.Msgsize()
+			}
+		}
+	}
+	s += 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size
 	return
 }
 

@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshaldataUsageCache(t *testing.T) {
-	v := dataUsageCache{}
+func TestMarshalUnmarshalReplicateDecision(t *testing.T) {
+	v := ReplicateDecision{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshaldataUsageCache(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgdataUsageCache(b *testing.B) {
-	v := dataUsageCache{}
+func BenchmarkMarshalMsgReplicateDecision(b *testing.B) {
+	v := ReplicateDecision{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgdataUsageCache(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgdataUsageCache(b *testing.B) {
-	v := dataUsageCache{}
+func BenchmarkAppendMsgReplicateDecision(b *testing.B) {
+	v := ReplicateDecision{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgdataUsageCache(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaldataUsageCache(b *testing.B) {
-	v := dataUsageCache{}
+func BenchmarkUnmarshalReplicateDecision(b *testing.B) {
+	v := ReplicateDecision{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshaldataUsageCache(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodedataUsageCache(t *testing.T) {
-	v := dataUsageCache{}
+func TestEncodeDecodeReplicateDecision(t *testing.T) {
+	v := ReplicateDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodedataUsageCache Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeReplicateDecision Msgsize() is inaccurate")
 	}
 
-	vn := dataUsageCache{}
+	vn := ReplicateDecision{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodedataUsageCache(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodedataUsageCache(b *testing.B) {
-	v := dataUsageCache{}
+func BenchmarkEncodeReplicateDecision(b *testing.B) {
+	v := ReplicateDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodedataUsageCache(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodedataUsageCache(b *testing.B) {
-	v := dataUsageCache{}
+func BenchmarkDecodeReplicateDecision(b *testing.B) {
+	v := ReplicateDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -122,8 +122,8 @@ func BenchmarkDecodedataUsageCache(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshaldataUsageCacheInfo(t *testing.T) {
-	v := dataUsageCacheInfo{}
+func TestMarshalUnmarshalReplicationState(t *testing.T) {
+	v := ReplicationState{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +145,8 @@ func TestMarshalUnmarshaldataUsageCacheInfo(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgdataUsageCacheInfo(b *testing.B) {
-	v := dataUsageCacheInfo{}
+func BenchmarkMarshalMsgReplicationState(b *testing.B) {
+	v := ReplicationState{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -154,8 +154,8 @@ func BenchmarkMarshalMsgdataUsageCacheInfo(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgdataUsageCacheInfo(b *testing.B) {
-	v := dataUsageCacheInfo{}
+func BenchmarkAppendMsgReplicationState(b *testing.B) {
+	v := ReplicationState{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -166,8 +166,8 @@ func BenchmarkAppendMsgdataUsageCacheInfo(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaldataUsageCacheInfo(b *testing.B) {
-	v := dataUsageCacheInfo{}
+func BenchmarkUnmarshalReplicationState(b *testing.B) {
+	v := ReplicationState{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -180,17 +180,17 @@ func BenchmarkUnmarshaldataUsageCacheInfo(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodedataUsageCacheInfo(t *testing.T) {
-	v := dataUsageCacheInfo{}
+func TestEncodeDecodeReplicationState(t *testing.T) {
+	v := ReplicationState{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodedataUsageCacheInfo Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeReplicationState Msgsize() is inaccurate")
 	}
 
-	vn := dataUsageCacheInfo{}
+	vn := ReplicationState{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -204,8 +204,8 @@ func TestEncodeDecodedataUsageCacheInfo(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodedataUsageCacheInfo(b *testing.B) {
-	v := dataUsageCacheInfo{}
+func BenchmarkEncodeReplicationState(b *testing.B) {
+	v := ReplicationState{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -218,8 +218,8 @@ func BenchmarkEncodedataUsageCacheInfo(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodedataUsageCacheInfo(b *testing.B) {
-	v := dataUsageCacheInfo{}
+func BenchmarkDecodeReplicationState(b *testing.B) {
+	v := ReplicationState{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -235,8 +235,8 @@ func BenchmarkDecodedataUsageCacheInfo(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshaldataUsageEntry(t *testing.T) {
-	v := dataUsageEntry{}
+func TestMarshalUnmarshalResyncDecision(t *testing.T) {
+	v := ResyncDecision{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -258,8 +258,8 @@ func TestMarshalUnmarshaldataUsageEntry(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgdataUsageEntry(b *testing.B) {
-	v := dataUsageEntry{}
+func BenchmarkMarshalMsgResyncDecision(b *testing.B) {
+	v := ResyncDecision{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -267,8 +267,8 @@ func BenchmarkMarshalMsgdataUsageEntry(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgdataUsageEntry(b *testing.B) {
-	v := dataUsageEntry{}
+func BenchmarkAppendMsgResyncDecision(b *testing.B) {
+	v := ResyncDecision{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -279,8 +279,8 @@ func BenchmarkAppendMsgdataUsageEntry(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaldataUsageEntry(b *testing.B) {
-	v := dataUsageEntry{}
+func BenchmarkUnmarshalResyncDecision(b *testing.B) {
+	v := ResyncDecision{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -293,17 +293,17 @@ func BenchmarkUnmarshaldataUsageEntry(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodedataUsageEntry(t *testing.T) {
-	v := dataUsageEntry{}
+func TestEncodeDecodeResyncDecision(t *testing.T) {
+	v := ResyncDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodedataUsageEntry Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeResyncDecision Msgsize() is inaccurate")
 	}
 
-	vn := dataUsageEntry{}
+	vn := ResyncDecision{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -317,8 +317,8 @@ func TestEncodeDecodedataUsageEntry(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodedataUsageEntry(b *testing.B) {
-	v := dataUsageEntry{}
+func BenchmarkEncodeResyncDecision(b *testing.B) {
+	v := ResyncDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -331,8 +331,8 @@ func BenchmarkEncodedataUsageEntry(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodedataUsageEntry(b *testing.B) {
-	v := dataUsageEntry{}
+func BenchmarkDecodeResyncDecision(b *testing.B) {
+	v := ResyncDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -348,8 +348,8 @@ func BenchmarkDecodedataUsageEntry(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshaldataUsageEntryV5(t *testing.T) {
-	v := dataUsageEntryV5{}
+func TestMarshalUnmarshalResyncTarget(t *testing.T) {
+	v := ResyncTarget{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -371,8 +371,8 @@ func TestMarshalUnmarshaldataUsageEntryV5(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgdataUsageEntryV5(b *testing.B) {
-	v := dataUsageEntryV5{}
+func BenchmarkMarshalMsgResyncTarget(b *testing.B) {
+	v := ResyncTarget{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -380,8 +380,8 @@ func BenchmarkMarshalMsgdataUsageEntryV5(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgdataUsageEntryV5(b *testing.B) {
-	v := dataUsageEntryV5{}
+func BenchmarkAppendMsgResyncTarget(b *testing.B) {
+	v := ResyncTarget{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -392,8 +392,8 @@ func BenchmarkAppendMsgdataUsageEntryV5(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaldataUsageEntryV5(b *testing.B) {
-	v := dataUsageEntryV5{}
+func BenchmarkUnmarshalResyncTarget(b *testing.B) {
+	v := ResyncTarget{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -406,17 +406,17 @@ func BenchmarkUnmarshaldataUsageEntryV5(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodedataUsageEntryV5(t *testing.T) {
-	v := dataUsageEntryV5{}
+func TestEncodeDecodeResyncTarget(t *testing.T) {
+	v := ResyncTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodedataUsageEntryV5 Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeResyncTarget Msgsize() is inaccurate")
 	}
 
-	vn := dataUsageEntryV5{}
+	vn := ResyncTarget{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -430,8 +430,8 @@ func TestEncodeDecodedataUsageEntryV5(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodedataUsageEntryV5(b *testing.B) {
-	v := dataUsageEntryV5{}
+func BenchmarkEncodeResyncTarget(b *testing.B) {
+	v := ResyncTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -444,8 +444,8 @@ func BenchmarkEncodedataUsageEntryV5(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodedataUsageEntryV5(b *testing.B) {
-	v := dataUsageEntryV5{}
+func BenchmarkDecodeResyncTarget(b *testing.B) {
+	v := ResyncTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -461,8 +461,8 @@ func BenchmarkDecodedataUsageEntryV5(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalreplicationAllStats(t *testing.T) {
-	v := replicationAllStats{}
+func TestMarshalUnmarshalResyncTargetDecision(t *testing.T) {
+	v := ResyncTargetDecision{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -484,8 +484,8 @@ func TestMarshalUnmarshalreplicationAllStats(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgreplicationAllStats(b *testing.B) {
-	v := replicationAllStats{}
+func BenchmarkMarshalMsgResyncTargetDecision(b *testing.B) {
+	v := ResyncTargetDecision{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -493,8 +493,8 @@ func BenchmarkMarshalMsgreplicationAllStats(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgreplicationAllStats(b *testing.B) {
-	v := replicationAllStats{}
+func BenchmarkAppendMsgResyncTargetDecision(b *testing.B) {
+	v := ResyncTargetDecision{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -505,8 +505,8 @@ func BenchmarkAppendMsgreplicationAllStats(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalreplicationAllStats(b *testing.B) {
-	v := replicationAllStats{}
+func BenchmarkUnmarshalResyncTargetDecision(b *testing.B) {
+	v := ResyncTargetDecision{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -519,17 +519,17 @@ func BenchmarkUnmarshalreplicationAllStats(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodereplicationAllStats(t *testing.T) {
-	v := replicationAllStats{}
+func TestEncodeDecodeResyncTargetDecision(t *testing.T) {
+	v := ResyncTargetDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodereplicationAllStats Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeResyncTargetDecision Msgsize() is inaccurate")
 	}
 
-	vn := replicationAllStats{}
+	vn := ResyncTargetDecision{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -543,8 +543,8 @@ func TestEncodeDecodereplicationAllStats(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodereplicationAllStats(b *testing.B) {
-	v := replicationAllStats{}
+func BenchmarkEncodeResyncTargetDecision(b *testing.B) {
+	v := ResyncTargetDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -557,8 +557,8 @@ func BenchmarkEncodereplicationAllStats(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodereplicationAllStats(b *testing.B) {
-	v := replicationAllStats{}
+func BenchmarkDecodeResyncTargetDecision(b *testing.B) {
+	v := ResyncTargetDecision{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -574,8 +574,8 @@ func BenchmarkDecodereplicationAllStats(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalreplicationStats(t *testing.T) {
-	v := replicationStats{}
+func TestMarshalUnmarshalResyncTargetsInfo(t *testing.T) {
+	v := ResyncTargetsInfo{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -597,8 +597,8 @@ func TestMarshalUnmarshalreplicationStats(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgreplicationStats(b *testing.B) {
-	v := replicationStats{}
+func BenchmarkMarshalMsgResyncTargetsInfo(b *testing.B) {
+	v := ResyncTargetsInfo{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -606,8 +606,8 @@ func BenchmarkMarshalMsgreplicationStats(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgreplicationStats(b *testing.B) {
-	v := replicationStats{}
+func BenchmarkAppendMsgResyncTargetsInfo(b *testing.B) {
+	v := ResyncTargetsInfo{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -618,8 +618,8 @@ func BenchmarkAppendMsgreplicationStats(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalreplicationStats(b *testing.B) {
-	v := replicationStats{}
+func BenchmarkUnmarshalResyncTargetsInfo(b *testing.B) {
+	v := ResyncTargetsInfo{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -632,17 +632,17 @@ func BenchmarkUnmarshalreplicationStats(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodereplicationStats(t *testing.T) {
-	v := replicationStats{}
+func TestEncodeDecodeResyncTargetsInfo(t *testing.T) {
+	v := ResyncTargetsInfo{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodereplicationStats Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeResyncTargetsInfo Msgsize() is inaccurate")
 	}
 
-	vn := replicationStats{}
+	vn := ResyncTargetsInfo{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -656,8 +656,8 @@ func TestEncodeDecodereplicationStats(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodereplicationStats(b *testing.B) {
-	v := replicationStats{}
+func BenchmarkEncodeResyncTargetsInfo(b *testing.B) {
+	v := ResyncTargetsInfo{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -670,121 +670,8 @@ func BenchmarkEncodereplicationStats(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodereplicationStats(b *testing.B) {
-	v := replicationStats{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	rd := msgp.NewEndlessReader(buf.Bytes(), b)
-	dc := msgp.NewReader(rd)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := v.DecodeMsg(dc)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalsizeHistogram(t *testing.T) {
-	v := sizeHistogram{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func BenchmarkMarshalMsgsizeHistogram(b *testing.B) {
-	v := sizeHistogram{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgsizeHistogram(b *testing.B) {
-	v := sizeHistogram{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalsizeHistogram(b *testing.B) {
-	v := sizeHistogram{}
-	bts, _ := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestEncodeDecodesizeHistogram(t *testing.T) {
-	v := sizeHistogram{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-
-	m := v.Msgsize()
-	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodesizeHistogram Msgsize() is inaccurate")
-	}
-
-	vn := sizeHistogram{}
-	err := msgp.Decode(&buf, &vn)
-	if err != nil {
-		t.Error(err)
-	}
-
-	buf.Reset()
-	msgp.Encode(&buf, &v)
-	err = msgp.NewReader(&buf).Skip()
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func BenchmarkEncodesizeHistogram(b *testing.B) {
-	v := sizeHistogram{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	en := msgp.NewWriter(msgp.Nowhere)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.EncodeMsg(en)
-	}
-	en.Flush()
-}
-
-func BenchmarkDecodesizeHistogram(b *testing.B) {
-	v := sizeHistogram{}
+func BenchmarkDecodeResyncTargetsInfo(b *testing.B) {
+	v := ResyncTargetsInfo{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

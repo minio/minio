@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
@@ -964,14 +966,8 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		VersionID: versionID,
 		Deleted:   true,
 	}
-	for k, v := range j.MetaSys {
-		switch {
-		case equals(k, xhttp.AmzBucketReplicationStatus):
-			fi.DeleteMarkerReplicationStatus = string(v)
-		case equals(k, VersionPurgeStatusKey):
-			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
-		}
-	}
+	fi.ReplicationState = GetInternalReplicationState(j.MetaSys)
+
 	if j.FreeVersion() {
 		fi.SetTierFreeVersion()
 		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
@@ -1050,11 +1046,14 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	for k, v := range j.MetaSys {
 		switch {
-		case equals(k, VersionPurgeStatusKey):
-			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
-		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower):
+		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower), equals(k, VersionPurgeStatusKey):
 			fi.Metadata[k] = string(v)
 		}
+	}
+	fi.ReplicationState = getInternalReplicationState(fi.Metadata)
+	replStatus := fi.ReplicationState.CompositeReplicationStatus()
+	if replStatus != "" {
+		fi.Metadata[xhttp.AmzBucketReplicationStatus] = string(replStatus)
 	}
 	fi.Erasure.Algorithm = j.ErasureAlgorithm.String()
 	fi.Erasure.Index = j.ErasureIndex
@@ -1163,26 +1162,37 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		}
 	}
 	updateVersion := false
-	if fi.VersionPurgeStatus.Empty() && (fi.DeleteMarkerReplicationStatus == "REPLICA" || fi.DeleteMarkerReplicationStatus == "") {
+	if fi.VersionPurgeStatus().Empty() && (fi.DeleteMarkerReplicationStatus() == "REPLICA" || fi.DeleteMarkerReplicationStatus().Empty()) {
 		updateVersion = fi.MarkDeleted
 	} else {
 		// for replication scenario
-		if fi.Deleted && fi.VersionPurgeStatus != Complete {
-			if !fi.VersionPurgeStatus.Empty() || fi.DeleteMarkerReplicationStatus != "" {
+		if fi.Deleted && fi.VersionPurgeStatus() != Complete {
+			if !fi.VersionPurgeStatus().Empty() || fi.DeleteMarkerReplicationStatus().Empty() {
 				updateVersion = true
 			}
 		}
 		// object or delete-marker versioned delete is not complete
-		if !fi.VersionPurgeStatus.Empty() && fi.VersionPurgeStatus != Complete {
+		if !fi.VersionPurgeStatus().Empty() && fi.VersionPurgeStatus() != Complete {
 			updateVersion = true
 		}
 	}
+
 	if fi.Deleted {
-		if fi.DeleteMarkerReplicationStatus != "" {
-			ventry.DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
+		if !fi.DeleteMarkerReplicationStatus().Empty() {
+			switch fi.DeleteMarkerReplicationStatus() {
+			case replication.Replica:
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat))
+			default:
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat))
+			}
 		}
-		if !fi.VersionPurgeStatus.Empty() {
-			ventry.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
+		if !fi.VersionPurgeStatus().Empty() {
+			ventry.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+		}
+		for k, v := range fi.ReplicationState.ResetStatusesMap {
+			ventry.DeleteMarker.MetaSys[k] = []byte(v)
 		}
 	}
 
@@ -1205,17 +1215,25 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 					if len(z.Versions[i].DeleteMarker.MetaSys) == 0 {
 						z.Versions[i].DeleteMarker.MetaSys = make(map[string][]byte)
 					}
-					delete(z.Versions[i].DeleteMarker.MetaSys, xhttp.AmzBucketReplicationStatus)
-					delete(z.Versions[i].DeleteMarker.MetaSys, VersionPurgeStatusKey)
-					if fi.DeleteMarkerReplicationStatus != "" {
-						z.Versions[i].DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
+					if !fi.DeleteMarkerReplicationStatus().Empty() {
+						switch fi.DeleteMarkerReplicationStatus() {
+						case replication.Replica:
+							z.Versions[i].DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
+							z.Versions[i].DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat))
+						default:
+							z.Versions[i].DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
+							z.Versions[i].DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat))
+						}
 					}
-					if !fi.VersionPurgeStatus.Empty() {
-						z.Versions[i].DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
+					if !fi.VersionPurgeStatus().Empty() {
+						z.Versions[i].DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+					}
+					for k, v := range fi.ReplicationState.ResetStatusesMap {
+						z.Versions[i].DeleteMarker.MetaSys[k] = []byte(v)
 					}
 				} else {
 					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-					if fi.MarkDeleted && (fi.VersionPurgeStatus.Empty() || (fi.VersionPurgeStatus != Complete)) {
+					if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 						z.Versions = append(z.Versions, ventry)
 					}
 				}
@@ -1223,7 +1241,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 		case ObjectType:
 			if version.ObjectV2.VersionID == uv && updateVersion {
-				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
+				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+				for k, v := range fi.ReplicationState.ResetStatusesMap {
+					z.Versions[i].ObjectV2.MetaSys[k] = []byte(v)
+				}
 				return "", len(z.Versions) == 0, nil
 			}
 		}

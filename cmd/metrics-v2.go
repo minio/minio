@@ -1352,7 +1352,7 @@ func getBucketUsageMetrics() MetricsGroup {
 			})
 
 			for bucket, usage := range dataUsageInfo.BucketsUsage {
-				stat := getLatestReplicationStats(bucket, usage)
+				stats := getLatestReplicationStats(bucket, usage)
 
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageTotalBytesMD(),
@@ -1366,27 +1366,29 @@ func getBucketUsageMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 
-				if stat.hasReplicationUsage() {
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedBytesMD(),
-						Value:          float64(stat.FailedSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepSentBytesMD(),
-						Value:          float64(stat.ReplicatedSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepReceivedBytesMD(),
-						Value:          float64(stat.ReplicaSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedOperationsMD(),
-						Value:          float64(stat.FailedCount),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
+				if stats.hasReplicationUsage() {
+					for arn, stat := range stats.Stats {
+						metrics = append(metrics, Metric{
+							Description:    getBucketRepFailedBytesMD(),
+							Value:          float64(stat.FailedSize),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getBucketRepSentBytesMD(),
+							Value:          float64(stat.ReplicatedSize),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getBucketRepReceivedBytesMD(),
+							Value:          float64(stat.ReplicaSize),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getBucketRepFailedOperationsMD(),
+							Value:          float64(stat.FailedCount),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+					}
 				}
 
 				metrics = append(metrics, Metric{

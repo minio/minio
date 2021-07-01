@@ -445,13 +445,16 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	// Check if the current bucket has replication configuration
 	if rcfg, err := globalBucketMetadataSys.GetReplicationConfig(ctx, cache.Info.Name); err == nil {
 		if rcfg.HasActiveRules("", true) {
-			tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, cache.Info.Name, rcfg.RoleArn)
-			cache.Info.replication = replicationConfig{
-				Config:          rcfg,
-				ResetID:         tgt.ResetID,
-				ResetBeforeDate: tgt.ResetBeforeDate}
-			if intDataUpdateTracker.debug {
-				console.Debugln(color.Green("scannerDisk:") + " replication: Active rules found")
+			tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, cache.Info.Name)
+			if err == nil {
+				cache.Info.replication = replicationConfig{
+					Config:  rcfg,
+					remotes: tgts,
+				}
+				if intDataUpdateTracker.debug {
+					console.Debugln(color.Green("scannerDisk:") + " replication: Active rules found")
+				}
+
 			}
 		}
 	}
