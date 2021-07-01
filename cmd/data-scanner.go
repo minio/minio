@@ -990,7 +990,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta
 	opts.VersionID = meta.oi.VersionID
 	_, err = o.DeleteObject(ctx, meta.oi.Bucket, meta.oi.Name, opts)
 	if err == nil {
-		auditLogLifecycle(ctx, meta.oi.Bucket, meta.oi.Name, meta.oi.VersionID, ILMFreeVersionDeleteActivity)
+		auditLogLifecycle(ctx, meta.oi, ILMFreeVersionDelete)
 	}
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
@@ -1136,7 +1136,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	}
 
 	// Send audit for the lifecycle delete operation
-	auditLogLifecycle(ctx, obj.Bucket, obj.Name, obj.VersionID, ILMExpiryActivity)
+	auditLogLifecycle(ctx, obj, ILMExpiry)
 
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
@@ -1379,23 +1379,23 @@ func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 }
 
 const (
-	// ILMExpiryActivity - activity trail for ILM expiry
-	ILMExpiryActivity = "ilm:expiry"
-	// ILMFreeVersionDeleteActivity - activity trail for ILM free-version delete
-	ILMFreeVersionDeleteActivity = "ilm:free-version-delete"
+	// ILMExpiry - audit trail for ILM expiry
+	ILMExpiry = "ilm:expiry"
+	// ILMFreeVersionDelete - audit trail for ILM free-version delete
+	ILMFreeVersionDelete = "ilm:free-version-delete"
 )
 
-func auditLogLifecycle(ctx context.Context, bucket, object, versionID string, trigger string) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
 	var apiName string
 	switch trigger {
-	case ILMExpiryActivity:
-		apiName = "s3:ExpireObject"
-	case ILMFreeVersionDeleteActivity:
-		apiName = "s3:DeleteFreeVersion"
+	case ILMExpiry:
+		apiName = "ILMExpiry"
+	case ILMFreeVersionDelete:
+		apiName = "ILMFreeVersionDelete"
 	}
-	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+	auditLogInternal(ctx, oi.Bucket, oi.Name, AuditLogOptions{
 		Trigger:   trigger,
 		APIName:   apiName,
-		VersionID: versionID,
+		VersionID: oi.VersionID,
 	})
 }
