@@ -33,12 +33,17 @@ import (
 )
 
 //go:generate msgp -file $GOFILE -unexported
-//msgp:ignore tierJournal walkfn
+//msgp:ignore tierJournal tierDiskJournal walkfn
 
-type tierJournal struct {
+type tierDiskJournal struct {
 	sync.RWMutex
 	diskPath string
 	file     *os.File // active journal file
+}
+
+type tierJournal struct {
+	*tierDiskJournal // for processing legacy journal entries
+	*tierMemJournal  // for processing new journal entries
 }
 
 type jentry struct {
@@ -56,12 +61,20 @@ var (
 	errUnsupportedJournalVersion = errors.New("unsupported pending deletes journal version")
 )
 
-func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
-	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
-		j := &tierJournal{
-			diskPath: diskPath,
-		}
+func newTierDiskJournal() *tierDiskJournal {
+	return &tierDiskJournal{}
+}
 
+// initTierDeletionJournal intializes an in-memory journal built using a
+// buffered channel for new journal entries. It also initializes the on-disk
+// journal only to process existing journal entries made from previous versions.
+func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
+	j := &tierJournal{
+		tierMemJournal:  newTierMemJoural(1000),
+		tierDiskJournal: newTierDiskJournal(),
+	}
+	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
+		j.diskPath = diskPath
 		if err := os.MkdirAll(filepath.Dir(j.JournalPath()), os.FileMode(0700)); err != nil {
 			logger.LogIf(ctx, err)
 			continue
@@ -73,7 +86,8 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 			continue
 		}
 
-		go j.deletePending(ctx.Done())
+		go j.deletePending(ctx)  // for existing journal entries from previous MinIO versions
+		go j.processEntries(ctx) // for newer journal entries circa free-versions
 		return j, nil
 	}
 
@@ -83,40 +97,40 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 // rotate rotates the journal. If a read-only journal already exists it does
 // nothing. Otherwise renames the active journal to a read-only journal and
 // opens a new active journal.
-func (j *tierJournal) rotate() error {
+func (jd *tierDiskJournal) rotate() error {
 	// Do nothing if a read-only journal file already exists.
-	if _, err := os.Stat(j.ReadOnlyPath()); err == nil {
+	if _, err := os.Stat(jd.ReadOnlyPath()); err == nil {
 		return nil
 	}
 	// Close the active journal if present.
-	j.Close()
+	jd.Close()
 	// Open a new active journal for subsequent journalling.
-	return j.Open()
+	return jd.Open()
 }
 
-type walkFn func(objName, rvID, tierName string) error
+type walkFn func(ctx context.Context, objName, rvID, tierName string) error
 
-func (j *tierJournal) ReadOnlyPath() string {
-	return filepath.Join(j.diskPath, minioMetaBucket, "ilm", "deletion-journal.ro.bin")
+func (jd *tierDiskJournal) ReadOnlyPath() string {
+	return filepath.Join(jd.diskPath, minioMetaBucket, "ilm", "deletion-journal.ro.bin")
 }
 
-func (j *tierJournal) JournalPath() string {
-	return filepath.Join(j.diskPath, minioMetaBucket, "ilm", "deletion-journal.bin")
+func (jd *tierDiskJournal) JournalPath() string {
+	return filepath.Join(jd.diskPath, minioMetaBucket, "ilm", "deletion-journal.bin")
 }
 
-func (j *tierJournal) WalkEntries(fn walkFn) {
-	err := j.rotate()
+func (jd *tierDiskJournal) WalkEntries(ctx context.Context, fn walkFn) {
+	err := jd.rotate()
 	if err != nil {
-		logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to rotate pending deletes journal %s", err))
+		logger.LogIf(ctx, fmt.Errorf("tier-journal: failed to rotate pending deletes journal %s", err))
 		return
 	}
 
-	ro, err := j.OpenRO()
+	ro, err := jd.OpenRO()
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return // No read-only journal to process; nothing to do.
 	case err != nil:
-		logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed open read-only journal for processing %s", err))
+		logger.LogIf(ctx, fmt.Errorf("tier-journal: failed open read-only journal for processing %s", err))
 		return
 	}
 	defer ro.Close()
@@ -131,52 +145,52 @@ func (j *tierJournal) WalkEntries(fn walkFn) {
 			break
 		}
 		if err != nil {
-			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to decode journal entry %s", err))
+			logger.LogIf(ctx, fmt.Errorf("tier-journal: failed to decode journal entry %s", err))
 			break
 		}
-		err = fn(entry.ObjName, entry.VersionID, entry.TierName)
+		err = fn(ctx, entry.ObjName, entry.VersionID, entry.TierName)
 		if err != nil && !isErrObjectNotFound(err) {
-			logger.LogIf(context.Background(), fmt.Errorf("tier-journal: failed to delete transitioned object %s from %s due to %s", entry.ObjName, entry.TierName, err))
+			logger.LogIf(ctx, fmt.Errorf("tier-journal: failed to delete transitioned object %s from %s due to %s", entry.ObjName, entry.TierName, err))
 			// We add the entry into the active journal to try again
 			// later.
-			j.AddEntry(entry)
+			jd.addEntry(entry)
 		}
 	}
 	if done {
-		os.Remove(j.ReadOnlyPath())
+		os.Remove(jd.ReadOnlyPath())
 	}
 }
 
-func deleteObjectFromRemoteTier(objName, rvID, tierName string) error {
+func deleteObjectFromRemoteTier(ctx context.Context, objName, rvID, tierName string) error {
 	w, err := globalTierConfigMgr.getDriver(tierName)
 	if err != nil {
 		return err
 	}
-	err = w.Remove(context.Background(), objName, remoteVersionID(rvID))
+	err = w.Remove(ctx, objName, remoteVersionID(rvID))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (j *tierJournal) deletePending(done <-chan struct{}) {
+func (jd *tierDiskJournal) deletePending(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			j.WalkEntries(deleteObjectFromRemoteTier)
+			jd.WalkEntries(ctx, deleteObjectFromRemoteTier)
 
-		case <-done:
-			j.Close()
+		case <-ctx.Done():
+			jd.Close()
 			return
 		}
 	}
 }
 
-func (j *tierJournal) AddEntry(je jentry) error {
+func (jd *tierDiskJournal) addEntry(je jentry) error {
 	// Open journal if it hasn't been
-	err := j.Open()
+	err := jd.Open()
 	if err != nil {
 		return err
 	}
@@ -186,21 +200,21 @@ func (j *tierJournal) AddEntry(je jentry) error {
 		return err
 	}
 
-	j.Lock()
-	defer j.Unlock()
-	_, err = j.file.Write(b)
+	jd.Lock()
+	defer jd.Unlock()
+	_, err = jd.file.Write(b)
 	if err != nil {
-		j.file = nil // reset to allow subsequent reopen when file/disk is available.
+		jd.file = nil // reset to allow subsequent reopen when file/disk is available.
 	}
 	return err
 }
 
 // Close closes the active journal and renames it to read-only for pending
 // deletes processing. Note: calling Close on a closed journal is a no-op.
-func (j *tierJournal) Close() error {
-	j.Lock()
-	defer j.Unlock()
-	if j.file == nil { // already closed
+func (jd *tierDiskJournal) Close() error {
+	jd.Lock()
+	defer jd.Unlock()
+	if jd.file == nil { // already closed
 		return nil
 	}
 
@@ -210,7 +224,7 @@ func (j *tierJournal) Close() error {
 		err error
 	)
 	// Setting j.file to nil
-	f, j.file = j.file, f
+	f, jd.file = jd.file, f
 	if fi, err = f.Stat(); err != nil {
 		return err
 	}
@@ -220,8 +234,8 @@ func (j *tierJournal) Close() error {
 		return nil
 	}
 
-	jPath := j.JournalPath()
-	jroPath := j.ReadOnlyPath()
+	jPath := jd.JournalPath()
+	jroPath := jd.ReadOnlyPath()
 	// Rotate active journal to perform pending deletes.
 	err = os.Rename(jPath, jroPath)
 	if err != nil {
@@ -233,28 +247,28 @@ func (j *tierJournal) Close() error {
 
 // Open opens a new active journal. Note: calling Open on an opened journal is a
 // no-op.
-func (j *tierJournal) Open() error {
-	j.Lock()
-	defer j.Unlock()
-	if j.file != nil { // already open
+func (jd *tierDiskJournal) Open() error {
+	jd.Lock()
+	defer jd.Unlock()
+	if jd.file != nil { // already open
 		return nil
 	}
 
 	var err error
-	j.file, err = os.OpenFile(j.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0644)
+	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0644)
 	if err != nil {
 		return err
 	}
 
 	// write journal version header if active journal is empty
-	fi, err := j.file.Stat()
+	fi, err := jd.file.Stat()
 	if err != nil {
 		return err
 	}
 	if fi.Size() == 0 {
 		var data [tierJournalHdrLen]byte
 		binary.LittleEndian.PutUint16(data[:], tierJournalVersion)
-		_, err = j.file.Write(data[:])
+		_, err = jd.file.Write(data[:])
 		if err != nil {
 			return err
 		}
@@ -262,8 +276,8 @@ func (j *tierJournal) Open() error {
 	return nil
 }
 
-func (j *tierJournal) OpenRO() (io.ReadCloser, error) {
-	file, err := os.Open(j.ReadOnlyPath())
+func (jd *tierDiskJournal) OpenRO() (io.ReadCloser, error) {
+	file, err := os.Open(jd.ReadOnlyPath())
 	if err != nil {
 		return nil, err
 	}

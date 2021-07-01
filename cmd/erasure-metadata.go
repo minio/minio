@@ -156,6 +156,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.TransitionStatus = fi.TransitionStatus
 	objInfo.transitionedObjName = fi.TransitionedObjName
 	objInfo.transitionVersionID = fi.TransitionVersionID
+	objInfo.tierFreeVersion = fi.TierFreeVersion()
 	objInfo.TransitionTier = fi.TransitionTier
 
 	// etag/md5Sum has already been extracted. We need to
@@ -361,4 +362,39 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
 	// from latestFileInfo to get the quorum
 	return dataBlocks, writeQuorum, nil
+}
+
+const (
+	tierFVID     = "tier-free-versionID"
+	tierFVMarker = "tier-free-marker"
+)
+
+// SetTierFreeVersionID sets free-version's versionID. This method is used by
+// object layer to pass down a versionID to set for a free-version that may be
+// created.
+func (fi *FileInfo) SetTierFreeVersionID(versionID string) {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+tierFVID] = versionID
+}
+
+// TierFreeVersionID returns the free-version's version id.
+func (fi *FileInfo) TierFreeVersionID() string {
+	return fi.Metadata[ReservedMetadataPrefixLower+tierFVID]
+}
+
+// SetTierFreeVersion sets fi as a free-version. This method is used by
+// lower layers to indicate a free-version.
+func (fi *FileInfo) SetTierFreeVersion() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker] = ""
+}
+
+// TierFreeVersion returns true if version is a free-version.
+func (fi *FileInfo) TierFreeVersion() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker]
+	return ok
 }
