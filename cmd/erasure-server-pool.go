@@ -947,15 +947,16 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
 
-	merged, err := z.listPath(ctx, opts)
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
 	if versionMarker == "" {
+		o := listPathOptions{Marker: marker}
 		// If we are not looking for a specific version skip it.
-		opts.Marker = marker
-		opts.parseMarker()
-		merged.forwardPast(opts.Marker)
+
+		o.parseMarker()
+		merged.forwardPast(o.Marker)
 	}
 	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
 	loi.IsTruncated = err == nil && len(objects) > 0
@@ -999,13 +1000,12 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
-	merged, err := z.listPath(ctx, opts)
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
 
-	opts.parseMarker()
 	merged.forwardPast(opts.Marker)
 
 	// Default is recursive, if delimiter is set then list non recursive.

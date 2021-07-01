@@ -34,7 +34,6 @@ const markerTagVersion = "v2"
 func (o *listPathOptions) parseMarker() {
 	s := o.Marker
 	if !strings.Contains(s, "[minio_cache:"+markerTagVersion) {
-		o.Create = true
 		return
 	}
 	start := strings.LastIndex(s, "[")
@@ -54,7 +53,6 @@ func (o *listPathOptions) parseMarker() {
 			}
 		case "id":
 			o.ID = kv[1]
-			o.Create = false
 		case "return":
 			o.ID = mustGetUUID()
 			o.Create = true

@@ -56,7 +56,7 @@ func renameAllBucketMetacache(epPath string) error {
 // Required important fields are Bucket, Prefix, Separator.
 // Other important fields are Limit, Marker.
 // List ID always derived from the Marker.
-func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
+func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	if err := checkListObjsArgs(ctx, o.Bucket, o.Prefix, o.Marker, z); err != nil {
 		return entries, err
 	}
@@ -96,7 +96,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// Decode and get the optional list id from the marker.
 	o.parseMarker()
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
-	o.Transient = o.Transient || isMinioReservedBucket(o.Bucket)
+	o.Transient = o.Transient || isMinioMetaBucket(o.Bucket) || isMinioReservedBucket(o.Bucket)
 	if o.Transient {
 		o.Create = false
 	}
@@ -109,14 +109,13 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.ID != "" && !o.Transient {
 		// Create or ping with handout...
-		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
 			o.Transient = true
 		}
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		c, err := rpc.GetMetacacheListing(ctx, o)
+		c, err := rpc.GetMetacacheListing(ctx, *o)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Context is canceled, return at once.
@@ -126,18 +125,20 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 			if !errors.Is(err, context.DeadlineExceeded) {
 				// TODO: Remove, not really informational.
 				logger.LogIf(ctx, err)
+				o.debugln("listPath: deadline exceeded")
 			}
 			o.Transient = true
 			o.Create = false
 			o.ID = mustGetUUID()
 		} else {
-			if cache.fileNotFound {
+			if c.fileNotFound {
 				// No cache found, no entries found.
 				return entries, io.EOF
 			}
-			if cache.status == scanStateError || cache.status == scanStateNone {
+			if c.status == scanStateError || c.status == scanStateNone {
 				o.ID = mustGetUUID()
 				o.Create = false
+				o.debugln("scan status", c.status, " - waiting for roundtrip to create")
 			} else {
 				// Continue listing
 				o.ID = c.id
@@ -148,14 +149,21 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	if o.ID != "" && !o.Transient {
 		// We have an existing list ID, continue streaming.
 		if o.Create {
+			o.debugln("Creating", o)
 			entries, err = z.listAndSave(ctx, o)
 			if err == nil {
 				return entries, nil
 			}
 		} else {
-			entries, err = z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, o)
-			if err == nil {
-				return entries, nil
+			if o.pool < len(z.serverPools) && o.set < len(z.serverPools[o.pool].sets) {
+				o.debugln("Resuming", o)
+				entries, err = z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, *o)
+				if err == nil {
+					return entries, nil
+				}
+			} else {
+				err = fmt.Errorf("invalid pool/set")
+				o.pool, o.set = 0, 0
 			}
 		}
 		if IsErr(err, []error{
@@ -170,13 +178,13 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		}
 		entries.truncate(0)
 		// TODO: Cancel existing, bad listing...
-		o.Create = true
-		o.ID = mustGetUUID()
+		o.ID = ""
 	}
 
 	// Do listing in-place.
 	// Create output for our results.
 	// Create filter for results.
+	o.debugln("Raw List", o)
 	filterCh := make(chan metaCacheEntry, o.Limit)
 	filteredResults := o.gatherResults(filterCh)
 	listCtx, cancelList := context.WithCancel(ctx)
@@ -184,10 +192,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	wg.Add(1)
 	var listErr error
 
-	go func() {
+	go func(o listPathOptions) {
 		defer wg.Done()
+		o.Limit = 0
 		listErr = z.listMerged(listCtx, o, filterCh)
-	}()
+	}(*o)
 
 	entries, err = filteredResults()
 	cancelList()
@@ -197,8 +206,12 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	}
 	truncated := entries.len() > o.Limit || err == nil
 	entries.truncate(o.Limit)
-	if !o.Transient {
-		entries.listID = o.ID
+	if !o.Transient && truncated {
+		if o.ID == "" {
+			entries.listID = mustGetUUID()
+		} else {
+			entries.listID = o.ID
+		}
 	}
 	if !truncated {
 		return entries, io.EOF
@@ -268,14 +281,6 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 
 	if isAllNotFound(errs) {
-		// All sets returned not found.
-		go func() {
-			// Update master cache with that information.
-			//cache.status = scanStateSuccess
-			//cache.fileNotFound = true
-			//o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
-		}()
-		// cache returned not found, entries truncated.
 		return nil
 	}
 
@@ -297,7 +302,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	return nil
 }
 
-func (z *erasureServerPools) listAndSave(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
+func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	// Use ID as the object name...
 	o.pool = z.getAvailablePoolIdx(ctx, minioMetaBucket, o.ID, 10<<20)
 	if o.pool < 0 {
@@ -320,7 +325,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o listPathOptions)
 	filteredResults := o.gatherResults(outCh)
 
 	mc := o.newMetacache()
-	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: o}
+	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: *o}
 
 	// Save listing...
 	go func() {
@@ -331,14 +336,13 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o listPathOptions)
 	}()
 
 	// Do listing...
-	go func() {
+	go func(o listPathOptions) {
 		err := z.listMerged(listCtx, o, inCh)
 		if err != nil {
 			meta.setErr(err.Error())
 		}
-		// Indicate end...
-		close(inCh)
-	}()
+		o.debugln("listAndSave: listing", o.ID, "finished with ", err)
+	}(*o)
 
 	// Write listing to results and saver.
 	go func() {
