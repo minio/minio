@@ -109,17 +109,17 @@ func init() {
 const consolePrefix = "CONSOLE_"
 
 func minioConfigToConsoleFeatures() {
-	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", restapi.RandomCharString(16))
-	os.Setenv("CONSOLE_PBKDF_SALT", restapi.RandomCharString(8))
+	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID)
+	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID)
 	os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
-	if value := os.Getenv("MINIO_LOG_QUERY_URL"); value != "" {
+	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
 	}
-	if value := os.Getenv("MINIO_LOG_QUERY_AUTH_TOKEN"); value != "" {
+	if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 	}
 	// Enable if prometheus URL is set.
-	if value := os.Getenv("MINIO_PROMETHEUS_URL"); value != "" {
+	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
 	}
 	// Enable if LDAP is enabled.
@@ -129,13 +129,19 @@ func minioConfigToConsoleFeatures() {
 	// if IDP is enabled, set IDP environment variables
 	if globalOpenIDConfig.URL != nil {
 		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.DiscoveryDoc.Issuer)
-		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
 		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ClientID)
 		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ClientSecret)
+		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)
+		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ClientID)
+		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
+		if globalOpenIDConfig.RedirectURI != "" {
+			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.RedirectURI)
+		} else {
+			os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
+		}
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
-	os.Setenv("CONSOLE_CERT_PASSWD", os.Getenv("MINIO_CERT_PASSWD"))
-	os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
+	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 }
 
 func initConsoleServer() (*restapi.Server, error) {

@@ -142,7 +142,11 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 		if ok {
 			return r
 		}
-		r = &audit.Entry{}
+		r = &audit.Entry{
+			Version:      audit.Version,
+			DeploymentID: globalDeploymentID,
+			Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		}
 		SetAuditEntry(ctx, r)
 		return r
 	}
@@ -165,7 +169,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		}
 
 		entry = audit.ToEntry(w, r, reqClaims, globalDeploymentID)
-		entry.Trigger = "external-request"
+		// indicates all requests for this API call are inbound
+		entry.Trigger = "incoming"
 
 		for _, filterKey := range filterKeys {
 			delete(entry.ReqClaims, filterKey)

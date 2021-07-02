@@ -505,6 +505,10 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 
 	g := errgroup.WithNErrs(len(disks))
 
+	fvID := mustGetUUID()
+	for index := range disks {
+		metadata[index].SetTierFreeVersionID(fvID)
+	}
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -518,6 +522,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if fi.Erasure.Index == 0 {
 				fi.Erasure.Index = index + 1
 			}
+
 			if fi.IsValid() {
 				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
 			}
@@ -930,6 +935,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
 			VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 		}
+		versions[i].SetTierFreeVersionID(mustGetUUID())
 	}
 
 	// Initialize list of errors.
@@ -1102,7 +1108,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
-
+	fvID := mustGetUUID()
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
@@ -1115,6 +1121,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				TransitionStatus:              opts.Transition.Status,
 				ExpireRestored:                opts.Transition.ExpireRestored,
 			}
+			fi.SetTierFreeVersionID(fvID)
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
 				if opts.VersionID != "" {
@@ -1133,7 +1140,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	// Delete the object version on all disks.
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
+	dfi := FileInfo{
 		Name:                          object,
 		VersionID:                     opts.VersionID,
 		MarkDeleted:                   markDelete,
@@ -1143,7 +1150,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
 		TransitionStatus:              opts.Transition.Status,
 		ExpireRestored:                opts.Transition.ExpireRestored,
-	}, opts.DeleteMarker); err != nil {
+	}
+	dfi.SetTierFreeVersionID(fvID)
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 

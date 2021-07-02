@@ -468,7 +468,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getAllFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
@@ -2058,6 +2058,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
+		// Empty fi.VersionID indicates that versioning is either
+		// suspended or disabled on this bucket. RenameData will replace
+		// the 'null' version. We add a free-version to track its tiered
+		// content for asynchronous deletion.
+		xlMeta.AddFreeVersion(fi)
 	}
 
 	if err = xlMeta.AddVersion(fi); err != nil {
