@@ -348,10 +348,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	// Write listing to results and saver.
 	go func() {
 		for entry := range inCh {
-			select {
-			case outCh <- entry:
-			default:
-			}
+			outCh <- entry
 			saveCh <- entry
 		}
 		close(outCh)

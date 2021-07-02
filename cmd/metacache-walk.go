@@ -107,9 +107,18 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 
 	prefix := opts.FilterPrefix
-	forward := opts.ForwardTo
 	var scanDir func(path string) error
+
 	scanDir = func(current string) error {
+		// Skip forward, if requested...
+		forward := ""
+		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
+			forward = strings.TrimPrefix(opts.ForwardTo, current)
+			if idx := strings.IndexByte(forward, '/'); idx > 0 {
+				forward = forward[:idx]
+			}
+		}
+
 		if contextCanceled(ctx) {
 			return ctx.Err()
 		}
@@ -262,10 +271,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			out <- metaCacheEntry{name: pop}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
-				forward = ""
-				if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
-					forward = strings.TrimPrefix(opts.ForwardTo, pop)
-				}
 				logger.LogIf(ctx, scanDir(pop))
 			}
 			dirStack = dirStack[:len(dirStack)-1]
