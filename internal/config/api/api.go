@@ -137,6 +137,7 @@ func (sCfg Config) GetListQuorum() int {
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	// remove this since we have removed this already.
 	kvs.Delete(apiReadyDeadline)
+	kvs.Delete("extend_list_cache_life")
 
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
