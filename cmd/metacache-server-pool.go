@@ -186,7 +186,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 					if existing.isDir() && !other.isDir() {
 						return true
 					}
-					if existing.isDir() && !other.isDir() {
+					if !existing.isDir() && other.isDir() {
 						return false
 					}
 					eFIV, err := existing.fileInfo(o.Bucket)

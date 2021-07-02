@@ -104,7 +104,7 @@ func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
 	}
 	bFi, err := b.fileInfo(bucket)
 	if err != nil {
-		return b
+		return a
 	}
 
 	if !aFi.ModTime.Equal(bFi.ModTime) {
