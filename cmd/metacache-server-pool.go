@@ -182,7 +182,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 
 				// Resolve non-trivial conflicts
 				entries.deduplicate(func(existing, other *metaCacheEntry) (replace bool) {
-					if existing.isDir() {
+					// Pick object over directory
+					if existing.isDir() && !other.isDir() {
+						return true
+					}
+					if existing.isDir() && !other.isDir() {
 						return false
 					}
 					eFIV, err := existing.fileInfo(o.Bucket)
