@@ -484,11 +484,11 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				updates := make(chan dataUsageEntry, 1)
 				var wg sync.WaitGroup
 				wg.Add(1)
-				go func() {
+				go func(name string) {
 					defer wg.Done()
 					for update := range updates {
 						bucketResults <- dataUsageEntryInfo{
-							Name:   cache.Info.Name,
+							Name:   name,
 							Parent: dataUsageRoot,
 							Entry:  update,
 						}
@@ -496,7 +496,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 							console.Debugln("bucket", bucket.Name, "got update", update)
 						}
 					}
-				}()
+				}(cache.Info.Name)
 
 				// Calc usage
 				before := cache.Info.LastUpdate
