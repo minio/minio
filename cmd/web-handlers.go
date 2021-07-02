@@ -2527,6 +2527,10 @@ func (d *DealVo) setDefault() {
 	}
 	if len(d.SwanEndpoint) == 0 {
 		d.SwanEndpoint = os.Getenv("SWAN_API")
+		if len(strings.TrimSpace(d.SwanEndpoint)) == 0 {
+			d.SwanEndpoint = "https://api.filswan.com"
+		}
+		os.Setenv("SWAN_API", d.SwanEndpoint)
 	} else {
 		os.Setenv("SWAN_API", d.SwanEndpoint)
 	}
@@ -2547,6 +2551,7 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 	var dealVo DealVo
 	err := decoder.Decode(&dealVo)
 	if err != nil && err != io.EOF {
+		w.Write([]byte(fmt.Sprintf("bad request: %s", err.Error())))
 		return
 	}
 	dealVo.setDefault()
