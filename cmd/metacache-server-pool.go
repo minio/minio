@@ -96,7 +96,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	// Decode and get the optional list id from the marker.
 	o.parseMarker()
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
-	o.Transient = o.Transient || isMinioMetaBucket(o.Bucket) || isMinioReservedBucket(o.Bucket)
+	o.Transient = o.Transient || isReservedOrInvalidBucket(o.Bucket, false)
 	if o.Transient {
 		o.Create = false
 	}
@@ -110,9 +110,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	if o.ID != "" && !o.Transient {
 		// Create or ping with handout...
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-		if isReservedOrInvalidBucket(o.Bucket, false) {
-			o.Transient = true
-		}
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		c, err := rpc.GetMetacacheListing(ctx, *o)
@@ -136,9 +133,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 				return entries, io.EOF
 			}
 			if c.status == scanStateError || c.status == scanStateNone {
-				o.ID = mustGetUUID()
+				o.ID = ""
 				o.Create = false
-				o.debugln("scan status", c.status, " - waiting for roundtrip to create")
+				o.debugln("scan status", c.status, " - waiting a roundtrip to create")
 			} else {
 				// Continue listing
 				o.ID = c.id
@@ -177,7 +174,15 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			return entries, err
 		}
 		entries.truncate(0)
-		// TODO: Cancel existing, bad listing...
+		go func() {
+			rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+			ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
+			defer cancel()
+			if c, err := rpc.GetMetacacheListing(ctx, *o); err == nil {
+				c.error = "no longer used"
+				c.status = scanStateError
+			}
+		}()
 		o.ID = ""
 	}
 

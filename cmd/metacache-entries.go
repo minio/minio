@@ -52,15 +52,6 @@ func (e metaCacheEntry) hasPrefix(s string) bool {
 	return strings.HasPrefix(e.name, s)
 }
 
-// likelyMatches returns if the entries match by comparing name and metadata length.
-func (e *metaCacheEntry) likelyMatches(other *metaCacheEntry) bool {
-	// This should reject 99%
-	if len(e.metadata) != len(other.metadata) || e.name != other.name {
-		return false
-	}
-	return true
-}
-
 // matches returns if the entries match by comparing their latest version fileinfo.
 func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
 	if e == nil && other == nil {
