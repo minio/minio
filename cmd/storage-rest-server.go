@@ -212,6 +212,10 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 	if err = respW.WriteBool(false); err == nil {
 		err = usageInfo.EncodeMsg(respW)
 	}
+	if err != nil {
+		resp.CloseWithError(err)
+		return
+	}
 	resp.CloseWithError(respW.Flush())
 }
 
