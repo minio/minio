@@ -257,9 +257,12 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 
 	// Gather results to a single channel.
 	err := mergeEntryChannels(ctx, inputs, results, func(existing, other *metaCacheEntry) (replace bool) {
+		// Pick object over directory
 		if existing.isDir() && !other.isDir() {
-			// Pick object over directory
 			return true
+		}
+		if !existing.isDir() && other.isDir() {
+			return false
 		}
 
 		eFIV, err := existing.fileInfo(o.Bucket)
