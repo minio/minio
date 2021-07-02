@@ -188,6 +188,7 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		defer wg.Done()
 		for update := range updates {
 			// Write true bool to indicate update.
+			var err error
 			if err = respW.WriteBool(true); err == nil {
 				err = update.EncodeMsg(respW)
 			}
