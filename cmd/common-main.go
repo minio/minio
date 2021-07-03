@@ -22,11 +22,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -39,21 +39,23 @@ import (
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/kes"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/ellipses"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/ellipses"
+	"github.com/minio/pkg/env"
 )
 
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+var defaultAWSCredProvider []credentials.Provider
 
 func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -74,7 +76,6 @@ func init() {
 		// safe to assume a higher timeout upto 10 minutes.
 		globalDNSCache = xhttp.NewDNSCache(10*time.Minute, 5*time.Second, logger.LogOnceIf)
 	}
-
 	initGlobalContext()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
@@ -92,6 +93,14 @@ func init() {
 	console.SetColor("Debug", color.New())
 
 	gob.Register(StorageErr(""))
+
+	defaultAWSCredProvider = []credentials.Provider{
+		&credentials.IAM{
+			Client: &http.Client{
+				Transport: NewGatewayHTTPTransport(),
+			},
+		},
+	}
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -245,14 +254,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 }
 
 func handleCommonEnvVars() {
-	wormEnabled, err := config.LookupWorm()
-	if err != nil {
-		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
-	}
-	if wormEnabled {
-		logger.Fatal(errors.New("WORM is deprecated"), "global MINIO_WORM support is removed, please downgrade your server or migrate to https://github.com/minio/minio/tree/master/docs/retention")
-	}
-
+	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
@@ -315,48 +317,67 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
+	// Check if the supported credential env vars, "MINIO_ROOT_USER" and
+	// "MINIO_ROOT_PASSWORD" are provided
+	// Warn user if deprecated environment variables,
+	// "MINIO_ACCESS_KEY" and "MINIO_SECRET_KEY", are defined
+	// Check all error conditions first
+	if !env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "Unable to start MinIO")
+	} else if env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		logger.Fatal(config.ErrMissingEnvCredentialRootPassword(nil), "Unable to start MinIO")
+	} else if !env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
+		if !env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialAccessKey(nil), "Unable to start MinIO")
+		} else if env.IsSet(config.EnvAccessKey) && !env.IsSet(config.EnvSecretKey) {
+			logger.Fatal(config.ErrMissingEnvCredentialSecretKey(nil), "Unable to start MinIO")
+		}
+	}
+
+	// At this point, either both environment variables
+	// are defined or both are not defined.
+	// Check both cases and authenticate them if correctly defined
+	var user, password string
+	haveRootCredentials := false
+	haveAccessCredentials := false
+	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
+		user = env.Get(config.EnvRootUser, "")
+		password = env.Get(config.EnvRootPassword, "")
+		haveRootCredentials = true
+	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
+		user = env.Get(config.EnvAccessKey, "")
+		password = env.Get(config.EnvSecretKey, "")
+		haveAccessCredentials = true
+	}
+	if haveRootCredentials || haveAccessCredentials {
+		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")
+		}
+		if haveAccessCredentials {
+			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
+				"         Please use %s and %s",
+				config.EnvAccessKey, config.EnvSecretKey,
+				config.EnvRootUser, config.EnvRootPassword)
+			logger.StartupMessage(color.RedString(msg))
 		}
 		globalActiveCred = cred
 	}
-
-	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
-		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
-		}
-		globalActiveCred = cred
+	if !haveRootCredentials && !haveAccessCredentials {
+		msg := "No credential environment variables defined. Going with the defaults.\n" +
+			"It is strongly recommended to define your own credentials" +
+			" via environment variables %s and %s instead of using default values"
+		logger.StartupMessage(color.RedString(msg, config.EnvRootUser, config.EnvRootPassword))
 	}
 
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
-	case env.IsSet(config.EnvKMSMasterKey) && env.IsSet(config.EnvKESEndpoint):
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSMasterKey, config.EnvKESEndpoint))
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
 		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-	} else if env.IsSet(config.EnvKMSMasterKey) {
-		// FIXME: remove this block by June 2021
-		logger.LogIf(GlobalContext, fmt.Errorf("legacy KMS configuration, this environment variable %q is deprecated and will be removed by June 2021", config.EnvKMSMasterKey))
-		v := strings.SplitN(env.Get(config.EnvKMSMasterKey, ""), ":", 2)
-		if len(v) != 2 {
-			logger.Fatal(errors.New("invalid "+config.EnvKMSMasterKey), "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		secretKey, err := hex.DecodeString(v[1])
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		GlobalKMS, err = kms.New(v[0], secretKey)
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}

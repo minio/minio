@@ -26,25 +26,25 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/kms"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/dns"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/storageclass"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/auth"
-	etcd "go.etcd.io/etcd/clientv3"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/compress"
+	"github.com/minio/minio/internal/config/dns"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/storageclass"
+	xhttp "github.com/minio/minio/internal/http"
+	etcd "go.etcd.io/etcd/client/v3"
 
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/pubsub"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/pkg/certs"
 )
 
 // minio configuration related constants.
@@ -107,6 +107,12 @@ const (
 
 	// diskFillFraction is the fraction of a disk we allow to be filled.
 	diskFillFraction = 0.95
+
+	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
+	diskAssumeUnknownSize = 1 << 30
+
+	// diskMinInodes is the minimum number of inodes we want free on a disk to perform writes.
+	diskMinInodes = 1000
 )
 
 var globalCLIContext = struct {
@@ -211,12 +217,6 @@ var (
 	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
-
-	// Hold the old server credentials passed by the environment
-	globalOldCred auth.Credentials
-
-	// Indicates if config is to be encrypted
-	globalConfigEncrypted bool
 
 	globalPublicCerts []*x509.Certificate
 

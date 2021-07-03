@@ -29,9 +29,9 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/crypto"
-	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/kms"
 )
 
 //go:generate msgp -file $GOFILE
@@ -49,7 +49,7 @@ const (
 )
 
 // tierConfigPath refers to remote tier config object name
-var tierConfigPath string = path.Join(minioConfigPrefix, tierConfigFile)
+var tierConfigPath = path.Join(minioConfigPrefix, tierConfigFile)
 
 // TierConfigMgr holds the collection of remote tiers configured in this deployment.
 type TierConfigMgr struct {
@@ -144,12 +144,16 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 	newCfg := config.Tiers[tierName]
 	switch tierType {
 	case madmin.S3:
-		if creds.AccessKey == "" || creds.SecretKey == "" {
+		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
 			return errTierInsufficientCreds
 		}
-		newCfg.S3.AccessKey = creds.AccessKey
-		newCfg.S3.SecretKey = creds.SecretKey
-
+		switch {
+		case creds.AWSRole:
+			newCfg.S3.AWSRole = true
+		default:
+			newCfg.S3.AccessKey = creds.AccessKey
+			newCfg.S3.SecretKey = creds.SecretKey
+		}
 	case madmin.Azure:
 		if creds.AccessKey == "" || creds.SecretKey == "" {
 			return errTierInsufficientCreds

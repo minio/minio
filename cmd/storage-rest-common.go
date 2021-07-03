@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v33" // Added transition related information to FileInfo
+	storageRESTVersion       = "v36" // Changes to FileInfo for tier-journal
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

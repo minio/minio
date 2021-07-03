@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
-	xnet "github.com/minio/minio/pkg/net"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/selfupdate"
 )
 

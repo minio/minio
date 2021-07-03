@@ -24,8 +24,8 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/hash"
 )
 
 // BackendType - represents different backend types.
@@ -117,6 +117,8 @@ type ObjectInfo struct {
 	TransitionStatus string
 	// Name of transitioned object on remote tier
 	transitionedObjName string
+	// VersionID on the the remote tier
+	transitionVersionID string
 	// Name of remote tier object has transitioned to
 	TransitionTier string
 
@@ -230,6 +232,7 @@ type ReplicateObjectInfo struct {
 	ObjectInfo
 	OpType     replication.Type
 	RetryCount uint32
+	ResetID    string
 }
 
 // MultipartInfo captures metadata information about the uploadId

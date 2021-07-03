@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/mimedb"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/mimedb"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -289,7 +289,27 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityDrives = er.defaultParityCount
 	}
 
+	parityOrig := parityDrives
+	for _, disk := range onlineDisks {
+		if parityDrives >= len(onlineDisks)/2 {
+			parityDrives = len(onlineDisks) / 2
+			break
+		}
+		if disk == nil {
+			parityDrives++
+			continue
+		}
+		di, err := disk.DiskInfo(ctx)
+		if err != nil || di.ID == "" {
+			parityDrives++
+		}
+	}
+	if parityOrig != parityDrives {
+		opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+	}
+
 	dataDrives := len(onlineDisks) - parityDrives
+
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data
 	writeQuorum := dataDrives
@@ -482,8 +502,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath,
-			erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	n, err := erasure.Encode(rctx, data, writers, buffer, writeQuorum)
@@ -755,8 +774,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	if opts.ParentIsObject != nil && opts.ParentIsObject(rctx, bucket, path.Dir(object)) {
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
-
-	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)

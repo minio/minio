@@ -26,7 +26,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio/browser"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 	jsonrpc "github.com/minio/rpc"
 	"github.com/minio/rpc/json2"
 )
@@ -94,6 +94,7 @@ func registerWebRouter(router *mux.Router) error {
 	// RPC handler at URI - /minio/webrpc
 	webBrowserRouter.Methods(http.MethodPost).Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods(http.MethodPut).Path("/upload/{bucket}/{object:.+}").HandlerFunc(httpTraceHdrs(web.Upload))
+	webBrowserRouter.Methods(http.MethodPut).Path("/deal/{bucket}/{object:.+}").HandlerFunc(httpTraceHdrs(web.SendDeal))
 
 	// These methods use short-expiry tokens in the URLs. These tokens may unintentionally
 	// be logged, so a new one must be generated for each request.

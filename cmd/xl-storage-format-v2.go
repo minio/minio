@@ -22,15 +22,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -210,6 +211,9 @@ type xlMetaV2Version struct {
 
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
+	if !j.Type.valid() {
+		return false
+	}
 	switch j.Type {
 	case LegacyType:
 		return j.ObjectV1 != nil &&
@@ -871,6 +875,9 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		if fi.TransitionedObjName != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
 		}
+		if fi.TransitionVersionID != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
+		}
 		if fi.TransitionTier != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
 		}
@@ -1015,6 +1022,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	if o, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
 		fi.TransitionedObjName = string(o)
+	}
+	if rv, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID]; ok {
+		fi.TransitionVersionID = string(rv)
 	}
 	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
 		fi.TransitionTier = string(sc)
@@ -1184,6 +1194,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 				case fi.TransitionStatus == lifecycle.TransitionComplete:
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
 					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
 				default:
 					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
@@ -1367,4 +1378,94 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	}
 
 	return FileInfo{}, errFileVersionNotFound
+}
+
+// readXLMetaNoData will load the metadata, but skip data segments.
+// This should only be used when data is never interesting.
+// If data is not xlv2, it is returned in full.
+func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
+	// Read at most this much on initial read.
+	const readDefault = 4 << 10
+	initial := size
+	hasFull := true
+	if initial > readDefault {
+		initial = readDefault
+		hasFull = false
+	}
+
+	buf := make([]byte, initial)
+	_, err := io.ReadFull(r, buf)
+	if err != nil {
+		return nil, fmt.Errorf("readXLMetaNoData.ReadFull: %w", err)
+	}
+	readMore := func(n int64) error {
+		has := int64(len(buf))
+		if has >= n {
+			return nil
+		}
+		if hasFull || n > size {
+			return io.ErrUnexpectedEOF
+		}
+		extra := n - has
+		buf = append(buf, make([]byte, extra)...)
+		_, err := io.ReadFull(r, buf[has:])
+		if err != nil {
+			if err == io.EOF {
+				// Returned if we read nothing.
+				return io.ErrUnexpectedEOF
+			}
+			return fmt.Errorf("readXLMetaNoData.readMore: %w", err)
+		}
+		return nil
+	}
+	tmp, major, minor, err := checkXL2V1(buf)
+	if err != nil {
+		err = readMore(size)
+		return buf, err
+	}
+	switch major {
+	case 1:
+		switch minor {
+		case 0:
+			err = readMore(size)
+			return buf, err
+		case 1, 2:
+			sz, tmp, err := msgp.ReadBytesHeader(tmp)
+			if err != nil {
+				return nil, err
+			}
+			want := int64(sz) + int64(len(buf)-len(tmp))
+
+			// v1.1 does not have CRC.
+			if minor < 2 {
+				if err := readMore(want); err != nil {
+					return nil, err
+				}
+				return buf[:want], nil
+			}
+
+			// CRC is variable length, so we need to truncate exactly that.
+			wantMax := want + msgp.Uint32Size
+			if wantMax > size {
+				wantMax = size
+			}
+			if err := readMore(wantMax); err != nil {
+				return nil, err
+			}
+
+			tmp = buf[want:]
+			_, after, err := msgp.ReadUint32Bytes(tmp)
+			if err != nil {
+				return nil, err
+			}
+			want += int64(len(tmp) - len(after))
+
+			return buf[:want], err
+
+		default:
+			return nil, errors.New("unknown minor metadata version")
+		}
+	default:
+		return nil, errors.New("unknown major metadata version")
+	}
 }

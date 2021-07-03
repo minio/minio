@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
@@ -31,17 +32,18 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tinylib/msgp/msgp"
 
 	jwtreq "github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	xjwt "github.com/minio/minio/cmd/jwt"
-	"github.com/minio/minio/cmd/logger"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/config"
+	xhttp "github.com/minio/minio/internal/http"
+	xjwt "github.com/minio/minio/internal/jwt"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/pkg/net"
 )
 
 var errDiskStale = errors.New("disk stale")
@@ -173,13 +175,43 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	resp := streamHTTPResponse(w)
-	usageInfo, err := s.storage.NSScanner(r.Context(), cache)
+	respW := msgp.NewWriter(resp)
+
+	// Collect updates, stream them before the full cache is sent.
+	updates := make(chan dataUsageEntry, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for update := range updates {
+			// Write true bool to indicate update.
+			if err = respW.WriteBool(true); err == nil {
+				err = update.EncodeMsg(respW)
+			}
+			respW.Flush()
+			if err != nil {
+				cancel()
+				resp.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	usageInfo, err := s.storage.NSScanner(ctx, cache, updates)
 	if err != nil {
+		respW.Flush()
 		resp.CloseWithError(err)
 		return
 	}
-	resp.CloseWithError(usageInfo.serializeTo(resp))
+
+	// Write false bool to indicate we finished.
+	wg.Wait()
+	if err = respW.WriteBool(false); err == nil {
+		err = usageInfo.EncodeMsg(respW)
+	}
+	resp.CloseWithError(respW.Flush())
 }
 
 // MakeVolHandler - make a volume.
@@ -941,9 +973,10 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 // now, need to revist the overall erroring structure here.
 // Do not like it :-(
 func logFatalErrs(err error, endpoint Endpoint, exit bool) {
-	if errors.Is(err, errMinDiskSize) {
+	switch {
+	case errors.Is(err, errMinDiskSize):
 		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
-	} else if errors.Is(err, errUnsupportedDisk) {
+	case errors.Is(err, errUnsupportedDisk):
 		var hint string
 		if endpoint.URL != nil {
 			hint = fmt.Sprintf("Disk '%s' does not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support", endpoint.Path)
@@ -951,7 +984,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 			hint = "Disks do not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support"
 		}
 		logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
-	} else if errors.Is(err, errDiskNotDir) {
+	case errors.Is(err, errDiskNotDir):
 		var hint string
 		if endpoint.URL != nil {
 			hint = fmt.Sprintf("Disk '%s' is not a directory, MinIO erasure coding needs a directory", endpoint.Path)
@@ -959,7 +992,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 			hint = "Disks are not directories, MinIO erasure coding needs directories"
 		}
 		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
-	} else if errors.Is(err, errFileAccessDenied) {
+	case errors.Is(err, errFileAccessDenied):
 		// Show a descriptive error with a hint about how to fix it.
 		var username string
 		if u, err := user.Current(); err == nil {
@@ -974,22 +1007,26 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 		} else {
 			hint = fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s. <path> && sudo chmod u+rxw <path>`", username)
 		}
-		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
-	} else if errors.Is(err, errFaultyDisk) {
+		if !exit {
+			logger.LogIf(GlobalContext, fmt.Errorf("disk is not writable %s, %s", endpoint, hint))
+		} else {
+			logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
+		}
+	case errors.Is(err, errFaultyDisk):
 		if !exit {
 			logger.LogIf(GlobalContext, fmt.Errorf("disk is faulty at %s, please replace the drive - disk will be offline", endpoint))
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
-	} else if errors.Is(err, errDiskFull) {
+	case errors.Is(err, errDiskFull):
 		if !exit {
 			logger.LogIf(GlobalContext, fmt.Errorf("disk is already full at %s, incoming I/O will fail - disk will be offline", endpoint))
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
-	} else {
+	default:
 		if !exit {
-			logger.LogIf(GlobalContext, fmt.Errorf("disk returned an unexpected error at %s, please investigate - disk will be offline", endpoint))
+			logger.LogIf(GlobalContext, fmt.Errorf("disk returned an unexpected error at %s, please investigate - disk will be offline (%w)", endpoint, err))
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
@@ -998,17 +1035,38 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
-	for _, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
+	storageDisks := make([][]*xlStorage, len(endpointServerPools))
+	for poolIdx, ep := range endpointServerPools {
+		storageDisks[poolIdx] = make([]*xlStorage, len(ep.Endpoints))
+	}
+	var wg sync.WaitGroup
+	for poolIdx, ep := range endpointServerPools {
+		for setIdx, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newXLStorage(endpoint)
-			if err != nil {
-				// if supported errors don't fail, we proceed to
-				// printing message and moving forward.
-				logFatalErrs(err, endpoint, false)
+			wg.Add(1)
+			go func(poolIdx, setIdx int, endpoint Endpoint) {
+				defer wg.Done()
+				var err error
+				storageDisks[poolIdx][setIdx], err = newXLStorage(endpoint)
+				if err != nil {
+					// if supported errors don't fail, we proceed to
+					// printing message and moving forward.
+					logFatalErrs(err, endpoint, false)
+				}
+			}(poolIdx, setIdx, endpoint)
+		}
+	}
+	wg.Wait()
+
+	for _, setDisks := range storageDisks {
+		for _, storage := range setDisks {
+			if storage == nil {
+				continue
 			}
+
+			endpoint := storage.Endpoint()
 
 			server := &storageRESTServer{storage: storage}
 

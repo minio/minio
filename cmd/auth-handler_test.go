@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/auth"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // Test get request auth type.

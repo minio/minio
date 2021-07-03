@@ -189,6 +189,35 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 	return latestFileInfo, nil
 }
 
+// fileInfoConsistent whether all fileinfos are consistent with each other.
+// Will return false if any fileinfo mismatches.
+func fileInfoConsistent(ctx context.Context, partsMetadata []FileInfo, errs []error) bool {
+	// There should be atleast half correct entries, if not return failure
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, len(partsMetadata)/2); reducedErr != nil {
+		return false
+	}
+	if len(partsMetadata) == 1 {
+		return true
+	}
+	// Reference
+	ref := partsMetadata[0]
+	if !ref.IsValid() {
+		return false
+	}
+	for _, meta := range partsMetadata[1:] {
+		if !meta.IsValid() {
+			return false
+		}
+		if !meta.ModTime.Equal(ref.ModTime) {
+			return false
+		}
+		if meta.DataDir != ref.DataDir {
+			return false
+		}
+	}
+	return true
+}
+
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //
@@ -198,9 +227,11 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 //   a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo, errs []error, bucket,
 	object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+	// List of disks having latest version of the object er.meta  (by modtime)
+	_, modTime, dataDir := listOnlineDisks(onlineDisks, partsMetadata, errs)
+
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
-
 	inconsistent := 0
 	for i, meta := range partsMetadata {
 		if !meta.IsValid() {
@@ -237,6 +268,13 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			continue
 		}
 		meta := partsMetadata[i]
+
+		if !meta.ModTime.Equal(modTime) || meta.DataDir != dataDir {
+			dataErrs[i] = errFileCorrupt
+			partsMetadata[i] = FileInfo{}
+			continue
+		}
+
 		if erasureDistributionReliable {
 			if !meta.IsValid() {
 				continue
@@ -262,7 +300,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		// Always check data, if we got it.
 		if (len(meta.Data) > 0 || meta.Size == 0) && len(meta.Parts) > 0 {
 			checksumInfo := meta.Erasure.GetChecksumInfo(meta.Parts[0].Number)
-			dataErrs[i] = bitrotVerify(bytes.NewBuffer(meta.Data),
+			dataErrs[i] = bitrotVerify(bytes.NewReader(meta.Data),
 				int64(len(meta.Data)),
 				meta.Erasure.ShardFileSize(meta.Size),
 				checksumInfo.Algorithm,
@@ -270,6 +308,9 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			if dataErrs[i] == nil {
 				// All parts verified, mark it as all data available.
 				availableDisks[i] = onlineDisk
+			} else {
+				// upon errors just make that disk's fileinfo invalid
+				partsMetadata[i] = FileInfo{}
 			}
 			continue
 		}
@@ -291,6 +332,9 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		if dataErrs[i] == nil {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
+		} else {
+			// upon errors just make that disk's fileinfo invalid
+			partsMetadata[i] = FileInfo{}
 		}
 	}
 

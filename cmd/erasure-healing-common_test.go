@@ -484,12 +484,14 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}
 
-	// Test that all disks are returned without any failures with
+	// Test 1: Test that all disks are returned without any failures with
 	// unmodified meta data
 	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
+
+	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs)
 
 	filteredDisks, errs := disksWithAllParts(ctx, erasureDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
 
@@ -507,8 +509,48 @@ func TestDisksWithAllParts(t *testing.T) {
 		}
 	}
 
+	// Test 2: Not synchronized modtime
+	partsMetadataBackup := partsMetadata[0]
+	partsMetadata[0].ModTime = partsMetadata[0].ModTime.Add(-1 * time.Hour)
+
+	errs = make([]error, len(erasureDisks))
+	filteredDisks, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
+
+	if len(filteredDisks) != len(erasureDisks) {
+		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+	}
+	for diskIndex, disk := range filteredDisks {
+		if diskIndex == 0 && disk != nil {
+			t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
+		}
+		if diskIndex != 0 && disk == nil {
+			t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+		}
+	}
+	partsMetadata[0] = partsMetadataBackup // Revert before going to the next test
+
+	// Test 3: Not synchronized DataDir
+	partsMetadataBackup = partsMetadata[1]
+	partsMetadata[1].DataDir = "foo-random"
+
+	errs = make([]error, len(erasureDisks))
+	filteredDisks, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
+
+	if len(filteredDisks) != len(erasureDisks) {
+		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+	}
+	for diskIndex, disk := range filteredDisks {
+		if diskIndex == 1 && disk != nil {
+			t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
+		}
+		if diskIndex != 1 && disk == nil {
+			t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+		}
+	}
+	partsMetadata[1] = partsMetadataBackup // Revert before going to the next test
+
+	// Test 4: key = disk index, value = part name with hash mismatch
 	diskFailures := make(map[int]string)
-	// key = disk index, value = part name with hash mismatch
 	diskFailures[0] = "part.1"
 	diskFailures[3] = "part.1"
 	diskFailures[15] = "part.1"

@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,25 +41,25 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/config/dns"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/etag"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/fips"
-	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/hash"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/kms"
-	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/s3select"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/etag"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/s3select"
+	"github.com/minio/pkg/bucket/policy"
+	iampolicy "github.com/minio/pkg/iam/policy"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/sio"
 )
 
@@ -278,6 +279,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
 		case crypto.S3:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.S3KMS:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
+			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
+				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+			}
 		case crypto.SSEC:
 			// Validate the SSE-C Key set in the header.
 			if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
@@ -303,33 +310,13 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	})
 }
 
-// GetObjectHandler - GET Object
-// ----------
-// This implementation of the GET operation retrieves object. To use GET,
-// you must have READ access to the object.
-func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetObject")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
+func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI ObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request) {
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
-		return
-	}
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object, err := unescapePath(vars["object"])
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -484,6 +471,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -548,32 +536,43 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// HeadObjectHandler - HEAD Object
-// -----------
-// The HEAD operation retrieves metadata from an object without returning the object itself.
-func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "HeadObject")
+// GetObjectHandler - GET Object
+// ----------
+// This implementation of the GET operation retrieves object. To use GET,
+// you must have READ access to the object.
+func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetObject")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrServerNotInitialized))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(object, archivePattern) {
+		api.getObjectInArchiveFileHandler(ctx, objectAPI, bucket, object, w, r)
+	} else {
+		api.getObjectHandler(ctx, objectAPI, bucket, object, w, r)
+	}
+}
+
+func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI ObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request) {
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
 		return
 	}
 	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
-		return
-	}
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object, err := unescapePath(vars["object"])
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -713,6 +712,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -758,6 +758,34 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+}
+
+// HeadObjectHandler - HEAD Object
+// -----------
+// The HEAD operation retrieves metadata from an object without returning the object itself.
+func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HeadObject")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrServerNotInitialized))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(object, archivePattern) {
+		api.headObjectInArchiveFileHandler(ctx, objectAPI, bucket, object, w, r)
+	} else {
+		api.headObjectHandler(ctx, objectAPI, bucket, object, w, r)
+	}
 }
 
 // Extract metadata relevant for an CopyObject operation based on conditional
@@ -1027,6 +1055,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 			}
 		}
+		// Update context bucket & object names for correct S3 XML error response
+		reqInfo := logger.GetReqInfo(ctx)
+		reqInfo.BucketName = srcBucket
+		reqInfo.ObjectName = srcObject
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1084,6 +1116,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
+		reader = etag.NewReader(reader, nil)
 		s2c := newS2CompressReader(reader, actualSize)
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
@@ -1282,7 +1315,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if rs := r.Header.Get(xhttp.AmzBucketReplicationStatus); rs != "" {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = rs
 	}
-	if ok, _ := mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String(), srcInfo.metadataOnly); ok {
+	if ok, _ := mustReplicate(ctx, r, dstBucket, dstObject, getMustReplicateOptions(srcInfo, replication.UnsetReplicationType)); ok {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	// Store the preserved compression metadata.
@@ -1384,7 +1417,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
-	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String(), objInfo.metadataOnly); replicate {
+
+	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, getMustReplicateOptions(objInfo, replication.UnsetReplicationType)); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
@@ -1628,7 +1662,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if ok, _ := mustReplicate(ctx, r, bucket, object, metadata, "", false); ok {
+	if ok, _ := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(ObjectInfo{
+		UserDefined: metadata,
+	}, replication.ObjectReplicationType)); ok {
 		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
@@ -1688,14 +1724,22 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	switch kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); {
-	case encrypted:
+	if r.Header.Get(xMinIOExtract) == "true" && strings.HasSuffix(object, archiveExt) {
+		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
+		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	if kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); encrypted {
 		switch kind {
 		case crypto.S3:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -1710,12 +1754,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				objInfo.ETag = objInfo.ETag[len(objInfo.ETag)-32:]
 			}
 		}
-	case objInfo.IsCompressed():
-		if !strings.HasSuffix(objInfo.ETag, "-1") {
-			objInfo.ETag = objInfo.ETag + "-1"
-		}
 	}
-	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, "", false); replicate {
+	if replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(ObjectInfo{
+		UserDefined: metadata,
+	}, replication.ObjectReplicationType)); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
@@ -1951,7 +1993,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return
 		}
 
-		if ok, _ := mustReplicate(ctx, r, bucket, object, metadata, "", false); ok {
+		if ok, _ := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(ObjectInfo{
+			UserDefined: metadata,
+		}, replication.ObjectReplicationType)); ok {
 			metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 		}
 
@@ -2007,7 +2051,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return
 		}
 
-		if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, "", false); replicate {
+		if replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(ObjectInfo{
+			UserDefined: metadata,
+		}, replication.ObjectReplicationType)); replicate {
 			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 
 		}
@@ -2119,7 +2165,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if ok, _ := mustReplicate(ctx, r, bucket, object, metadata, "", false); ok {
+	if ok, _ := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(ObjectInfo{
+		UserDefined: metadata,
+	}, replication.ObjectReplicationType)); ok {
 		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	// We need to preserve the encryption headers set in EncryptRequest,
@@ -2310,13 +2358,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
 
-	actualPartSize := srcInfo.Size
-	if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok {
-		actualPartSize, err = srcInfo.GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
+	actualPartSize, err := srcInfo.GetActualSize()
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
@@ -3108,8 +3153,16 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 	}
 
+	if r.Header.Get(xMinIOExtract) == "true" && strings.HasSuffix(object, archiveExt) {
+		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
+		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
 	setPutObjHeaders(w, objInfo, false)
-	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String(), false); replicate {
+	if replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(objInfo, replication.ObjectReplicationType)); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
@@ -3218,6 +3271,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+		if opts.DeletePrefix {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL, guessIsBrowserReq(r))
+			return
+		}
 		if vID != "" {
 			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
 				ObjectName: object,
@@ -3283,7 +3340,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		} else {
 			versionID = objInfo.VersionID
 		}
-		dobj := DeletedObjectVersionInfo{
+		dobj := DeletedObjectReplicationInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    object,
 				VersionID:                     versionID,
@@ -3370,7 +3427,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
-	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String(), true)
+	replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(objInfo, replication.MetadataReplicationType))
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
@@ -3549,7 +3606,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
 		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
 	}
-	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String(), true)
+	replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(objInfo, replication.MetadataReplicationType))
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
@@ -3746,13 +3803,15 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	replicate, sync := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: tags.String()}, objInfo.ReplicationStatus.String(), true)
+	tagsStr := tags.String()
+
+	oi := objInfo.Clone()
+	oi.UserTags = tagsStr
+	replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(oi, replication.MetadataReplicationType))
 	if replicate {
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-
-	tagsStr := tags.String()
 
 	// Put object tags
 	objInfo, err = objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
@@ -3823,7 +3882,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	replicate, sync := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: oi.UserTags}, oi.ReplicationStatus.String(), true)
+	replicate, sync := mustReplicate(ctx, r, bucket, object, getMustReplicateOptions(oi, replication.MetadataReplicationType))
 	if replicate {
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()

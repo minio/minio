@@ -39,8 +39,8 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // AWS Signature Version '4' constants.

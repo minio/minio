@@ -26,16 +26,16 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/logger"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/bucket/versioning"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/kms"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	bucketsse "github.com/minio/minio/internal/bucket/encryption"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/bucket/versioning"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
@@ -262,6 +262,22 @@ func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Co
 // GetLifecycleConfig returns configured lifecycle config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+	if globalIsGateway && globalGatewayName == NASBackendGateway {
+		// Only needed in case of NAS gateway.
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+		if err != nil {
+			return nil, err
+		}
+		if meta.lifecycleConfig == nil {
+			return nil, BucketLifecycleNotFound{Bucket: bucket}
+		}
+		return meta.lifecycleConfig, nil
+	}
+
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
@@ -421,6 +437,7 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 	sys.Lock()
 	sys.metadataMap[bucket] = meta
 	sys.Unlock()
+
 	return meta, nil
 }
 

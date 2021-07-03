@@ -32,9 +32,9 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -153,8 +153,16 @@ type dataUsageCacheInfo struct {
 	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool
-	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
-	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
+	BloomFilter []byte `msg:"BloomFilter,omitempty"`
+
+	// Active lifecycle, if any on the bucket
+	lifeCycle *lifecycle.Lifecycle `msg:"-"`
+
+	// optional updates channel.
+	// If set updates will be sent regularly to this channel.
+	// Will not be closed when returned.
+	updates     chan<- dataUsageEntry `msg:"-"`
+	replication replicationConfig     `msg:"-"`
 }
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
@@ -211,12 +219,6 @@ func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
 	return uint32(xxhash.Sum64String(string(h)))%cycles == cycle%cycles
 }
 
-// addChildString will add a child based on its name.
-// If it already exists it will not be added again.
-func (e *dataUsageEntry) addChildString(name string) {
-	e.addChild(hashPath(name))
-}
-
 // addChild will add a child based on its hash.
 // If it already exists it will not be added again.
 func (e *dataUsageEntry) addChild(hash dataUsageHash) {
@@ -259,15 +261,29 @@ func (d *dataUsageCache) findChildrenCopy(h dataUsageHash) dataUsageHashMap {
 	return res
 }
 
-// Returns nil if not found.
-func (d *dataUsageCache) subCache(path string) dataUsageCache {
-	dst := dataUsageCache{Info: dataUsageCacheInfo{
-		Name:        path,
-		LastUpdate:  d.Info.LastUpdate,
-		BloomFilter: d.Info.BloomFilter,
-	}}
-	dst.copyWithChildren(d, dataUsageHash(hashPath(path).Key()), nil)
-	return dst
+// searchParent will search for the parent of h.
+// This is an O(N*N) operation if there is no parent or it cannot be guessed.
+func (d *dataUsageCache) searchParent(h dataUsageHash) *dataUsageHash {
+	want := h.Key()
+	if idx := strings.LastIndexByte(want, '/'); idx >= 0 {
+		if v := d.find(want[:idx]); v != nil {
+			for child := range v.Children {
+				if child == want {
+					found := hashPath(want[:idx])
+					return &found
+				}
+			}
+		}
+	}
+	for k, v := range d.Cache {
+		for child := range v.Children {
+			if child == want {
+				found := dataUsageHash(k)
+				return &found
+			}
+		}
+	}
+	return nil
 }
 
 // deleteRecursive will delete an entry recursively, but not change its parent.
@@ -279,28 +295,6 @@ func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 			d.deleteRecursive(dataUsageHash(child))
 		}
 	}
-}
-
-// replaceRootChild will replace the child of root in d with the root of 'other'.
-func (d *dataUsageCache) replaceRootChild(other dataUsageCache) {
-	otherRoot := other.root()
-	if otherRoot == nil {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Source has no root"))
-		return
-	}
-	thisRoot := d.root()
-	if thisRoot == nil {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of current not found"))
-		return
-	}
-	thisRootHash := d.rootHash()
-	otherRootHash := other.rootHash()
-	if thisRootHash == otherRootHash {
-		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of child matches root of destination"))
-		return
-	}
-	d.deleteRecursive(other.rootHash())
-	d.copyWithChildren(&other, other.rootHash(), &thisRootHash)
 }
 
 // keepBuckets will keep only the buckets specified specified by delete all others.
@@ -372,16 +366,6 @@ func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 		p.addChild(hash)
 		d.Cache[phash.Key()] = p
 	}
-}
-
-// listCache will return all cache paths.
-func (d *dataUsageCache) listCache() []string {
-	dst := make([]string, 0, len(d.Cache))
-	for k := range d.Cache {
-		dst = append(dst, k)
-	}
-	sort.Strings(dst)
-	return dst
 }
 
 // replaceHashed add or replaces an entry to the cache based on its hash.

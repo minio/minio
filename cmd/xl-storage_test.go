@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/minio/minio/cmd/config/storageclass"
+	"github.com/minio/minio/internal/config/storageclass"
 )
 
 func TestCheckPathLength(t *testing.T) {
@@ -966,11 +966,11 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			expectedErr: nil,
 		},
 		// TestXLStorage case - 2.
-		// The file was deleted in the last  case, so Delete should fail.
+		// The file was deleted in the last  case, so Delete should not fail.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
-			expectedErr: errFileNotFound,
+			expectedErr: nil,
 		},
 		// TestXLStorage case - 3.
 		// TestXLStorage case with segment of the volume name > 255.
@@ -1787,7 +1787,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	algo = HighwayHash256S
 	shardSize := int64(1024 * 1024)
 	shard := make([]byte, shardSize)
-	w := newStreamingBitrotWriter(storage, volName, fileName, size, algo, shardSize, false)
+	w := newStreamingBitrotWriter(storage, volName, fileName, size, algo, shardSize)
 	reader := bytes.NewReader(data)
 	for {
 		// Using io.Copy instead of this loop will not work for us as io.Copy

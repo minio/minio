@@ -26,7 +26,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // CheckPreconditionFn returns true if precondition check failed.
@@ -57,6 +57,8 @@ type ObjectOptions struct {
 	ProxyRequest   bool                                                  // only set for GET/HEAD in active-active replication scenario
 	ProxyHeaderSet bool                                                  // only set for GET/HEAD in active-active replication scenario
 	ParentIsObject func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+
+	DeletePrefix bool //  set true to enforce a prefix deletion, only application for DeleteObject API,
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool

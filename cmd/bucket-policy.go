@@ -27,10 +27,10 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // PolicySys - policy subsystem.
@@ -174,6 +174,8 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 			// Special case for AD/LDAP STS users
 			if k == ldapUser {
 				args["user"] = []string{vStr}
+			} else if k == ldapUsername {
+				args["username"] = []string{vStr}
 			} else {
 				args[k] = []string{vStr}
 			}

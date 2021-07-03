@@ -24,7 +24,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"flag"
 	"fmt"
@@ -38,36 +37,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/pkg/auth"
 )
-
-// AssumedRoleUser - The identifiers for the temporary security credentials that
-// the operation returns. Please also see https://docs.aws.amazon.com/goto/WebAPI/sts-2011-06-15/AssumedRoleUser
-type AssumedRoleUser struct {
-	Arn           string
-	AssumedRoleID string `xml:"AssumeRoleId"`
-	// contains filtered or unexported fields
-}
-
-// AssumeRoleWithWebIdentityResponse contains the result of successful AssumeRoleWithWebIdentity request.
-type AssumeRoleWithWebIdentityResponse struct {
-	XMLName          xml.Name          `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithWebIdentityResponse" json:"-"`
-	Result           WebIdentityResult `xml:"AssumeRoleWithWebIdentityResult"`
-	ResponseMetadata struct {
-		RequestID string `xml:"RequestId,omitempty"`
-	} `xml:"ResponseMetadata,omitempty"`
-}
-
-// WebIdentityResult - Contains the response to a successful AssumeRoleWithWebIdentity
-// request, including temporary credentials that can be used to make MinIO API requests.
-type WebIdentityResult struct {
-	AssumedRoleUser             AssumedRoleUser  `xml:",omitempty"`
-	Audience                    string           `xml:",omitempty"`
-	Credentials                 auth.Credentials `xml:",omitempty"`
-	PackedPolicySize            int              `xml:",omitempty"`
-	Provider                    string           `xml:",omitempty"`
-	SubjectFromWebIdentityToken string           `xml:",omitempty"`
-}
 
 // Returns a base64 encoded random 32 byte string.
 func randomState() string {

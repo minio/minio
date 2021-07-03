@@ -32,10 +32,10 @@ import (
 	"sync"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	xnet "github.com/minio/minio/pkg/net"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	xnet "github.com/minio/pkg/net"
 	xbufio "github.com/philhofer/fwd"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -206,7 +206,8 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
@@ -218,14 +219,38 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 		return cache, err
 	}
 
-	var newCache dataUsageCache
-	pr, pw = io.Pipe()
+	rr, rw := io.Pipe()
 	go func() {
-		pw.CloseWithError(waitForHTTPStream(respBody, pw))
+		rw.CloseWithError(waitForHTTPStream(respBody, rw))
 	}()
-	err = newCache.deserialize(pr)
-	pr.CloseWithError(err)
-	return newCache, err
+
+	ms := msgp.NewReader(rr)
+	for {
+		// Read whether it is an update.
+		upd, err := ms.ReadBool()
+		if err != nil {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		if !upd {
+			// No more updates... New cache follows.
+			break
+		}
+		var update dataUsageEntry
+		err = update.DecodeMsg(ms)
+		if err != nil || err == io.EOF {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		updates <- update
+	}
+	var newCache dataUsageCache
+	err = newCache.DecodeMsg(ms)
+	rr.CloseWithError(err)
+	if err == io.EOF {
+		err = nil
+	}
+	return cache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
@@ -679,6 +704,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 		healthClient.ExpectTimeouts = true
+		healthClient.NoMetrics = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 			defer cancel()

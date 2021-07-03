@@ -35,12 +35,12 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/mountinfo"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/config"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mountinfo"
+	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.
@@ -257,18 +257,17 @@ func (l EndpointServerPools) Localhost() string {
 	return ""
 }
 
-// FirstLocalDiskPath returns the disk path of first (in cmdline args order)
-// local endpoint.
-func (l EndpointServerPools) FirstLocalDiskPath() string {
-	var diskPath string
+// LocalDisksPaths returns the disk paths of the local disks
+func (l EndpointServerPools) LocalDisksPaths() []string {
+	var disks []string
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.IsLocal {
-				return endpoint.Path
+				disks = append(disks, endpoint.Path)
 			}
 		}
 	}
-	return diskPath
+	return disks
 }
 
 // FirstLocal returns true if the first endpoint is local.

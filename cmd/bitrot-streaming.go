@@ -26,18 +26,10 @@ import (
 	"io"
 	"sync"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/ioutil"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
 )
-
-type errHashMismatch struct {
-	message string
-}
-
-func (err *errHashMismatch) Error() string {
-	return err.message
-}
 
 // Calculates bitrot in chunks and writes the hash into the stream.
 type streamingBitrotWriter struct {
@@ -57,9 +49,15 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 	hashBytes := b.h.Sum(nil)
 	_, err := b.iow.Write(hashBytes)
 	if err != nil {
+		b.closeWithErr(err)
 		return 0, err
 	}
-	return b.iow.Write(p)
+	n, err := b.iow.Write(p)
+	if err != nil {
+		b.closeWithErr(err)
+		return n, err
+	}
+	return n, err
 }
 
 func (b *streamingBitrotWriter) Close() error {
@@ -77,13 +75,17 @@ func (b *streamingBitrotWriter) Close() error {
 	return err
 }
 
-// Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
-	return &streamingBitrotWriter{iow: ioutil.NopCloser(w), h: algo.New(), shardSize: shardSize, canClose: nil}
+// newStreamingBitrotWriterBuffer returns streaming bitrot writer implementation.
+// The output is written to the supplied writer w.
+func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize int64) io.Writer {
+	return &streamingBitrotWriter{iow: ioutil.NopCloser(w), h: algo.New(), shardSize: shardSize, canClose: nil, closeWithErr: func(err error) error {
+		// Similar to CloseWithError on pipes we always return nil.
+		return nil
+	}}
 }
 
 // Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64, heal bool) io.Writer {
+func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
 
@@ -146,6 +148,11 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		if len(b.data) == 0 && b.tillOffset != streamOffset {
 			b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
+			if err != nil {
+				logger.LogIf(GlobalContext,
+					fmt.Errorf("Error(%w) reading erasure shards at (%s: %s/%s), will attempt to reconstruct if we have quorum",
+						err, b.disk, b.volume, b.filePath))
+			}
 		} else {
 			b.rc = io.NewSectionReader(bytes.NewReader(b.data), streamOffset, b.tillOffset-streamOffset)
 		}
@@ -153,7 +160,6 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 			return 0, err
 		}
 	}
-
 	if offset != b.currOffset {
 		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected

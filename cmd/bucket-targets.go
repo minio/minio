@@ -30,10 +30,10 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/cmd/crypto"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/versioning"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/bucket/versioning"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -352,7 +352,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 			return tgt.Arn
 		}
 	}
-	if !madmin.ServiceType(target.Type).IsValid() {
+	if !target.Type.IsValid() {
 		return ""
 	}
 	return generateARN(target)

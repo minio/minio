@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/internal/bpool"
 )
 
 var erasureHealTests = []struct {
@@ -91,8 +91,7 @@ func TestErasureHeal(t *testing.T) {
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "testobject",
-				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
+			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -135,8 +134,7 @@ func TestErasureHeal(t *testing.T) {
 				continue
 			}
 			os.Remove(pathJoin(disk.String(), "testbucket", "testobject"))
-			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject",
-				erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize(), true)
+			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 
 		// Number of buffers, max 2GB

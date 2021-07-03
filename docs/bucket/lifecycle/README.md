@@ -116,6 +116,11 @@ Using above tier, set up a lifecycle rule with transition:
  mc ilm add --expiry-days 365 --transition-days 45 --storage-class "AZURETIER" myminio/srcbucket
 ```
 
+Note: In the case of S3, it is possible to create a tier from MinIO running in EC2 to S3 using AWS role attached to EC2 as credentials instead of accesskey/secretkey:
+```
+mc admin tier add s3 source S3TIER --bucket s3bucket --prefix testprefix/ --use-aws-role
+```
+
 Once transitioned, GET or HEAD on the object will stream the content from the transitioned tier. In the event that the object needs to be restored temporarily to the local cluster, the AWS [RestoreObject API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_RestoreObject.html) can be utilized.
 
 ```

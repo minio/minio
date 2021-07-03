@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 type scanStatus uint8

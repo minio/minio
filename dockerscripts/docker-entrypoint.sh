@@ -71,17 +71,6 @@ docker_kms_secret_encryption_env() {
     fi
 }
 
-## Legacy
-## Set KMS_MASTER_KEY from docker secrets if provided
-docker_kms_master_encryption_env() {
-    KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
-
-    if [ -f "$KMS_MASTER_KEY_FILE" ]; then
-        MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
-        export MINIO_KMS_MASTER_KEY
-    fi
-}
-
 # su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
     if [ ! -z "${MINIO_USERNAME}" ] && [ ! -z "${MINIO_GROUPNAME}" ]; then
@@ -103,9 +92,6 @@ docker_secrets_env_old
 
 ## Set access env from secrets if necessary. Override
 docker_secrets_env
-
-## Set sse encryption from secrets if necessary. Legacy
-docker_kms_master_encryption_env
 
 ## Set kms encryption from secrets if necessary. Override
 docker_kms_secret_encryption_env

@@ -22,15 +22,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/internal/bucket/replication"
 )
 
 func (b *BucketReplicationStats) hasReplicationUsage() bool {
-	return b.PendingSize > 0 ||
-		b.FailedSize > 0 ||
+	return b.FailedSize > 0 ||
 		b.ReplicatedSize > 0 ||
 		b.ReplicaSize > 0 ||
-		b.PendingCount > 0 ||
 		b.FailedCount > 0
 }
 
@@ -67,38 +65,23 @@ func (r *ReplicationStats) Update(bucket string, n int64, status, prevStatus rep
 	}
 	r.RUnlock()
 	switch status {
-	case replication.Pending:
-		if opType == replication.ObjectReplicationType {
-			atomic.AddUint64(&b.PendingSize, uint64(n))
-		}
-		atomic.AddUint64(&b.PendingCount, 1)
 	case replication.Completed:
 		switch prevStatus { // adjust counters based on previous state
-		case replication.Pending:
-			atomic.AddUint64(&b.PendingCount, ^uint64(0))
 		case replication.Failed:
 			atomic.AddUint64(&b.FailedCount, ^uint64(0))
 		}
 		if opType == replication.ObjectReplicationType {
 			atomic.AddUint64(&b.ReplicatedSize, uint64(n))
 			switch prevStatus {
-			case replication.Pending:
-				atomic.AddUint64(&b.PendingSize, ^uint64(n-1))
 			case replication.Failed:
 				atomic.AddUint64(&b.FailedSize, ^uint64(n-1))
 			}
 		}
 	case replication.Failed:
-		// count failures only once - not on every retry
-		switch prevStatus { // adjust counters based on previous state
-		case replication.Pending:
-			atomic.AddUint64(&b.PendingCount, ^uint64(0))
-		}
 		if opType == replication.ObjectReplicationType {
 			if prevStatus == replication.Pending {
 				atomic.AddUint64(&b.FailedSize, uint64(n))
 				atomic.AddUint64(&b.FailedCount, 1)
-				atomic.AddUint64(&b.PendingSize, ^uint64(n-1))
 			}
 		}
 	case replication.Replica:
@@ -125,11 +108,9 @@ func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats
 		return BucketReplicationStats{}
 	}
 	return BucketReplicationStats{
-		PendingSize:    atomic.LoadUint64(&st.PendingSize),
 		FailedSize:     atomic.LoadUint64(&st.FailedSize),
 		ReplicatedSize: atomic.LoadUint64(&st.ReplicatedSize),
 		ReplicaSize:    atomic.LoadUint64(&st.ReplicaSize),
-		PendingCount:   atomic.LoadUint64(&st.PendingCount),
 		FailedCount:    atomic.LoadUint64(&st.FailedCount),
 	}
 }
@@ -149,11 +130,9 @@ func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	}
 
 	return BucketReplicationStats{
-		PendingSize:    atomic.LoadUint64(&st.PendingSize),
 		FailedSize:     atomic.LoadUint64(&st.FailedSize),
 		ReplicatedSize: atomic.LoadUint64(&st.ReplicatedSize),
 		ReplicaSize:    atomic.LoadUint64(&st.ReplicaSize),
-		PendingCount:   atomic.LoadUint64(&st.PendingCount),
 		FailedCount:    atomic.LoadUint64(&st.FailedCount),
 	}
 }
@@ -177,11 +156,9 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 
 	for bucket, usage := range dataUsageInfo.BucketsUsage {
 		b := &BucketReplicationStats{
-			PendingSize:    usage.ReplicationPendingSize,
 			FailedSize:     usage.ReplicationFailedSize,
 			ReplicatedSize: usage.ReplicatedSize,
 			ReplicaSize:    usage.ReplicaSize,
-			PendingCount:   usage.ReplicationPendingCount,
 			FailedCount:    usage.ReplicationFailedCount,
 		}
 		if b.hasReplicationUsage() {

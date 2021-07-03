@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/sio"
 )
 
@@ -495,8 +495,5 @@ func migrateCacheFormatJSON(cacheFormatPath string) error {
 	formatV2.Version = formatMetaVersion1
 	formatV2.Cache = formatV1.Cache
 	formatV2.Cache.Version = formatCacheVersionV2
-	if err := jsonSave(f, formatV2); err != nil {
-		return err
-	}
-	return nil
+	return jsonSave(f, formatV2)
 }

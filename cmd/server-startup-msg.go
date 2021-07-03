@@ -26,10 +26,10 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/logger"
-	color "github.com/minio/minio/pkg/color"
-	xnet "github.com/minio/minio/pkg/net"
+	color "github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/pkg/net"
 )
 
 // Documentation links, these are part of message printing code.

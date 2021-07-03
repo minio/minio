@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // healStatusSummary - overall short summary of a healing sequence
@@ -484,22 +484,6 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 		healedItemsMap:        make(map[madmin.HealItemType]int64),
 		healFailedItemsMap:    make(map[string]int64),
 	}
-}
-
-// resetHealStatusCounters - reset the healSequence status counters between
-// each monthly background heal scanning activity.
-// This is used only in case of Background healing scenario, where
-// we use a single long running healSequence which reactively heals
-// objects passed to the SourceCh.
-func (h *healSequence) resetHealStatusCounters() {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	h.currentStatus.Items = []madmin.HealResultItem{}
-	h.lastSentResultIndex = 0
-	h.scannedItemsMap = make(map[madmin.HealItemType]int64)
-	h.healedItemsMap = make(map[madmin.HealItemType]int64)
-	h.healFailedItemsMap = make(map[string]int64)
 }
 
 // getScannedItemsCount - returns a count of all scanned items

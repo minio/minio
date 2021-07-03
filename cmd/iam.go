@@ -32,9 +32,9 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -624,7 +624,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(lkctx.Context(), globalEtcdClient); err != nil {
+			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, globalEtcdClient); err != nil {
 				txnLk.Unlock(lkctx.Cancel)
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
@@ -638,7 +638,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		}
 
 		// Migrate IAM configuration, if necessary.
-		if err := sys.doIAMConfigMigration(lkctx.Context()); err != nil {
+		if err := sys.doIAMConfigMigration(retryCtx); err != nil {
 			txnLk.Unlock(lkctx.Cancel)
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
@@ -655,7 +655,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	for {
-		if err := sys.store.loadAll(ctx, sys); err != nil {
+		if err := sys.store.loadAll(retryCtx, sys); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -668,8 +668,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		break
 	}
 
-	// Invalidate the old cred always, even upon error to avoid any leakage.
-	globalOldCred = auth.Credentials{}
 	go sys.store.watch(ctx, sys)
 
 	logger.Info("IAM initialization complete")
@@ -738,16 +736,22 @@ func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	v, ok := sys.iamPolicyDocsMap[policyName]
-	if !ok {
-		return iampolicy.Policy{}, errNoSuchPolicy
+	var combinedPolicy iampolicy.Policy
+	for _, policy := range strings.Split(policyName, ",") {
+		if policy == "" {
+			continue
+		}
+		v, ok := sys.iamPolicyDocsMap[policy]
+		if !ok {
+			return iampolicy.Policy{}, errNoSuchPolicy
+		}
+		combinedPolicy = combinedPolicy.Merge(v)
 	}
-
-	return v, nil
+	return combinedPolicy, nil
 }
 
 // ListPolicies - lists all canned policies.
-func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
+func (sys *IAMSys) ListPolicies(bucketName string) (map[string]iampolicy.Policy, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -759,7 +763,11 @@ func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 
 	policyDocsMap := make(map[string]iampolicy.Policy, len(sys.iamPolicyDocsMap))
 	for k, v := range sys.iamPolicyDocsMap {
-		policyDocsMap[k] = v
+		if bucketName != "" && v.MatchResource(bucketName) {
+			policyDocsMap[k] = v
+		} else {
+			policyDocsMap[k] = v
+		}
 	}
 
 	return policyDocsMap, nil
@@ -921,14 +929,58 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	return nil
 }
 
+// ListBucketUsers - list all users who can access this 'bucket'
+func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, error) {
+	if bucket == "" {
+		return nil, errInvalidArgument
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var users = make(map[string]madmin.UserInfo)
+
+	for k, v := range sys.iamUsersMap {
+		if v.IsTemp() || v.IsServiceAccount() {
+			continue
+		}
+		var policies []string
+		mp, ok := sys.iamUserPolicyMap[k]
+		if ok {
+			policies = append(policies, mp.toSlice()...)
+			for _, group := range sys.iamUserGroupMemberships[k].ToSlice() {
+				if nmp, ok := sys.iamGroupPolicyMap[group]; ok {
+					policies = append(policies, nmp.toSlice()...)
+				}
+			}
+		}
+		var matchesPolices []string
+		for _, p := range policies {
+			if sys.iamPolicyDocsMap[p].MatchResource(bucket) {
+				matchesPolices = append(matchesPolices, p)
+			}
+		}
+		if len(matchesPolices) > 0 {
+			users[k] = madmin.UserInfo{
+				PolicyName: strings.Join(matchesPolices, ","),
+				Status: func() madmin.AccountStatus {
+					if v.IsValid() {
+						return madmin.AccountEnabled
+					}
+					return madmin.AccountDisabled
+				}(),
+				MemberOf: sys.iamUserGroupMemberships[k].ToSlice(),
+			}
+		}
+	}
+
+	return users, nil
+}
+
 // ListUsers - list all users.
 func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
-	}
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return nil, errIAMActionNotAllowed
 	}
 
 	<-sys.configLoaded
@@ -948,6 +1000,16 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 					}
 					return madmin.AccountDisabled
 				}(),
+				MemberOf: sys.iamUserGroupMemberships[k].ToSlice(),
+			}
+		}
+	}
+
+	if sys.usersSysType == LDAPUsersSysType {
+		for k, v := range sys.iamUserPolicyMap {
+			users[k] = madmin.UserInfo{
+				PolicyName: v.Policies,
+				Status:     madmin.AccountEnabled,
 			}
 		}
 	}
@@ -1013,15 +1075,21 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 		sys.store.rlock()
 		// If the user has a mapped policy or is a member of a group, we
 		// return that info. Otherwise we return error.
-		mappedPolicy, ok1 := sys.iamUserPolicyMap[name]
-		memberships, ok2 := sys.iamUserGroupMemberships[name]
+		var groups []string
+		for _, v := range sys.iamUsersMap {
+			if v.ParentUser == name {
+				groups = v.Groups
+				break
+			}
+		}
+		mappedPolicy, ok := sys.iamUserPolicyMap[name]
 		sys.store.runlock()
-		if !ok1 && !ok2 {
+		if !ok {
 			return u, errNoSuchUser
 		}
 		return madmin.UserInfo{
 			PolicyName: mappedPolicy.Policies,
-			MemberOf:   memberships.ToSlice(),
+			MemberOf:   groups,
 		}, nil
 	}
 
@@ -1134,6 +1202,13 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	policies, err := sys.policyDBGet(parentUser, false)
 	if err != nil {
 		return auth.Credentials{}, err
+	}
+	for _, group := range groups {
+		gpolicies, err := sys.policyDBGet(group, true)
+		if err != nil && err != errNoSuchGroup {
+			return auth.Credentials{}, err
+		}
+		policies = append(policies, gpolicies...)
 	}
 	if len(policies) == 0 {
 		return auth.Credentials{}, errNoSuchUser
@@ -1734,10 +1809,6 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return nil, errIAMActionNotAllowed
-	}
-
 	<-sys.configLoaded
 
 	sys.store.rlock()
@@ -1746,6 +1817,12 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 	r = make([]string, 0, len(sys.iamGroupsMap))
 	for k := range sys.iamGroupsMap {
 		r = append(r, k)
+	}
+
+	if sys.usersSysType == LDAPUsersSysType {
+		for k := range sys.iamGroupPolicyMap {
+			r = append(r, k)
+		}
 	}
 
 	return r, nil
@@ -1896,6 +1973,9 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 	var parentName string
 	u, ok := sys.iamUsersMap[name]
 	if ok {
+		if !u.IsValid() {
+			return nil, nil
+		}
 		parentName = u.ParentUser
 	}
 

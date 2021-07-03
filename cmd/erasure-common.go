@@ -21,7 +21,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 func (er erasureObjects) getLocalDisks() (localDisks []StorageAPI) {
@@ -78,24 +78,6 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 	}
 	wg.Wait()
 	return newDisks
-}
-
-// getLoadBalancedNDisks - fetches load balanced (sufficiently randomized) disk slice
-// with N disks online. If ndisks is zero or negative, then it will returns all disks,
-// same if ndisks is greater than the number of all disks.
-func (er erasureObjects) getLoadBalancedNDisks(ndisks int) (newDisks []StorageAPI) {
-	disks := er.getLoadBalancedDisks(ndisks != -1)
-	for _, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		newDisks = append(newDisks, disk)
-		ndisks--
-		if ndisks == 0 {
-			break
-		}
-	}
-	return
 }
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.

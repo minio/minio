@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -275,35 +274,12 @@ type metaCacheEntriesSorted struct {
 	listID string
 }
 
-// writeTo will write all objects to the provided output.
-func (m metaCacheEntriesSorted) writeTo(writer io.Writer) error {
-	w := newMetacacheWriter(writer, 1<<20)
-	if err := w.write(m.o...); err != nil {
-		w.Close()
-		return err
-	}
-	return w.Close()
-}
-
 // shallowClone will create a shallow clone of the array objects,
 // but object metadata will not be cloned.
 func (m metaCacheEntriesSorted) shallowClone() metaCacheEntriesSorted {
 	// We have value receiver so we already have a copy.
 	m.o = m.o.shallowClone()
 	return m
-}
-
-// iterate the entries in order.
-// If the iterator function returns iterating stops.
-func (m *metaCacheEntriesSorted) iterate(fn func(entry metaCacheEntry) (cont bool)) {
-	if m == nil {
-		return
-	}
-	for _, o := range m.o {
-		if !fn(o) {
-			return
-		}
-	}
 }
 
 // fileInfoVersions converts the metadata to FileInfoVersions where possible.
@@ -486,17 +462,6 @@ func (m *metaCacheEntriesSorted) merge(other metaCacheEntriesSorted, limit int) 
 		merged = append(merged, b...)
 	}
 	m.o = merged
-}
-
-// filter allows selective filtering with the provided function.
-func (m *metaCacheEntriesSorted) filter(fn func(entry *metaCacheEntry) bool) {
-	dst := m.o[:0]
-	for _, o := range m.o {
-		if fn(&o) {
-			dst = append(dst, o)
-		}
-	}
-	m.o = dst
 }
 
 // filterPrefix will filter m to only contain entries with the specified prefix.
