@@ -19,9 +19,12 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/minio/pkg/console"
 )
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
@@ -38,7 +41,7 @@ type metaCacheEntry struct {
 
 // isDir returns if the entry is representing a prefix directory.
 func (e metaCacheEntry) isDir() bool {
-	return len(e.metadata) == 0
+	return len(e.metadata) == 0 && strings.HasSuffix(e.name, slashSeparator)
 }
 
 // isObject returns if the entry is representing an object.
@@ -49,15 +52,6 @@ func (e metaCacheEntry) isObject() bool {
 // hasPrefix returns whether an entry has a specific prefix
 func (e metaCacheEntry) hasPrefix(s string) bool {
 	return strings.HasPrefix(e.name, s)
-}
-
-// likelyMatches returns if the entries match by comparing name and metadata length.
-func (e *metaCacheEntry) likelyMatches(other *metaCacheEntry) bool {
-	// This should reject 99%
-	if len(e.metadata) != len(other.metadata) || e.name != other.name {
-		return false
-	}
-	return true
 }
 
 // matches returns if the entries match by comparing their latest version fileinfo.
@@ -510,6 +504,111 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 	m.o = m.o[idx:]
 }
 
+// mergeEntryChannels will merge entries from in and return them sorted on out.
+// To signify no more results are on an input channel, close it.
+// The output channel will be closed when all inputs are emptied.
+// If file names are equal, compareMeta is called to select which one to choose.
+// The entry not chosen will be discarded.
+// If the context is canceled the function will return the error,
+// otherwise the function will return nil.
+func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<- metaCacheEntry, compareMeta func(existing, other *metaCacheEntry) (replace bool)) error {
+	defer close(out)
+	top := make([]*metaCacheEntry, len(in))
+	nDone := 0
+	ctxDone := ctx.Done()
+
+	// Use simpler forwarder.
+	if len(in) == 1 {
+		for {
+			select {
+			case <-ctxDone:
+				return ctx.Err()
+			case v, ok := <-in[0]:
+				if !ok {
+					return nil
+				}
+				select {
+				case <-ctxDone:
+					return ctx.Err()
+				case out <- v:
+				}
+			}
+		}
+	}
+
+	selectFrom := func(idx int) error {
+		select {
+		case <-ctxDone:
+			return ctx.Err()
+		case entry, ok := <-in[idx]:
+			if !ok {
+				top[idx] = nil
+				nDone++
+			} else {
+				top[idx] = &entry
+			}
+		}
+		return nil
+	}
+	// Populate all...
+	for i := range in {
+		if err := selectFrom(i); err != nil {
+			return err
+		}
+	}
+	last := ""
+
+	// Choose the best to return.
+	for {
+		if nDone == len(in) {
+			return nil
+		}
+		best := top[0]
+		bestIdx := 0
+		for i, other := range top[1:] {
+			otherIdx := i + 1
+			if other == nil {
+				continue
+			}
+			if best == nil {
+				best = other
+				bestIdx = otherIdx
+				continue
+			}
+			if best.name == other.name {
+				if compareMeta(best, other) {
+					// Replace "best"
+					if err := selectFrom(bestIdx); err != nil {
+						return err
+					}
+					best = other
+					bestIdx = otherIdx
+				} else {
+					// Keep best, replace "other"
+					if err := selectFrom(otherIdx); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if best.name > other.name {
+				best = other
+				bestIdx = otherIdx
+			}
+		}
+		if best.name > last {
+			out <- *best
+			last = best.name
+		} else {
+			console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
+		}
+		// Replace entry we just sent.
+		if err := selectFrom(bestIdx); err != nil {
+			return err
+		}
+	}
+}
+
 // merge will merge other into m.
 // If the same entries exists in both and metadata matches only one is added,
 // otherwise the entry from m will be placed first.
@@ -632,45 +731,4 @@ func (m *metaCacheEntriesSorted) entries() metaCacheEntries {
 		return nil
 	}
 	return m.o
-}
-
-// deduplicate entries in the list.
-// If compareMeta is set it will be used to resolve conflicts.
-// The function should return whether the existing entry should be replaced with other.
-// If no compareMeta is provided duplicates may be left.
-// This is indicated by the returned boolean.
-func (m *metaCacheEntriesSorted) deduplicate(compareMeta func(existing, other *metaCacheEntry) (replace bool)) (dupesLeft bool) {
-	dst := m.o[:0]
-	for j := range m.o {
-		found := false
-		obj := &m.o[j]
-		for i := len(dst) - 1; i >= 0; i++ {
-			existing := &dst[i]
-			if existing.name != obj.name {
-				break
-			}
-
-			// Use given resolution function first if any.
-			if compareMeta != nil {
-				if compareMeta(existing, obj) {
-					dst[i] = *obj
-				}
-				found = true
-				break
-			}
-			if obj.likelyMatches(existing) {
-				found = true
-				break
-			}
-
-			// Matches, move on.
-			dupesLeft = true
-			continue
-		}
-		if !found {
-			dst = append(dst, *obj)
-		}
-	}
-	m.o = dst
-	return dupesLeft
 }

@@ -340,7 +340,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 				}
 			}
 
-			if serverDebugLog {
+			if serverDebugLog && len(healDisks) > 0 {
 				console.Debugf(color.Green("healDisk:")+" disk check timer fired, attempting to heal %d drives\n", len(healDisks))
 			}
 

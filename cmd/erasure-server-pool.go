@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -948,24 +947,16 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
 
-	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
-	// It requests unique blocks with a specific prefix.
-	// We skip scanning the parent directory for
-	// more objects matching the prefix.
-	ri := logger.GetReqInfo(ctx)
-	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		opts.discardResult = true
-		opts.Transient = true
-	}
-
-	merged, err := z.listPath(ctx, opts)
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
 	if versionMarker == "" {
+		o := listPathOptions{Marker: marker}
 		// If we are not looking for a specific version skip it.
-		marker, _ = parseMarker(marker)
-		merged.forwardPast(marker)
+
+		o.parseMarker()
+		merged.forwardPast(o.Marker)
 	}
 	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
 	loi.IsTruncated = err == nil && len(objects) > 0
@@ -982,7 +973,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	}
 	if loi.IsTruncated {
 		last := objects[len(objects)-1]
-		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+		loi.NextMarker = opts.encodeMarker(last.Name)
 		loi.NextVersionIDMarker = last.VersionID
 	}
 	return loi, nil
@@ -1000,8 +991,7 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
-
-	merged, err := z.listPath(ctx, listPathOptions{
+	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
@@ -1009,13 +999,14 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
-	})
+	}
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
-	marker, _ = parseMarker(marker)
-	merged.forwardPast(marker)
+
+	merged.forwardPast(opts.Marker)
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	objects := merged.fileInfos(bucket, prefix, delimiter)
@@ -1033,7 +1024,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	if loi.IsTruncated {
 		last := objects[len(objects)-1]
-		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+		loi.NextMarker = opts.encodeMarker(last.Name)
 	}
 	return loi, nil
 }
