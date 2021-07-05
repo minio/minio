@@ -112,7 +112,13 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		c, err := rpc.GetMetacacheListing(ctx, *o)
+		var c *metacache
+		if rpc == nil {
+			resp := localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(*o)
+			c = &resp
+		} else {
+			c, err = rpc.GetMetacacheListing(ctx, *o)
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Context is canceled, return at once.
