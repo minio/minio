@@ -513,6 +513,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	askDisks := o.AskDisks
 	listingQuorum := o.AskDisks - 1
 	disks := er.getOnlineDisks()
+
 	// Special case: ask all disks if the drive count is 4
 	if askDisks == -1 || er.setDriveCount == 4 {
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
@@ -524,9 +525,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	}
 	if askDisks > 0 && len(disks) > askDisks {
 		rand.Shuffle(len(disks), func(i, j int) {
-			disks[i] = disks[j]
+			disks[i], disks[j] = disks[j], disks[i]
 		})
-		disks = disks[askDisks:]
+		disks = disks[:askDisks]
 	}
 
 	// How to resolve results.

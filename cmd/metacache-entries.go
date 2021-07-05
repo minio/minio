@@ -41,7 +41,7 @@ type metaCacheEntry struct {
 
 // isDir returns if the entry is representing a prefix directory.
 func (e metaCacheEntry) isDir() bool {
-	return len(e.metadata) == 0
+	return len(e.metadata) == 0 && strings.HasSuffix(e.name, slashSeparator)
 }
 
 // isObject returns if the entry is representing an object.
@@ -732,46 +732,3 @@ func (m *metaCacheEntriesSorted) entries() metaCacheEntries {
 	}
 	return m.o
 }
-
-/*
-// deduplicate entries in the list.
-// If compareMeta is set it will be used to resolve conflicts.
-// The function should return whether the existing entry should be replaced with other.
-// If no compareMeta is provided duplicates may be left.
-// This is indicated by the returned boolean.
-func (m *metaCacheEntriesSorted) deduplicate(compareMeta func(existing, other *metaCacheEntry) (replace bool)) (dupesLeft bool) {
-	dst := m.o[:0]
-	for j := range m.o {
-		found := false
-		obj := &m.o[j]
-		for i := len(dst) - 1; i >= 0; i++ {
-			existing := &dst[i]
-			if existing.name != obj.name {
-				break
-			}
-
-			// Use given resolution function first if any.
-			if compareMeta != nil {
-				if compareMeta(existing, obj) {
-					dst[i] = *obj
-				}
-				found = true
-				break
-			}
-			if obj.likelyMatches(existing) {
-				found = true
-				break
-			}
-
-			// Matches, move on.
-			dupesLeft = true
-			continue
-		}
-		if !found {
-			dst = append(dst, *obj)
-		}
-	}
-	m.o = dst
-	return dupesLeft
-}
-*/
