@@ -23,6 +23,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/minio/pkg/console"
 )
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
@@ -554,6 +556,7 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			return err
 		}
 	}
+	last := ""
 
 	// Choose the best to return.
 	for {
@@ -593,8 +596,12 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 				bestIdx = otherIdx
 			}
 		}
-
-		out <- *best
+		if best.name > last {
+			out <- *best
+			last = best.name
+		} else {
+			console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
+		}
 		// Replace entry we just sent.
 		if err := selectFrom(bestIdx); err != nil {
 			return err

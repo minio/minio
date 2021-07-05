@@ -148,9 +148,10 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		if o.Create {
 			o.debugln("Creating", o)
 			entries, err = z.listAndSave(ctx, o)
-			if err == nil {
-				return entries, nil
+			if err == nil || err == io.EOF {
+				return entries, err
 			}
+			entries.truncate(0)
 		} else {
 			if o.pool < len(z.serverPools) && o.set < len(z.serverPools[o.pool].sets) {
 				o.debugln("Resuming", o)
