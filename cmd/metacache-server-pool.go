@@ -235,6 +235,8 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	var inputs []chan metaCacheEntry
 	mu.Lock()
 	// Ask all sets and merge entries.
+	listCtx, cancelList := context.WithCancel(ctx)
+	defer cancelList()
 	for _, pool := range z.serverPools {
 		for _, set := range pool.sets {
 			wg.Add(1)
@@ -242,7 +244,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 			inputs = append(inputs, results)
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
-				err := set.listPath(ctx, o, results)
+				err := set.listPath(listCtx, o, results)
 				mu.Lock()
 				defer mu.Unlock()
 				if err == nil {
@@ -281,6 +283,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		return oFIV.NumVersions > eFIV.NumVersions
 	})
 
+	cancelList()
 	wg.Wait()
 	if err != nil {
 		return err
@@ -294,7 +297,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 
 	for _, err := range errs {
-		if err == nil {
+		if err == nil || contextCanceled(ctx) {
 			allAtEOF = false
 			continue
 		}
