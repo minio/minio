@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v5" // Add Force unlock
+	lockRESTVersion       = "v4" // Add Quorum query param
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
