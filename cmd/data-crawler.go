@@ -614,7 +614,10 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// Dynamic time delay.
 			t := UTCNow()
 
-			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
+			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
+				Recursive: true,
+				Remove:    healDeleteDangling,
+			},
 				func(bucket, object, versionID string) error {
 					// Wait for each heal as per crawler frequency.
 					sleepDuration(time.Since(t), f.dataUsageCrawlMult)

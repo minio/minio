@@ -1836,56 +1836,44 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
 
-	serverSetsEntryChs := make([][]FileInfoVersionsCh, 0, len(z.serverSets))
-	zoneDrivesPerSet := make([]int, 0, len(z.serverSets))
-
+	var skipped int
 	for _, zone := range z.serverSets {
-		serverSetsEntryChs = append(serverSetsEntryChs,
-			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, true, endWalkCh))
-		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
-	}
+		entryChs := zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, true, ctx.Done())
+		entriesInfos := make([]FileInfoVersions, 0, len(entryChs))
+		entriesValid := make([]bool, 0, len(entryChs))
 
-	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-	}
+		for {
+			entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entriesInfos, entriesValid)
+			if !ok {
+				skipped++
+				// calculate number of skips to return
+				// "NotFound" error at the end.
+				break
+			}
 
-	// If listing did not return any entries upon first attempt, we
-	// return `ObjectNotFound`, to indicate the caller for any
-	// actions they may want to take as if `prefix` is missing.
-	err := toObjectErr(errFileNotFound, bucket, prefix)
-	for {
-		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-		if !ok {
-			break
-		}
+			drivesPerSet := zone.setDriveCount
+			if quorumCount == drivesPerSet && opts.ScanMode == madmin.HealNormalScan {
+				// Skip good entries.
+				continue
+			}
 
-		// Indicate that first attempt was a success and subsequent loop
-		// knows that its not our first attempt at 'prefix'
-		err = nil
-
-		if zoneIndex >= len(zoneDrivesPerSet) || zoneIndex < 0 {
-			return fmt.Errorf("invalid zone index returned: %d", zoneIndex)
-		}
-
-		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
-			// Skip good entries.
-			continue
-		}
-
-		for _, version := range entry.Versions {
-			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-				return toObjectErr(err, bucket, version.Name)
+			for _, version := range entry.Versions {
+				if err := healObject(bucket, version.Name, version.VersionID); err != nil {
+					return toObjectErr(err, bucket, version.Name)
+				}
 			}
 		}
 	}
 
-	return err
+	if skipped == len(z.serverSets) {
+		// If listing did not return any entries upon first attempt, we
+		// return `ObjectNotFound`, to indicate the caller for any
+		// actions they may want to take as if `prefix` is missing.
+		return toObjectErr(errFileNotFound, bucket, prefix)
+	}
+
+	return nil
 }
 
 func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
