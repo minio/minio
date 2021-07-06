@@ -628,10 +628,26 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 		return rd, wr
 	}
 
-	buckets, err := objectAPI.ListBuckets(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+	var (
+		buckets []BucketInfo
+		err     error
+	)
+
+	q := r.URL.Query()
+
+	if b := q.Get("bucket"); b != "" {
+		bucket, err := objectAPI.GetBucketInfo(ctx, b)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		buckets = append(buckets, bucket)
+	} else {
+		buckets, err = objectAPI.ListBuckets(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Load the latest calculated data usage
