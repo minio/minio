@@ -906,8 +906,6 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	w.(http.Flusher).Flush()
 }
 
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
@@ -1184,8 +1182,14 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			if err := enc.Encode(entry); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			if len(traceCh) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
 		case <-keepAliveTicker.C:
+			if len(traceCh) > 0 {
+				continue
+			}
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
@@ -1255,9 +1259,15 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 				if err := enc.Encode(log); err != nil {
 					return
 				}
+			}
+			if len(logCh) == 0 {
+				// Flush if nothing is queued
 				w.(http.Flusher).Flush()
 			}
 		case <-keepAliveTicker.C:
+			if len(logCh) > 0 {
+				continue
+			}
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
