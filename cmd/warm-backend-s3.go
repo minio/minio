@@ -91,14 +91,11 @@ func (s3 *warmBackendS3) Remove(ctx context.Context, object string, rv remoteVer
 }
 
 func (s3 *warmBackendS3) InUse(ctx context.Context) (bool, error) {
-	result, err := s3.core.ListObjectsV2(s3.Bucket, s3.Prefix, "", false, "/", 1)
+	result, err := s3.core.ListObjectsV2(s3.Bucket, s3.Prefix, "", "", slashSeparator, 1)
 	if err != nil {
 		return false, s3.ToObjectError(err)
 	}
-	if len(result.CommonPrefixes) > 0 || len(result.Contents) > 0 {
-		return true, nil
-	}
-	return false, nil
+	return len(result.CommonPrefixes) > 0 || len(result.Contents) > 0, nil
 }
 
 func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
