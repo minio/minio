@@ -242,7 +242,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
@@ -284,7 +284,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // countErrs - count a specific error.

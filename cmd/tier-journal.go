@@ -255,7 +255,7 @@ func (jd *tierDiskJournal) Open() error {
 	}
 
 	var err error
-	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0644)
+	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0666)
 	if err != nil {
 		return err
 	}
