@@ -42,6 +42,13 @@ type BucketUsageInfo struct {
 	Size    uint64        `json:"size"`
 	Created time.Time     `json:"created"`
 	Access  AccountAccess `json:"access"`
+
+	PrefixesUsage map[string]uint64 `json:"prefixesUsage"`
+}
+
+type AccountUsageInfoOpts struct {
+	Bucket            string
+	EnablePrefixUsage bool
 }
 
 // AccountUsageInfo represents the account usage info of an
@@ -52,8 +59,15 @@ type AccountUsageInfo struct {
 }
 
 // AccountUsageInfo returns the usage info for the authenticating account.
-func (adm *AdminClient) AccountUsageInfo(ctx context.Context) (AccountUsageInfo, error) {
-	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountusageinfo"})
+func (adm *AdminClient) AccountUsageInfo(ctx context.Context, opts AccountUsageInfoOpts) (AccountUsageInfo, error) {
+	q := make(url.Values)
+	if opts.Bucket != "" {
+		q.Set("bucket", opts.Bucket)
+	}
+	if opts.EnablePrefixUsage {
+		q.Set("prefix-usage", "true")
+	}
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{queryValues: q, relPath: adminAPIPrefix + "/accountusageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
 		return AccountUsageInfo{}, err
