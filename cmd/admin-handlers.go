@@ -344,6 +344,40 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
+// PrefixUsageInfoHandler - GET /minio/admin/v3/prefixusage
+// ----------
+// Get server/cluster data usage info
+func (a adminAPIHandlers) PrefixUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PrefixUsageInfo")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DataUsageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	bucket := r.URL.Query().Get("bucket")
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
+		return
+	}
+
+	prefixUsageInfo, err := loadPrefixUsageFromBackend(ctx, objectAPI, bucket)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	prefixUsageInfoJSON, err := json.Marshal(prefixUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, prefixUsageInfoJSON)
+}
+
 func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,

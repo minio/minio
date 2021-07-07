@@ -20,7 +20,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
@@ -57,6 +59,34 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			logger.LogIf(ctx, err)
 		}
 	}
+}
+
+// loadPrefixUsageFromBackend returns prefix usages found in passed buckets
+//   e.g.:  /testbucket/prefix => 355601334
+func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket string) (map[string]uint64, error) {
+	z, ok := objAPI.(*erasureServerPools)
+	if !ok {
+		return nil, errors.New("prefix usage is not supported")
+	}
+
+	cache := dataUsageCache{}
+
+	m := make(map[string]uint64)
+	for _, pool := range z.serverPools {
+		for _, er := range pool.sets {
+			// Load bucket usage prefixes
+			if err := cache.load(ctx, er, bucket+slashSeparator+dataUsageCacheName); err == nil {
+				if root := cache.find(bucket); root != nil {
+					for id, usageInfo := range cache.flattenChildrens(*root) {
+						prefix := strings.TrimPrefix(id, bucket+slashSeparator)
+						m[prefix] += uint64(usageInfo.Size)
+					}
+				}
+			}
+		}
+	}
+
+	return m, nil
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (madmin.DataUsageInfo, error) {
