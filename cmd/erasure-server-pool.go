@@ -147,6 +147,38 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 	return res
 }
 
+// GetRawFile will return all files with a given raw path to the callback.
+// For now only direct paths are supported.
+func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error {
+	for _, s := range z.serverPools {
+		for _, disks := range s.erasureDisks {
+			for i, disk := range disks {
+				if disk == OfflineDisk {
+					continue
+				}
+				si, err := disk.StatInfoFile(ctx, volume, file)
+				if err != nil {
+					continue
+				}
+				r, err := disk.ReadFileStream(ctx, volume, file, 0, si.Size)
+				if err != nil {
+					continue
+				}
+				defer r.Close()
+				did, err := disk.GetDiskID()
+				if err != nil {
+					did = fmt.Sprintf("disk-%d", i)
+				}
+				err = fn(r, disk.Hostname(), did, pathJoin(volume, file), si.Size, si.ModTime)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (z *erasureServerPools) SetDriveCounts() []int {
 	setDriveCounts := make([]int, len(z.serverPools))
 	for i := range z.serverPools {
