@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -161,10 +162,9 @@ func guessIsBrowserReq(r *http.Request) bool {
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) && globalBrowserRedirect {
+		if guessIsBrowserReq(r) {
 			// Fetch the redirect location if any.
-			u := getRedirectLocation(r)
-			if u != nil {
+			if u := getRedirectLocation(r); u != nil {
 				// Employ a temporary re-direct.
 				http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 				return
@@ -184,33 +184,36 @@ func shouldProxy() bool {
 // serves only limited purpose on redirect-handler for
 // browser requests.
 func getRedirectLocation(r *http.Request) *url.URL {
-	hostname, _, _ := net.SplitHostPort(r.Host)
-	if hostname == "" {
-		hostname = r.Host
+	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+	if err != nil {
+		return nil
 	}
-	var rurl = &url.URL{
-		Host: net.JoinHostPort(hostname, globalMinioConsolePort),
+	for _, prefix := range []string{
+		"favicon-16x16.png",
+		"favicon-32x32.png",
+		"favicon-96x96.png",
+		"index.html",
+		minioReservedBucket,
+	} {
+		bucket, _ := path2BucketObject(resource)
+		if path.Clean(bucket) == prefix || resource == slashSeparator {
+			hostname, _, _ := net.SplitHostPort(r.Host)
+			if hostname == "" {
+				hostname = r.Host
+			}
+			return &url.URL{
+				Host: net.JoinHostPort(hostname, globalMinioConsolePort),
+				Scheme: func() string {
+					scheme := "http"
+					if r.TLS != nil {
+						scheme = "https"
+					}
+					return scheme
+				}(),
+			}
+		}
 	}
-	urlPath := r.URL.Path
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	rurl.Scheme = scheme
-	if urlPath == minioReservedBucketPath {
-		rurl.Path = minioReservedBucketPath + SlashSeparator
-	}
-	if contains([]string{
-		SlashSeparator,
-		"/webrpc",
-		"/login",
-		"/favicon-16x16.png",
-		"/favicon-32x32.png",
-		"/favicon-96x96.png",
-	}, urlPath) {
-		rurl.Path = minioReservedBucketPath + urlPath
-	}
-	return rurl
+	return nil
 }
 
 // guessIsHealthCheckReq - returns true if incoming request looks
