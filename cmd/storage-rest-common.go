@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v22" // WalkVersions to throttle for healing
+	storageRESTVersion       = "v21" // Add checkDataDir in ReadVersion API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
