@@ -29,14 +29,13 @@ const (
 	EnvRootUser     = "MINIO_ROOT_USER"
 	EnvRootPassword = "MINIO_ROOT_PASSWORD"
 
-	EnvBrowser         = "MINIO_BROWSER"
-	EnvBrowserRedirect = "MINIO_BROWSER_REDIRECT"
-	EnvDomain          = "MINIO_DOMAIN"
-	EnvRegionName      = "MINIO_REGION_NAME"
-	EnvPublicIPs       = "MINIO_PUBLIC_IPS"
-	EnvFSOSync         = "MINIO_FS_OSYNC"
-	EnvArgs            = "MINIO_ARGS"
-	EnvDNSWebhook      = "MINIO_DNS_WEBHOOK_ENDPOINT"
+	EnvBrowser    = "MINIO_BROWSER"
+	EnvDomain     = "MINIO_DOMAIN"
+	EnvRegionName = "MINIO_REGION_NAME"
+	EnvPublicIPs  = "MINIO_PUBLIC_IPS"
+	EnvFSOSync    = "MINIO_FS_OSYNC"
+	EnvArgs       = "MINIO_ARGS"
+	EnvDNSWebhook = "MINIO_DNS_WEBHOOK_ENDPOINT"
 
 	EnvRootDiskThresholdSize = "MINIO_ROOTDISK_THRESHOLD_SIZE"
 

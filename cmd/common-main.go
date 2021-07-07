@@ -114,13 +114,16 @@ func minioConfigToConsoleFeatures() {
 	os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
 	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
-	}
-	if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
-		os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
+		if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
+			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
+		}
 	}
 	// Enable if prometheus URL is set.
 	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
+		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
+			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
+		}
 	}
 	// Enable if LDAP is enabled.
 	if globalLDAPConfig.Enabled {
@@ -411,11 +414,6 @@ func handleCommonEnvVars() {
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
-	}
-
-	globalBrowserRedirect, err = config.ParseBool(env.Get(config.EnvBrowserRedirect, config.EnableOn))
-	if err != nil {
-		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER_REDIRECT value in environment variable")
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
