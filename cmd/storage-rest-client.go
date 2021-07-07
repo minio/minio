@@ -647,6 +647,23 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	return toStorageErr(verifyResp.Err)
 }
 
+func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	respBody, err := client.call(ctx, storageRESTMethodStatInfoFile, values, nil, -1)
+	if err != nil {
+		return stat, err
+	}
+	defer xhttp.DrainBody(respBody)
+	respReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return stat, err
+	}
+	err = stat.DecodeMsg(msgpNewReader(respReader))
+	return stat, err
+}
+
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.restClient.Close()
