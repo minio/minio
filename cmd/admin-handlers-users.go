@@ -635,8 +635,11 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 
 	q := r.URL.Query()
 
-	if b := q.Get("bucket"); b != "" {
-		bucket, err := objectAPI.GetBucketInfo(ctx, b)
+	prefixUsageEnabled := q.Get("prefix-usage") == "true"
+	selectedBucket := q.Get("bucket")
+
+	if selectedBucket != "" {
+		bucket, err := objectAPI.GetBucketInfo(ctx, selectedBucket)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -679,9 +682,12 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	pathsUsage, err := loadPathsUsageFromBackend(ctx, objectAPI, buckets)
-	if err != nil {
-		logger.LogIf(ctx, err)
+	var pathsUsage map[string]uint64
+	if prefixUsageEnabled {
+		pathsUsage, err = loadPathsUsageFromBackend(ctx, objectAPI, buckets)
+		if err != nil {
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	for _, bucket := range allowedAccessBuckets {
@@ -701,13 +707,15 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 			},
 		}
 
-		// Update prefixes usage for this bucket
-		bucketUsage.PrefixesUsage = make(map[string]uint64)
-		bucketPrefix := bucket.info.Name + slashSeparator
-		for prefix, usage := range pathsUsage {
-			if strings.HasPrefix(prefix, bucketPrefix) {
-				prefix := prefix[len(bucketPrefix):]
-				bucketUsage.PrefixesUsage[prefix] = usage
+		if prefixUsageEnabled {
+			// Update prefixes usage for this bucket
+			bucketUsage.PrefixesUsage = make(map[string]uint64)
+			bucketPrefix := bucket.info.Name + slashSeparator
+			for prefix, usage := range pathsUsage {
+				if strings.HasPrefix(prefix, bucketPrefix) {
+					prefix := prefix[len(bucketPrefix):]
+					bucketUsage.PrefixesUsage[prefix] = usage
+				}
 			}
 		}
 
