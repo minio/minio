@@ -24,12 +24,12 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
-	"github.com/minio/minio/cmd/config/scanner"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/audit"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
@@ -44,6 +44,7 @@ import (
 
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
+	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
@@ -54,7 +55,6 @@ const (
 
 var (
 	globalHealConfig             heal.Config
-	globalScannerConfig          scanner.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 )
 
@@ -172,6 +172,12 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		return cache, errors.New("internal error: root scan attempted")
 	}
 
+	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		delayMult = dataCrawlSleepDefMult
+	}
+
 	s := folderScanner{
 		root:                basePath,
 		getSize:             getSize,
@@ -179,7 +185,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		newCache:            dataUsageCache{Info: cache.Info},
 		newFolders:          nil,
 		existingFolders:     nil,
-		dataUsageCrawlMult:  globalScannerConfig.Delay,
+		dataUsageCrawlMult:  delayMult,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,

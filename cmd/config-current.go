@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/scanner"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -53,7 +52,6 @@ func initHelp() {
 		config.PolicyOPASubSys:      opa.DefaultKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
-		config.ScannerSubSys:        scanner.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.KmsVaultSubSys:       crypto.DefaultVaultKVS,
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
@@ -110,10 +108,6 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
-		},
-		config.HelpKV{
-			Key:         config.ScannerSubSys,
-			Description: "manage namespace scanning for usage calculation",
 		},
 		config.HelpKV{
 			Key:         config.HealSubSys,
@@ -194,7 +188,6 @@ func initHelp() {
 		"":                          helpSubSys, // Help for all sub-systems.
 		config.RegionSubSys:         config.RegionHelp,
 		config.APISubSys:            api.Help,
-		config.ScannerSubSys:        scanner.Help,
 		config.StorageClassSubSys:   storageclass.Help,
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
@@ -244,10 +237,6 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
-		return err
-	}
-
-	if _, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -422,11 +411,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	}
 
 	globalAPIConfig.init(apiConfig, setDriveCount)
-
-	globalScannerConfig, err = scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid scanner configuration: %w", err))
-	}
 
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
