@@ -1840,8 +1840,8 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 	var skipped int
 	for _, zone := range z.serverSets {
 		entryChs := zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, true, ctx.Done())
-		entriesInfos := make([]FileInfoVersions, 0, len(entryChs))
-		entriesValid := make([]bool, 0, len(entryChs))
+		entriesInfos := make([]FileInfoVersions, len(entryChs))
+		entriesValid := make([]bool, len(entryChs))
 
 		for {
 			entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entriesInfos, entriesValid)
