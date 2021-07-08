@@ -47,7 +47,7 @@ minio server /data{1...12}
 Example: Start MinIO server in a 8 drives setup, using MinIO Docker image. 
 
 ```sh
-docker run -p 9000:9000 --name minio \
+podman run -p 9000:9000 --name minio \
   -v /mnt/data1:/data1 \
   -v /mnt/data2:/data2 \
   -v /mnt/data3:/data3 \
