@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/mimedb"
+	uatomic "go.uber.org/atomic"
 )
 
 // list all errors which can be ignored in object operations.
@@ -608,19 +609,35 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 		// If we have offline disks upgrade the number of erasure codes for this object.
 		parityOrig := parityDrives
+
+		atomicParityDrives := uatomic.NewInt64(0)
+		// Start with current parityDrives
+		atomicParityDrives.Store(int64(parityDrives))
+
+		var wg sync.WaitGroup
 		for _, disk := range storageDisks {
-			if parityDrives >= len(storageDisks)/2 {
-				parityDrives = len(storageDisks) / 2
-				break
-			}
 			if disk == nil {
-				parityDrives++
+				atomicParityDrives.Inc()
 				continue
 			}
-			di, err := disk.DiskInfo(ctx)
-			if err != nil || di.ID == "" {
-				parityDrives++
+			if !disk.IsOnline() {
+				atomicParityDrives.Inc()
+				continue
 			}
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				di, err := disk.DiskInfo(ctx)
+				if err != nil || di.ID == "" {
+					atomicParityDrives.Inc()
+				}
+			}(disk)
+		}
+		wg.Wait()
+
+		parityDrives = int(atomicParityDrives.Load())
+		if parityDrives >= len(storageDisks)/2 {
+			parityDrives = len(storageDisks) / 2
 		}
 		if parityOrig != parityDrives {
 			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
