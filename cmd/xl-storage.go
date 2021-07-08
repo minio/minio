@@ -2213,3 +2213,32 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 
 	return nil
 }
+
+func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return stat, err
+	}
+
+	// Stat a volume entry.
+	if err = Access(volumeDir); err != nil {
+		if osIsNotExist(err) {
+			return stat, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return stat, errFaultyDisk
+		} else if osIsPermission(err) {
+			return stat, errVolumeAccessDenied
+		}
+		return stat, err
+	}
+	filePath := pathJoin(volumeDir, path)
+	if err := checkPathLength(filePath); err != nil {
+		return stat, err
+	}
+	st, _ := Lstat(filePath)
+	if st == nil {
+		return stat, errPathNotFound
+	}
+
+	return StatInfo{ModTime: st.ModTime(), Size: st.Size()}, nil
+}

@@ -70,6 +70,7 @@ type StorageAPI interface {
 	CheckFile(ctx context.Context, volume string, path string) (err error)
 	Delete(ctx context.Context, volume string, path string, recursive bool) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
+	StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error)
 
 	// Write all data, syncs the data to disk.
 	// Should be used for smaller payloads.

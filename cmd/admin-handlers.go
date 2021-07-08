@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	crand "crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
@@ -36,6 +37,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -49,7 +51,8 @@ import (
 	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/pkg/trace"
+	"github.com/secure-io/sio-go"
 )
 
 const (
@@ -1855,4 +1858,105 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	}
 	defer xhttp.DrainBody(resp.Body)
 	return nil
+}
+
+// getRawDataer provides an interface for getting raw FS files.
+type getRawDataer interface {
+	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error
+}
+
+// InspectDataHandler - GET /minio/admin/v3/inspect-data
+// ----------
+// Download file from all nodes in a zip format
+func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InspectData")
+
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.InspectDataAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	o, ok := newObjectLayerFn().(getRawDataer)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	volume := r.URL.Query().Get("volume")
+	file := r.URL.Query().Get("file")
+	if len(volume) == 0 {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
+		return
+	}
+	if len(file) == 0 {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	var key [32]byte
+	// MUST use crypto/rand
+	n, err := crand.Read(key[:])
+	if err != nil || n != len(key) {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		return
+	}
+	stream, err := sio.AES_256_GCM.Stream(key[:])
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		return
+	}
+	// Zero nonce, we only use each key once, and 32 bytes is plenty.
+	nonce := make([]byte, stream.NonceSize())
+	encw := stream.EncryptWriter(w, nonce, nil)
+
+	defer encw.Close()
+
+	// Write a version for making *incompatible* changes.
+	// The AdminClient will reject any version it does not know.
+	w.Write([]byte{1})
+
+	// Write key first (without encryption)
+	_, err = w.Write(key[:])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		return
+	}
+
+	// Initialize a zip writer which will provide a zipped content
+	// of profiling data of all nodes
+	zipWriter := zip.NewWriter(encw)
+	defer zipWriter.Close()
+
+	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, size int64, modtime time.Time) error {
+		// Prefix host+disk
+		filename = path.Join(host, disk, filename)
+		header, zerr := zip.FileInfoHeader(dummyFileInfo{
+			name:    filename,
+			size:    size,
+			mode:    0600,
+			modTime: modtime,
+			isDir:   false,
+			sys:     nil,
+		})
+		if zerr != nil {
+			logger.LogIf(ctx, zerr)
+			return nil
+		}
+		header.Method = zip.Deflate
+		zwriter, zerr := zipWriter.CreateHeader(header)
+		if zerr != nil {
+			logger.LogIf(ctx, zerr)
+			return nil
+		}
+		if _, err = io.Copy(zwriter, r); err != nil {
+			logger.LogIf(ctx, err)
+		}
+		return nil
+	})
+	logger.LogIf(ctx, err)
 }
