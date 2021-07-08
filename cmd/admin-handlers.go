@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -50,7 +51,8 @@ import (
 	"github.com/minio/minio/pkg/kms"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/pkg/trace"
+	"github.com/secure-io/sio-go"
 )
 
 const (
