@@ -48,7 +48,7 @@ require (
 	github.com/minio/madmin-go v1.0.13
 	github.com/minio/minio-go/v7 v7.0.13-0.20210706013812-337aa536abe2
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.0.8
+	github.com/minio/pkg v1.0.10
 	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
@@ -91,5 +91,3 @@ require (
 )
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.29.1
-replace github.com/minio/pkg => e:\gopath\src\github.com\minio\pkg
-
