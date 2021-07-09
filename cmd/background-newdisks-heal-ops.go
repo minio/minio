@@ -430,8 +430,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								dataUsageInfo := cache.dui(dataUsageRoot, nil)
 								tracker.ObjectsTotalCount = dataUsageInfo.ObjectsTotalCount
 								tracker.ObjectsTotalSize = dataUsageInfo.ObjectsTotalSize
-							} else {
-								fmt.Println("loading cache err =", err)
 							}
 
 							tracker.PoolIndex, tracker.SetIndex, tracker.DiskIndex = disk.GetDiskLoc()
