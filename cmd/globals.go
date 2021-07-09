@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
+	xnet "github.com/minio/pkg/net"
 )
 
 // minio configuration related constants.
@@ -136,6 +137,10 @@ var (
 
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
+
+	// Custom browser redirect URL, not set by default
+	// and it is automatically deduced.
+	globalBrowserRedirectURL *xnet.URL
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
