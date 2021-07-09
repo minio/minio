@@ -1511,6 +1511,9 @@ func (fs *FSObjects) RestoreTransitionedObject(ctx context.Context, bucket, obje
 	return NotImplemented{}
 }
 
+// GetRawData returns raw file data to the callback.
+// Errors are ignored, only errors from the callback are returned.
+// For now only direct file paths are supported.
 func (fs *FSObjects) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error {
 	f, err := os.Open(filepath.Join(fs.fsPath, volume, file))
 	if err != nil {

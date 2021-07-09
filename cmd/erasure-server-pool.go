@@ -147,8 +147,9 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 	return res
 }
 
-// GetRawFile will return all files with a given raw path to the callback.
-// For now only direct paths are supported.
+// GetRawData will return all files with a given raw path to the callback.
+// Errors are ignored, only errors from the callback are returned.
+// For now only direct file paths are supported.
 func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error {
 	for _, s := range z.serverPools {
 		for _, disks := range s.erasureDisks {
