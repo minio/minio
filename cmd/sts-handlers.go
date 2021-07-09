@@ -68,6 +68,16 @@ const (
 	ldapUsername = "ldapUsername"
 )
 
+func parseOpenIDParentUser(parentUser string) (userID string, err error) {
+	if strings.HasPrefix(parentUser, "jwt:") {
+		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "jwt:"), ":", 2)
+		if len(tokens) == 2 {
+			return tokens[0], nil
+		}
+	}
+	return "", errSkipFile
+}
+
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
 type stsAPIHandlers struct{}
 

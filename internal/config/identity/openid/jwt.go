@@ -32,6 +32,7 @@ import (
 	jwtgo "github.com/golang-jwt/jwt"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
@@ -50,10 +51,75 @@ type Config struct {
 	DiscoveryDoc DiscoveryDoc
 	ClientID     string
 	ClientSecret string
+	provider     provider.Provider
 	publicKeys   map[string]crypto.PublicKey
 	transport    *http.Transport
 	closeRespFn  func(io.ReadCloser)
 	mutex        *sync.Mutex
+}
+
+// LookupUser lookup userid for the provider
+func (r *Config) LookupUser(userid string) (provider.User, error) {
+	if r.provider != nil {
+		user, err := r.provider.LookupUser(userid)
+		if err != nil && err != provider.ErrAccessTokenExpired {
+			return user, err
+		}
+		if err == provider.ErrAccessTokenExpired {
+			if err = r.provider.LoginWithClientID(r.ClientID, r.ClientSecret); err != nil {
+				return user, err
+			}
+			user, err = r.provider.LookupUser(userid)
+		}
+		return user, err
+	}
+	// Without any specific logic for a provider, all accounts
+	// are always enabled.
+	return provider.User{ID: userid, Enabled: true}, nil
+}
+
+const (
+	keyCloakVendor = "keycloak"
+)
+
+// InitializeProvider initializes if any additional vendor specific
+// information was provided, initialization will return an error
+// initial login fails.
+func (r *Config) InitializeProvider(kvs config.KVS) error {
+	vendor := env.Get(EnvIdentityOpenIDVendor, kvs.Get(Vendor))
+	if vendor == "" {
+		return nil
+	}
+	switch vendor {
+	case keyCloakVendor:
+		adminURL := env.Get(EnvIdentityOpenIDKeyCloakAdminURL, kvs.Get(KeyCloakAdminURL))
+		realm := env.Get(EnvIdentityOpenIDKeyCloakRealm, kvs.Get(KeyCloakRealm))
+		return r.InitializeKeycloakProvider(adminURL, realm)
+	default:
+		return fmt.Errorf("Unsupport vendor %s", keyCloakVendor)
+	}
+}
+
+// ProviderEnabled returns true if any vendor specific provider is enabled.
+func (r *Config) ProviderEnabled() bool {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return r.provider != nil
+}
+
+// InitializeKeycloakProvider - initializes keycloak provider
+func (r *Config) InitializeKeycloakProvider(adminURL, realm string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	var err error
+	r.provider, err = provider.KeyCloak(
+		provider.WithAdminURL(adminURL),
+		provider.WithOpenIDConfig(provider.DiscoveryDoc(r.DiscoveryDoc)),
+		provider.WithTransport(r.transport),
+		provider.WithRealm(realm),
+	)
+	return err
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
@@ -228,9 +294,15 @@ const (
 	ClaimPrefix  = "claim_prefix"
 	ClientID     = "client_id"
 	ClientSecret = "client_secret"
+	Vendor       = "vendor"
 	Scopes       = "scopes"
 	RedirectURI  = "redirect_uri"
 
+	// Vendor specific ENV only enabled if the Vendor matches == "vendor"
+	KeyCloakRealm    = "keycloak_realm"
+	KeyCloakAdminURL = "keycloak_admin_url"
+
+	EnvIdentityOpenIDVendor       = "MINIO_IDENTITY_OPENID_VENDOR"
 	EnvIdentityOpenIDClientID     = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDClientSecret = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
 	EnvIdentityOpenIDJWKSURL      = "MINIO_IDENTITY_OPENID_JWKS_URL"
@@ -239,6 +311,10 @@ const (
 	EnvIdentityOpenIDClaimPrefix  = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
 	EnvIdentityOpenIDRedirectURI  = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
 	EnvIdentityOpenIDScopes       = "MINIO_IDENTITY_OPENID_SCOPES"
+
+	// Vendor specific ENVs only enabled if the Vendor matches == "vendor"
+	EnvIdentityOpenIDKeyCloakRealm    = "MINIO_IDENTITY_OPENID_KEYCLOAK_REALM"
+	EnvIdentityOpenIDKeyCloakAdminURL = "MINIO_IDENTITY_OPENID_KEYCLOAK_ADMIN_URL"
 )
 
 // DiscoveryDoc - parses the output from openid-configuration
@@ -394,6 +470,10 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	}
 
 	if err = c.PopulatePublicKey(); err != nil {
+		return c, err
+	}
+
+	if err = c.InitializeProvider(kvs); err != nil {
 		return c, err
 	}
 
