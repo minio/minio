@@ -860,7 +860,7 @@ func (sys *NotificationSys) GetNetPerfInfo(ctx context.Context) madmin.NetPerfIn
 		}
 	}
 	return madmin.NetPerfInfo{
-		Addr:        globalLocalNodeName,
+		NodeCommon:  madmin.NodeCommon{Addr: globalLocalNodeName},
 		RemotePeers: netInfos,
 	}
 }
@@ -935,7 +935,7 @@ func (sys *NotificationSys) GetParallelNetPerfInfo(ctx context.Context) madmin.N
 	}
 	wg.Wait()
 	return madmin.NetPerfInfo{
-		Addr:        globalLocalNodeName,
+		NodeCommon:  madmin.NodeCommon{Addr: globalLocalNodeName},
 		RemotePeers: netInfos,
 	}
 }

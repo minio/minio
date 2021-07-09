@@ -106,7 +106,7 @@ func getDrivePerfInfos(ctx context.Context, addr string) madmin.DrivePerfInfos {
 	serialPerf := getDrivePerfInfo(ctx, false)
 	parallelPerf := getDrivePerfInfo(ctx, true)
 	return madmin.DrivePerfInfos{
-		Addr:         addr,
+		NodeCommon:   madmin.NodeCommon{Addr: addr},
 		SerialPerf:   serialPerf,
 		ParallelPerf: parallelPerf,
 	}
