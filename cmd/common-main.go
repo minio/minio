@@ -415,6 +415,22 @@ func handleCommonEnvVars() {
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
+	if globalBrowserEnabled {
+		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
+			u, err := xnet.ParseHTTPURL(redirectURL)
+			if err != nil {
+				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT value in environment variable")
+			}
+			// Look for if URL has invalid values and return error.
+			if !((u.Scheme == "http" || u.Scheme == "https") &&
+				(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
+				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
+				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT value is environment variable")
+			}
+			globalBrowserRedirectURL = u
+		}
+	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
 	if err != nil {

@@ -21,13 +21,13 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
+	xnet "github.com/minio/pkg/net"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/dns"
@@ -183,7 +183,7 @@ func shouldProxy() bool {
 // redirectable, this is purely internal function and
 // serves only limited purpose on redirect-handler for
 // browser requests.
-func getRedirectLocation(r *http.Request) *url.URL {
+func getRedirectLocation(r *http.Request) *xnet.URL {
 	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
 		return nil
@@ -197,11 +197,14 @@ func getRedirectLocation(r *http.Request) *url.URL {
 	} {
 		bucket, _ := path2BucketObject(resource)
 		if path.Clean(bucket) == prefix || resource == slashSeparator {
+			if globalBrowserRedirectURL != nil {
+				return globalBrowserRedirectURL
+			}
 			hostname, _, _ := net.SplitHostPort(r.Host)
 			if hostname == "" {
 				hostname = r.Host
 			}
-			return &url.URL{
+			return &xnet.URL{
 				Host: net.JoinHostPort(hostname, globalMinioConsolePort),
 				Scheme: func() string {
 					scheme := "http"
