@@ -17,8 +17,11 @@
 
 package cmd
 
+// Options for readDir function call
 type readDirOpts struct {
-	count            int
+	// The maximum number of entries to return
+	count int
+	// Follow directory symlink
 	followDirSymlink bool
 }
 
@@ -27,6 +30,7 @@ func readDir(dirPath string) (entries []string, err error) {
 	return readDirWithOpts(dirPath, readDirOpts{count: -1})
 }
 
+// Return up to count entries at the directory dirPath.
 func readDirN(dirPath string, count int) (entries []string, err error) {
 	return readDirWithOpts(dirPath, readDirOpts{count: count})
 }
