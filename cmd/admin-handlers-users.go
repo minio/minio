@@ -1019,11 +1019,15 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	// Load the latest calculated data usage
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err != nil {
-		// log the error, continue with the accounting response
-		logger.LogIf(ctx, err)
+	var dataUsageInfo madmin.DataUsageInfo
+	var err error
+	if !globalIsGateway {
+		// Load the latest calculated data usage
+		dataUsageInfo, err = loadDataUsageFromBackend(ctx, objectAPI)
+		if err != nil {
+			// log the error, continue with the accounting response
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	// If etcd, dns federation configured list buckets from etcd.
