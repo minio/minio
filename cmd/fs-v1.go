@@ -534,7 +534,7 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		atomic.AddInt64(&fs.activeIOCount, -1)
 	}()
 
-	entries, err := readDir(fs.fsPath)
+	entries, err := readDirWithOpts(fs.fsPath, readDirOpts{count: -1, followDirSymlink: true})
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
 		return nil, toObjectErr(errDiskNotFound)
