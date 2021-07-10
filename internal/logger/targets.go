@@ -23,7 +23,7 @@ package logger
 type Target interface {
 	String() string
 	Endpoint() string
-	Validate() error
+	Init() error
 	Send(entry interface{}, errKind string) error
 }
 
@@ -36,7 +36,7 @@ var AuditTargets = []Target{}
 // AddAuditTarget adds a new audit logger target to the
 // list of enabled loggers
 func AddAuditTarget(t Target) error {
-	if err := t.Validate(); err != nil {
+	if err := t.Init(); err != nil {
 		return err
 	}
 
@@ -47,7 +47,7 @@ func AddAuditTarget(t Target) error {
 // AddTarget adds a new logger target to the
 // list of enabled loggers
 func AddTarget(t Target) error {
-	if err := t.Validate(); err != nil {
+	if err := t.Init(); err != nil {
 		return err
 	}
 	Targets = append(Targets, t)

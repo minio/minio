@@ -74,6 +74,7 @@ const (
 	CompressionSubSys    = "compression"
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
+	AuditKafkaSubSys     = "audit_kafka"
 	HealSubSys           = "heal"
 	ScannerSubSys        = "scanner"
 	CrawlerSubSys        = "crawler"
@@ -108,6 +109,7 @@ var SubSystems = set.CreateStringSet(
 	CompressionSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
+	AuditKafkaSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
@@ -245,6 +247,23 @@ func (kvs KVS) String() string {
 		s.WriteString(KvSpaceSeparator)
 	}
 	return s.String()
+}
+
+// Merge environment values with on disk KVS, environment values overrides
+// anything on the disk.
+func Merge(cfgKVS map[string]KVS, envname string, defaultKVS KVS) map[string]KVS {
+	newCfgKVS := make(map[string]KVS)
+	for _, e := range env.List(envname) {
+		tgt := strings.TrimPrefix(e, envname+Default)
+		if tgt == envname {
+			tgt = Default
+		}
+		newCfgKVS[tgt] = defaultKVS
+	}
+	for tgt, kv := range cfgKVS {
+		newCfgKVS[tgt] = kv
+	}
+	return newCfgKVS
 }
 
 // Set sets a value, if not sets a default value.

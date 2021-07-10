@@ -28,11 +28,25 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
 )
 
 // Timeout for the webhook http call
 const webhookCallTimeout = 5 * time.Second
+
+// Config http logger target
+type Config struct {
+	Enabled    bool              `json:"enabled"`
+	Name       string            `json:"name"`
+	UserAgent  string            `json:"userAgent"`
+	Endpoint   string            `json:"endpoint"`
+	AuthToken  string            `json:"authToken"`
+	ClientCert string            `json:"clientCert"`
+	ClientKey  string            `json:"clientKey"`
+	Transport  http.RoundTripper `json:"-"`
+
+	// Custom logger
+	LogOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}) `json:"-"`
+}
 
 // Target implements logger.Target and sends the json
 // format of a log entry to the configured http endpoint.
@@ -43,32 +57,24 @@ type Target struct {
 	// Channel of log entries
 	logCh chan interface{}
 
-	name string
-	// HTTP(s) endpoint
-	endpoint string
-	// Authorization token for `endpoint`
-	authToken string
-	// User-Agent to be set on each log to `endpoint`
-	userAgent string
-	logKind   string
-	client    http.Client
+	config Config
 }
 
 // Endpoint returns the backend endpoint
 func (h *Target) Endpoint() string {
-	return h.endpoint
+	return h.config.Endpoint
 }
 
 func (h *Target) String() string {
-	return h.name
+	return h.config.Name
 }
 
-// Validate validate the http target
-func (h *Target) Validate() error {
+// Init validate and initialize the http target
+func (h *Target) Init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*webhookCallTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, strings.NewReader(`{}`))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.config.Endpoint, strings.NewReader(`{}`))
 	if err != nil {
 		return err
 	}
@@ -77,13 +83,14 @@ func (h *Target) Validate() error {
 
 	// Set user-agent to indicate MinIO release
 	// version to the configured log endpoint
-	req.Header.Set("User-Agent", h.userAgent)
+	req.Header.Set("User-Agent", h.config.UserAgent)
 
-	if h.authToken != "" {
-		req.Header.Set("Authorization", h.authToken)
+	if h.config.AuthToken != "" {
+		req.Header.Set("Authorization", h.config.AuthToken)
 	}
 
-	resp, err := h.client.Do(req)
+	client := http.Client{Transport: h.config.Transport}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -95,12 +102,13 @@ func (h *Target) Validate() error {
 		switch resp.StatusCode {
 		case http.StatusForbidden:
 			return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
-				h.endpoint, resp.Status)
+				h.config.Endpoint, resp.Status)
 		}
 		return fmt.Errorf("%s returned '%s', please check your endpoint configuration",
-			h.endpoint, resp.Status)
+			h.config.Endpoint, resp.Status)
 	}
 
+	go h.startHTTPLogger()
 	return nil
 }
 
@@ -116,7 +124,7 @@ func (h *Target) startHTTPLogger() {
 
 			ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-				h.endpoint, bytes.NewReader(logJSON))
+				h.config.Endpoint, bytes.NewReader(logJSON))
 			if err != nil {
 				cancel()
 				continue
@@ -125,17 +133,17 @@ func (h *Target) startHTTPLogger() {
 
 			// Set user-agent to indicate MinIO release
 			// version to the configured log endpoint
-			req.Header.Set("User-Agent", h.userAgent)
+			req.Header.Set("User-Agent", h.config.UserAgent)
 
-			if h.authToken != "" {
-				req.Header.Set("Authorization", h.authToken)
+			if h.config.AuthToken != "" {
+				req.Header.Set("Authorization", h.config.AuthToken)
 			}
 
-			resp, err := h.client.Do(req)
+			client := http.Client{Transport: h.config.Transport}
+			resp, err := client.Do(req)
 			cancel()
 			if err != nil {
-				logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration",
-					h.endpoint, err), h.endpoint)
+				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
 				continue
 			}
 
@@ -145,88 +153,28 @@ func (h *Target) startHTTPLogger() {
 			if resp.StatusCode != http.StatusOK {
 				switch resp.StatusCode {
 				case http.StatusForbidden:
-					logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
-						h.endpoint, resp.Status), h.endpoint)
+					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
 				default:
-					logger.LogOnceIf(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration",
-						h.endpoint, resp.Status), h.endpoint)
+					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status), h.config.Endpoint)
 				}
 			}
 		}
 	}()
 }
 
-// Option is a function type that accepts a pointer Target
-type Option func(*Target)
-
-// WithTargetName target name
-func WithTargetName(name string) Option {
-	return func(t *Target) {
-		t.name = name
-	}
-}
-
-// WithEndpoint adds a new endpoint
-func WithEndpoint(endpoint string) Option {
-	return func(t *Target) {
-		t.endpoint = endpoint
-	}
-}
-
-// WithLogKind adds a log type for this target
-func WithLogKind(logKind string) Option {
-	return func(t *Target) {
-		t.logKind = strings.ToUpper(logKind)
-	}
-}
-
-// WithUserAgent adds a custom user-agent sent to the target.
-func WithUserAgent(userAgent string) Option {
-	return func(t *Target) {
-		t.userAgent = userAgent
-	}
-}
-
-// WithAuthToken adds a new authorization header to be sent to target.
-func WithAuthToken(authToken string) Option {
-	return func(t *Target) {
-		t.authToken = authToken
-	}
-}
-
-// WithTransport adds a custom transport with custom timeouts and tuning.
-func WithTransport(transport *http.Transport) Option {
-	return func(t *Target) {
-		t.client = http.Client{
-			Transport: transport,
-		}
-	}
-}
-
 // New initializes a new logger target which
 // sends log over http to the specified endpoint
-func New(opts ...Option) *Target {
+func New(config Config) *Target {
 	h := &Target{
-		logCh: make(chan interface{}, 10000),
+		logCh:  make(chan interface{}, 10000),
+		config: config,
 	}
 
-	// Loop through each option
-	for _, opt := range opts {
-		// Call the option giving the instantiated
-		// *Target as the argument
-		opt(h)
-	}
-
-	h.startHTTPLogger()
 	return h
 }
 
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}, errKind string) error {
-	if h.logKind != errKind && h.logKind != "ALL" {
-		return nil
-	}
-
 	select {
 	case h.logCh <- entry:
 	default:

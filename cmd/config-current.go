@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/target/http"
+	"github.com/minio/minio/internal/logger/target/kafka"
 	"github.com/minio/pkg/env"
 )
 
@@ -58,7 +59,8 @@ func initHelp() {
 		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
-		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
+		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
 		config.HealSubSys:           heal.DefaultKVS,
 		config.ScannerSubSys:        scanner.DefaultKVS,
 	}
@@ -120,6 +122,11 @@ func initHelp() {
 		config.HelpKV{
 			Key:             config.AuditWebhookSubSys,
 			Description:     "send audit logs to webhook endpoints",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.AuditKafkaSubSys,
+			Description:     "send audit logs to kafka endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
@@ -197,7 +204,8 @@ func initHelp() {
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
 		config.LoggerWebhookSubSys:  logger.Help,
-		config.AuditWebhookSubSys:   logger.HelpAudit,
+		config.AuditWebhookSubSys:   logger.HelpWebhook,
+		config.AuditKafkaSubSys:     logger.HelpKafka,
 		config.NotifyAMQPSubSys:     notify.HelpAMQP,
 		config.NotifyKafkaSubSys:    notify.HelpKafka,
 		config.NotifyMQTTSubSys:     notify.HelpMQTT,
@@ -478,38 +486,36 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger: %w", err))
 	}
 
-	for k, l := range loggerCfg.HTTP {
+	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = loggerUserAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http logging
-			if err = logger.AddTarget(
-				http.New(
-					http.WithTargetName(k),
-					http.WithEndpoint(l.Endpoint),
-					http.WithAuthToken(l.AuthToken),
-					http.WithUserAgent(loggerUserAgent),
-					http.WithLogKind(string(logger.All)),
-					http.WithTransport(NewGatewayHTTPTransport()),
-				),
-			); err != nil {
+			if err = logger.AddTarget(http.New(l)); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize console HTTP target: %w", err))
 			}
 		}
 	}
 
-	for k, l := range loggerCfg.Audit {
+	for _, l := range loggerCfg.AuditWebhook {
 		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = loggerUserAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http audit logging
-			if err = logger.AddAuditTarget(
-				http.New(
-					http.WithTargetName(k),
-					http.WithEndpoint(l.Endpoint),
-					http.WithAuthToken(l.AuthToken),
-					http.WithUserAgent(loggerUserAgent),
-					http.WithLogKind(string(logger.All)),
-					http.WithTransport(NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)),
-				),
-			); err != nil {
+			if err = logger.AddAuditTarget(http.New(l)); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit HTTP target: %w", err))
+			}
+		}
+	}
+
+	for _, l := range loggerCfg.AuditKafka {
+		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			// Enable Kafka audit logging
+			if err = logger.AddAuditTarget(kafka.New(l)); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit Kafka target: %w", err))
 			}
 		}
 	}
