@@ -34,7 +34,7 @@ const (
 type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
+func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
@@ -105,61 +105,59 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
 		}
 
-		if enableIAMOps {
-			// -- IAM APIs --
+		// -- IAM APIs --
 
-			// Add policy IAM
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-canned-policy").HandlerFunc(httpTraceAll(adminAPI.AddCannedPolicy)).Queries("name", "{name:.*}")
+		// Add policy IAM
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-canned-policy").HandlerFunc(httpTraceAll(adminAPI.AddCannedPolicy)).Queries("name", "{name:.*}")
 
-			// Add user IAM
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountinfo").HandlerFunc(httpTraceAll(adminAPI.AccountInfoHandler))
+		// Add user IAM
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountinfo").HandlerFunc(httpTraceAll(adminAPI.AccountInfoHandler))
 
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
-			// Service accounts ops
-			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
-			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update-service-account").HandlerFunc(httpTraceHdrs(adminAPI.UpdateServiceAccount)).Queries("accessKey", "{accessKey:.*}")
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-service-account").HandlerFunc(httpTraceHdrs(adminAPI.InfoServiceAccount)).Queries("accessKey", "{accessKey:.*}")
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(httpTraceHdrs(adminAPI.ListServiceAccounts))
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(httpTraceHdrs(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+		// Service accounts ops
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update-service-account").HandlerFunc(httpTraceHdrs(adminAPI.UpdateServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-service-account").HandlerFunc(httpTraceHdrs(adminAPI.InfoServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(httpTraceHdrs(adminAPI.ListServiceAccounts))
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(httpTraceHdrs(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
-			// Info policy IAM latest
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
-			// List policies latest
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketPolicies)).Queries("bucket", "{bucket:.*}")
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
+		// Info policy IAM latest
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
+		// List policies latest
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketPolicies)).Queries("bucket", "{bucket:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
 
-			// Remove policy IAM
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
+		// Remove policy IAM
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
 
-			// Set user or group policy
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-or-group-policy").
-				HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
-				Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
+		// Set user or group policy
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-or-group-policy").
+			HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
+			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
 
-			// Remove user IAM
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
+		// Remove user IAM
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
 
-			// List users
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketUsers)).Queries("bucket", "{bucket:.*}")
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
+		// List users
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListBucketUsers)).Queries("bucket", "{bucket:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
 
-			// User info
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
-			// Add/Remove members from group
-			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
+		// User info
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
+		// Add/Remove members from group
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
 
-			// Get Group
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/group").HandlerFunc(httpTraceHdrs(adminAPI.GetGroup)).Queries("group", "{group:.*}")
+		// Get Group
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/group").HandlerFunc(httpTraceHdrs(adminAPI.GetGroup)).Queries("group", "{group:.*}")
 
-			// List Groups
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/groups").HandlerFunc(httpTraceHdrs(adminAPI.ListGroups))
+		// List Groups
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/groups").HandlerFunc(httpTraceHdrs(adminAPI.ListGroups))
 
-			// Set Group Status
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
-		}
+		// Set Group Status
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
 
 		if globalIsDistErasure || globalIsErasure {
 			// GetBucketQuotaConfig

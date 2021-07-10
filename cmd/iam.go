@@ -452,7 +452,11 @@ func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
 	defer sys.Unlock()
 
 	if globalEtcdClient == nil {
-		sys.store = newIAMObjectStore(objAPI)
+		if globalIsGateway {
+			sys.store = &iamDummyStore{}
+		} else {
+			sys.store = newIAMObjectStore(objAPI)
+		}
 	} else {
 		sys.store = newIAMEtcdStore()
 	}

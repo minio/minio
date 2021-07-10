@@ -248,16 +248,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// avoid URL path encoding minio/minio#8950
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
-	if globalEtcdClient != nil {
-		// Enable STS router if etcd is enabled.
-		registerSTSRouter(router)
-	}
-
-	enableIAMOps := globalEtcdClient != nil
+	// Enable STS router if etcd is enabled.
+	registerSTSRouter(router)
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
-	registerAdminRouter(router, enableConfigOps, enableIAMOps)
+	registerAdminRouter(router, enableConfigOps)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
@@ -315,12 +311,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
-	if enableIAMOps {
-		// Initialize users credentials and policies in background.
-		globalIAMSys.InitStore(newObject)
+	// Initialize users credentials and policies in background.
+	globalIAMSys.InitStore(newObject)
 
-		go globalIAMSys.Init(GlobalContext, newObject)
-	}
+	go globalIAMSys.Init(GlobalContext, newObject)
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
