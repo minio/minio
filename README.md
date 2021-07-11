@@ -184,6 +184,14 @@ service minio start
 
 # Install from Source
 ##Build the Source Code
+Build UI
+```bash
+cd fs3/browser
+npm run build
+npm run release
+# back to repository 
+cd ..
+```
 Install Filecoin dependency
 ```bash
 sudo apt install mesa-opencl-icd ocl-icd-opencl-dev gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget -y && sudo apt upgrade -y
