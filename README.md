@@ -184,6 +184,11 @@ service minio start
 
 # Install from Source
 ##Build the Source Code
+Install Filecoin dependency
+```bash
+sudo apt install mesa-opencl-icd ocl-icd-opencl-dev gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget -y && sudo apt upgrade -y
+```
+Install go module dependency
 ``` bash 
 # get submodules
 git submodule update --init --recursive
