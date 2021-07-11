@@ -1,4 +1,4 @@
-# MinIO Quickstart Guide
+# FS3 Quickstart Guide
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 [![MinIO](https://raw.githubusercontent.com/minio/minio/master/.github/logo.svg?sanitize=true)](https://min.io)
@@ -183,7 +183,18 @@ service minio start
 ```
 
 # Install from Source
-
+##Build the Source Code
+``` bash 
+# get submodules
+git submodule update --init --recursive
+# build filecoin-ffi
+make ffi
+make 
+```
+## Run a Standalone FS3 Server
+``` bash
+ ./minio server ~/minio-data
+```
 Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.16](https://golang.org/dl/#stable)
 
 ```sh
