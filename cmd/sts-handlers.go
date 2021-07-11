@@ -69,8 +69,8 @@ const (
 )
 
 func parseOpenIDParentUser(parentUser string) (userID string, err error) {
-	if strings.HasPrefix(parentUser, "jwt:") {
-		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "jwt:"), ":", 2)
+	if strings.HasPrefix(parentUser, "openid:") {
+		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "openid:"), ":", 2)
 		if len(tokens) == 2 {
 			return tokens[0], nil
 		}
@@ -408,7 +408,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// this is to ensure that ParentUser doesn't change and we get to use
 	// parentUser as per the requirements for service accounts for OpenID
 	// based logins.
-	cred.ParentUser = "jwt:" + subFromToken + ":" + issFromToken
+	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
