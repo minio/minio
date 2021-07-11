@@ -1,0 +1,156 @@
+{
+  "id": "2637127",
+  "name": "minio",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "167188",
+      "name": "上传",
+      "font_class": "shangchuan",
+      "unicode": "e663",
+      "unicode_decimal": 58979
+    },
+    {
+      "icon_id": "18170184",
+      "name": "登录,进入,进",
+      "font_class": "login-full",
+      "unicode": "e97e",
+      "unicode_decimal": 59774
+    },
+    {
+      "icon_id": "18171174",
+      "name": "排序,数量升序",
+      "font_class": "sort-asc-full",
+      "unicode": "ea21",
+      "unicode_decimal": 59937
+    },
+    {
+      "icon_id": "18171176",
+      "name": "排序,数量降序",
+      "font_class": "sort-desc-full",
+      "unicode": "ea22",
+      "unicode_decimal": 59938
+    },
+    {
+      "icon_id": "9559033",
+      "name": "菜单",
+      "font_class": "ziyuan",
+      "unicode": "e612",
+      "unicode_decimal": 58898
+    },
+    {
+      "icon_id": "19667987",
+      "name": "降序排序",
+      "font_class": "sort-ascending",
+      "unicode": "eaf3",
+      "unicode_decimal": 60147
+    },
+    {
+      "icon_id": "19667989",
+      "name": "升序排序",
+      "font_class": "sort-descending",
+      "unicode": "eaf4",
+      "unicode_decimal": 60148
+    },
+    {
+      "icon_id": "72668",
+      "name": "i",
+      "font_class": "i",
+      "unicode": "e67f",
+      "unicode_decimal": 59007
+    },
+    {
+      "icon_id": "1164945",
+      "name": "地球",
+      "font_class": "diqiu",
+      "unicode": "e62e",
+      "unicode_decimal": 58926
+    },
+    {
+      "icon_id": "12097431",
+      "name": "放大",
+      "font_class": "fangda",
+      "unicode": "e650",
+      "unicode_decimal": 58960
+    },
+    {
+      "icon_id": "19681083",
+      "name": "放大",
+      "font_class": "huaban18",
+      "unicode": "e667",
+      "unicode_decimal": 58983
+    },
+    {
+      "icon_id": "20009193",
+      "name": "harddrive硬盘",
+      "font_class": "harddriveyingpan",
+      "unicode": "e6db",
+      "unicode_decimal": 59099
+    },
+    {
+      "icon_id": "36529",
+      "name": "登录",
+      "font_class": "denglu",
+      "unicode": "e601",
+      "unicode_decimal": 58881
+    },
+    {
+      "icon_id": "693656",
+      "name": "登录统计",
+      "font_class": "denglutongji",
+      "unicode": "e669",
+      "unicode_decimal": 58985
+    },
+    {
+      "icon_id": "15644324",
+      "name": "登录",
+      "font_class": "denglu1",
+      "unicode": "e6bd",
+      "unicode_decimal": 59069
+    },
+    {
+      "icon_id": "256475",
+      "name": "Sign out",
+      "font_class": "signout",
+      "unicode": "e610",
+      "unicode_decimal": 58896
+    },
+    {
+      "icon_id": "6141181",
+      "name": "AK-YK_方块",
+      "font_class": "yk_fangkuai",
+      "unicode": "e600",
+      "unicode_decimal": 58880
+    },
+    {
+      "icon_id": "21009741",
+      "name": "添加文件",
+      "font_class": "tianjiawenjian",
+      "unicode": "f447",
+      "unicode_decimal": 62535
+    },
+    {
+      "icon_id": "1916548",
+      "name": "文件",
+      "font_class": "file",
+      "unicode": "e7e0",
+      "unicode_decimal": 59360
+    },
+    {
+      "icon_id": "20710439",
+      "name": "文件",
+      "font_class": "wenjian",
+      "unicode": "e69f",
+      "unicode_decimal": 59039
+    },
+    {
+      "icon_id": "7214849",
+      "name": "Go to right",
+      "font_class": "Gotoright",
+      "unicode": "e6c6",
+      "unicode_decimal": 59078
+    }
+  ]
+}

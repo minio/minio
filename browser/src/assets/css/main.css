@@ -1,0 +1,91 @@
+
+
+@font-face {
+  font-family: 'PTSerifCaption';
+  src: url('../font/PTSerifCaption.ttf') format('truetype');
+} 
+
+* {
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#app,
+.wrapper {
+    width: 100%;
+    height: 100%;
+    background-color: #fff;
+    font-size: 100px;
+}
+/* .wrapper{
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+} */
+
+body {
+    font-family: 'PingFang SC', "Helvetica Neue", Helvetica, "microsoft yahei", arial, STHeiTi, sans-serif;
+    min-height: 100%;
+    overflow: hidden;
+    /* overflow-y: scroll; */
+  }
+
+a {
+    text-decoration: none
+}
+
+.pcShow{
+    display: block;
+}
+.mobileShow{
+    display: none;
+}
+
+
+.move-enter-active,
+.move-leave-active {
+    transition: opacity .5s;
+}
+
+.move-enter,
+.move-leave {
+    opacity: 0;
+}
+
+.el-menu--popup{
+  background-color: #fff !important;
+}
+.el-menu--popup .el-menu-item{
+  background-color: #fff !important;
+  color: #101c4f !important;
+}
+
+.el-message__icon{
+  font-size: 35px;
+}
+.login .el-loading-mask{
+  background-color: transparent !important;
+}
+
+.el-message.messageTip{
+  z-index: 2100 !important;
+}
+
+@media screen and (max-width:1024px){
+  html,
+  body,
+  #app,
+  .wrapper {
+      font-size: 97px;
+  }
+}
+
+@media screen and (max-width:640px){
+
+  
+}
