@@ -428,6 +428,7 @@ func handleCommonEnvVars() {
 				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT value is environment variable")
 			}
+			u.Path = "" // remove any path component such as `/`
 			globalBrowserRedirectURL = u
 		}
 	}
