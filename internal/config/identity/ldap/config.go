@@ -28,6 +28,7 @@ import (
 	"time"
 
 	ldap "github.com/go-ldap/ldap/v3"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )
@@ -65,6 +66,12 @@ type Config struct {
 	LookupBindDN       string `json:"lookupBindDN"`
 	LookupBindPassword string `json:"lookupBindPassword"`
 
+	// LDAP root users and groups
+	RootUserNames     string        `json:"rootUserNames"`
+	RootUserNamesSet  set.StringSet `json:"-"`
+	RootUserGroups    string        `json:"rootUserGroupDNs"`
+	RootUserGroupsSet set.StringSet `json:"-"`
+
 	stsExpiryDuration time.Duration // contains converted value
 	tlsSkipVerify     bool          // allows skipping TLS verification
 	serverInsecure    bool          // allows plain text connection to LDAP server
@@ -87,6 +94,8 @@ const (
 	TLSSkipVerify      = "tls_skip_verify"
 	ServerInsecure     = "server_insecure"
 	ServerStartTLS     = "server_starttls"
+	RootUserNames      = "root_user_names"
+	RootUserGroups     = "root_user_groups"
 
 	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
 	EnvSTSExpiry          = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
@@ -100,6 +109,8 @@ const (
 	EnvGroupSearchBaseDN  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
 	EnvLookupBindDN       = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN"
 	EnvLookupBindPassword = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD"
+	EnvRootUserNames      = "MINIO_IDENTITY_LDAP_ROOT_USER_NAMES"
+	EnvRootUserGroups     = "MINIO_IDENTITY_LDAP_ROOT_USER_GROUPS"
 )
 
 var removedKeys = []string{
@@ -157,6 +168,14 @@ var (
 		},
 		config.KV{
 			Key:   LookupBindPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   RootUserNames,
+			Value: "",
+		},
+		config.KV{
+			Key:   RootUserGroups,
 			Value: "",
 		},
 	}
@@ -377,7 +396,17 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 		return "", nil, err
 	}
 
+	// isRoot := l.checkRoot(username, groups)
+
 	return bindDN, groups, nil
+}
+
+func (l *Config) CheckForRootPrivilege(username string, groups []string) bool {
+	isRoot := l.RootUserNamesSet.Contains(username)
+	for _, group := range groups {
+		isRoot = isRoot || l.RootUserGroupsSet.Contains(group)
+	}
+	return isRoot
 }
 
 // Connect connect to ldap server.
@@ -565,6 +594,13 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		l.GroupSearchBaseDistName = grpSearchBaseDN
 		l.GroupSearchBaseDistNames = strings.Split(l.GroupSearchBaseDistName, dnDelimiter)
 	}
+
+	// Root users and groups configuration
+	rootUserNames := env.Get(EnvRootUserNames, kvs.Get(RootUserNames))
+	l.RootUserNamesSet = set.CreateStringSet(strings.Split(rootUserNames, dnDelimiter)...)
+
+	rootUserGroups := env.Get(EnvRootUserGroups, kvs.Get(RootUserGroups))
+	l.RootUserGroupsSet = set.CreateStringSet(strings.Split(rootUserGroups, dnDelimiter)...)
 
 	return l, nil
 }

@@ -98,6 +98,18 @@ var (
 			Type:        "on|off",
 		},
 		config.HelpKV{
+			Key:         RootUserNames,
+			Type:        "list",
+			Description: `";" separated list of user names to be given full admin access to MinIO`,
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         RootUserGroups,
+			Type:        "list",
+			Description: `";" separated list of LDAP group DNs whose members will get full admin access to MinIO`,
+			Optional:    true,
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,

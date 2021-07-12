@@ -312,6 +312,13 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 		return cred, owner, s3Err
 	}
 
+	if !owner && globalLDAPConfig.Enabled {
+		// Check if user is configured as root/owner via LDAP
+		ldapUsername := claims[ldapUserN].(string)
+		groups := cred.Groups
+		owner = globalLDAPConfig.CheckForRootPrivilege(ldapUsername, groups)
+	}
+
 	// LocationConstraint is valid only for CreateBucketAction.
 	var locationConstraint string
 	if action == policy.CreateBucketAction {
