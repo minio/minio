@@ -64,13 +64,13 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser     = "ldapUser"
-	ldapUsername = "ldapUsername"
+	ldapUser  = "ldapUser"
+	ldapUserN = "ldapUsername"
 )
 
 func parseOpenIDParentUser(parentUser string) (userID string, err error) {
-	if strings.HasPrefix(parentUser, "jwt:") {
-		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "jwt:"), ":", 2)
+	if strings.HasPrefix(parentUser, "openid:") {
+		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "openid:"), ":", 2)
 		if len(tokens) == 2 {
 			return tokens[0], nil
 		}
@@ -408,7 +408,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// this is to ensure that ParentUser doesn't change and we get to use
 	// parentUser as per the requirements for service accounts for OpenID
 	// based logins.
-	cred.ParentUser = "jwt:" + subFromToken + ":" + issFromToken
+	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
@@ -543,9 +543,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim:     UTCNow().Add(expiryDur).Unix(),
-		ldapUsername: ldapUsername,
-		ldapUser:     ldapUserDN,
+		expClaim:  UTCNow().Add(expiryDur).Unix(),
+		ldapUser:  ldapUserDN,
+		ldapUserN: ldapUsername,
 	}
 
 	if len(sessionPolicyStr) > 0 {

@@ -984,18 +984,13 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Set delimiter value for "s3:delimiter" policy conditionals.
 	r.Header.Set("delimiter", SlashSeparator)
 
-	parentUser := cred.AccessKey
-	if cred.ParentUser != "" {
-		parentUser = cred.ParentUser
-	}
-
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     parentUser,
+			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketName,
-			ConditionValues: getConditionValues(r, "", parentUser, claims),
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			ObjectName:      "",
 			Claims:          claims,
@@ -1004,11 +999,11 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		}
 
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     parentUser,
+			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      bucketName,
-			ConditionValues: getConditionValues(r, "", parentUser, claims),
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			ObjectName:      "",
 			Claims:          claims,
