@@ -64,8 +64,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser     = "ldapUser"
-	ldapUsername = "ldapUsername"
+	ldapUser  = "ldapUser"
+	ldapUserN = "ldapUsername"
 )
 
 func parseOpenIDParentUser(parentUser string) (userID string, err error) {
@@ -543,9 +543,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim:     UTCNow().Add(expiryDur).Unix(),
-		ldapUsername: ldapUsername,
-		ldapUser:     ldapUserDN,
+		expClaim:  UTCNow().Add(expiryDur).Unix(),
+		ldapUser:  ldapUserDN,
+		ldapUserN: ldapUsername,
 	}
 
 	if len(sessionPolicyStr) > 0 {
