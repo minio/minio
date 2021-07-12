@@ -157,6 +157,9 @@ func sortIPs(ipList []string) []string {
 }
 
 func getConsoleEndpoints() (consoleEndpoints []string) {
+	if globalBrowserRedirectURL != nil {
+		return []string{globalBrowserRedirectURL.String()}
+	}
 	var ipList []string
 	if globalMinioConsoleHost == "" {
 		ipList = sortIPs(mustGetLocalIP4().ToSlice())
