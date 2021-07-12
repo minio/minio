@@ -12,10 +12,11 @@ services:
       - data1-2:/data2
     expose:
       - "9000"
+      - "9001"
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
-    command: server http://minio{1...4}/data{1...2}
+    command: server --console-address ":9001" http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -30,10 +31,11 @@ services:
       - data2-2:/data2
     expose:
       - "9000"
+      - "9001"
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
-    command: server http://minio{1...4}/data{1...2}
+    command: server --console-address ":9001" http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -48,10 +50,11 @@ services:
       - data3-2:/data2
     expose:
       - "9000"
+      - "9001"
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
-    command: server http://minio{1...4}/data{1...2}
+    command: server --console-address ":9001" http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -66,10 +69,11 @@ services:
       - data4-2:/data2
     expose:
       - "9000"
+      - "9001"
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
-    command: server http://minio{1...4}/data{1...2}
+    command: server --console-address ":9001" http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -83,6 +87,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "9000:9000"
+      - "9001:9001"
     depends_on:
       - minio1
       - minio2
