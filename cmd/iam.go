@@ -2042,7 +2042,7 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 
 // IsAllowedServiceAccount - checks if the given service account is allowed to perform
 // actions. The permission of the parent user is checked first
-func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) bool {
+func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser string) bool {
 	// Now check if we have a subject claim
 	p, ok := args.Claims[parentClaim]
 	if ok {
@@ -2053,7 +2053,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		}
 		// The parent claim in the session token should be equal
 		// to the parent detected in the backend
-		if parentInClaim != parent {
+		if parentInClaim != parentUser {
 			return false
 		}
 	} else {
@@ -2064,7 +2064,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	}
 
 	// Check policy for this service account.
-	svcPolicies, err := sys.PolicyDBGet(parent, false, args.Groups...)
+	svcPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
 	if err != nil {
 		logger.LogIf(GlobalContext, err)
 		return false
@@ -2097,7 +2097,10 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	}
 
 	parentArgs := args
-	parentArgs.AccountName = parent
+	parentArgs.AccountName = parentUser
+	// These are dynamic values set them appropriately.
+	parentArgs.ConditionValues["username"] = []string{parentUser}
+	parentArgs.ConditionValues["userid"] = []string{parentUser}
 
 	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
 	if !ok {
@@ -2136,7 +2139,11 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		return false
 	}
 
-	// Policy without Version string value reject it.
+	// This can only happen if policy was set but with an empty JSON.
+	if subPolicy.Version == "" && len(subPolicy.Statements) == 0 {
+		return combinedPolicy.IsAllowed(parentArgs)
+	}
+
 	if subPolicy.Version == "" {
 		return false
 	}
@@ -2254,6 +2261,10 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 		combinedPolicy.Statements = append(combinedPolicy.Statements,
 			availablePolicies[i].Statements...)
 	}
+
+	// These are dynamic values set them appropriately.
+	args.ConditionValues["username"] = []string{parentUser}
+	args.ConditionValues["userid"] = []string{parentUser}
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
