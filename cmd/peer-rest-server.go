@@ -129,8 +129,8 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		s.writeErrorResponse(w, errors.New("user-or-group is missing"))
 		return
 	}
-	_, isGroup := vars[peerRESTIsGroup]
 
+	_, isGroup := r.URL.Query()[peerRESTIsGroup]
 	if err := globalIAMSys.LoadPolicyMapping(objAPI, userOrGroup, isGroup); err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -384,7 +384,6 @@ func (s *peerRESTServer) NetInfoHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	if n != r.ContentLength {
 		err := fmt.Errorf("Subnet health: short read: expected %d found %d", r.ContentLength, n)
-
 		logger.LogIf(ctx, err)
 		w.Header().Set("FinalStatus", err.Error())
 		return
