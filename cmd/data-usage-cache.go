@@ -530,6 +530,18 @@ func (h dataUsageHash) Key() string {
 	return string(h)
 }
 
+func (d *dataUsageCache) flattenChildrens(root dataUsageEntry) (m map[string]dataUsageEntry) {
+	m = make(map[string]dataUsageEntry)
+	for id := range root.Children {
+		e := d.Cache[id]
+		if len(e.Children) > 0 {
+			e = d.flatten(e)
+		}
+		m[id] = e
+	}
+	return m
+}
+
 // flatten all children of the root into the root element and return it.
 func (d *dataUsageCache) flatten(root dataUsageEntry) dataUsageEntry {
 	for id := range root.Children {
