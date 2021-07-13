@@ -21,7 +21,10 @@ for more complete documentation.
 Run the following command to run the latest stable image of MinIO as a container using an ephemeral data volume:
 
 ```sh
-podman run -p 9000:9000 minio/minio server /data
+podman run \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  minio/minio server /data --console-address ":9001"
 ```
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Console, an embedded

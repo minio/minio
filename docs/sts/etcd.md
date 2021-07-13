@@ -10,7 +10,7 @@ etcd uses [gcr.io/etcd-development/etcd](https://console.cloud.google.com/gcr/im
 
 ```
 rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
-  docker rmi gcr.io/etcd-development/etcd:v3.3.9 || true && \
+  podman rmi gcr.io/etcd-development/etcd:v3.3.9 || true && \
   podman run \
   -p 2379:2379 \
   -p 2380:2380 \

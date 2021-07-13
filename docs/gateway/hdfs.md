@@ -23,11 +23,13 @@ minio gateway hdfs hdfs://namenode:8200
 ### Using Docker
 Using docker is experimental, most Hadoop environments are not dockerized and may require additional steps in getting this to work properly. You are better off just using the binary in this situation.
 ```
-podman run -p 9000:9000 \
+podman run \
+ -p 9000:9000 \
+ -p 9001:9001 \
  --name hdfs-s3 \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
- minio/minio gateway hdfs hdfs://namenode:8200
+ minio/minio gateway hdfs hdfs://namenode:8200 --console-address ":9001"
 ```
 
 ### Setup Kerberos

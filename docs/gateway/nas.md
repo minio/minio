@@ -9,11 +9,14 @@ MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple 
 Please ensure to replace `/shared/nasvol` with actual mount path.
 
 ```
-podman run -p 9000:9000 --name nas-s3 \
+podman run \
+ -p 9000:9000 \
+ -p 9001:9001 \
+ --name nas-s3 \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
  -v /shared/nasvol:/container/vol \
- minio/minio gateway nas /container/vol
+ minio/minio gateway nas /container/vol --console-address ":9001"
 ```
 
 ### Using Binary

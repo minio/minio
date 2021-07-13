@@ -61,7 +61,7 @@ sudo mount -o relatime /tmp/data /mnt/cache
 podman run --net=host -e MINIO_ROOT_USER={s3-access-key} -e MINIO_ROOT_PASSWORD={s3-secret-key} \
     -e MINIO_CACHE_DRIVES=/cache -e MINIO_CACHE_QUOTA=99 -e MINIO_CACHE_AFTER=0 \
     -e MINIO_CACHE_WATERMARK_LOW=90 -e MINIO_CACHE_WATERMARK_HIGH=95 \
-    -v /mnt/cache:/cache  minio/minio:latest gateway s3
+    -v /mnt/cache:/cache  minio/minio:latest gateway s3 --console-address ":9001"
 ```
 
 ## Assumptions
