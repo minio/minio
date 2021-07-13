@@ -154,15 +154,15 @@ func setRedirectHandler(h http.Handler) http.Handler {
 
 func guessIsBrowserReq(r *http.Request) bool {
 	aType := getRequestAuthType(r)
-	ok := strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && globalBrowserEnabled &&
-		(aType == authTypeJWT || aType == authTypeAnonymous)
-	return ok
+	return strings.Contains(r.Header.Get("User-Agent"), "Mozilla") &&
+		globalBrowserEnabled && aType == authTypeAnonymous
 }
 
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		read := r.Method == http.MethodGet || r.Method == http.MethodHead
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) {
+		if guessIsBrowserReq(r) && read {
 			// Fetch the redirect location if any.
 			if u := getRedirectLocation(r); u != nil {
 				// Employ a temporary re-direct.
