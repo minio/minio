@@ -76,11 +76,16 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 		for _, er := range pool.sets {
 			// Load bucket usage prefixes
 			if err := cache.load(ctx, er, bucket+slashSeparator+dataUsageCacheName); err == nil {
-				if root := cache.find(bucket); root != nil {
-					for id, usageInfo := range cache.flattenChildrens(*root) {
-						prefix := strings.TrimPrefix(id, bucket+slashSeparator)
-						m[prefix] += uint64(usageInfo.Size)
-					}
+				root := cache.find(bucket)
+				if root == nil {
+					// We dont have usage information for this bucket in this
+					// set, go to the next set
+					continue
+				}
+
+				for id, usageInfo := range cache.flattenChildrens(*root) {
+					prefix := strings.TrimPrefix(id, bucket+slashSeparator)
+					m[prefix] += uint64(usageInfo.Size)
 				}
 			}
 		}
