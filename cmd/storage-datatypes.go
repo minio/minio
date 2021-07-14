@@ -181,6 +181,17 @@ type FileInfo struct {
 	SuccessorModTime time.Time
 }
 
+// InlineData returns true if object contents are inlined alongside its metadata.
+func (fi FileInfo) InlineData() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]
+	return ok
+}
+
+// SetInlineData marks object (version) as inline.
+func (fi FileInfo) SetInlineData() {
+	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+}
+
 // VersionPurgeStatusKey denotes purge status in metadata
 const VersionPurgeStatusKey = "purgestatus"
 

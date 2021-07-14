@@ -1099,8 +1099,8 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
 			if len(fi.Data) > 0 {
-				if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; !ok {
-					fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+				if !fi.InlineData() {
+					fi.SetInlineData()
 				}
 			}
 			return fi, nil
