@@ -839,7 +839,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		for k, v := range objInfo.UserDefined {
 			popts.UserDefined[k] = v
 		}
-		popts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Completed.String()
+		popts.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 		if objInfo.UserTags != "" {
 			popts.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 		}
