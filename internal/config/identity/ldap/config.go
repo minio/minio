@@ -401,6 +401,8 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 	return bindDN, groups, nil
 }
 
+// CheckForRootPrivilege checks if the given username and list of group
+// memberships allows for root privileges according to the LDAP configuration.
 func (l *Config) CheckForRootPrivilege(username string, groups []string) bool {
 	isRoot := l.RootUserNamesSet.Contains(username)
 	for _, group := range groups {

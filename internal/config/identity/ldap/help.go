@@ -50,13 +50,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
-			Description: `Base LDAP DN to search for user DN`,
+			Description: `Base LDAP DN to search for user DN e.g. "cn=users,dc=myldapserver,dc=com`,
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         UserDNSearchFilter,
-			Description: `Search filter to lookup user DN`,
+			Description: `Search filter to lookup user DN e.g. "(uid=%s,cn=accounts,dc=myldapserver,dc=com)"`,
 			Optional:    true,
 			Type:        "string",
 		},
