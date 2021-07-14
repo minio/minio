@@ -984,6 +984,9 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Set delimiter value for "s3:delimiter" policy conditionals.
 	r.Header.Set("delimiter", SlashSeparator)
 
+	// Check if we are asked to return prefix usage
+	enablePrefixUsage := r.URL.Query().Get("prefix-usage") == "true"
+
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
@@ -1086,15 +1089,25 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	for _, bucket := range buckets {
 		rd, wr := isAllowedAccess(bucket.Name)
 		if rd || wr {
-			var size uint64
 			// Fetch the data usage of the current bucket
+			var size uint64
 			if !dataUsageInfo.LastUpdate.IsZero() {
 				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
 			}
+			// Fetch the prefix usage of the current bucket
+			var prefixUsage map[string]uint64
+			if enablePrefixUsage {
+				if pu, err := loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name); err == nil {
+					prefixUsage = pu
+				} else {
+					logger.LogIf(ctx, err)
+				}
+			}
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
-				Name:    bucket.Name,
-				Created: bucket.Created,
-				Size:    size,
+				Name:        bucket.Name,
+				Created:     bucket.Created,
+				Size:        size,
+				PrefixUsage: prefixUsage,
 				Access: madmin.AccountAccess{
 					Read:  rd,
 					Write: wr,

@@ -72,8 +72,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.StorageInfoHandler)))
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.DataUsageInfoHandler)))
-		// PrefixUsageInfo operations
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/prefixusageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.PrefixUsageInfoHandler)))
 
 		if globalIsDistErasure || globalIsErasure {
 			/// Heal operations
