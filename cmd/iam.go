@@ -2199,6 +2199,11 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool
 				availablePolicies[i].Statements...)
 	}
 
+	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
+	if hasSessionPolicy {
+		return isAllowedSP && combinedPolicy.IsAllowed(args)
+	}
+
 	return combinedPolicy.IsAllowed(args)
 }
 
@@ -2263,35 +2268,57 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	args.ConditionValues["userid"] = []string{parentUser}
 
 	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
-	if ok {
-		spolicyStr, ok := spolicy.(string)
-		if !ok {
-			// Sub policy if set, should be a string reject
-			// malformed/malicious requests.
-			return false
-		}
-
-		// Check if policy is parseable.
-		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-		if err != nil {
-			// Log any error in input session policy config.
-			logger.LogIf(GlobalContext, err)
-			return false
-		}
-
-		// Policy without Version string value reject it.
-		if subPolicy.Version == "" {
-			return false
-		}
-
-		// Sub policy is set and valid.
-		return combinedPolicy.IsAllowed(args) && subPolicy.IsAllowed(args)
+	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
+	if hasSessionPolicy {
+		return isAllowedSP && combinedPolicy.IsAllowed(args)
 	}
 
 	// Sub policy not set, this is most common since subPolicy
 	// is optional, use the inherited policies.
 	return combinedPolicy.IsAllowed(args)
+}
+
+func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAllowed bool) {
+	hasSessionPolicy = false
+	isAllowed = false
+
+	// Now check if we have a sessionPolicy.
+	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	if !ok {
+		return
+	}
+
+	hasSessionPolicy = true
+
+	spolicyStr, ok := spolicy.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return
+	}
+
+	policyBytes, err := base64.StdEncoding.DecodeString(spolicyStr)
+	if err != nil {
+		// Got a malformed base64 string
+		return
+	}
+	spolicyStr = string(policyBytes)
+
+	// Check if policy is parseable.
+	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	if err != nil {
+		// Log any error in input session policy config.
+		logger.LogIf(GlobalContext, err)
+		return
+	}
+
+	// Policy without Version string value reject it.
+	if subPolicy.Version == "" {
+		return
+	}
+
+	// Sub policy is set and valid.
+	return hasSessionPolicy, subPolicy.IsAllowed(args)
 }
 
 // GetCombinedPolicy returns a combined policy combining all policies
