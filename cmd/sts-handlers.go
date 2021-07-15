@@ -532,13 +532,16 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-	if len(ldapPolicies) == 0 && globalPolicyOPA == nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
-				ldapUserDN, strings.Join(groupDistNames, "`,`")))
-		return
+	// Root users do not need any policies to be applied.
+	if !globalLDAPConfig.CheckForRootPrivilege(ldapUsername, groupDistNames) {
+		// Check if this user or their groups have a policy applied.
+		ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
+		if len(ldapPolicies) == 0 && globalPolicyOPA == nil {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
+					ldapUserDN, strings.Join(groupDistNames, "`,`")))
+			return
+		}
 	}
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()

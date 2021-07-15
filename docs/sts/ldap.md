@@ -1,5 +1,33 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+**Table of Contents**
+
+- [AssumeRoleWithLDAPIdentity](#assumerolewithldapidentity)
+    - [Introduction](#introduction)
+    - [Configuring AD/LDAP on MinIO](#configuring-adldap-on-minio)
+        - [Supported modes of operation](#supported-modes-of-operation)
+            - [Lookup-Bind Mode](#lookup-bind-mode)
+            - [Username-Format Mode](#username-format-mode)
+        - [Group membership search](#group-membership-search)
+        - [Variable substitution in AD/LDAP configuration strings](#variable-substitution-in-adldap-configuration-strings)
+    - [Managing User/Group Access Policy](#managing-usergroup-access-policy)
+    - [Root or Admin users configuration](#root-or-admin-users-configuration)
+    - [API Request Parameters](#api-request-parameters)
+        - [LDAPUsername](#ldapusername)
+        - [LDAPPassword](#ldappassword)
+        - [Version](#version)
+        - [Policy](#policy)
+        - [Response Elements](#response-elements)
+        - [Errors](#errors)
+    - [Sample `POST` Request](#sample-post-request)
+    - [Sample Response](#sample-response)
+    - [Using LDAP STS API](#using-ldap-sts-api)
+    - [Explore Further](#explore-further)
+
+<!-- markdown-toc end -->
+
+
 ## Introduction
 
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server can be configured in two possible modes: either using a LDAP separate service account, called lookup-bind mode or in username-format mode. In either case the login flow for a user is the same as the STS flow:
@@ -29,14 +57,16 @@ MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e
 MINIO_IDENTITY_LDAP_STS_EXPIRY              (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN e.g. "cn=users,dc=myldapserver,dc=com
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN e.g. "(uid=%s,cn=accounts,dc=myldapserver,dc=com)"
 MINIO_IDENTITY_LDAP_USERNAME_FORMAT         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
 MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
 MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
+MINIO_IDENTITY_LDAP_ROOT_USER_NAMES         (list)      ";" separated list of user names to be given full admin access to MinIO
+MINIO_IDENTITY_LDAP_ROOT_USER_GROUPS        (list)      ";" separated list of LDAP group DNs whose members will get full admin access to MinIO
 MINIO_IDENTITY_LDAP_COMMENT                 (sentence)  optionally add a comment to this setting
 ```
 
@@ -135,6 +165,17 @@ mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=m
 
 **Please note that when AD/LDAP is configured, MinIO will not support long term users defined internally.** Only AD/LDAP users are allowed. In addition to this, the server will not support operations on users or groups using `mc admin user` or `mc admin group` commands except `mc admin user info` and `mc admin group info` to list set policies for users and groups. This is because users and groups are defined externally in AD/LDAP.
 
+
+## Root or Admin users configuration
+
+When the LDAP Identity Provider is configured, some users may be given root or administrative privileges. These users will have **full access** to the MinIO installation including **administrative and object storage access**. To configure this setting, the following (optional) parameters may be specified:
+
+```
+MINIO_IDENTITY_LDAP_ROOT_USER_NAMES         (list)      ";" separated list of user names to be given full admin access to MinIO
+MINIO_IDENTITY_LDAP_ROOT_USER_GROUPS        (list)      ";" separated list of LDAP group DNs whose members will get full admin access to MinIO
+```
+
+The first setting is a list of usernames (not DNs) that should be given root privilege. The second allows for configuring a set of LDAP groups whose members will given root privilege - this must be a list of group DNs. These users or groups do not need any access policy to be configured - they will automatically receive root privileges.
 
 ## API Request Parameters
 

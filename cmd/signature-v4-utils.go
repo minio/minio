@@ -135,8 +135,8 @@ func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		owner = cred.AccessKey == ucred.ParentUser
 		cred = ucred
+		owner = cred.AccessKey == ucred.ParentUser
 	}
 	return cred, owner, ErrNone
 }
