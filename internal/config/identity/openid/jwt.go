@@ -41,7 +41,10 @@ import (
 // Config - OpenID Config
 // RSA authentication target arguments
 type Config struct {
-	JWKS struct {
+	*sync.RWMutex
+
+	Enabled bool `json:"enabled"`
+	JWKS    struct {
 		URL *xnet.URL `json:"url"`
 	} `json:"jwks"`
 	URL          *xnet.URL `json:"url,omitempty"`
@@ -51,15 +54,15 @@ type Config struct {
 	DiscoveryDoc DiscoveryDoc
 	ClientID     string
 	ClientSecret string
-	provider     provider.Provider
-	publicKeys   map[string]crypto.PublicKey
-	transport    *http.Transport
-	closeRespFn  func(io.ReadCloser)
-	mutex        *sync.Mutex
+
+	provider    provider.Provider
+	publicKeys  map[string]crypto.PublicKey
+	transport   *http.Transport
+	closeRespFn func(io.ReadCloser)
 }
 
 // LookupUser lookup userid for the provider
-func (r *Config) LookupUser(userid string) (provider.User, error) {
+func (r Config) LookupUser(userid string) (provider.User, error) {
 	if r.provider != nil {
 		user, err := r.provider.LookupUser(userid)
 		if err != nil && err != provider.ErrAccessTokenExpired {
@@ -85,7 +88,7 @@ const (
 // InitializeProvider initializes if any additional vendor specific
 // information was provided, initialization will return an error
 // initial login fails.
-func (r *Config) InitializeProvider(kvs config.KVS) error {
+func (r Config) InitializeProvider(kvs config.KVS) error {
 	vendor := env.Get(EnvIdentityOpenIDVendor, kvs.Get(Vendor))
 	if vendor == "" {
 		return nil
@@ -101,17 +104,12 @@ func (r *Config) InitializeProvider(kvs config.KVS) error {
 }
 
 // ProviderEnabled returns true if any vendor specific provider is enabled.
-func (r *Config) ProviderEnabled() bool {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	return r.provider != nil
+func (r Config) ProviderEnabled() bool {
+	return r.Enabled && r.provider != nil
 }
 
 // InitializeKeycloakProvider - initializes keycloak provider
 func (r *Config) InitializeKeycloakProvider(adminURL, realm string) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	var err error
 	r.provider, err = provider.KeyCloak(
 		provider.WithAdminURL(adminURL),
@@ -124,8 +122,8 @@ func (r *Config) InitializeKeycloakProvider(adminURL, realm string) error {
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
 func (r *Config) PopulatePublicKey() error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
 	if r.JWKS.URL == nil || r.JWKS.URL.String() == "" {
 		return nil
@@ -179,11 +177,6 @@ func (r *Config) UnmarshalJSON(data []byte) error {
 
 	*r = ar
 	return nil
-}
-
-// JWT - rs client grants provider details.
-type JWT struct {
-	Config
 }
 
 // GetDefaultExpiration - returns the expiration seconds expected.
@@ -241,7 +234,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 }
 
 // Validate - validates the access token.
-func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
+func (r *Config) Validate(token, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512", "ES256", "ES384", "ES512",
@@ -253,7 +246,9 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
 		}
-		return p.publicKeys[kid], nil
+		r.RLock()
+		defer r.RUnlock()
+		return r.publicKeys[kid], nil
 	}
 
 	var claims jwtgo.MapClaims
@@ -261,7 +256,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	if err != nil {
 		// Re-populate the public key in-case the JWKS
 		// pubkeys are refreshed
-		if err = p.PopulatePublicKey(); err != nil {
+		if err = r.PopulatePublicKey(); err != nil {
 			return nil, err
 		}
 		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
@@ -282,7 +277,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 }
 
 // ID returns the provider name and authentication type.
-func (p *JWT) ID() ID {
+func (Config) ID() ID {
 	return "jwt"
 }
 
@@ -415,6 +410,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	}
 
 	c = Config{
+		RWMutex:      &sync.RWMutex{},
 		ClaimName:    env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
 		ClaimPrefix:  env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
 		RedirectURI:  env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
@@ -423,7 +419,6 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		ClientSecret: env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
 		transport:    transport,
 		closeRespFn:  closeRespFn,
-		mutex:        &sync.Mutex{}, // allocate for copying
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
@@ -477,10 +472,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		return c, err
 	}
 
-	return c, nil
-}
+	c.Enabled = true
 
-// NewJWT - initialize new jwt authenticator.
-func NewJWT(c Config) *JWT {
-	return &JWT{c}
+	return c, nil
 }
