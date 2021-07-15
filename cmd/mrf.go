@@ -48,7 +48,7 @@ type setInfo struct {
 	index, pool int
 }
 
-type mrfStateInfo struct {
+type mrfStats struct {
 	triggeredAt time.Time
 
 	itemsHealed uint64
@@ -58,6 +58,8 @@ type mrfStateInfo struct {
 	pendingBytes uint64
 }
 
+// mrfState sncapsulates all the information
+// related to the global background MRF.
 type mrfState struct {
 	ctx       context.Context
 	objectAPI ObjectLayer
@@ -75,6 +77,7 @@ type mrfState struct {
 	triggeredAt time.Time
 }
 
+// Add a partial S3 operation (put/delete) when one or more disks are offline.
 func (m *mrfState) addPartialOp(op partialOperation) {
 	if m == nil {
 		return
@@ -86,6 +89,7 @@ func (m *mrfState) addPartialOp(op partialOperation) {
 	}
 }
 
+// Receive the new set (disk) reconnection event
 func (m *mrfState) newSetReconnected(pool, set int) {
 	if m == nil {
 		return
@@ -100,7 +104,8 @@ func (m *mrfState) newSetReconnected(pool, set int) {
 	}
 }
 
-func (m *mrfState) getCurrentMRFRoundInfo() mrfStateInfo {
+// Get current MRF stats
+func (m *mrfState) getCurrentMRFRoundInfo() mrfStats {
 	m.mu.Lock()
 	triggeredAt := m.triggeredAt
 	itemsHealed := m.itemsHealed
@@ -110,10 +115,10 @@ func (m *mrfState) getCurrentMRFRoundInfo() mrfStateInfo {
 	m.mu.Unlock()
 
 	if pendingItems == 0 {
-		return mrfStateInfo{}
+		return mrfStats{}
 	}
 
-	return mrfStateInfo{
+	return mrfStats{
 		triggeredAt:  triggeredAt,
 		itemsHealed:  itemsHealed,
 		bytesHealed:  bytesHealed,
@@ -143,6 +148,7 @@ func (m *mrfState) maintainMRFList() {
 	}
 }
 
+// Reset current MRF stats
 func (m *mrfState) resetMRFInfoIfNoPendingOps() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -158,6 +164,9 @@ func (m *mrfState) resetMRFInfoIfNoPendingOps() {
 	m.triggeredAt = time.Time{}
 }
 
+// healRoutine listens to new disks reconnection events and
+// issues healing requests for queued objects belonging to the
+// corresponding erasure set
 func (m *mrfState) healRoutine() {
 	idler := time.NewTimer(mrfInfoResetInterval)
 	defer idler.Stop()
@@ -219,6 +228,7 @@ func (m *mrfState) healRoutine() {
 	}
 }
 
+// Initialize healing MRF
 func initHealMRF(ctx context.Context, obj ObjectLayer) {
 	globalMRFState = &mrfState{
 		ctx:               ctx,
