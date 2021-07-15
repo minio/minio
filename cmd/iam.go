@@ -1390,11 +1390,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 
 	// It is ok to ignore deletion error on the mapped policy
 	err := sys.store.deleteUserIdentity(context.Background(), accessKey, svcUser)
-	if err != nil {
-		// ignore if user is already deleted.
-		if err == errNoSuchUser {
-			return nil
-		}
+	if err != nil && err != errNoSuchUser {
 		return err
 	}
 

@@ -956,6 +956,13 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
 	writeSuccessNoContent(w)
 }
 
