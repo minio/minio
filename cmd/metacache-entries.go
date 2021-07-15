@@ -600,7 +600,9 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			out <- *best
 			last = best.name
 		} else {
-			console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
+			if serverDebugLog {
+				console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
+			}
 		}
 		// Replace entry we just sent.
 		if err := selectFrom(bestIdx); err != nil {
