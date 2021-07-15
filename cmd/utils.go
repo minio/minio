@@ -513,6 +513,7 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
+		MaxConnsPerHost:       1024,
 		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
 		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,

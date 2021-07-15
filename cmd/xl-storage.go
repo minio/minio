@@ -519,7 +519,6 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
-
 			diskID, err := s.GetDiskID()
 			if errors.Is(err, errUnformattedDisk) {
 				// if we found an unformatted disk then
@@ -530,7 +529,6 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 				// returned any error other than fresh disk
 				dcinfo.Healing = s.Healing() != nil
 			}
-
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
@@ -553,28 +551,7 @@ func (s *xlStorage) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
-// GetDiskID - returns the cached disk uuid
-func (s *xlStorage) GetDiskID() (string, error) {
-	s.RLock()
-	diskID := s.diskID
-	fileInfo := s.formatFileInfo
-	lastCheck := s.formatLastCheck
-	s.RUnlock()
-
-	// check if we have a valid disk ID that is less than 1 second old.
-	if fileInfo != nil && diskID != "" && time.Since(lastCheck) <= time.Second {
-		return diskID, nil
-	}
-
-	s.Lock()
-	// If somebody else updated the disk ID and changed the time, return what they got.
-	if !lastCheck.IsZero() && !s.formatLastCheck.Equal(lastCheck) && diskID != "" {
-		s.Unlock()
-		// Somebody else got the lock first.
-		return diskID, nil
-	}
-	s.Unlock()
-
+func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := Lstat(formatFile)
 	if err != nil {
@@ -582,20 +559,41 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		if osIsNotExist(err) {
 			if err = Access(s.diskPath); err == nil {
 				// Disk is present but missing `format.json`
-				return "", errUnformattedDisk
+				return nil, errUnformattedDisk
 			}
 			if osIsNotExist(err) {
-				return "", errDiskNotFound
+				return nil, errDiskNotFound
 			} else if osIsPermission(err) {
-				return "", errDiskAccessDenied
+				return nil, errDiskAccessDenied
 			}
 			logger.LogIf(GlobalContext, err) // log unexpected errors
-			return "", errCorruptedFormat
+			return nil, errCorruptedFormat
 		} else if osIsPermission(err) {
-			return "", errDiskAccessDenied
+			return nil, errDiskAccessDenied
 		}
 		logger.LogIf(GlobalContext, err) // log unexpected errors
-		return "", errCorruptedFormat
+		return nil, errCorruptedFormat
+	}
+	return fi, nil
+}
+
+// GetDiskID - returns the cached disk uuid
+func (s *xlStorage) GetDiskID() (string, error) {
+	s.RLock()
+	diskID := s.diskID
+	fileInfo := s.formatFileInfo
+	lastCheck := s.formatLastCheck
+
+	// check if we have a valid disk ID that is less than 1 second old.
+	if fileInfo != nil && diskID != "" && time.Since(lastCheck) <= time.Second {
+		s.RUnlock()
+		return diskID, nil
+	}
+	s.RUnlock()
+
+	fi, err := s.checkFormatJSON()
+	if err != nil {
+		return "", err
 	}
 
 	if xioutil.SameFile(fi, fileInfo) && diskID != "" {
@@ -606,6 +604,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		return diskID, nil
 	}
 
+	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	b, err := xioutil.ReadFile(formatFile)
 	if err != nil {
 		// If the disk is still not initialized.
