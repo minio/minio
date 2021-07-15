@@ -358,14 +358,19 @@ func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObjec
 //
 // Implements S3 compatible Upload Part API.
 func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	if err = uploadIDLock.GetRLock(ctx, globalOperationTimeout); err != nil {
+	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
+	if err = partIDLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return PartInfo{}, err
 	}
-	readLocked := true
+	defer partIDLock.Unlock()
+
+	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	if err = uploadIDRLock.GetRLock(ctx, globalOperationTimeout); err != nil {
+		return PartInfo{}, err
+	}
 	defer func() {
-		if readLocked {
-			uploadIDLock.RUnlock()
+		if uploadIDRLock != nil {
+			uploadIDRLock.RUnlock()
 		}
 	}()
 
@@ -388,6 +393,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllFileInfo(ctx, er.getDisks(), minioMetaMultipartBucket,
 		uploadIDPath, "")
+
+	// Unlock upload id locks before, so others can get it.
+	uploadIDRLock.RUnlock()
+	uploadIDRLock = nil
 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
@@ -468,14 +477,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}
 
-	// Unlock here before acquiring write locks all concurrent
-	// PutObjectParts would serialize here updating `xl.meta`
-	uploadIDLock.RUnlock()
-	readLocked = false
-	if err = uploadIDLock.GetLock(ctx, globalOperationTimeout); err != nil {
+	// Acquire write lock to update metadata.
+	uploadIDWLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	if err = uploadIDWLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return PartInfo{}, err
 	}
-	defer uploadIDLock.Unlock()
+	defer uploadIDWLock.Unlock()
 
 	// Validates if upload ID exists.
 	if err = er.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
