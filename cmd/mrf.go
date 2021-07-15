@@ -135,7 +135,9 @@ func (m *mrfState) maintainMRFList() {
 
 		m.pendingOps[fOp] = setInfo{index: fOp.setIndex, pool: fOp.poolIndex}
 		m.pendingItems++
-		m.pendingBytes += uint64(fOp.size)
+		if fOp.size > 0 {
+			m.pendingBytes += uint64(fOp.size)
+		}
 
 		m.mu.Unlock()
 	}
