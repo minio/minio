@@ -784,7 +784,9 @@ func (z *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
 				return nil
 			}
 		case DeleteType:
-			return errMethodNotAllowed
+			if version.DeleteMarker.VersionID == uv {
+				return errMethodNotAllowed
+			}
 		}
 	}
 
