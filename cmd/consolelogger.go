@@ -117,8 +117,8 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan
 	sys.pubsub.Subscribe(subCh, doneCh, filter)
 }
 
-// Validate if HTTPConsoleLoggerSys is valid, always returns nil right now
-func (sys *HTTPConsoleLoggerSys) Validate() error {
+// Init if HTTPConsoleLoggerSys is valid, always returns nil right now
+func (sys *HTTPConsoleLoggerSys) Init() error {
 	return nil
 }
 

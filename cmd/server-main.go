@@ -123,7 +123,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(globalMinioAddr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
@@ -144,7 +144,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
@@ -214,7 +214,7 @@ func newAllSubsystems() {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
+	globalBucketMonitor = bandwidth.NewMonitor(GlobalContext, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -537,6 +537,7 @@ func serverMain(ctx *cli.Context) {
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
+		initHealMRF(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
 	}
 
@@ -595,11 +596,11 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		go func() {
-			<-globalOSSignalCh
-			consoleSrv.Shutdown()
+			logger.FatalIf(consoleSrv.Serve(), "Unable to initialize console server")
 		}()
 
-		consoleSrv.Serve()
+		<-globalOSSignalCh
+		consoleSrv.Shutdown()
 	} else {
 		<-globalOSSignalCh
 	}

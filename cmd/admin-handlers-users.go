@@ -956,6 +956,13 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
 	writeSuccessNoContent(w)
 }
 
@@ -984,9 +991,10 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Set delimiter value for "s3:delimiter" policy conditionals.
 	r.Header.Set("delimiter", SlashSeparator)
 
+	// Check if we are asked to return prefix usage
+	enablePrefixUsage := r.URL.Query().Get("prefix-usage") == "true"
+
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
-		// Use the following trick to filter in place
-		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
@@ -1016,11 +1024,15 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	// Load the latest calculated data usage
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err != nil {
-		// log the error, continue with the accounting response
-		logger.LogIf(ctx, err)
+	var dataUsageInfo madmin.DataUsageInfo
+	var err error
+	if !globalIsGateway {
+		// Load the latest calculated data usage
+		dataUsageInfo, err = loadDataUsageFromBackend(ctx, objectAPI)
+		if err != nil {
+			// log the error, continue with the accounting response
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	// If etcd, dns federation configured list buckets from etcd.
@@ -1084,15 +1096,25 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	for _, bucket := range buckets {
 		rd, wr := isAllowedAccess(bucket.Name)
 		if rd || wr {
-			var size uint64
 			// Fetch the data usage of the current bucket
+			var size uint64
 			if !dataUsageInfo.LastUpdate.IsZero() {
 				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
 			}
+			// Fetch the prefix usage of the current bucket
+			var prefixUsage map[string]uint64
+			if enablePrefixUsage {
+				if pu, err := loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name); err == nil {
+					prefixUsage = pu
+				} else {
+					logger.LogIf(ctx, err)
+				}
+			}
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
-				Name:    bucket.Name,
-				Created: bucket.Created,
-				Size:    size,
+				Name:        bucket.Name,
+				Created:     bucket.Created,
+				Size:        size,
+				PrefixUsage: prefixUsage,
 				Access: madmin.AccountAccess{
 					Read:  rd,
 					Write: wr,

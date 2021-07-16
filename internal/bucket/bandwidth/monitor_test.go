@@ -18,7 +18,6 @@
 package bandwidth
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -29,52 +28,6 @@ import (
 const (
 	oneMiB uint64 = 1024 * 1024
 )
-
-func TestMonitor_GetThrottle(t *testing.T) {
-	type fields struct {
-		bucketThrottles map[string]*throttle
-		bucket          string
-		bpi             int64
-	}
-	t1 := newThrottle(context.Background(), 100, 1024*1024)
-	t2 := newThrottle(context.Background(), 200, 1024*1024)
-	tests := []struct {
-		name   string
-		fields fields
-		want   *throttle
-	}{
-		{
-			name: "Existing",
-			fields: fields{
-				bucketThrottles: map[string]*throttle{"bucket": t1},
-				bucket:          "bucket",
-				bpi:             100,
-			},
-			want: t1,
-		},
-		{
-			name: "new",
-			fields: fields{
-				bucketThrottles: map[string]*throttle{"bucket": t1},
-				bucket:          "bucket2",
-				bpi:             200,
-			},
-			want: t2,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			m := &Monitor{
-				bucketThrottle: tt.fields.bucketThrottles,
-			}
-			if got := m.throttleBandwidth(context.Background(), tt.fields.bucket, tt.fields.bpi, 1024*1024); got.bytesPerInterval != tt.want.bytesPerInterval {
-				t.Errorf("throttleBandwidth() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestMonitor_GetReport(t *testing.T) {
 	type fields struct {
@@ -136,12 +89,12 @@ func TestMonitor_GetReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			thr := throttle{
-				bytesPerSecond:   1024 * 1024,
-				clusterBandwidth: 1024 * 1024,
+				NodeBandwidthPerSec: 1024 * 1024,
 			}
 			m := &Monitor{
 				activeBuckets:  tt.fields.activeBuckets,
 				bucketThrottle: map[string]*throttle{"bucket": &thr},
+				NodeCount:      1,
 			}
 			m.activeBuckets["bucket"].updateExponentialMovingAverage(tt.fields.endTime)
 			got := m.GetReport(SelectBuckets())

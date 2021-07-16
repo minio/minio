@@ -9,7 +9,7 @@ This guide explains how to configure MinIO Server with TLS certificates on Linux
 
 ## <a name="install-minio-server"></a>1. Install MinIO Server
 
-Install MinIO Server using the instructions in the [MinIO Quickstart Guide](http://docs.min.io/docs/minio-quickstart-guide).
+Install MinIO Server using the instructions in the [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
 
 ## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with MinIO
 

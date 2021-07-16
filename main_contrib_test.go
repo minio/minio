@@ -40,7 +40,7 @@ import (
 //
 // 2. Run System-Tests (when using GitBash prefix this line with MSYS_NO_PATHCONV=1)
 //    Note the the SERVER_ENDPOINT must be reachable from inside the docker container (so don't use localhost!)
-// $ docker run -e MINT_MODE=full -e SERVER_ENDPOINT=192.168.47.11:9000 -e ACCESS_KEY=minioadmin -e SECRET_KEY=minioadmin -v /tmp/mint/log:/mint/log minio/mint
+// $ podman run -e MINT_MODE=full -e SERVER_ENDPOINT=192.168.47.11:9000 -e ACCESS_KEY=minioadmin -e SECRET_KEY=minioadmin -v /tmp/mint/log:/mint/log minio/mint
 //
 // 3. Stop system under test by sending SIGTERM
 // $ ctrl+c

@@ -72,9 +72,9 @@ const (
 	StorageClassSubSys   = "storage_class"
 	APISubSys            = "api"
 	CompressionSubSys    = "compression"
-	KmsKesSubSys         = "kms_kes"
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
+	AuditKafkaSubSys     = "audit_kafka"
 	HealSubSys           = "heal"
 	ScannerSubSys        = "scanner"
 	CrawlerSubSys        = "crawler"
@@ -107,9 +107,9 @@ var SubSystems = set.CreateStringSet(
 	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
-	KmsKesSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
+	AuditKafkaSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
@@ -144,7 +144,6 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
-	KmsKesSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
@@ -248,6 +247,23 @@ func (kvs KVS) String() string {
 		s.WriteString(KvSpaceSeparator)
 	}
 	return s.String()
+}
+
+// Merge environment values with on disk KVS, environment values overrides
+// anything on the disk.
+func Merge(cfgKVS map[string]KVS, envname string, defaultKVS KVS) map[string]KVS {
+	newCfgKVS := make(map[string]KVS)
+	for _, e := range env.List(envname) {
+		tgt := strings.TrimPrefix(e, envname+Default)
+		if tgt == envname {
+			tgt = Default
+		}
+		newCfgKVS[tgt] = defaultKVS
+	}
+	for tgt, kv := range cfgKVS {
+		newCfgKVS[tgt] = kv
+	}
+	return newCfgKVS
 }
 
 // Set sets a value, if not sets a default value.
@@ -358,8 +374,10 @@ func (c Config) RedactSensitiveInfo() Config {
 				}
 			}
 		}
-		nc[configName] = configVals
 	}
+
+	// Remove the server credentials altogether
+	nc.DelKVS(CredentialsSubSys)
 
 	return nc
 }

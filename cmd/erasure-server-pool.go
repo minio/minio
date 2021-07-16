@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -146,6 +145,39 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 		}
 	}
 	return res
+}
+
+// GetRawData will return all files with a given raw path to the callback.
+// Errors are ignored, only errors from the callback are returned.
+// For now only direct file paths are supported.
+func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error {
+	for _, s := range z.serverPools {
+		for _, disks := range s.erasureDisks {
+			for i, disk := range disks {
+				if disk == OfflineDisk {
+					continue
+				}
+				si, err := disk.StatInfoFile(ctx, volume, file)
+				if err != nil {
+					continue
+				}
+				r, err := disk.ReadFileStream(ctx, volume, file, 0, si.Size)
+				if err != nil {
+					continue
+				}
+				defer r.Close()
+				did, err := disk.GetDiskID()
+				if err != nil {
+					did = fmt.Sprintf("disk-%d", i)
+				}
+				err = fn(r, disk.Hostname(), did, pathJoin(volume, file), si.Size, si.ModTime)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (z *erasureServerPools) SetDriveCounts() []int {
@@ -617,114 +649,44 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		unlockOnDefer = true
 	}
 
-	lockType = noLock // do not take locks at lower levels
 	checkPrecondFn := opts.CheckPrecondFn
-	opts.CheckPrecondFn = nil
-	results := make([]struct {
-		zIdx int
-		gr   *GetObjectReader
-		err  error
-	}, len(z.serverPools))
-
-	var wg sync.WaitGroup
-	for i, pool := range z.serverPools {
-		wg.Add(1)
-		go func(i int, pool *erasureSets) {
-			defer wg.Done()
-			results[i].zIdx = i
-			results[i].gr, results[i].err = pool.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
-		}(i, pool)
-	}
-	wg.Wait()
-
-	// Sort the objInfos such that we always serve latest
-	// this is a defensive change to handle any duplicate
-	// content that may have been created, we always serve
-	// the latest object.
-	sort.Slice(results, func(i, j int) bool {
-		var mtimeI, mtimeJ time.Time
-
-		if results[i].gr != nil {
-			mtimeI = results[i].gr.ObjInfo.ModTime
-		}
-		if results[j].gr != nil {
-			mtimeJ = results[j].gr.ObjInfo.ModTime
-		}
-		// On tiebreaks, choose the earliest.
-		if mtimeI.Equal(mtimeJ) {
-			return results[i].zIdx < results[j].zIdx
-		}
-		return mtimeI.After(mtimeJ)
-	})
-
-	var found = -1
-	for i, res := range results {
-		if res.err == nil {
-			// Select earliest result
-			found = i
-			break
-		}
-		if !isErrObjectNotFound(res.err) && !isErrVersionNotFound(res.err) {
-			for _, res := range results {
-				res.gr.Close()
+	opts.CheckPrecondFn = nil // do not need to apply pre-conditions at lower layer.
+	opts.NoLock = true        // no locks needed at lower levels for getObjectInfo()
+	objInfo, zIdx, err := z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
+	if err != nil {
+		if objInfo.DeleteMarker {
+			if opts.VersionID == "" {
+				return &GetObjectReader{
+					ObjInfo: objInfo,
+				}, toObjectErr(errFileNotFound, bucket, object)
 			}
-			return nil, res.err
+			// Make sure to return object info to provide extra information.
+			return &GetObjectReader{
+				ObjInfo: objInfo,
+			}, toObjectErr(errMethodNotAllowed, bucket, object)
 		}
+		return nil, err
 	}
 
-	if found < 0 {
-		object = decodeDirObject(object)
-		if opts.VersionID != "" {
-			return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
-		}
-		return gr, ObjectNotFound{Bucket: bucket, Object: object}
-	}
-
-	// Check preconditions.
-	if checkPrecondFn != nil && checkPrecondFn(results[found].gr.ObjInfo) {
-		for _, res := range results {
-			res.gr.Close()
-		}
+	// check preconditions before reading the stream.
+	if checkPrecondFn != nil && checkPrecondFn(objInfo) {
 		return nil, PreConditionFailed{}
 	}
 
-	// Close all others
-	for i, res := range results {
-		if i == found {
-			continue
-		}
-		res.gr.Close()
-	}
-
-	return results[found].gr, nil
+	lockType = noLock // do not take locks at lower levels for GetObjectNInfo()
+	return z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 }
 
-func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return objInfo, err
-	}
-
+// getLatestObjectInfoWithIdx returns the objectInfo of the latest object from multiple pools (this function
+// is present in-case there were duplicate writes to both pools, this function also returns the
+// additional index where the latest object exists, that is used to start the GetObject stream.
+func (z *erasureServerPools) getLatestObjectInfoWithIdx(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, int, error) {
 	object = encodeDirObject(object)
-
-	if z.SinglePool() {
-		return z.serverPools[0].GetObjectInfo(ctx, bucket, object, opts)
-	}
-
-	// Lock the object before reading.
-	lk := z.NewNSLock(bucket, object)
-	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer lk.RUnlock(lkctx.Cancel)
-
 	results := make([]struct {
 		zIdx int
 		oi   ObjectInfo
 		err  error
 	}, len(z.serverPools))
-	opts.NoLock = true // avoid taking locks at lower levels for multi-pool setups.
 	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
 		wg.Add(1)
@@ -748,24 +710,52 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 		}
 		return a.oi.ModTime.After(b.oi.ModTime)
 	})
+
 	for _, res := range results {
-		// Return first found.
 		err := res.err
 		if err == nil {
-			return res.oi, nil
+			return res.oi, res.zIdx, nil
 		}
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			// some errors such as MethodNotAllowed for delete marker
 			// should be returned upwards.
-			return res.oi, err
+			return res.oi, res.zIdx, err
 		}
 	}
 
 	object = decodeDirObject(object)
 	if opts.VersionID != "" {
-		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+		return ObjectInfo{}, -1, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
-	return objInfo, ObjectNotFound{Bucket: bucket, Object: object}
+	return ObjectInfo{}, -1, ObjectNotFound{Bucket: bucket, Object: object}
+}
+
+func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
+		return objInfo, err
+	}
+
+	object = encodeDirObject(object)
+
+	if z.SinglePool() {
+		return z.serverPools[0].GetObjectInfo(ctx, bucket, object, opts)
+	}
+
+	if !opts.NoLock {
+		opts.NoLock = true // avoid taking locks at lower levels for multi-pool setups.
+
+		// Lock the object before reading.
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.RUnlock(lkctx.Cancel)
+	}
+
+	objInfo, _, err = z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
+	return objInfo, err
 }
 
 // PutObject - writes an object to least used erasure pool.
@@ -782,6 +772,16 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 			return ObjectInfo{}, toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
+	}
+	if !opts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		opts.NoLock = true
 	}
 
 	idx, err := z.getPoolIdx(ctx, bucket, object, data.Size())
@@ -894,6 +894,17 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
+	if !dstOpts.NoLock {
+		ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(dstBucket, dstObject, "newMultipartObject.lck"))
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx.Cancel)
+		dstOpts.NoLock = true
+	}
+
 	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
@@ -969,24 +980,16 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
 
-	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
-	// It requests unique blocks with a specific prefix.
-	// We skip scanning the parent directory for
-	// more objects matching the prefix.
-	ri := logger.GetReqInfo(ctx)
-	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		opts.discardResult = true
-		opts.Transient = true
-	}
-
-	merged, err := z.listPath(ctx, opts)
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
 	if versionMarker == "" {
+		o := listPathOptions{Marker: marker}
 		// If we are not looking for a specific version skip it.
-		marker, _ = parseMarker(marker)
-		merged.forwardPast(marker)
+
+		o.parseMarker()
+		merged.forwardPast(o.Marker)
 	}
 	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
 	loi.IsTruncated = err == nil && len(objects) > 0
@@ -1003,7 +1006,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	}
 	if loi.IsTruncated {
 		last := objects[len(objects)-1]
-		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+		loi.NextMarker = opts.encodeMarker(last.Name)
 		loi.NextVersionIDMarker = last.VersionID
 	}
 	return loi, nil
@@ -1021,8 +1024,7 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
-
-	merged, err := z.listPath(ctx, listPathOptions{
+	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
@@ -1030,13 +1032,14 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
-	})
+	}
+	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
-	marker, _ = parseMarker(marker)
-	merged.forwardPast(marker)
+
+	merged.forwardPast(opts.Marker)
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	objects := merged.fileInfos(bucket, prefix, delimiter)
@@ -1054,7 +1057,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	if loi.IsTruncated {
 		last := objects[len(objects)-1]
-		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+		loi.NextMarker = opts.encodeMarker(last.Name)
 	}
 	return loi, nil
 }

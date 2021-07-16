@@ -162,7 +162,7 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context) error {
 
 			// 2. copy policy to new loc.
 			mp := newMappedPolicy(policyName)
-			userType := regularUser
+			userType := regUser
 			path := getMappedPolicyPath(user, userType, false)
 			if err := ies.saveIAMConfig(ctx, mp, path); err != nil {
 				return err
@@ -335,7 +335,7 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
 	var basePrefix string
 	switch userType {
-	case srvAccUser:
+	case svcUser:
 		basePrefix = iamConfigServiceAccountsPrefix
 	case stsUser:
 		basePrefix = iamConfigSTSPrefix
@@ -432,7 +432,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 		basePrefix = iamConfigPolicyDBGroupsPrefix
 	} else {
 		switch userType {
-		case srvAccUser:
+		case svcUser:
 			basePrefix = iamConfigPolicyDBServiceAccountsPrefix
 		case stsUser:
 			basePrefix = iamConfigPolicyDBSTSUsersPrefix
@@ -567,7 +567,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 		case usersPrefix:
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigUsersPrefix))
-			ies.loadUser(ctx, accessKey, regularUser, sys.iamUsersMap)
+			ies.loadUser(ctx, accessKey, regUser, sys.iamUsersMap)
 		case stsPrefix:
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigSTSPrefix))
@@ -593,7 +593,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 		case svcPrefix:
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigServiceAccountsPrefix))
-			ies.loadUser(ctx, accessKey, srvAccUser, sys.iamUsersMap)
+			ies.loadUser(ctx, accessKey, svcUser, sys.iamUsersMap)
 		case groupsPrefix:
 			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigGroupsPrefix))
@@ -609,7 +609,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPolicyDBUsersPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
-			ies.loadMappedPolicy(ctx, user, regularUser, false, sys.iamUserPolicyMap)
+			ies.loadMappedPolicy(ctx, user, regUser, false, sys.iamUserPolicyMap)
 		case policyDBSTSUsersPrefix:
 			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPolicyDBSTSUsersPrefix)
@@ -619,7 +619,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPolicyDBGroupsPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
-			ies.loadMappedPolicy(ctx, user, regularUser, true, sys.iamGroupPolicyMap)
+			ies.loadMappedPolicy(ctx, user, regUser, true, sys.iamGroupPolicyMap)
 		}
 	case eventDelete:
 		switch {

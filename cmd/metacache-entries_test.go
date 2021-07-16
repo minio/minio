@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"reflect"
 	"sort"
 	"testing"
@@ -93,51 +92,6 @@ func Test_metaCacheEntries_merge(t *testing.T) {
 		if want[i] != name {
 			t.Errorf("unexpected name, want %q, got %q", want[i], name)
 		}
-	}
-}
-
-func Test_metaCacheEntries_dedupe(t *testing.T) {
-	org := loadMetacacheSampleEntries(t)
-	a, b := org.shallowClone(), org.shallowClone()
-
-	// Merge b into a
-	a.merge(b, -1)
-	if a.deduplicate(nil) {
-		t.Fatal("deduplicate returned duplicate entries left")
-	}
-	want := loadMetacacheSampleNames
-	got := a.entries().names()
-	if !reflect.DeepEqual(want, got) {
-		t.Errorf("got unexpected result: %#v", got)
-	}
-}
-
-func Test_metaCacheEntries_dedupe2(t *testing.T) {
-	org := loadMetacacheSampleEntries(t)
-	a, b := org.shallowClone(), org.shallowClone()
-
-	// Replace metadata in b
-	testMarker := []byte("sampleset")
-	for i := range b.o {
-		b.o[i].metadata = testMarker
-	}
-
-	// Merge b into a
-	a.merge(b, -1)
-	if a.deduplicate(func(existing, other *metaCacheEntry) (replace bool) {
-		a := bytes.Equal(existing.metadata, testMarker)
-		b := bytes.Equal(other.metadata, testMarker)
-		if a == b {
-			t.Fatal("got same number of testmarkers, only one should be given", a, b)
-		}
-		return b
-	}) {
-		t.Fatal("deduplicate returned duplicate entries left, we should always resolve")
-	}
-	want := loadMetacacheSampleNames
-	got := a.entries().names()
-	if !reflect.DeepEqual(want, got) {
-		t.Errorf("got unexpected result: %#v", got)
 	}
 }
 

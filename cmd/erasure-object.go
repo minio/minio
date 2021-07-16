@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/mimedb"
+	uatomic "go.uber.org/atomic"
 )
 
 // list all errors which can be ignored in object operations.
@@ -212,7 +213,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		pr.CloseWithError(nil)
 	}
 
-	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
+	return fn(pr, h, pipeCloser, nsUnlocker)
 }
 
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
@@ -505,6 +506,10 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 
 	g := errgroup.WithNErrs(len(disks))
 
+	fvID := mustGetUUID()
+	for index := range disks {
+		metadata[index].SetTierFreeVersionID(fvID)
+	}
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -518,6 +523,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if fi.Erasure.Index == 0 {
 				fi.Erasure.Index = index + 1
 			}
+
 			if fi.IsValid() {
 				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
 			}
@@ -603,19 +609,35 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 		// If we have offline disks upgrade the number of erasure codes for this object.
 		parityOrig := parityDrives
+
+		atomicParityDrives := uatomic.NewInt64(0)
+		// Start with current parityDrives
+		atomicParityDrives.Store(int64(parityDrives))
+
+		var wg sync.WaitGroup
 		for _, disk := range storageDisks {
-			if parityDrives >= len(storageDisks)/2 {
-				parityDrives = len(storageDisks) / 2
-				break
-			}
 			if disk == nil {
-				parityDrives++
+				atomicParityDrives.Inc()
 				continue
 			}
-			di, err := disk.DiskInfo(ctx)
-			if err != nil || di.ID == "" {
-				parityDrives++
+			if !disk.IsOnline() {
+				atomicParityDrives.Inc()
+				continue
 			}
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				di, err := disk.DiskInfo(ctx)
+				if err != nil || di.ID == "" {
+					atomicParityDrives.Inc()
+				}
+			}(disk)
+		}
+		wg.Wait()
+
+		parityDrives = int(atomicParityDrives.Load())
+		if parityDrives >= len(storageDisks)/2 {
+			parityDrives = len(storageDisks) / 2
 		}
 		if parityOrig != parityDrives {
 			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
@@ -804,16 +826,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	// Whether a disk was initially or becomes offline
-	// during this upload, send it to the MRF list.
-	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, fi.VersionID)
-		break
-	}
-
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -822,6 +834,17 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+
+	// Whether a disk was initially or becomes offline
+	// during this upload, send it to the MRF list.
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			continue
+		}
+		er.addPartial(bucket, object, fi.VersionID, fi.Size)
+		break
+	}
+
 	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object), nil
@@ -930,6 +953,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
 			VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 		}
+		versions[i].SetTierFreeVersionID(mustGetUUID())
 	}
 
 	// Initialize list of errors.
@@ -1006,7 +1030,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
-			er.addPartial(bucket, version.Name, version.VersionID)
+			er.addPartial(bucket, version.Name, version.VersionID, -1)
 			break
 		}
 	}
@@ -1102,7 +1126,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
-
+	fvID := mustGetUUID()
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
@@ -1115,6 +1139,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				TransitionStatus:              opts.Transition.Status,
 				ExpireRestored:                opts.Transition.ExpireRestored,
 			}
+			fi.SetTierFreeVersionID(fvID)
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
 				if opts.VersionID != "" {
@@ -1133,7 +1158,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	// Delete the object version on all disks.
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
+	dfi := FileInfo{
 		Name:                          object,
 		VersionID:                     opts.VersionID,
 		MarkDeleted:                   markDelete,
@@ -1143,7 +1168,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
 		TransitionStatus:              opts.Transition.Status,
 		ExpireRestored:                opts.Transition.ExpireRestored,
-	}, opts.DeleteMarker); err != nil {
+	}
+	dfi.SetTierFreeVersionID(fvID)
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1151,7 +1178,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 
@@ -1166,11 +1193,15 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartial(bucket, object, versionID string) {
-	select {
-	case er.mrfOpCh <- partialOperation{bucket: bucket, object: object, versionID: versionID}:
-	default:
-	}
+func (er erasureObjects) addPartial(bucket, object, versionID string, size int64) {
+	globalMRFState.addPartialOp(partialOperation{
+		bucket:    bucket,
+		object:    object,
+		versionID: versionID,
+		size:      size,
+		setIndex:  er.setIndex,
+		poolIndex: er.poolIndex,
+	})
 }
 
 func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
@@ -1395,7 +1426,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 	// Notify object deleted event.

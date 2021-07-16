@@ -336,3 +336,21 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 	}
 	return opts, nil
 }
+
+// get ObjectOptions for CompleteMultipart calls
+func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	mtime := UTCNow()
+	if mtimeStr != "" {
+		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		if err != nil {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
+			}
+		}
+	}
+	opts.MTime = mtime
+	return opts, nil
+}

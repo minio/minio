@@ -176,9 +176,6 @@ func (d *dataUpdateTracker) latestWithDir(dir string) uint64 {
 		return d.current()
 	}
 	if isReservedOrInvalidBucket(bucket, false) {
-		if d.debug {
-			console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, dir)
-		}
 		return d.current()
 	}
 
@@ -486,9 +483,6 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		}
 
 		if isReservedOrInvalidBucket(bucket, false) {
-			if d.debug {
-				console.Debugf(color.Green("dataUpdateTracker:")+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, in)
-			}
 			continue
 		}
 		split := splitPathDeterministic(in)
@@ -512,7 +506,6 @@ func (d *dataUpdateTracker) markDirty(bucket, prefix string) {
 	}
 
 	if isReservedOrInvalidBucket(bucket, false) && d.debug {
-		console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, prefix)
 		return
 	}
 	split := splitPathDeterministic(pathJoin(bucket, prefix))

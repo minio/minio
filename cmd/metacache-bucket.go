@@ -23,10 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -51,9 +49,8 @@ type bucketMetacache struct {
 	cachesRoot map[string][]string `msg:"-"`
 
 	// Internal state
-	mu        sync.RWMutex `msg:"-"`
-	updated   bool         `msg:"-"`
-	transient bool         `msg:"-"` // bucket used for non-persisted caches.
+	mu      sync.RWMutex `msg:"-"`
+	updated bool         `msg:"-"`
 }
 
 // newBucketMetacache creates a new bucketMetacache.
@@ -146,9 +143,6 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 
 // save the bucket cache to the object storage.
 func (b *bucketMetacache) save(ctx context.Context) error {
-	if b.transient {
-		return nil
-	}
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -195,76 +189,24 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		return metacache{}
 	}
 
-	if o.Bucket != b.bucket && !b.transient {
+	if o.Bucket != b.bucket {
 		logger.Info("bucketMetacache.findCache: bucket %s does not match this bucket %s", o.Bucket, b.bucket)
 		debug.PrintStack()
 		return metacache{}
 	}
 
-	extend := globalAPIConfig.getExtendListLife()
-
 	// Grab a write lock, since we create one if we cannot find one.
-	if o.Create {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-	} else {
-		b.mu.RLock()
-		defer b.mu.RUnlock()
-	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	// Check if exists already.
 	if c, ok := b.caches[o.ID]; ok {
+		c.lastHandout = time.Now()
+		b.caches[o.ID] = c
 		b.debugf("returning existing %v", o.ID)
 		return c
 	}
-	// No need to do expensive checks on transients.
-	if b.transient {
-		if !o.Create {
-			return metacache{
-				id:     o.ID,
-				bucket: o.Bucket,
-				status: scanStateNone,
-			}
-		}
 
-		// Create new
-		best := o.newMetacache()
-		b.caches[o.ID] = best
-		b.updated = true
-		b.debugf("returning new cache %s, bucket: %v", best.id, best.bucket)
-		return best
-	}
-
-	var best metacache
-	rootSplit := strings.Split(o.BaseDir, slashSeparator)
-	for i := range rootSplit {
-		interesting := b.cachesRoot[path.Join(rootSplit[:i+1]...)]
-
-		for _, id := range interesting {
-			cached, ok := b.caches[id]
-			if !ok {
-				continue
-			}
-			if !cached.matches(&o, extend) {
-				continue
-			}
-			if cached.started.Before(best.started) {
-				b.debugf("cache %s disregarded - we have a better", cached.id)
-				// If we already have a newer, keep that.
-				continue
-			}
-			best = cached
-		}
-	}
-	if !best.started.IsZero() {
-		if o.Create {
-			best.lastHandout = UTCNow()
-			b.caches[best.id] = best
-			b.updated = true
-		}
-		b.debugf("returning cached %s, status: %v, ended: %v", best.id, best.status, best.ended)
-		return best
-	}
 	if !o.Create {
 		return metacache{
 			id:     o.ID,
@@ -274,7 +216,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	}
 
 	// Create new and add.
-	best = o.newMetacache()
+	best := o.newMetacache()
 	b.caches[o.ID] = best
 	b.cachesRoot[best.root] = append(b.cachesRoot[best.root], best.id)
 	b.updated = true
@@ -286,19 +228,13 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 func (b *bucketMetacache) cleanup() {
 	// Entries to remove.
 	remove := make(map[string]struct{})
-	currentCycle := intDataUpdateTracker.current()
 
 	// Test on a copy
 	// cleanup is the only one deleting caches.
-	caches, rootIdx := b.cloneCaches()
+	caches, _ := b.cloneCaches()
 
 	for id, cache := range caches {
-		if b.transient && time.Since(cache.lastUpdate) > 10*time.Minute && time.Since(cache.lastHandout) > 10*time.Minute {
-			// Keep transient caches only for 15 minutes.
-			remove[id] = struct{}{}
-			continue
-		}
-		if !cache.worthKeeping(currentCycle) {
+		if !cache.worthKeeping() {
 			b.debugf("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
 			continue
@@ -308,41 +244,10 @@ func (b *bucketMetacache) cleanup() {
 			remove[id] = struct{}{}
 			continue
 		}
-		if cache.bucket != b.bucket && !b.transient {
+		if cache.bucket != b.bucket {
 			logger.Info("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
 			remove[id] = struct{}{}
 			continue
-		}
-	}
-
-	// Check all non-deleted against eachother.
-	// O(n*n), but should still be rather quick.
-	for id, cache := range caches {
-		if b.transient {
-			break
-		}
-		if _, ok := remove[id]; ok {
-			continue
-		}
-
-		interesting := interestingCaches(cache.root, rootIdx)
-		for _, id2 := range interesting {
-			if _, ok := remove[id2]; ok || id2 == id {
-				// Don't check against one we are already removing
-				continue
-			}
-			cache2, ok := caches[id2]
-			if !ok {
-				continue
-			}
-
-			if cache.canBeReplacedBy(&cache2) {
-				b.debugf("cache %s can be replaced by %s", id, cache2.id)
-				remove[id] = struct{}{}
-				break
-			} else {
-				b.debugf("cache %s can be NOT replaced by %s", id, cache2.id)
-			}
 		}
 	}
 
@@ -372,18 +277,6 @@ func (b *bucketMetacache) cleanup() {
 	for id := range remove {
 		b.deleteCache(id)
 	}
-}
-
-// Potentially interesting caches.
-// Will only add root if request is for root.
-func interestingCaches(root string, cachesRoot map[string][]string) []string {
-	var interesting []string
-	rootSplit := strings.Split(root, slashSeparator)
-	for i := range rootSplit {
-		want := path.Join(rootSplit[:i+1]...)
-		interesting = append(interesting, cachesRoot[want]...)
-	}
-	return interesting
 }
 
 // updateCacheEntry will update a cache.
@@ -434,25 +327,10 @@ func (b *bucketMetacache) deleteAll() {
 	defer b.mu.Unlock()
 
 	b.updated = true
-	if !b.transient {
-		// Delete all.
-		ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
-		b.caches = make(map[string]metacache, 10)
-		b.cachesRoot = make(map[string][]string, 10)
-		return
-	}
-
-	// Transient are in different buckets.
-	var wg sync.WaitGroup
-	for id := range b.caches {
-		wg.Add(1)
-		go func(cache metacache) {
-			defer wg.Done()
-			ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(cache.bucket, cache.id))
-		}(b.caches[id])
-	}
-	wg.Wait()
+	// Delete all.
+	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
 	b.caches = make(map[string]metacache, 10)
+	b.cachesRoot = make(map[string][]string, 10)
 }
 
 // deleteCache will delete a specific cache and all files related to it across the cluster.

@@ -410,21 +410,6 @@ func checkValidNotificationKeys(cfg config.Config) error {
 	return nil
 }
 
-func mergeTargets(cfgTargets map[string]config.KVS, envname string, defaultKVS config.KVS) map[string]config.KVS {
-	newCfgTargets := make(map[string]config.KVS)
-	for _, e := range env.List(envname) {
-		tgt := strings.TrimPrefix(e, envname+config.Default)
-		if tgt == envname {
-			tgt = config.Default
-		}
-		newCfgTargets[tgt] = defaultKVS
-	}
-	for tgt, kv := range cfgTargets {
-		newCfgTargets[tgt] = kv
-	}
-	return newCfgTargets
-}
-
 // DefaultKakfaKVS - default KV for kafka target
 var (
 	DefaultKafkaKVS = config.KVS{
@@ -494,7 +479,7 @@ var (
 // GetNotifyKafka - returns a map of registered notification 'kafka' targets
 func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs, error) {
 	kafkaTargets := make(map[string]target.KafkaArgs)
-	for k, kv := range mergeTargets(kafkaKVS, target.EnvKafkaEnable, DefaultKafkaKVS) {
+	for k, kv := range config.Merge(kafkaKVS, target.EnvKafkaEnable, DefaultKafkaKVS) {
 		enableEnv := target.EnvKafkaEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -675,7 +660,7 @@ var (
 // GetNotifyMQTT - returns a map of registered notification 'mqtt' targets
 func GetNotifyMQTT(mqttKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.MQTTArgs, error) {
 	mqttTargets := make(map[string]target.MQTTArgs)
-	for k, kv := range mergeTargets(mqttKVS, target.EnvMQTTEnable, DefaultMQTTKVS) {
+	for k, kv := range config.Merge(mqttKVS, target.EnvMQTTEnable, DefaultMQTTKVS) {
 		enableEnv := target.EnvMQTTEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -818,7 +803,7 @@ var (
 // GetNotifyMySQL - returns a map of registered notification 'mysql' targets
 func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs, error) {
 	mysqlTargets := make(map[string]target.MySQLArgs)
-	for k, kv := range mergeTargets(mysqlKVS, target.EnvMySQLEnable, DefaultMySQLKVS) {
+	for k, kv := range config.Merge(mysqlKVS, target.EnvMySQLEnable, DefaultMySQLKVS) {
 		enableEnv := target.EnvMySQLEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -969,7 +954,7 @@ var (
 // GetNotifyNATS - returns a map of registered notification 'nats' targets
 func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.NATSArgs, error) {
 	natsTargets := make(map[string]target.NATSArgs)
-	for k, kv := range mergeTargets(natsKVS, target.EnvNATSEnable, DefaultNATSKVS) {
+	for k, kv := range config.Merge(natsKVS, target.EnvNATSEnable, DefaultNATSKVS) {
 		enableEnv := target.EnvNATSEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1157,7 +1142,7 @@ var (
 // GetNotifyNSQ - returns a map of registered notification 'nsq' targets
 func GetNotifyNSQ(nsqKVS map[string]config.KVS) (map[string]target.NSQArgs, error) {
 	nsqTargets := make(map[string]target.NSQArgs)
-	for k, kv := range mergeTargets(nsqKVS, target.EnvNSQEnable, DefaultNSQKVS) {
+	for k, kv := range config.Merge(nsqKVS, target.EnvNSQEnable, DefaultNSQKVS) {
 		enableEnv := target.EnvNSQEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1262,7 +1247,7 @@ var (
 // GetNotifyPostgres - returns a map of registered notification 'postgres' targets
 func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.PostgreSQLArgs, error) {
 	psqlTargets := make(map[string]target.PostgreSQLArgs)
-	for k, kv := range mergeTargets(postgresKVS, target.EnvPostgresEnable, DefaultPostgresKVS) {
+	for k, kv := range config.Merge(postgresKVS, target.EnvPostgresEnable, DefaultPostgresKVS) {
 		enableEnv := target.EnvPostgresEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1371,7 +1356,7 @@ var (
 // GetNotifyRedis - returns a map of registered notification 'redis' targets
 func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs, error) {
 	redisTargets := make(map[string]target.RedisArgs)
-	for k, kv := range mergeTargets(redisKVS, target.EnvRedisEnable, DefaultRedisKVS) {
+	for k, kv := range config.Merge(redisKVS, target.EnvRedisEnable, DefaultRedisKVS) {
 		enableEnv := target.EnvRedisEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1472,7 +1457,7 @@ var (
 func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transport) (
 	map[string]target.WebhookArgs, error) {
 	webhookTargets := make(map[string]target.WebhookArgs)
-	for k, kv := range mergeTargets(webhookKVS, target.EnvWebhookEnable, DefaultWebhookKVS) {
+	for k, kv := range config.Merge(webhookKVS, target.EnvWebhookEnable, DefaultWebhookKVS) {
 		enableEnv := target.EnvWebhookEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1577,7 +1562,7 @@ var (
 // GetNotifyES - returns a map of registered notification 'elasticsearch' targets
 func GetNotifyES(esKVS map[string]config.KVS, transport *http.Transport) (map[string]target.ElasticsearchArgs, error) {
 	esTargets := make(map[string]target.ElasticsearchArgs)
-	for k, kv := range mergeTargets(esKVS, target.EnvElasticEnable, DefaultESKVS) {
+	for k, kv := range config.Merge(esKVS, target.EnvElasticEnable, DefaultESKVS) {
 		enableEnv := target.EnvElasticEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k
@@ -1719,7 +1704,7 @@ var (
 // GetNotifyAMQP - returns a map of registered notification 'amqp' targets
 func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, error) {
 	amqpTargets := make(map[string]target.AMQPArgs)
-	for k, kv := range mergeTargets(amqpKVS, target.EnvAMQPEnable, DefaultAMQPKVS) {
+	for k, kv := range config.Merge(amqpKVS, target.EnvAMQPEnable, DefaultAMQPKVS) {
 		enableEnv := target.EnvAMQPEnable
 		if k != config.Default {
 			enableEnv = enableEnv + config.Default + k

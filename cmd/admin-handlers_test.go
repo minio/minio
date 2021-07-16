@@ -77,7 +77,7 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
-	registerAdminRouter(adminRouter, true, true)
+	registerAdminRouter(adminRouter, true)
 
 	return &adminErasureTestBed{
 		erasureDirs: erasureDirs,

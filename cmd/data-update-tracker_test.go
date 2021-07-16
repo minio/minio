@@ -51,7 +51,7 @@ func (t *testingLogger) String() string {
 	return ""
 }
 
-func (t *testingLogger) Validate() error {
+func (t *testingLogger) Init() error {
 	return nil
 }
 

@@ -174,7 +174,7 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 			// Special case for AD/LDAP STS users
 			if k == ldapUser {
 				args["user"] = []string{vStr}
-			} else if k == ldapUsername {
+			} else if k == ldapUserN {
 				args["username"] = []string{vStr}
 			} else {
 				args[k] = []string{vStr}

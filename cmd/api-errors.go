@@ -115,6 +115,7 @@ const (
 	ErrReplicationDestinationMissingLock
 	ErrRemoteTargetNotFoundError
 	ErrReplicationRemoteConnectionError
+	ErrReplicationBandwidthLimitError
 	ErrBucketRemoteIdenticalToSource
 	ErrBucketRemoteAlreadyExists
 	ErrBucketRemoteLabelInUse
@@ -859,6 +860,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioAdminReplicationRemoteConnectionError",
 		Description:    "Remote service connection error - please check remote service credentials and target bucket",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationBandwidthLimitError: {
+		Code:           "XMinioAdminReplicationBandwidthLimitError",
+		Description:    "Bandwidth limit for remote target must be atleast 100MBps",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNoMatchingRuleError: {
 		Code:           "XMinioReplicationNoMatchingRule",

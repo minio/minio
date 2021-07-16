@@ -21,12 +21,13 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/url"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
+	xnet "github.com/minio/pkg/net"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/dns"
@@ -153,18 +154,17 @@ func setRedirectHandler(h http.Handler) http.Handler {
 
 func guessIsBrowserReq(r *http.Request) bool {
 	aType := getRequestAuthType(r)
-	ok := strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && globalBrowserEnabled &&
-		(aType == authTypeJWT || aType == authTypeAnonymous)
-	return ok
+	return strings.Contains(r.Header.Get("User-Agent"), "Mozilla") &&
+		globalBrowserEnabled && aType == authTypeAnonymous
 }
 
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		read := r.Method == http.MethodGet || r.Method == http.MethodHead
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) {
+		if guessIsBrowserReq(r) && read {
 			// Fetch the redirect location if any.
-			u := getRedirectLocation(r)
-			if u != nil {
+			if u := getRedirectLocation(r); u != nil {
 				// Employ a temporary re-direct.
 				http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 				return
@@ -183,34 +183,40 @@ func shouldProxy() bool {
 // redirectable, this is purely internal function and
 // serves only limited purpose on redirect-handler for
 // browser requests.
-func getRedirectLocation(r *http.Request) *url.URL {
-	hostname, _, _ := net.SplitHostPort(r.Host)
-	if hostname == "" {
-		hostname = r.Host
+func getRedirectLocation(r *http.Request) *xnet.URL {
+	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+	if err != nil {
+		return nil
 	}
-	var rurl = &url.URL{
-		Host: net.JoinHostPort(hostname, globalMinioConsolePort),
+	for _, prefix := range []string{
+		"favicon-16x16.png",
+		"favicon-32x32.png",
+		"favicon-96x96.png",
+		"index.html",
+		minioReservedBucket,
+	} {
+		bucket, _ := path2BucketObject(resource)
+		if path.Clean(bucket) == prefix || resource == slashSeparator {
+			if globalBrowserRedirectURL != nil {
+				return globalBrowserRedirectURL
+			}
+			hostname, _, _ := net.SplitHostPort(r.Host)
+			if hostname == "" {
+				hostname = r.Host
+			}
+			return &xnet.URL{
+				Host: net.JoinHostPort(hostname, globalMinioConsolePort),
+				Scheme: func() string {
+					scheme := "http"
+					if r.TLS != nil {
+						scheme = "https"
+					}
+					return scheme
+				}(),
+			}
+		}
 	}
-	urlPath := r.URL.Path
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	rurl.Scheme = scheme
-	if urlPath == minioReservedBucketPath {
-		rurl.Path = minioReservedBucketPath + SlashSeparator
-	}
-	if contains([]string{
-		SlashSeparator,
-		"/webrpc",
-		"/login",
-		"/favicon-16x16.png",
-		"/favicon-32x32.png",
-		"/favicon-96x96.png",
-	}, urlPath) {
-		rurl.Path = minioReservedBucketPath + urlPath
-	}
-	return rurl
+	return nil
 }
 
 // guessIsHealthCheckReq - returns true if incoming request looks

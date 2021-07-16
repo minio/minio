@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/event"
@@ -163,7 +164,15 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 		return err
 	}
 
-	if target.args.AuthToken != "" {
+	// Verify if the authToken already contains
+	// <Key> <Token> like format, if this is
+	// already present we can blindly use the
+	// authToken as is instead of adding 'Bearer'
+	tokens := strings.Fields(target.args.AuthToken)
+	switch len(tokens) {
+	case 2:
+		req.Header.Set("Authorization", target.args.AuthToken)
+	case 1:
 		req.Header.Set("Authorization", "Bearer "+target.args.AuthToken)
 	}
 

@@ -468,7 +468,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getAllFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
@@ -2058,6 +2058,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
+		// Empty fi.VersionID indicates that versioning is either
+		// suspended or disabled on this bucket. RenameData will replace
+		// the 'null' version. We add a free-version to track its tiered
+		// content for asynchronous deletion.
+		xlMeta.AddFreeVersion(fi)
 	}
 
 	if err = xlMeta.AddVersion(fi); err != nil {
@@ -2278,4 +2283,33 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	}
 
 	return nil
+}
+
+func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return stat, err
+	}
+
+	// Stat a volume entry.
+	if err = Access(volumeDir); err != nil {
+		if osIsNotExist(err) {
+			return stat, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return stat, errFaultyDisk
+		} else if osIsPermission(err) {
+			return stat, errVolumeAccessDenied
+		}
+		return stat, err
+	}
+	filePath := pathJoin(volumeDir, path)
+	if err := checkPathLength(filePath); err != nil {
+		return stat, err
+	}
+	st, _ := Lstat(filePath)
+	if st == nil {
+		return stat, errPathNotFound
+	}
+
+	return StatInfo{ModTime: st.ModTime(), Size: st.Size()}, nil
 }

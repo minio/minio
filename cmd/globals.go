@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
+	xnet "github.com/minio/pkg/net"
 )
 
 // minio configuration related constants.
@@ -118,8 +119,6 @@ const (
 var globalCLIContext = struct {
 	JSON, Quiet    bool
 	Anonymous      bool
-	Addr           string
-	ConsoleAddr    string
 	StrictS3Compat bool
 }{}
 
@@ -139,6 +138,10 @@ var (
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
 
+	// Custom browser redirect URL, not set by default
+	// and it is automatically deduced.
+	globalBrowserRedirectURL *xnet.URL
+
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
@@ -146,8 +149,7 @@ var (
 	globalServerRegion = globalMinioDefaultRegion
 
 	// MinIO local server address (in `host:port` format)
-	globalMinioAddr        = ""
-	globalMinioConsoleAddr = ""
+	globalMinioAddr = ""
 
 	// MinIO default port, can be changed through command line.
 	globalMinioPort            = GlobalMinioDefaultPort
@@ -290,6 +292,8 @@ var (
 	// The always present healing routine ready to heal objects
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
+
+	globalMRFState *mrfState
 
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool

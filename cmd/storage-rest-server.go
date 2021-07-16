@@ -37,7 +37,7 @@ import (
 
 	"github.com/tinylib/msgp/msgp"
 
-	jwtreq "github.com/dgrijalva/jwt-go/request"
+	jwtreq "github.com/golang-jwt/jwt/request"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
@@ -188,6 +188,7 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		defer wg.Done()
 		for update := range updates {
 			// Write true bool to indicate update.
+			var err error
 			if err = respW.WriteBool(true); err == nil {
 				err = update.EncodeMsg(respW)
 			}
@@ -210,6 +211,10 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 	wg.Wait()
 	if err = respW.WriteBool(false); err == nil {
 		err = usageInfo.EncodeMsg(respW)
+	}
+	if err != nil {
+		resp.CloseWithError(err)
+		return
 	}
 	resp.CloseWithError(respW.Flush())
 }
@@ -277,7 +282,7 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	forceDelete := vars[storageRESTForceDelete] == "true"
+	forceDelete := r.URL.Query().Get(storageRESTForceDelete) == "true"
 	err := s.storage.DeleteVol(r.Context(), volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -1033,6 +1038,23 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	}
 }
 
+// StatInfoFile returns file stat info.
+func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+	done := keepHTTPResponseAlive(w)
+	si, err := s.storage.StatInfoFile(r.Context(), volume, filePath)
+	done(err)
+	if err != nil {
+		return
+	}
+	msgp.Encode(w, &si)
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
 	storageDisks := make([][]*xlStorage, len(endpointServerPools))
@@ -1124,6 +1146,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile)).
+				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		}
 	}
 }

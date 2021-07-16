@@ -23,8 +23,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/url"
+	"os"
 
 	"github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
@@ -37,12 +39,24 @@ var (
 	// LDAP credentials
 	ldapUsername string
 	ldapPassword string
+
+	// Display credentials flag
+	displayCreds bool
+
+	// Bucket to list
+	bucketToList string
+
+	// Session policy file
+	sessionPolicyFile string
 )
 
 func init() {
 	flag.StringVar(&stsEndpoint, "sts-ep", "http://localhost:9000", "STS endpoint")
 	flag.StringVar(&ldapUsername, "u", "", "AD/LDAP Username")
 	flag.StringVar(&ldapPassword, "p", "", "AD/LDAP Password")
+	flag.BoolVar(&displayCreds, "d", false, "Only show generated credentials")
+	flag.StringVar(&bucketToList, "b", "", "Bucket to list (defaults to ldap username)")
+	flag.StringVar(&sessionPolicyFile, "s", "", "File containing session policy to apply to the STS request")
 }
 
 func main() {
@@ -56,11 +70,30 @@ func main() {
 	// LDAP STS API.
 
 	// Initialize LDAP credentials
-	li, _ := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
+	var li *cr.Credentials
+	var err error
+	if sessionPolicyFile == "" {
+		li, err = cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
+	} else {
+		var policy string
+		if f, err := os.Open(sessionPolicyFile); err != nil {
+			log.Fatalf("Unable to open session policy file: %v", sessionPolicyFile, err)
+		} else {
+			bs, err := ioutil.ReadAll(f)
+			if err != nil {
+				log.Fatalf("Error reading session policy file: %v", err)
+			}
+			policy = string(bs)
+		}
+		li, err = cr.NewLDAPIdentityWithSessionPolicy(stsEndpoint, ldapUsername, ldapPassword, policy)
+	}
+	if err != nil {
+		log.Fatalf("Error initializing LDAP Identity: %v", err)
+	}
 
 	stsEndpointURL, err := url.Parse(stsEndpoint)
 	if err != nil {
-		log.Fatalf("Err: %v", err)
+		log.Fatalf("Error parsing sts endpoint: %v", err)
 	}
 
 	opts := &minio.Options{
@@ -68,22 +101,35 @@ func main() {
 		Secure: stsEndpointURL.Scheme == "https",
 	}
 
-	fmt.Println(li.Get())
+	v, err := li.Get()
+	if err != nil {
+		log.Fatalf("Error retrieving STS credentials: %v", err)
+	}
+
+	if displayCreds {
+		fmt.Println("Only displaying credentials:")
+		fmt.Println("AccessKeyID:", v.AccessKeyID)
+		fmt.Println("SecretAccessKey:", v.SecretAccessKey)
+		fmt.Println("SessionToken:", v.SessionToken)
+		return
+	}
+
 	// Use generated credentials to authenticate with MinIO server
 	minioClient, err := minio.New(stsEndpointURL.Host, opts)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Error initializing client: ", err)
 	}
 
 	// Use minIO Client object normally like the regular client.
-	fmt.Println("Calling list objects with temp creds: ")
-	objCh := minioClient.ListObjects(context.Background(), ldapUsername, minio.ListObjectsOptions{})
+	if bucketToList == "" {
+		bucketToList = ldapUsername
+	}
+	fmt.Printf("Calling list objects on bucket named `%s` with temp creds:\n===\n", bucketToList)
+	objCh := minioClient.ListObjects(context.Background(), bucketToList, minio.ListObjectsOptions{})
 	for obj := range objCh {
 		if obj.Err != nil {
-			if err != nil {
-				log.Fatalln(err)
-			}
+			log.Fatalf("Listing error: %v", obj.Err)
 		}
-		fmt.Println(obj)
+		fmt.Printf("Key: %s\nSize: %d\nLast Modified: %s\n===\n", obj.Key, obj.Size, obj.LastModified)
 	}
 }

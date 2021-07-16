@@ -474,6 +474,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, nil
 	}
 	l.Enabled = true
+	l.rootCAs = rootCAs
 	l.ServerAddr = ldapServer
 	l.stsExpiryDuration = defaultLDAPExpiry
 	if v := env.Get(EnvSTSExpiry, kvs.Get(STSExpiry)); v != "" {
@@ -565,6 +566,5 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		l.GroupSearchBaseDistNames = strings.Split(l.GroupSearchBaseDistName, dnDelimiter)
 	}
 
-	l.rootCAs = rootCAs
 	return l, nil
 }

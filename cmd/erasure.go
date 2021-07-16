@@ -39,15 +39,6 @@ import (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// partialOperation is a successful upload/delete of an object
-// but not written in all disks (having quorum)
-type partialOperation struct {
-	bucket    string
-	object    string
-	versionID string
-	failedSet int
-}
-
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
 	GatewayUnsupported
@@ -77,8 +68,6 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers,
 	// legacy objects.
 	bpOld *bpool.BytePoolCap
-
-	mrfOpCh chan partialOperation
 
 	deletedCleanupSleeper *dynamicSleeper
 }
@@ -484,11 +473,11 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				updates := make(chan dataUsageEntry, 1)
 				var wg sync.WaitGroup
 				wg.Add(1)
-				go func() {
+				go func(name string) {
 					defer wg.Done()
 					for update := range updates {
 						bucketResults <- dataUsageEntryInfo{
-							Name:   cache.Info.Name,
+							Name:   name,
 							Parent: dataUsageRoot,
 							Entry:  update,
 						}
@@ -496,7 +485,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 							console.Debugln("bucket", bucket.Name, "got update", update)
 						}
 					}
-				}()
+				}(cache.Info.Name)
 
 				// Calc usage
 				before := cache.Info.LastUpdate

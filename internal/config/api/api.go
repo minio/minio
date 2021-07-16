@@ -36,7 +36,6 @@ const (
 	apiCorsAllowOrigin          = "cors_allow_origin"
 	apiRemoteTransportDeadline  = "remote_transport_deadline"
 	apiListQuorum               = "list_quorum"
-	apiExtendListCacheLife      = "extend_list_cache_life"
 	apiReplicationWorkers       = "replication_workers"
 	apiReplicationFailedWorkers = "replication_failed_workers"
 
@@ -46,7 +45,6 @@ const (
 	EnvAPICorsAllowOrigin          = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline  = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPIListQuorum               = "MINIO_API_LIST_QUORUM"
-	EnvAPIExtendListCacheLife      = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
 	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
@@ -86,10 +84,6 @@ var (
 			Value: "optimal",
 		},
 		config.KV{
-			Key:   apiExtendListCacheLife,
-			Value: "0s",
-		},
-		config.KV{
 			Key:   apiReplicationWorkers,
 			Value: "250",
 		},
@@ -108,7 +102,6 @@ type Config struct {
 	CorsAllowOrigin          []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline  time.Duration `json:"remote_transport_deadline"`
 	ListQuorum               string        `json:"list_quorum"`
-	ExtendListLife           time.Duration `json:"extend_list_cache_life"`
 	ReplicationWorkers       int           `json:"replication_workers"`
 	ReplicationFailedWorkers int           `json:"replication_failed_workers"`
 }
@@ -144,6 +137,7 @@ func (sCfg Config) GetListQuorum() int {
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	// remove this since we have removed this already.
 	kvs.Delete(apiReadyDeadline)
+	kvs.Delete("extend_list_cache_life")
 
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
@@ -183,11 +177,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, errors.New("invalid value for list strict quorum")
 	}
 
-	listLife, err := time.ParseDuration(env.Get(EnvAPIExtendListCacheLife, kvs.Get(apiExtendListCacheLife)))
-	if err != nil {
-		return cfg, err
-	}
-
 	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.Get(apiReplicationWorkers)))
 	if err != nil {
 		return cfg, err
@@ -213,7 +202,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		CorsAllowOrigin:          corsAllowOrigin,
 		RemoteTransportDeadline:  remoteTransportDeadline,
 		ListQuorum:               listQuorum,
-		ExtendListLife:           listLife,
 		ReplicationWorkers:       replicationWorkers,
 		ReplicationFailedWorkers: replicationFailedWorkers,
 	}, nil

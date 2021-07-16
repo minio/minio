@@ -109,15 +109,21 @@ func init() {
 const consolePrefix = "CONSOLE_"
 
 func minioConfigToConsoleFeatures() {
-	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", restapi.RandomCharString(16))
-	os.Setenv("CONSOLE_PBKDF_SALT", restapi.RandomCharString(8))
+	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID)
+	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID)
 	os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
-	if value := os.Getenv("MINIO_LOG_QUERY_URL"); value != "" {
+	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
+		if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
+			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
+		}
 	}
 	// Enable if prometheus URL is set.
-	if value := os.Getenv("MINIO_PROMETHEUS_URL"); value != "" {
+	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
+		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
+			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
+		}
 	}
 	// Enable if LDAP is enabled.
 	if globalLDAPConfig.Enabled {
@@ -126,13 +132,19 @@ func minioConfigToConsoleFeatures() {
 	// if IDP is enabled, set IDP environment variables
 	if globalOpenIDConfig.URL != nil {
 		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.DiscoveryDoc.Issuer)
-		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
 		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ClientID)
 		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ClientSecret)
+		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)
+		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ClientID)
+		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
+		if globalOpenIDConfig.RedirectURI != "" {
+			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.RedirectURI)
+		} else {
+			os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
+		}
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
-	os.Setenv("CONSOLE_CERT_PASSWD", os.Getenv("MINIO_CERT_PASSWD"))
-	os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
+	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 }
 
 func initConsoleServer() (*restapi.Server, error) {
@@ -337,39 +349,42 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	// Fetch address option
-	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
-		globalCLIContext.Addr = ctx.String("address")
+	addr := ctx.GlobalString("address")
+	if addr == "" || addr == ":"+GlobalMinioDefaultPort {
+		addr = ctx.String("address")
 	}
 
 	// Fetch console address option
-	globalCLIContext.ConsoleAddr = ctx.GlobalString("console-address")
-	if globalCLIContext.ConsoleAddr == "" {
-		globalCLIContext.ConsoleAddr = ctx.String("console-address")
+	consoleAddr := ctx.GlobalString("console-address")
+	if consoleAddr == "" {
+		consoleAddr = ctx.String("console-address")
 	}
 
-	if globalCLIContext.ConsoleAddr == "" {
+	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
 			logger.FatalIf(err, "Unable to get free port for console on the host")
 		}
 		globalMinioConsolePortAuto = true
-		globalCLIContext.ConsoleAddr = net.JoinHostPort("", p.String())
+		consoleAddr = net.JoinHostPort("", p.String())
 	}
 
-	if globalCLIContext.ConsoleAddr == globalCLIContext.Addr {
+	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
+		logger.FatalIf(err, "Unable to start listening on console port")
+	}
+
+	if consoleAddr == addr {
 		logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
 	}
 
-	globalMinioAddr = globalCLIContext.Addr
-	globalMinioConsoleAddr = globalCLIContext.ConsoleAddr
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(globalMinioConsoleAddr)
+	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 
 	if globalMinioPort == globalMinioConsolePort {
 		logger.FatalIf(errors.New("--console-address port cannot be same as --address port"), "Unable to start the server")
 	}
+
+	globalMinioAddr = addr
 
 	// Check "no-compat" flag from command line argument.
 	globalCLIContext.StrictS3Compat = true
@@ -399,6 +414,23 @@ func handleCommonEnvVars() {
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+	if globalBrowserEnabled {
+		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
+			u, err := xnet.ParseHTTPURL(redirectURL)
+			if err != nil {
+				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
+			}
+			// Look for if URL has invalid values and return error.
+			if !((u.Scheme == "http" || u.Scheme == "https") &&
+				(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
+				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
+				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
+			}
+			u.Path = "" // remove any path component such as `/`
+			globalBrowserRedirectURL = u
+		}
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
@@ -564,6 +596,7 @@ func handleCommonEnvVars() {
 		}
 		GlobalKMS = KMS
 	}
+
 	if tiers := env.Get("_MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY", ""); tiers != "" {
 		globalDebugRemoteTiersImmediately = strings.Split(tiers, ",")
 	}

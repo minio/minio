@@ -235,7 +235,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		}
 
 		// Send audit for the lifecycle delete operation
-		auditLogLifecycle(ctx, oi.Bucket, oi.Name)
+		auditLogLifecycle(ctx, *oi, ILMExpiry)
 
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
@@ -342,7 +342,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 	closer := func() {
 		reader.Close()
 	}
-	return fn(reader, h, opts.CheckPrecondFn, closer)
+	return fn(reader, h, closer)
 }
 
 // RestoreRequestType represents type of restore.

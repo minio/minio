@@ -29,9 +29,10 @@ import (
 	"sync"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/golang-jwt/jwt"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
@@ -40,25 +41,89 @@ import (
 // Config - OpenID Config
 // RSA authentication target arguments
 type Config struct {
-	JWKS struct {
+	*sync.RWMutex
+
+	Enabled bool `json:"enabled"`
+	JWKS    struct {
 		URL *xnet.URL `json:"url"`
 	} `json:"jwks"`
 	URL          *xnet.URL `json:"url,omitempty"`
 	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
 	ClaimName    string    `json:"claimName,omitempty"`
+	RedirectURI  string    `json:"redirectURI,omitempty"`
 	DiscoveryDoc DiscoveryDoc
 	ClientID     string
 	ClientSecret string
-	publicKeys   map[string]crypto.PublicKey
-	transport    *http.Transport
-	closeRespFn  func(io.ReadCloser)
-	mutex        *sync.Mutex
+
+	provider    provider.Provider
+	publicKeys  map[string]crypto.PublicKey
+	transport   *http.Transport
+	closeRespFn func(io.ReadCloser)
+}
+
+// LookupUser lookup userid for the provider
+func (r Config) LookupUser(userid string) (provider.User, error) {
+	if r.provider != nil {
+		user, err := r.provider.LookupUser(userid)
+		if err != nil && err != provider.ErrAccessTokenExpired {
+			return user, err
+		}
+		if err == provider.ErrAccessTokenExpired {
+			if err = r.provider.LoginWithClientID(r.ClientID, r.ClientSecret); err != nil {
+				return user, err
+			}
+			user, err = r.provider.LookupUser(userid)
+		}
+		return user, err
+	}
+	// Without any specific logic for a provider, all accounts
+	// are always enabled.
+	return provider.User{ID: userid, Enabled: true}, nil
+}
+
+const (
+	keyCloakVendor = "keycloak"
+)
+
+// InitializeProvider initializes if any additional vendor specific
+// information was provided, initialization will return an error
+// initial login fails.
+func (r Config) InitializeProvider(kvs config.KVS) error {
+	vendor := env.Get(EnvIdentityOpenIDVendor, kvs.Get(Vendor))
+	if vendor == "" {
+		return nil
+	}
+	switch vendor {
+	case keyCloakVendor:
+		adminURL := env.Get(EnvIdentityOpenIDKeyCloakAdminURL, kvs.Get(KeyCloakAdminURL))
+		realm := env.Get(EnvIdentityOpenIDKeyCloakRealm, kvs.Get(KeyCloakRealm))
+		return r.InitializeKeycloakProvider(adminURL, realm)
+	default:
+		return fmt.Errorf("Unsupport vendor %s", keyCloakVendor)
+	}
+}
+
+// ProviderEnabled returns true if any vendor specific provider is enabled.
+func (r Config) ProviderEnabled() bool {
+	return r.Enabled && r.provider != nil
+}
+
+// InitializeKeycloakProvider - initializes keycloak provider
+func (r *Config) InitializeKeycloakProvider(adminURL, realm string) error {
+	var err error
+	r.provider, err = provider.KeyCloak(
+		provider.WithAdminURL(adminURL),
+		provider.WithOpenIDConfig(provider.DiscoveryDoc(r.DiscoveryDoc)),
+		provider.WithTransport(r.transport),
+		provider.WithRealm(realm),
+	)
+	return err
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
 func (r *Config) PopulatePublicKey() error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
 	if r.JWKS.URL == nil || r.JWKS.URL.String() == "" {
 		return nil
@@ -114,11 +179,6 @@ func (r *Config) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// JWT - rs client grants provider details.
-type JWT struct {
-	Config
-}
-
 // GetDefaultExpiration - returns the expiration seconds expected.
 func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	defaultExpiryDuration := time.Duration(60) * time.Minute // Defaults to 1hr.
@@ -130,8 +190,8 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
-		// up to 7 days.
-		if expirySecs < 900 || expirySecs > 604800 {
+		// up to 365 days.
+		if expirySecs < 900 || expirySecs > 31536000 {
 			return 0, auth.ErrInvalidDuration
 		}
 
@@ -174,7 +234,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 }
 
 // Validate - validates the access token.
-func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
+func (r *Config) Validate(token, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512", "ES256", "ES384", "ES512",
@@ -186,7 +246,9 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
 		}
-		return p.publicKeys[kid], nil
+		r.RLock()
+		defer r.RUnlock()
+		return r.publicKeys[kid], nil
 	}
 
 	var claims jwtgo.MapClaims
@@ -194,7 +256,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	if err != nil {
 		// Re-populate the public key in-case the JWKS
 		// pubkeys are refreshed
-		if err = p.PopulatePublicKey(); err != nil {
+		if err = r.PopulatePublicKey(); err != nil {
 			return nil, err
 		}
 		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
@@ -215,7 +277,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 }
 
 // ID returns the provider name and authentication type.
-func (p *JWT) ID() ID {
+func (Config) ID() ID {
 	return "jwt"
 }
 
@@ -227,15 +289,27 @@ const (
 	ClaimPrefix  = "claim_prefix"
 	ClientID     = "client_id"
 	ClientSecret = "client_secret"
+	Vendor       = "vendor"
 	Scopes       = "scopes"
+	RedirectURI  = "redirect_uri"
 
+	// Vendor specific ENV only enabled if the Vendor matches == "vendor"
+	KeyCloakRealm    = "keycloak_realm"
+	KeyCloakAdminURL = "keycloak_admin_url"
+
+	EnvIdentityOpenIDVendor       = "MINIO_IDENTITY_OPENID_VENDOR"
 	EnvIdentityOpenIDClientID     = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDClientSecret = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
 	EnvIdentityOpenIDJWKSURL      = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL          = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimName    = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
 	EnvIdentityOpenIDClaimPrefix  = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDRedirectURI  = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
 	EnvIdentityOpenIDScopes       = "MINIO_IDENTITY_OPENID_SCOPES"
+
+	// Vendor specific ENVs only enabled if the Vendor matches == "vendor"
+	EnvIdentityOpenIDKeyCloakRealm    = "MINIO_IDENTITY_OPENID_KEYCLOAK_REALM"
+	EnvIdentityOpenIDKeyCloakAdminURL = "MINIO_IDENTITY_OPENID_KEYCLOAK_ADMIN_URL"
 )
 
 // DiscoveryDoc - parses the output from openid-configuration
@@ -305,6 +379,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   RedirectURI,
+			Value: "",
+		},
+		config.KV{
 			Key:   Scopes,
 			Value: "",
 		},
@@ -332,14 +410,15 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	}
 
 	c = Config{
+		RWMutex:      &sync.RWMutex{},
 		ClaimName:    env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
 		ClaimPrefix:  env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
+		RedirectURI:  env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
 		publicKeys:   make(map[string]crypto.PublicKey),
 		ClientID:     env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
 		ClientSecret: env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
 		transport:    transport,
 		closeRespFn:  closeRespFn,
-		mutex:        &sync.Mutex{}, // allocate for copying
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
@@ -389,10 +468,11 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		return c, err
 	}
 
-	return c, nil
-}
+	if err = c.InitializeProvider(kvs); err != nil {
+		return c, err
+	}
 
-// NewJWT - initialize new jwt authenticator.
-func NewJWT(c Config) *JWT {
-	return &JWT{c}
+	c.Enabled = true
+
+	return c, nil
 }

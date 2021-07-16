@@ -19,15 +19,15 @@ package jwt
 
 // This file is a re-implementation of the original code here with some
 // additional allocation tweaks reproduced using GODEBUG=allocfreetrace=1
-// original file https://github.com/dgrijalva/jwt-go/blob/master/parser.go
-// borrowed under MIT License https://github.com/dgrijalva/jwt-go/blob/master/LICENSE
+// original file https://github.com/golang-jwt/jwt/blob/main/parser.go
+// borrowed under MIT License https://github.com/golang-jwt/jwt/blob/main/LICENSE
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 var (

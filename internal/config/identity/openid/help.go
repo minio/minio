@@ -51,10 +51,34 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         RedirectURI,
+			Description: `Configure custom redirect_uri for OpenID login flow callback`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         Scopes,
 			Description: `Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"`,
 			Optional:    true,
 			Type:        "csv",
+		},
+		config.HelpKV{
+			Key:         Vendor,
+			Description: `Specify vendor type for vendor specific behavior to checking validity of temporary credentials and service accounts on MinIO`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KeyCloakRealm,
+			Description: `Specify Keycloak 'realm' name, only honored if vendor was set to 'keycloak' as value, if no realm is specified 'master' is default`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KeyCloakAdminURL,
+			Description: `Specify Keycloak 'admin' REST API endpoint e.g. http://localhost:8080/auth/admin/`,
+			Optional:    true,
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         config.Comment,

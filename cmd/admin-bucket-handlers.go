@@ -205,6 +205,12 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		}
 		target = tgt
 	}
+
+	// enforce minimum bandwidth limit as 100MBps
+	if target.BandwidthLimit > 0 && target.BandwidthLimit < 100*1000*1000 {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationBandwidthLimitError, err), r.URL)
+		return
+	}
 	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, update); err != nil {
 		switch err.(type) {
 		case BucketRemoteConnectionErr:

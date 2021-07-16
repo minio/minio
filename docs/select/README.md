@@ -24,7 +24,7 @@ To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 # Example using Python API 
 
 ## 1. Prerequisites
-- Install MinIO Server from [here](http://docs.min.io/docs/minio-quickstart-guide).
+- Install MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
 - Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 
