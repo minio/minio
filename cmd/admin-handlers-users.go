@@ -1090,6 +1090,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	acctInfo := madmin.AccountInfo{
 		AccountName: accountName,
+		Server:      objectAPI.BackendInfo(),
 		Policy:      buf,
 	}
 
