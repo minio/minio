@@ -970,7 +970,7 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 
 // UsesDataDir returns true if this object version uses its data directory for
 // its contents and false otherwise.
-func (j *xlMetaV2Object) UsesDataDir() bool {
+func (j xlMetaV2Object) UsesDataDir() bool {
 	// Skip if this version is not transitioned, i.e it uses its data directory.
 	if !bytes.Equal(j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus], []byte(lifecycle.TransitionComplete)) {
 		return true
@@ -978,6 +978,19 @@ func (j *xlMetaV2Object) UsesDataDir() bool {
 
 	// Check if this transitioned object has been restored on disk.
 	return isRestoredObjectOnDisk(j.MetaUser)
+}
+
+func (j *xlMetaV2Object) SetTransition(fi FileInfo) {
+	j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+	j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+	j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
+	j.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+}
+
+func (j *xlMetaV2Object) RemoveRestoreHdrs() {
+	delete(j.MetaUser, xhttp.AmzRestore)
+	delete(j.MetaUser, xhttp.AmzRestoreExpiryDays)
+	delete(j.MetaUser, xhttp.AmzRestoreRequestDate)
 }
 
 func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
@@ -1211,14 +1224,11 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			if version.ObjectV2.VersionID == uv {
 				switch {
 				case fi.ExpireRestored:
-					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestore)
-					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestoreExpiryDays)
-					delete(z.Versions[i].ObjectV2.MetaUser, xhttp.AmzRestoreRequestDate)
+					z.Versions[i].ObjectV2.RemoveRestoreHdrs()
+
 				case fi.TransitionStatus == lifecycle.TransitionComplete:
-					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
-					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
-					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
-					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+					z.Versions[i].ObjectV2.SetTransition(fi)
+
 				default:
 					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 					// if uv has tiered content we add a

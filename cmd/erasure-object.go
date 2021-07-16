@@ -267,7 +267,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	// due to a bug in RenameData() the fi.Data is not niled leading to
 	// GetObject thinking that fi.Data is valid while fi.Size has
 	// changed already.
-	if _, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]; ok {
+	if fi.InlineData() {
 		shardFileSize := erasure.ShardFileSize(fi.Size)
 		if shardFileSize >= 0 && shardFileSize >= smallFileThreshold {
 			for i := range metaArr {
@@ -816,7 +816,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if len(inlineBuffers) > 0 {
 		// Set an additional header when data is inlined.
 		for index := range partsMetadata {
-			partsMetadata[index].Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+			partsMetadata[index].SetInlineData()
 		}
 	}
 
@@ -1393,6 +1393,12 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 			return toObjectErr(err, bucket, object)
 		}
 	}
+
+	// object content is small enough that it's inlined, skipping transition
+	if fi.InlineData() {
+		return nil
+	}
+
 	destObj, err := genTransitionObjName()
 	if err != nil {
 		return err
