@@ -269,13 +269,13 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 }
 
 // generate an object name for transitioned object
-func genTransitionObjName() (string, error) {
+func genTransitionObjName(bucket string) (string, error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
 	us := u.String()
-	obj := fmt.Sprintf("%s/%s/%s", us[0:2], us[2:4], us)
+	obj := fmt.Sprintf("%s/%s/%s/%s/%s", globalDeploymentID, bucket, us[0:2], us[2:4], us)
 	return obj, nil
 }
 
