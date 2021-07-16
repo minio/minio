@@ -1,0 +1,45 @@
+{{- if and .Values.securityContext.enabled .Values.persistence.enabled (.Capabilities.APIVersions.Has "security.openshift.io/v1") }}
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: {{ template "minio.fullname" . }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: true
+allowPrivilegedContainer: false
+allowedCapabilities: []
+readOnlyRootFilesystem: false
+defaultAddCapabilities: []
+requiredDropCapabilities:
+- KILL
+- MKNOD
+- SETUID
+- SETGID
+fsGroup:
+  type: MustRunAs
+  ranges:
+  - max: {{ .Values.securityContext.fsGroup }}
+    min: {{ .Values.securityContext.fsGroup }}
+runAsUser:
+  type: MustRunAs
+  uid: {{ .Values.securityContext.runAsUser }}
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+volumes:
+- configMap
+- downwardAPI
+- emptyDir
+- persistentVolumeClaim
+- projected
+- secret
+{{- end }}

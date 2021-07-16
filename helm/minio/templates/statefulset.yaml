@@ -1,0 +1,180 @@
+{{- if eq .Values.mode "distributed" }}
+{{ $zoneCount := .Values.zones | int }}
+{{ $nodeCount := .Values.replicas | int }}
+{{ $drivesPerNode := .Values.drivesPerNode | int }}
+{{ $scheme := "http" }}
+{{- if .Values.tls.enabled }}
+{{ $scheme = "https" }}
+{{ end }}
+{{ $mountPath := .Values.mountPath }}
+{{ $bucketRoot := or ($.Values.bucketRoot) ($.Values.mountPath) }}
+{{ $subPath := .Values.persistence.subPath }}
+{{ $penabled := .Values.persistence.enabled }}
+{{ $accessMode := .Values.persistence.accessMode }}
+{{ $storageClass := .Values.persistence.storageClass }}
+{{ $psize := .Values.persistence.size }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "minio.fullname" . }}-svc
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  publishNotReadyAddresses: true
+  clusterIP: None
+  ports:
+    - name: {{ $scheme }}
+      port: {{ .Values.service.port }}
+      protocol: TCP
+  selector:
+    app: {{ template "minio.name" . }}
+    release: {{ .Release.Name }}
+---
+apiVersion: {{ template "minio.statefulset.apiVersion" . }}
+kind: StatefulSet
+metadata:
+  name: {{ template "minio.fullname" . }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+{{- if .Values.additionalLabels }}
+{{ toYaml .Values.additionalLabels | trimSuffix "\n" | indent 4 }}
+{{- end }}
+{{- if .Values.additionalAnnotations }}
+  annotations:
+{{ toYaml .Values.additionalAnnotations | trimSuffix "\n" | indent 4 }}
+{{- end }}
+spec:
+  updateStrategy:
+    type: {{ .Values.StatefulSetUpdate.updateStrategy }}
+  podManagementPolicy: "Parallel"
+  serviceName: {{ template "minio.fullname" . }}-svc
+  replicas: {{ mul $zoneCount $nodeCount }}
+  selector:
+    matchLabels:
+      app: {{ template "minio.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      name: {{ template "minio.fullname" . }}
+      labels:
+        app: {{ template "minio.name" . }}
+        release: {{ .Release.Name }}
+{{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 8 }}
+{{- end }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+{{- if .Values.podAnnotations }}
+{{ toYaml .Values.podAnnotations | trimSuffix "\n" | indent 8 }}
+{{- end }}
+    spec:
+      {{- if .Values.priorityClassName }}
+      priorityClassName: "{{ .Values.priorityClassName }}"
+      {{- end }}
+{{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
+      securityContext:
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+{{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          command: [ "/bin/sh",
+            "-ce",
+            "/usr/bin/docker-entrypoint.sh minio -S {{ .Values.certsPath }} server {{- range $i := until $zoneCount }}{{ $factor := mul $i $nodeCount }}{{ $endIndex := add $factor $nodeCount }}{{ $beginIndex := mul $i $nodeCount }}  {{ $scheme }}://{{ template `minio.fullname` $ }}-{{ `{` }}{{ $beginIndex }}...{{ sub $endIndex 1 }}{{ `}`}}.{{ template `minio.fullname` $ }}-svc.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain }}{{if (gt $drivesPerNode 1)}}{{ $bucketRoot }}-{{ `{` }}0...{{ sub $drivesPerNode 1 }}{{ `}` }}{{else}}{{ $bucketRoot }}{{end}}{{- end}}{{- template `minio.extraArgs` . }}" ]
+          volumeMounts:
+            {{- if $penabled }}
+            {{- if (gt $drivesPerNode 1) }}
+            {{- range $i := until $drivesPerNode }}
+            - name: export-{{ $i }}
+              mountPath: {{ $mountPath }}-{{ $i }}
+              {{- if and $penabled $subPath }}
+              subPath: {{ $subPath }}
+              {{- end }}
+            {{- end }}
+            {{- else }}
+            - name: export
+              mountPath: {{ $mountPath }}
+              {{- if and $penabled $subPath }}
+              subPath: {{ $subPath }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- include "minio.tlsKeysVolumeMount" . | indent 12 }}
+          ports:
+            - name: {{ $scheme }}
+              containerPort: 9000
+          env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" . }}
+                  key: accesskey
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" . }}
+                  key: secretkey
+            {{- range $key, $val := .Values.environment }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end}}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+{{- include "minio.imagePullSecrets" . | indent 6 }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: minio-user
+          secret:
+            secretName: {{ template "minio.secretName" . }}
+        {{- include "minio.tlsKeysVolume" . | indent 8 }}
+{{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  {{- if gt $drivesPerNode 1 }}
+    {{- range $diskId := until $drivesPerNode}}
+    - metadata:
+        name: export-{{ $diskId }}
+      spec:
+        accessModes: [ {{ $accessMode | quote }} ]
+        {{- if $storageClass }}
+        storageClassName: {{ $storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $psize }}
+    {{- end }}
+  {{- else }}
+    - metadata:
+        name: export
+      spec:
+        accessModes: [ {{ $accessMode | quote }} ]
+        {{- if $storageClass }}
+        storageClassName: {{ $storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $psize }}
+  {{- end }}
+{{- end }}
+{{- end }}

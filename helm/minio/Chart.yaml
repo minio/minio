@@ -1,0 +1,16 @@
+apiVersion: v1
+description: High Performance, Kubernetes Native Object Storage
+name: minio
+version: 0.1.0
+appVersion: RELEASE.2021-06-14T01-29-23Z
+keywords:
+- storage
+- object-storage
+- S3
+home: https://min.io
+icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+sources:
+- https://github.com/minio/minio
+maintainers:
+- name: MinIO, Inc
+  email: dev@minio.io
