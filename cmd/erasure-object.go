@@ -826,16 +826,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	// Whether a disk was initially or becomes offline
-	// during this upload, send it to the MRF list.
-	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, fi.VersionID)
-		break
-	}
-
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -844,6 +834,17 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+
+	// Whether a disk was initially or becomes offline
+	// during this upload, send it to the MRF list.
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			continue
+		}
+		er.addPartial(bucket, object, fi.VersionID, fi.Size)
+		break
+	}
+
 	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object), nil
@@ -1029,7 +1030,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
-			er.addPartial(bucket, version.Name, version.VersionID)
+			er.addPartial(bucket, version.Name, version.VersionID, -1)
 			break
 		}
 	}
@@ -1177,7 +1178,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 
@@ -1192,11 +1193,15 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartial(bucket, object, versionID string) {
-	select {
-	case er.mrfOpCh <- partialOperation{bucket: bucket, object: object, versionID: versionID}:
-	default:
-	}
+func (er erasureObjects) addPartial(bucket, object, versionID string, size int64) {
+	globalMRFState.addPartialOp(partialOperation{
+		bucket:    bucket,
+		object:    object,
+		versionID: versionID,
+		size:      size,
+		setIndex:  er.setIndex,
+		poolIndex: er.poolIndex,
+	})
 }
 
 func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
@@ -1421,7 +1426,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 	// Notify object deleted event.

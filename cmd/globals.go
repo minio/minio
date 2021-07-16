@@ -293,6 +293,8 @@ var (
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
 
+	globalMRFState *mrfState
+
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 

@@ -537,6 +537,7 @@ func serverMain(ctx *cli.Context) {
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
+		initHealMRF(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
 	}
 
