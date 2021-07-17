@@ -118,7 +118,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				forward = forward[:idx]
 			}
 		}
-
 		if contextCanceled(ctx) {
 			return ctx.Err()
 		}
@@ -132,6 +131,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return errFileNotFound
 			}
 			// Forward some errors?
+			return nil
+		}
+		if len(entries) == 0 {
 			return nil
 		}
 		dirObjects := make(map[string]struct{})
