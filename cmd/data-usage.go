@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -66,7 +65,8 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket string) (map[string]uint64, error) {
 	z, ok := objAPI.(*erasureServerPools)
 	if !ok {
-		return nil, errors.New("prefix usage is not supported")
+		// Prefix usage is empty
+		return map[string]uint64{}, nil
 	}
 
 	cache := dataUsageCache{}

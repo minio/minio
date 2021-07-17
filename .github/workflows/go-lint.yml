@@ -32,10 +32,11 @@ jobs:
           CGO_ENABLED: 0
           GO111MODULE: on
         run: |
+          sudo apt install jq -y
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           nancy_version=$(curl --retry 10 -Ls -o /dev/null -w "%{url_effective}" https://github.com/sonatype-nexus-community/nancy/releases/latest | sed "s/https:\/\/github.com\/sonatype-nexus-community\/nancy\/releases\/tag\///")
           curl -L -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/${nancy_version}/nancy-${nancy_version}-linux-amd64 && chmod +x nancy
-          go list -m all | ./nancy sleuth
+          go list -deps -json ./... | jq -s 'unique_by(.Module.Path)|.[]|select(has("Module"))|.Module' | ./nancy sleuth
           make
           make test-race
