@@ -26,25 +26,26 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/kms"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/dns"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/storageclass"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/auth"
-	etcd "go.etcd.io/etcd/clientv3"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/compress"
+	"github.com/minio/minio/internal/config/dns"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/storageclass"
+	xhttp "github.com/minio/minio/internal/http"
+	etcd "go.etcd.io/etcd/client/v3"
 
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/pubsub"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/pkg/certs"
+	xnet "github.com/minio/pkg/net"
 )
 
 // minio configuration related constants.
@@ -107,12 +108,17 @@ const (
 
 	// diskFillFraction is the fraction of a disk we allow to be filled.
 	diskFillFraction = 0.95
+
+	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
+	diskAssumeUnknownSize = 1 << 30
+
+	// diskMinInodes is the minimum number of inodes we want free on a disk to perform writes.
+	diskMinInodes = 1000
 )
 
 var globalCLIContext = struct {
 	JSON, Quiet    bool
 	Anonymous      bool
-	Addr           string
 	StrictS3Compat bool
 }{}
 
@@ -132,6 +138,10 @@ var (
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
 
+	// Custom browser redirect URL, not set by default
+	// and it is automatically deduced.
+	globalBrowserRedirectURL *xnet.URL
+
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
@@ -140,10 +150,17 @@ var (
 
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
+
 	// MinIO default port, can be changed through command line.
-	globalMinioPort = GlobalMinioDefaultPort
+	globalMinioPort            = GlobalMinioDefaultPort
+	globalMinioConsolePort     = "13333"
+	globalMinioConsolePortAuto = false
+
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+	// Holds the host that was passed using --console-address
+	globalMinioConsoleHost = ""
+
 	// Holds the possible host endpoint.
 	globalMinioEndpoint = ""
 
@@ -212,12 +229,6 @@ var (
 
 	globalActiveCred auth.Credentials
 
-	// Hold the old server credentials passed by the environment
-	globalOldCred auth.Credentials
-
-	// Indicates if config is to be encrypted
-	globalConfigEncrypted bool
-
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests
@@ -282,6 +293,8 @@ var (
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
 
+	globalMRFState *mrfState
+
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
@@ -304,16 +317,3 @@ var (
 )
 
 var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
-
-// Returns minio global information, as a key value map.
-// returned list of global values is not an exhaustive
-// list. Feel free to add new relevant fields.
-func getGlobalInfo() (globalInfo map[string]interface{}) {
-	globalInfo = map[string]interface{}{
-		"serverRegion": globalServerRegion,
-		"domains":      globalDomainNames,
-		// Add more relevant global settings here.
-	}
-
-	return globalInfo
-}

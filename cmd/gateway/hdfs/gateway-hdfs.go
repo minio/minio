@@ -41,10 +41,9 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -158,7 +157,7 @@ func getKerberosClient() (*krb.Client, error) {
 }
 
 // NewGatewayLayer returns hdfs gatewaylayer.
-func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *HDFS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	dialFunc := (&net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -221,11 +220,6 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 	}
 
 	return &hdfsObjects{clnt: clnt, subPath: commonPath, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
-}
-
-// Production - hdfs gateway is production ready.
-func (g *HDFS) Production() bool {
-	return true
 }
 
 func (n *hdfsObjects) Shutdown(ctx context.Context) error {

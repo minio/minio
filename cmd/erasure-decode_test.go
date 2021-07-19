@@ -20,13 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"io"
 	"math/rand"
 	"testing"
 
-	crand "crypto/rand"
-
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 func (a badDisk) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -109,8 +108,7 @@ func TestErasureDecode(t *testing.T) {
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "object",
-				erasure.ShardFileSize(test.data), writeAlgorithm, erasure.ShardSize(), false)
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(test.data), writeAlgorithm, erasure.ShardSize())
 		}
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[:]), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
@@ -236,8 +234,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, "testbucket", "object",
-			erasure.ShardFileSize(length), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+		writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(length), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	// 10000 iterations with random offsets and lengths.
@@ -307,8 +304,7 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, "testbucket", "object",
-			erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+		writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	content := make([]byte, size)

@@ -337,6 +337,7 @@
       "steppedLine": false,
       "targets": [
         {
+          "exemplar": true,
           "expr": "sum(minio_bucket_usage_total_bytes) by (instance)",
           "interval": "",
           "legendFormat": "Used Capacity",
@@ -955,7 +956,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (server) (rate(minio_s3_traffic_received_bytes[$__interval]))",
+          "expr": "sum by (server) (rate(minio_s3_traffic_received_bytes[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Received [{{server}}]",
@@ -1055,7 +1056,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (server) (rate(minio_s3_traffic_sent_bytes[$__interval]))",
+          "expr": "sum by (server) (rate(minio_s3_traffic_sent_bytes[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Sent [{{server}}]",
@@ -1521,7 +1522,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (server,api) (rate(minio_s3_requests_total[$__interval]))",
+          "expr": "sum by (server,api) (rate(minio_s3_requests_total[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{server,api}}",
@@ -1621,7 +1622,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_s3_requests_errors_total[$__interval])",
+          "expr": "rate(minio_s3_requests_errors_total[$__rate_interval])",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{server,api}}",
@@ -1691,8 +1692,8 @@
       "fill": 10,
       "fillGradient": 1,
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 9,
+        "w": 12,
         "x": 0,
         "y": 22
       },
@@ -1727,7 +1728,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"minio-job\"}[$__interval])",
+          "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"minio-job\"}[$__rate_interval])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
@@ -1738,7 +1739,7 @@
         },
         {
           "exemplar": true,
-          "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"minio-job\"}[$__interval])",
+          "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"minio-job\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "Internode Bytes Sent [{{server}}]",
           "refId": "B"
@@ -1789,6 +1790,116 @@
     },
     {
       "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "hiddenSeries": false,
+      "id": 84,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.5.5",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum by (instance) (minio_heal_objects_heal_total)",
+          "interval": "",
+          "legendFormat": "Objects healed in current self heal run",
+          "refId": "A"
+        },
+        {
+          "exemplar": true,
+          "expr": "sum by (instance) (minio_heal_objects_error_total)",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Heal errors in current self heal run",
+          "refId": "B"
+        },
+        {
+          "exemplar": true,
+          "expr": "sum by (instance) (minio_heal_objects_total) ",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Objects scanned in current self heal run",
+          "refId": "C"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Healing",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
       "bars": true,
       "dashLength": 10,
       "dashes": false,
@@ -1803,7 +1914,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 31
       },
       "hiddenSeries": false,
       "id": 77,
@@ -1899,7 +2010,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 31
       },
       "hiddenSeries": false,
       "id": 76,
@@ -1995,7 +2106,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 39
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 74,
@@ -2093,7 +2204,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 39
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 82,
@@ -2198,7 +2309,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 47
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 11,
@@ -2231,7 +2342,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_node_syscall_read_total[$__interval])",
+          "expr": "rate(minio_node_syscall_read_total[$__rate_interval])",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
@@ -2242,7 +2353,7 @@
         },
         {
           "exemplar": true,
-          "expr": "rate(minio_node_syscall_write_total[$__interval])",
+          "expr": "rate(minio_node_syscall_write_total[$__rate_interval])",
           "interval": "",
           "legendFormat": "Write Syscalls [{{server}}]",
           "refId": "B"
@@ -2315,7 +2426,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 47
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 8,
@@ -2411,10 +2522,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 57
       },
       "hiddenSeries": false,
       "id": 73,
@@ -2544,5 +2655,5 @@
   "timezone": "",
   "title": "MinIO Overview",
   "uid": "pJnnS4hZz",
-  "version": 4
+  "version": 3
 }

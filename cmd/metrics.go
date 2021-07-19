@@ -18,14 +18,15 @@
 package cmd
 
 import (
+	"math"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -181,7 +182,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Objects for which healing failed in current self healing run",
 				[]string{"mount_path", "volume_status"}, nil),
 			prometheus.GaugeValue,
-			float64(v), string(s[0]), string(s[1]),
+			float64(v), s[0], s[1],
 		)
 	}
 }
@@ -441,56 +442,23 @@ func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s Bucke
 	for _, bucketStat := range bucketStats {
 		replStats.FailedCount += bucketStat.ReplicationStats.FailedCount
 		replStats.FailedSize += bucketStat.ReplicationStats.FailedSize
-		replStats.PendingCount += bucketStat.ReplicationStats.PendingCount
-		replStats.PendingSize += bucketStat.ReplicationStats.PendingSize
 		replStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
 		replStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
 	}
 	usageStat := globalReplicationStats.GetInitialUsage(bucket)
-	replStats.FailedCount += usageStat.FailedCount
-	replStats.FailedSize += usageStat.FailedSize
-	replStats.PendingCount += usageStat.PendingCount
-	replStats.PendingSize += usageStat.PendingSize
 	replStats.ReplicaSize += usageStat.ReplicaSize
 	replStats.ReplicatedSize += usageStat.ReplicatedSize
 
 	// use in memory replication stats if it is ahead of usage info.
+	s.ReplicatedSize = u.ReplicatedSize
 	if replStats.ReplicatedSize >= u.ReplicatedSize {
 		s.ReplicatedSize = replStats.ReplicatedSize
-	} else {
-		s.ReplicatedSize = u.ReplicatedSize
 	}
-
-	if replStats.PendingSize > u.ReplicationPendingSize {
-		s.PendingSize = replStats.PendingSize
-	} else {
-		s.PendingSize = u.ReplicationPendingSize
-	}
-
-	if replStats.FailedSize > u.ReplicationFailedSize {
-		s.FailedSize = replStats.FailedSize
-	} else {
-		s.FailedSize = u.ReplicationFailedSize
-	}
-
-	if replStats.ReplicaSize > u.ReplicaSize {
-		s.ReplicaSize = replStats.ReplicaSize
-	} else {
-		s.ReplicaSize = u.ReplicaSize
-	}
-
-	if replStats.PendingCount > u.ReplicationPendingCount {
-		s.PendingCount = replStats.PendingCount
-	} else {
-		s.PendingCount = u.ReplicationPendingCount
-	}
-
-	if replStats.FailedCount > u.ReplicationFailedCount {
-		s.FailedCount = replStats.FailedCount
-	} else {
-		s.FailedCount = u.ReplicationFailedCount
-	}
-
+	// Reset FailedSize and FailedCount to 0 for negative overflows which can
+	// happen since data usage picture can lag behind actual usage state at the time of cluster start
+	s.FailedSize = uint64(math.Max(float64(replStats.FailedSize), 0))
+	s.FailedCount = uint64(math.Max(float64(replStats.FailedCount), 0))
+	s.ReplicaSize = uint64(math.Max(float64(replStats.ReplicaSize), float64(u.ReplicaSize)))
 	return s
 }
 
@@ -539,15 +507,6 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "replication", "pending_size"),
-				"Total capacity pending to be replicated",
-				[]string{"bucket"}, nil),
-			prometheus.GaugeValue,
-			float64(stat.PendingSize),
-			bucket,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
 				prometheus.BuildFQName("bucket", "replication", "failed_size"),
 				"Total capacity failed to replicate at least once",
 				[]string{"bucket"}, nil),
@@ -571,15 +530,6 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
 			float64(stat.ReplicaSize),
-			bucket,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "replication", "pending_count"),
-				"Total replication operations pending",
-				[]string{"bucket"}, nil),
-			prometheus.GaugeValue,
-			float64(stat.PendingCount),
 			bucket,
 		)
 		ch <- prometheus.MustNewConstMetric(

@@ -32,32 +32,28 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/console"
-	"github.com/willf/bloom"
+	"github.com/bits-and-blooms/bloom/v3"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/console"
 )
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUpdateTrackerEstItems = 10000000
+	dataUpdateTrackerEstItems = 200000
 	// ... we want this false positive rate:
-	dataUpdateTrackerFP        = 0.99
+	dataUpdateTrackerFP        = 0.1
 	dataUpdateTrackerQueueSize = 0
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 4
+	dataUpdateTrackerVersion      = 5
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
-var (
-	objectUpdatedCh      chan<- string
-	intDataUpdateTracker *dataUpdateTracker
-)
+var intDataUpdateTracker *dataUpdateTracker
 
 func init() {
 	intDataUpdateTracker = newDataUpdateTracker()
-	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 type dataUpdateTracker struct {
@@ -180,9 +176,6 @@ func (d *dataUpdateTracker) latestWithDir(dir string) uint64 {
 		return d.current()
 	}
 	if isReservedOrInvalidBucket(bucket, false) {
-		if d.debug {
-			console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, dir)
-		}
 		return d.current()
 	}
 
@@ -404,8 +397,10 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case 1, 2, 3:
-		console.Println(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+	case 1, 2, 3, 4:
+		if intDataUpdateTracker.debug {
+			console.Debugln(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+		}
 		return nil
 	case dataUpdateTrackerVersion:
 	default:
@@ -488,9 +483,6 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		}
 
 		if isReservedOrInvalidBucket(bucket, false) {
-			if d.debug {
-				console.Debugf(color.Green("dataUpdateTracker:")+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, in)
-			}
 			continue
 		}
 		split := splitPathDeterministic(in)
@@ -506,23 +498,17 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 }
 
 // markDirty adds the supplied path to the current bloom filter.
-func (d *dataUpdateTracker) markDirty(in string) {
-	bucket, _ := path2BucketObjectWithBasePath("", in)
+func (d *dataUpdateTracker) markDirty(bucket, prefix string) {
 	dateUpdateTrackerLogPrefix := color.Green("dataUpdateTracker:")
-	if bucket == "" {
-		if d.debug && len(in) > 0 {
-			console.Debugf(dateUpdateTrackerLogPrefix+" no bucket (%s)\n", in)
-		}
+	if bucket == "" && d.debug {
+		console.Debugf(dateUpdateTrackerLogPrefix + " no bucket specified\n")
 		return
 	}
 
-	if isReservedOrInvalidBucket(bucket, false) {
-		if d.debug && false {
-			console.Debugf(dateUpdateTrackerLogPrefix+" isReservedOrInvalidBucket: %v, entry: %v\n", bucket, in)
-		}
+	if isReservedOrInvalidBucket(bucket, false) && d.debug {
 		return
 	}
-	split := splitPathDeterministic(in)
+	split := splitPathDeterministic(pathJoin(bucket, prefix))
 
 	// Add all paths until done.
 	d.mu.Lock()
@@ -679,10 +665,10 @@ type bloomFilterResponse struct {
 	Filter []byte
 }
 
-// ObjectPathUpdated indicates a path has been updated.
+// NSUpdated indicates namespace has been updated.
 // The function will block until the entry has been picked up.
-func ObjectPathUpdated(s string) {
+func NSUpdated(bucket, prefix string) {
 	if intDataUpdateTracker != nil {
-		intDataUpdateTracker.markDirty(s)
+		intDataUpdateTracker.markDirty(bucket, prefix)
 	}
 }

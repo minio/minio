@@ -22,6 +22,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -33,17 +35,17 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/fips"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/fips"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 // ServerFlags - server command specific flags
@@ -52,6 +54,10 @@ var ServerFlags = []cli.Flag{
 		Name:  "address",
 		Value: ":" + GlobalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+	},
+	cli.StringFlag{
+		Name:  "console-address",
+		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
 	},
 }
 
@@ -117,7 +123,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(globalMinioAddr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
@@ -138,10 +144,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalMinioAddr = globalCLIContext.Addr
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
@@ -211,7 +214,7 @@ func newAllSubsystems() {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
+	globalBucketMonitor = bandwidth.NewMonitor(GlobalContext, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -264,6 +267,7 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, errErasureWriteQuorum) ||
 		errors.Is(err, errErasureReadQuorum) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.As(err, &rquorum) ||
 		errors.As(err, &wquorum) ||
 		isErrBucketNotFound(err) ||
@@ -415,6 +419,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	return nil
 }
 
+type nullWriter struct{}
+
+func (lw nullWriter) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	defer globalDNSCache.Stop()
@@ -473,8 +483,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
-		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
-			"Unable to initialize the server in distributed mode")
+		globalActiveCred = auth.DefaultCredentials
 	}
 
 	// Set system resources to maximum.
@@ -495,6 +504,8 @@ func serverMain(ctx *cli.Context) {
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
+	// Turn-off random logging by Go internally
+	httpServer.ErrorLog = log.New(&nullWriter{}, "", 0)
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -526,11 +537,11 @@ func serverMain(ctx *cli.Context) {
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
+		initHealMRF(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
 	}
 
 	initBackgroundExpiry(GlobalContext, newObject)
-	initDataScanner(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
@@ -544,11 +555,18 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+
+		logger.LogIf(GlobalContext, err)
 	}
+
+	// Initialize users credentials and policies in background right after config has initialized.
+	go globalIAMSys.Init(GlobalContext, newObject)
+
+	initDataScanner(GlobalContext, newObject)
 
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)
-		globalTierJournal, err = initTierDeletionJournal(GlobalContext.Done())
+		globalTierJournal, err = initTierDeletionJournal(GlobalContext)
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
 		}
@@ -563,18 +581,29 @@ func serverMain(ctx *cli.Context) {
 		setCacheObjectLayer(cacheAPI)
 	}
 
-	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject)
-
 	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
-		logger.StartupMessage(color.RedBold(msg))
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables", globalActiveCred)
+		logStartupMessage(color.RedBold(msg))
 	}
 
-	<-globalOSSignalCh
+	if globalBrowserEnabled {
+		consoleSrv, err := initConsoleServer()
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize console service")
+		}
+
+		go func() {
+			logger.FatalIf(consoleSrv.Serve(), "Unable to initialize console server")
+		}()
+
+		<-globalOSSignalCh
+		consoleSrv.Shutdown()
+	} else {
+		<-globalOSSignalCh
+	}
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

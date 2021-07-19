@@ -20,18 +20,18 @@ package cmd
 import (
 	"sync"
 
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/compress"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/notify"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/compress"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/notify"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/event/target"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/quick"
 )
 
 /////////////////// Config V1 ///////////////////

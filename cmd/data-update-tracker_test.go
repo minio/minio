@@ -29,8 +29,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/message/log"
 )
 
 type testLoggerI interface {
@@ -51,7 +51,7 @@ func (t *testingLogger) String() string {
 	return ""
 }
 
-func (t *testingLogger) Validate() error {
+func (t *testingLogger) Init() error {
 	return nil
 }
 
@@ -224,6 +224,7 @@ func TestDataUpdateTracker(t *testing.T) {
 		t.Fatal("wanted oldest index 3, got", bfr2.OldestIdx)
 	}
 
+	t.Logf("Size of filter %d bytes, M: %d, K:%d", len(bfr2.Filter), dut.Current.bf.Cap(), dut.Current.bf.K())
 	// Rerun test with returned bfr2
 	bf := dut.newBloomFilter()
 	_, err = bf.ReadFrom(bytes.NewReader(bfr2.Filter))

@@ -1,8 +1,8 @@
 # Bucket Versioning Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-MinIO versioning is designed to keep multiple versions of an object in one bucket. For example, you could store `spark.csv` (version `ede336f2`) and `spark.csv` (version `fae684da`) in a single bucket. Versioning protects you from unintended overwrites, deletions, to apply retention policies and archive your objects.
+MinIO versioning is designed to keep multiple versions of an object in one bucket. For example, you could store `spark.csv` (version `ede336f2`) and `spark.csv` (version `fae684da`) in a single bucket. Versioning protects you from unintended overwrites, deletions, protect objects with retention policies.
 
-To custom data retention and storage usage, use object versioning with object lifecycle management.  If you have an object expiration lifecycle policy in your non-versioned bucket and you want to maintain the same permanent delete behavior when on versioning-enabled bucket, you must add a noncurrent expiration policy. The noncurrent expiration lifecycle policy will manage the deletes of the noncurrent object versions in the versioning-enabled bucket. (A version-enabled bucket maintains one current and zero or more noncurrent object versions.)
+To control data retention and storage usage, use object versioning with [object lifecycle management](https://github.com/minio/minio/blob/master/docs/bucket/lifecycle/README.md).  If you have an object expiration lifecycle policy in your non-versioned bucket and you want to maintain the same permanent delete behavior when on versioning-enabled bucket, you must add a noncurrent expiration policy. The noncurrent expiration lifecycle policy will manage the deletes of the noncurrent object versions in the versioning-enabled bucket. (A version-enabled bucket maintains one current and zero or more noncurrent object versions.)
 
 Versioning must be explicitly enabled on a bucket, versioning is not enabled by default. Object locking enabled buckets have versioning enabled automatically. Enabling and suspending versioning is done at the bucket level.
 
@@ -12,7 +12,7 @@ When you PUT an object in a versioning-enabled bucket, the noncurrent version is
 
 ![put](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_PUT_versionEnabled.png)
 
-This means accidental overwrites or deletes of objects are protected, allows previous version of on object to be retrieved.
+This protects against accidental overwrites or deletes of objects, allows previous versions to be retrieved.
 
 When you DELETE an object, all versions remain in the bucket and MinIO adds a delete marker, as shown below:
 

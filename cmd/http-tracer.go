@@ -32,8 +32,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/logger"
 	jsonrpc "github.com/minio/rpc"
 )
 
@@ -218,11 +218,16 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Time:     now,
 		Proto:    r.Proto,
 		Method:   r.Method,
-		Path:     r.URL.Path,
 		RawQuery: redactLDAPPwd(r.URL.RawQuery),
 		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 	}
+
+	path := r.URL.RawPath
+	if path == "" {
+		path = r.URL.Path
+	}
+	rq.Path = path
 
 	rw := logger.NewResponseWriter(w)
 	rw.LogErrBody = true

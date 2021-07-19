@@ -45,7 +45,7 @@ var startsWithConds = map[string]bool{
 	"$key":                     true,
 	"$success_action_redirect": true,
 	"$redirect":                true,
-	"$success_action_status":   false,
+	"$success_action_status":   true,
 	"$x-amz-algorithm":         false,
 	"$x-amz-credential":        false,
 	"$x-amz-date":              false,

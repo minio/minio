@@ -44,16 +44,25 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/handlers"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/certs"
 )
 
 const (
 	slashSeparator = "/"
 )
+
+// BucketAccessPolicy - Collection of canned bucket policy at a given prefix.
+type BucketAccessPolicy struct {
+	Bucket string                     `json:"bucket"`
+	Prefix string                     `json:"prefix"`
+	Policy miniogopolicy.BucketPolicy `json:"policy"`
+}
 
 // IsErrIgnored returns whether given error is ignored or not.
 func IsErrIgnored(err error, ignoredErrs ...error) bool {
@@ -921,4 +930,38 @@ func decodeDirObject(object string) string {
 func loadAndResetRPCNetworkErrsCounter() uint64 {
 	defer rest.ResetNetworkErrsCounter()
 	return rest.GetNetworkErrsCounter()
+}
+
+// Helper method to return total number of nodes in cluster
+func totalNodeCount() uint64 {
+	peers, _ := globalEndpoints.peers()
+	totalNodesCount := uint64(len(peers))
+	if totalNodesCount == 0 {
+		totalNodesCount = 1 // For standalone erasure coding
+	}
+	return totalNodesCount
+}
+
+// AuditLogOptions takes options for audit logging subsystem activity
+type AuditLogOptions struct {
+	Trigger   string
+	APIName   string
+	Status    string
+	VersionID string
+}
+
+// sends audit logs for internal subsystem activity
+func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
+	entry := audit.NewEntry(globalDeploymentID)
+	entry.Trigger = opts.Trigger
+	entry.API.Name = opts.APIName
+	entry.API.Bucket = bucket
+	entry.API.Object = object
+	if opts.VersionID != "" {
+		entry.ReqQuery = make(map[string]string)
+		entry.ReqQuery[xhttp.VersionID] = opts.VersionID
+	}
+	entry.API.Status = opts.Status
+	ctx = logger.SetAuditEntry(ctx, &entry)
+	logger.AuditLog(ctx, nil, nil, nil)
 }

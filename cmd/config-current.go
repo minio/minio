@@ -25,25 +25,26 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/api"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/dns"
-	"github.com/minio/minio/cmd/config/etcd"
-	"github.com/minio/minio/cmd/config/heal"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/notify"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/scanner"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/http"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/compress"
+	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/etcd"
+	"github.com/minio/minio/internal/config/heal"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/notify"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/scanner"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/target/http"
+	"github.com/minio/minio/internal/logger/target/kafka"
+	"github.com/minio/pkg/env"
 )
 
 func initHelp() {
@@ -58,7 +59,8 @@ func initHelp() {
 		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
-		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
+		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
 		config.HealSubSys:           heal.DefaultKVS,
 		config.ScannerSubSys:        scanner.DefaultKVS,
 	}
@@ -101,14 +103,6 @@ func initHelp() {
 			Description: "[DEPRECATED] enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
-			Key:         config.KmsVaultSubSys,
-			Description: "enable external HashiCorp Vault key management service",
-		},
-		config.HelpKV{
-			Key:         config.KmsKesSubSys,
-			Description: "enable external MinIO key encryption service",
-		},
-		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
 		},
@@ -128,6 +122,11 @@ func initHelp() {
 		config.HelpKV{
 			Key:             config.AuditWebhookSubSys,
 			Description:     "send audit logs to webhook endpoints",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.AuditKafkaSubSys,
+			Description:     "send audit logs to kafka endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
@@ -205,7 +204,8 @@ func initHelp() {
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
 		config.LoggerWebhookSubSys:  logger.Help,
-		config.AuditWebhookSubSys:   logger.HelpAudit,
+		config.AuditWebhookSubSys:   logger.HelpWebhook,
+		config.AuditKafkaSubSys:     logger.HelpKafka,
 		config.NotifyAMQPSubSys:     notify.HelpAMQP,
 		config.NotifyKafkaSubSys:    notify.HelpKafka,
 		config.NotifyMQTTSubSys:     notify.HelpMQTT,
@@ -486,38 +486,36 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger: %w", err))
 	}
 
-	for k, l := range loggerCfg.HTTP {
+	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = loggerUserAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http logging
-			if err = logger.AddTarget(
-				http.New(
-					http.WithTargetName(k),
-					http.WithEndpoint(l.Endpoint),
-					http.WithAuthToken(l.AuthToken),
-					http.WithUserAgent(loggerUserAgent),
-					http.WithLogKind(string(logger.All)),
-					http.WithTransport(NewGatewayHTTPTransport()),
-				),
-			); err != nil {
+			if err = logger.AddTarget(http.New(l)); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize console HTTP target: %w", err))
 			}
 		}
 	}
 
-	for k, l := range loggerCfg.Audit {
+	for _, l := range loggerCfg.AuditWebhook {
 		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = loggerUserAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http audit logging
-			if err = logger.AddAuditTarget(
-				http.New(
-					http.WithTargetName(k),
-					http.WithEndpoint(l.Endpoint),
-					http.WithAuthToken(l.AuthToken),
-					http.WithUserAgent(loggerUserAgent),
-					http.WithLogKind(string(logger.All)),
-					http.WithTransport(NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)),
-				),
-			); err != nil {
+			if err = logger.AddAuditTarget(http.New(l)); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit HTTP target: %w", err))
+			}
+		}
+	}
+
+	for _, l := range loggerCfg.AuditKafka {
+		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			// Enable Kafka audit logging
+			if err = logger.AddAuditTarget(kafka.New(l)); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit Kafka target: %w", err))
 			}
 		}
 	}
@@ -725,8 +723,8 @@ func loadConfig(objAPI ObjectLayer) error {
 func getOpenIDValidators(cfg openid.Config) *openid.Validators {
 	validators := openid.NewValidators()
 
-	if cfg.JWKS.URL != nil {
-		validators.Add(openid.NewJWT(cfg))
+	if cfg.Enabled {
+		validators.Add(&cfg)
 	}
 
 	return validators

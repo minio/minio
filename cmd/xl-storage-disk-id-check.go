@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	ewma "github.com/VividCortex/ewma"
+	"github.com/VividCortex/ewma"
 	"github.com/minio/madmin-go"
 )
 
@@ -58,6 +58,7 @@ const (
 	storageMetricUpdateMetadata
 	storageMetricReadVersion
 	storageMetricReadAll
+	storageStatInfoFile
 
 	// .... add more
 
@@ -158,7 +159,7 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 
-func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
 	select {
 	case <-ctx.Done():
 		return dataUsageCache{}, ctx.Err()
@@ -168,7 +169,7 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err
 	}
-	return p.storage.NSScanner(ctx, cache)
+	return p.storage.NSScanner(ctx, cache, updates)
 }
 
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
@@ -609,6 +610,22 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	}
 
 	return p.storage.ReadAll(ctx, volume, path)
+}
+
+func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	defer p.updateStorageMetrics(storageStatInfoFile, volume, path)()
+
+	select {
+	case <-ctx.Done():
+		return StatInfo{}, ctx.Err()
+	default:
+	}
+
+	if err = p.checkDiskStale(); err != nil {
+		return StatInfo{}, err
+	}
+
+	return p.storage.StatInfoFile(ctx, volume, path)
 }
 
 func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {

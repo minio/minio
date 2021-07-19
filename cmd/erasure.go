@@ -28,24 +28,16 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/bpool"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/dsync"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/console"
 )
 
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
-
-// partialOperation is a successful upload/delete of an object
-// but not written in all disks (having quorum)
-type partialOperation struct {
-	bucket    string
-	object    string
-	versionID string
-	failedSet int
-}
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
@@ -73,7 +65,9 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	mrfOpCh chan partialOperation
+	// Byte pools used for temporary i/o buffers,
+	// legacy objects.
+	bpOld *bpool.BytePoolCap
 
 	deletedCleanupSleeper *dynamicSleeper
 }
@@ -475,11 +469,28 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 						NextCycle:  0,
 					}
 				}
+				// Collect updates.
+				updates := make(chan dataUsageEntry, 1)
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func(name string) {
+					defer wg.Done()
+					for update := range updates {
+						bucketResults <- dataUsageEntryInfo{
+							Name:   name,
+							Parent: dataUsageRoot,
+							Entry:  update,
+						}
+						if intDataUpdateTracker.debug {
+							console.Debugln("bucket", bucket.Name, "got update", update)
+						}
+					}
+				}(cache.Info.Name)
 
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error
-				cache, err = disk.NSScanner(ctx, cache)
+				cache, err = disk.NSScanner(ctx, cache, updates)
 				cache.Info.BloomFilter = nil
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
@@ -490,6 +501,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 					continue
 				}
 
+				wg.Wait()
 				var root dataUsageEntry
 				if r := cache.root(); r != nil {
 					root = cache.flatten(*r)

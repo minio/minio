@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 type scanStatus uint8
@@ -65,8 +65,6 @@ type metacache struct {
 	ended        time.Time  `msg:"end"`
 	lastUpdate   time.Time  `msg:"u"`
 	lastHandout  time.Time  `msg:"lh"`
-	startedCycle uint64     `msg:"stc"`
-	endedCycle   uint64     `msg:"endc"`
 	dataVersion  uint8      `msg:"v"`
 }
 
@@ -74,66 +72,8 @@ func (m *metacache) finished() bool {
 	return !m.ended.IsZero()
 }
 
-// matches returns whether the metacache matches the options given.
-func (m *metacache) matches(o *listPathOptions, extend time.Duration) bool {
-	if o == nil {
-		return false
-	}
-
-	// Never return transient caches if there is no id.
-	if m.status == scanStateError || m.status == scanStateNone || m.dataVersion != metacacheStreamVersion {
-		o.debugf("cache %s state or stream version mismatch", m.id)
-		return false
-	}
-	if m.startedCycle < o.OldestCycle {
-		o.debugf("cache %s cycle too old", m.id)
-		return false
-	}
-
-	// Root of what we are looking for must at least have the same
-	if !strings.HasPrefix(o.BaseDir, m.root) {
-		o.debugf("cache %s prefix mismatch, cached:%v, want:%v", m.id, m.root, o.BaseDir)
-		return false
-	}
-	if m.filter != "" && strings.HasPrefix(m.filter, o.FilterPrefix) {
-		o.debugf("cache %s cannot be used because of filter %s", m.id, m.filter)
-		return false
-	}
-
-	if o.Recursive && !m.recursive {
-		o.debugf("cache %s not recursive", m.id)
-		// If this is recursive the cached listing must be as well.
-		return false
-	}
-	if o.Separator != slashSeparator && !m.recursive {
-		o.debugf("cache %s not slashsep and not recursive", m.id)
-		// Non slash separator requires recursive.
-		return false
-	}
-	if !m.finished() && time.Since(m.lastUpdate) > metacacheMaxRunningAge {
-		o.debugf("cache %s not running, time: %v", m.id, time.Since(m.lastUpdate))
-		// Abandoned
-		return false
-	}
-
-	if m.finished() && m.endedCycle <= o.OldestCycle {
-		if extend <= 0 {
-			// If scan has ended the oldest requested must be less.
-			o.debugf("cache %s ended and cycle (%v) <= oldest allowed (%v)", m.id, m.endedCycle, o.OldestCycle)
-			return false
-		}
-		if time.Since(m.lastUpdate) > metacacheMaxRunningAge+extend {
-			// Cache ended within bloom cycle, but we can extend the life.
-			o.debugf("cache %s ended (%v) and beyond extended life (%v)", m.id, m.lastUpdate, metacacheMaxRunningAge+extend)
-			return false
-		}
-	}
-
-	return true
-}
-
 // worthKeeping indicates if the cache by itself is worth keeping.
-func (m *metacache) worthKeeping(currentCycle uint64) bool {
+func (m *metacache) worthKeeping() bool {
 	if m == nil {
 		return false
 	}
@@ -142,57 +82,14 @@ func (m *metacache) worthKeeping(currentCycle uint64) bool {
 	case !cache.finished() && time.Since(cache.lastUpdate) > metacacheMaxRunningAge:
 		// Not finished and update for metacacheMaxRunningAge, discard it.
 		return false
-	case cache.finished() && cache.startedCycle > currentCycle:
-		// Cycle is somehow bigger.
-		return false
-	case cache.finished() && time.Since(cache.lastHandout) > 48*time.Hour:
-		// Keep only for 2 days. Fallback if scanner is clogged.
-		return false
-	case cache.finished() && currentCycle >= dataUsageUpdateDirCycles && cache.startedCycle < currentCycle-dataUsageUpdateDirCycles:
-		// Cycle is too old to be valuable.
+	case cache.finished() && time.Since(cache.lastHandout) > 30*time.Minute:
+		// Keep only for 30 minutes.
 		return false
 	case cache.status == scanStateError || cache.status == scanStateNone:
 		// Remove failed listings after 5 minutes.
-		return time.Since(cache.lastUpdate) < 5*time.Minute
+		return time.Since(cache.lastUpdate) > 5*time.Minute
 	}
 	return true
-}
-
-// canBeReplacedBy.
-// Both must pass the worthKeeping check.
-func (m *metacache) canBeReplacedBy(other *metacache) bool {
-	// If the other is older it can never replace.
-	if other.started.Before(m.started) || m.id == other.id {
-		return false
-	}
-	if other.status == scanStateNone || other.status == scanStateError {
-		return false
-	}
-	if m.status == scanStateStarted && time.Since(m.lastUpdate) < metacacheMaxRunningAge {
-		return false
-	}
-
-	// Keep it around a bit longer.
-	if time.Since(m.lastHandout) < 30*time.Minute || time.Since(m.lastUpdate) < metacacheMaxRunningAge {
-		return false
-	}
-
-	// Go through recursive combinations.
-	switch {
-	case !m.recursive && !other.recursive:
-		// If both not recursive root must match.
-		return m.root == other.root && strings.HasPrefix(m.filter, other.filter)
-	case m.recursive && !other.recursive:
-		// A recursive can never be replaced by a non-recursive
-		return false
-	case !m.recursive && other.recursive:
-		// If other is recursive it must contain this root
-		return strings.HasPrefix(m.root, other.root) && other.filter == ""
-	case m.recursive && other.recursive:
-		// Similar if both are recursive
-		return strings.HasPrefix(m.root, other.root) && other.filter == ""
-	}
-	panic("should be unreachable")
 }
 
 // baseDirFromPrefix will return the base directory given an object path.
@@ -218,11 +115,15 @@ func (m *metacache) update(update metacache) {
 
 	if m.status == scanStateStarted && update.status == scanStateSuccess {
 		m.ended = UTCNow()
-		m.endedCycle = update.endedCycle
 	}
 
 	if m.status == scanStateStarted && update.status != scanStateStarted {
 		m.status = update.status
+	}
+
+	if m.status == scanStateStarted && time.Since(m.lastHandout) > 15*time.Minute {
+		m.status = scanStateError
+		m.error = "client not seen"
 	}
 
 	if m.error == "" && update.error != "" {

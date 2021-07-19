@@ -24,7 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // Reads in parallel from readers.
@@ -117,6 +117,8 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	}
 
 	readTriggerCh := make(chan bool, len(p.readers))
+	defer close(readTriggerCh) // close the channel upon return
+
 	for i := 0; i < p.dataBlocks; i++ {
 		// Setup read triggers for p.dataBlocks number of reads so that it reads in parallel.
 		readTriggerCh <- true

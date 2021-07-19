@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -775,7 +775,7 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 }
 
 // writeErrorRespone writes error headers
-func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, browser bool) {
+func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	switch err.Code {
 	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
@@ -785,14 +785,6 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalServerRegion)
 	case "AuthorizationHeaderMalformed":
 		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
-	case "AccessDenied":
-		// The request is from browser and also if browser
-		// is enabled we need to redirect.
-		if browser && globalBrowserEnabled {
-			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
-			w.WriteHeader(http.StatusTemporaryRedirect)
-			return
-		}
 	}
 
 	// Generate error response.

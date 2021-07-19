@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/logger"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/pkg/net"
 )
 
 // IPv4 addresses of local host.
@@ -154,6 +154,26 @@ func sortIPs(ipList []string) []string {
 	}
 
 	return append(nonIPs, ips...)
+}
+
+func getConsoleEndpoints() (consoleEndpoints []string) {
+	if globalBrowserRedirectURL != nil {
+		return []string{globalBrowserRedirectURL.String()}
+	}
+	var ipList []string
+	if globalMinioConsoleHost == "" {
+		ipList = sortIPs(mustGetLocalIP4().ToSlice())
+		ipList = append(ipList, mustGetLocalIP6().ToSlice()...)
+	} else {
+		ipList = []string{globalMinioConsoleHost}
+	}
+
+	for _, ip := range ipList {
+		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(ip, globalMinioConsolePort))
+		consoleEndpoints = append(consoleEndpoints, endpoint)
+	}
+
+	return consoleEndpoints
 }
 
 func getAPIEndpoints() (apiEndpoints []string) {

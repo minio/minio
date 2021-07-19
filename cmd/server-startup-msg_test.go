@@ -50,20 +50,20 @@ func TestStorageInfoMsg(t *testing.T) {
 func TestStripStandardPorts(t *testing.T) {
 	apiEndpoints := []string{"http://127.0.0.1:9000", "http://127.0.0.2:80", "https://127.0.0.3:443"}
 	expectedAPIEndpoints := []string{"http://127.0.0.1:9000", "http://127.0.0.2", "https://127.0.0.3"}
-	newAPIEndpoints := stripStandardPorts(apiEndpoints)
+	newAPIEndpoints := stripStandardPorts(apiEndpoints, "")
 
 	if !reflect.DeepEqual(expectedAPIEndpoints, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", expectedAPIEndpoints, newAPIEndpoints)
 	}
 
 	apiEndpoints = []string{"http://%%%%%:9000"}
-	newAPIEndpoints = stripStandardPorts(apiEndpoints)
+	newAPIEndpoints = stripStandardPorts(apiEndpoints, "")
 	if !reflect.DeepEqual([]string{""}, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
 	}
 
 	apiEndpoints = []string{"http://127.0.0.1:443", "https://127.0.0.1:80"}
-	newAPIEndpoints = stripStandardPorts(apiEndpoints)
+	newAPIEndpoints = stripStandardPorts(apiEndpoints, "")
 	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
 	}

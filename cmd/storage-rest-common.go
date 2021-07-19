@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v33" // Added transition related information to FileInfo
+	storageRESTVersion       = "v37" // cleanup behavior change at storage layer.
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -52,6 +52,7 @@ const (
 	storageRESTMethodRenameFile     = "/renamefile"
 	storageRESTMethodVerifyFile     = "/verifyfile"
 	storageRESTMethodWalkDir        = "/walkdir"
+	storageRESTMethodStatInfoFile   = "/statfile"
 )
 
 const (

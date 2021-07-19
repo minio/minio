@@ -28,16 +28,16 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/etcd"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/etcd"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) (auth.Credentials, ObjectLayer) {
@@ -178,16 +178,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg := globalServerConfig
-	if newObjectLayerFn() == nil {
-		var err error
-		cfg, err = getValidConfig(objectAPI)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-	}
-
+	cfg := globalServerConfig.Clone()
 	vars := mux.Vars(r)
 	var buf = &bytes.Buffer{}
 	cw := config.NewConfigWriteTo(cfg, vars["key"])
@@ -421,11 +412,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	cfg := globalServerConfig.Clone()
 
 	var s strings.Builder
 	hkvs := config.HelpSubSysMap[""]

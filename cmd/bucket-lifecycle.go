@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,12 +31,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	sse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/s3select"
+	sse "github.com/minio/minio/internal/bucket/encryption"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/event"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/s3select"
 )
 
 const (
@@ -45,6 +46,8 @@ const (
 	TransitionStatus = "transition-status"
 	// TransitionedObjectName name of transitioned object
 	TransitionedObjectName = "transitioned-object"
+	// TransitionedVersionID is version of remote object
+	TransitionedVersionID = "transitioned-versionID"
 	// TransitionTier name of transition storage class
 	TransitionTier = "transition-tier"
 )
@@ -175,28 +178,16 @@ func initBackgroundTransition(ctx context.Context, objectAPI ObjectLayer) {
 	}
 }
 
-func validateLifecycleTransition(ctx context.Context, bucket string, lfc *lifecycle.Lifecycle) error {
-	for _, rule := range lfc.Rules {
-		if rule.Transition.StorageClass != "" {
-			err := validateTransitionDestination(rule.Transition.StorageClass)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
+var errInvalidStorageClass = errors.New("invalid storage class")
 
-// validateTransitionDestination returns error if transition destination bucket missing or not configured
-// It also returns true if transition destination is same as this server.
-func validateTransitionDestination(sc string) error {
-	backend, err := globalTierConfigMgr.getDriver(sc)
-	if err != nil {
-		return TransitionStorageClassNotFound{}
-	}
-	_, err = backend.Get(context.Background(), "probeobject", WarmBackendGetOpts{})
-	if !isErrObjectNotFound(err) {
-		return err
+func validateTransitionTier(ctx context.Context, lfc *lifecycle.Lifecycle) error {
+	for _, rule := range lfc.Rules {
+		if rule.Transition.StorageClass == "" {
+			continue
+		}
+		if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
+			return errInvalidStorageClass
+		}
 	}
 	return nil
 }
@@ -219,41 +210,46 @@ const (
 //
 // 1. when a restored (via PostRestoreObject API) object expires.
 // 2. when a transitioned object expires (based on an ILM rule).
-func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, remoteObject, tier string, action expireAction) error {
+func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *ObjectInfo, lcOpts lifecycle.ObjectOpts, action expireAction) error {
 	var opts ObjectOptions
-	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
+	opts.Versioned = globalBucketVersioningSys.Enabled(oi.Bucket)
 	opts.VersionID = lcOpts.VersionID
 	switch action {
 	case expireObj:
 		// When an object is past expiry or when a transitioned object is being
 		// deleted, 'mark' the data in the remote tier for delete.
-		if err := globalTierJournal.AddEntry(jentry{ObjName: remoteObject, TierName: tier}); err != nil {
+		entry := jentry{
+			ObjName:   oi.transitionedObjName,
+			VersionID: oi.transitionVersionID,
+			TierName:  oi.TransitionTier,
+		}
+		if err := globalTierJournal.AddEntry(entry); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
 		// Delete metadata on source, now that data in remote tier has been
 		// marked for deletion.
-		if _, err := objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+		if _, err := objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
 
 		// Send audit for the lifecycle delete operation
-		auditLogLifecycle(ctx, bucket, object)
+		auditLogLifecycle(ctx, *oi, ILMExpiry)
 
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
 		objInfo := ObjectInfo{
-			Name:         object,
+			Name:         oi.Name,
 			VersionID:    lcOpts.VersionID,
 			DeleteMarker: lcOpts.DeleteMarker,
 		}
 		// Notify object deleted event.
 		sendEvent(eventArgs{
 			EventName:  eventName,
-			BucketName: bucket,
+			BucketName: oi.Bucket,
 			Object:     objInfo,
 			Host:       "Internal: [ILM-EXPIRY]",
 		})
@@ -263,7 +259,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 		// from the source, while leaving metadata behind. The data on
 		// transitioned tier lies untouched and still accessible
 		opts.Transition.ExpireRestored = true
-		_, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
+		_, err := objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
 		return err
 	default:
 		return fmt.Errorf("Unknown expire action %v", action)
@@ -297,11 +293,12 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 		UserTags: oi.UserTags,
 	}
 	tierName := getLifeCycleTransitionTier(ctx, lc, oi.Bucket, lcOpts)
-	opts := ObjectOptions{Transition: TransitionOptions{
-		Status: lifecycle.TransitionPending,
-		Tier:   tierName,
-		ETag:   oi.ETag,
-	},
+	opts := ObjectOptions{
+		Transition: TransitionOptions{
+			Status: lifecycle.TransitionPending,
+			Tier:   tierName,
+			ETag:   oi.ETag,
+		},
 		VersionID: oi.VersionID,
 		Versioned: globalBucketVersioningSys.Enabled(oi.Bucket),
 		MTime:     oi.ModTime,
@@ -338,14 +335,14 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		gopts.length = length
 	}
 
-	reader, err := tgtClient.Get(ctx, oi.transitionedObjName, gopts)
+	reader, err := tgtClient.Get(ctx, oi.transitionedObjName, remoteVersionID(oi.transitionVersionID), gopts)
 	if err != nil {
 		return nil, err
 	}
 	closer := func() {
 		reader.Close()
 	}
-	return fn(reader, h, opts.CheckPrecondFn, closer)
+	return fn(reader, h, closer)
 }
 
 // RestoreRequestType represents type of restore.

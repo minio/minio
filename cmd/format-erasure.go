@@ -29,12 +29,12 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
-	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/storageclass"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 const (
@@ -242,7 +242,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
@@ -284,7 +284,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // countErrs - count a specific error.

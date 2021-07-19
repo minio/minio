@@ -43,7 +43,7 @@ type StorageAPI interface {
 	Healing() *healingTracker // Returns nil if disk is not healing.
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
-	NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)
@@ -74,6 +74,7 @@ type StorageAPI interface {
 	CheckFile(ctx context.Context, volume string, path string) (err error)
 	Delete(ctx context.Context, volume string, path string, recursive bool) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
+	StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error)
 
 	// Write all data, syncs the data to disk.
 	// Should be used for smaller payloads.

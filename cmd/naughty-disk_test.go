@@ -110,8 +110,8 @@ func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }
 
-func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
-	return d.disk.NSScanner(ctx, cache)
+func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (info dataUsageCache, err error) {
+	return d.disk.NSScanner(ctx, cache, updates)
 }
 
 func (d *naughtyDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
@@ -290,4 +290,11 @@ func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi Fi
 		return err
 	}
 	return d.disk.VerifyFile(ctx, volume, path, fi)
+}
+
+func (d *naughtyDisk) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	if err := d.calcError(); err != nil {
+		return stat, err
+	}
+	return d.disk.StatInfoFile(ctx, volume, path)
 }

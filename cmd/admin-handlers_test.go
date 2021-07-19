@@ -31,7 +31,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
 )
 
 // adminErasureTestBed - encapsulates subsystems that need to be setup for
@@ -77,7 +77,7 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
-	registerAdminRouter(adminRouter, true, true)
+	registerAdminRouter(adminRouter, true)
 
 	return &adminErasureTestBed{
 		erasureDirs: erasureDirs,

@@ -22,8 +22,9 @@ import (
 	"os"
 	"testing"
 
-	xjwt "github.com/minio/minio/cmd/jwt"
-	"github.com/minio/minio/pkg/auth"
+	jwtgo "github.com/golang-jwt/jwt"
+	"github.com/minio/minio/internal/auth"
+	xjwt "github.com/minio/minio/internal/jwt"
 )
 
 func testAuthenticate(authType string, t *testing.T) {
@@ -89,6 +90,14 @@ func TestAuthenticateWeb(t *testing.T) {
 
 func TestAuthenticateURL(t *testing.T) {
 	testAuthenticate("url", t)
+}
+
+func getTokenString(accessKey, secretKey string) (string, error) {
+	claims := xjwt.NewMapClaims()
+	claims.SetExpiry(UTCNow().Add(defaultJWTExpiry))
+	claims.SetAccessKey(accessKey)
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
+	return token.SignedString([]byte(secretKey))
 }
 
 // Tests web request authenticator.

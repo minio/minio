@@ -26,11 +26,14 @@ import (
 	"sort"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/bucket/replication"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
+
+// Object was stored with additional erasure codes due to degraded system at upload time
+const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
 
@@ -152,6 +155,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 
 	objInfo.TransitionStatus = fi.TransitionStatus
 	objInfo.transitionedObjName = fi.TransitionedObjName
+	objInfo.transitionVersionID = fi.TransitionVersionID
+	objInfo.tierFreeVersion = fi.TierFreeVersion()
 	objInfo.TransitionTier = fi.TransitionTier
 
 	// etag/md5Sum has already been extracted. We need to
@@ -239,7 +244,11 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 	return 0, 0, InvalidRange{}
 }
 
-func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
+func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (FileInfo, error) {
+	// with less quorum return error.
+	if quorum < 2 {
+		return FileInfo{}, errErasureReadQuorum
+	}
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
 	for i, meta := range metaArr {
@@ -278,7 +287,9 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 	for i, hash := range metaHashes {
 		if hash == maxHash {
-			return metaArr[i], nil
+			if metaArr[i].IsValid() {
+				return metaArr[i], nil
+			}
 		}
 	}
 
@@ -287,7 +298,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
-func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (xmv FileInfo, e error) {
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, dataDir string, quorum int) (FileInfo, error) {
 	return findFileInfoInQuorum(ctx, metaArr, modTime, dataDir, quorum)
 }
 
@@ -329,10 +340,18 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		return 0, 0, err
 	}
 
-	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if !latestFileInfo.IsValid() {
+		return 0, 0, errErasureReadQuorum
+	}
+
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
 	if parityBlocks <= 0 {
 		parityBlocks = defaultParityCount
+	}
+
+	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	if dataBlocks == 0 {
+		dataBlocks = len(partsMetaData) - parityBlocks
 	}
 
 	writeQuorum := dataBlocks
@@ -343,4 +362,39 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
 	// from latestFileInfo to get the quorum
 	return dataBlocks, writeQuorum, nil
+}
+
+const (
+	tierFVID     = "tier-free-versionID"
+	tierFVMarker = "tier-free-marker"
+)
+
+// SetTierFreeVersionID sets free-version's versionID. This method is used by
+// object layer to pass down a versionID to set for a free-version that may be
+// created.
+func (fi *FileInfo) SetTierFreeVersionID(versionID string) {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+tierFVID] = versionID
+}
+
+// TierFreeVersionID returns the free-version's version id.
+func (fi *FileInfo) TierFreeVersionID() string {
+	return fi.Metadata[ReservedMetadataPrefixLower+tierFVID]
+}
+
+// SetTierFreeVersion sets fi as a free-version. This method is used by
+// lower layers to indicate a free-version.
+func (fi *FileInfo) SetTierFreeVersion() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker] = ""
+}
+
+// TierFreeVersion returns true if version is a free-version.
+func (fi *FileInfo) TierFreeVersion() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker]
+	return ok
 }

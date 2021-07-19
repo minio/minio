@@ -24,8 +24,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 const (
@@ -42,12 +42,12 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	if !objAPI.IsEncryptionSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -55,13 +55,13 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketEncryptionAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -73,25 +73,25 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 			Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, err),
 			HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
 		}
-		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
 	// Return error if KMS is not initialized
 	if GlobalKMS == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
 
 	configData, err := xml.Marshal(encConfig)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// Store the bucket encryption configuration in the object layer
 	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, configData); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (api objectAPIHandlers) GetBucketEncryptionHandler(w http.ResponseWriter, r
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
@@ -115,26 +115,26 @@ func (api objectAPIHandlers) GetBucketEncryptionHandler(w http.ResponseWriter, r
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketEncryptionAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Check if bucket exists
 	var err error
 	if _, err = objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	config, err := globalBucketMetadataSys.GetSSEConfig(bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	configData, err := xml.Marshal(config)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
@@ -158,20 +158,20 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketEncryptionAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Check if bucket exists
 	var err error
 	if _, err = objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// Delete bucket encryption config from object layer
 	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, nil); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 

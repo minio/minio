@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config/api"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/sys"
+	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/sys"
 )
 
 type apiConfig struct {
@@ -34,7 +34,6 @@ type apiConfig struct {
 	requestsPool     chan struct{}
 	clusterDeadline  time.Duration
 	listQuorum       int
-	extendListLife   time.Duration
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
 	totalDriveCount          int
@@ -81,7 +80,6 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
-	t.extendListLife = cfg.ExtendListLife
 	if globalReplicationPool != nil &&
 		cfg.ReplicationWorkers != t.replicationWorkers {
 		globalReplicationPool.ResizeFailedWorkers(cfg.ReplicationFailedWorkers)
@@ -96,13 +94,6 @@ func (t *apiConfig) getListQuorum() int {
 	defer t.mu.RUnlock()
 
 	return t.listQuorum
-}
-
-func (t *apiConfig) getExtendListLife() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.extendListLife
 }
 
 func (t *apiConfig) getCorsAllowOrigins() []string {
@@ -159,7 +150,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),
-				r.URL, guessIsBrowserReq(r))
+				r.URL)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():

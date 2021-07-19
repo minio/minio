@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
-	xnet "github.com/minio/minio/pkg/net"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/selfupdate"
 )
 
@@ -466,7 +466,7 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 	// Check if we are docker environment, return docker update command
 	if IsDocker() {
 		// Construct release tag name.
-		return fmt.Sprintf("docker pull minio/minio:%s", releaseTag)
+		return fmt.Sprintf("podman pull minio/minio:%s", releaseTag)
 	}
 
 	// For binary only installations, we return link to the latest binary.

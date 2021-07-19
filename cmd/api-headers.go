@@ -28,9 +28,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // Returns a hexadecimal representation of time at the

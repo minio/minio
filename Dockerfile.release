@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4
 
 ARG TARGETARCH
 
@@ -17,7 +17,8 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_ROOT_USER_FILE=access_key \
     MINIO_ROOT_PASSWORD_FILE=secret_key \
     MINIO_KMS_SECRET_KEY_FILE=kms_master_key \
-    MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
+    MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav" \
+    MINIO_CONFIG_ENV_FILE=config.env
 
 COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
@@ -26,7 +27,7 @@ COPY LICENSE /licenses/LICENSE
 
 RUN \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux iproute iputils --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
      microdnf install minisign --nodocs && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE} -o /usr/bin/minio && \

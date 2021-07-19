@@ -18,10 +18,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"path"
 	"strings"
 	"sync"
@@ -29,12 +26,11 @@ import (
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -79,12 +75,8 @@ func (iamOS *IAMObjectStore) runlock() {
 // location.
 //
 // 3. Migrate user identity json file to include version info.
-func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool) error {
+func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context) error {
 	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -112,10 +104,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 
 			// 2. copy policy file to new location.
 			mp := newMappedPolicy(policyName)
-			userType := regularUser
-			if isSTS {
-				userType = stsUser
-			}
+			userType := regUser
 			if err := iamOS.saveMappedPolicy(ctx, user, userType, false, mp); err != nil {
 				return err
 			}
@@ -127,7 +116,9 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 	next:
 		// 4. check if user identity has old format.
 		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		var cred auth.Credentials
+		var cred = auth.Credentials{
+			AccessKey: user,
+		}
 		if err := iamOS.loadIAMConfig(ctx, &cred, identityPath); err != nil {
 			switch err {
 			case errConfigNotFound:
@@ -141,15 +132,11 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 		// If the file is already in the new format,
 		// then the parsed auth.Credentials will have
 		// the zero value for the struct.
-		var zeroCred auth.Credentials
-		if cred.Equal(zeroCred) {
+		if !cred.IsValid() {
 			// nothing to do
 			continue
 		}
 
-		// Found a id file in old format. Copy value
-		// into new format and save it.
-		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := iamOS.saveIAMConfig(ctx, u, identityPath); err != nil {
 			logger.LogIf(ctx, err)
@@ -171,28 +158,21 @@ func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
+			// if IAM format
 			return err
 		}
-	} else {
-		if iamFmt.Version >= iamFormatVersion1 {
-			// Nothing to do.
-			return nil
-		}
-		// This case should not happen
-		// (i.e. Version is 0 or negative.)
-		return errors.New("got an invalid IAM format version")
 	}
 
-	// Migrate long-term users
-	if err := iamOS.migrateUsersConfigToV1(ctx, false); err != nil {
+	if iamFmt.Version >= iamFormatVersion1 {
+		// Nothing to do.
+		return nil
+	}
+
+	if err := iamOS.migrateUsersConfigToV1(ctx); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
-	// Migrate STS users
-	if err := iamOS.migrateUsersConfigToV1(ctx, true); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
+
 	// Save iam format to version 1.
 	if err := iamOS.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
 		logger.LogIf(ctx, err)
@@ -207,6 +187,7 @@ func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
 }
 
 func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -227,22 +208,12 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 	if err != nil {
 		return err
 	}
-	if !utf8.Valid(data) {
-		if GlobalKMS != nil {
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-				minioMetaBucket: path.Join(minioMetaBucket, objPath),
-			})
-			if err != nil {
-				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-			if err != nil {
-				return err
-			}
+	if !utf8.Valid(data) && GlobalKMS != nil {
+		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, objPath),
+		})
+		if err != nil {
+			return err
 		}
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -308,7 +279,7 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
 	var basePrefix string
 	switch userType {
-	case srvAccUser:
+	case svcUser:
 		basePrefix = iamConfigServiceAccountsPrefix
 	case stsUser:
 		basePrefix = iamConfigSTSPrefix
@@ -377,7 +348,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 		basePath = iamConfigPolicyDBGroupsPrefix
 	} else {
 		switch userType {
-		case srvAccUser:
+		case svcUser:
 			basePath = iamConfigPolicyDBServiceAccountsPrefix
 		case stsUser:
 			basePath = iamConfigPolicyDBSTSUsersPrefix

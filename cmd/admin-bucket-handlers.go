@@ -26,8 +26,8 @@ import (
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const (
@@ -66,12 +66,12 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	}
 
 	if _, err = parseBucketQuota(bucket, data); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	if err = globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, data); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -205,6 +205,12 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		}
 		target = tgt
 	}
+
+	// enforce minimum bandwidth limit as 100MBps
+	if target.BandwidthLimit > 0 && target.BandwidthLimit < 100*1000*1000 {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationBandwidthLimitError, err), r.URL)
+		return
+	}
 	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, update); err != nil {
 		switch err.(type) {
 		case BucketRemoteConnectionErr:
@@ -216,7 +222,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 	tgtBytes, err := json.Marshal(&targets)
@@ -225,7 +231,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		return
 	}
 	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -310,7 +316,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 	}
 	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 	tgtBytes, err := json.Marshal(&targets)
@@ -319,7 +325,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 		return
 	}
 	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 

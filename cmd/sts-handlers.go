@@ -27,12 +27,12 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/identity/openid"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (
@@ -64,8 +64,19 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser = "ldapUser"
+	ldapUser  = "ldapUser"
+	ldapUserN = "ldapUsername"
 )
+
+func parseOpenIDParentUser(parentUser string) (userID string, err error) {
+	if strings.HasPrefix(parentUser, "openid:") {
+		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "openid:"), ":", 2)
+		if len(tokens) == 2 {
+			return tokens[0], nil
+		}
+	}
+	return "", errSkipFile
+}
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
 type stsAPIHandlers struct{}
@@ -119,12 +130,12 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 		return user, true, ErrSTSAccessDenied
 	case authTypeSigned:
 		s3Err := isReqAuthenticated(ctx, r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 
 		user, _, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
-		if APIErrorCode(s3Err) != ErrNone {
+		if s3Err != ErrNone {
 			return user, false, STSErrorCode(s3Err)
 		}
 
@@ -342,14 +353,21 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// JWT custom claims.
 	var policyName string
 	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
+	policies := strings.Join(policySet.ToSlice(), ",")
 	if ok {
-		policyName = globalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
+		policyName = globalIAMSys.CurrentPolicies(policies)
 	}
 
-	if policyName == "" && globalPolicyOPA == nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-			fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
-		return
+	if globalPolicyOPA == nil {
+		if !ok {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
+			return
+		} else if policyName == "" {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", policies))
+			return
+		}
 	}
 	m[iamPolicyClaimNameOpenID()] = policyName
 
@@ -390,7 +408,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// this is to ensure that ParentUser doesn't change and we get to use
 	// parentUser as per the requirements for service accounts for OpenID
 	// based logins.
-	cred.ParentUser = "jwt:" + subFromToken + ":" + issFromToken
+	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
@@ -516,7 +534,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-	if len(ldapPolicies) == 0 {
+	if len(ldapPolicies) == 0 && globalPolicyOPA == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
 				ldapUserDN, strings.Join(groupDistNames, "`,`")))
@@ -525,8 +543,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim: UTCNow().Add(expiryDur).Unix(),
-		ldapUser: ldapUserDN,
+		expClaim:  UTCNow().Add(expiryDur).Unix(),
+		ldapUser:  ldapUserDN,
+		ldapUserN: ldapUsername,
 	}
 
 	if len(sessionPolicyStr) > 0 {

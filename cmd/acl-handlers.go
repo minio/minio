@@ -23,9 +23,9 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/policy"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // Data types used for returning dummy access control
@@ -68,21 +68,21 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	// Allow putBucketACL if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -92,26 +92,26 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 		if err = xmlDecoder(r.Body, acl, r.ContentLength); err != nil {
 			if err == io.EOF {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingSecurityHeader),
-					r.URL, guessIsBrowserReq(r))
+					r.URL)
 				return
 			}
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
 
 		if len(acl.AccessControlList.Grants) == 0 {
-			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 			return
 		}
 
 		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
-			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 			return
 		}
 	}
 
 	if aclHeader != "" && aclHeader != "private" {
-		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 		return
 	}
 
@@ -132,21 +132,21 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	// Allow getBucketACL if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	})
 
 	if err := xml.NewEncoder(w).Encode(acl); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -182,27 +182,27 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 	object, err := unescapePath(vars["object"])
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	// Allow putObjectACL if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Before proceeding validate if object exists.
 	_, err = objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -210,23 +210,23 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 	if aclHeader == "" {
 		acl := &accessControlPolicy{}
 		if err = xmlDecoder(r.Body, acl, r.ContentLength); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
 
 		if len(acl.AccessControlList.Grants) == 0 {
-			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 			return
 		}
 
 		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
-			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 			return
 		}
 	}
 
 	if aclHeader != "" && aclHeader != "private" {
-		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 		return
 	}
 
@@ -246,27 +246,27 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 	object, err := unescapePath(vars["object"])
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
 	// Allow getObjectACL if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
 	// Before proceeding validate if object exists.
 	_, err = objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
@@ -280,7 +280,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 		Permission: "FULL_CONTROL",
 	})
 	if err := xml.NewEncoder(w).Encode(acl); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 

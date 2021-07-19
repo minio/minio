@@ -39,16 +39,16 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
-	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/dns"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/trie"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/minio/internal/config/compress"
+	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/trie"
+	"github.com/minio/pkg/wildcard"
 )
 
 const (
@@ -76,10 +76,7 @@ const (
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
 func isMinioMetaBucketName(bucket string) bool {
-	return bucket == minioMetaBucket ||
-		bucket == minioMetaMultipartBucket ||
-		bucket == minioMetaTmpBucket ||
-		bucket == dataUsageBucket
+	return strings.HasPrefix(bucket, minioMetaBucket)
 }
 
 // IsValidBucketName verifies that a bucket name is in accordance with
@@ -543,11 +540,6 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 		}
 	}
 
-	if isEncryptedMultipart(objectInfo) && firstPartIdx > 0 {
-		off, _, _, _, _, err := objectInfo.GetDecryptedRange(partNumberToRangeSpec(objectInfo, firstPartIdx))
-		logger.LogIf(context.Background(), err)
-		compressedOffset += off
-	}
 	return compressedOffset, offset - skipLength, firstPartIdx
 }
 
@@ -590,7 +582,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 // GetObjectReader and an error. Request headers are passed to provide
 // encryption parameters. cleanupFns allow cleanup funcs to be
 // registered for calling after usage of the reader.
-type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
+type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
 // are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
@@ -598,6 +590,10 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditi
 // not all run!).
 func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 	fn ObjReaderFn, off, length int64, err error) {
+
+	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+		return nil, 0, 0, PreConditionFailed{}
+	}
 
 	if rs == nil && opts.PartNumber > 0 {
 		rs = partNumberToRangeSpec(oi, opts.PartNumber)
@@ -632,6 +628,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
+
 		off, length = int64(0), oi.Size
 		decOff, decLength := int64(0), actualSize
 		if rs != nil {
@@ -639,8 +636,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if err != nil {
 				return nil, 0, 0, err
 			}
+
 			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff, firstPart = getCompressedOffsets(oi, off)
+
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.
@@ -653,21 +652,15 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return nil, 0, 0, errInvalidRange
 			}
 		}
-		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				for _, cFn := range cFns {
-					cFn()
-				}
-				return nil, PreConditionFailed{}
-			}
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
 				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
-					for _, cFn := range cFns {
-						cFn()
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
 					}
 					return nil, err
 				}
@@ -679,8 +672,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if decOff > 0 {
 				if err = s2Reader.Skip(decOff); err != nil {
 					// Call the cleanup funcs
-					for _, cFn := range cFns {
-						cFn()
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
 					}
 					return nil, err
 				}
@@ -732,7 +725,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		// a reader that returns the desired range of
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
-		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
 			// Attach decrypter on inputReader
@@ -744,14 +737,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 					cFns[i]()
 				}
 				return nil, err
-			}
-
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, PreConditionFailed{}
 			}
 
 			oi.ETag = getDecryptedETag(h, oi, false)
@@ -775,14 +760,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, PreConditionFailed{}
-			}
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			r = &GetObjectReader{
 				ObjInfo:    oi,
 				Reader:     inputReader,
@@ -797,6 +775,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 
 // Close - calls the cleanup actions in reverse order
 func (g *GetObjectReader) Close() error {
+	if g == nil {
+		return nil
+	}
 	// sync.Once is used here to ensure that Close() is
 	// idempotent.
 	g.once.Do(func() {
@@ -966,4 +947,69 @@ func compressSelfTest() {
 		logger.Fatal(errSelfTestFailure, "compress: self-test roundtrip mismatch.")
 
 	}
+}
+
+// getDiskInfos returns the disk information for the provided disks.
+// If a disk is nil or an error is returned the result will be nil as well.
+func getDiskInfos(ctx context.Context, disks []StorageAPI) []*DiskInfo {
+	res := make([]*DiskInfo, len(disks))
+	for i, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		if di, err := disk.DiskInfo(ctx); err == nil {
+			res[i] = &di
+		}
+	}
+	return res
+}
+
+// hasSpaceFor returns whether the disks in `di` have space for and object of a given size.
+func hasSpaceFor(di []*DiskInfo, size int64) bool {
+	// We multiply the size by 2 to account for erasure coding.
+	size *= 2
+	if size < 0 {
+		// If no size, assume diskAssumeUnknownSize.
+		size = diskAssumeUnknownSize
+	}
+
+	var available uint64
+	var total uint64
+	var nDisks int
+	for _, disk := range di {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+			// Disk offline, no inodes or something else is wrong.
+			continue
+		}
+		nDisks++
+		total += disk.Total
+		available += disk.Total - disk.Used
+	}
+
+	if nDisks == 0 {
+		return false
+	}
+
+	// Check we have enough on each disk, ignoring diskFillFraction.
+	perDisk := size / int64(nDisks)
+	for _, disk := range di {
+		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+			continue
+		}
+		if int64(disk.Free) <= perDisk {
+			return false
+		}
+	}
+
+	// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
+	if available < uint64(size) {
+		return false
+	}
+
+	// How much will be left after adding the file.
+	available -= uint64(size)
+
+	// wantLeft is how much space there at least must be left.
+	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
+	return available > wantLeft
 }

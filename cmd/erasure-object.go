@@ -25,20 +25,22 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/hash"
-	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/mimedb"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/mimedb"
+	uatomic "go.uber.org/atomic"
 )
 
 // list all errors which can be ignored in object operations.
@@ -64,7 +66,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 
-	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
+	defer NSUpdated(dstBucket, dstObject)
+
 	if !dstOpts.NoLock {
 		lk := er.NewNSLock(dstBucket, dstObject)
 		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -210,38 +213,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		pr.CloseWithError(nil)
 	}
 
-	return fn(pr, h, opts.CheckPrecondFn, pipeCloser, nsUnlocker)
-}
-
-// GetObject - reads an object erasured coded across multiple
-// disks. Supports additional parameters like offset and length
-// which are synonymous with HTTP Range requests.
-//
-// startOffset indicates the starting read location of the object.
-// length indicates the total length of the object.
-func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
-	// Lock the object before reading.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return err
-	}
-	ctx = lkctx.Context()
-	defer lk.RUnlock(lkctx.Cancel)
-
-	// Start offset cannot be negative.
-	if startOffset < 0 {
-		logger.LogIf(ctx, errUnexpected, logger.Application)
-		return errUnexpected
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		logger.LogIf(ctx, errUnexpected)
-		return errUnexpected
-	}
-
-	return er.getObject(ctx, bucket, object, startOffset, length, writer, opts)
+	return fn(pr, h, pipeCloser, nsUnlocker)
 }
 
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
@@ -283,6 +255,27 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+
+	// This hack is needed to avoid a bug found when overwriting
+	// the inline data object with a un-inlined version, for the
+	// time being we need this as we have released inline-data
+	// version already and this bug is already present in newer
+	// releases.
+	//
+	// This mainly happens with objects < smallFileThreshold when
+	// they are overwritten with un-inlined objects >= smallFileThreshold,
+	// due to a bug in RenameData() the fi.Data is not niled leading to
+	// GetObject thinking that fi.Data is valid while fi.Size has
+	// changed already.
+	if fi.InlineData() {
+		shardFileSize := erasure.ShardFileSize(fi.Size)
+		if shardFileSize >= 0 && shardFileSize >= smallFileThreshold {
+			for i := range metaArr {
+				metaArr[i].Data = nil
+			}
+		}
+	}
+
 	var healOnce sync.Once
 
 	// once we have obtained a common FileInfo i.e latest, we should stick
@@ -370,23 +363,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	} // End of read all parts loop.
 	// Return success.
 	return nil
-}
-
-// getObject wrapper for erasure GetObject
-func (er erasureObjects) getObject(ctx context.Context, bucket, object string, startOffset, length int64, writer io.Writer, opts ObjectOptions) error {
-	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-	if fi.Deleted {
-		if opts.VersionID == "" {
-			return toObjectErr(errFileNotFound, bucket, object)
-		}
-		// Make sure to return object info to provide extra information.
-		return toObjectErr(errMethodNotAllowed, bucket, object)
-	}
-
-	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, fi, metaArr, onlineDisks)
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
@@ -526,10 +502,14 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
-	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
+	defer NSUpdated(dstBucket, dstEntry)
 
 	g := errgroup.WithNErrs(len(disks))
 
+	fvID := mustGetUUID()
+	for index := range disks {
+		metadata[index].SetTierFreeVersionID(fvID)
+	}
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -543,6 +523,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if fi.Erasure.Index == 0 {
 				fi.Erasure.Index = index + 1
 			}
+
 			if fi.IsValid() {
 				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
 			}
@@ -566,7 +547,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
-	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
+	defer NSUpdated(dstBucket, dstEntry)
 
 	g := errgroup.WithNErrs(len(disks))
 
@@ -624,6 +605,42 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		parityDrives = globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 		if parityDrives <= 0 {
 			parityDrives = er.defaultParityCount
+		}
+
+		// If we have offline disks upgrade the number of erasure codes for this object.
+		parityOrig := parityDrives
+
+		atomicParityDrives := uatomic.NewInt64(0)
+		// Start with current parityDrives
+		atomicParityDrives.Store(int64(parityDrives))
+
+		var wg sync.WaitGroup
+		for _, disk := range storageDisks {
+			if disk == nil {
+				atomicParityDrives.Inc()
+				continue
+			}
+			if !disk.IsOnline() {
+				atomicParityDrives.Inc()
+				continue
+			}
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				di, err := disk.DiskInfo(ctx)
+				if err != nil || di.ID == "" {
+					atomicParityDrives.Inc()
+				}
+			}(disk)
+		}
+		wg.Wait()
+
+		parityDrives = int(atomicParityDrives.Load())
+		if parityDrives >= len(storageDisks)/2 {
+			parityDrives = len(storageDisks) / 2
+		}
+		if parityOrig != parityDrives {
+			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 		}
 	}
 	dataDrives := len(storageDisks) - parityDrives
@@ -732,8 +749,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj,
-			shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
@@ -797,20 +813,17 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].ModTime = modTime
 	}
 
+	if len(inlineBuffers) > 0 {
+		// Set an additional header when data is inlined.
+		for index := range partsMetadata {
+			partsMetadata[index].SetInlineData()
+		}
+	}
+
 	// Rename the successfully written temporary object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum); err != nil {
 		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	// Whether a disk was initially or becomes offline
-	// during this upload, send it to the MRF list.
-	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, fi.VersionID)
-		break
 	}
 
 	for i := 0; i < len(onlineDisks); i++ {
@@ -821,13 +834,23 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+
+	// Whether a disk was initially or becomes offline
+	// during this upload, send it to the MRF list.
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			continue
+		}
+		er.addPartial(bucket, object, fi.VersionID, fi.Size)
+		break
+	}
+
 	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
 func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
-	defer ObjectPathUpdated(pathJoin(bucket, object))
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
@@ -843,37 +866,11 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
-// deleteEmptyDir knows only how to remove an empty directory (not the empty object with a
-// trailing slash), this is called for the healing code to remove such directories.
-func (er erasureObjects) deleteEmptyDir(ctx context.Context, bucket, object string) error {
-	defer ObjectPathUpdated(pathJoin(bucket, object))
-
-	if bucket == minioMetaTmpBucket {
-		return nil
-	}
-
-	disks := er.getDisks()
-	g := errgroup.WithNErrs(len(disks))
-	for index := range disks {
-		index := index
-		g.Go(func() error {
-			if disks[index] == nil {
-				return errDiskNotFound
-			}
-			return disks[index].Delete(ctx, bucket, object, false)
-		}, index)
-	}
-
-	// return errors if any during deletion
-	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, len(disks)/2+1)
-}
-
 // deleteObject - wrapper for delete object, deletes an object from
 // all the disks in parallel, including `xl.meta` associated with the
 // object.
 func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int) error {
 	var err error
-	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	disks := er.getDisks()
 	tmpObj := mustGetUUID()
@@ -956,6 +953,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
 			VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 		}
+		versions[i].SetTierFreeVersionID(mustGetUUID())
 	}
 
 	// Initialize list of errors.
@@ -999,7 +997,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		}
 
 		if errs[objIndex] == nil {
-			ObjectPathUpdated(pathJoin(bucket, objects[objIndex].ObjectName))
+			NSUpdated(bucket, objects[objIndex].ObjectName)
 		}
 
 		if versions[objIndex].Deleted {
@@ -1032,7 +1030,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
-			er.addPartial(bucket, version.Name, version.VersionID)
+			er.addPartial(bucket, version.Name, version.VersionID, -1)
 			break
 		}
 	}
@@ -1040,10 +1038,34 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	return dobjects, errs
 }
 
+func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
+	disks := er.getDisks()
+	g := errgroup.WithNErrs(len(disks))
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return nil
+			}
+			return disks[index].Delete(ctx, bucket, prefix, true)
+		}, index)
+	}
+	for _, err := range g.Wait() {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if opts.DeletePrefix {
+		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
+	}
+
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
@@ -1059,6 +1081,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			return objInfo, gerr
 		}
 	}
+
+	defer NSUpdated(bucket, object)
+
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(bucket, object)
 	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
@@ -1101,7 +1126,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
-
+	fvID := mustGetUUID()
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
@@ -1114,6 +1139,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				TransitionStatus:              opts.Transition.Status,
 				ExpireRestored:                opts.Transition.ExpireRestored,
 			}
+			fi.SetTierFreeVersionID(fvID)
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
 				if opts.VersionID != "" {
@@ -1132,7 +1158,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	// Delete the object version on all disks.
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
+	dfi := FileInfo{
 		Name:                          object,
 		VersionID:                     opts.VersionID,
 		MarkDeleted:                   markDelete,
@@ -1142,7 +1168,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
 		TransitionStatus:              opts.Transition.Status,
 		ExpireRestored:                opts.Transition.ExpireRestored,
-	}, opts.DeleteMarker); err != nil {
+	}
+	dfi.SetTierFreeVersionID(fvID)
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1150,7 +1178,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 
@@ -1165,11 +1193,15 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartial(bucket, object, versionID string) {
-	select {
-	case er.mrfOpCh <- partialOperation{bucket: bucket, object: object, versionID: versionID}:
-	default:
-	}
+func (er erasureObjects) addPartial(bucket, object, versionID string, size int64) {
+	globalMRFState.addPartialOp(partialOperation{
+		bucket:    bucket,
+		object:    object,
+		versionID: versionID,
+		size:      size,
+		setIndex:  er.setIndex,
+		poolIndex: er.poolIndex,
+	})
 }
 
 func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
@@ -1319,6 +1351,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	if err != nil {
 		return err
 	}
+	defer NSUpdated(bucket, object)
+
 	// Acquire write lock before starting to transition the object.
 	lk := er.NewNSLock(bucket, object)
 	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
@@ -1359,6 +1393,12 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 			return toObjectErr(err, bucket, object)
 		}
 	}
+
+	// object content is small enough that it's inlined, skipping transition
+	if fi.InlineData() {
+		return nil
+	}
+
 	destObj, err := genTransitionObjName()
 	if err != nil {
 		return err
@@ -1370,7 +1410,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		pw.CloseWithError(err)
 	}()
 
-	err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	var rv remoteVersionID
+	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
 	pr.CloseWithError(err)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
@@ -1379,6 +1420,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	fi.TransitionStatus = lifecycle.TransitionComplete
 	fi.TransitionedObjName = destObj
 	fi.TransitionTier = opts.Transition.Tier
+	fi.TransitionVersionID = string(rv)
 	eventName := event.ObjectTransitionComplete
 
 	storageDisks := er.getDisks()
@@ -1390,7 +1432,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID)
+		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
 	// Notify object deleted event.

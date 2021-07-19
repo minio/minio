@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
@@ -31,17 +32,18 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tinylib/msgp/msgp"
 
-	jwtreq "github.com/dgrijalva/jwt-go/request"
+	jwtreq "github.com/golang-jwt/jwt/request"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	xjwt "github.com/minio/minio/cmd/jwt"
-	"github.com/minio/minio/cmd/logger"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/config"
+	xhttp "github.com/minio/minio/internal/http"
+	xjwt "github.com/minio/minio/internal/jwt"
+	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/pkg/net"
 )
 
 var errDiskStale = errors.New("disk stale")
@@ -173,13 +175,48 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	resp := streamHTTPResponse(w)
-	usageInfo, err := s.storage.NSScanner(r.Context(), cache)
+	respW := msgp.NewWriter(resp)
+
+	// Collect updates, stream them before the full cache is sent.
+	updates := make(chan dataUsageEntry, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for update := range updates {
+			// Write true bool to indicate update.
+			var err error
+			if err = respW.WriteBool(true); err == nil {
+				err = update.EncodeMsg(respW)
+			}
+			respW.Flush()
+			if err != nil {
+				cancel()
+				resp.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	usageInfo, err := s.storage.NSScanner(ctx, cache, updates)
+	if err != nil {
+		respW.Flush()
+		resp.CloseWithError(err)
+		return
+	}
+
+	// Write false bool to indicate we finished.
+	wg.Wait()
+	if err = respW.WriteBool(false); err == nil {
+		err = usageInfo.EncodeMsg(respW)
+	}
 	if err != nil {
 		resp.CloseWithError(err)
 		return
 	}
-	resp.CloseWithError(usageInfo.serializeTo(resp))
+	resp.CloseWithError(respW.Flush())
 }
 
 // MakeVolHandler - make a volume.
@@ -245,7 +282,7 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	forceDelete := vars[storageRESTForceDelete] == "true"
+	forceDelete := r.URL.Query().Get(storageRESTForceDelete) == "true"
 	err := s.storage.DeleteVol(r.Context(), volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -1001,19 +1038,57 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	}
 }
 
+// StatInfoFile returns file stat info.
+func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+	done := keepHTTPResponseAlive(w)
+	si, err := s.storage.StatInfoFile(r.Context(), volume, filePath)
+	done(err)
+	if err != nil {
+		return
+	}
+	msgp.Encode(w, &si)
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
-	for _, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
+	storageDisks := make([][]*xlStorage, len(endpointServerPools))
+	for poolIdx, ep := range endpointServerPools {
+		storageDisks[poolIdx] = make([]*xlStorage, len(ep.Endpoints))
+	}
+	var wg sync.WaitGroup
+	for poolIdx, ep := range endpointServerPools {
+		for setIdx, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newXLStorage(endpoint)
-			if err != nil {
-				// if supported errors don't fail, we proceed to
-				// printing message and moving forward.
-				logFatalErrs(err, endpoint, false)
+			wg.Add(1)
+			go func(poolIdx, setIdx int, endpoint Endpoint) {
+				defer wg.Done()
+				var err error
+				storageDisks[poolIdx][setIdx], err = newXLStorage(endpoint)
+				if err != nil {
+					// if supported errors don't fail, we proceed to
+					// printing message and moving forward.
+					logFatalErrs(err, endpoint, false)
+				}
+			}(poolIdx, setIdx, endpoint)
+		}
+	}
+	wg.Wait()
+
+	for _, setDisks := range storageDisks {
+		for _, storage := range setDisks {
+			if storage == nil {
+				continue
 			}
+
+			endpoint := storage.Endpoint()
 
 			server := &storageRESTServer{storage: storage}
 
@@ -1071,6 +1146,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile)).
+				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		}
 	}
 }

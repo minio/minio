@@ -33,10 +33,10 @@ import (
 	"strings"
 
 	"github.com/minio/madmin-go"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -486,7 +486,7 @@ func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Req
 				Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
 					r.Method, r.URL.Path),
 				HTTPStatusCode: http.StatusBadRequest,
-			}, r.URL, guessIsBrowserReq(r))
+			}, r.URL)
 		}
 	}
 }
@@ -539,7 +539,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
 				r.Method, r.URL.Path),
 			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL, guessIsBrowserReq(r))
+		}, r.URL)
 	}
 
 }

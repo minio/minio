@@ -308,7 +308,7 @@ Once set the healer settings are automatically applied without the need for serv
 
 ### Browser
 
-Enable or disable access to web UI. By default it is set to `on`. You may override this field with `MINIO_BROWSER` environment variable.
+Enable or disable access to console web UI. By default it is set to `on`. You may override this field with `MINIO_BROWSER` environment variable.
 
 Example:
 

@@ -19,10 +19,12 @@ package cmd
 
 import (
 	"bytes"
-	"io"
+	"context"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/minio/pkg/console"
 )
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
@@ -39,7 +41,7 @@ type metaCacheEntry struct {
 
 // isDir returns if the entry is representing a prefix directory.
 func (e metaCacheEntry) isDir() bool {
-	return len(e.metadata) == 0
+	return len(e.metadata) == 0 && strings.HasSuffix(e.name, slashSeparator)
 }
 
 // isObject returns if the entry is representing an object.
@@ -50,15 +52,6 @@ func (e metaCacheEntry) isObject() bool {
 // hasPrefix returns whether an entry has a specific prefix
 func (e metaCacheEntry) hasPrefix(s string) bool {
 	return strings.HasPrefix(e.name, s)
-}
-
-// likelyMatches returns if the entries match by comparing name and metadata length.
-func (e *metaCacheEntry) likelyMatches(other *metaCacheEntry) bool {
-	// This should reject 99%
-	if len(e.metadata) != len(other.metadata) || e.name != other.name {
-		return false
-	}
-	return true
 }
 
 // matches returns if the entries match by comparing their latest version fileinfo.
@@ -81,7 +74,45 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
 		return eErr == oErr
 	}
 
+	// check both fileInfo's have same number of versions, if not skip
+	// the `other` entry.
+	if eFi.NumVersions != oFi.NumVersions {
+		return false
+	}
+
 	return eFi.ModTime.Equal(oFi.ModTime) && eFi.Size == oFi.Size && eFi.VersionID == oFi.VersionID
+}
+
+// resolveEntries returns if the entries match by comparing their latest version fileinfo.
+func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
+	if b == nil {
+		return a
+	}
+	if a == nil {
+		return b
+	}
+
+	aFi, err := a.fileInfo(bucket)
+	if err != nil {
+		return b
+	}
+	bFi, err := b.fileInfo(bucket)
+	if err != nil {
+		return a
+	}
+
+	if !aFi.ModTime.Equal(bFi.ModTime) {
+		if aFi.ModTime.After(bFi.ModTime) {
+			return a
+		}
+		return b
+	}
+
+	if aFi.NumVersions > bFi.NumVersions {
+		return a
+	}
+
+	return b
 }
 
 // isInDir returns whether the entry is in the dir when considering the separator.
@@ -194,21 +225,35 @@ type metadataResolutionParams struct {
 	dirQuorum int    // Number if disks needed for a directory to 'exist'.
 	objQuorum int    // Number of disks needed for an object to 'exist'.
 	bucket    string // Name of the bucket. Used for generating cached fileinfo.
+
+	// Reusable slice for resolution
+	candidates []struct {
+		n int
+		e *metaCacheEntry
+	}
 }
 
+// resolve multiple entries.
+// entries are resolved by majority, then if tied by mod-time and versions.
 func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCacheEntry, ok bool) {
 	if len(m) == 0 {
 		return nil, false
 	}
 
 	dirExists := 0
-	objExists := 0
-	var selFIV *FileInfo
+	if cap(r.candidates) < len(m) {
+		r.candidates = make([]struct {
+			n int
+			e *metaCacheEntry
+		}, 0, len(m))
+	}
+	r.candidates = r.candidates[0:]
 	for i := range m {
 		entry := &m[i]
 		if entry.name == "" {
 			continue
 		}
+
 		if entry.isDir() {
 			dirExists++
 			selected = entry
@@ -216,33 +261,60 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		}
 
 		// Get new entry metadata
-		fiv, err := entry.fileInfo(r.bucket)
-		if err != nil {
+		if _, err := entry.fileInfo(r.bucket); err != nil {
 			continue
 		}
 
-		objExists++
-		if selFIV == nil {
-			selected = entry
-			selFIV = fiv
-			continue
+		found := false
+		for i, c := range r.candidates {
+			if c.e.matches(entry, r.bucket) {
+				c.n++
+				r.candidates[i] = c
+				found = true
+				break
+			}
 		}
-
-		if selected.matches(entry, r.bucket) {
-			continue
+		if !found {
+			r.candidates = append(r.candidates, struct {
+				n int
+				e *metaCacheEntry
+			}{n: 1, e: entry})
 		}
 	}
-
-	if selected == nil {
-		return nil, false
+	if selected != nil && selected.isDir() && dirExists > r.dirQuorum {
+		return selected, true
 	}
 
-	if selected.isDir() && dirExists < r.dirQuorum {
-		return nil, false
-	} else if !selected.isDir() && objExists < r.objQuorum {
-		return nil, false
+	switch len(r.candidates) {
+	case 0:
+		if selected == nil {
+			return nil, false
+		}
+		if !selected.isDir() || dirExists < r.dirQuorum {
+			return nil, false
+		}
+		return selected, true
+	case 1:
+		cand := r.candidates[0]
+		if cand.n < r.objQuorum {
+			return nil, false
+		}
+		return cand.e, true
+	default:
+		// Sort by matches....
+		sort.Slice(r.candidates, func(i, j int) bool {
+			return r.candidates[i].n > r.candidates[j].n
+		})
+		// Check if we have enough.
+		if r.candidates[0].n < r.objQuorum {
+			return nil, false
+		}
+		if r.candidates[0].n > r.candidates[1].n {
+			return r.candidates[0].e, true
+		}
+		// Tie between two, resolve using modtime+versions.
+		return resolveEntries(r.candidates[0].e, r.candidates[1].e, r.bucket), true
 	}
-	return selected, true
 }
 
 // firstFound returns the first found and the number of set entries.
@@ -275,35 +347,12 @@ type metaCacheEntriesSorted struct {
 	listID string
 }
 
-// writeTo will write all objects to the provided output.
-func (m metaCacheEntriesSorted) writeTo(writer io.Writer) error {
-	w := newMetacacheWriter(writer, 1<<20)
-	if err := w.write(m.o...); err != nil {
-		w.Close()
-		return err
-	}
-	return w.Close()
-}
-
 // shallowClone will create a shallow clone of the array objects,
 // but object metadata will not be cloned.
 func (m metaCacheEntriesSorted) shallowClone() metaCacheEntriesSorted {
 	// We have value receiver so we already have a copy.
 	m.o = m.o.shallowClone()
 	return m
-}
-
-// iterate the entries in order.
-// If the iterator function returns iterating stops.
-func (m *metaCacheEntriesSorted) iterate(fn func(entry metaCacheEntry) (cont bool)) {
-	if m == nil {
-		return
-	}
-	for _, o := range m.o {
-		if !fn(o) {
-			return
-		}
-	}
 }
 
 // fileInfoVersions converts the metadata to FileInfoVersions where possible.
@@ -455,6 +504,113 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 	m.o = m.o[idx:]
 }
 
+// mergeEntryChannels will merge entries from in and return them sorted on out.
+// To signify no more results are on an input channel, close it.
+// The output channel will be closed when all inputs are emptied.
+// If file names are equal, compareMeta is called to select which one to choose.
+// The entry not chosen will be discarded.
+// If the context is canceled the function will return the error,
+// otherwise the function will return nil.
+func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<- metaCacheEntry, compareMeta func(existing, other *metaCacheEntry) (replace bool)) error {
+	defer close(out)
+	top := make([]*metaCacheEntry, len(in))
+	nDone := 0
+	ctxDone := ctx.Done()
+
+	// Use simpler forwarder.
+	if len(in) == 1 {
+		for {
+			select {
+			case <-ctxDone:
+				return ctx.Err()
+			case v, ok := <-in[0]:
+				if !ok {
+					return nil
+				}
+				select {
+				case <-ctxDone:
+					return ctx.Err()
+				case out <- v:
+				}
+			}
+		}
+	}
+
+	selectFrom := func(idx int) error {
+		select {
+		case <-ctxDone:
+			return ctx.Err()
+		case entry, ok := <-in[idx]:
+			if !ok {
+				top[idx] = nil
+				nDone++
+			} else {
+				top[idx] = &entry
+			}
+		}
+		return nil
+	}
+	// Populate all...
+	for i := range in {
+		if err := selectFrom(i); err != nil {
+			return err
+		}
+	}
+	last := ""
+
+	// Choose the best to return.
+	for {
+		if nDone == len(in) {
+			return nil
+		}
+		best := top[0]
+		bestIdx := 0
+		for i, other := range top[1:] {
+			otherIdx := i + 1
+			if other == nil {
+				continue
+			}
+			if best == nil {
+				best = other
+				bestIdx = otherIdx
+				continue
+			}
+			if best.name == other.name {
+				if compareMeta(best, other) {
+					// Replace "best"
+					if err := selectFrom(bestIdx); err != nil {
+						return err
+					}
+					best = other
+					bestIdx = otherIdx
+				} else {
+					// Keep best, replace "other"
+					if err := selectFrom(otherIdx); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if best.name > other.name {
+				best = other
+				bestIdx = otherIdx
+			}
+		}
+		if best.name > last {
+			out <- *best
+			last = best.name
+		} else {
+			if serverDebugLog {
+				console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
+			}
+		}
+		// Replace entry we just sent.
+		if err := selectFrom(bestIdx); err != nil {
+			return err
+		}
+	}
+}
+
 // merge will merge other into m.
 // If the same entries exists in both and metadata matches only one is added,
 // otherwise the entry from m will be placed first.
@@ -486,17 +642,6 @@ func (m *metaCacheEntriesSorted) merge(other metaCacheEntriesSorted, limit int) 
 		merged = append(merged, b...)
 	}
 	m.o = merged
-}
-
-// filter allows selective filtering with the provided function.
-func (m *metaCacheEntriesSorted) filter(fn func(entry *metaCacheEntry) bool) {
-	dst := m.o[:0]
-	for _, o := range m.o {
-		if fn(&o) {
-			dst = append(dst, o)
-		}
-	}
-	m.o = dst
 }
 
 // filterPrefix will filter m to only contain entries with the specified prefix.
@@ -588,45 +733,4 @@ func (m *metaCacheEntriesSorted) entries() metaCacheEntries {
 		return nil
 	}
 	return m.o
-}
-
-// deduplicate entries in the list.
-// If compareMeta is set it will be used to resolve conflicts.
-// The function should return whether the existing entry should be replaced with other.
-// If no compareMeta is provided duplicates may be left.
-// This is indicated by the returned boolean.
-func (m *metaCacheEntriesSorted) deduplicate(compareMeta func(existing, other *metaCacheEntry) (replace bool)) (dupesLeft bool) {
-	dst := m.o[:0]
-	for j := range m.o {
-		found := false
-		obj := &m.o[j]
-		for i := len(dst) - 1; i >= 0; i++ {
-			existing := &dst[i]
-			if existing.name != obj.name {
-				break
-			}
-
-			// Use given resolution function first if any.
-			if compareMeta != nil {
-				if compareMeta(existing, obj) {
-					dst[i] = *obj
-				}
-				found = true
-				break
-			}
-			if obj.likelyMatches(existing) {
-				found = true
-				break
-			}
-
-			// Matches, move on.
-			dupesLeft = true
-			continue
-		}
-		if !found {
-			dst = append(dst, *obj)
-		}
-	}
-	m.o = dst
-	return dupesLeft
 }

@@ -1,23 +1,11 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
-
-ARG TARGETARCH
+FROM minio/minio:edge
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
-COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 COPY minio /usr/bin/
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
-ENV MINIO_UPDATE=off \
-    MINIO_ACCESS_KEY_FILE=access_key \
-    MINIO_SECRET_KEY_FILE=secret_key \
-    MINIO_ROOT_USER_FILE=access_key \
-    MINIO_ROOT_PASSWORD_FILE=secret_key \
-    MINIO_KMS_SECRET_KEY_FILE=kms_master_key
-
-RUN microdnf update --nodocs
-RUN microdnf install curl ca-certificates shadow-utils util-linux --nodocs
-RUN microdnf clean all && \
-    chmod +x /usr/bin/minio  && \
+RUN chmod +x /usr/bin/minio && \
     chmod +x /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000

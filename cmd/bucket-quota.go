@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 )
 
 // BucketQuotaSys - map of bucket and quota configuration.

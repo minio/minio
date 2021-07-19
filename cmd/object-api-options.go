@@ -27,9 +27,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 // set encryption options for pass through to backend in the case of gateway and UserDefined metadata
@@ -121,11 +121,21 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}, nil
 	}
 
+	deletePrefix := false
+	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
+		if b, err := strconv.ParseBool(d); err == nil {
+			deletePrefix = b
+		} else {
+			return opts, err
+		}
+	}
+
 	// default case of passing encryption headers to backend
 	opts, err = getDefaultOpts(r.Header, false, nil)
 	if err != nil {
 		return opts, err
 	}
+	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
@@ -324,5 +334,23 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 	if err != nil {
 		return opts, err
 	}
+	return opts, nil
+}
+
+// get ObjectOptions for CompleteMultipart calls
+func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	mtime := UTCNow()
+	if mtimeStr != "" {
+		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		if err != nil {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
+			}
+		}
+	}
+	opts.MTime = mtime
 	return opts, nil
 }

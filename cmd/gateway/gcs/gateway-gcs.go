@@ -40,11 +40,10 @@ import (
 	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/bucket/policy/condition"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/bucket/policy/condition"
+	"github.com/minio/pkg/env"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -164,7 +163,7 @@ func (g *GCS) Name() string {
 }
 
 // NewGatewayLayer returns gcs ObjectLayer.
-func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *GCS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	ctx := minio.GlobalContext
 
 	var err error
@@ -204,11 +203,6 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	// Start background process to cleanup old files in minio.sys.tmp
 	go gcs.CleanupGCSMinioSysTmp(ctx)
 	return gcs, nil
-}
-
-// Production - GCS gateway is production ready.
-func (g *GCS) Production() bool {
-	return true
 }
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be

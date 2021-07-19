@@ -28,24 +28,25 @@ import (
 	"unicode/utf8"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/config/compress"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
-	"github.com/minio/minio/cmd/config/identity/openid"
-	"github.com/minio/minio/cmd/config/notify"
-	"github.com/minio/minio/cmd/config/policy/opa"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/kms"
-	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/compress"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/config/notify"
+	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/event/target"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/target/http"
+	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/quick"
 )
 
-// DO NOT EDIT following message template, please open a github issue to discuss instead.
+// DO NOT EDIT following message template, please open a GitHub issue to discuss instead.
 var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully."
 
 // Save config file to corresponding backend
@@ -2383,8 +2384,8 @@ func migrateV26ToV27() error {
 	// Enable console logging by default to avoid breaking users
 	// current deployments
 	srvConfig.Logger.Console.Enabled = true
-	srvConfig.Logger.HTTP = make(map[string]logger.HTTP)
-	srvConfig.Logger.HTTP["1"] = logger.HTTP{}
+	srvConfig.Logger.HTTP = make(map[string]http.Config)
+	srvConfig.Logger.HTTP["1"] = http.Config{}
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %w", err)
@@ -2748,7 +2749,7 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 	for k, loggerArgs := range cfg.Logger.HTTP {
 		logger.SetLoggerHTTP(newCfg, k, loggerArgs)
 	}
-	for k, auditArgs := range cfg.Logger.Audit {
+	for k, auditArgs := range cfg.Logger.AuditWebhook {
 		logger.SetLoggerHTTPAudit(newCfg, k, auditArgs)
 	}
 

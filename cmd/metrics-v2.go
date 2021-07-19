@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
@@ -98,8 +98,6 @@ const (
 	failedCount   MetricName = "failed_count"
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
-	pendingBytes  MetricName = "pending_bytes"
-	pendingCount  MetricName = "pending_count"
 	readBytes     MetricName = "read_bytes"
 	rcharBytes    MetricName = "rchar_bytes"
 	receivedBytes MetricName = "received_bytes"
@@ -400,15 +398,7 @@ func getBucketUsageObjectsTotalMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
-func getBucketRepPendingBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      pendingBytes,
-		Help:      "Total bytes pending to replicate.",
-		Type:      gaugeMetric,
-	}
-}
+
 func getBucketRepFailedBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -436,15 +426,7 @@ func getBucketRepReceivedBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
-func getBucketRepPendingOperationsMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      pendingCount,
-		Help:      "Total number of objects pending replication",
-		Type:      gaugeMetric,
-	}
-}
+
 func getBucketRepFailedOperationsMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -952,7 +934,7 @@ func getMinioProcMetrics() MetricsGroup {
 			metrics = append(metrics,
 				Metric{
 					Description: getMinIOProcessCPUTime(),
-					Value:       float64(stat.CPUTime()),
+					Value:       stat.CPUTime(),
 				})
 			return
 		},
@@ -1082,7 +1064,7 @@ func getMinioHealingMetrics() MetricsGroup {
 				Value:       float64(time.Since(bgSeq.lastHealActivity)),
 			})
 			metrics = append(metrics, getObjectsScanned(bgSeq)...)
-			metrics = append(metrics, getScannedItems(bgSeq)...)
+			metrics = append(metrics, getHealedItems(bgSeq)...)
 			metrics = append(metrics, getFailedItems(bgSeq)...)
 			return
 		},
@@ -1105,7 +1087,7 @@ func getFailedItems(seq *healSequence) (m []Metric) {
 	return
 }
 
-func getScannedItems(seq *healSequence) (m []Metric) {
+func getHealedItems(seq *healSequence) (m []Metric) {
 	items := seq.getHealedItemsMap()
 	m = make([]Metric, 0, len(items))
 	for k, v := range items {
@@ -1119,9 +1101,9 @@ func getScannedItems(seq *healSequence) (m []Metric) {
 }
 
 func getObjectsScanned(seq *healSequence) (m []Metric) {
-	items := seq.getHealedItemsMap()
+	items := seq.getScannedItemsMap()
 	m = make([]Metric, 0, len(items))
-	for k, v := range seq.getScannedItemsMap() {
+	for k, v := range items {
 		m = append(m, Metric{
 			Description:    getHealObjectsTotalMD(),
 			VariableLabels: map[string]string{"type": string(k)},
@@ -1130,6 +1112,7 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 	}
 	return
 }
+
 func getCacheMetrics() MetricsGroup {
 	return MetricsGroup{
 		id:         "CacheMetrics",
@@ -1319,11 +1302,6 @@ func getBucketUsageMetrics() MetricsGroup {
 
 				if stat.hasReplicationUsage() {
 					metrics = append(metrics, Metric{
-						Description:    getBucketRepPendingBytesMD(),
-						Value:          float64(stat.PendingSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
 						Description:    getBucketRepFailedBytesMD(),
 						Value:          float64(stat.FailedSize),
 						VariableLabels: map[string]string{"bucket": bucket},
@@ -1336,11 +1314,6 @@ func getBucketUsageMetrics() MetricsGroup {
 					metrics = append(metrics, Metric{
 						Description:    getBucketRepReceivedBytesMD(),
 						Value:          float64(stat.ReplicaSize),
-						VariableLabels: map[string]string{"bucket": bucket},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepPendingOperationsMD(),
-						Value:          float64(stat.PendingCount),
 						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
@@ -1411,7 +1384,7 @@ func getClusterStorageMetrics() MetricsGroup {
 		read: func(ctx context.Context) (metrics []Metric) {
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil || globalIsGateway {
+			if objLayer == nil || !globalIsErasure {
 				return
 			}
 

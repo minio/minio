@@ -138,6 +138,9 @@ type FileInfo struct {
 	TransitionedObjName string
 	// TransitionTier is the storage class label assigned to remote tier.
 	TransitionTier string
+	// TransitionVersionID stores a version ID of the object associate
+	// with the remote tier.
+	TransitionVersionID string
 	// ExpireRestored indicates that the restored object is to be expired.
 	ExpireRestored bool
 
@@ -176,6 +179,17 @@ type FileInfo struct {
 
 	NumVersions      int
 	SuccessorModTime time.Time
+}
+
+// InlineData returns true if object contents are inlined alongside its metadata.
+func (fi FileInfo) InlineData() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]
+	return ok
+}
+
+// SetInlineData marks object (version) as inline.
+func (fi FileInfo) SetInlineData() {
+	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata

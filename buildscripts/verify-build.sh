@@ -31,6 +31,8 @@ FUNCTIONAL_TESTS="$WORK_DIR/functional-tests.sh"
 
 function start_minio_fs()
 {
+    export MINIO_ROOT_USER=$ACCESS_KEY
+    export MINIO_ROOT_PASSWORD=$SECRET_KEY
     "${MINIO[@]}" server "${WORK_DIR}/fs-disk" >"$WORK_DIR/fs-minio.log" 2>&1 &
     sleep 10
 }

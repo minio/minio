@@ -31,9 +31,9 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/cmd/logger"
-	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/trie"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/trie"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -241,7 +241,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 		return "", err
 	}
 
-	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0644); err != nil {
+	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0666); err != nil {
 		logger.LogIf(ctx, err)
 		return "", err
 	}
@@ -558,7 +558,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return oi, toObjectErr(err, bucket)
 	}
-	defer ObjectPathUpdated(pathutil.Join(bucket, object))
+	defer NSUpdated(bucket, object)
 
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.

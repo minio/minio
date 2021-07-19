@@ -31,7 +31,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
@@ -59,14 +58,14 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // TestMain to set up global env.
@@ -77,8 +76,6 @@ func TestMain(m *testing.M) {
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
 	}
-
-	globalConfigEncrypted = true
 
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
@@ -1174,78 +1171,6 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	return req, nil
 }
 
-// Return new WebRPC request object.
-func newWebRPCRequest(methodRPC, authorization string, body io.ReadSeeker) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodPost, "/minio/webrpc", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla")
-	req.Header.Set("Content-Type", "application/json")
-	if authorization != "" {
-		req.Header.Set("Authorization", "Bearer "+authorization)
-	}
-	// Seek back to beginning.
-	if body != nil {
-		body.Seek(0, 0)
-		// Add body
-		req.Body = ioutil.NopCloser(body)
-	} else {
-		// this is added to avoid panic during ioutil.ReadAll(req.Body).
-		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
-		// This is very similar to https://github.com/golang/go/issues/7527.
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
-	}
-	return req, nil
-}
-
-// Marshal request and return a new HTTP request object to call the webrpc
-func newTestWebRPCRequest(rpcMethod string, authorization string, data interface{}) (*http.Request, error) {
-	type genericJSON struct {
-		JSONRPC string      `json:"jsonrpc"`
-		ID      string      `json:"id"`
-		Method  string      `json:"method"`
-		Params  interface{} `json:"params"`
-	}
-	encapsulatedData := genericJSON{JSONRPC: "2.0", ID: "1", Method: rpcMethod, Params: data}
-	jsonData, err := json.Marshal(encapsulatedData)
-	if err != nil {
-		return nil, err
-	}
-	req, err := newWebRPCRequest(rpcMethod, authorization, bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-type ErrWebRPC struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
-}
-
-// Unmarshal response and return the webrpc response
-func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) error {
-	type rpcReply struct {
-		ID      string      `json:"id"`
-		JSONRPC string      `json:"jsonrpc"`
-		Result  interface{} `json:"result"`
-		Error   *ErrWebRPC  `json:"error"`
-	}
-	reply := &rpcReply{Result: &data}
-	err := json.NewDecoder(resp.Body).Decode(reply)
-	if err != nil {
-		return err
-	}
-	// For the moment, web handlers errors code are not meaningful
-	// Return only the error message
-	if reply.Error != nil {
-		return errors.New(reply.Error.Message)
-	}
-	return nil
-}
-
 // Function to generate random string for bucket/object names.
 func randString(n int) string {
 	src := rand.NewSource(UTCNow().UnixNano())
@@ -1276,35 +1201,6 @@ func getRandomObjectName() string {
 func getRandomBucketName() string {
 	return randString(60)
 
-}
-
-// NewEOFWriter returns a Writer that writes to w,
-// but returns EOF error after writing n bytes.
-func NewEOFWriter(w io.Writer, n int64) io.Writer {
-	return &EOFWriter{w, n}
-}
-
-type EOFWriter struct {
-	w io.Writer
-	n int64
-}
-
-// io.Writer implementation designed to error out with io.EOF after reading `n` bytes.
-func (t *EOFWriter) Write(p []byte) (n int, err error) {
-	if t.n <= 0 {
-		return -1, io.EOF
-	}
-	// real write
-	n = len(p)
-	if int64(n) > t.n {
-		n = int(t.n)
-	}
-	n, err = t.w.Write(p[0:n])
-	t.n -= int64(n)
-	if err == nil {
-		n = len(p)
-	}
-	return
 }
 
 // construct URL for http requests for bucket operations.
@@ -2146,18 +2042,6 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		return muxRouter
 	}
 	registerAPIRouter(muxRouter)
-	return muxRouter
-}
-
-// Initialize Web RPC Handlers for testing
-func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Initialize router.
-	muxRouter := mux.NewRouter().SkipClean(true)
-	registerWebRouter(muxRouter)
 	return muxRouter
 }
 

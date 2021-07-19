@@ -1,29 +1,5 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-**Table of Contents**
-
-- [AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)](#assumerolewithldapidentity-slackhttpsslackminioslacktypesvghttpsslackminio)
-    - [Introduction](#introduction)
-    - [Configuring AD/LDAP on MinIO](#configuring-adldap-on-minio)
-        - [Supported modes of operation](#supported-modes-of-operation)
-            - [Lookup-Bind Mode](#lookup-bind-mode)
-            - [Username-Format Mode](#username-format-mode)
-        - [Group membership search](#group-membership-search)
-        - [Variable substitution in AD/LDAP configuration strings](#variable-substitution-in-adldap-configuration-strings)
-    - [Managing User/Group Access Policy](#managing-usergroup-access-policy)
-    - [API Request Parameters](#api-request-parameters)
-        - [LDAPUsername](#ldapusername)
-        - [LDAPPassword](#ldappassword)
-        - [Version](#version)
-        - [Policy](#policy)
-        - [Response Elements](#response-elements)
-        - [Errors](#errors)
-    - [Sample `POST` Request](#sample-post-request)
-    - [Sample Response](#sample-response)
-    - [Using LDAP STS API](#using-ldap-sts-api)
-    - [Caveats](#caveats)
-    - [Explore Further](#explore-further)
-
 ## Introduction
 
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server can be configured in two possible modes: either using a LDAP separate service account, called lookup-bind mode or in username-format mode. In either case the login flow for a user is the same as the STS flow:
@@ -119,9 +95,11 @@ export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=%s,cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
-export MINIO_IDENTITY_LDAP_STS_EXPIRY=60h
+export MINIO_IDENTITY_LDAP_STS_EXPIRY=720h
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
+
+> NOTE: In this example STS_EXPIRY is set to 1month, maximum expiry that can be set is 365 days.
 
 ### Variable substitution in AD/LDAP configuration strings ###
 
@@ -236,7 +214,7 @@ $ export MINIO_ROOT_PASSWORD=minio123
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 $ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com;cn=%s,ou=Users,ou=BUS2,ou=LOB,dc=somedomain,dc=com'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=%s))'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=groupOfNames)(member=%d))'
 $ minio server ~/test
 ```
 You can make sure it works appropriately using our [example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):
@@ -251,9 +229,6 @@ $ go run ldap.go -u foouser -p foopassword
         "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
 }
 ```
-
-## Caveats
-**LDAP STS credentials are not yet supported on MinIO Browser UI, we may add this feature in future releases.**
 
 ## Explore Further
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)

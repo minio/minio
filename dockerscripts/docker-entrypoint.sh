@@ -8,6 +8,20 @@ if [ "${1}" != "minio" ]; then
     fi
 fi
 
+## look for specific a `config.env` file to load all the
+## minio settings from
+docker_minio_env() {
+    if [ -f "$MINIO_CONFIG_ENV_FILE" ]; then
+        config_env_file="${MINIO_CONFIG_ENV_FILE}"
+    else
+        config_env_file="/run/secrets/${MINIO_CONFIG_ENV_FILE}"
+    fi
+    if [ -f "$config_env_file" ]; then
+        # shellcheck source=/dev/null
+        . "${config_env_file}"
+    fi
+}
+
 ## Look for docker secrets at given absolute path or in default documented location.
 docker_secrets_env_old() {
     if [ -f "$MINIO_ACCESS_KEY_FILE" ]; then
@@ -71,28 +85,18 @@ docker_kms_secret_encryption_env() {
     fi
 }
 
-## Legacy
-## Set KMS_MASTER_KEY from docker secrets if provided
-docker_kms_master_encryption_env() {
-    KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
-
-    if [ -f "$KMS_MASTER_KEY_FILE" ]; then
-        MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
-        export MINIO_KMS_MASTER_KEY
-    fi
-}
-
 # su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
-    if [ ! -z "${MINIO_USERNAME}" ] && [ ! -z "${MINIO_GROUPNAME}" ]; then
-        if [ ! -z "${MINIO_UID}" ] && [ ! -z "${MINIO_GID}" ]; then
+    if [ -n "${MINIO_USERNAME}" ] && [ -n "${MINIO_GROUPNAME}" ]; then
+        if [ -n "${MINIO_UID}" ] && [ -n "${MINIO_GID}" ]; then
             groupadd -g "$MINIO_GID" "$MINIO_GROUPNAME" && \
                 useradd -u "$MINIO_UID" -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
         else
             groupadd "$MINIO_GROUPNAME" && \
                 useradd -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
         fi
-        exec setpriv --reuid="${MINIO_USERNAME}" --regid="${MINIO_GROUPNAME}" --keep-groups "$@"
+        exec setpriv --reuid="${MINIO_USERNAME}" \
+             --regid="${MINIO_GROUPNAME}" --keep-groups "$@"
     else
         exec "$@"
     fi
@@ -104,11 +108,13 @@ docker_secrets_env_old
 ## Set access env from secrets if necessary. Override
 docker_secrets_env
 
-## Set sse encryption from secrets if necessary. Legacy
-docker_kms_master_encryption_env
-
 ## Set kms encryption from secrets if necessary. Override
 docker_kms_secret_encryption_env
+
+## Set all config environment variables from 'config.env' if necessary.
+## Overrides all previous settings and also overrides all
+## environment values passed from 'podman run -e ENV=value'
+docker_minio_env
 
 ## Switch to user if applicable.
 docker_switch_user "$@"

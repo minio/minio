@@ -23,11 +23,13 @@ minio gateway hdfs hdfs://namenode:8200
 ### Using Docker
 Using docker is experimental, most Hadoop environments are not dockerized and may require additional steps in getting this to work properly. You are better off just using the binary in this situation.
 ```
-docker run -p 9000:9000 \
+podman run \
+ -p 9000:9000 \
+ -p 9001:9001 \
  --name hdfs-s3 \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
- minio/minio gateway hdfs hdfs://namenode:8200
+ minio/minio gateway hdfs hdfs://namenode:8200 --console-address ":9001"
 ```
 
 ### Setup Kerberos
@@ -68,10 +70,12 @@ export KRB5USERNAME=hdfs
 export KRB5REALM=REALM.COM
 ```
 
-## Test using MinIO Browser
+## Test using MinIO Console
 *MinIO gateway* comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
-![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
+| Dashboard                                                                                   | Creating a bucket                                                                           |
+| -------------                                                                               | -------------                                                                               |
+| ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic1.png?raw=true) | ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic2.png?raw=true) |
 
 ## Test using MinIO Client `mc`
 

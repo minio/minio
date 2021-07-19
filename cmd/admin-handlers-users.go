@@ -29,10 +29,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/cmd/config/dns"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
@@ -94,6 +94,42 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListUsers - GET /minio/admin/v3/list-users?bucket={bucket}
+func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListBucketUsers")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	bucket := mux.Vars(r)["bucket"]
+
+	password := cred.SecretKey
+
+	allCredentials, err := globalIAMSys.ListBucketUsers(bucket)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(allCredentials)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
+}
+
 // ListUsers - GET /minio/admin/v3/list-users
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListUsers")
@@ -150,9 +186,16 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessKey := cred.AccessKey
-	if cred.ParentUser != "" {
-		accessKey = cred.ParentUser
+	accessKey := cred.ParentUser
+	if accessKey == "" {
+		accessKey = cred.AccessKey
+	}
+
+	// For temporary credentials always
+	// the temporary credentials to check
+	// policy without implicit permissions.
+	if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
+		accessKey = cred.AccessKey
 	}
 
 	implicitPerm := name == accessKey
@@ -396,6 +439,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if !implicitPerm {
 		parentUser := cred.ParentUser
 		if parentUser == "" {
+			parentUser = cred.AccessKey
+		}
+		// For temporary credentials always
+		// the temporary credentials to check
+		// policy without implicit permissions.
+		if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
 			parentUser = cred.AccessKey
 		}
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
@@ -748,7 +797,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		svcAccountPolicy = svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
 	}
 
-	policyJSON, err := json.Marshal(svcAccountPolicy)
+	policyJSON, err := json.MarshalIndent(svcAccountPolicy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -907,6 +956,13 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
 	writeSuccessNoContent(w)
 }
 
@@ -935,9 +991,10 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Set delimiter value for "s3:delimiter" policy conditionals.
 	r.Header.Set("delimiter", SlashSeparator)
 
+	// Check if we are asked to return prefix usage
+	enablePrefixUsage := r.URL.Query().Get("prefix-usage") == "true"
+
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
-		// Use the following trick to filter in place
-		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
@@ -967,11 +1024,15 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	// Load the latest calculated data usage
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err != nil {
-		// log the error, continue with the accounting response
-		logger.LogIf(ctx, err)
+	var dataUsageInfo madmin.DataUsageInfo
+	var err error
+	if !globalIsGateway {
+		// Load the latest calculated data usage
+		dataUsageInfo, err = loadDataUsageFromBackend(ctx, objectAPI)
+		if err != nil {
+			// log the error, continue with the accounting response
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	// If etcd, dns federation configured list buckets from etcd.
@@ -981,7 +1042,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
 			dns.ErrDomainMissing) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 		for _, dnsRecords := range dnsBuckets {
@@ -1021,8 +1082,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := globalIAMSys.GetCombinedPolicy(policies...)
-	buf, err := json.Marshal(p)
+	buf, err := json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1030,21 +1090,32 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	acctInfo := madmin.AccountInfo{
 		AccountName: accountName,
+		Server:      objectAPI.BackendInfo(),
 		Policy:      buf,
 	}
 
 	for _, bucket := range buckets {
 		rd, wr := isAllowedAccess(bucket.Name)
 		if rd || wr {
-			var size uint64
 			// Fetch the data usage of the current bucket
+			var size uint64
 			if !dataUsageInfo.LastUpdate.IsZero() {
 				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
 			}
+			// Fetch the prefix usage of the current bucket
+			var prefixUsage map[string]uint64
+			if enablePrefixUsage {
+				if pu, err := loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name); err == nil {
+					prefixUsage = pu
+				} else {
+					logger.LogIf(ctx, err)
+				}
+			}
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
-				Name:    bucket.Name,
-				Created: bucket.Created,
-				Size:    size,
+				Name:        bucket.Name,
+				Created:     bucket.Created,
+				Size:        size,
+				PrefixUsage: prefixUsage,
 				Access: madmin.AccountAccess{
 					Read:  rd,
 					Write: wr,
@@ -1060,33 +1131,6 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeSuccessResponseJSON(w, usageInfoJSON)
-}
-
-// InfoCannedPolicyV2 - GET /minio/admin/v2/info-canned-policy?name={policyName}
-func (a adminAPIHandlers) InfoCannedPolicyV2(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "InfoCannedPolicyV2")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetPolicyAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	data, err := json.Marshal(policy)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	w.Write(data)
-	w.(http.Flusher).Flush()
 }
 
 // InfoCannedPolicy - GET /minio/admin/v3/info-canned-policy?name={policyName}
@@ -1106,16 +1150,17 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = json.NewEncoder(w).Encode(policy); err != nil {
+	buf, err := json.MarshalIndent(policy, "", " ")
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	w.(http.Flusher).Flush()
+	w.Write(buf)
 }
 
-// ListCannedPoliciesV2 - GET /minio/admin/v2/list-canned-policies
-func (a adminAPIHandlers) ListCannedPoliciesV2(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListCannedPoliciesV2")
+// ListBucketPolicies - GET /minio/admin/v3/list-canned-policies?bucket={bucket}
+func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListBucketPolicies")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -1124,27 +1169,29 @@ func (a adminAPIHandlers) ListCannedPoliciesV2(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	policies, err := globalIAMSys.ListPolicies()
+	bucket := mux.Vars(r)["bucket"]
+	policies, err := globalIAMSys.ListPolicies(bucket)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	policyMap := make(map[string][]byte, len(policies))
-	for k, p := range policies {
-		var err error
-		policyMap[k], err = json.Marshal(p)
+	var newPolicies = make(map[string]iampolicy.Policy)
+	for name, p := range policies {
+		_, err = json.Marshal(p)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}
+		newPolicies[name] = p
 	}
-	if err = json.NewEncoder(w).Encode(policyMap); err != nil {
+	if err = json.NewEncoder(w).Encode(newPolicies); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	w.(http.Flusher).Flush()
+
 }
 
 // ListCannedPolicies - GET /minio/admin/v3/list-canned-policies
@@ -1158,7 +1205,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	policies, err := globalIAMSys.ListPolicies()
+	policies, err := globalIAMSys.ListPolicies("")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

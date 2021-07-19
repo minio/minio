@@ -20,22 +20,24 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // markerTagVersion is the marker version.
 // Should not need to be updated unless a fundamental change is made to the marker format.
-const markerTagVersion = "v1"
+const markerTagVersion = "v2"
 
 // parseMarker will parse a marker possibly encoded with encodeMarker
-func parseMarker(s string) (marker, uuid string) {
+func (o *listPathOptions) parseMarker() {
+	s := o.Marker
 	if !strings.Contains(s, "[minio_cache:"+markerTagVersion) {
-		return s, ""
+		return
 	}
 	start := strings.LastIndex(s, "[")
-	marker = s[:start]
+	o.Marker = s[:start]
 	end := strings.LastIndex(s, "]")
 	tag := strings.Trim(s[start:end], "[]")
 	tags := strings.Split(tag, ",")
@@ -50,22 +52,41 @@ func parseMarker(s string) (marker, uuid string) {
 				break
 			}
 		case "id":
-			uuid = kv[1]
+			o.ID = kv[1]
+		case "return":
+			o.ID = mustGetUUID()
+			o.Create = true
+		case "p": // pool
+			v, err := strconv.ParseInt(kv[1], 10, 64)
+			if err != nil {
+				o.ID = mustGetUUID()
+				o.Create = true
+				continue
+			}
+			o.pool = int(v)
+		case "s": // set
+			v, err := strconv.ParseInt(kv[1], 10, 64)
+			if err != nil {
+				o.ID = mustGetUUID()
+				o.Create = true
+				continue
+			}
+			o.set = int(v)
 		default:
 			// Ignore unknown
 		}
 	}
-	return
 }
 
 // encodeMarker will encode a uuid and return it as a marker.
 // uuid cannot contain '[', ':' or ','.
-func encodeMarker(marker, uuid string) string {
-	if uuid == "" {
-		return marker
+func (o listPathOptions) encodeMarker(marker string) string {
+	if o.ID == "" {
+		// Mark as returning listing...
+		return fmt.Sprintf("%s[minio_cache:%s,return:]", marker, markerTagVersion)
 	}
-	if strings.ContainsAny(uuid, "[:,") {
-		logger.LogIf(context.Background(), fmt.Errorf("encodeMarker: uuid %s contained invalid characters", uuid))
+	if strings.ContainsAny(o.ID, "[:,") {
+		logger.LogIf(context.Background(), fmt.Errorf("encodeMarker: uuid %s contained invalid characters", o.ID))
 	}
-	return fmt.Sprintf("%s[minio_cache:%s,id:%s]", marker, markerTagVersion, uuid)
+	return fmt.Sprintf("%s[minio_cache:%s,id:%s,p:%d,s:%d]", marker, markerTagVersion, o.ID, o.pool, o.set)
 }

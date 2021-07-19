@@ -30,10 +30,10 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/cmd/crypto"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/versioning"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/bucket/versioning"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -84,6 +84,20 @@ func (sys *BucketTargetSys) ListBucketTargets(ctx context.Context, bucket string
 	return nil, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
+// Delete clears targets present for a bucket
+func (sys *BucketTargetSys) Delete(bucket string) {
+	sys.Lock()
+	defer sys.Unlock()
+	tgts, ok := sys.targetsMap[bucket]
+	if !ok {
+		return
+	}
+	for _, t := range tgts {
+		delete(sys.arnRemotesMap, t.Arn)
+	}
+	delete(sys.targetsMap, bucket)
+}
+
 // SetTarget - sets a new minio-go client target for this bucket.
 func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget, update bool) error {
 	if globalIsGateway {
@@ -117,9 +131,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if vcfg.Status != string(versioning.Enabled) {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
-		if tgt.ReplicationSync && tgt.BandwidthLimit > 0 {
-			return NotImplemented{Message: "Synchronous replication does not support bandwidth limits"}
-		}
 	}
 	sys.Lock()
 	defer sys.Unlock()
@@ -145,7 +156,21 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 
 	sys.targetsMap[bucket] = newtgts
 	sys.arnRemotesMap[tgt.Arn] = clnt
+	sys.updateBandwidthLimit(bucket, tgt.BandwidthLimit)
 	return nil
+}
+
+func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
+	if globalIsGateway {
+		return
+	}
+	if limit == 0 {
+		globalBucketMonitor.DeleteBucket(bucket)
+		return
+	}
+	// Setup bandwidth throttling
+
+	globalBucketMonitor.SetBandwidthLimit(bucket, limit)
 }
 
 // RemoveTarget - removes a remote bucket target for this source bucket.
@@ -200,6 +225,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	}
 	sys.targetsMap[bucket] = targets
 	delete(sys.arnRemotesMap, arnStr)
+	sys.updateBandwidthLimit(bucket, 0)
 	return nil
 }
 
@@ -264,6 +290,7 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 			}
 		}
 		delete(sys.targetsMap, bucket)
+		sys.updateBandwidthLimit(bucket, 0)
 		return
 	}
 
@@ -276,6 +303,7 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 			continue
 		}
 		sys.arnRemotesMap[tgt.Arn] = tgtClient
+		sys.updateBandwidthLimit(bucket, tgt.BandwidthLimit)
 	}
 	sys.targetsMap[bucket] = tgts.Targets
 }
@@ -301,6 +329,7 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 				continue
 			}
 			sys.arnRemotesMap[tgt.Arn] = tgtClient
+			sys.updateBandwidthLimit(bucket.Name, tgt.BandwidthLimit)
 		}
 		sys.targetsMap[bucket.Name] = cfg.Targets
 	}
@@ -352,7 +381,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 			return tgt.Arn
 		}
 	}
-	if !madmin.ServiceType(target.Type).IsValid() {
+	if !target.Type.IsValid() {
 		return ""
 	}
 	return generateARN(target)

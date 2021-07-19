@@ -22,8 +22,8 @@ import (
 	"strings"
 	"sync"
 
-	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 const (
@@ -289,6 +289,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		if !ok {
 			// Closed channel.
 			eof = true
+			break
 		}
 
 		if HasSuffix(walkResult.entry, SlashSeparator) {

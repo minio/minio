@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/mimedb"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/mimedb"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -289,7 +289,27 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityDrives = er.defaultParityCount
 	}
 
+	parityOrig := parityDrives
+	for _, disk := range onlineDisks {
+		if parityDrives >= len(onlineDisks)/2 {
+			parityDrives = len(onlineDisks) / 2
+			break
+		}
+		if disk == nil {
+			parityDrives++
+			continue
+		}
+		di, err := disk.DiskInfo(ctx)
+		if err != nil || di.ID == "" {
+			parityDrives++
+		}
+	}
+	if parityOrig != parityDrives {
+		opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+	}
+
 	dataDrives := len(onlineDisks) - parityDrives
+
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data
 	writeQuorum := dataDrives
@@ -377,16 +397,27 @@ func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObjec
 //
 // Implements S3 compatible Upload Part API.
 func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	// Write lock for this part ID.
+	// Held throughout the operation.
+	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
+	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+	pctx := plkctx.Context()
+	defer partIDLock.Unlock(plkctx.Cancel)
+
+	// Read lock for upload id.
+	// Only held while reading the upload metadata.
+	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return PartInfo{}, err
 	}
 	rctx := rlkctx.Context()
-	readLocked := true
 	defer func() {
-		if readLocked {
-			uploadIDLock.RUnlock(rlkctx.Cancel)
+		if uploadIDRLock != nil {
+			uploadIDRLock.RUnlock(rlkctx.Cancel)
 		}
 	}()
 
@@ -412,13 +443,17 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	partsMetadata, errs = readAllFileInfo(rctx, storageDisks, minioMetaMultipartBucket,
 		uploadIDPath, "", false)
 
+	// Unlock upload id locks before, so others can get it.
+	uploadIDRLock.RUnlock(rlkctx.Cancel)
+	uploadIDRLock = nil
+
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(rctx, partsMetadata, errs, er.defaultParityCount)
+	_, writeQuorum, err := objectQuorumFromMeta(pctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
 
-	reducedErr := reduceWriteQuorumErrs(rctx, errs, objectOpIgnoredErrs, writeQuorum)
+	reducedErr := reduceWriteQuorumErrs(pctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if reducedErr == errErasureWriteQuorum {
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
@@ -427,7 +462,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	fi, err := pickValidFileInfo(rctx, partsMetadata, modTime, dataDir, writeQuorum)
+	fi, err := pickValidFileInfo(pctx, partsMetadata, modTime, dataDir, writeQuorum)
 	if err != nil {
 		return pi, err
 	}
@@ -449,7 +484,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}()
 
-	erasure, err := NewErasure(rctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
+	erasure, err := NewErasure(pctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -482,11 +517,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath,
-			erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize(), false)
+		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, err := erasure.Encode(rctx, data, writers, buffer, writeQuorum)
+	n, err := erasure.Encode(pctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
@@ -504,16 +538,14 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}
 
-	// Unlock here before acquiring write locks all concurrent
-	// PutObjectParts would serialize here updating `xl.meta`
-	uploadIDLock.RUnlock(rlkctx.Cancel)
-	readLocked = false
-	wlkctx, err := uploadIDLock.GetLock(ctx, globalOperationTimeout)
+	// Acquire write lock to update metadata.
+	uploadIDWLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	wlkctx, err := uploadIDWLock.GetLock(pctx, globalOperationTimeout)
 	if err != nil {
 		return PartInfo{}, err
 	}
 	wctx := wlkctx.Context()
-	defer uploadIDLock.Unlock(wlkctx.Cancel)
+	defer uploadIDWLock.Unlock(wlkctx.Cancel)
 
 	// Validates if upload ID exists.
 	if err = er.checkUploadIDExists(wctx, bucket, object, uploadID); err != nil {
@@ -756,8 +788,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
-	defer ObjectPathUpdated(pathJoin(bucket, object))
-
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 
@@ -915,7 +945,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, fi.VersionID)
+		er.addPartial(bucket, object, fi.VersionID, fi.Size)
 		break
 	}
 

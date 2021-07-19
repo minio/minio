@@ -28,9 +28,9 @@ import (
 	"strconv"
 	"strings"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/internal/auth"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -131,11 +131,12 @@ func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 	var cred = globalActiveCred
 	if cred.AccessKey != accessKey {
 		// Check if the access key is part of users credentials.
-		var ok bool
-		if cred, ok = globalIAMSys.GetUser(accessKey); !ok {
+		ucred, ok := globalIAMSys.GetUser(accessKey)
+		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		owner = false
+		owner = cred.AccessKey == ucred.ParentUser
+		cred = ucred
 	}
 	return cred, owner, ErrNone
 }

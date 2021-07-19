@@ -1,0 +1,32 @@
+name: Go
+
+on:
+  pull_request:
+    branches:
+    - master
+
+jobs:
+  build:
+    name: MinIO crosscompile tests on ${{ matrix.go-version }} and ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go-version: [1.16.x]
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '12'
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Build on ${{ matrix.os }}
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make crosscompile

@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	miniogo "github.com/minio/minio-go/v7"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
 
 	minio "github.com/minio/minio/cmd"
 )

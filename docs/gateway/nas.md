@@ -9,11 +9,14 @@ MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple 
 Please ensure to replace `/shared/nasvol` with actual mount path.
 
 ```
-docker run -p 9000:9000 --name nas-s3 \
+podman run \
+ -p 9000:9000 \
+ -p 9001:9001 \
+ --name nas-s3 \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
  -v /shared/nasvol:/container/vol \
- minio/minio gateway nas /container/vol
+ minio/minio gateway nas /container/vol --console-address ":9001"
 ```
 
 ### Using Binary
@@ -24,11 +27,13 @@ export MINIO_ROOT_PASSWORD=minio123
 minio gateway nas /shared/nasvol
 ```
 
-## Test using MinIO Browser
+## Test using MinIO Console
 
 MinIO Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
-![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
+| Dashboard                                                                                   | Creating a bucket                                                                           |
+| -------------                                                                               | -------------                                                                               |
+| ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic1.png?raw=true) | ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic2.png?raw=true) |
 
 ## Test using MinIO Client `mc`
 

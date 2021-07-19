@@ -35,14 +35,14 @@ import (
 	"time"
 
 	"github.com/djherbis/atime"
-	"github.com/minio/minio/cmd/config/cache"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/fips"
-	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/kms"
+	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/disk"
+	"github.com/minio/minio/internal/fips"
+	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/sio"
 )
 
@@ -963,7 +963,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	// case of incomplete read.
 	pipeCloser := func() { pr.CloseWithError(nil) }
 
-	gr, gerr := fn(pr, h, opts.CheckPrecondFn, pipeCloser)
+	gr, gerr := fn(pr, h, pipeCloser)
 	if gerr != nil {
 		return gr, numHits, gerr
 	}
