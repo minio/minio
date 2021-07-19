@@ -723,7 +723,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// We map the X.509 subject common name to the policy. So, a client
 	// with the common name "foo" will be associated with the policy "foo".
 	// Other mapping functions - e.g. public-key hash based mapping - are
-	// possible but not implement.
+	// possible but not implemented.
 	//
 	// Group mapping is not possible with standard X.509 certificates.
 	if err = globalIAMSys.SetTempUser(tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName); err != nil {
