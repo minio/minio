@@ -726,6 +726,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// possible but not implemented.
 	//
 	// Group mapping is not possible with standard X.509 certificates.
+	if certificate.Subject.CommonName == "" {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("The certificate subject CN is empty"))
+		return
+	}
+	tmpCredentials.ParentUser = "tls:" + certificate.Subject.CommonName // Associate any service accounts to the certificate CN
 	if err = globalIAMSys.SetTempUser(tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
