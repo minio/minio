@@ -703,7 +703,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 	}
 
-	// We set the expiry of the temp. credentials to the minumim of the
+	// We set the expiry of the temp. credentials to the minimum of the
 	// configured expiry and the duration until the certificate itself
 	// expires.
 	// We must not issue credentials that out-live the certificate.
