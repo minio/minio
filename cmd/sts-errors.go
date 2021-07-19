@@ -93,6 +93,8 @@ const (
 	ErrSTSClientGrantsExpiredToken
 	ErrSTSInvalidClientGrantsToken
 	ErrSTSMalformedPolicyDocument
+	ErrSTSInsecureConnection
+	ErrSTSInvalidClientCertificate
 	ErrSTSNotInitialized
 	ErrSTSInternalError
 )
@@ -143,6 +145,16 @@ var stsErrCodes = stsErrorCodeMap{
 	ErrSTSMalformedPolicyDocument: {
 		Code:           "MalformedPolicyDocument",
 		Description:    "The request was rejected because the policy document was malformed.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSTSInsecureConnection: {
+		Code:           "InsecureConnection",
+		Description:    "The request was made over a plain HTTP connection. A TLS connection is required.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSTSInvalidClientCertificate: {
+		Code:           "InvalidClientCertificate",
+		Description:    "The provided client certificate is invalid. Retry with a different certificate.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSTSNotInitialized: {

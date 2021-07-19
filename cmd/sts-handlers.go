@@ -20,11 +20,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/auth"
@@ -48,10 +50,11 @@ const (
 	stsLDAPPassword     = "LDAPPassword"
 
 	// STS API action constants
-	clientGrants = "AssumeRoleWithClientGrants"
-	webIdentity  = "AssumeRoleWithWebIdentity"
-	ldapIdentity = "AssumeRoleWithLDAPIdentity"
-	assumeRole   = "AssumeRole"
+	clientGrants      = "AssumeRoleWithClientGrants"
+	webIdentity       = "AssumeRoleWithWebIdentity"
+	ldapIdentity      = "AssumeRoleWithLDAPIdentity"
+	clientCertificate = "AssumeRoleWithCertificate"
+	assumeRole        = "AssumeRole"
 
 	stsRequestBodyLimit = 10 * (1 << 20) // 10 MiB
 
@@ -124,6 +127,12 @@ func registerSTSRouter(router *mux.Router) {
 		Queries(stsVersion, stsAPIVersion).
 		Queries(stsLDAPUsername, "{LDAPUsername:.*}").
 		Queries(stsLDAPPassword, "{LDAPPassword:.*}")
+
+	// AssumeRoleWithCertificate
+	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithCertificate)).
+		Queries(stsAction, clientCertificate).
+		Queries(stsVersion, stsAPIVersion)
+
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, isErrCodeSTS bool, stsErr STSErrorCode) {
@@ -648,4 +657,82 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	encodedSuccessResponse := encodeResponse(ldapIdentityResponse)
 
 	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
+// AssumeRoleWithCertificate implements user authentication with client certificates.
+// It verifies the client-provided X.509 certificate, maps the certificate to an S3 policy
+// and returns temp. S3 credentials to the client.
+//
+// API endpoint: https://minio:9000?Action=AssumeRoleWithCertificate&Version=2011-06-15
+func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *http.Request) {
+	var ctx = newContext(r, w, "AssumeRoleWithCertificate")
+
+	if !globalSTSTLSConfig.Enabled {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCertificate' is disabled"))
+		return
+	}
+
+	// We have to establish a TLS connection and the
+	// client must provide exactly one client certificate.
+	// Otherwise, we don't have a certificate to verify or
+	// the policy lookup would ambigious.
+	if r.TLS == nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInsecureConnection, errors.New("No TLS connection attempt"))
+		return
+	}
+	if len(r.TLS.PeerCertificates) == 0 {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("No client certificate provided"))
+		return
+	}
+	if len(r.TLS.PeerCertificates) > 1 {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, errors.New("More than one client certificate provided"))
+		return
+	}
+
+	var certificate = r.TLS.PeerCertificates[0]
+	if !globalSTSTLSConfig.InsecureSkipVerify {
+		_, err := certificate.Verify(x509.VerifyOptions{
+			KeyUsages: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageClientAuth,
+			},
+			Roots: globalRootCAs,
+		})
+		if err != nil {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidClientCertificate, err)
+			return
+		}
+	}
+
+	// We set the expiry of the temp. credentials to the minumim of the
+	// configured expiry and the duration until the certificate itself
+	// expires.
+	// We must not issue credentials that out-live the certificate.
+	var expiry = globalSTSTLSConfig.STSExpiry
+	if validUntil := time.Until(certificate.NotAfter); validUntil < expiry {
+		expiry = validUntil
+	}
+
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
+		expClaim: time.Now().UTC().Add(expiry).Unix(),
+	}, globalActiveCred.SecretKey)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
+		return
+	}
+
+	// We map the X.509 subject common name to the policy. So, a client
+	// with the common name "foo" will be associated with the policy "foo".
+	// Other mapping functions - e.g. public-key hash based mapping - are
+	// possible but not implement.
+	//
+	// Group mapping is not possible with standard X.509 certificates.
+	if err = globalIAMSys.SetTempUser(tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName); err != nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
+		return
+	}
+
+	var response = new(AssumeRoleWithCertificateResponse)
+	response.Result.Credentials = tmpCredentials
+	response.Metadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
+	writeSuccessResponseXML(w, encodeResponse(response))
 }
