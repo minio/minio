@@ -246,3 +246,40 @@ func TestValidateTransitionTier(t *testing.T) {
 		}
 	}
 }
+
+func TestGetLifecycleTransitionTier(t *testing.T) {
+	lc := lifecycle.Lifecycle{
+		Rules: []lifecycle.Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Transition: lifecycle.Transition{
+					Days:         lifecycle.TransitionDays(3),
+					StorageClass: "TIER-1",
+				},
+			},
+			{
+				ID:     "rule-2",
+				Status: "Enabled",
+				NoncurrentVersionTransition: lifecycle.NoncurrentVersionTransition{
+					NoncurrentDays: lifecycle.ExpirationDays(3),
+					StorageClass:   "TIER-2",
+				},
+			},
+		},
+	}
+
+	obj1 := lifecycle.ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
+	}
+	obj2 := lifecycle.ObjectOpts{
+		Name: "obj2",
+	}
+	if got := getLifeCycleTransitionTier(context.TODO(), &lc, "bucket", obj1); got != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", got)
+	}
+	if got := getLifeCycleTransitionTier(context.TODO(), &lc, "bucket", obj2); got != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", got)
+	}
+}

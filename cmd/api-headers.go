@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -186,42 +185,12 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
-		if opts.VersionID == "" {
-			if ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
-				Name:             objInfo.Name,
-				UserTags:         objInfo.UserTags,
-				VersionID:        objInfo.VersionID,
-				ModTime:          objInfo.ModTime,
-				IsLatest:         objInfo.IsLatest,
-				DeleteMarker:     objInfo.DeleteMarker,
-				SuccessorModTime: objInfo.SuccessorModTime,
-			}); !expiryTime.IsZero() {
-				w.Header()[xhttp.AmzExpiration] = []string{
-					fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
-				}
-			}
-		}
 		if objInfo.IsRemote() {
 			// Check if object is being restored. For more information on x-amz-restore header see
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
 			w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionTier}
 		}
-		ruleID, transitionTime := lc.PredictTransitionTime(lifecycle.ObjectOpts{
-			Name:             objInfo.Name,
-			UserTags:         objInfo.UserTags,
-			VersionID:        objInfo.VersionID,
-			ModTime:          objInfo.ModTime,
-			IsLatest:         objInfo.IsLatest,
-			DeleteMarker:     objInfo.DeleteMarker,
-			TransitionStatus: objInfo.TransitionStatus,
-		})
-		if !transitionTime.IsZero() {
-			// This header is a MinIO centric extension to show expected transition date in a similar spirit as x-amz-expiration
-			w.Header()[xhttp.MinIOTransition] = []string{
-				fmt.Sprintf(`transition-date="%s", rule-id="%s"`, transitionTime.Format(http.TimeFormat), ruleID),
-			}
-		}
-
+		lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 	}
 
 	return nil

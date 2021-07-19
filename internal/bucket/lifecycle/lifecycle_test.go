@@ -21,8 +21,12 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 func TestParseAndValidateLifecycleConfig(t *testing.T) {
@@ -427,5 +431,68 @@ func TestHasActiveRules(t *testing.T) {
 
 		})
 
+	}
+}
+
+func TestSetPredictionHeaders(t *testing.T) {
+	// current version
+	obj1 := ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
+	}
+	// non-current version
+	obj2 := ObjectOpts{
+		Name: "obj2",
+	}
+
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Expiration: Expiration{
+					Days: ExpirationDays(3),
+					set:  true,
+				},
+			},
+			{
+				ID:     "rule-2",
+				Status: "Enabled",
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-1",
+					set:          true,
+				},
+			},
+			{
+				ID:     "rule-3",
+				Status: "Enabled",
+				NoncurrentVersionTransition: NoncurrentVersionTransition{
+					NoncurrentDays: ExpirationDays(3),
+					StorageClass:   "TIER-2",
+					set:            true,
+				},
+			},
+		},
+	}
+
+	// current version headers
+	w := httptest.NewRecorder()
+	lc.SetPredictionHeaders(w, obj1)
+	if expHdrs, ok := w.Header()[xhttp.AmzExpiration]; ok && !strings.Contains(expHdrs[0], "rule-1") {
+		t.Fatalf("Expected %s header", xhttp.AmzExpiration)
+	}
+	if transHdrs, ok := w.Header()[xhttp.MinIOTransition]; ok && !strings.Contains(transHdrs[0], "rule-2") {
+		t.Fatalf("Expected %s header", xhttp.MinIOTransition)
+	}
+
+	// non-current version headers
+	w = httptest.NewRecorder()
+	lc.SetPredictionHeaders(w, obj2)
+	if expHdrs, ok := w.Header()[xhttp.AmzExpiration]; ok && !strings.Contains(expHdrs[0], "rule-1") {
+		t.Fatalf("Expected %s header", xhttp.AmzExpiration)
+	}
+	if transHdrs, ok := w.Header()[xhttp.MinIOTransition]; ok && !strings.Contains(transHdrs[0], "rule-3") {
+		t.Fatalf("Expected %s header", xhttp.MinIOTransition)
 	}
 }

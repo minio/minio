@@ -21,8 +21,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 var (
@@ -445,18 +448,42 @@ func (lc Lifecycle) PredictTransitionTime(obj ObjectOpts) (string, time.Time) {
 	// transition date and its associated rule ID.
 	for _, rule := range lc.FilterActionableRules(obj) {
 		switch {
-		case !rule.Transition.IsDateNull():
+		case obj.IsLatest && !rule.Transition.IsDateNull():
 			if finalTransitionDate.IsZero() || finalTransitionDate.After(rule.Transition.Date.Time) {
 				finalTransitionRuleID = rule.ID
 				finalTransitionDate = rule.Transition.Date.Time
 			}
-		case !rule.Transition.IsDaysNull():
+
+		case obj.IsLatest && !rule.Transition.IsDaysNull():
+			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
+				finalTransitionRuleID = rule.ID
+				finalTransitionDate = expectedTransition
+			}
+
+		case !obj.IsLatest && !rule.NoncurrentVersionTransition.IsDaysNull():
 			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
 			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
 				finalTransitionRuleID = rule.ID
 				finalTransitionDate = expectedTransition
 			}
 		}
+
 	}
 	return finalTransitionRuleID, finalTransitionDate
+}
+
+// SetPredictionHeaders sets time to expiry and transition headers on w for a
+// given obj.
+func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
+	if ruleID, expiry := lc.PredictExpiryTime(obj); !expiry.IsZero() {
+		w.Header()[xhttp.AmzExpiration] = []string{
+			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiry.Format(http.TimeFormat), ruleID),
+		}
+	}
+	if ruleID, transition := lc.PredictTransitionTime(obj); !transition.IsZero() {
+		w.Header()[xhttp.MinIOTransition] = []string{
+			fmt.Sprintf(`transition-date="%s", rule-id="%s"`, transition.Format(http.TimeFormat), ruleID),
+		}
+	}
 }
