@@ -752,6 +752,16 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 
 }
 
+func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodReloadPoolMeta, nil, nil, 0)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadTransitionTierConfig, nil, nil, 0)
 	if err != nil {

@@ -72,11 +72,12 @@ type FilesInfo struct {
 	IsTruncated bool
 }
 
-// FilesInfoVersions represents a list of file versions,
-// additionally indicates if the list is last.
-type FilesInfoVersions struct {
-	FilesVersions []FileInfoVersions
-	IsTruncated   bool
+// Size returns size of all versions for the object 'Name'
+func (f FileInfoVersions) Size() (size int64) {
+	for _, v := range f.Versions {
+		size += v.Size
+	}
+	return size
 }
 
 // FileInfoVersions represent a list of versions for a given file.
@@ -216,7 +217,9 @@ func (fi *FileInfo) SetInlineData() {
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata
-const VersionPurgeStatusKey = "purgestatus"
+const (
+	VersionPurgeStatusKey = ReservedMetadataPrefixLower + "purgestatus"
+)
 
 // newFileInfo - initializes new FileInfo, allocates a fresh erasure info.
 func newFileInfo(object string, dataBlocks, parityBlocks int) (fi FileInfo) {

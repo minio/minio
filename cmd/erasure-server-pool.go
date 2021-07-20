@@ -42,10 +42,15 @@ import (
 type erasureServerPools struct {
 	GatewayUnsupported
 
-	serverPools []*erasureSets
+	poolMetaMutex sync.RWMutex
+	poolMeta      poolMeta
+	serverPools   []*erasureSets
 
-	// Shut down async operations
+	// Shutdown async operations
 	shutdown context.CancelFunc
+
+	// Active decomission canceler
+	decomissionCancelers []context.CancelFunc
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -62,7 +67,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
-		z            = &erasureServerPools{serverPools: make([]*erasureSets, len(endpointServerPools))}
+		z            = &erasureServerPools{
+			serverPools: make([]*erasureSets, len(endpointServerPools)),
+		}
 	)
 
 	var localDrives []string
@@ -108,11 +115,26 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives, i)
+		z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	z.decomissionCancelers = make([]context.CancelFunc, len(z.serverPools))
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		err := z.Init(ctx)
+		if err != nil {
+			if !configRetriableErrors(err) {
+				logger.Fatal(err, "Unable to initialize backend")
+			}
+			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+			continue
+		}
+		break
+	}
+
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
 	return z, nil
@@ -249,6 +271,10 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
+		// skip suspended pools for any new I/O.
+		if z.poolMeta.IsSuspended(index) {
+			continue
+		}
 		g.Go(func() error {
 			// Get the set where it would be placed.
 			storageInfos[index] = getDiskInfos(ctx, z.serverPools[index].getHashedSet(object).getDisks())
@@ -302,6 +328,7 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 			pinfo := poolObjInfo{
 				PoolIndex: i,
 			}
+			opts.VersionID = "" // no need to check for specific versionId
 			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool)
@@ -322,6 +349,12 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
 			return -1, pinfo.Err
 		}
+
+		// skip all objects from suspended pools for mutating calls.
+		if z.poolMeta.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
+			continue
+		}
+
 		if isErrObjectNotFound(pinfo.Err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
@@ -333,23 +366,23 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 			// exist proceed to next pool.
 			continue
 		}
+
 		return pinfo.PoolIndex, nil
 	}
 
 	return -1, toObjectErr(errFileNotFound, bucket, object)
 }
 
-func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucket, object string) (idx int, err error) {
-	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{NoLock: true})
-}
-
-// getPoolIdxExisting returns the (first) found object pool index containing an object.
+// getPoolIdxExistingNoLock returns the (first) found object pool index containing an object.
 // If the object exists, but the latest version is a delete marker, the index with it is still returned.
 // If the object does not exist ObjectNotFound error is returned.
 // If any other error is found, it is returned.
 // The check is skipped if there is only one zone, and 0, nil is always returned in that case.
-func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, object string) (idx int, err error) {
-	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{})
+func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucket, object string) (idx int, err error) {
+	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
+		NoLock: true,
+		Mutate: true,
+	})
 }
 
 func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
@@ -369,9 +402,10 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 }
 
 // getPoolIdx returns the found previous object and its corresponding pool idx,
-// if none are found falls back to most available space pool.
+// if none are found falls back to most available space pool, this function is
+// designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExisting(ctx, bucket, object)
+	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{Mutate: true})
 	if err != nil && !isErrObjectNotFound(err) {
 		return idx, err
 	}
@@ -844,7 +878,11 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 }
 
 func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
-	for _, zone := range z.serverPools {
+	for idx, zone := range z.serverPools {
+		if z.poolMeta.IsSuspended(idx) {
+			logger.LogIf(ctx, fmt.Errorf("pool %d is suspended, all writes are suspended", idx+1))
+			continue
+		}
 		_, err := zone.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
 		if err != nil {
 			return err
@@ -868,7 +906,8 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return objInfo, err
 	}
@@ -1973,7 +2012,8 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -1989,7 +2029,8 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -2004,7 +2045,8 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -2019,7 +2061,8 @@ func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object s
 		return z.serverPools[0].GetObjectTags(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = false
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -2034,7 +2077,8 @@ func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, objec
 		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
 	}
@@ -2049,7 +2093,8 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExisting(ctx, bucket, object)
+	opts.Mutate = true
+	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
 	}

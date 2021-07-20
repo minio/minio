@@ -71,6 +71,9 @@ type ObjectOptions struct {
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
+
+	// Mutate set to 'true' if the call is namespace mutation call
+	Mutate bool
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.

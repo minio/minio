@@ -46,6 +46,16 @@ const (
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo = madmin.StorageInfo
 
+// TotalUsableCapacity - total usable capacity
+func TotalUsableCapacity(s StorageInfo) float64 {
+	return GetTotalUsableCapacity(s.Disks, s)
+}
+
+// TotalUsableCapacityFree - total usable capacity free
+func TotalUsableCapacityFree(s StorageInfo) float64 {
+	return GetTotalUsableCapacityFree(s.Disks, s)
+}
+
 // objectHistogramInterval is an interval that will be
 // used to report the histogram of objects data sizes
 type objectHistogramInterval struct {
