@@ -47,6 +47,44 @@ root credentials. You can use the Browser to create buckets, upload objects, sen
 You can also connect using any S3-compatible tool, such as the FS3 `mc` commandline tool.
 
 
+## FS3 API
+### Send Online Deals (single file)
+POST`/send/{bucket}/{object}`
+
+#### Example: 
+
+Send request using POSTMAN
+
+``` bash
+# Headers
+## Use a new User-Agent instead of the default User-Agent in Postman
+User-Agent    Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36
+
+# Body
+{
+    "VerifiedDeal":"false",
+    "FastRetrieval":"true",
+    "MinerId":"t00000",
+    "Price": "0.000005",
+    "Duration":"1036800"
+}
+```
+Response from POSTMAN
+```bash
+{
+    "filename": "~/minio-data/test/test.zip",
+    "walletAddress": "nvauebtbb3kthiqbnaksb3gfkbaskrt4kwh3er",
+    "verifiedDeal": "false",
+    "fastRetrieval": "true",
+    "dataCid": "bafyktrevft2ar7hmifqw5krqunu4zx76vaqpcjyxcmsbamc3547nyzvtuggg",
+    "minerId": "t03354",
+    "price": "0.000005",
+    "duration": "1038500",
+    "dealCid": "bafyreic5jfcksvii7pzv5zpszxw5hxtl7yuioppe5qoeruzp5ql5p6jsy"
+}
+```
+
+
 # Deployment Recommendations
 
 ## Allow port access for Firewalls
