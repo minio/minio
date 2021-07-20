@@ -1527,20 +1527,20 @@ func (sys *IAMSys) loadUserFromStore(accessKey string) {
 // by checking remote IDP if the relevant users are still active and present.
 func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 	sys.store.lock()
-	parentUsersMap := make(map[string]auth.Credentials, len(sys.iamUsersMap))
+	parentUsersMap := make(map[string][]auth.Credentials, len(sys.iamUsersMap))
 	for _, cred := range sys.iamUsersMap {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			userid, err := parseOpenIDParentUser(cred.ParentUser)
 			if err == errSkipFile {
 				continue
 			}
-			parentUsersMap[userid] = cred
+			parentUsersMap[userid] = append(parentUsersMap[userid], cred)
 		}
 	}
 	sys.store.unlock()
 
 	expiredUsers := make([]auth.Credentials, 0, len(parentUsersMap))
-	for userid, cred := range parentUsersMap {
+	for userid, creds := range parentUsersMap {
 		u, err := globalOpenIDConfig.LookupUser(userid)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
@@ -1548,7 +1548,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 		}
 		// Disabled parentUser purge the entries locally
 		if !u.Enabled {
-			expiredUsers = append(expiredUsers, cred)
+			expiredUsers = append(expiredUsers, creds...)
 		}
 	}
 
