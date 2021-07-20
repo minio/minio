@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -435,16 +436,6 @@ func TestHasActiveRules(t *testing.T) {
 }
 
 func TestSetPredictionHeaders(t *testing.T) {
-	// current version
-	obj1 := ObjectOpts{
-		Name:     "obj1",
-		IsLatest: true,
-	}
-	// non-current version
-	obj2 := ObjectOpts{
-		Name: "obj2",
-	}
-
 	lc := Lifecycle{
 		Rules: []Rule{
 			{
@@ -468,7 +459,7 @@ func TestSetPredictionHeaders(t *testing.T) {
 				ID:     "rule-3",
 				Status: "Enabled",
 				NoncurrentVersionTransition: NoncurrentVersionTransition{
-					NoncurrentDays: ExpirationDays(3),
+					NoncurrentDays: ExpirationDays(5),
 					StorageClass:   "TIER-2",
 					set:            true,
 				},
@@ -476,23 +467,52 @@ func TestSetPredictionHeaders(t *testing.T) {
 		},
 	}
 
-	// current version headers
-	w := httptest.NewRecorder()
-	lc.SetPredictionHeaders(w, obj1)
-	if expHdrs, ok := w.Header()[xhttp.AmzExpiration]; ok && !strings.Contains(expHdrs[0], "rule-1") {
-		t.Fatalf("Expected %s header", xhttp.AmzExpiration)
+	// current version
+	obj1 := ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
 	}
-	if transHdrs, ok := w.Header()[xhttp.MinIOTransition]; ok && !strings.Contains(transHdrs[0], "rule-2") {
-		t.Fatalf("Expected %s header", xhttp.MinIOTransition)
+	// non-current version
+	obj2 := ObjectOpts{
+		Name: "obj2",
 	}
 
-	// non-current version headers
-	w = httptest.NewRecorder()
-	lc.SetPredictionHeaders(w, obj2)
-	if expHdrs, ok := w.Header()[xhttp.AmzExpiration]; ok && !strings.Contains(expHdrs[0], "rule-1") {
-		t.Fatalf("Expected %s header", xhttp.AmzExpiration)
+	tests := []struct {
+		obj         ObjectOpts
+		expRuleID   int
+		transRuleID int
+	}{
+		{
+			obj:         obj1,
+			expRuleID:   0,
+			transRuleID: 1,
+		},
+		{
+			obj:         obj2,
+			expRuleID:   0,
+			transRuleID: 2,
+		},
 	}
-	if transHdrs, ok := w.Header()[xhttp.MinIOTransition]; ok && !strings.Contains(transHdrs[0], "rule-3") {
-		t.Fatalf("Expected %s header", xhttp.MinIOTransition)
+	for i, tc := range tests {
+		w := httptest.NewRecorder()
+		lc.SetPredictionHeaders(w, tc.obj)
+		if expHdrs, ok := w.Header()[xhttp.AmzExpiration]; ok && !strings.Contains(expHdrs[0], lc.Rules[tc.expRuleID].ID) {
+			t.Fatalf("Test %d: Expected %s header", i+1, xhttp.AmzExpiration)
+		}
+		if transHdrs, ok := w.Header()[xhttp.MinIOTransition]; ok {
+			if !strings.Contains(transHdrs[0], lc.Rules[tc.transRuleID].ID) {
+				t.Fatalf("Test %d: Expected %s header", i+1, xhttp.MinIOTransition)
+			}
+
+			if tc.obj.IsLatest {
+				if expectedDue, _ := lc.Rules[tc.transRuleID].Transition.NextDue(tc.obj); !strings.Contains(transHdrs[0], expectedDue.Format(http.TimeFormat)) {
+					t.Fatalf("Test %d: Expected transition time %s", i+1, expectedDue)
+				}
+			} else {
+				if expectedDue, _ := lc.Rules[tc.transRuleID].NoncurrentVersionTransition.NextDue(tc.obj); !strings.Contains(transHdrs[0], expectedDue.Format(http.TimeFormat)) {
+					t.Fatalf("Test %d: Expected transition time %s", i+1, expectedDue)
+				}
+			}
+		}
 	}
 }

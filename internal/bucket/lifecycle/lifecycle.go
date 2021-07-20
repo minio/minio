@@ -441,34 +441,23 @@ func (lc Lifecycle) PredictTransitionTime(obj ObjectOpts) (string, time.Time) {
 		return "", time.Time{}
 	}
 
-	var finalTransitionDate time.Time
-	var finalTransitionRuleID string
-
 	// Iterate over all actionable rules and find the earliest
 	// transition date and its associated rule ID.
+	var finalTransitionDate time.Time
+	var finalTransitionRuleID string
 	for _, rule := range lc.FilterActionableRules(obj) {
-		switch {
-		case obj.IsLatest && !rule.Transition.IsDateNull():
-			if finalTransitionDate.IsZero() || finalTransitionDate.After(rule.Transition.Date.Time) {
+		if due, ok := rule.Transition.NextDue(obj); ok {
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(due) {
 				finalTransitionRuleID = rule.ID
-				finalTransitionDate = rule.Transition.Date.Time
-			}
-
-		case obj.IsLatest && !rule.Transition.IsDaysNull():
-			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
-			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
-				finalTransitionRuleID = rule.ID
-				finalTransitionDate = expectedTransition
-			}
-
-		case !obj.IsLatest && !rule.NoncurrentVersionTransition.IsDaysNull():
-			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
-			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
-				finalTransitionRuleID = rule.ID
-				finalTransitionDate = expectedTransition
+				finalTransitionDate = due
 			}
 		}
-
+		if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok {
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(due) {
+				finalTransitionRuleID = rule.ID
+				finalTransitionDate = due
+			}
+		}
 	}
 	return finalTransitionRuleID, finalTransitionDate
 }

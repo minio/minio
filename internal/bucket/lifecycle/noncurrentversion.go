@@ -19,6 +19,7 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"time"
 )
 
 // NoncurrentVersionExpiration - an action for lifecycle configuration rule.
@@ -111,4 +112,15 @@ func (n NoncurrentVersionTransition) Validate() error {
 		return errXMLNotWellFormed
 	}
 	return nil
+}
+
+// NextDue returns upcoming NoncurrentVersionTransition date for obj if
+// applicable, returns false otherwise.
+func (n NoncurrentVersionTransition) NextDue(obj ObjectOpts) (time.Time, bool) {
+	switch {
+	case obj.IsLatest, n.IsDaysNull():
+		return time.Time{}, false
+	}
+
+	return ExpectedExpiryTime(obj.SuccessorModTime, int(n.NoncurrentDays)), true
 }
