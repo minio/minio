@@ -2,8 +2,8 @@
 
 
 # Install from Source
-##Build the Source Code
-####Build UI
+## Build the Source Code
+#### Build UI
 ```bash
 cd browser
 npm install chalk
@@ -11,11 +11,11 @@ npm run release
 # back to repository 
 cd ..
 ```
-####Install Filecoin dependency
+#### Install Filecoin dependency
 ```bash
 sudo apt install mesa-opencl-icd ocl-icd-opencl-dev gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget -y && sudo apt upgrade -y
 ```
-####Install go module dependency
+#### Install go module dependency
 ``` bash 
 # get submodules
 git submodule update --init --recursive
@@ -24,7 +24,7 @@ make ffi
 make 
 ```
 
-####Export environment variables
+#### Export environment variables
 A wallet address is a must for sending deals to miner. You can change it via setting environment variable `filw_wallet`.
 ``` bash 
 # export wallet address
