@@ -36,7 +36,7 @@ export fil_wallet=MY_WALLET_ADDRESS
  ./minio server ~/minio-data
 ```
 
-The default fs3 volume address `GlobalVolumeAddress` is set as `~/minio-data`, which can be changed in `fs3/cmd/globals.go'. See more details in Pre-existing data.
+The default fs3 volume address `GlobalVolumeAddress` is set as `~/minio-data`, which can be changed in `fs3/cmd/globals.go`. See more details in Pre-existing data.
 
 
 
