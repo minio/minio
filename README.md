@@ -36,11 +36,11 @@ export fil_wallet=MY_WALLET_ADDRESS
  ./minio server ~/minio-data
 ```
 
-The default fs3 volume address `GlobalVolumeAddress` is set as `~/minio-data`, which can be changed in `fs3/cmd/globals.go`. See more details in Pre-existing data.
+The default FS3 volume address `GlobalVolumeAddress` is set as `~/minio-data`, which can be changed in `fs3/cmd/globals.go`. See more details in Pre-existing data.
 
 
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the FS3 Browser, an embedded
+The FS3 deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the FS3 Browser, an embedded
 web-based object browser built into FS3 Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
 root credentials. You can use the Browser to create buckets, upload objects, send deals, retrieve data and browse the contents of the FS3 server.
 
@@ -105,17 +105,13 @@ service iptables restart
 ```
 
 ## Pre-existing data
-When deployed on a single drive, FS3 lets clients access any pre-existing data in the data directory. For example, if MinIO is started with the command  `minio server /mnt/data`, any pre-existing data in the `/mnt/data` directory would be accessible to the clients.
+When deployed on a single drive, FS3 lets clients access any pre-existing data in the data directory. For example, if FS3 is started with the command  `minio server /mnt/data`, any pre-existing data in the `/mnt/data` directory would be accessible to the clients.
 
 The above statement is also valid for all gateway backends.
 
-# Test MinIO Connectivity
+# Test FS3 Connectivity
 
 ## Test using FS3 Browser
-MinIO Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure your server has started successfully.
+FS3 Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure your server has started successfully.
 
-
-
-## Test using FS3 `mc`
-`mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. 
 
