@@ -200,30 +200,6 @@ func initConsoleServer() (*restapi.Server, error) {
 		restapi.Hostname = globalMinioConsoleHost
 	}
 
-	// subnet license refresh process
-	go func() {
-		// start refreshing subnet license after 5 seconds..
-		time.Sleep(time.Second * 5)
-
-		failedAttempts := 0
-		for {
-			if err := restapi.RefreshLicense(); err != nil {
-				failedAttempts++
-				// end license refresh after 3 consecutive failed attempts
-				if failedAttempts >= 3 {
-					return
-				}
-				// wait 5 minutes and retry again
-				time.Sleep(time.Minute * 5)
-				continue
-			}
-			// if license refreshed successfully reset the counter
-			failedAttempts = 0
-			// try to refresh license every 24 hrs
-			time.Sleep(time.Hour * 24)
-		}
-	}()
-
 	return server, nil
 }
 
