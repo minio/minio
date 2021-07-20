@@ -2583,7 +2583,7 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("bad request: %s", err.Error())))
 		return
 	}
-	fmt.Println("hello1")
+
 	_ = func(address string) (string, error) {
 		addr := net.ParseIP(address)
 		if addr != nil {
@@ -2618,15 +2618,7 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 
 
     // send online deal to lotus
-    //filWallet := os.Getenv("fil_wallet")
-
-	commandLineWallet := "echo $fil_wallet"
-	filWallet,err:= ExecCommand(commandLineWallet)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(filWallet)
+    filWallet := os.Getenv("fil_wallet")
 
 	verifiedDeal := "--verified-deal="+ onlineDealRequest.VerifiedDeal
     fastRetrieval := "--fast-retrieval="+ onlineDealRequest.FastRetrieval
