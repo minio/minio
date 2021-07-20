@@ -616,6 +616,26 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	return bucketStats
 }
 
+// ReloadPoolMeta reloads on disk updates on pool metadata
+func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.ReloadPoolMeta(ctx)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
 // LoadTransitionTierConfig notifies remote peers to load their remote tier
 // configs from config store.
 func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
