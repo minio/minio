@@ -40,21 +40,12 @@ The default fs3 volume address `GlobalVolumeAddress` is set as `~/minio-data`, w
 
 
 
-The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Browser, an embedded
-web-based object browser built into MinIO Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
-root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
+The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the FS3 Browser, an embedded
+web-based object browser built into FS3 Server. Point a web browser running on the host machine to http://127.0.0.1:9000 and log in with the
+root credentials. You can use the Browser to create buckets, upload objects, send deals, retrieve data and browse the contents of the FS3 server.
 
-You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See
-[Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers,
-see https://docs.min.io/docs/ and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
+You can also connect using any S3-compatible tool, such as the FS3 `mc` commandline tool.
 
-
-> NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication
-require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically,
-with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html)
-for more complete documentation.
-
-MinIO strongly recommends *against* using compiled-from-source MinIO servers for production environments.
 
 # Deployment Recommendations
 
