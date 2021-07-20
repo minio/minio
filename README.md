@@ -49,7 +49,7 @@ You can also connect using any S3-compatible tool, such as the FS3 `mc` commandl
 
 ## FS3 API
 ### Send Online Deals (single file)
-POST`/send/{bucket}/{object}`
+POST`minio/send/{bucket}/{object}`
 
 #### Example: 
 
