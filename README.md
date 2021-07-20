@@ -123,8 +123,8 @@ The above statement is also valid for all gateway backends.
 ## Test using FS3 Browser
 MinIO Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure your server has started successfully.
 
-![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
 
-## Test using FS# `mc`
+
+## Test using FS3 `mc`
 `mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. 
 
