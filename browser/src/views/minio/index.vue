@@ -54,13 +54,57 @@
             sortable
             label="Name">
             <template slot-scope="scope">
-              <div class="iconBefore">
+              <div class="iconBefore" v-if="scope.row.contentType.indexOf('text') >= 0">
+                <i class="iconfont el-icon-document" style="background-color: #8a8a8a;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('image') >= 0">
+                <i class="iconfont icon-wenjiantupian" style="background-color: #f06292;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('zip') >= 0">
+                <i class="iconfont icon-zip" style="background-color: #427089;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.name.indexOf('xlsx') >= 0 || scope.row.contentType.indexOf('excel') >= 0">
+                <i class="iconfont icon-exclxlsxlsx" style="background-color: cadetblue;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.name.indexOf('pdf') >= 0">
+                <i class="iconfont icon-pdf" style="background-color: #fa7775;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('video') >= 0 || scope.row.contentType.indexOf('audio') >= 0">
+                <i class="iconfont icon-geshi_tongyongshipin" style="background-color: #f8c363;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.name.indexOf('doc') >= 0">
+                <i class="iconfont icon-word1" style="background-color: #2196f5;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.name.indexOf('ppt') >= 0">
+                <i class="iconfont icon-PPT" style="background-color: #896ea6;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.name.indexOf('powerpoint') >= 0 || scope.row.name.indexOf('presentation') >= 0">
+                <i class="iconfont icon-ppt" style="background-color: rgb(182, 146, 221);" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                {{scope.row.name}}
+              </div>
+
+
+              <div class="iconBefore" v-else>
                 <i class="iconfont icon-wenjian" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
                 {{scope.row.name}}
-                <!-- <svg t="1624849660275" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5453" width="200" height="200">
-                  <path d="M820.2752 896.512H211.968c-72.7552 0-131.7376-58.8288-131.7376-131.3792V230.0928c0-72.5504 58.9824-131.3792 131.7376-131.3792h169.3696c43.6736 0 82.8928 26.6752 98.8672 67.2256l23.0912 42.9056c8.8064 22.3232 30.4128 37.0176 54.4768 37.0176h262.5024c72.7552 0 131.7376 58.8288 131.7376 131.3792v387.9424c0 72.5504-58.9824 131.328-131.7376 131.328z" fill="#1296db" p-id="5454" data-spm-anchor-id="a313x.7781069.0.i0" class="selected"></path><path d="M629.6576 539.8016H545.792V456.192c0-21.76-17.7152-39.424-39.5264-39.424s-39.5264 17.664-39.5264 39.424v83.6096H382.8736c-21.8112 0-39.5264 17.664-39.5264 39.424s17.7152 39.424 39.5264 39.424h83.8656v83.6096c0 21.76 17.7152 39.424 39.5264 39.424s39.5264-17.664 39.5264-39.424v-83.6096h83.8656c21.8112 0 39.5264-17.664 39.5264-39.424 0-21.8112-17.7152-39.424-39.5264-39.424z" fill="#ffffff" p-id="5455"></path>
-                </svg> -->
               </div>
             </template>
           </el-table-column>
@@ -71,7 +115,7 @@
             width="130">
             <template slot-scope="scope">
               <div class="iconBefore">
-                {{scope.row.size}} bytes
+                {{scope.row.size | formatbytes}}
               </div>
             </template>
 
@@ -144,39 +188,6 @@
       </div>
 
 
-      <el-dialog title="Share Object" :visible.sync="shareDialog" custom-class="ShareObject">
-          <el-button class="shareFileCoin">Share to Filecoin</el-button>
-          <el-row>
-              <el-col :span="24">
-                <h5>Shareable Link</h5>
-                <el-input v-model="share_input" placeholder="" id="url-link" disabled></el-input>
-              </el-col>
-              <el-col :span="24">
-                <h5>Expires in (Max 7 days)</h5>
-                <el-row class="steppet">
-                  <el-col :span="8">
-                    <div class="set-expire-title">Days</div>
-                    <el-input-number v-model="num.num_Day" @change="handleChange" :min="1" :max="7" label="Days"></el-input-number>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="set-expire-title">Hours</div>
-                    <el-input-number v-model="num.num_Hours" @change="handleChange" :min="0" :max="23" label="Hours"></el-input-number>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="set-expire-title">Minutes</div>
-                    <el-input-number v-model="num.num_Minutes" @change="handleChange" :min="0" :max="59" label="Minutes"></el-input-number>
-                  </el-col>
-                </el-row>
-              </el-col>
-              <el-col :span="24">
-                <div class="btncompose">
-                  <el-button @click="copyLink">Copy Link</el-button>
-                  <el-button @click="shareDialog = false">Cancel</el-button>
-                </div>
-              </el-col>
-          </el-row>
-      </el-dialog>
-
       <el-dialog title="" custom-class="customStyle" :visible.sync="dialogFormVisible">
           <el-input v-model="form.name" placeholder="Bucket Name"></el-input>
       </el-dialog>
@@ -194,12 +205,19 @@
           <el-button type="primary" @click="deleteDialogVisible = false">Cancel</el-button>
         </div>
       </el-dialog>
+
+      <share-dialog
+        :shareDialog="shareDialog" :shareObjectShow="shareObjectShow"
+        :shareFileShow="shareFileShow" :num="num" :share_input="share_input"
+        @getshareDialog="getshareDialog" @getShareGet="getPresignedGet">
+      </share-dialog>
   </div>
 </template>
 
 <script>
 import axios from 'axios'
 import Moment from 'moment'
+import shareDialog from '@/components/shareDialog.vue';
 export default {
   name: 'landing',
   data() {
@@ -225,14 +243,6 @@ export default {
       editNameFile: true,
       table: true,
       openAboutShow: false,
-      shareDialog: false,
-      share_input: '',
-      share_now: null,
-      num: {
-        num_Day: 5,
-        num_Hours: 0,
-        num_Minutes: 0,
-      },
       aboutPresignedGet: {
         uiVersion: "",
         url: ""
@@ -245,11 +255,27 @@ export default {
         uiVersion: ""
       },
       prefixName: '',
-      browserNameChange: ''
+      browserNameChange: '',
+            shareDialog: false,
+            shareObjectShow: true,
+            shareFileShow: false,
+            share_now: null,
+            share_input: '',
+            num: {
+              num_Day: 5,
+              num_Hours: 0,
+              num_Minutes: 0,
+            },
     }
+  },
+  components: {
+      shareDialog
   },
   props: ['aboutServer','aboutListObjects','dialogFormVisible','currentBucket','userd'],
   methods: {
+    getshareDialog(shareDialog) {
+      this.shareDialog = shareDialog
+    },
     editFun() {
       this.editNameFile = false
       // this.$refs['mark'].focus()
@@ -413,36 +439,6 @@ export default {
         $(a).remove();
       }
     },
-    copyLink(){
-      let _this = this
-      var txtArea = document.createElement("textarea");
-      txtArea.id = 'txt';
-      txtArea.style.position = 'fixed';
-      txtArea.style.top = '0';
-      txtArea.style.left = '0';
-      txtArea.style.opacity = '0';
-      txtArea.value = _this.share_input;
-      document.body.appendChild(txtArea);
-      txtArea.select();
-
-      try {
-          var successful = document.execCommand('copy');
-          var msg = successful ? 'Link copied to clipboard!' : 'copy failed!';
-          console.log('Copying text command was ' + msg);
-          if (successful) {
-              _this.$message({
-                  message: msg,
-                  type: 'success'
-              });
-          }
-      } catch (err) {
-          console.log('Oops, unable to copy');
-      } finally {
-          document.body.removeChild(txtArea);
-      }
-
-
-    },
     shareBtn(index) {
       let _this = this
       _this.share_now = index
@@ -573,10 +569,6 @@ export default {
         _this.$emit('getaboutServer', _this.form.name, false);
         _this.form.name = ''
     },
-    handleChange(value) {
-        console.log(value);
-        this.getPresignedGet()
-    },
     aboutListData(){
       let _this = this
       if(_this.aboutListObjects && _this.aboutListObjects.objects){
@@ -586,7 +578,7 @@ export default {
             item.lastModified = Moment(item.lastModified).format('YYYY-MM-DD HH:mm:ss')
           })
           _this.tableData = JSON.parse(JSON.stringify(_this.aboutListObjects.objects))
-          console.log('tableData', _this.tableData)
+          //console.log('tableData', _this.tableData)
       }else{
         _this.tableData = JSON.parse(JSON.stringify(_this.aboutListObjects.objects))
       }
@@ -606,7 +598,7 @@ export default {
     formatbytes: function (bytes) {
       if (bytes === 0) return '0 B';
       var k = 1000, // or 1024
-          sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+          sizes = ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
           i = Math.floor(Math.log(bytes) / Math.log(k));
 
       return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
@@ -1125,150 +1117,10 @@ export default {
     }
   }
   .el-dialog__wrapper /deep/{
-    .ShareObject{
-      position: relative;
-      width: 90%;
-      max-width: 400px;
-      .shareFileCoin{
-        position: absolute;
-        top: 0.2rem;
-        right: 0.2rem;
-        padding: 0.05rem 0.1rem;
-        font-size: 12px;
-        color: #fff;
-        border: 0;
-        background-color: #33d46f;
-        line-height: 1.5;
-        border-radius: 2px;
-        text-align: center;
-        transition: all;
-        transition-duration: .3s;
-      }
-      .el-dialog__header{
-          display: flex;
-          .el-dialog__title{
-              font-size: 0.15rem;
-              color: #333;
-          }
-      }
-      .el-dialog__body{
-        padding: 0.2rem;
-        .el-row{
-          .el-col{
-            margin-bottom: 0.25rem;
-            h5{
-              font-size: 13px;
-              font-weight: normal;
-              display: block;
-              margin-bottom: 10px;
-              line-height: 2;
-              color: #8e8e8e;
-            }
-            .el-input{
-              .el-input__inner{
-                padding: 0.1rem;
-                border: 1px solid #eee;
-                border-radius: 0.02rem;
-                font-size: 13px;
-                cursor: text;
-                transition: border-color;
-                transition-duration: .3s;
-                background-color: transparent;
-              }
-            }
-            .steppet{
-              display: flex;
-              justify-content: center;
-              .el-col{
-                position: relative;
-                margin: 0;
-                .set-expire-title {
-                  position: absolute;
-                  top: 40px;
-                  left: 0;
-                  right: 0;
-                  font-size: 10px;
-                  text-transform: uppercase;
-                  text-align: center;
-                  line-height: 1.42857143;
-                  color: #8e8e8e;
-                }
-                .el-input-number{
-                  display: flex;
-                  flex-wrap: wrap;
-                  width: 100%;
-                  height: 125px;
-                  span, .el-input{
-                    width: 100%;
-                  }
-                  .el-input-number__decrease{
-                    background: transparent url(../../assets/images/down.png) no-repeat center;
-                    background-size: auto 100%;
-                    height: 20px;
-                    top: auto;
-                    bottom: 0;
-                    border: 0;
-                    i{
-                      display: none;
-                    }
-                  }
-                  .el-input-number__increase{
-                    bottom: auto;
-                    background: transparent url(../../assets/images/up.png) no-repeat center;
-                    background-size: auto 100%;
-                    height: 20px;
-                    top: 0;
-                    border: 0;
-                    i{
-                      display: none;
-                    }
-                  }
-                  .el-input{
-                    position: absolute;
-                    top: 27px;
-                    bottom: 27px;
-                    border: 1px solid #eee;
-                    pointer-events: none;
-                    .el-input__inner{
-                      position: absolute;
-                      bottom: 0;
-                      border: 0;
-                      background-color: transparent;
-                      box-shadow: none;
-                      color: #333;
-                      font-size: 0.2rem;
-                      font-weight: 400;
-                    }
-                  }
-                }
-              }
-            }
-            .btncompose{
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              .el-button{
-                padding: 0.05rem 0.1rem;
-                margin: 0 0.03rem;
-                font-size: 12px;
-                color: #fff;
-                border: 0;
-                background-color: #33d46f;
-                line-height: 1.5;
-                border-radius: 0.02rem;
-                text-align: center;
-                transition: all;
-                transition-duration: .3s;
-                &:last-child{
-                  color: #545454;
-                  background-color: #eee;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    justify-content: center;
+    display: flex;
+    align-items: center;
+
     .el-dialog.customStyle{
         width: 400px;
         margin: 0 !important;
@@ -1381,6 +1233,20 @@ export default {
       .model_right{
         width: 92%;
         padding: 4%;
+      }
+    }
+  }
+  .el-dialog__wrapper /deep/{
+    .ShareObject{
+      width: 90%;
+      .el-dialog__body{
+        padding: 0;
+        .shareContent{
+          flex-wrap: wrap;
+          .el-row{
+            width: 100%;
+          }
+        }
       }
     }
   }

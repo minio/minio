@@ -187,6 +187,7 @@ service minio start
 Build UI
 ```bash
 cd fs3/browser
+npm install chalk
 npm run build
 npm run release
 # back to repository 
