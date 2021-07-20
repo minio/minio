@@ -1399,7 +1399,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return nil
 	}
 
-	destObj, err := genTransitionObjName()
+	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
 		return err
 	}
