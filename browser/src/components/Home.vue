@@ -432,6 +432,8 @@ export default {
                         message: "File '" + file.name + "' uploaded successfully.",
                         type: 'success'
                     });
+
+                    _this.getListObjects(_this.currentBucket, _this.prefixData)
                 }
 
                 xhr.upload.addEventListener("error", event => {
@@ -477,7 +479,6 @@ export default {
               // console.log(error.message, error.request, error.response.headers);
           });*/
 
-          _this.getListObjects(_this.currentBucket, _this.prefixData)
 
 
 
