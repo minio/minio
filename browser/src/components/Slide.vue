@@ -21,7 +21,7 @@
 
                     <ul v-if="item.show && homeClick">
                         <li @click.stop="dialogFun(item.name, index)">Edit policy</li>
-                        <li>Backup to Filecoin</li>
+                        <li @click="backupFun">Backup to Filecoin</li>
                         <li @click.stop="dialogDeleteFun(item.name, index)">Delete</li>
                     </ul>
                 </el-col>
@@ -63,10 +63,17 @@
                 </el-form-item>
             </el-form>
         </el-dialog>
+
+
+        <!--share-dialog
+          :shareDialog="shareDialog" :shareObjectShow="shareObjectShow"
+          :shareFileShow="shareFileShow" @getshareDialog="getshareDialog">
+        </share-dialog-->
     </div>
 </template>
 <script>
 import axios from 'axios'
+import shareDialog from '@/components/shareDialog.vue';
 export default {
     data() {
         return {
@@ -95,10 +102,16 @@ export default {
             },
             bucketPolicies: {
                 policies: []
-            }
+            },
+            shareDialog: false,
+            shareObjectShow: true,
+            shareFileShow: false,
         };
     },
     props: ['minioListBuckets', 'currentBucket', 'homeClick'],
+    components: {
+        shareDialog
+    },
     computed: {
         email() {
             return this.$store.state.user.email
@@ -119,6 +132,15 @@ export default {
         },
     },
     methods: {
+      getshareDialog(shareDialog) {
+        this.shareDialog = shareDialog
+      },
+      backupFun() {
+        this.shareDialog = true
+        this.shareObjectShow = false
+        this.shareFileShow = true
+        this.$emit('getshareHome', true, false, true);
+      },
       removePolicies(content) {
         let _this = this
         console.log('content', content)
@@ -342,7 +364,7 @@ export default {
       },
       getMinioData() {
         let _this = this;
-        if(_this.minioListBuckets){
+        if(_this.minioListBuckets && _this.minioListBuckets.buckets){
             _this.minioListBuckets.buckets.map(item => {
                 item.show = false;
             })
@@ -384,6 +406,7 @@ export default {
         }
     }
     .fes-search{
+        height: calc(100% - 1.5rem);
         .el-input /deep/{
             display: block;
             clear: both;
@@ -403,6 +426,9 @@ export default {
             margin-left: -0.25rem;
             margin-right: -0.25rem;
             font-size: 0.13rem;
+            height: calc(100% - 0.6rem);
+            overflow: hidden;
+            overflow-y: scroll;
             .el-col{
                 position: relative;
                 display: flex;
@@ -480,6 +506,29 @@ export default {
                     color: #fff;
                 }
             }
+        }
+        .el-row{
+          &::-webkit-scrollbar{
+              width: 1px;
+              height: 1px;
+              background-color: #F5F5F5;
+          }
+
+          /*定义滚动条轨道 内阴影+圆角*/
+          &::-webkit-scrollbar-track {
+              box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+              -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+              border-radius: 10px;
+              background-color: #F5F5F5;
+          }
+
+          /*定义滑块 内阴影+圆角*/
+          &::-webkit-scrollbar-thumb{
+              border-radius: 10px;
+              box-shadow: inset 0 0 6px rgba(0, 0, 0, .1);
+              -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, .1);
+              background-color: #c8c8c8;
+          }
         }
     }
     .fes-host {
@@ -596,6 +645,15 @@ export default {
     top: 0;
     z-index: 20;
     transform: translate3d(-3rem,0,0);
+    .fes-search {
+      .el-row /deep/{
+        .el-col{
+          .caozuo{
+            opacity: 1;
+          }
+        }
+      }
+    }
 }
 }
 </style>

@@ -37,7 +37,7 @@
     "babel-preset-es2015": "^6.24.1",
     "babel-preset-react": "^6.11.1",
     "babel-preset-stage-2": "^6.22.0",
-    "chalk": "^2.0.1",
+    "chalk": "^2.4.2",
     "compression-webpack-plugin": "^1.1.2",
     "copy-webpack-plugin": "^4.0.1",
     "css-loader": "^0.28.0",

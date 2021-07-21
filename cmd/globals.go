@@ -72,6 +72,7 @@ const (
 	globalDirSuffix                = "__XLDIR__"
 	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
 
+	GlobalVolumeAddress = "~/minio-data"
 	// Add new global values here.
 )
 
