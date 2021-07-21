@@ -282,6 +282,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			},
 			finished: nil,
 		})
+		
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}		
 
 		select {
 		// If context is canceled don't mark as done...
