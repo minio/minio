@@ -216,7 +216,10 @@ For deployments behind a load balancer, proxy, or ingress rule where the MinIO h
 
 For example, consider a MinIO deployment behind a proxy `https://minio.example.net`, `https://console.minio.example.net` with rules for forwarding traffic on port :9000 and :9001 to MinIO and the MinIO Console respectively on the internal network. Set `MINIO_BROWSER_REDIRECT_URL` to `https://console.minio.example.net` to ensure the browser receives a valid reachable URL.
 
-If your TLS certs do not have IP SANs enabled then this can cause issues with console when MinIO server is configured with TLS directly, use `MINIO_SERVER_URL` environment variable pointing to `https://minio.example.net` this would allow MinIO Console UI to talk to MinIO API with proper TLS certs.
+Similarly, if your TLS certificates do not have the IP SAN for the MinIO server host, the MinIO Console may fail to validate the connection to the server. Use the `MINIO_SERVER_URL` environment variable  and specify the proxy-accessible hostname of the MinIO server to allow the Console to use the MinIO server API using the TLS certificate.
+
+For example: `export MINIO_SERVER_URL="https://minio.example.net"`
+
 
 | Dashboard                                                                                   | Creating a bucket                                                                           |
 | -------------                                                                               | -------------                                                                               |
