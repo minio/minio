@@ -111,7 +111,10 @@ const consolePrefix = "CONSOLE_"
 func minioConfigToConsoleFeatures() {
 	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID)
 	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID)
-	os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
+	if globalMinioEndpoint == "" {
+		logger.Fatal(errInvalidArgument, "Unable to start console service MinIO Endpoint is empty")
+	}
+	os.Setenv("CONSOLE_MINIO_SERVER", globalMinioEndpoint)
 	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
 		if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
@@ -407,6 +410,22 @@ func handleCommonEnvVars() {
 			u.Path = "" // remove any path component such as `/`
 			globalBrowserRedirectURL = u
 		}
+	}
+
+	if serverURL := env.Get(config.EnvMinIOServerURL, globalEndpoints.Localhost()); serverURL != "" {
+		u, err := xnet.ParseHTTPURL(serverURL)
+		if err != nil {
+			logger.Fatal(err, "Invalid MINIO_SERVER_URL value in environment variable")
+		}
+		// Look for if URL has invalid values and return error.
+		if !((u.Scheme == "http" || u.Scheme == "https") &&
+			(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
+			!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+			err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
+			logger.Fatal(err, "Invalid MINIO_SERVER_URL value is environment variable")
+		}
+		u.Path = "" // remove any path component such as `/`
+		globalMinioEndpoint = u.String()
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))

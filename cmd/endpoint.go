@@ -245,7 +245,7 @@ func (l *EndpointServerPools) Add(zeps PoolEndpoints) error {
 func (l EndpointServerPools) Localhost() string {
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
-			if endpoint.IsLocal {
+			if endpoint.IsLocal && endpoint.Host != "" {
 				u := &url.URL{
 					Scheme: endpoint.Scheme,
 					Host:   endpoint.Host,
@@ -254,7 +254,11 @@ func (l EndpointServerPools) Localhost() string {
 			}
 		}
 	}
-	return ""
+	host := globalMinioHost
+	if host == "" {
+		host = sortIPs(localIP4.ToSlice())[0]
+	}
+	return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
 }
 
 // LocalDisksPaths returns the disk paths of the local disks

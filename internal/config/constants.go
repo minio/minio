@@ -37,6 +37,7 @@ const (
 	EnvArgs       = "MINIO_ARGS"
 	EnvDNSWebhook = "MINIO_DNS_WEBHOOK_ENDPOINT"
 
+	EnvMinIOServerURL          = "MINIO_SERVER_URL"
 	EnvMinIOBrowserRedirectURL = "MINIO_BROWSER_REDIRECT_URL"
 	EnvRootDiskThresholdSize   = "MINIO_ROOTDISK_THRESHOLD_SIZE"
 
