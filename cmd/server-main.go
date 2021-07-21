@@ -459,14 +459,6 @@ func serverMain(ctx *cli.Context) {
 	// Initialize all sub-systems
 	newAllSubsystems()
 
-	globalMinioEndpoint = func() string {
-		host := globalMinioHost
-		if host == "" {
-			host = sortIPs(localIP4.ToSlice())[0]
-		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
-	}()
-
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
 		if globalEndpoints.HTTPS() && !globalIsTLS {

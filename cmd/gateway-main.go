@@ -209,14 +209,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the gateway")
 
-	globalMinioEndpoint = func() string {
-		host := globalMinioHost
-		if host == "" {
-			host = sortIPs(localIP4.ToSlice())[0]
-		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
-	}()
-
 	// Handle gateway specific env
 	gatewayHandleEnvVars()
 
