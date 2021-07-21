@@ -459,7 +459,7 @@ func (l Config) IsLDAPUserDN(user string) bool {
 
 // GetNonExistentUserDNs - find user accounts that are no longer present in the
 // LDAP server.
-func (l *Config) GetNonExistentUserDNs(userDNs []string) ([]string, error) {
+func (l *Config) GetNonExistentUserDNS(userDNs []string) ([]string, error) {
 	if !l.isUsingLookupBind {
 		return nil, errors.New("current LDAP configuration does not permit looking for expired user accounts")
 	}
