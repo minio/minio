@@ -158,7 +158,7 @@ export default {
                 "FastRetrieval": _this.ruleForm.fastRetirval == '2'? 'false' : 'true',
                 "MinerId": _this.ruleForm.minerId,
                 "Price": _this.ruleForm.price,
-                "Duration": _this.ruleForm.duration*24*60*2   //（UI上用户输入天数，需要转化成epoch给后端。例如10天, 就是 10*24*60*2）
+                "Duration": String(_this.ruleForm.duration*24*60*2)   //（UI上用户输入天数，需要转化成epoch给后端。例如10天, 就是 10*24*60*2）
             }
 
             axios.post(postUrl, minioDeal, {}).then((response) => {
