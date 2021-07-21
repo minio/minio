@@ -452,6 +452,62 @@ func (l Config) testConnection() error {
 	return fmt.Errorf("LDAP connection test error: %w", err)
 }
 
+// IsLDAPUserDN determines if the given string could be a user DN from LDAP.
+func (l Config) IsLDAPUserDN(user string) bool {
+	return strings.HasSuffix(user, ","+l.UserDNSearchBaseDN)
+}
+
+// GetNonExistentUserDNS - find user accounts that are no longer present in the
+// LDAP server.
+func (l *Config) GetNonExistentUserDNS(userDNS []string) ([]string, error) {
+	if !l.isUsingLookupBind {
+		return nil, errors.New("current LDAP configuration does not permit looking for expired user accounts")
+	}
+
+	conn, err := l.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.lookupBind(conn); err != nil {
+		return nil, err
+	}
+
+	nonExistentUsers := []string{}
+	for _, dn := range userDNS {
+		searchRequest := ldap.NewSearchRequest(
+			dn,
+			ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
+			"(objectclass=*)",
+			[]string{}, // only need DN, so no pass no attributes here
+			nil,
+		)
+
+		searchResult, err := conn.Search(searchRequest)
+		if err != nil {
+			// Object does not exist error?
+			if ldap.IsErrorWithCode(err, 32) {
+				nonExistentUsers = append(nonExistentUsers, dn)
+				continue
+			}
+			return nil, err
+		}
+		if len(searchResult.Entries) == 0 {
+			// DN was not found - this means this user account is
+			// expired.
+			nonExistentUsers = append(nonExistentUsers, dn)
+		}
+	}
+	return nonExistentUsers, nil
+}
+
+// EnabledWithLookupBind - checks if ldap IDP is enabled in lookup bind mode.
+func (l Config) EnabledWithLookupBind() bool {
+	return l.Enabled && l.isUsingLookupBind
+}
+
 // Enabled returns if jwks is enabled.
 func Enabled(kvs config.KVS) bool {
 	return kvs.Get(ServerAddr) != ""
