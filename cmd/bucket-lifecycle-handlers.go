@@ -80,7 +80,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	}
 
 	// Validate the transition storage ARNs
-	if err = validateTransitionTier(ctx, bucketLifecycle); err != nil {
+	if err = validateTransitionTier(bucketLifecycle); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

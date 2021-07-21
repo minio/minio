@@ -476,3 +476,16 @@ func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) 
 		}
 	}
 }
+
+// TransitionTier returns remote tier that applies to obj per ILM rules.
+func (lc Lifecycle) TransitionTier(obj ObjectOpts) string {
+	for _, rule := range lc.FilterActionableRules(obj) {
+		if obj.IsLatest && rule.Transition.StorageClass != "" {
+			return rule.Transition.StorageClass
+		}
+		if !obj.IsLatest && rule.NoncurrentVersionTransition.StorageClass != "" {
+			return rule.NoncurrentVersionTransition.StorageClass
+		}
+	}
+	return ""
+}

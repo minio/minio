@@ -1020,22 +1020,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, meta acti
 }
 
 func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
-	lcOpts := lifecycle.ObjectOpts{
-		Name:                   obj.Name,
-		UserTags:               obj.UserTags,
-		ModTime:                obj.ModTime,
-		VersionID:              obj.VersionID,
-		DeleteMarker:           obj.DeleteMarker,
-		IsLatest:               obj.IsLatest,
-		NumVersions:            obj.NumVersions,
-		SuccessorModTime:       obj.SuccessorModTime,
-		RestoreOngoing:         obj.RestoreOngoing,
-		RestoreExpires:         obj.RestoreExpires,
-		TransitionStatus:       obj.TransitionStatus,
-		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
-	}
-
-	action = lc.ComputeAction(lcOpts)
+	action = lc.ComputeAction(obj.ToLifecycleOpts())
 	if debug {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
 	}
@@ -1086,25 +1071,11 @@ func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLaye
 }
 
 func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
-	lcOpts := lifecycle.ObjectOpts{
-		Name:             obj.Name,
-		UserTags:         obj.UserTags,
-		ModTime:          obj.ModTime,
-		VersionID:        obj.VersionID,
-		DeleteMarker:     obj.DeleteMarker,
-		IsLatest:         obj.IsLatest,
-		NumVersions:      obj.NumVersions,
-		SuccessorModTime: obj.SuccessorModTime,
-		RestoreOngoing:   obj.RestoreOngoing,
-		RestoreExpires:   obj.RestoreExpires,
-		TransitionStatus: obj.TransitionStatus,
-	}
-
 	action := expireObj
 	if restoredObject {
 		action = expireRestoredObj
 	}
-	if err := expireTransitionedObject(ctx, objLayer, &obj, lcOpts, action); err != nil {
+	if err := expireTransitionedObject(ctx, objLayer, &obj, obj.ToLifecycleOpts(), action); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
