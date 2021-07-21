@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/logs"
 	//"github.com/filedrive-team/go-graphsplit"
 	"io"
 	"net"
@@ -2555,16 +2556,16 @@ func ExecCommand(strCommand string) (string, error) {
 	cmd := exec.Command("/bin/bash", "-c", strCommand)
 	stdout, _ := cmd.StdoutPipe()
 	if err := cmd.Start(); err != nil {
-		fmt.Println("Execute failed when Start:" + err.Error())
+		logs.GetLogger().Error("Execute failed when Start:" + err.Error())
 		return "", err
 	}
 	out_bytes, _ := ioioutil.ReadAll(stdout)
 	if err := stdout.Close(); err != nil {
-		fmt.Println("Execute failed when close stdout:" + err.Error())
+		logs.GetLogger().Error("Execute failed when close stdout:" + err.Error())
 		return "", err
 	}
 	if err := cmd.Wait(); err != nil {
-		fmt.Println("Execute failed when Wait:" + err.Error())
+		logs.GetLogger().Error("Execute failed when Wait:" + err.Error())
 		return "", err
 	}
 	return string(out_bytes), nil
@@ -2619,14 +2620,14 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 	commandLine := "lotus " + "client " + "import " + sourceFilePath
 	dataCID, err := ExecCommand(commandLine)
 	if err != nil {
-		fmt.Println(err)
+		logs.GetLogger().Error(err)
 		return
 	}
 	outStr := strings.Fields(string(dataCID))
 	dataCIDStr := outStr[len(outStr)-1]
 	dealCID, err := exec.Command("lotus", "client", "deal", "--from", filWallet, verifiedDeal, fastRetrieval, dataCIDStr, onlineDealRequest.MinerId, onlineDealRequest.Price, onlineDealRequest.Duration).Output()
 	if err != nil {
-		fmt.Println(err)
+		logs.GetLogger().Error(err)
 		return
 	}
 	dealCIDStr := string(dealCID)
@@ -2645,7 +2646,7 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 
 	bodyByte, err := json.Marshal(onlineDealResponse)
 	if err != nil {
-		fmt.Printf("Error: %s", err)
+		logs.GetLogger().Error(err)
 		return
 	}
 	w.Write(bodyByte)

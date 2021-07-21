@@ -24,13 +24,15 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.0
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.12.0
-	github.com/filedrive-team/go-graphsplit v0.4.1 // indirect
+    github.com/filedrive-team/go-graphsplit v0.4.1 // indirect
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.2
+	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.11
 	github.com/klauspost/compress v1.12.2
@@ -69,8 +71,10 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.6.0
+	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
+	github.com/sirupsen/logrus v1.8.0
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.6-0.20210521143832-0becd170c402
 	github.com/valyala/bytebufferpool v1.0.0
