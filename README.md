@@ -7,7 +7,6 @@
 ```bash
 cd browser
 npm install chalk
-npm rebuild node-sass
 npm run release
 # back to repository 
 cd ..
