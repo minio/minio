@@ -309,8 +309,11 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 // getLifeCycleTransitionTier returns storage class for transition target
 func getLifeCycleTransitionTier(ctx context.Context, lc *lifecycle.Lifecycle, bucket string, obj lifecycle.ObjectOpts) string {
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if rule.Transition.StorageClass != "" {
+		if obj.IsLatest && rule.Transition.StorageClass != "" {
 			return rule.Transition.StorageClass
+		}
+		if !obj.IsLatest && rule.NoncurrentVersionTransition.StorageClass != "" {
+			return rule.NoncurrentVersionTransition.StorageClass
 		}
 	}
 	return ""
@@ -672,4 +675,22 @@ func isRestoredObjectOnDisk(meta map[string]string) (onDisk bool) {
 		}
 	}
 	return onDisk
+}
+
+// ToLifecycleOpts returns lifecycle.ObjectOpts value for oi.
+func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
+	return lifecycle.ObjectOpts{
+		Name:                   oi.Name,
+		UserTags:               oi.UserTags,
+		VersionID:              oi.VersionID,
+		ModTime:                oi.ModTime,
+		IsLatest:               oi.IsLatest,
+		NumVersions:            oi.NumVersions,
+		DeleteMarker:           oi.DeleteMarker,
+		SuccessorModTime:       oi.SuccessorModTime,
+		RestoreOngoing:         oi.RestoreOngoing,
+		RestoreExpires:         oi.RestoreExpires,
+		TransitionStatus:       oi.TransitionStatus,
+		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
+	}
 }

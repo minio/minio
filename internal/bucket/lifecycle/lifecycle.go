@@ -21,8 +21,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 var (
@@ -438,25 +441,38 @@ func (lc Lifecycle) PredictTransitionTime(obj ObjectOpts) (string, time.Time) {
 		return "", time.Time{}
 	}
 
-	var finalTransitionDate time.Time
-	var finalTransitionRuleID string
-
 	// Iterate over all actionable rules and find the earliest
 	// transition date and its associated rule ID.
+	var finalTransitionDate time.Time
+	var finalTransitionRuleID string
 	for _, rule := range lc.FilterActionableRules(obj) {
-		switch {
-		case !rule.Transition.IsDateNull():
-			if finalTransitionDate.IsZero() || finalTransitionDate.After(rule.Transition.Date.Time) {
+		if due, ok := rule.Transition.NextDue(obj); ok {
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(due) {
 				finalTransitionRuleID = rule.ID
-				finalTransitionDate = rule.Transition.Date.Time
+				finalTransitionDate = due
 			}
-		case !rule.Transition.IsDaysNull():
-			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
-			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
+		}
+		if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok {
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(due) {
 				finalTransitionRuleID = rule.ID
-				finalTransitionDate = expectedTransition
+				finalTransitionDate = due
 			}
 		}
 	}
 	return finalTransitionRuleID, finalTransitionDate
+}
+
+// SetPredictionHeaders sets time to expiry and transition headers on w for a
+// given obj.
+func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
+	if ruleID, expiry := lc.PredictExpiryTime(obj); !expiry.IsZero() {
+		w.Header()[xhttp.AmzExpiration] = []string{
+			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiry.Format(http.TimeFormat), ruleID),
+		}
+	}
+	if ruleID, transition := lc.PredictTransitionTime(obj); !transition.IsZero() {
+		w.Header()[xhttp.MinIOTransition] = []string{
+			fmt.Sprintf(`transition-date="%s", rule-id="%s"`, transition.Format(http.TimeFormat), ruleID),
+		}
+	}
 }

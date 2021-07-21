@@ -163,3 +163,20 @@ func (t Transition) IsDateNull() bool {
 func (t Transition) IsNull() bool {
 	return t.IsDaysNull() && t.IsDateNull()
 }
+
+// NextDue returns upcoming transition date for obj and true if applicable,
+// returns false otherwise.
+func (t Transition) NextDue(obj ObjectOpts) (time.Time, bool) {
+	if !obj.IsLatest {
+		return time.Time{}, false
+	}
+
+	switch {
+	case !t.IsDateNull():
+		return t.Date.Time, true
+	case !t.IsDaysNull():
+		return ExpectedExpiryTime(obj.ModTime, int(t.Days)), true
+	}
+
+	return time.Time{}, false
+}
