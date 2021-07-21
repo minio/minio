@@ -2508,17 +2508,16 @@ type OnlineDealRequest struct {
 }
 
 type OnlineDealResponse struct {
-	Filename         string  `json:"filename,omitempty"`
-	WalletAddress    string  `json:"walletAddress,omitempty"`
-	VerifiedDeal     string  `json:"verifiedDeal,omitempty"`
-	FastRetrieval    string  `json:"fastRetrieval,omitempty"`
-	DataCid          string  `json:"dataCid,omitempty"`
-	MinerId          string  `json:"minerId,omitempty"`
-	Price            string  `json:"price,omitempty"`
-	Duration         string  `json:"duration,omitempty"`
-	DealCid          string  `json:"dealCid,omitempty"`
+	Filename      string `json:"filename,omitempty"`
+	WalletAddress string `json:"walletAddress,omitempty"`
+	VerifiedDeal  string `json:"verifiedDeal,omitempty"`
+	FastRetrieval string `json:"fastRetrieval,omitempty"`
+	DataCid       string `json:"dataCid,omitempty"`
+	MinerId       string `json:"minerId,omitempty"`
+	Price         string `json:"price,omitempty"`
+	Duration      string `json:"duration,omitempty"`
+	DealCid       string `json:"dealCid,omitempty"`
 }
-
 
 func (d *DealVo) setDefault() {
 	if d.CarSliceSize == 0 {
@@ -2534,24 +2533,23 @@ func (d *DealVo) setDefault() {
 		d.Price = "0"
 	}
 	//if len(d.SwanEndpoint) == 0 {
-		//d.SwanEndpoint = os.Getenv("SWAN_API")
-		//if len(strings.TrimSpace(d.SwanEndpoint)) == 0 {
-			//d.SwanEndpoint = "https://api.filswan.com"
-		//}
-		//os.Setenv("SWAN_API", d.SwanEndpoint)
+	//d.SwanEndpoint = os.Getenv("SWAN_API")
+	//if len(strings.TrimSpace(d.SwanEndpoint)) == 0 {
+	//d.SwanEndpoint = "https://api.filswan.com"
+	//}
+	//os.Setenv("SWAN_API", d.SwanEndpoint)
 	//} else {
-		//os.Setenv("SWAN_API", d.SwanEndpoint)
+	//os.Setenv("SWAN_API", d.SwanEndpoint)
 	//}
 	//if len(d.SwanApiToken) == 0 {
-		//d.SwanApiToken = os.Getenv("SWAN_TOKEN")
+	//d.SwanApiToken = os.Getenv("SWAN_TOKEN")
 	//} else {
-		//os.Setenv("SWAN_TOKEN", d.SwanApiToken)
+	//os.Setenv("SWAN_TOKEN", d.SwanApiToken)
 	//}
 	if len(d.MinerId) == 0 {
 		d.MinerId = "f0447183"
 	}
 }
-
 
 func ExecCommand(strCommand string) (string, error) {
 	cmd := exec.Command("/bin/bash", "-c", strCommand)
@@ -2567,11 +2565,10 @@ func ExecCommand(strCommand string) (string, error) {
 	}
 	if err := cmd.Wait(); err != nil {
 		fmt.Println("Execute failed when Wait:" + err.Error())
-		//return "", err
+		return "", err
 	}
 	return string(out_bytes), nil
 }
-
 
 // SendDeal - send deal to filecoin network.
 func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
@@ -2606,56 +2603,53 @@ func (web *webAPIHandlers) SendDeal(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-
 	object, err := unescapePath(vars["object"])
 	if err != nil {
 		return
 	}
 
-
 	//sourceBucketPath := filepath.Join(fs3VolumeAddress, bucket)
-	sourceFilePath := filepath.Join(fs3VolumeAddress,bucket, object)
+	sourceFilePath := filepath.Join(fs3VolumeAddress, bucket, object)
 
+	// send online deal to lotus
+	filWallet := os.Getenv("fil_wallet")
 
-    // send online deal to lotus
-    filWallet := os.Getenv("fil_wallet")
-
-	verifiedDeal := "--verified-deal="+ onlineDealRequest.VerifiedDeal
-    fastRetrieval := "--fast-retrieval="+ onlineDealRequest.FastRetrieval
-	commandLine := "lotus "+"client "+ "import " + sourceFilePath
-	dataCID,err := ExecCommand(commandLine)
-    if err != nil {
+	verifiedDeal := "--verified-deal=" + onlineDealRequest.VerifiedDeal
+	fastRetrieval := "--fast-retrieval=" + onlineDealRequest.FastRetrieval
+	commandLine := "lotus " + "client " + "import " + sourceFilePath
+	dataCID, err := ExecCommand(commandLine)
+	if err != nil {
 		fmt.Println(err)
-        return
-    }
-    outStr := strings.Fields(string(dataCID))
-    dataCIDStr := outStr[len(outStr)-1]
-    dealCID, err := exec.Command("lotus", "client", "deal","--from",filWallet,verifiedDeal,fastRetrieval,dataCIDStr,onlineDealRequest.MinerId,onlineDealRequest.Price,onlineDealRequest.Duration).Output()
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    dealCIDStr := string(dealCID)
-	dealCIDStr = strings.TrimSuffix(dealCIDStr,"\n")
-    onlineDealResponse := OnlineDealResponse{
-        Filename: sourceFilePath,
-        WalletAddress: filWallet,
-        VerifiedDeal : onlineDealRequest.VerifiedDeal,
-        FastRetrieval: onlineDealRequest.FastRetrieval,
-        DataCid: dataCIDStr,
-        MinerId: onlineDealRequest.MinerId,
-        Price: onlineDealRequest.Price,
-        Duration: onlineDealRequest.Duration,
-        DealCid: dealCIDStr,
-    }
+		return
+	}
+	outStr := strings.Fields(string(dataCID))
+	dataCIDStr := outStr[len(outStr)-1]
+	dealCID, err := exec.Command("lotus", "client", "deal", "--from", filWallet, verifiedDeal, fastRetrieval, dataCIDStr, onlineDealRequest.MinerId, onlineDealRequest.Price, onlineDealRequest.Duration).Output()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	dealCIDStr := string(dealCID)
+	dealCIDStr = strings.TrimSuffix(dealCIDStr, "\n")
+	onlineDealResponse := OnlineDealResponse{
+		Filename:      sourceFilePath,
+		WalletAddress: filWallet,
+		VerifiedDeal:  onlineDealRequest.VerifiedDeal,
+		FastRetrieval: onlineDealRequest.FastRetrieval,
+		DataCid:       dataCIDStr,
+		MinerId:       onlineDealRequest.MinerId,
+		Price:         onlineDealRequest.Price,
+		Duration:      onlineDealRequest.Duration,
+		DealCid:       dealCIDStr,
+	}
 
-    bodyByte, err := json.Marshal(onlineDealResponse)
-    if err != nil {
-        fmt.Printf("Error: %s", err)
-        return
-    }
-    w.Write(bodyByte)
-    return
+	bodyByte, err := json.Marshal(onlineDealResponse)
+	if err != nil {
+		fmt.Printf("Error: %s", err)
+		return
+	}
+	w.Write(bodyByte)
+	return
 }
 
 type DealResponseVo struct {
