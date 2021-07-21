@@ -3,7 +3,7 @@
       <header class="fe-header">
         <h2>
           <span class="main" v-if="editNameFile" v-for="(item, index) in currentBucketAll" :key="index">
-            <a href="">{{item}}</a>
+            <a href="javascript:;" @click="buckerAdress(index)">{{item}}</a>
           </span>
           <a href="javascript:;" class="fe-edit" @click="editFun" v-if="editNameFile">
             <el-tooltip class="item" effect="dark" content="Choose or create new path" placement="bottom">
@@ -57,54 +57,59 @@
               <div class="iconBefore" v-if="scope.row.contentType.indexOf('text') >= 0">
                 <i class="iconfont el-icon-document" style="background-color: #8a8a8a;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('image') >= 0">
                 <i class="iconfont icon-wenjiantupian" style="background-color: #f06292;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('zip') >= 0">
                 <i class="iconfont icon-zip" style="background-color: #427089;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.name.indexOf('xlsx') >= 0 || scope.row.contentType.indexOf('excel') >= 0">
                 <i class="iconfont icon-exclxlsxlsx" style="background-color: cadetblue;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.name.indexOf('pdf') >= 0">
                 <i class="iconfont icon-pdf" style="background-color: #fa7775;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.contentType.indexOf('video') >= 0 || scope.row.contentType.indexOf('audio') >= 0">
                 <i class="iconfont icon-geshi_tongyongshipin" style="background-color: #f8c363;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.name.indexOf('doc') >= 0">
                 <i class="iconfont icon-word1" style="background-color: #2196f5;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.name.indexOf('ppt') >= 0">
                 <i class="iconfont icon-PPT" style="background-color: #896ea6;font-weight: bold;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
               <div class="iconBefore" v-else-if="scope.row.name.indexOf('powerpoint') >= 0 || scope.row.name.indexOf('presentation') >= 0">
                 <i class="iconfont icon-ppt" style="background-color: rgb(182, 146, 221);" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
+              </div>
+              <div class="iconBefore" v-else-if="scope.row.contentType == ''">
+                <i class="el-icon-folder" style="background-color: #a1d6dd;" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
+                <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
+                <span style="cursor: pointer;" @click="curListFolder(scope.row.name)">{{scope.row.name | slideName}}</span>
               </div>
 
 
               <div class="iconBefore" v-else>
                 <i class="iconfont icon-wenjian" @click="drawPlay(scope.$index, true)" v-if="tableData[scope.$index].drawShow"></i>
                 <i class="el-icon-check" @click="drawPlay(scope.$index, false)" v-else></i>
-                {{scope.row.name}}
+                {{scope.row.name | slideName}}
               </div>
             </template>
           </el-table-column>
@@ -134,6 +139,7 @@
               <ul class="dropdown-menu" :class="{'dropdown-show': tableData[scope.$index].dropShow}">
                 <a href="javascript:;" class="fiad-action" @click="deleteBtn(tableData[scope.$index].name)"><i class="el-icon-delete"></i></a>
                 <a href="javascript:;" class="fiad-action" @click="shareBtn(scope.$index)"><i class="el-icon-share"></i></a>
+                <a href="javascript:;" class="fiad-action" @click="ShareToFil(tableData[scope.$index])"><img :src="ShareToFilecoin" /></a>
               </ul>
             </template>
           </el-table-column>
@@ -188,7 +194,7 @@
       </div>
 
 
-      <el-dialog title="" custom-class="customStyle" :visible.sync="dialogFormVisible">
+      <el-dialog title="" custom-class="customStyle" :before-close="getDialogClose" :visible.sync="dialogFormVisible">
           <el-input v-model="form.name" placeholder="Bucket Name"></el-input>
       </el-dialog>
 
@@ -209,6 +215,7 @@
       <share-dialog
         :shareDialog="shareDialog" :shareObjectShow="shareObjectShow"
         :shareFileShow="shareFileShow" :num="num" :share_input="share_input"
+        :postAdress="postAdress"
         @getshareDialog="getshareDialog" @getShareGet="getPresignedGet">
       </share-dialog>
   </div>
@@ -218,12 +225,14 @@
 import axios from 'axios'
 import Moment from 'moment'
 import shareDialog from '@/components/shareDialog.vue';
+let that
 export default {
   name: 'landing',
   data() {
     return {
       postUrl: this.data_api + `/minio/webrpc`,
       logo: require("@/assets/images/title.svg"),
+      ShareToFilecoin: require("@/assets/images/WechatIMG1133.png"),
       danger_img: require("@/assets/images/danger.png"),
       bodyWidth: document.body.clientWidth>600?true:false,
       tableData: [],
@@ -266,13 +275,38 @@ export default {
               num_Hours: 0,
               num_Minutes: 0,
             },
+            postAdress: ''
     }
   },
   components: {
       shareDialog
   },
-  props: ['aboutServer','aboutListObjects','dialogFormVisible','currentBucket','userd'],
+  props: ['aboutServer','aboutListObjects','dialogFormVisible','currentBucket','userd', 'slideListClick'],
   methods: {
+    buckerAdress(index) {
+      let _this = this
+      if(index){
+        _this.prefixName = _this.currentBucketAll.slice(1, index+1).join('/')
+      }else{
+        _this.prefixName = ''
+      }
+      _this.currentBucketAll = _this.currentBucketAll.slice(0, index+1)
+      _this.$emit('getListObjects', _this.currentBucket, _this.prefixName);
+    },
+    curListFolder(name) {
+        let _this = this
+        let floder = name.slice(0, name.length-1)
+        _this.currentBucketAll.push(floder.replace(_this.prefixName+'/', ""))
+        _this.prefixName = _this.currentBucketAll.slice(1).join('/');
+        _this.$emit('getListObjects', _this.currentBucket, _this.prefixName);
+    },
+    ShareToFil (now) {
+      this.shareDialog = true
+      this.shareObjectShow = false
+      this.shareFileShow = true
+      this.postAdress = this.currentBucket + '/' + now.name
+      //this.$emit('getshareHome', true, false, true);
+    },
     getshareDialog(shareDialog) {
       this.shareDialog = shareDialog
     },
@@ -299,7 +333,7 @@ export default {
     },
     actClient(index, now) {
       let _this = this;
-      if(_this.tableData) {
+      if(_this.tableData && _this.tableData.length > 0) {
         let active = _this.tableData[index].dropShow;
         _this.tableData.map(item => {
           item.dropShow = false;
@@ -445,7 +479,9 @@ export default {
 
       _this.getPresignedGet()
 
-      this.shareDialog = true
+      _this.shareDialog = true
+      _this.shareObjectShow = true
+      _this.shareFileShow = false
     },
     getPresignedGet() {
       let _this = this
@@ -564,6 +600,11 @@ export default {
         _this.$router.replace({ name: 'login' })
       });
     },
+    getDialogClose() {
+        let _this = this;
+        _this.$emit('getDialogClose', false);
+        _this.form.name = ''
+    },
     getServer() {
         let _this = this;
         _this.$emit('getaboutServer', _this.form.name, false);
@@ -589,9 +630,14 @@ export default {
       let _this = this
       _this.aboutListData()
     },
-    currentBucket: function(){
+    'currentBucket': function(){
       let _this = this
       _this.currentBucketAll = _this.currentBucket.split('/')
+    },
+    'slideListClick': function(){
+      let _this = this
+      _this.currentBucketAll = _this.currentBucket.split('/')
+      _this.prefixName = ''
     }
   },
   filters: {
@@ -602,10 +648,16 @@ export default {
           i = Math.floor(Math.log(bytes) / Math.log(k));
 
       return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
-    }
+    },
+    slideName: function (name) {
+       if (!name) return '-';
+       let retName = that.prefixName ? name.replace(that.prefixName+'/', "") : name
+       return retName;
+     }
   },
   mounted() {
     let _this = this
+    that = _this
     _this.aboutListData()
     _this.currentBucketAll = _this.currentBucket.split('/')
     document.onkeydown = function(e) {
@@ -621,7 +673,7 @@ export default {
         }
         if(_this.user.name_file && !_this.editNameFile){
           if(_this.user.name_file){
-              console.log('bucket prefix', _this.user.name_file.split('/'))
+              console.log('bucket prefix:', _this.user.name_file.split('/'))
               let fileAll = _this.user.name_file.split('/')
               _this.currentBucketAll = []
               if(fileAll) {
@@ -632,7 +684,7 @@ export default {
                 })
               }
               _this.prefixName = _this.currentBucketAll.slice(1).join('/');
-              console.log('prefix', _this.prefixName, 'currentBucketAll', _this.currentBucketAll[0]);
+              console.log('prefix:', _this.prefixName, 'currentBucketAll:', _this.currentBucketAll[0]);
               if(_this.currentBucketAll[0] == _this.currentBucket){
                 _this.$emit('getListObjects', _this.currentBucket, _this.prefixName);
               }else{
@@ -893,6 +945,11 @@ export default {
                   font-size: 0.18rem;
                   font-weight: bold;
                   color: #fff;
+              }
+              img {
+                  display: block;
+                  width: 100%;
+                  height: 100%;
               }
           }
         }

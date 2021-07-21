@@ -364,7 +364,7 @@ export default {
       },
       getMinioData() {
         let _this = this;
-        if(_this.minioListBuckets){
+        if(_this.minioListBuckets && _this.minioListBuckets.buckets){
             _this.minioListBuckets.buckets.map(item => {
                 item.show = false;
             })

@@ -2,7 +2,7 @@
       <el-dialog title="" :visible.sync="shareDialog" :custom-class="{'ShareObjectMobile': shareFileShowMobile, 'ShareObject': 1 === 1}" :before-close="getDiglogChange">
           <div class="shareContent">
               <el-row class="share_left" v-if="shareObjectShow">
-                <el-button class="shareFileCoin" @click="shareFileShowFun">Share to Filecoin >></el-button>
+                <!--el-button class="shareFileCoin" @click="shareFileShowFun">Share to Filecoin >></el-button-->
                 <el-col :span="24">
                   <h4>Share Object</h4>
                 </el-col>
@@ -29,7 +29,7 @@
                 </el-col>
                 <el-col :span="24">
                   <div class="btncompose">
-                    <el-button @click="copyLink">Copy Link</el-button>
+                    <el-button @click="copyLink(share_input)">Copy Link</el-button>
                     <el-button @click="getDiglogChange">Cancel</el-button>
                   </div>
                 </el-col>
@@ -39,8 +39,8 @@
               <el-row class="share_right" v-if="shareFileShow">
                 <el-button class="shareFileCoinSend" @click="submitForm('ruleForm')">Send</el-button>
                 <el-col :span="24">
-                  <h4 v-if="shareObjectShow">Share to Filecoin</h4>
-                  <h4 v-else>Backup to Filecoin</h4>
+                  <!--h4 v-if="shareObjectShow">Share to Filecoin</h4-->
+                  <h4>Backup to Filecoin</h4>
                 </el-col>
                 <el-col :span="24">
                   <el-form :model="ruleForm" :rules="rules" ref="ruleForm" label-width="110px" class="demo-ruleForm">
@@ -48,10 +48,10 @@
                       <el-input v-model="ruleForm.minerId"></el-input>
                     </el-form-item>
                     <el-form-item label="Price:" prop="price">
-                      <el-input v-model="ruleForm.price"></el-input> FIL
+                      <el-input v-model="ruleForm.price" onkeyup="value=value.replace(/^\D*(\d*(?:\.\d{0,20})?).*$/g, '$1')"></el-input> FIL
                     </el-form-item>
                     <el-form-item label="Duration:" prop="duration">
-                      <el-input v-model="ruleForm.duration"></el-input> Day
+                      <el-input v-model="ruleForm.duration" onkeyup="value=value.replace(/^(0+)|[^\d]+/g,'')"></el-input> Day
                     </el-form-item>
                     <el-form-item label="Verified-Deal:" prop="verified">
                       <el-radio v-model="ruleForm.verified" label="1">True</el-radio>
@@ -64,6 +64,18 @@
                   </el-form>
                 </el-col>
                 <el-col :span="24">
+                   <h4 style="margin: 0;">Deal CID <i class="el-icon-document-copy" v-if="ruleForm.dealCID" @click="copyLink(ruleForm.dealCID)"></i></h4>
+                 </el-col>
+                 <el-col :span="24">
+                   <el-input
+                     type="textarea"
+                     :rows="4"
+                     placeholder=""
+                     v-model="ruleForm.dealCID"
+                     disabled>
+                   </el-input>
+                 </el-col>
+                <!--el-col :span="24">
                   <h4 style="margin: 0;">Retrieval from Filecoin Network <i class="el-icon-document-copy"></i></h4>
                 </el-col>
                 <el-col :span="24">
@@ -74,7 +86,7 @@
                     v-model="ruleForm.textarea"
                     disabled>
                   </el-input>
-                </el-col>
+                </el-col-->
               </el-row>
           </div>
       </el-dialog>
@@ -94,7 +106,8 @@ export default {
               duration: '',
               verified: '2',
               fastRetirval: '1',
-              textarea: 'lotus client'
+              textarea: 'lotus client',
+              dealCID: ''
             },
             rules: {
                minerId: [
@@ -109,7 +122,7 @@ export default {
             },
         }
     },
-    props: ['shareDialog','shareObjectShow','shareFileShow', 'num', 'share_input'],
+    props: ['shareDialog','shareObjectShow','shareFileShow', 'num', 'share_input', 'postAdress'],
     watch: {
       'shareDialog': function(){
         let _this = this
@@ -119,12 +132,16 @@ export default {
               price: '',
               duration: '',
               verified: '2',
-              fastRetirval: '1'
+              fastRetirval: '1',
+              dealCID: ''
           }
         }
       }
     },
     methods: {
+      copyDealCid() {
+
+      },
       shareFileShowFun() {
         this.shareFileShow = !this.shareFileShow
         this.shareFileShowMobile = !this.shareFileShowMobile
@@ -132,7 +149,38 @@ export default {
       submitForm(formName) {
         this.$refs[formName].validate((valid) => {
           if (valid) {
-            alert('submit!');
+
+            let _this = this
+            let postUrl01 = _this.data_api + `/minio/deal/` + _this.postAdress
+            let postUrl = `http://192.168.88.41:9000/minio/deal/` + _this.postAdress
+            let minioDeal = {
+                "VerifiedDeal": _this.ruleForm.verified == '2'? 'false' : 'true',
+                "FastRetrieval": _this.ruleForm.fastRetirval == '2'? 'false' : 'true',
+                "MinerId": _this.ruleForm.minerId,
+                "Price": _this.ruleForm.price,
+                "Duration": _this.ruleForm.duration*24*60*2   //（UI上用户输入天数，需要转化成epoch给后端。例如10天, 就是 10*24*60*2）
+            }
+
+            axios.post(postUrl, minioDeal, {}).then((response) => {
+                let json = response.data
+                let error = json.error
+                let result = json.result
+                if (error) {
+                    _this.$message.error(error.message);
+                    return false
+                }
+
+                _this.ruleForm.dealCID = json.dealCid
+                _this.$message({
+                  message: 'Transaction has been successfully sent.',
+                  type: 'success'
+                });
+
+            }).catch(function (error) {
+                console.log(error);
+                // console.log(error.message, error.request, error.response.headers);
+            });
+
           } else {
             console.log('error submit!!');
             return false;
@@ -146,7 +194,7 @@ export default {
           console.log(this.num)
           this.$emit('getShareGet', this.num)
       },
-      copyLink(){
+      copyLink(text){
         let _this = this
         var txtArea = document.createElement("textarea");
         txtArea.id = 'txt';
@@ -154,7 +202,7 @@ export default {
         txtArea.style.top = '0';
         txtArea.style.left = '0';
         txtArea.style.opacity = '0';
-        txtArea.value = _this.share_input;
+        txtArea.value = text;
         document.body.appendChild(txtArea);
         txtArea.select();
 
@@ -354,7 +402,7 @@ export default {
               }
             }
             .share_right{
-              padding: 0 0 0.1rem;
+              padding: 0.05rem 0 .2rem;
               .el-col{
                 display: flex;
                 align-items: center;

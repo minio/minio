@@ -18,7 +18,9 @@
             <transition name="move" mode="out-in">
                 <router-view
                 :aboutServer="aboutServer" :aboutListObjects="aboutListObjects"
+                :slideListClick="slideListClick"
                 :dialogFormVisible="dialogFormVisible" :currentBucket="currentBucket" :userd="userd"
+                @getDialogClose="getDialogClose"
                 @getaboutServer="getMakeBucket"
                 @getRemoveObject="getRemoveObject"
                 @getListObjects="getListObjects"></router-view>
@@ -53,9 +55,6 @@
                                 <i class="iconfont icon-shangchuan"></i>
                             </el-tooltip>
                         </el-upload>
-                        <!--input type="file" ref="clearFile"
-                        @change="getFile($event)" multiple="multiplt"
-                        class="add-file-right-input" -->
                     </el-col>
                     <el-col :span="24">
                         <el-tooltip class="item" effect="dark" content="Create bucket" placement="left" @click.native="dialogFormVisible = true">
@@ -79,7 +78,7 @@
 
         <share-dialog
           :shareDialog="shareDialog" :shareObjectShow="shareObjectShow"
-          :shareFileShow="shareFileShow"
+          :shareFileShow="shareFileShow" :postAdress="currentBucket"
           @getshareDialog="getshareDialog">
         </share-dialog>
     </div>
@@ -139,6 +138,7 @@ export default {
             shareDialog: false,
             shareObjectShow: true,
             shareFileShow: false,
+            slideListClick: 0
         }
     },
     components: {
@@ -161,60 +161,6 @@ export default {
           this.shareDialog = shareDialog
           this.shareObjectShow = shareObjectShow
           this.shareFileShow = shareFileShow
-        },
-        getFile(event){
-           var file = event.target.files;
-           for(var i = 0;i<file.length;i++){
-                //    上传类型判断
-                var imgName = file[i].name;
-                var idx = imgName.lastIndexOf(".");
-                if (idx != -1){
-                    var ext = imgName.substr(idx+1).toUpperCase();
-                    ext = ext.toLowerCase( );
-                    /*if (ext!='pdf' && ext!='doc' && ext!='docx'){
-                          console.log('upload type', ext);
-                    }else{
-                          this.addArr.push(file[i]);
-                    }*/
-                    this.addArr.push(file[i]);
-                    this.submitAddFile(file[i])
-                }else{
-
-                }
-           }
-        },
-        submitAddFile(cont){
-           //console.log(cont);
-           let _this = this
-           let $hgh
-            if(0 == _this.addArr.length){
-                _this.$message({
-                    message: 'Please choose a bucket before trying to upload files.',
-                    type: 'error',
-                    showClose: true,
-                    duration: 0
-                });
-                $hgh = true
-                return false
-            }
-
-            if(!$hgh) {
-              let postUrl = _this.data_api + '/minio/upload/' + _this.currentBucket + '/' + cont.name
-              axios.put(postUrl, {}, {headers: {
-                  'Authorization':"Bearer "+ _this.$store.getters.accessToken,
-                  'Content-Type': cont.type
-              }}).then((response) => {
-                  let json = response.data
-                  console.log(json)
-
-              }).catch(function (error) {
-                  console.log(error);
-                  // console.log(error.message, error.request, error.response.headers);
-              });
-
-              _this.getListObjects(_this.currentBucket, _this.prefixData)
-            }
-
         },
         getData() {
             this.getListBuckets()
@@ -243,13 +189,15 @@ export default {
                     return false
                 }
                 _this.minioListBuckets = result
-                _this.currentBucket = _this.minioListBuckets.buckets[0]?_this.minioListBuckets.buckets[0].name:''
+                _this.currentBucket = _this.minioListBuckets && _this.minioListBuckets.buckets?_this.minioListBuckets.buckets[0].name:''
 
                 if(name) {
                   _this.getListObjects(name)
                   return false
                 }
-                _this.getListObjects()
+                if(_this.minioListBuckets.buckets){
+                  _this.getListObjects()
+                }
                 //console.log('minioListBuckets home', _this.minioListBuckets)
 
             }).catch(function (error) {
@@ -303,7 +251,7 @@ export default {
                     return false
                 }
                 _this.aboutServer = result
-                console.log(json)
+                //console.log(json)
 
             }).catch(function (error) {
                 console.log(error);
@@ -318,11 +266,11 @@ export default {
                 jsonrpc: "2.0",
                 method: "web.ListObjects",
                 params:{
-                    bucketName: listName?listName:_this.minioListBuckets.buckets[0]?_this.minioListBuckets.buckets[0].name:'',
-                    prefix: _this.prefixData?_this.prefixData:""
+                    bucketName: listName?listName:_this.minioListBuckets.buckets?_this.minioListBuckets.buckets[0].name:'',
+                    prefix: _this.prefixData?_this.prefixData + '/':""
                 }
             }
-            _this.currentBucket = listName?listName:_this.minioListBuckets.buckets[0]?_this.minioListBuckets.buckets[0].name:''
+            _this.currentBucket = listName?listName:_this.minioListBuckets.buckets?_this.minioListBuckets.buckets[0].name:''
             axios.post(_this.postUrl, dataListObjects, {headers: {
                 'Authorization':"Bearer "+ _this.$store.getters.accessToken
             }}).then((response) => {
@@ -334,12 +282,15 @@ export default {
                     return false
                 }
                 _this.aboutListObjects = result
-                console.log(json)
+                //console.log(json)
 
             }).catch(function (error) {
                 console.log(error);
                 // console.log(error.message, error.request, error.response.headers);
             });
+        },
+        getDialogClose(dialogFormVisible) {
+            this.dialogFormVisible = dialogFormVisible
         },
         getMakeBucket(name, dialogFormVisible, prefix, oldName) {
             let _this = this
@@ -363,7 +314,7 @@ export default {
                     _this.$message.error(error.message);
                     if(oldName) {
                       _this.currentBucket = oldName
-                      console.log('error', oldName)
+                      //console.log('error', oldName)
                     }
                     return false
                 }
@@ -395,6 +346,7 @@ export default {
         },
         getminioListBucket(listName) {
             this.getListObjects(listName)
+            this.slideListClick += 1
         },
         addToggle() {
            this.addFileShow = !this.addFileShow
@@ -406,7 +358,6 @@ export default {
             this.addFileShow = false
             this.homeClick = false
             this.slideShow = false
-            console.log('home click');
         },
         homeClickFun(now) {
             this.homeClick = now
@@ -421,7 +372,7 @@ export default {
       console.log('onChange', file, fileList);
         let _this = this
         let $hgh
-        if(_this.minioListBuckets.buckets.length < 1){
+        if(!_this.minioListBuckets.buckets || _this.minioListBuckets.buckets.length < 1){
             _this.$message({
                 message: 'Please choose a bucket before trying to upload files.',
                 type: 'error',
@@ -433,7 +384,8 @@ export default {
         }
 
         if(!$hgh) {
-          let postUrl = _this.data_api + '/minio/upload/' + _this.currentBucket + '/' + file.name
+          let prefix = _this.prefixData ? _this.prefixData + '/': ''
+          let postUrl = _this.data_api + '/minio/upload/' + _this.currentBucket + '/' + prefix + file.name
           let formData = new FormData();  //创建空对象
           /*for (let i = 0; i < fileList.length; i++) {
             formData.append("Content-Type", fileList[i].raw.type);
