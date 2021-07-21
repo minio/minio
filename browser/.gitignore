@@ -9,7 +9,6 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-build
 vendor/**/*.js
 vendor/**/*.json
 .DS_Store
