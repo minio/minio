@@ -180,8 +180,8 @@ func initBackgroundTransition(ctx context.Context, objectAPI ObjectLayer) {
 
 var errInvalidStorageClass = errors.New("invalid storage class")
 
-func validateTransitionTier(ctx context.Context, lfc *lifecycle.Lifecycle) error {
-	for _, rule := range lfc.Rules {
+func validateTransitionTier(lc *lifecycle.Lifecycle) error {
+	for _, rule := range lc.Rules {
 		if rule.Transition.StorageClass == "" {
 			continue
 		}
@@ -288,15 +288,10 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 	if err != nil {
 		return err
 	}
-	lcOpts := lifecycle.ObjectOpts{
-		Name:     oi.Name,
-		UserTags: oi.UserTags,
-	}
-	tierName := getLifeCycleTransitionTier(ctx, lc, oi.Bucket, lcOpts)
 	opts := ObjectOptions{
 		Transition: TransitionOptions{
 			Status: lifecycle.TransitionPending,
-			Tier:   tierName,
+			Tier:   lc.TransitionTier(oi.ToLifecycleOpts()),
 			ETag:   oi.ETag,
 		},
 		VersionID: oi.VersionID,
@@ -304,19 +299,6 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 		MTime:     oi.ModTime,
 	}
 	return objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
-}
-
-// getLifeCycleTransitionTier returns storage class for transition target
-func getLifeCycleTransitionTier(ctx context.Context, lc *lifecycle.Lifecycle, bucket string, obj lifecycle.ObjectOpts) string {
-	for _, rule := range lc.FilterActionableRules(obj) {
-		if obj.IsLatest && rule.Transition.StorageClass != "" {
-			return rule.Transition.StorageClass
-		}
-		if !obj.IsLatest && rule.NoncurrentVersionTransition.StorageClass != "" {
-			return rule.NoncurrentVersionTransition.StorageClass
-		}
-	}
-	return ""
 }
 
 // getTransitionedObjectReader returns a reader from the transitioned tier.

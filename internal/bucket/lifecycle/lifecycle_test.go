@@ -516,3 +516,40 @@ func TestSetPredictionHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestTransitionTier(t *testing.T) {
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-1",
+				},
+			},
+			{
+				ID:     "rule-2",
+				Status: "Enabled",
+				NoncurrentVersionTransition: NoncurrentVersionTransition{
+					NoncurrentDays: ExpirationDays(3),
+					StorageClass:   "TIER-2",
+				},
+			},
+		},
+	}
+
+	obj1 := ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
+	}
+	obj2 := ObjectOpts{
+		Name: "obj2",
+	}
+	if got := lc.TransitionTier(obj1); got != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", got)
+	}
+	if got := lc.TransitionTier(obj2); got != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", got)
+	}
+}
