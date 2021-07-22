@@ -31,6 +31,7 @@ import (
 	ldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
 
@@ -553,6 +554,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	l.ServerAddr = ldapServer
 	l.stsExpiryDuration = defaultLDAPExpiry
 	if v := env.Get(EnvSTSExpiry, kvs.Get(STSExpiry)); v != "" {
+		logger.Info("DEPRECATION WARNING: Support for configuring the default LDAP credentials expiry duration will be removed in a future release. Please use the `DurationSeconds` parameter in the LDAP STS API instead.")
 		expDur, err := time.ParseDuration(v)
 		if err != nil {
 			return l, errors.New("LDAP expiry time err:" + err.Error())

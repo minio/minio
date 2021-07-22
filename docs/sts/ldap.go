@@ -27,6 +27,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
@@ -43,6 +44,9 @@ var (
 	// Display credentials flag
 	displayCreds bool
 
+	// Credential expiry duration
+	expiryDuration time.Duration
+
 	// Bucket to list
 	bucketToList string
 
@@ -55,6 +59,7 @@ func init() {
 	flag.StringVar(&ldapUsername, "u", "", "AD/LDAP Username")
 	flag.StringVar(&ldapPassword, "p", "", "AD/LDAP Password")
 	flag.BoolVar(&displayCreds, "d", false, "Only show generated credentials")
+	flag.DurationVar(&expiryDuration, "e", 0, "Request a duration of validity for the generated credential")
 	flag.StringVar(&bucketToList, "b", "", "Bucket to list (defaults to ldap username)")
 	flag.StringVar(&sessionPolicyFile, "s", "", "File containing session policy to apply to the STS request")
 }
@@ -70,11 +75,8 @@ func main() {
 	// LDAP STS API.
 
 	// Initialize LDAP credentials
-	var li *cr.Credentials
-	var err error
-	if sessionPolicyFile == "" {
-		li, err = cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
-	} else {
+	var ldapOpts []cr.LDAPIdentityOpt
+	if sessionPolicyFile != "" {
 		var policy string
 		if f, err := os.Open(sessionPolicyFile); err != nil {
 			log.Fatalf("Unable to open session policy file: %v", sessionPolicyFile, err)
@@ -85,8 +87,12 @@ func main() {
 			}
 			policy = string(bs)
 		}
-		li, err = cr.NewLDAPIdentityWithSessionPolicy(stsEndpoint, ldapUsername, ldapPassword, policy)
+		ldapOpts = append(ldapOpts, cr.LDAPIdentityPolicyOpt(policy))
 	}
+	if expiryDuration != 0 {
+		ldapOpts = append(ldapOpts, cr.LDAPIdentityExpiryOpt(expiryDuration))
+	}
+	li, err := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword, ldapOpts...)
 	if err != nil {
 		log.Fatalf("Error initializing LDAP Identity: %v", err)
 	}

@@ -30,7 +30,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         STSExpiry,
-			Description: `temporary credentials validity duration in s,m,h,d. Default is "1h"`,
+			Description: `[DEPRECATED] temporary credentials validity duration in s,m,h,d. Default is "1h"`,
 			Optional:    true,
 			Type:        "duration",
 		},

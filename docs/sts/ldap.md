@@ -54,7 +54,6 @@ identity_ldap  enable LDAP SSO support
 
 ARGS:
 MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e.g. "myldapserver.com:636"
-MINIO_IDENTITY_LDAP_STS_EXPIRY              (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
@@ -123,11 +122,8 @@ export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=%s,cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
-export MINIO_IDENTITY_LDAP_STS_EXPIRY=720h
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
-
-> NOTE: In this example STS_EXPIRY is set to 1month, maximum expiry that can be set is 365 days.
 
 ### Variable substitution in AD/LDAP configuration strings ###
 
