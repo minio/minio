@@ -541,7 +541,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	expiryDur := globalLDAPConfig.GetExpiryDuration()
+	expiryDur, err := globalLDAPConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
+		return
+	}
+
 	m := map[string]interface{}{
 		expClaim:  UTCNow().Add(expiryDur).Unix(),
 		ldapUser:  ldapUserDN,

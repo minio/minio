@@ -1,5 +1,33 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+**Table of Contents**
+
+- [AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)](#assumerolewithldapidentity-slackhttpsslackminioslacktypesvghttpsslackminio)
+    - [Introduction](#introduction)
+    - [Configuring AD/LDAP on MinIO](#configuring-adldap-on-minio)
+        - [Supported modes of operation](#supported-modes-of-operation)
+            - [Lookup-Bind Mode](#lookup-bind-mode)
+            - [Username-Format Mode](#username-format-mode)
+        - [Group membership search](#group-membership-search)
+        - [Variable substitution in AD/LDAP configuration strings](#variable-substitution-in-adldap-configuration-strings)
+    - [Managing User/Group Access Policy](#managing-usergroup-access-policy)
+    - [API Request Parameters](#api-request-parameters)
+        - [LDAPUsername](#ldapusername)
+        - [LDAPPassword](#ldappassword)
+        - [Version](#version)
+        - [DurationSeconds](#durationseconds)
+        - [Policy](#policy)
+        - [Response Elements](#response-elements)
+        - [Errors](#errors)
+    - [Sample `POST` Request](#sample-post-request)
+    - [Sample Response](#sample-response)
+    - [Using LDAP STS API](#using-ldap-sts-api)
+    - [Explore Further](#explore-further)
+
+<!-- markdown-toc end -->
+
+
 ## Introduction
 
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server can be configured in two possible modes: either using a LDAP separate service account, called lookup-bind mode or in username-format mode. In either case the login flow for a user is the same as the STS flow:
@@ -165,6 +193,15 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 | *Type*     | *String* |
 | *Required* | *Yes*    |
 
+### DurationSeconds
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 365 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+
+| Params        | Value                                              |
+| :--           | :--                                                |
+| *Type*        | *Integer*                                          |
+| *Valid Range* | *Minimum value of 900. Maximum value of 31536000.* |
+| *Required*    | *No*                                               |
+
 ### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
@@ -182,7 +219,7 @@ XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity
 
 ## Sample `POST` Request
 ```
-http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15
+http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15&DurationSeconds=7200
 ```
 
 ## Sample Response
