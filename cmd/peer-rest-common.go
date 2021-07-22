@@ -34,6 +34,7 @@ const (
 	peerRESTMethodOsInfo                   = "/osinfo"
 	peerRESTMethodMemInfo                  = "/meminfo"
 	peerRESTMethodProcInfo                 = "/procinfo"
+	peerRESTMethodSysErrors                = "/syserrors"
 	peerRESTMethodDispatchNetInfo          = "/dispatchnetinfo"
 	peerRESTMethodDeleteBucketMetadata     = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata       = "/loadbucketmetadata"
