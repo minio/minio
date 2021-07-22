@@ -2353,13 +2353,6 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 		return
 	}
 
-	policyBytes, err := base64.StdEncoding.DecodeString(spolicyStr)
-	if err != nil {
-		// Got a malformed base64 string
-		return
-	}
-	spolicyStr = string(policyBytes)
-
 	// Check if policy is parseable.
 	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 	if err != nil {

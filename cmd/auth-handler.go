@@ -213,27 +213,17 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 		return nil, errAuthentication
 	}
 
-	if globalPolicyOPA == nil {
-		// If OPA is not set and if ldap claim key is set, allow the claim.
-		if _, ok := claims.MapClaims[ldapUser]; ok {
-			return claims.Map(), nil
-		}
+	// If OPA is set, return without any further checks.
+	if globalPolicyOPA != nil {
+		return claims.Map(), nil
+	}
 
-		// If OPA is not set, session token should
-		// have a policy and its mandatory, reject
-		// requests without policy claim.
-		_, pokOpenID := claims.MapClaims[iamPolicyClaimNameOpenID()]
-		_, pokSA := claims.MapClaims[iamPolicyClaimNameSA()]
-		if !pokOpenID && !pokSA {
-			return nil, errAuthentication
-		}
-
-		sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
-		if !spok {
-			return claims.Map(), nil
-		}
+	// Check if a session policy is set. If so, decode it here.
+	sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
+	if spok {
 		// Looks like subpolicy is set and is a string, if set then its
-		// base64 encoded, decode it. Decoding fails reject such requests.
+		// base64 encoded, decode it. Decoding fails reject such
+		// requests.
 		spBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
@@ -242,6 +232,19 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 			return nil, errAuthentication
 		}
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
+	}
+
+	// If LDAP claim key is set, return here.
+	if _, ok := claims.MapClaims[ldapUser]; ok {
+		return claims.Map(), nil
+	}
+
+	// Session token must have a policy, reject requests without policy
+	// claim.
+	_, pokOpenID := claims.MapClaims[iamPolicyClaimNameOpenID()]
+	_, pokSA := claims.MapClaims[iamPolicyClaimNameSA()]
+	if !pokOpenID && !pokSA {
+		return nil, errAuthentication
 	}
 
 	return claims.Map(), nil
