@@ -96,6 +96,11 @@ func isNotIPv4(host string) bool {
 // port "80" and "443" before displaying on the startup
 // banner.  Returns a new list of API endpoints.
 func stripStandardPorts(apiEndpoints []string, host string) (newAPIEndpoints []string) {
+	if len(apiEndpoints) == 1 && globalBrowserRedirectURL != nil {
+		if apiEndpoints[0] == globalBrowserRedirectURL.String() {
+			return []string{globalBrowserRedirectURL.String()}
+		}
+	}
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
