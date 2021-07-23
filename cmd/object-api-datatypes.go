@@ -182,6 +182,9 @@ type ObjectInfo struct {
 	NumVersions int
 	//  The modtime of the successor object version if any
 	SuccessorModTime time.Time
+
+	// True if object contents are inlined in xl.meta
+	InlineData bool
 }
 
 // Clone - Returns a cloned copy of current objectInfo

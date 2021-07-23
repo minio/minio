@@ -55,6 +55,7 @@ type NotificationSys struct {
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
 	peerClients                []*peerRESTClient // Excludes self
 	allPeerClients             []*peerRESTClient // Includes nil client for self
+	rrPeers                    *roundrobin
 }
 
 // GetARNList - returns available ARNs.
@@ -1222,6 +1223,7 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
 		peerClients:                remote,
 		allPeerClients:             all,
+		rrPeers:                    newRoundRobin(len(all)),
 	}
 }
 
@@ -1426,4 +1428,38 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 		close(ch)
 	}(&wg, ch)
 	return ch
+}
+
+type roundrobin struct {
+	last int
+	n    int
+}
+
+func newRoundRobin(n int) *roundrobin {
+	return &roundrobin{n: n}
+}
+
+func (rr *roundrobin) Next() int {
+	rr.last = (rr.last + 1) % rr.n
+	return rr.last
+}
+
+// EnqueueTransitionTask enqueues ILM transition object task to a peer.
+// This peer is selected using a round-robin scheme.
+func (sys *NotificationSys) EnqueueTransitionTask(ctx context.Context, oi ObjectInfo) error {
+	var err error
+	for tries := 0; tries < len(sys.allPeerClients); tries++ {
+		nxt := sys.rrPeers.Next()
+		if nxt == 0 {
+			if globalTransitionState != nil {
+				globalTransitionState.queueTransitionTask(oi)
+			}
+			return nil
+		}
+		err = sys.peerClients[nxt-1].EnqueueTransitionTask(ctx, oi)
+		if err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("Failed to enqueue transition task on any of the peers %w", err)
 }

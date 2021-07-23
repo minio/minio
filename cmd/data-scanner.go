@@ -1065,7 +1065,10 @@ func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLaye
 			return false
 		}
 	}
-	globalTransitionState.queueTransitionTask(obj)
+	if obj.InlineData {
+		return false
+	}
+	globalNotificationSys.EnqueueTransitionTask(ctx, obj)
 	return true
 
 }

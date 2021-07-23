@@ -969,3 +969,16 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	}(ch)
 	return ch, nil
 }
+
+func (client *peerRESTClient) EnqueueTransitionTask(ctx context.Context, oi ObjectInfo) error {
+	params := make(url.Values)
+	params.Set(peerRESTBucket, oi.Bucket)
+	params.Set(peerRESTObject, oi.Name)
+	params.Set(peerRESTVersionID, oi.VersionID)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodEnqueueTransitionTask, params, nil, -1)
+	if err != nil {
+		return err
+	}
+	http.DrainBody(respBody)
+	return nil
+}

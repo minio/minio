@@ -124,6 +124,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		ContentEncoding:  fi.Metadata["content-encoding"],
 		NumVersions:      fi.NumVersions,
 		SuccessorModTime: fi.SuccessorModTime,
+		InlineData:       fi.InlineData(),
 	}
 
 	// Update expires

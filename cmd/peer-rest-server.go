@@ -1097,6 +1097,33 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 	w.(http.Flusher).Flush()
 }
 
+// EnqueueTransitionTask enqueues an ILM transition object task for an object
+// version specified via query pararms.
+func (s *peerRESTServer) EnqueueTransitionTask(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	params := r.URL.Query()
+	bucket := params.Get(peerRESTBucket)
+	object := params.Get(peerRESTObject)
+	versionID := params.Get(peerRESTVersionID)
+	objAPI := newObjectLayerFn()
+	opts := ObjectOptions{
+		VersionID: versionID,
+	}
+	oi, err := objAPI.GetObjectInfo(r.Context(), bucket, object, opts)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	if globalTransitionState != nil {
+		globalTransitionState.queueTransitionTask(oi)
+	}
+	w.(http.Flusher).Flush()
+}
+
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
@@ -1139,4 +1166,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(httpTraceHdrs(server.UpdateMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodEnqueueTransitionTask).HandlerFunc(httpTraceHdrs(server.EnqueueTransitionTask)).Queries(restQueries(peerRESTBucket, peerRESTObject, peerRESTVersionID)...)
+
 }
