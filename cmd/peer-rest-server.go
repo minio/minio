@@ -1110,6 +1110,11 @@ func (s *peerRESTServer) EnqueueTransitionTask(w http.ResponseWriter, r *http.Re
 	object := params.Get(peerRESTObject)
 	versionID := params.Get(peerRESTVersionID)
 	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	opts := ObjectOptions{
 		VersionID: versionID,
 	}
@@ -1118,9 +1123,12 @@ func (s *peerRESTServer) EnqueueTransitionTask(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-	if globalTransitionState != nil {
-		globalTransitionState.queueTransitionTask(oi)
+	if globalTransitionState == nil {
+		s.writeErrorResponse(w, fmt.Errorf("transition state is not yet initialized"))
+		return
 	}
+	globalTransitionState.queueTransitionTask(oi)
+
 	w.(http.Flusher).Flush()
 }
 
