@@ -562,10 +562,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	var ldapUsername string
 	if globalLDAPConfig.Enabled && targetUser != "" {
 		// If LDAP enabled, service accounts need
 		// to be created only for LDAP users.
 		var err error
+		ldapUsername = targetUser
 		targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -603,6 +605,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		accessKey:     createReq.AccessKey,
 		secretKey:     createReq.SecretKey,
 		sessionPolicy: sp,
+	}
+	if ldapUsername != "" {
+		opts.ldapUsername = ldapUsername
 	}
 	newCred, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
