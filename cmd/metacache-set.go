@@ -351,18 +351,18 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// All operations are performed without locks, so we must be careful and allow for failures.
 		// Read metadata associated with the object from a disk.
 		if retries > 0 {
-			disks := er.getOnlineDisks()
-			if len(disks) == 0 {
-				time.Sleep(retryDelay)
-				retries++
-				continue
-			}
-
-			_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(0), "", false)
-			if err != nil {
-				time.Sleep(retryDelay)
-				retries++
-				continue
+			for _, disk := range er.getDisks() {
+				if disk == nil {
+					continue
+				}
+				_, err := disk.ReadVersion(ctx, minioMetaBucket,
+					o.objectPath(0), "", false)
+				if err != nil {
+					time.Sleep(retryDelay)
+					retries++
+					continue
+				}
+				break
 			}
 		}
 
@@ -421,20 +421,21 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 
 				if retries > 0 {
 					// Load from one disk only
-					disks := er.getOnlineDisks()
-					if len(disks) == 0 {
-						time.Sleep(retryDelay)
-						retries++
-						continue
-					}
-
-					_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(partN), "", false)
-					if err != nil {
-						time.Sleep(retryDelay)
-						retries++
-						continue
+					for _, disk := range er.getDisks() {
+						if disk == nil {
+							continue
+						}
+						_, err := disk.ReadVersion(ctx, minioMetaBucket,
+							o.objectPath(partN), "", false)
+						if err != nil {
+							time.Sleep(retryDelay)
+							retries++
+							continue
+						}
+						break
 					}
 				}
+
 				// Load first part metadata...
 				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{}, true)
 				if err != nil {
@@ -512,7 +513,8 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 
 	askDisks := o.AskDisks
 	listingQuorum := o.AskDisks - 1
-	disks := er.getOnlineDisks()
+	disks := er.getDisks()
+	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
 	if askDisks == -1 || er.setDriveCount == 4 {
@@ -527,6 +529,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		rand.Shuffle(len(disks), func(i, j int) {
 			disks[i], disks[j] = disks[j], disks[i]
 		})
+		fallbackDisks = disks[askDisks:]
 		disks = disks[:askDisks]
 	}
 
@@ -539,13 +542,14 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 
 	ctxDone := ctx.Done()
 	return listPathRaw(ctx, listPathRawOptions{
-		disks:        disks,
-		bucket:       o.Bucket,
-		path:         o.BaseDir,
-		recursive:    o.Recursive,
-		filterPrefix: o.FilterPrefix,
-		minDisks:     listingQuorum,
-		forwardTo:    o.Marker,
+		disks:         disks,
+		fallbackDisks: fallbackDisks,
+		bucket:        o.Bucket,
+		path:          o.BaseDir,
+		recursive:     o.Recursive,
+		filterPrefix:  o.FilterPrefix,
+		minDisks:      listingQuorum,
+		forwardTo:     o.Marker,
 		agreed: func(entry metaCacheEntry) {
 			select {
 			case <-ctxDone:
@@ -710,9 +714,10 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 }
 
 type listPathRawOptions struct {
-	disks        []StorageAPI
-	bucket, path string
-	recursive    bool
+	disks         []StorageAPI
+	fallbackDisks []StorageAPI
+	bucket, path  string
+	recursive     bool
 
 	// Only return results with this prefix.
 	filterPrefix string
@@ -752,10 +757,18 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	if len(disks) == 0 {
 		return fmt.Errorf("listPathRaw: 0 drives provided")
 	}
+
 	// Cancel upstream if we finish before we expect.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	fallback := func(err error) bool {
+		if err == nil {
+			return false
+		}
+		return err.Error() == errUnformattedDisk.Error() ||
+			err.Error() == errVolumeNotFound.Error()
+	}
 	askDisks := len(disks)
 	readers := make([]*metacacheReader, askDisks)
 	for i := range disks {
@@ -768,15 +781,44 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 
 		// Send request to each disk.
 		go func() {
-			werr := d.WalkDir(ctx, WalkDirOptions{
-				Bucket:         opts.bucket,
-				BaseDir:        opts.path,
-				Recursive:      opts.recursive,
-				ReportNotFound: opts.reportNotFound,
-				FilterPrefix:   opts.filterPrefix,
-				ForwardTo:      opts.forwardTo,
-			}, w)
+			var werr error
+			if d == nil {
+				werr = errDiskNotFound
+			} else {
+				werr = d.WalkDir(ctx, WalkDirOptions{
+					Bucket:         opts.bucket,
+					BaseDir:        opts.path,
+					Recursive:      opts.recursive,
+					ReportNotFound: opts.reportNotFound,
+					FilterPrefix:   opts.filterPrefix,
+					ForwardTo:      opts.forwardTo,
+				}, w)
+			}
+
+			// fallback only when set.
+			if len(opts.fallbackDisks) > 0 && fallback(werr) {
+				// This fallback is only set when
+				// askDisks is less than total
+				// number of disks per set.
+				for _, fd := range opts.fallbackDisks {
+					if fd == nil {
+						continue
+					}
+					werr = fd.WalkDir(ctx, WalkDirOptions{
+						Bucket:         opts.bucket,
+						BaseDir:        opts.path,
+						Recursive:      opts.recursive,
+						ReportNotFound: opts.reportNotFound,
+						FilterPrefix:   opts.filterPrefix,
+						ForwardTo:      opts.forwardTo,
+					}, w)
+					if werr == nil {
+						break
+					}
+				}
+			}
 			w.CloseWithError(werr)
+
 			if werr != io.EOF && werr != nil &&
 				werr.Error() != errFileNotFound.Error() &&
 				werr.Error() != errVolumeNotFound.Error() &&
@@ -795,10 +837,8 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		for i := range topEntries {
 			topEntries[i] = metaCacheEntry{}
 		}
-		select {
-		case <-ctx.Done():
+		if contextCanceled(ctx) {
 			return ctx.Err()
-		default:
 		}
 		for i, r := range readers {
 			if errs[i] != nil {
