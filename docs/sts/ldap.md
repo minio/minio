@@ -90,9 +90,18 @@ MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup 
 
 If you set an empty lookup bind password, the lookup bind will use the unauthenticated authentication mechanism, as described in [RFC 4513 Section 5.1.2](https://tools.ietf.org/html/rfc4513#section-5.1.2).
 
+**Automatic LDAP sync:** In Lookup-Bind mode, the server periodically queries the LDAP service to:
+
+1. find accounts (user DNs) that have been removed;
+2. find accounts whose group memberships have changed.
+
+In case 1 above, any active STS credentials or MinIO service accounts belonging to these users are purged.
+
+In case 2 above, access policies available to the credential are updated to reflect the change - i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
+
 #### Username-Format Mode ####
 
-In this mode, the server does not use a separate LDAP service account. Instead, the username and password provided in the STS API call are used to login to the LDAP server and also to lookup the user's groups. This mode preserves older behavior for compatibility, but users are encouraged to use the Lookup-Bind mode.
+In this mode, the server does not use a separate LDAP service account. Instead, the username and password provided in the STS API call are used to login to the LDAP server and also to lookup the user's groups. This mode preserves older behavior for compatibility, but users are encouraged to use the Lookup-Bind mode. Some newer features may not be available in this mode of operation.
 
 The DN to use to login to LDAP is computed from a username format configuration parameter. This is a list of possible DN templates to be used. For each such template, the username is substituted and the DN is generated. Each generated DN is tried by the MinIO server to login to LDAP. If exactly one successful DN is found, it is used to perform the groups lookup as well.
 
