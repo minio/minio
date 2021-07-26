@@ -906,8 +906,12 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			var combinedErr []string
 			for i, err := range errs {
 				if err != nil {
-					combinedErr = append(combinedErr,
-						fmt.Sprintf("disk %s returned: %s", disks[i], err))
+					if disks[i] != nil {
+						combinedErr = append(combinedErr,
+							fmt.Sprintf("disk %s returned: %s", disks[i], err))
+					} else {
+						combinedErr = append(combinedErr, err.Error())
+					}
 				}
 			}
 			return errors.New(strings.Join(combinedErr, ", "))
