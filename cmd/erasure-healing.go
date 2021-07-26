@@ -212,7 +212,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		return true
 	}
 	if erErr == nil {
-		if !meta.IsRemote() {
+		if !meta.Deleted && !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			if IsErr(dataErr, []error{
 				errFileNotFound,
@@ -267,10 +267,10 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
 
-	_, err = getLatestFileInfo(ctx, partsMetadata, errs)
-	if err != nil {
+	if _, err = getLatestFileInfo(ctx, partsMetadata, errs); err != nil {
 		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
 	}
+
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
 	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
@@ -292,7 +292,8 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// used here for reconstruction. This is done to ensure that
 	// we do not skip drives that have inconsistent metadata to be
 	// skipped from purging when they are stale.
-	availableDisks, dataErrs := disksWithAllParts(ctx, storageDisks, partsMetadata, errs, bucket, object, scanMode)
+	availableDisks, dataErrs := disksWithAllParts(ctx, storageDisks, partsMetadata,
+		errs, bucket, object, scanMode)
 
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
