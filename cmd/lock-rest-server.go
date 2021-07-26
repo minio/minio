@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -303,6 +304,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
 		nlripsMap := make(map[string]nlock, len(nlrips))
 		for _, nlrip := range nlrips {
+			expiredInOwner := false
 			for _, c := range allLockersFn() {
 				if !c.IsOnline() || c == nil {
 					continue
@@ -325,11 +327,18 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 
 				if !expired {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
+				} else {
+					// Check if the lock owner still recognizes the lock
+					u, err := url.Parse(c.String())
+					if err == nil && u.Host == nlrip.lri.Owner {
+						expiredInOwner = true
+					}
 				}
+
 			}
 
-			// less than the quorum, we have locks expired.
-			if nlripsMap[nlrip.name].locks < nlrip.lri.Quorum {
+			// Remove the lock if Less than the quorum or the lock owner does not recognize it
+			if expiredInOwner || nlripsMap[nlrip.name].locks < nlrip.lri.Quorum {
 				// Purge the stale entry if it exists.
 				globalLockServers[lendpoint].removeEntryIfExists(nlrip)
 			}
