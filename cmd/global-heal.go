@@ -68,17 +68,6 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-func getCurrentMRFStatus() madmin.MRFStatus {
-	mrfInfo := globalMRFState.getCurrentMRFRoundInfo()
-	return madmin.MRFStatus{
-		BytesHealed: mrfInfo.bytesHealed,
-		ItemsHealed: mrfInfo.itemsHealed,
-		TotalItems:  mrfInfo.itemsHealed + mrfInfo.pendingItems,
-		TotalBytes:  mrfInfo.bytesHealed + mrfInfo.pendingBytes,
-		Started:     mrfInfo.triggeredAt,
-	}
-}
-
 // getBackgroundHealStatus will return the
 func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
@@ -94,9 +83,9 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 	}
 
-	if globalMRFState != nil {
+	if globalMRFState.initialized() {
 		status.MRF = map[string]madmin.MRFStatus{
-			globalLocalNodeName: getCurrentMRFStatus(),
+			globalLocalNodeName: globalMRFState.getCurrentMRFRoundInfo(),
 		}
 	}
 

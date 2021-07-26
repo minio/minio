@@ -30,11 +30,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/logger"
-	jsonrpc "github.com/minio/rpc"
 )
 
 // recordRequest - records the first recLen bytes
@@ -108,75 +106,6 @@ func getOpName(name string) (op string) {
 	op = strings.Replace(op, "ReadinessCheckHandler", "healthcheck", 1)
 	op = strings.Replace(op, "-fm", "", 1)
 	return op
-}
-
-// WebTrace gets trace of web request
-func WebTrace(ri *jsonrpc.RequestInfo) madmin.TraceInfo {
-	r := ri.Request
-	w := ri.ResponseWriter
-
-	name := ri.Method
-	// Setup a http request body recorder
-	reqHeaders := r.Header.Clone()
-	reqHeaders.Set("Host", r.Host)
-	if len(r.TransferEncoding) == 0 {
-		reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
-	} else {
-		reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
-	}
-
-	now := time.Now().UTC()
-	t := madmin.TraceInfo{TraceType: madmin.TraceHTTP, FuncName: name, Time: now}
-	t.NodeName = r.Host
-	if globalIsDistErasure {
-		t.NodeName = globalLocalNodeName
-	}
-	if t.NodeName == "" {
-		t.NodeName = globalLocalNodeName
-	}
-
-	// strip only standard port from the host address
-	if host, port, err := net.SplitHostPort(t.NodeName); err == nil {
-		if port == "443" || port == "80" {
-			t.NodeName = host
-		}
-	}
-
-	vars := mux.Vars(r)
-	rq := madmin.TraceRequestInfo{
-		Time:     now,
-		Proto:    r.Proto,
-		Method:   r.Method,
-		Path:     SlashSeparator + pathJoin(vars["bucket"], vars["object"]),
-		RawQuery: redactLDAPPwd(r.URL.RawQuery),
-		Client:   handlers.GetSourceIP(r),
-		Headers:  reqHeaders,
-	}
-
-	rw, ok := w.(*logger.ResponseWriter)
-	if ok {
-		rs := madmin.TraceResponseInfo{
-			Time:       time.Now().UTC(),
-			Headers:    rw.Header().Clone(),
-			StatusCode: rw.StatusCode,
-			Body:       logger.BodyPlaceHolder,
-		}
-
-		if rs.StatusCode == 0 {
-			rs.StatusCode = http.StatusOK
-		}
-
-		t.RespInfo = rs
-		t.CallStats = madmin.TraceCallStats{
-			Latency:         rs.Time.Sub(rw.StartTime),
-			InputBytes:      int(r.ContentLength),
-			OutputBytes:     rw.Size(),
-			TimeToFirstByte: rw.TimeToFirstByte,
-		}
-	}
-
-	t.ReqInfo = rq
-	return t
 }
 
 // Trace gets trace of http request

@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,8 +65,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 
 	// Stat a volume entry.
-	_, err = os.Lstat(volumeDir)
-	if err != nil {
+	if err = Access(volumeDir); err != nil {
 		if osIsNotExist(err) {
 			return errVolumeNotFound
 		} else if isSysErrIO(err) {
@@ -100,7 +98,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				metadata: metadata,
 			}
 		} else {
-			if st, err := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
+			st, sterr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
+			if sterr == nil && st.Mode().IsRegular() {
 				return errFileNotFound
 			}
 		}
@@ -118,7 +117,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				forward = forward[:idx]
 			}
 		}
-
 		if contextCanceled(ctx) {
 			return ctx.Err()
 		}
@@ -132,6 +130,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return errFileNotFound
 			}
 			// Forward some errors?
+			return nil
+		}
+		if len(entries) == 0 {
 			return nil
 		}
 		dirObjects := make(map[string]struct{})
@@ -245,8 +246,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			case osIsNotExist(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				if err == nil {
-					// Maybe rename? Would make it inconsistent across disks though.
-					// os.Rename(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1), pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 					// It was an object
 					out <- meta
 					continue
@@ -265,6 +264,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				logger.LogIf(ctx, err)
 			}
 		}
+
 		// If directory entry left on stack, pop it now.
 		for len(dirStack) > 0 {
 			pop := dirStack[len(dirStack)-1]

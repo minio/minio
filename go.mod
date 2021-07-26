@@ -41,7 +41,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.7.6-0.20210722051837-b79c2288906e
+	github.com/minio/console v0.8.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
@@ -49,7 +49,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.10
-	github.com/minio/rpc v1.0.0
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
@@ -57,10 +56,9 @@ require (
 	github.com/minio/zipindex v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/montanaflynn/stats v0.6.6
-	github.com/nats-io/nats-server/v2 v2.1.9
+	github.com/nats-io/nats-server/v2 v2.3.2
 	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
-	github.com/nats-io/nats.go v1.10.0
-	github.com/nats-io/nkeys v0.2.0 // indirect
+	github.com/nats-io/nats.go v1.11.1-0.20210623165838-4b75fc59ae30
 	github.com/nats-io/stan.go v0.8.3
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8
@@ -82,8 +80,8 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.0-beta.4
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.1-0.20210329175301-c23abee72d19
-	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
-	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
+	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
+	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.1 // indirect
 	google.golang.org/api v0.31.0

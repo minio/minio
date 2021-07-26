@@ -218,25 +218,27 @@ func contains(slice interface{}, elem interface{}) bool {
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
 	// Profile recorded at start of benchmark.
-	base   []byte
-	stopFn func() ([]byte, error)
-	ext    string
+	records map[string][]byte
+	stopFn  func() ([]byte, error)
+	ext     string
 }
 
-// recordBase will record the profile and store it as the base.
-func (p *profilerWrapper) recordBase(name string, debug int) {
+// record will record the profile and store it as the base.
+func (p *profilerWrapper) record(profileType string, debug int, recordName string) {
 	var buf bytes.Buffer
-	p.base = nil
-	err := pprof.Lookup(name).WriteTo(&buf, debug)
+	if p.records == nil {
+		p.records = make(map[string][]byte)
+	}
+	err := pprof.Lookup(profileType).WriteTo(&buf, debug)
 	if err != nil {
 		return
 	}
-	p.base = buf.Bytes()
+	p.records[recordName] = buf.Bytes()
 }
 
-// Base returns the recorded base if any.
-func (p profilerWrapper) Base() []byte {
-	return p.base
+// Records returns the recorded profiling if any.
+func (p profilerWrapper) Records() map[string][]byte {
+	return p.records
 }
 
 // Stop the currently running benchmark.
@@ -268,9 +270,10 @@ func getProfileData() (map[string][]byte, error) {
 		if err == nil {
 			dst[typ+"."+prof.Extension()] = buf
 		}
-		buf = prof.Base()
-		if len(buf) > 0 {
-			dst[typ+"-before"+"."+prof.Extension()] = buf
+		for name, buf := range prof.Records() {
+			if len(buf) > 0 {
+				dst[typ+"-"+name+"."+prof.Extension()] = buf
+			}
 		}
 	}
 	return dst, nil
@@ -314,7 +317,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerMEM:
 		runtime.GC()
-		prof.recordBase("heap", 0)
+		prof.record("heap", 0, "before")
 		prof.stopFn = func() ([]byte, error) {
 			runtime.GC()
 			var buf bytes.Buffer
@@ -330,7 +333,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerMutex:
-		prof.recordBase("mutex", 0)
+		prof.record("mutex", 0, "before")
 		runtime.SetMutexProfileFraction(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
@@ -339,7 +342,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerThreads:
-		prof.recordBase("threadcreate", 0)
+		prof.record("threadcreate", 0, "before")
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
@@ -347,7 +350,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerGoroutines:
 		prof.ext = "txt"
-		prof.recordBase("goroutine", 1)
+		prof.record("goroutine", 1, "before")
+		prof.record("goroutine", 2, "before,debug=2")
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			err := pprof.Lookup("goroutine").WriteTo(&buf, 1)
@@ -386,8 +390,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 
 // minioProfiler - minio profiler interface.
 type minioProfiler interface {
-	// Return base profile. 'nil' if none.
-	Base() []byte
+	// Return recorded profiles, each profile associated with a distinct generic name.
+	Records() map[string][]byte
 	// Stop the profiler
 	Stop() ([]byte, error)
 	// Return extension of profile
@@ -509,6 +513,7 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
+		MaxConnsPerHost:       1024,
 		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
 		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,

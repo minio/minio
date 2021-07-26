@@ -664,6 +664,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			for {
 				time.Sleep(globalRefreshIAMInterval)
 				sys.purgeExpiredCredentialsForLDAP(ctx)
+				sys.updateGroupMembershipsForLDAP(ctx)
 			}
 		}()
 	}
@@ -1165,6 +1166,9 @@ type newServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	accessKey     string
 	secretKey     string
+
+	// LDAP username
+	ldapUsername string
 }
 
 // NewServiceAccount - create a new service account
@@ -1220,6 +1224,11 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		m[iamPolicyClaimNameSA()] = "embedded-policy"
 	} else {
 		m[iamPolicyClaimNameSA()] = "inherited-policy"
+	}
+
+	// For LDAP service account, save the ldap username in the metadata.
+	if opts.ldapUsername != "" {
+		m[ldapUserN] = opts.ldapUsername
 	}
 
 	var (
@@ -1597,7 +1606,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	}
 	sys.store.unlock()
 
-	expiredUsers, err := globalLDAPConfig.GetNonExistentUserDNS(parentUsers)
+	expiredUsers, err := globalLDAPConfig.GetNonExistentUserDistNames(parentUsers)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1625,6 +1634,92 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 		}
 	}
 	sys.store.unlock()
+}
+
+// updateGroupMembershipsForLDAP - updates the list of groups associated with the credential.
+func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
+	// 1. Collect all LDAP users with active creds.
+	sys.store.lock()
+	// List of unique LDAP (parent) user DNs that have active creds
+	parentUsers := make([]string, 0, len(sys.iamUsersMap))
+	// Map of LDAP user to list of active credential objects
+	parentUserToCredsMap := make(map[string][]auth.Credentials, len(sys.iamUsersMap))
+	// DN to ldap username mapping for each LDAP user
+	parentUserToLDAPUsernameMap := make(map[string]string, len(sys.iamUsersMap))
+	for _, cred := range sys.iamUsersMap {
+		if cred.IsServiceAccount() || cred.IsTemp() {
+			if globalLDAPConfig.IsLDAPUserDN(cred.ParentUser) {
+				// Check if this is the first time we are
+				// encountering this LDAP user.
+				if _, ok := parentUserToCredsMap[cred.ParentUser]; !ok {
+					// Try to find the ldapUsername for this
+					// parentUser by extracting JWT claims
+					jwtClaims, err := auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
+					if err != nil {
+						// skip this cred - session token seems
+						// invalid
+						continue
+					}
+					ldapUsername, ok := jwtClaims.Lookup(ldapUserN)
+					if !ok {
+						// skip this cred - we dont have the
+						// username info needed
+						continue
+					}
+
+					// Collect each new cred.ParentUser into parentUsers
+					parentUsers = append(parentUsers, cred.ParentUser)
+
+					// Update the ldapUsernameMap
+					parentUserToLDAPUsernameMap[cred.ParentUser] = ldapUsername
+				}
+				parentUserToCredsMap[cred.ParentUser] = append(parentUserToCredsMap[cred.ParentUser], cred)
+			}
+		}
+	}
+	sys.store.unlock()
+
+	// 2. Query LDAP server for groups of the LDAP users collected.
+	updatedGroups, err := globalLDAPConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
+	if err != nil {
+		// Log and return on error - perhaps it'll work the next time.
+		logger.LogIf(GlobalContext, err)
+		return
+	}
+
+	// 3. Update creds for those users whose groups are changed
+	sys.store.lock()
+	defer sys.store.unlock()
+	for _, parentUser := range parentUsers {
+		currGroupsSet := updatedGroups[parentUser]
+		currGroups := currGroupsSet.ToSlice()
+		for _, cred := range parentUserToCredsMap[parentUser] {
+			gSet := set.CreateStringSet(cred.Groups...)
+			if gSet.Equals(currGroupsSet) {
+				// No change to groups memberships for this
+				// credential.
+				continue
+			}
+
+			cred.Groups = currGroups
+			userType := regUser
+			if cred.IsServiceAccount() {
+				userType = svcUser
+			} else if cred.IsTemp() {
+				userType = stsUser
+			}
+			// Overwrite the user identity here. As store should be
+			// atomic, it shouldn't cause any corruption.
+			if err := sys.store.saveUserIdentity(ctx, cred.AccessKey, userType, newUserIdentity(cred)); err != nil {
+				// Log and continue error - perhaps it'll work the next time.
+				logger.LogIf(GlobalContext, err)
+				continue
+			}
+			// If we wrote the updated creds to IAM storage, we can
+			// update the in memory map.
+			sys.iamUsersMap[cred.AccessKey] = cred
+		}
+	}
 }
 
 // GetUser - get user credentials
@@ -2205,20 +2300,15 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 
 // IsAllowedLDAPSTS - checks for LDAP specific claims and values
 func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool {
-	parentInClaimIface, ok := args.Claims[ldapUser]
-	if ok {
-		parentInClaim, ok := parentInClaimIface.(string)
-		if !ok {
-			// ldap parentInClaim name is not a string reject it.
-			return false
-		}
-
-		if parentInClaim != parentUser {
-			// ldap claim has been modified maliciously reject it.
-			return false
-		}
-	} else {
-		// no ldap parentInClaim claim present reject it.
+	// parentUser value must match the ldap user in the claim.
+	if parentInClaimIface, ok := args.Claims[ldapUser]; !ok {
+		// no ldapUser claim present reject it.
+		return false
+	} else if parentInClaim, ok := parentInClaimIface.(string); !ok {
+		// not the right type, reject it.
+		return false
+	} else if parentInClaim != parentUser {
+		// ldap claim has been modified maliciously reject it.
 		return false
 	}
 

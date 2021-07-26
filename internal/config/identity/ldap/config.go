@@ -29,6 +29,7 @@ import (
 	"time"
 
 	ldap "github.com/go-ldap/ldap/v3"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
@@ -296,7 +297,7 @@ func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) (
 	return groups, nil
 }
 
-// LookupUserDN searches for the full DN ang groups of a given username
+// LookupUserDN searches for the full DN and groups of a given username
 func (l *Config) LookupUserDN(username string) (string, []string, error) {
 	if !l.isUsingLookupBind {
 		return "", nil, errors.New("current lookup mode does not support searching for User DN")
@@ -477,9 +478,9 @@ func (l Config) IsLDAPUserDN(user string) bool {
 	return strings.HasSuffix(user, ","+l.UserDNSearchBaseDN)
 }
 
-// GetNonExistentUserDNS - find user accounts that are no longer present in the
-// LDAP server.
-func (l *Config) GetNonExistentUserDNS(userDNS []string) ([]string, error) {
+// GetNonExistentUserDistNames - find user accounts (DNs) that are no longer
+// present in the LDAP server.
+func (l *Config) GetNonExistentUserDistNames(userDistNames []string) ([]string, error) {
 	if !l.isUsingLookupBind {
 		return nil, errors.New("current LDAP configuration does not permit looking for expired user accounts")
 	}
@@ -496,7 +497,7 @@ func (l *Config) GetNonExistentUserDNS(userDNS []string) ([]string, error) {
 	}
 
 	nonExistentUsers := []string{}
-	for _, dn := range userDNS {
+	for _, dn := range userDistNames {
 		searchRequest := ldap.NewSearchRequest(
 			dn,
 			ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
@@ -521,6 +522,37 @@ func (l *Config) GetNonExistentUserDNS(userDNS []string) ([]string, error) {
 		}
 	}
 	return nonExistentUsers, nil
+}
+
+// LookupGroupMemberships - for each DN finds the set of LDAP groups they are a
+// member of.
+func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsernameMap map[string]string) (map[string]set.StringSet, error) {
+	if !l.isUsingLookupBind {
+		return nil, errors.New("current LDAP configuration does not permit this lookup")
+	}
+
+	conn, err := l.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.lookupBind(conn); err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]set.StringSet, len(userDistNames))
+	for _, userDistName := range userDistNames {
+		username := userDNToUsernameMap[userDistName]
+		groups, err := l.searchForUserGroups(conn, username, userDistName)
+		if err != nil {
+			return nil, err
+		}
+		res[userDistName] = set.CreateStringSet(groups...)
+	}
+
+	return res, nil
 }
 
 // EnabledWithLookupBind - checks if ldap IDP is enabled in lookup bind mode.
