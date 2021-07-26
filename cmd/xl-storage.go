@@ -2054,6 +2054,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// Purge the destination path as we are not preserving anything
 				// versioned object was not requested.
 				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+				// if old destination path is same as new destination path
+				// there is nothing to purge, this is true in case of healing
+				// avoid setting oldDstDataPath at that point.
+				if oldDstDataPath == dstDataPath {
+					oldDstDataPath = ""
+				}
 				xlMeta.data.remove(nullVersionID, ofi.DataDir)
 			}
 		}
