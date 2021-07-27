@@ -59,6 +59,7 @@ const (
 	expClaim = "exp"
 	subClaim = "sub"
 	audClaim = "aud"
+	azpClaim = "azp"
 	issClaim = "iss"
 
 	// JWT claim to check the parent user
@@ -333,9 +334,40 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var audFromToken string
-	if v, ok := m[audClaim]; ok {
-		audFromToken, _ = v.(string)
+	// REQUIRED. Audience(s) that this ID Token is intended for.
+	// It MUST contain the OAuth 2.0 client_id of the Relying Party
+	// as an audience value. It MAY also contain identifiers for
+	// other audiences. In the general case, the aud value is an
+	// array of case sensitive strings. In the common special case
+	// when there is one audience, the aud value MAY be a single
+	// case sensitive
+	audValues, ok := iampolicy.GetValuesFromClaims(m, audClaim)
+	if !ok {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+			errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
+		return
+	}
+	if !audValues.Contains(globalOpenIDConfig.ClientID) {
+		// if audience claims is missing, look for "azp" claims.
+		// OPTIONAL. Authorized party - the party to which the ID
+		// Token was issued. If present, it MUST contain the OAuth
+		// 2.0 Client ID of this party. This Claim is only needed
+		// when the ID Token has a single audience value and that
+		// audience is different than the authorized party. It MAY
+		// be included even when the authorized party is the same
+		// as the sole audience. The azp value is a case sensitive
+		// string containing a StringOrURI value
+		azpValues, ok := iampolicy.GetValuesFromClaims(m, azpClaim)
+		if !ok {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
+			return
+		}
+		if !azpValues.Contains(globalOpenIDConfig.ClientID) {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				errors.New("STS JWT Token has `azp` claim invalid, `azp` must match configured OpenID Client ID"))
+			return
+		}
 	}
 
 	var subFromToken string
@@ -346,12 +378,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	if subFromToken == "" {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
-		return
-	}
-
-	if audFromToken != globalOpenIDConfig.ClientID {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-			errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
 		return
 	}
 
