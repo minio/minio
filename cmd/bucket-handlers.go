@@ -1193,6 +1193,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	setBucketRegionHeader(w, globalServerRegion)
 	writeSuccessResponseHeadersOnly(w)
 }
 
