@@ -58,6 +58,7 @@ const (
 	// JWT claim keys
 	expClaim = "exp"
 	subClaim = "sub"
+	audClaim = "aud"
 	issClaim = "iss"
 
 	// JWT claim to check the parent user
@@ -332,13 +333,25 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var audFromToken string
+	if v, ok := m[audClaim]; ok {
+		audFromToken, _ = v.(string)
+	}
+
 	var subFromToken string
 	if v, ok := m[subClaim]; ok {
 		subFromToken, _ = v.(string)
 	}
 
 	if subFromToken == "" {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+			errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
+		return
+	}
+
+	if audFromToken != globalOpenIDConfig.ClientID {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+			errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
 		return
 	}
 
