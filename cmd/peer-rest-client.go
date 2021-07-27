@@ -969,3 +969,21 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	}(ch)
 	return ch, nil
 }
+
+func (client *peerRESTClient) Speedtest(ctx context.Context, size, concurrent int, duration time.Duration) (SpeedtestResult, error) {
+	values := make(url.Values)
+	values.Set(peerRESTSize, strconv.Itoa(size))
+	values.Set(peerRESTConcurrent, strconv.Itoa(concurrent))
+	values.Set(peerRESTDuration, duration.String())
+
+	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedtest, values, nil, -1)
+	if err != nil {
+		return SpeedtestResult{}, err
+	}
+	defer http.DrainBody(respBody)
+
+	dec := gob.NewDecoder(respBody)
+	var result SpeedtestResult
+	err = dec.Decode(&result)
+	return result, err
+}

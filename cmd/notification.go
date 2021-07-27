@@ -1427,3 +1427,42 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 	}(&wg, ch)
 	return ch
 }
+
+// Speedtest run GET/PUT tests at input concurrency for requested object size,
+// optionally you can extend the tests longer with time.Duration.
+func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []madmin.SpeedtestResult {
+	results := make([]madmin.SpeedtestResult, len(sys.peerClients)+1)
+
+	var wg sync.WaitGroup
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			r, err := sys.peerClients[index].Speedtest(ctx, size, concurrent, duration)
+			results[index].Endpoint = sys.peerClients[index].String()
+			results[index].Err = err
+			if err == nil {
+				results[index].Uploads = r.Uploads
+				results[index].Downloads = r.Downloads
+			}
+		}(index)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r, err := selfSpeedtest(ctx, size, concurrent, duration)
+		results[len(results)-1].Endpoint = globalMinioEndpoint
+		results[len(results)-1].Err = err
+		if err == nil {
+			results[len(results)-1].Uploads = r.Uploads
+			results[len(results)-1].Downloads = r.Downloads
+		}
+	}()
+	wg.Wait()
+
+	return results
+}

@@ -292,7 +292,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	}
 
 	// Create all necessary bucket folders if possible.
-	if err = p.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket); err != nil {
+	if err = p.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket, minioMetaSpeedTestBucket); err != nil {
 		return nil, err
 	}
 

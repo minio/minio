@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -27,12 +28,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -1097,6 +1103,179 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 	w.(http.Flusher).Flush()
 }
 
+// SpeedtestResult return value of the speedtest function
+type SpeedtestResult struct {
+	Uploads   uint64
+	Downloads uint64
+}
+
+// SpeedtestObject implements "random-read" object reader
+type SpeedtestObject struct {
+	buf       []byte
+	remaining int
+}
+
+func (bo *SpeedtestObject) Read(b []byte) (int, error) {
+	if bo.remaining == 0 {
+		return 0, io.EOF
+	}
+	if len(b) == 0 {
+		return 0, nil
+	}
+	if len(b) > len(bo.buf) {
+		b = b[:len(bo.buf)]
+	}
+	if len(b) > bo.remaining {
+		b = b[:bo.remaining]
+	}
+	copy(b, bo.buf)
+	bo.remaining -= len(b)
+	return len(b), nil
+}
+
+// Runs the speedtest on local MinIO process.
+func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Duration) (SpeedtestResult, error) {
+	var result SpeedtestResult
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return result, errServerNotInitialized
+	}
+
+	bucket := minioMetaSpeedTestBucket
+
+	buf := make([]byte, humanize.MiByte)
+	rand.Read(buf)
+
+	objCountPerThread := make([]uint64, concurrent)
+
+	var objUploadCount uint64
+	var objDownloadCount uint64
+
+	var wg sync.WaitGroup
+
+	doneCh1 := make(chan struct{})
+	go func() {
+		time.Sleep(duration)
+		close(doneCh1)
+	}()
+
+	objNamePrefix := minioMetaSpeedTestBucketPrefix + uuid.New().String()
+
+	wg.Add(concurrent)
+	for i := 0; i < concurrent; i++ {
+		go func(i int) {
+			defer wg.Done()
+			for {
+				hashReader, err := hash.NewReader(&SpeedtestObject{buf, size},
+					int64(size), "", "", int64(size))
+				if err != nil {
+					logger.LogIf(ctx, err)
+					break
+				}
+				reader := NewPutObjReader(hashReader)
+				_, err = objAPI.PutObject(ctx, bucket, fmt.Sprintf("%s.%d.%d",
+					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{})
+				if err != nil {
+					logger.LogIf(ctx, err)
+					break
+				}
+				objCountPerThread[i]++
+				atomic.AddUint64(&objUploadCount, 1)
+				select {
+				case <-doneCh1:
+					return
+				default:
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	doneCh2 := make(chan struct{})
+	go func() {
+		time.Sleep(duration)
+		close(doneCh2)
+	}()
+
+	wg.Add(concurrent)
+	for i := 0; i < concurrent; i++ {
+		go func(i int) {
+			defer wg.Done()
+			var j uint64
+			for {
+				if objCountPerThread[i] == j {
+					j = 0
+				}
+				r, err := objAPI.GetObjectNInfo(ctx, bucket, fmt.Sprintf("%s.%d.%d",
+					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
+				if err != nil {
+					logger.LogIf(ctx, err)
+					break
+				}
+				_, err = io.Copy(ioutil.Discard, r)
+				r.Close()
+				if err != nil {
+					logger.LogIf(ctx, err)
+					break
+				}
+				j++
+				atomic.AddUint64(&objDownloadCount, 1)
+				select {
+				case <-doneCh2:
+					return
+				default:
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	return SpeedtestResult{objUploadCount, objDownloadCount}, nil
+}
+
+func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+	}
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	sizeStr := r.URL.Query().Get(peerRESTSize)
+	durationStr := r.URL.Query().Get(peerRESTDuration)
+	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		size = 64 * humanize.MiByte
+	}
+
+	concurrent, err := strconv.Atoi(concurrentStr)
+	if err != nil {
+		concurrent = 32
+	}
+
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		duration = time.Second * 10
+	}
+
+	result, err := selfSpeedtest(r.Context(), size, concurrent, duration)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(result); err != nil {
+		s.writeErrorResponse(w, errors.New("Encoding report failed: "+err.Error()))
+		return
+	}
+	w.(http.Flusher).Flush()
+}
+
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
@@ -1139,4 +1318,5 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(httpTraceHdrs(server.UpdateMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedtest).HandlerFunc(httpTraceHdrs(server.SpeedtestHandler))
 }
