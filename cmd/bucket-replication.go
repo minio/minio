@@ -43,6 +43,8 @@ import (
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
+const throttleDeadline = 1 * time.Hour
+
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	if globalIsGateway {
@@ -792,15 +794,21 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			Bucket:     objInfo.Bucket,
 			HeaderSize: headerSize,
 		}
-		newCtx, cancel := context.WithTimeout(ctx, globalOperationTimeout.Timeout())
-		defer cancel()
+		newCtx := ctx
+		if globalBucketMonitor.IsThrottled(bucket) {
+			var cancel context.CancelFunc
+			newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
+			defer cancel()
+		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
 		if len(objInfo.Parts) > 1 {
 			if uploadID, err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object, r, objInfo, putOpts); err != nil {
 				replicationStatus = replication.Failed
 				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 				// block and abort remote upload upon failure.
-				c.AbortMultipartUpload(ctx, dest.Bucket, object, uploadID)
+				if err = c.AbortMultipartUpload(ctx, dest.Bucket, object, uploadID); err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Unable to clean up failed upload %s on remote %s/%s: %w", uploadID, dest.Bucket, object, err))
+				}
 			}
 		} else {
 			if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {

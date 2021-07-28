@@ -179,3 +179,11 @@ func (m *Monitor) SetBandwidthLimit(bucket string, limit int64) {
 	t.Limiter = rate.NewLimiter(newlimit, int(t.NodeBandwidthPerSec))
 	m.bucketThrottle[bucket] = t
 }
+
+// IsThrottled returns true if a bucket has bandwidth throttling enabled.
+func (m *Monitor) IsThrottled(bucket string) bool {
+	m.tlock.RLock()
+	defer m.tlock.RUnlock()
+	_, ok := m.bucketThrottle[bucket]
+	return ok
+}
