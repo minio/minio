@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/etag"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -141,6 +143,13 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	// Extract etag from metadata.
 	objInfo.ETag = extractETag(fi.Metadata)
 
+	// Verify if Etag is parseable, if yes
+	// then check if its multipart etag.
+	et, e := etag.Parse(objInfo.ETag)
+	if e == nil {
+		objInfo.Multipart = et.IsMultipart()
+	}
+
 	// Add user tags to the object info
 	tags := fi.Metadata[xhttp.AmzObjectTagging]
 	if len(tags) != 0 {
@@ -164,6 +173,14 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	// response headers. e.g, X-Minio-* or X-Amz-*.
 	// Tags have also been extracted, we remove that as well.
 	objInfo.UserDefined = cleanMetadata(fi.Metadata)
+
+	// Set multipart for encryption properly if
+	// not set already.
+	if !objInfo.Multipart {
+		if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
+			objInfo.Multipart = crypto.IsMultiPart(objInfo.UserDefined)
+		}
+	}
 
 	// All the parts per object.
 	objInfo.Parts = fi.Parts

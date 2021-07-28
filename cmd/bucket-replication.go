@@ -801,14 +801,11 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			defer cancel()
 		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-		if len(objInfo.Parts) > 1 {
-			if uploadID, err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object, r, objInfo, putOpts); err != nil {
+		if objInfo.Multipart {
+			if err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object,
+				r, objInfo, putOpts); err != nil {
 				replicationStatus = replication.Failed
 				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
-				// block and abort remote upload upon failure.
-				if err = c.AbortMultipartUpload(ctx, dest.Bucket, object, uploadID); err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to clean up failed upload %s on remote %s/%s: %w", uploadID, dest.Bucket, object, err))
-				}
 			}
 		} else {
 			if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
@@ -876,38 +873,52 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	}
 }
 
-func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts miniogo.PutObjectOptions) (uploadID string, err error) {
+func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts miniogo.PutObjectOptions) (err error) {
 	var uploadedParts []miniogo.CompletePart
-	uploadID, err = c.NewMultipartUpload(context.Background(), bucket, object, opts)
+	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
-		return
+		return err
 	}
+
+	defer func() {
+		if err != nil {
+			// block and abort remote upload upon failure.
+			if aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID); aerr != nil {
+				aerr = fmt.Errorf("Unable to cleanup failed multipart replication %s on remote %s/%s: %w", uploadID, bucket, object, aerr)
+				logger.LogIf(ctx, aerr)
+			}
+		}
+	}()
+
 	var (
 		hr    *hash.Reader
 		pInfo miniogo.ObjectPart
 	)
+
 	for _, partInfo := range objInfo.Parts {
 		hr, err = hash.NewReader(r, partInfo.Size, "", "", partInfo.Size)
 		if err != nil {
-			return
+			return err
 		}
 		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, "", "", opts.ServerSideEncryption)
 		if err != nil {
-			return
+			return err
 		}
 		if pInfo.Size != partInfo.Size {
-			return uploadID, fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.Size)
+			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.Size)
 		}
 		uploadedParts = append(uploadedParts, miniogo.CompletePart{
 			PartNumber: pInfo.PartNumber,
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{
-		SourceMTime:        objInfo.ModTime,
-		ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
-	}})
-	return
+	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, miniogo.PutObjectOptions{
+		Internal: miniogo.AdvancedPutOptions{
+			SourceMTime: objInfo.ModTime,
+			// always set this to distinguish between `mc mirror` replication and serverside
+			ReplicationRequest: true,
+		}})
+	return err
 }
 
 // filterReplicationStatusMetadata filters replication status metadata for COPY
