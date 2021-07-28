@@ -35,12 +35,6 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         ClassDMA,
-			Description: `enable O_DIRECT for both read and write, defaults to "write" e.g. "read+write"`,
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,

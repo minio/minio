@@ -43,7 +43,6 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -1109,11 +1108,12 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		// - object has not yet transitioned
 		// - object size lesser than 128KiB
 		// - object has maximum of 1 parts
-		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
-			// Enable O_DIRECT optionally only if drive supports it.
-			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
+		if fi.TransitionStatus == "" &&
+			fi.DataDir != "" && fi.Size <= smallFileThreshold &&
+			len(fi.Parts) == 1 {
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
-			fi.Data, err = s.readAllData(volumeDir, pathJoin(volumeDir, path, fi.DataDir, partPath), requireDirectIO)
+			dataPath := pathJoin(volumeDir, path, fi.DataDir, partPath)
+			fi.Data, err = s.readAllData(volumeDir, dataPath)
 			if err != nil {
 				return FileInfo{}, err
 			}
@@ -1123,15 +1123,8 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	return fi, nil
 }
 
-func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirectIO bool) (buf []byte, err error) {
-	var r io.ReadCloser
-	if requireDirectIO {
-		var f *os.File
-		f, err = OpenFileDirectIO(filePath, readMode, 0666)
-		r = &odirectReader{f, nil, nil, true, true, s, nil}
-	} else {
-		r, err = OpenFile(filePath, readMode, 0)
-	}
+func (s *xlStorage) readAllData(volumeDir string, filePath string) (buf []byte, err error) {
+	f, err := OpenFileDirectIO(filePath, readMode, 0666)
 	if err != nil {
 		if osIsNotExist(err) {
 			// Check if the object doesn't exist because its bucket
@@ -1163,7 +1156,7 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 		}
 		return nil, err
 	}
-
+	r := &odirectReader{f, nil, nil, true, true, s, nil}
 	defer r.Close()
 	buf, err = ioutil.ReadAll(r)
 	if err != nil {
@@ -1191,8 +1184,7 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite
-	return s.readAllData(volumeDir, filePath, requireDirectIO)
+	return s.readAllData(volumeDir, filePath)
 }
 
 // ReadFile reads exactly len(buf) bytes into buf. It returns the
@@ -1415,7 +1407,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 
 	var file *os.File
 	// O_DIRECT only supported if offset is zero
-	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+	if offset == 0 {
 		file, err = OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
 		// Open the file for reading.
@@ -1456,7 +1448,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
-	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+	if offset == 0 {
 		or := &odirectReader{file, nil, nil, true, false, s, nil}
 		if length <= smallFileThreshold {
 			or = &odirectReader{file, nil, nil, true, true, s, nil}
