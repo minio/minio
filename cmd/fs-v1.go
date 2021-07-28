@@ -682,8 +682,15 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
-		// Stat the file to get file size.
-		fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, srcBucket, srcObject))
+		fsObjectPath := pathJoin(fs.fsPath, srcBucket, srcObject)
+
+		// Update object modtime
+		err = fsTouch(ctx, fsObjectPath)
+		if err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
+		}
+		// Stat the file to get object info
+		fi, err := fsStatFile(ctx, fsObjectPath)
 		if err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}

@@ -24,6 +24,7 @@ import (
 	pathutil "path"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/internal/lock"
 	"github.com/minio/minio/internal/logger"
@@ -166,6 +167,25 @@ func fsStat(ctx context.Context, statLoc string) (os.FileInfo, error) {
 	}
 
 	return fi, nil
+}
+
+// fsTouch updates a file access & modtime with current time
+func fsTouch(ctx context.Context, statLoc string) error {
+	if statLoc == "" {
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
+	}
+	if err := checkPathLength(statLoc); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	now := time.Now()
+	if err := os.Chtimes(statLoc, now, now); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	return nil
 }
 
 // Lookup if volume exists, returns volume attributes upon success.
