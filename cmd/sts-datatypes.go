@@ -112,7 +112,7 @@ type WebIdentityResult struct {
 	PackedPolicySize int `xml:",omitempty"`
 
 	// The issuing authority of the web identity token presented. For OpenID Connect
-	// ID tokens, this contains the value of the iss field. For OAuth 2.0 access tokens,
+	// ID tokens, this contains the value of the iss field. For OAuth 2.0 id_tokens,
 	// this contains the value of the ProviderId parameter that was passed in the
 	// AssumeRoleWithWebIdentity request.
 	Provider string `xml:",omitempty"`
@@ -162,7 +162,7 @@ type ClientGrantsResult struct {
 	PackedPolicySize int `xml:",omitempty"`
 
 	// The issuing authority of the web identity token presented. For OpenID Connect
-	// ID tokens, this contains the value of the iss field. For OAuth 2.0 access tokens,
+	// ID tokens, this contains the value of the iss field. For OAuth 2.0 id_tokens,
 	// this contains the value of the ProviderId parameter that was passed in the
 	// AssumeRoleWithClientGrants request.
 	Provider string `xml:",omitempty"`

@@ -2,13 +2,13 @@
 
 ## Introduction
 
-Calling AssumeRoleWithWebIdentity does not require the use of MinIO default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including MinIO default credentials in the application. Instead, the identity of the caller is validated by using a JWT access token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
+Calling AssumeRoleWithWebIdentity does not require the use of MinIO default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including MinIO default credentials in the application. Instead, the identity of the caller is validated by using a JWT id_token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
 
 By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
 
 ## API Request Parameters
 ### WebIdentityToken
-The OAuth 2.0 access token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
+The OAuth 2.0 id_token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
 
 | Params               | Value                                          |
 | :--                  | :--                                            |
@@ -120,7 +120,7 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 
 - Visit http://localhost:8080, login will direct the user to the Google OAuth2 Auth URL to obtain a permission grant.
 - The redirection URI (callback handler) receives the OAuth2 callback, verifies the state parameter, and obtains a Token.
-- Using the access token the callback handler further talks to Google OAuth2 Token URL to obtain an JWT id_token.
+- Using the id_token the callback handler further talks to Google OAuth2 Token URL to obtain an JWT id_token.
 - Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrieve temporary credentials.
 - Temporary credentials are displayed on the browser upon successful retrieval.
 

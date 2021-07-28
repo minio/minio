@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// JWTToken - parses the output from IDP access token.
+// JWTToken - parses the output from IDP id_token.
 type JWTToken struct {
 	AccessToken string `json:"access_token"`
 	Expiry      int    `json:"expires_in"`
