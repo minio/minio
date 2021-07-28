@@ -43,7 +43,7 @@ curl -u PoEgXP6uVO45IsENRngDXj5Au5Ya:eKsw6z8CtOJVBtrOWvhRWL4TUCga -k -d "grant_t
 In response, the self-contained JWT access token will be returned as shown below.
 ```
 {
-  "access_token": "eyJ4NXQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJraWQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiYXpwIjoiUG9FZ1hQNnVWTzQ1SXNFTlJuZ0RYajVBdTVZYSIsImlzcyI6Imh0dHBzOlwvXC9sb2NhbGhvc3Q6OTQ0M1wvb2F1dGgyXC90b2tlbiIsImV4cCI6MTUzNDg5MTc3OCwiaWF0IjoxNTM0ODg4MTc4LCJqdGkiOiIxODQ0MzI5Yy1kNjVhLTQ4YTMtODIyOC05ZGY3M2ZlODNkNTYifQ.ELZ8ujk2Xp9xTGgMqnCa5ehuimaAPXWlSCW5QeBbTJIT4M5OB_2XEVIV6p89kftjUdKu50oiYe4SbfrxmLm6NGSGd2qxkjzJK3SRKqsrmVWEn19juj8fz1neKtUdXVHuSZu6ws_bMDy4f_9hN2Jv9dFnkoyeNT54r4jSTJ4A2FzN2rkiURheVVsc8qlm8O7g64Az-5h4UGryyXU4zsnjDCBKYk9jdbEpcUskrFMYhuUlj1RWSASiGhHHHDU5dTRqHkVLIItfG48k_fb-ehU60T7EFWH1JBdNjOxM9oN_yb0hGwOjLUyCUJO_Y7xcd5F4dZzrBg8LffFmvJ09wzHNtQ",
+  "id_token": "eyJ4NXQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJraWQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiYXpwIjoiUG9FZ1hQNnVWTzQ1SXNFTlJuZ0RYajVBdTVZYSIsImlzcyI6Imh0dHBzOlwvXC9sb2NhbGhvc3Q6OTQ0M1wvb2F1dGgyXC90b2tlbiIsImV4cCI6MTUzNDg5MTc3OCwiaWF0IjoxNTM0ODg4MTc4LCJqdGkiOiIxODQ0MzI5Yy1kNjVhLTQ4YTMtODIyOC05ZGY3M2ZlODNkNTYifQ.ELZ8ujk2Xp9xTGgMqnCa5ehuimaAPXWlSCW5QeBbTJIT4M5OB_2XEVIV6p89kftjUdKu50oiYe4SbfrxmLm6NGSGd2qxkjzJK3SRKqsrmVWEn19juj8fz1neKtUdXVHuSZu6ws_bMDy4f_9hN2Jv9dFnkoyeNT54r4jSTJ4A2FzN2rkiURheVVsc8qlm8O7g64Az-5h4UGryyXU4zsnjDCBKYk9jdbEpcUskrFMYhuUlj1RWSASiGhHHHDU5dTRqHkVLIItfG48k_fb-ehU60T7EFWH1JBdNjOxM9oN_yb0hGwOjLUyCUJO_Y7xcd5F4dZzrBg8LffFmvJ09wzHNtQ",
   "token_type": "Bearer",
   "expires_in": 3600
 }
@@ -52,17 +52,17 @@ In response, the self-contained JWT access token will be returned as shown below
 ### 4. JWT Claims
 The access token received is a signed JSON Web Token (JWT). Use a JWT decoder to decode the access token to access the payload of the token that includes following JWT claims:
 
-|Claim Name|Type|Claim Value|
-|:--:|:--:|:--:|
-|iss| _string_ | The issuer of the JWT. The '> Identity Provider Entity Id ' value of the OAuth2/OpenID Connect Inbound Authentication configuration of the Resident Identity Provider is returned here. |
-|aud| _string array_ | The token audience list. The client identifier of the OAuth clients that the JWT is intended for, is sent herewith. |
-|azp| _string_ | The authorized party for which the token is issued to. The client identifier of the OAuth client that the token is issued for, is sent herewith. |
-|iat| _integer_ |	The token issue time. |
-|exp| _integer_ |	The token expiration time. |
-|jti| _string_ | Unique identifier for the JWT token. |
-|policy| _string_ | Canned policy name to be applied for STS credentials. (Recommended) |
+| Claim Name | Type           | Claim Value                                                                                                                                                                             |
+|:----------:|:--------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| iss        | _string_       | The issuer of the JWT. The '> Identity Provider Entity Id ' value of the OAuth2/OpenID Connect Inbound Authentication configuration of the Resident Identity Provider is returned here. |
+| aud        | _string array_ | The token audience list. The client identifier of the OAuth clients that the JWT is intended for, is sent herewith.                                                                     |
+| azp        | _string_       | The authorized party for which the token is issued to. The client identifier of the OAuth client that the token is issued for, is sent herewith.                                        |
+| iat        | _integer_      | The token issue time.                                                                                                                                                                   |
+| exp        | _integer_      | The token expiration time.                                                                                                                                                              |
+| jti        | _string_       | Unique identifier for the JWT token.                                                                                                                                                    |
+| policy     | _string_       | Canned policy name to be applied for STS credentials. (Recommended)                                                                                                                     |
 
-Using the above `access_token` we can perform an STS request to MinIO to get temporary credentials for MinIO API operations. MinIO STS API uses [JSON Web Key Set Endpoint](https://docs.wso2.com/display/IS541/JSON+Web+Key+Set+Endpoint) to validate if JWT is valid and is properly signed.
+Using the above `id_token` we can perform an STS request to MinIO to get temporary credentials for MinIO API operations. MinIO STS API uses [JSON Web Key Set Endpoint](https://docs.wso2.com/display/IS541/JSON+Web+Key+Set+Endpoint) to validate if JWT is valid and is properly signed.
 
 **We recommend setting `policy` as a custom claim for the JWT service provider follow [here](https://docs.wso2.com/display/IS550/Configuring+Claims+for+a+Service+Provider) and [here](https://docs.wso2.com/display/IS550/Handling+Custom+Claims+with+the+JWT+Bearer+Grant+Type) for relevant docs on how to configure claims for a service provider.**
 

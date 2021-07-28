@@ -121,7 +121,7 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 - Visit http://localhost:8080, login will direct the user to the Google OAuth2 Auth URL to obtain a permission grant.
 - The redirection URI (callback handler) receives the OAuth2 callback, verifies the state parameter, and obtains a Token.
 - Using the access token the callback handler further talks to Google OAuth2 Token URL to obtain an JWT id_token.
-- Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrive temporary credentials.
+- Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrieve temporary credentials.
 - Temporary credentials are displayed on the browser upon successful retrieval.
 
 ## Using MinIO Console

@@ -48,7 +48,7 @@ require (
 	github.com/minio/madmin-go v1.0.19
 	github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.0.10
+	github.com/minio/pkg v1.0.11
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
