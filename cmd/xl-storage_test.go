@@ -30,8 +30,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-
-	"github.com/minio/minio/internal/config/storageclass"
 )
 
 func TestCheckPathLength(t *testing.T) {
@@ -1152,10 +1150,6 @@ func TestXLStorageReadFile(t *testing.T) {
 	}
 
 	for l := 0; l < 2; l++ {
-		// 1st loop tests with dma=write, 2nd loop tests with dma=read-write.
-		if l == 1 {
-			globalStorageClass.DMA = storageclass.DMAReadWrite
-		}
 		// Following block validates all ReadFile test cases.
 		for i, testCase := range testCases {
 			var n int64
@@ -1212,9 +1206,6 @@ func TestXLStorageReadFile(t *testing.T) {
 			}
 		}
 	}
-
-	// Reset the flag.
-	globalStorageClass.DMA = storageclass.DMAWrite
 
 	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
