@@ -466,7 +466,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	// if missing metadata can be reconstructed, attempt to reconstruct.
-	if missingBlocks > 0 && missingBlocks < readQuorum {
+	if !fi.Deleted && missingBlocks > 0 && missingBlocks < readQuorum {
 		if _, healing := er.getOnlineDisksWithHealing(); !healing {
 			go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
 		}
