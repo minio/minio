@@ -19,7 +19,6 @@ package storageclass
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,26 +34,17 @@ const (
 	RRS = "REDUCED_REDUNDANCY"
 	// Standard storage class
 	STANDARD = "STANDARD"
-	// DMA storage class
-	DMA = "DMA"
-
-	// Valid values are "write" and "read+write"
-	DMAWrite     = "write"
-	DMAReadWrite = "read+write"
 )
 
 // Standard constats for config info storage class
 const (
 	ClassStandard = "standard"
 	ClassRRS      = "rrs"
-	ClassDMA      = "dma"
 
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
 	StandardEnv = "MINIO_STORAGE_CLASS_STANDARD"
-	// DMA storage class environment variable
-	DMAEnv = "MINIO_STORAGE_CLASS_DMA"
 
 	// Supported storage class scheme is EC
 	schemePrefix = "EC"
@@ -64,9 +54,6 @@ const (
 
 	// Default RRS parity is always minimum parity.
 	defaultRRSParity = minParityDisks
-
-	// Default DMA value
-	defaultDMA = DMAReadWrite
 )
 
 // DefaultKVS - default storage class config
@@ -79,10 +66,6 @@ var (
 		config.KV{
 			Key:   ClassRRS,
 			Value: "EC:2",
-		},
-		config.KV{
-			Key:   ClassDMA,
-			Value: defaultDMA,
 		},
 	}
 )
@@ -99,7 +82,6 @@ var ConfigLock = sync.RWMutex{}
 type Config struct {
 	Standard StorageClass `json:"standard"`
 	RRS      StorageClass `json:"rrs"`
-	DMA      string       `json:"dma"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -256,15 +238,7 @@ func (sCfg Config) Update(newCfg Config) {
 	ConfigLock.Lock()
 	defer ConfigLock.Unlock()
 	sCfg.RRS = newCfg.RRS
-	sCfg.DMA = newCfg.DMA
 	sCfg.Standard = newCfg.Standard
-}
-
-// GetDMA - returns DMA configuration.
-func (sCfg Config) GetDMA() string {
-	ConfigLock.RLock()
-	defer ConfigLock.RUnlock()
-	return sCfg.DMA
 }
 
 // Enabled returns if etcd is enabled.
@@ -278,13 +252,14 @@ func Enabled(kvs config.KVS) bool {
 func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg = Config{}
 
+	kvs.Delete("dma")
+
 	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
 		return Config{}, err
 	}
 
 	ssc := env.Get(StandardEnv, kvs.Get(ClassStandard))
 	rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS))
-	dma := env.Get(DMAEnv, kvs.Get(ClassDMA))
 	// Check for environment variables and parse into storageClass struct
 	if ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)
@@ -302,14 +277,6 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	if cfg.RRS.Parity == 0 {
 		cfg.RRS.Parity = defaultRRSParity
 	}
-
-	if dma == "" {
-		dma = defaultDMA
-	}
-	if dma != DMAReadWrite && dma != DMAWrite {
-		return Config{}, errors.New(`valid dma values are "read-write" and "write"`)
-	}
-	cfg.DMA = dma
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.

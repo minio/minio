@@ -63,6 +63,7 @@ const (
 	peerRESTMethodUpdateMetacacheListing   = "/updatemetacache"
 	peerRESTMethodGetPeerMetrics           = "/peermetrics"
 	peerRESTMethodLoadTransitionTierConfig = "/loadtransitiontierconfig"
+	peerRESTMethodSpeedtest                = "/speedtest"
 )
 
 const (
@@ -82,6 +83,9 @@ const (
 	peerRESTTraceS3        = "s3"
 	peerRESTTraceOS        = "os"
 	peerRESTTraceThreshold = "threshold"
+	peerRESTSize           = "size"
+	peerRESTConcurrent     = "concurrent"
+	peerRESTDuration       = "duration"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

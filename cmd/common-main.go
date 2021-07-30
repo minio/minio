@@ -44,6 +44,7 @@ import (
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
@@ -104,6 +105,10 @@ func init() {
 			},
 		},
 	}
+
+	// All minio-go API operations shall be performed only once,
+	// another way to look at this is we are turning off retries.
+	minio.MaxRetry = 1
 }
 
 const consolePrefix = "CONSOLE_"

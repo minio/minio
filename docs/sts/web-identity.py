@@ -64,19 +64,20 @@ def callback():
 
     data = {'grant_type': 'authorization_code',
             'code': authorization_code, 'redirect_uri': callback_uri}
-    access_token_response = requests.post(
-        token_url, data=data, verify=False, allow_redirects=False, auth=(client_id, client_secret))
+    id_token_response = requests.post(
+        token_url, data=data, verify=False,
+        allow_redirects=False, auth=(client_id, client_secret))
 
-    print('body: ' + access_token_response.text)
+    print('body: ' + id_token_response.text)
 
-    # we can now use the access_token as much as we want to access protected resources.
-    tokens = json.loads(access_token_response.text)
-    access_token = tokens['access_token']
+    # we can now use the id_token as much as we want to access protected resources.
+    tokens = json.loads(id_token_response.text)
+    id_token = tokens['id_token']
 
     response = sts_client.assume_role_with_web_identity(
         RoleArn='arn:aws:iam::123456789012:user/svc-internal-api',
         RoleSessionName='test',
-        WebIdentityToken=access_token,
+        WebIdentityToken=id_token,
         DurationSeconds=3600
     )
 

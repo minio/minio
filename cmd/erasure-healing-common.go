@@ -189,35 +189,6 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 	return latestFileInfo, nil
 }
 
-// fileInfoConsistent whether all fileinfos are consistent with each other.
-// Will return false if any fileinfo mismatches.
-func fileInfoConsistent(ctx context.Context, partsMetadata []FileInfo, errs []error) bool {
-	// There should be atleast half correct entries, if not return failure
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, len(partsMetadata)/2); reducedErr != nil {
-		return false
-	}
-	if len(partsMetadata) == 1 {
-		return true
-	}
-	// Reference
-	ref := partsMetadata[0]
-	if !ref.IsValid() {
-		return false
-	}
-	for _, meta := range partsMetadata[1:] {
-		if !meta.IsValid() {
-			return false
-		}
-		if !meta.ModTime.Equal(ref.ModTime) {
-			return false
-		}
-		if meta.DataDir != ref.DataDir {
-			return false
-		}
-	}
-	return true
-}
-
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //
@@ -225,8 +196,9 @@ func fileInfoConsistent(ctx context.Context, partsMetadata []FileInfo, errs []er
 //
 // - slice of errors about the state of data files on disk - can have
 //   a not-found error or a hash-mismatch error.
-func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo, errs []error, bucket,
-	object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
+	errs []error, bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+
 	// List of disks having latest version of the object er.meta  (by modtime)
 	_, modTime, dataDir := listOnlineDisks(onlineDisks, partsMetadata, errs)
 
@@ -239,15 +211,17 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// consider the offline disks as consistent.
 			continue
 		}
-		if len(meta.Erasure.Distribution) != len(onlineDisks) {
-			// Erasure distribution seems to have lesser
-			// number of items than number of online disks.
-			inconsistent++
-			continue
-		}
-		if meta.Erasure.Distribution[i] != meta.Erasure.Index {
-			// Mismatch indexes with distribution order
-			inconsistent++
+		if !meta.Deleted {
+			if len(meta.Erasure.Distribution) != len(onlineDisks) {
+				// Erasure distribution seems to have lesser
+				// number of items than number of online disks.
+				inconsistent++
+				continue
+			}
+			if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+				// Mismatch indexes with distribution order
+				inconsistent++
+			}
 		}
 	}
 
@@ -267,8 +241,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			dataErrs[i] = errDiskNotFound
 			continue
 		}
-		meta := partsMetadata[i]
 
+		meta := partsMetadata[i]
 		if !meta.ModTime.Equal(modTime) || meta.DataDir != dataDir {
 			dataErrs[i] = errFileCorrupt
 			partsMetadata[i] = FileInfo{}
@@ -280,20 +254,22 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 				continue
 			}
 
-			if len(meta.Erasure.Distribution) != len(onlineDisks) {
-				// Erasure distribution is not the same as onlineDisks
-				// attempt a fix if possible, assuming other entries
-				// might have the right erasure distribution.
-				partsMetadata[i] = FileInfo{}
-				dataErrs[i] = errFileCorrupt
-				continue
-			}
+			if !meta.Deleted {
+				if len(meta.Erasure.Distribution) != len(onlineDisks) {
+					// Erasure distribution is not the same as onlineDisks
+					// attempt a fix if possible, assuming other entries
+					// might have the right erasure distribution.
+					partsMetadata[i] = FileInfo{}
+					dataErrs[i] = errFileCorrupt
+					continue
+				}
 
-			// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
-			if meta.Erasure.Distribution[i] != meta.Erasure.Index {
-				partsMetadata[i] = FileInfo{}
-				dataErrs[i] = errFileCorrupt
-				continue
+				// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
+				if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+					partsMetadata[i] = FileInfo{}
+					dataErrs[i] = errFileCorrupt
+					continue
+				}
 			}
 		}
 
@@ -320,11 +296,11 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// disk has a valid xl.meta but may not have all the
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
-			if !partsMetadata[i].IsRemote() {
+			if !partsMetadata[i].Deleted && !partsMetadata[i].IsRemote() {
 				dataErrs[i] = onlineDisk.VerifyFile(ctx, bucket, object, partsMetadata[i])
 			}
 		case madmin.HealNormalScan:
-			if !partsMetadata[i].IsRemote() {
+			if !partsMetadata[i].Deleted && !partsMetadata[i].IsRemote() {
 				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, partsMetadata[i])
 			}
 		}

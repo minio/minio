@@ -55,7 +55,7 @@ Before being able to authenticate against the Admin REST API using a client_id a
 
 - Check that `account` client_id has the role 'admin' assigned in the "Service Account Roles" tab.
 
-After that, you will be able to obtain an access token for the Admin REST API using client_id and client_secret:
+After that, you will be able to obtain an id_token for the Admin REST API using client_id and client_secret:
 
 ```
 curl \

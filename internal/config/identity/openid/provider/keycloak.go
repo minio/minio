@@ -27,7 +27,7 @@ import (
 	"sync"
 )
 
-// Token - parses the output from IDP access token.
+// Token - parses the output from IDP id_token.
 type Token struct {
 	AccessToken string `json:"access_token"`
 	Expiry      int    `json:"expires_in"`

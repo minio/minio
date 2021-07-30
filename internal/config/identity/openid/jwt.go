@@ -233,7 +233,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 	return nil
 }
 
-// Validate - validates the access token.
+// Validate - validates the id_token.
 func (r *Config) Validate(token, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{

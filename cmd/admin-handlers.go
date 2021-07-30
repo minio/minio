@@ -39,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/kes"
@@ -908,6 +909,52 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+}
+
+func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SpeedtestHandler")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	sizeStr := r.URL.Query().Get(peerRESTSize)
+	durationStr := r.URL.Query().Get(peerRESTDuration)
+	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		size = 64 * humanize.MiByte
+	}
+
+	concurrent, err := strconv.Atoi(concurrentStr)
+	if err != nil {
+		concurrent = 32
+	}
+
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		duration = time.Second * 10
+	}
+
+	results := globalNotificationSys.Speedtest(ctx, size, concurrent, duration)
+
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	objectAPI.DeleteBucket(ctx, pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix), true)
+
+	w.(http.Flusher).Flush()
 }
 
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
