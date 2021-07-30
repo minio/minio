@@ -177,14 +177,16 @@ func initConsoleServer() (*restapi.Server, error) {
 		return nil, err
 	}
 
+	noLog := func(string, ...interface{}) {
+		// nothing to log
+	}
+
 	// Initialize MinIO loggers
-	restapi.LogInfo = logger.Info
-	restapi.LogError = logger.Error
+	restapi.LogInfo = noLog
+	restapi.LogError = noLog
 
 	api := operations.NewConsoleAPI(swaggerSpec)
-	api.Logger = func(_ string, _ ...interface{}) {
-		// nothing to log.
-	}
+	api.Logger = noLog
 
 	server := restapi.NewServer(api)
 	// register all APIs
