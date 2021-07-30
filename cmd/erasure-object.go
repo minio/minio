@@ -1437,16 +1437,15 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		er.addPartial(bucket, object, opts.VersionID, -1)
 		break
 	}
-	// Notify object deleted event.
+
+	objInfo := fi.ToObjectInfo(bucket, object)
 	sendEvent(eventArgs{
 		EventName:  eventName,
 		BucketName: bucket,
-		Object: ObjectInfo{
-			Name:      object,
-			VersionID: opts.VersionID,
-		},
-		Host: "Internal: [ILM-Transition]",
+		Object:     objInfo,
+		Host:       "Internal: [ILM-Transition]",
 	})
+	auditLogLifecycle(ctx, objInfo, ILMTransition)
 	return err
 }
 
