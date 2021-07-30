@@ -1433,6 +1433,11 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []madmin.SpeedtestResult {
 	results := make([]madmin.SpeedtestResult, len(sys.peerClients)+1)
 
+	scheme := "http"
+	if globalIsTLS {
+		scheme = "https"
+	}
+
 	var wg sync.WaitGroup
 	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {
@@ -1442,7 +1447,11 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 		go func(index int) {
 			defer wg.Done()
 			r, err := sys.peerClients[index].Speedtest(ctx, size, concurrent, duration)
-			results[index].Endpoint = sys.peerClients[index].String()
+			u := &url.URL{
+				Scheme: scheme,
+				Host:   sys.peerClients[index].host.String(),
+			}
+			results[index].Endpoint = u.String()
 			results[index].Err = err
 			if err == nil {
 				results[index].Uploads = r.Uploads
