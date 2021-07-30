@@ -1354,6 +1354,8 @@ const (
 	ILMExpiry = "ilm:expiry"
 	// ILMFreeVersionDelete - audit trail for ILM free-version delete
 	ILMFreeVersionDelete = "ilm:free-version-delete"
+	// ILMTransition - audit trail for ILM transitioning.
+	ILMTransition = " ilm:transition"
 )
 
 func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
@@ -1363,6 +1365,8 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
 		apiName = "ILMExpiry"
 	case ILMFreeVersionDelete:
 		apiName = "ILMFreeVersionDelete"
+	case ILMTransition:
+		apiName = "ILMTransition"
 	}
 	auditLogInternal(ctx, oi.Bucket, oi.Name, AuditLogOptions{
 		Trigger:   trigger,
