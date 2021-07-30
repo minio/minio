@@ -1396,11 +1396,6 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		}
 	}
 
-	// object content is small enough that it's inlined, skipping transition
-	if fi.InlineData() {
-		return nil
-	}
-
 	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
 		return err
