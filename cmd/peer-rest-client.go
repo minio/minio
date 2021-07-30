@@ -400,6 +400,17 @@ func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo
 	return info, err
 }
 
+// GetSysErrors - fetch memory information for a remote node.
+func (client *peerRESTClient) GetSysErrors(ctx context.Context) (info madmin.SysErrors, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodSysErrors, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // GetMemInfo - fetch memory information for a remote node.
 func (client *peerRESTClient) GetMemInfo(ctx context.Context) (info madmin.MemInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodMemInfo, nil, nil, -1)

@@ -1066,6 +1066,36 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 	return reply
 }
 
+// GetSysErrors - Memory information
+func (sys *NotificationSys) GetSysErrors(ctx context.Context) []madmin.SysErrors {
+	reply := make([]madmin.SysErrors, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetSysErrors(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
 // GetMemInfo - Memory information
 func (sys *NotificationSys) GetMemInfo(ctx context.Context) []madmin.MemInfo {
 	reply := make([]madmin.MemInfo, len(sys.peerClients))
