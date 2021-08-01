@@ -487,20 +487,6 @@ func (s *storageRESTServer) CheckPartsHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// CheckFileHandler - check if a file metadata exists.
-func (s *storageRESTServer) CheckFileHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	filePath := vars[storageRESTFilePath]
-
-	if err := s.storage.CheckFile(r.Context(), volume, filePath); err != nil {
-		s.writeErrorResponse(w, err)
-	}
-}
-
 // ReadAllHandler - read all the contents of a file.
 func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1121,8 +1107,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(httpTraceHdrs(server.CreateFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
 
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCheckFile).HandlerFunc(httpTraceHdrs(server.CheckFileHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCheckParts).HandlerFunc(httpTraceHdrs(server.CheckPartsHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 

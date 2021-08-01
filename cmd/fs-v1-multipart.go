@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	pathutil "path"
 	"sort"
 	"strconv"
 	"strings"
@@ -548,11 +547,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	if err := checkCompleteMultipartArgs(ctx, bucket, object, fs); err != nil {
 		return oi, toObjectErr(err)
-	}
-
-	// Check if an object is present as one of the parent dir.
-	if fs.parentDirIsObject(ctx, bucket, pathutil.Dir(object)) {
-		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {

@@ -434,16 +434,6 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 	return err
 }
 
-// CheckFile - stat a file metadata.
-func (client *storageRESTClient) CheckFile(ctx context.Context, volume string, path string) error {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(ctx, storageRESTMethodCheckFile, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
-}
-
 // CheckParts - stat all file parts.
 func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error {
 	values := make(url.Values)

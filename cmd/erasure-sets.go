@@ -878,18 +878,10 @@ func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string,
 	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 }
 
-func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	if parent == "." {
-		return false
-	}
-	return s.getHashedSet(parent).parentDirIsObject(ctx, bucket, parent)
-}
-
 // PutObject - writes an object to hashedSet based on the object name.
 func (s *erasureSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
 	auditObjectErasureSet(ctx, object, set)
-	opts.ParentIsObject = s.parentDirIsObject
 	return set.PutObject(ctx, bucket, object, data, opts)
 }
 
@@ -1074,7 +1066,6 @@ func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, 
 func (s *erasureSets) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
 	auditObjectErasureSet(ctx, object, set)
-	opts.ParentIsObject = s.parentDirIsObject
 	return set.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 }
 

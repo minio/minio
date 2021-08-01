@@ -1628,8 +1628,8 @@ func TestXLStorageRenameFile(t *testing.T) {
 	}
 }
 
-// TestXLStorage xlStorage.CheckFile()
-func TestXLStorageCheckFile(t *testing.T) {
+// TestXLStorage xlStorage.StatInfoFile()
+func TestXLStorageStatInfoFile(t *testing.T) {
 	// create xlStorage test setup
 	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
@@ -1699,19 +1699,20 @@ func TestXLStorageCheckFile(t *testing.T) {
 		{
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
-			expectedErr: errPathNotFound,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestXLStorage case - 7.
 		// TestXLStorage case with file with directory.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path/to",
-			expectedErr: errFileNotFound,
+			expectedErr: nil,
 		},
 	}
 
 	for i, testCase := range testCases {
-		if err := xlStorage.CheckFile(context.Background(), testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+		_, err := xlStorage.StatInfoFile(context.Background(), testCase.srcVol, testCase.srcPath+"/"+xlStorageFormatFile)
+		if err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}

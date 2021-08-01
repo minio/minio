@@ -88,9 +88,6 @@ var errFileAccessDenied = StorageErr("file access denied")
 // errFileCorrupt - file has an unexpected size, or is not readable
 var errFileCorrupt = StorageErr("file is corrupted")
 
-// errFileParentIsFile - cannot have overlapping objects, parent is already a file.
-var errFileParentIsFile = StorageErr("parent is a file")
-
 // errBitrotHashAlgoInvalid - the algo for bit-rot hash
 // verification is empty or invalid.
 var errBitrotHashAlgoInvalid = StorageErr("bit-rot hash algorithm is invalid")

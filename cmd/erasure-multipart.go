@@ -782,12 +782,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
 
-	// Check if an object is present as one of the parent dir.
-	// -- FIXME. (needs a new kind of lock).
-	if opts.ParentIsObject != nil && opts.ParentIsObject(rctx, bucket, path.Dir(object)) {
-		return oi, toObjectErr(errFileParentIsFile, bucket, object)
-	}
-
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 

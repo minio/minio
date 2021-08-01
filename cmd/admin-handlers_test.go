@@ -182,7 +182,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 
 	adminTestBed, err := prepareAdminErasureTestBed(ctx)
 	if err != nil {
-		t.Fatal("Failed to initialize a single node Erasure backend for admin handler tests.")
+		t.Fatal("Failed to initialize a single node Erasure backend for admin handler tests.", err)
 	}
 	defer adminTestBed.TearDown()
 
@@ -253,7 +253,7 @@ func TestAdminServerInfo(t *testing.T) {
 
 	adminTestBed, err := prepareAdminErasureTestBed(ctx)
 	if err != nil {
-		t.Fatal("Failed to initialize a single node Erasure backend for admin handler tests.")
+		t.Fatal("Failed to initialize a single node Erasure backend for admin handler tests.", err)
 	}
 
 	defer adminTestBed.TearDown()
