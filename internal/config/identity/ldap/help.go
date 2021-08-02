@@ -62,7 +62,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         UsernameFormat,
-			Description: `";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Description: `[DEPRECATED] ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
 			Optional:    true,
 			Type:        "list",
 			Sensitive:   true,

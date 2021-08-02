@@ -73,7 +73,7 @@ The two supported modes of LDAP configuration differ in how the MinIO server der
 
 Once a unique DN for the user is derived, the server verifies the user's credentials with the LDAP server and on success, looks up the user's groups via a configured group search query and finally temporary object storage credentials are generated and returned.
 
-#### Lookup-Bind Mode ####
+#### Lookup-Bind Mode (Recommended) ####
 
 In this mode, the a low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. It is the new and preferred mode for LDAP integration.
 
@@ -99,7 +99,7 @@ In case 1 above, any active STS credentials or MinIO service accounts belonging 
 
 In case 2 above, access policies available to the credential are updated to reflect the change - i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
 
-#### Username-Format Mode ####
+#### Username-Format Mode (Deprecated) ####
 
 In this mode, the server does not use a separate LDAP service account. Instead, the username and password provided in the STS API call are used to login to the LDAP server and also to lookup the user's groups. This mode preserves older behavior for compatibility, but users are encouraged to use the Lookup-Bind mode. Some newer features may not be available in this mode of operation.
 
