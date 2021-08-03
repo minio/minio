@@ -71,7 +71,7 @@ func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsKubernetesReplicaSet() || IsPCFTile() {
+	if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile() {
 		// 30 seconds matches the orchestrator DNS TTLs, have
 		// a 5 second timeout to lookup from DNS servers.
 		globalDNSCache = xhttp.NewDNSCache(30*time.Second, 5*time.Second, logger.LogOnceIf)

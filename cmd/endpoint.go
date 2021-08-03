@@ -377,27 +377,6 @@ func (endpoints Endpoints) GetAllStrings() (all []string) {
 	return
 }
 
-func hostResolveToLocalhost(endpoint Endpoint) bool {
-	hostIPs, err := getHostIP(endpoint.Hostname())
-	if err != nil {
-		// Log the message to console about the host resolving
-		reqInfo := (&logger.ReqInfo{}).AppendTags(
-			"host",
-			endpoint.Hostname(),
-		)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogIf(ctx, err, logger.Application)
-		return false
-	}
-	var loopback int
-	for _, hostIP := range hostIPs.ToSlice() {
-		if net.ParseIP(hostIP).IsLoopback() {
-			loopback++
-		}
-	}
-	return loopback == len(hostIPs)
-}
-
 func (endpoints Endpoints) atleastOneEndpointLocal() bool {
 	for _, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -410,7 +389,6 @@ func (endpoints Endpoints) atleastOneEndpointLocal() bool {
 // UpdateIsLocal - resolves the host and discovers the local host.
 func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 	orchestrated := IsDocker() || IsKubernetes()
-	k8sReplicaSet := IsKubernetesReplicaSet()
 
 	var epsResolved int
 	var foundLocal bool
@@ -443,24 +421,6 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 					endpoints[i].Hostname(),
 				)
 
-				if k8sReplicaSet && hostResolveToLocalhost(endpoints[i]) {
-					err := fmt.Errorf("host %s resolves to 127.*, DNS incorrectly configured retrying",
-						endpoints[i])
-					// time elapsed
-					timeElapsed := time.Since(startTime)
-					// log error only if more than 1s elapsed
-					if timeElapsed > time.Second {
-						reqInfo.AppendTags("elapsedTime",
-							humanize.RelTime(startTime,
-								startTime.Add(timeElapsed),
-								"elapsed",
-								""))
-						ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-						logger.LogIf(ctx, err, logger.Application)
-					}
-					continue
-				}
-
 				// return err if not Docker or Kubernetes
 				// We use IsDocker() to check for Docker environment
 				// We use IsKubernetes() to check for Kubernetes environment
@@ -489,36 +449,6 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 				} else {
 					resolvedList[i] = true
 					endpoints[i].IsLocal = isLocal
-					if k8sReplicaSet && !endpoints.atleastOneEndpointLocal() && !foundPrevLocal {
-						// In replicated set in k8s deployment, IPs might
-						// get resolved for older IPs, add this code
-						// to ensure that we wait for this server to
-						// participate atleast one disk and be local.
-						//
-						// In special cases for replica set with expanded
-						// pool setups we need to make sure to provide
-						// value of foundPrevLocal from pool1 if we already
-						// found a local setup. Only if we haven't found
-						// previous local we continue to wait to look for
-						// atleast one local.
-						resolvedList[i] = false
-						// time elapsed
-						err := fmt.Errorf("no endpoint is local to this host: %s", endpoints[i])
-						timeElapsed := time.Since(startTime)
-						// log error only if more than 1s elapsed
-						if timeElapsed > time.Second {
-							reqInfo.AppendTags("elapsedTime",
-								humanize.RelTime(startTime,
-									startTime.Add(timeElapsed),
-									"elapsed",
-									"",
-								))
-							ctx := logger.SetReqInfo(GlobalContext,
-								reqInfo)
-							logger.LogIf(ctx, err, logger.Application)
-						}
-						continue
-					}
 					epsResolved++
 					if !foundLocal {
 						foundLocal = isLocal
