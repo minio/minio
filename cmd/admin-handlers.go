@@ -2316,12 +2316,13 @@ func createHostAnonymizerForFSMode() map[string]string {
 
 	apiEndpoints := getAPIEndpoints()
 	for _, ep := range apiEndpoints {
-		if len(ep) > 0 {
-			if url, err := xnet.ParseHTTPURL(ep); err == nil {
-				// In FS mode the drive names don't include the host.
-				// So mapping just the host should be sufficient.
-				hostAnonymizer[url.Host] = "server1"
-			}
+		if len(ep) == 0 {
+			continue
+		}
+		if url, err := xnet.ParseHTTPURL(ep); err == nil {
+			// In FS mode the drive names don't include the host.
+			// So mapping just the host should be sufficient.
+			hostAnonymizer[url.Host] = "server1"
 		}
 	}
 	return hostAnonymizer
