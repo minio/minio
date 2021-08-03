@@ -177,6 +177,9 @@ func getConsoleEndpoints() (consoleEndpoints []string) {
 }
 
 func getAPIEndpoints() (apiEndpoints []string) {
+	if globalMinioEndpoint != "" {
+		return []string{globalMinioEndpoint}
+	}
 	var ipList []string
 	if globalMinioHost == "" {
 		ipList = sortIPs(mustGetLocalIP4().ToSlice())

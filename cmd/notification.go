@@ -1461,7 +1461,7 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
 func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []madmin.SpeedtestResult {
-	results := make([]madmin.SpeedtestResult, len(sys.peerClients)+1)
+	results := make([]madmin.SpeedtestResult, len(sys.allPeerClients))
 
 	scheme := "http"
 	if globalIsTLS {
@@ -1494,7 +1494,11 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 	go func() {
 		defer wg.Done()
 		r, err := selfSpeedtest(ctx, size, concurrent, duration)
-		results[len(results)-1].Endpoint = globalMinioEndpoint
+		u := &url.URL{
+			Scheme: scheme,
+			Host:   globalLocalNodeName,
+		}
+		results[len(results)-1].Endpoint = u.String()
 		results[len(results)-1].Err = err
 		if err == nil {
 			results[len(results)-1].Uploads = r.Uploads
