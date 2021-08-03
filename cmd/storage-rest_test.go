@@ -166,7 +166,7 @@ func testStorageAPIDeleteVol(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func testStorageAPICheckFile(t *testing.T, storage StorageAPI) {
+func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
 	err := storage.MakeVol(context.Background(), "foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -187,7 +187,7 @@ func testStorageAPICheckFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.CheckFile(context.Background(), testCase.volumeName, testCase.objectName)
+		_, err := storage.StatInfoFile(context.Background(), testCase.volumeName, testCase.objectName+"/"+xlStorageFormatFile)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -515,7 +515,7 @@ func TestStorageRESTClientDeleteVol(t *testing.T) {
 	testStorageAPIDeleteVol(t, restClient)
 }
 
-func TestStorageRESTClientCheckFile(t *testing.T) {
+func TestStorageRESTClientStatInfoFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
@@ -523,7 +523,7 @@ func TestStorageRESTClientCheckFile(t *testing.T) {
 	}()
 	defer os.RemoveAll(endpointPath)
 
-	testStorageAPICheckFile(t, restClient)
+	testStorageAPIStatInfoFile(t, restClient)
 }
 
 func TestStorageRESTClientListDir(t *testing.T) {

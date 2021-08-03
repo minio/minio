@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"sync"
-
-	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 func (er erasureObjects) getLocalDisks() (localDisks []StorageAPI) {
@@ -100,35 +98,4 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 
 	// Return disks which have maximum disk usage common.
 	return newDisks[max]
-}
-
-// This function does the following check, suppose
-// object is "a/b/c/d", stat makes sure that objects
-// - "a/b/c"
-// - "a/b"
-// - "a"
-// do not exist on the namespace.
-func (er erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	storageDisks := er.getDisks()
-
-	g := errgroup.WithNErrs(len(storageDisks))
-
-	for index := range storageDisks {
-		index := index
-		g.Go(func() error {
-			if storageDisks[index] == nil {
-				return errDiskNotFound
-			}
-			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			return storageDisks[index].CheckFile(ctx, bucket, parent)
-		}, index)
-	}
-
-	// NOTE: Observe we are not trying to read `xl.meta` and figure out the actual
-	// quorum intentionally, but rely on the default case scenario. Actual quorum
-	// verification will happen by top layer by using getObjectInfo() and will be
-	// ignored if necessary.
-	readQuorum := getReadQuorum(len(storageDisks))
-
-	return reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }

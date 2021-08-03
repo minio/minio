@@ -48,7 +48,6 @@ const (
 	storageMetricRenameFile
 	storageMetricRenameData
 	storageMetricCheckParts
-	storageMetricCheckFile
 	storageMetricDelete
 	storageMetricDeleteVersions
 	storageMetricVerifyFile
@@ -434,22 +433,6 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	}
 
 	return p.storage.CheckParts(ctx, volume, path, fi)
-}
-
-func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, path string) (err error) {
-	defer p.updateStorageMetrics(storageMetricCheckFile, volume, path)()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	if err = p.checkDiskStale(); err != nil {
-		return err
-	}
-
-	return p.storage.CheckFile(ctx, volume, path)
 }
 
 func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {

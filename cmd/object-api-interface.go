@@ -53,10 +53,9 @@ type ObjectOptions struct {
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	Transition                    TransitionOptions
 
-	NoLock         bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest   bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ParentIsObject func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+	NoLock         bool // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest   bool // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet bool // only set for GET/HEAD in active-active replication scenario
 
 	DeletePrefix bool //  set true to enforce a prefix deletion, only application for DeleteObject API,
 

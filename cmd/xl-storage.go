@@ -37,7 +37,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -880,15 +879,15 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch
-		xlMeta.data.remove(versionID, dataDir)
-		filePath := pathJoin(volumeDir, path, dataDir)
-		if err = checkPathLength(filePath); err != nil {
-			return err
-		}
-
-		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
-			if err != errFileNotFound {
+		if !xlMeta.data.remove(versionID, dataDir) {
+			filePath := pathJoin(volumeDir, path, dataDir)
+			if err = checkPathLength(filePath); err != nil {
 				return err
+			}
+			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
+				if err != errFileNotFound {
+					return err
+				}
 			}
 		}
 	}
@@ -901,19 +900,16 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Move everything to trash.
-	filePath := retainSlash(pathJoin(volumeDir, path))
+	// Move xl.meta to trash
+	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
-	err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
 
-	// Delete parents if needed.
-	filePath = retainSlash(pathutil.Dir(pathJoin(volumeDir, path)))
-	if filePath == retainSlash(volumeDir) {
-		return err
+	err = Rename(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+	if err == nil || err == errFileNotFound {
+		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false)
 	}
-	s.deleteFile(volumeDir, filePath, false)
 	return err
 }
 
@@ -1701,65 +1697,6 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 	return nil
 }
 
-// CheckFile check if path has necessary metadata.
-// This function does the following check, suppose
-// you are creating a metadata file at "a/b/c/d/xl.meta",
-// makes sure that there is no `xl.meta` at
-// - "a/b/c/"
-// - "a/b/"
-// - "a/"
-func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) error {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return err
-	}
-	s.RLock()
-	formatLegacy := s.formatLegacy
-	s.RUnlock()
-
-	var checkFile func(p string) error
-	checkFile = func(p string) error {
-		if p == "." || p == SlashSeparator {
-			return errPathNotFound
-		}
-
-		filePath := pathJoin(volumeDir, p, xlStorageFormatFile)
-		if err := checkPathLength(filePath); err != nil {
-			return err
-		}
-		st, _ := Lstat(filePath)
-		if st == nil {
-
-			if !formatLegacy {
-				return errPathNotFound
-			}
-
-			filePathOld := pathJoin(volumeDir, p, xlStorageFormatFileV1)
-			if err := checkPathLength(filePathOld); err != nil {
-				return err
-			}
-
-			st, _ = Lstat(filePathOld)
-			if st == nil {
-				return errPathNotFound
-			}
-		}
-
-		if st != nil {
-			if !st.Mode().IsRegular() {
-				// not a regular file return error.
-				return errFileNotFound
-			}
-			// Success fully found
-			return nil
-		}
-
-		return checkFile(pathutil.Dir(p))
-	}
-
-	return checkFile(path)
-}
-
 // deleteFile deletes a file or a directory if its empty unless recursive
 // is set to true. If the target is successfully deleted, it will recursively
 // move up the tree, deleting empty parent directories until it finds one
@@ -1907,6 +1844,15 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 	dstBuf, err := xioutil.ReadFile(dstFilePath)
 	if err != nil {
+		// handle situations when dstFilePath is 'file'
+		// for example such as someone is trying to
+		// upload an object such as `prefix/object/xl.meta`
+		// where `prefix/object` is already an object
+		if isSysErrNotDir(err) && runtime.GOOS != globalWindowsOSName {
+			// NOTE: On windows the error happens at
+			// next line and returns appropriate error.
+			return errFileAccessDenied
+		}
 		if !osIsNotExist(err) {
 			return osErrToFileErr(err)
 		}
@@ -1919,38 +1865,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			dstBuf, err = xioutil.ReadFile(dstFilePath)
 			if err != nil && !osIsNotExist(err) {
 				return osErrToFileErr(err)
-			}
-		}
-		if err == errFileNotFound {
-			// Verification to ensure that we
-			// don't have objects already created
-			// at this location, verify that resultant
-			// directories don't have any unexpected
-			// directories that we do not understand
-			// or expect. If its already there we should
-			// make sure to reject further renames
-			// for such objects.
-			//
-			// This elaborate check is necessary to avoid
-			// scenarios such as these.
-			//
-			// bucket1/name1/obj1/xl.meta
-			// bucket1/name1/xl.meta --> this should never
-			// be allowed.
-			{
-				entries, err := readDirN(pathutil.Dir(dstFilePath), 1)
-				if err != nil && err != errFileNotFound {
-					return err
-				}
-				if len(entries) > 0 {
-					entry := pathutil.Clean(entries[0])
-					if entry != legacyDataDir {
-						_, uerr := uuid.Parse(entry)
-						if uerr != nil {
-							return errFileParentIsFile
-						}
-					}
-				}
 			}
 		}
 	}

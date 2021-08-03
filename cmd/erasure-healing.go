@@ -783,11 +783,9 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 		var err error
 		var returnNotFound bool
 		if !opts.DryRun && opts.Remove {
-			if versionID == "" {
-				err = er.deleteObject(ctx, bucket, object, writeQuorum)
-			} else {
-				err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{VersionID: versionID}, false)
-			}
+			err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
+				VersionID: versionID,
+			}, false)
 
 			// If Delete was successful, make sure to return the appropriate error
 			// and heal result appropriate with delete's error messages

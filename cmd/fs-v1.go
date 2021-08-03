@@ -1006,26 +1006,6 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	return oi, toObjectErr(err, bucket, object)
 }
 
-// This function does the following check, suppose
-// object is "a/b/c/d", stat makes sure that objects ""a/b/c""
-// "a/b" and "a" do not exist.
-func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	var isParentDirObject func(string) bool
-	isParentDirObject = func(p string) bool {
-		if p == "." || p == SlashSeparator {
-			return false
-		}
-		if fsIsFile(ctx, pathJoin(fs.fsPath, bucket, p)) {
-			// If there is already a file at prefix "p", return true.
-			return true
-		}
-
-		// Check if there is a file as one of the parent paths.
-		return isParentDirObject(path.Dir(p))
-	}
-	return isParentDirObject(parent)
-}
-
 // PutObject - creates an object upon reading from the input stream
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
@@ -1079,10 +1059,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
 	if isObjectDir(object, data.Size()) {
-		// Check if an object is present as one of the parent dir.
-		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
-		}
 		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
 			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -1092,11 +1068,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
-	}
-
-	// Check if an object is present as one of the parent dir.
-	if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
 	// Validate input data size and it can never be less than zero.

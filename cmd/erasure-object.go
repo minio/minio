@@ -660,13 +660,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
-	// Check if an object is present as one of the parent dir.
-	// -- FIXME. (needs a new kind of lock).
-	// -- FIXME (this also causes performance issue when disks are down).
-	if opts.ParentIsObject != nil && opts.ParentIsObject(ctx, bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
-	}
-
 	// Initialize parts metadata
 	partsMetadata := make([]FileInfo, len(storageDisks))
 

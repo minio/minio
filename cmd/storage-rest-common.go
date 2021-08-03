@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v37" // cleanup behavior change at storage layer.
+	storageRESTVersion       = "v38" // Remove CheckFile API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -42,7 +42,6 @@ const (
 	storageRESTMethodReadVersion    = "/readversion"
 	storageRESTMethodRenameData     = "/renamedata"
 	storageRESTMethodCheckParts     = "/checkparts"
-	storageRESTMethodCheckFile      = "/checkfile"
 	storageRESTMethodReadAll        = "/readall"
 	storageRESTMethodReadFile       = "/readfile"
 	storageRESTMethodReadFileStream = "/readfilestream"

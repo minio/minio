@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -57,15 +56,6 @@ func toObjectErr(err error, params ...string) error {
 		return SlowDown{}
 	case errFileAccessDenied.Error():
 		apiErr := PrefixAccessDenied{}
-		if len(params) >= 1 {
-			apiErr.Bucket = params[0]
-		}
-		if len(params) >= 2 {
-			apiErr.Object = decodeDirObject(params[1])
-		}
-		return apiErr
-	case errFileParentIsFile.Error():
-		apiErr := ParentIsObject{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]
 		}
@@ -320,13 +310,6 @@ type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
 	return "Prefix access is denied: " + e.Bucket + SlashSeparator + e.Object
-}
-
-// ParentIsObject object access is denied.
-type ParentIsObject GenericError
-
-func (e ParentIsObject) Error() string {
-	return "Parent is object " + e.Bucket + SlashSeparator + path.Dir(e.Object)
 }
 
 // BucketExists bucket exists.

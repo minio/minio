@@ -218,13 +218,6 @@ func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string
 	return d.disk.CheckParts(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) CheckFile(ctx context.Context, volume string, path string) (err error) {
-	if err := d.calcError(); err != nil {
-		return err
-	}
-	return d.disk.CheckFile(ctx, volume, path)
-}
-
 func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
