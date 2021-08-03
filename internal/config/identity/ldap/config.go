@@ -586,7 +586,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	l.ServerAddr = ldapServer
 	l.stsExpiryDuration = defaultLDAPExpiry
 	if v := env.Get(EnvSTSExpiry, kvs.Get(STSExpiry)); v != "" {
-		logger.Info("DEPRECATION WARNING: Support for configuring the default LDAP credentials expiry duration will be removed in a future release. Please use the `DurationSeconds` parameter in the LDAP STS API instead.")
+		logger.Info("DEPRECATION WARNING: Support for configuring the default LDAP credentials expiry duration will be removed by October 2021. Please use the `DurationSeconds` parameter in the LDAP STS API instead.")
 		expDur, err := time.ParseDuration(v)
 		if err != nil {
 			return l, errors.New("LDAP expiry time err:" + err.Error())
@@ -642,20 +642,23 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	// Username format configuration.
 	if v := env.Get(EnvUsernameFormat, kvs.Get(UsernameFormat)); v != "" {
 		if !strings.Contains(v, "%s") {
-			return l, errors.New("LDAP username format doesn't have '%s' substitution")
+			return l, errors.New("LDAP username format does not support '%s' substitution")
 		}
 		l.UsernameFormats = strings.Split(v, dnDelimiter)
 	}
 
-	// Either lookup bind mode or username format is supported, but not
-	// both.
+	if len(l.UsernameFormats) > 0 {
+		logger.Info("DEPRECATION WARNING: Support for %s will be removed by October 2021, please migrate your LDAP settings to lookup bind mode", UsernameFormat)
+	}
+
+	// Either lookup bind mode or username format is supported, but not both.
 	if l.isUsingLookupBind && len(l.UsernameFormats) > 0 {
 		return l, errors.New("Lookup Bind mode and Username Format mode are not supported at the same time")
 	}
 
 	// At least one of bind mode or username format must be used.
 	if !l.isUsingLookupBind && len(l.UsernameFormats) == 0 {
-		return l, errors.New("Either Lookup Bind mode or Username Format mode is required.")
+		return l, errors.New("Either Lookup Bind mode or Username Format mode is required")
 	}
 
 	// Test connection to LDAP server.
