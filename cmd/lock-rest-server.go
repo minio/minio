@@ -156,7 +156,7 @@ func (l *lockRESTServer) UnlockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = l.ll.Unlock(args)
+	_, err = l.ll.Unlock(context.Background(), args)
 	// Ignore the Unlock() "reply" return value because if err == nil, "reply" is always true
 	// Consequently, if err != nil, reply is always false
 	if err != nil {
@@ -203,7 +203,7 @@ func (l *lockRESTServer) RUnlockHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Ignore the RUnlock() "reply" return value because if err == nil, "reply" is always true.
 	// Consequently, if err != nil, reply is always false
-	if _, err = l.ll.RUnlock(args); err != nil {
+	if _, err = l.ll.RUnlock(context.Background(), args); err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}

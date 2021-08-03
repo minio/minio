@@ -123,13 +123,13 @@ func (client *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (re
 }
 
 // RUnlock calls read unlock REST API.
-func (client *lockRESTClient) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(context.Background(), lockRESTMethodRUnlock, args)
+func (client *lockRESTClient) RUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodRUnlock, args)
 }
 
 // Unlock calls write unlock RPC.
-func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(context.Background(), lockRESTMethodUnlock, args)
+func (client *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodUnlock, args)
 }
 
 // RUnlock calls read unlock REST API.

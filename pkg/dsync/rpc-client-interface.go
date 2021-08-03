@@ -53,12 +53,12 @@ type NetLocker interface {
 	// Do read unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
-	RUnlock(args LockArgs) (bool, error)
+	RUnlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Do write unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of unlock request operation.
-	Unlock(args LockArgs) (bool, error)
+	Unlock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Force unlock a resource
 	ForceUnlock(ctx context.Context, args LockArgs) (bool, error)
