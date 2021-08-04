@@ -45,8 +45,8 @@ func toLockError(err error) error {
 	switch err.Error() {
 	case errLockConflict.Error():
 		return errLockConflict
-	case errLockNotExpired.Error():
-		return errLockNotExpired
+	case errLockNotFound.Error():
+		return errLockNotFound
 	}
 	return err
 }
@@ -105,7 +105,7 @@ func (client *lockRESTClient) restCall(ctx context.Context, call string, args ds
 	switch err {
 	case nil:
 		return true, nil
-	case errLockConflict, errLockNotExpired:
+	case errLockConflict, errLockNotFound:
 		return false, nil
 	default:
 		return false, err
@@ -123,18 +123,18 @@ func (client *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (re
 }
 
 // RUnlock calls read unlock REST API.
-func (client *lockRESTClient) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(context.Background(), lockRESTMethodRUnlock, args)
+func (client *lockRESTClient) RUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodRUnlock, args)
 }
 
 // Unlock calls write unlock RPC.
-func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(context.Background(), lockRESTMethodUnlock, args)
+func (client *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodUnlock, args)
 }
 
-// Expired calls expired handler to check if lock args have expired.
-func (client *lockRESTClient) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
-	return client.restCall(ctx, lockRESTMethodExpired, args)
+// RUnlock calls read unlock REST API.
+func (client *lockRESTClient) Refresh(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodRefresh, args)
 }
 
 // ForceUnlock calls force unlock handler to forcibly unlock an active lock.
