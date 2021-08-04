@@ -482,11 +482,10 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 							Entry:  update,
 						}
 						if intDataUpdateTracker.debug {
-							console.Debugln("bucket", bucket.Name, "got update", update)
+							console.Debugln("z:", er.poolIndex, "s:", er.setIndex, "bucket", name, "got update", update)
 						}
 					}
 				}(cache.Info.Name)
-
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error

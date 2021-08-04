@@ -525,12 +525,22 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				return
 			}
 			if !into.Compacted {
-				into.addChild(dataUsageHash(folder.name))
+				h := dataUsageHash(folder.name)
+				into.addChild(h)
+				// We scanned a folder, optionally send update.
+				f.updateCache.deleteRecursive(h)
+				f.updateCache.copyWithChildren(&f.newCache, h, folder.parent)
+				f.sendUpdate()
 			}
-			// We scanned a folder, optionally send update.
-			f.sendUpdate()
 		}
 
+		// Transfer existing
+		if !into.Compacted {
+			for _, folder := range existingFolders {
+				h := hashPath(folder.name)
+				f.updateCache.copyWithChildren(&f.oldCache, h, folder.parent)
+			}
+		}
 		// Scan new...
 		for _, folder := range newFolders {
 			h := hashPath(folder.name)

@@ -513,7 +513,11 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 
 // StringAll returns a detailed string representation of all entries in the cache.
 func (d *dataUsageCache) StringAll() string {
+	// Remove bloom filter from print.
+	bf := d.Info.BloomFilter
+	d.Info.BloomFilter = nil
 	s := fmt.Sprintf("info:%+v\n", d.Info)
+	d.Info.BloomFilter = bf
 	for k, v := range d.Cache {
 		s += fmt.Sprintf("\t%v: %+v\n", k, v)
 	}
