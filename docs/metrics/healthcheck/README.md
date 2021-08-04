@@ -38,7 +38,7 @@ X-Xss-Protection: 1; mode=block
 Date: Tue, 21 Jul 2020 00:36:14 GMT
 ```
 
-#### Clustr-readable probe
+#### Cluster-readable probe
 This probe is not useful in almost all cases, this is meant for administrators to see if read quorum is available in any given cluster. The reply is '200 OK' if cluster has read quorum if not it returns '503 Service Unavailable'.
 
 ```
