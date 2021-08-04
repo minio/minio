@@ -232,7 +232,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	for range retry.NewTimerWithJitter(retryCtx, 500*time.Millisecond, time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(retryCtx, configLockTimeout); err != nil {
+		lkctx, err := txnLk.GetLock(retryCtx, configLockTimeout)
+		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -249,7 +250,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(ctx, newObject); err == nil {
-				txnLk.Unlock()
+				txnLk.Unlock(lkctx.Cancel)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -259,7 +260,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			}
 		}
 
-		txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		txnLk.Unlock(lkctx.Cancel) // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
 
 		// One of these retriable errors shall be retried.
 		if errors.Is(err, errDiskNotFound) ||

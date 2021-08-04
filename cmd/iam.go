@@ -462,7 +462,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err := txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
+		lkctx, err := txnLk.GetLock(retryCtx, iamLockTimeout)
+		if err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -471,8 +472,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
-				txnLk.Unlock()
+			if err := migrateIAMConfigsEtcdToEncrypted(lkctx.Context(), globalEtcdClient); err != nil {
+				txnLk.Unlock(lkctx.Cancel)
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
 				return
@@ -486,7 +487,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 
 		// Migrate IAM configuration, if necessary.
 		if err := sys.doIAMConfigMigration(ctx); err != nil {
-			txnLk.Unlock()
+			txnLk.Unlock(lkctx.Cancel)
 			if errors.Is(err, errDiskNotFound) ||
 				errors.Is(err, errConfigNotFound) ||
 				errors.Is(err, context.Canceled) ||
@@ -503,7 +504,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		}
 
 		// Successfully migrated, proceed to load the users.
-		txnLk.Unlock()
+		txnLk.Unlock(lkctx.Cancel)
 		break
 	}
 

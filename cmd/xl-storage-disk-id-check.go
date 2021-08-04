@@ -56,6 +56,12 @@ func (p *xlStorageDiskIDCheck) Healing() bool {
 }
 
 func (p *xlStorageDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	select {
+	case <-ctx.Done():
+		return dataUsageCache{}, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err
 	}
@@ -93,6 +99,12 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 }
 
 func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	select {
+	case <-ctx.Done():
+		return DiskInfo{}, ctx.Err()
+	default:
+	}
+
 	info, err = p.storage.DiskInfo(ctx)
 	if err != nil {
 		return info, err
@@ -108,6 +120,12 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 }
 
 func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -115,6 +133,12 @@ func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...strin
 }
 
 func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -122,6 +146,12 @@ func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err 
 }
 
 func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -129,6 +159,12 @@ func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) 
 }
 
 func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
+	select {
+	case <-ctx.Done():
+		return VolInfo{}, ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return vol, err
 	}
@@ -136,6 +172,12 @@ func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol 
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -143,6 +185,12 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 }
 
 func (p *xlStorageDiskIDCheck) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, healing bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -166,6 +214,12 @@ func (p *xlStorageDiskIDCheck) WalkSplunk(ctx context.Context, volume, dirPath, 
 }
 
 func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -174,6 +228,12 @@ func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath stri
 }
 
 func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return 0, err
 	}
@@ -182,6 +242,12 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 }
 
 func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -190,6 +256,12 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 }
 
 func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -198,6 +270,12 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -206,6 +284,12 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 }
 
 func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -214,6 +298,12 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 }
 
 func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -222,6 +312,12 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 }
 
 func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -230,6 +326,12 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 }
 
 func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, path string) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -238,6 +340,12 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 }
 
 func (p *xlStorageDiskIDCheck) DeleteFile(ctx context.Context, volume string, path string) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -257,6 +365,12 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string
 }
 
 func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -265,6 +379,12 @@ func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path stri
 }
 
 func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -273,6 +393,12 @@ func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -281,6 +407,12 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 }
 
 func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -289,6 +421,12 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 }
 
 func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (fi FileInfo, err error) {
+	select {
+	case <-ctx.Done():
+		return fi, ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return fi, err
 	}
@@ -297,6 +435,12 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 }
 
 func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if err = p.checkDiskStale(); err != nil {
 		return nil, err
 	}

@@ -28,11 +28,11 @@ const (
 
 const (
 	lockRESTMethodHealth      = "/health"
+	lockRESTMethodRefresh     = "/refresh"
 	lockRESTMethodLock        = "/lock"
 	lockRESTMethodRLock       = "/rlock"
 	lockRESTMethodUnlock      = "/unlock"
 	lockRESTMethodRUnlock     = "/runlock"
-	lockRESTMethodExpired     = "/expired"
 	lockRESTMethodForceUnlock = "/force-unlock"
 
 	// lockRESTOwner represents owner UUID
@@ -52,6 +52,6 @@ const (
 
 var (
 	errLockConflict       = errors.New("lock conflict")
-	errLockNotExpired     = errors.New("lock not expired")
 	errLockNotInitialized = errors.New("lock not initialized")
+	errLockNotFound       = errors.New("lock not found")
 )
