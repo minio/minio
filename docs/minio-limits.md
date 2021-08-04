@@ -31,7 +31,7 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 | Maximum number of multipart uploads returned per list multipart uploads request | 1000                                          |
 | Maximum length for bucket names                                                 | 63                                            |
 | Maximum length for object names                                                 | 1024                                          |
-| Maximum length for '/' seperated object name segment                            | 255                                           |
+| Maximum length for '/' separated object name segment                            | 255                                           |
 
 ### List of Amazon S3 API's not supported on MinIO
 We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [GitHub issue](https://github.com/minio/minio/issues).

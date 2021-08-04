@@ -20,6 +20,6 @@ event_system.register_first('before-sign.s3.*', _add_header)
 response = s3.list_objects_v2(Bucket="your-bucket", Prefix="path/to/file.zip/")
 print(response)
 
-# Downlaod data.csv stored in the zip file
+# Download data.csv stored in the zip file
 s3.download_file(Bucket='your-bucket', Key='path/to/file.zip/data.csv', Filename='/tmp/data.csv')
 
