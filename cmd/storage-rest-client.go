@@ -250,7 +250,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	if err == io.EOF {
 		err = nil
 	}
-	return cache, err
+	return newCache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
