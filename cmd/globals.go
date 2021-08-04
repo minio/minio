@@ -107,7 +107,7 @@ const (
 	maxBucketSSEConfigSize = 1 * humanize.MiByte
 
 	// diskFillFraction is the fraction of a disk we allow to be filled.
-	diskFillFraction = 0.95
+	diskFillFraction = 0.99
 
 	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
 	diskAssumeUnknownSize = 1 << 30
