@@ -590,13 +590,15 @@ func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, ob
 
 	// Acquire a bulk write lock across 'objects'
 	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
-	if err := multiDeleteLock.GetLock(ctx, globalOperationTimeout); err != nil {
+	lkctx, err := multiDeleteLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
 		for i := range derrs {
 			derrs[i] = err
 		}
 		return nil, derrs
 	}
-	defer multiDeleteLock.Unlock()
+	ctx = lkctx.Context()
+	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
 	for _, zone := range z.serverSets {
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
@@ -1499,10 +1501,12 @@ func (z *erasureServerSets) NewMultipartUpload(ctx context.Context, bucket, obje
 	}
 
 	ns := z.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, "newMultipartObject.lck"))
-	if err := ns.GetLock(ctx, globalOperationTimeout); err != nil {
+	lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return "", err
 	}
-	defer ns.Unlock()
+	ctx = lkctx.Context()
+	defer ns.Unlock(lkctx.Cancel)
 
 	for idx, zone := range z.serverSets {
 		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
@@ -1814,10 +1818,12 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(ctx, globalOperationTimeout); err != nil {
+	lkctx, err := formatLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return madmin.HealResultItem{}, err
 	}
-	defer formatLock.Unlock()
+	ctx = lkctx.Context()
+	defer formatLock.Unlock(lkctx.Cancel)
 
 	var r = madmin.HealResultItem{
 		Type:   madmin.HealItemMetadata,
@@ -2025,17 +2031,21 @@ func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, vers
 	lk := z.NewNSLock(bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
-		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
 			return madmin.HealResultItem{}, err
 		}
-		defer lk.Unlock()
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx.Cancel)
 	} else {
 		// Lock the object before healing. Use read lock since healing
 		// will only regenerate parts & xl.meta of outdated disks.
-		if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
+		lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
 			return madmin.HealResultItem{}, err
 		}
-		defer lk.RUnlock()
+		ctx = lkctx.Context()
+		defer lk.RUnlock(lkctx.Cancel)
 	}
 
 	for _, zone := range z.serverSets {
