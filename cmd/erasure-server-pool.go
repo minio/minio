@@ -1644,7 +1644,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						path = prefix
 					}
 
-					if err := listPathRaw(ctx, listPathRawOptions{
+					lopts := listPathRawOptions{
 						disks:          disks,
 						bucket:         bucket,
 						path:           path,
@@ -1660,7 +1660,9 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 							}
 						},
 						finished: nil,
-					}); err != nil {
+					}
+					if err := listPathRaw(ctx, lopts); err != nil {
+						errCh <- fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts)
 						cancel()
 						return
 					}
