@@ -122,7 +122,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
-	update := r.URL.Query().Get("update") == "true"
+	update := r.Form.Get("update") == "true"
 
 	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -169,7 +169,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	target.SourceBucket = bucket
 	var ops []madmin.TargetUpdateType
 	if update {
-		ops = madmin.GetTargetUpdateOps(r.URL.Query())
+		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
 		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
 	}

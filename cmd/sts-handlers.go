@@ -95,14 +95,14 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
 		authOk := wildcard.MatchSimple(signV4Algorithm+"*", r.Header.Get(xhttp.Authorization))
-		noQueries := len(r.URL.Query()) == 0
+		noQueries := len(r.URL.RawQuery) == 0
 		return ctypeOk && authOk && noQueries
 	}).HandlerFunc(httpTraceAll(sts.AssumeRole))
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
 	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
-		noQueries := len(r.URL.Query()) == 0
+		noQueries := len(r.URL.RawQuery) == 0
 		return ctypeOk && noQueries
 	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithSSO))
 
@@ -155,6 +155,18 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 	return user, true, ErrSTSNone
 }
 
+func parseForm(r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+	for k, v := range r.PostForm {
+		if _, ok := r.Form[k]; !ok {
+			r.Form[k] = v
+		}
+	}
+	return nil
+}
+
 // AssumeRole - implementation of AWS STS API AssumeRole to get temporary
 // credentials for regular users on Minio.
 // https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -167,7 +179,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
+	if err := parseForm(r); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
@@ -275,7 +287,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	ctx := newContext(r, w, "AssumeRoleSSOCommon")
 
 	// Parse the incoming form data.
-	if err := r.ParseForm(); err != nil {
+	if err := parseForm(r); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
@@ -514,7 +526,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	defer logger.AuditLog(ctx, w, r, nil, stsLDAPPassword)
 
 	// Parse the incoming form data.
-	if err := r.ParseForm(); err != nil {
+	if err := parseForm(r); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}

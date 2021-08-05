@@ -332,8 +332,8 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
-	forward := r.URL.Query().Get(storageRESTForwardFilter)
+	prefix := r.Form.Get(storageRESTPrefixFilter)
+	forward := r.Form.Get(storageRESTForwardFilter)
 	writer := streamHTTPResponse(w)
 	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
 		Bucket:         volume,

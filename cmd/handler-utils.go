@@ -112,7 +112,7 @@ var userMetadataKeyPrefixes = []string{
 
 // extractMetadata extracts metadata from HTTP header and HTTP queryString.
 func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
-	query := r.URL.Query()
+	query := r.Form
 	header := r.Header
 	metadata = make(map[string]string)
 	// Extract all query values.

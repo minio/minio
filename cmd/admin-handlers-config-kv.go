@@ -337,7 +337,7 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 	subSys := vars["subSys"]
 	key := vars["key"]
 
-	_, envOnly := r.URL.Query()["env"]
+	_, envOnly := r.Form["env"]
 
 	rd, err := GetHelp(subSys, key, envOnly)
 	if err != nil {

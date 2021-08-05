@@ -293,6 +293,9 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 			req.Header.Set(key, value)
 		}
 
+		// parse form.
+		req.ParseForm()
+
 		// Check if it matches!
 		err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region, serviceS3)
 		if err != testCase.expected {

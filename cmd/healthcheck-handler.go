@@ -42,7 +42,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
-	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
+	opts := HealthOptions{Maintenance: r.Form.Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
 	if result.WriteQuorum > 0 {
 		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))

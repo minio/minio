@@ -45,6 +45,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"sort"
 	"strconv"
@@ -1648,12 +1649,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 			t.Fatal(failTestStr(unknownSignTestStr, "error response failed to parse error XML"))
 		}
 
-		if actualError.BucketName != bucketName {
-			t.Fatal(failTestStr(unknownSignTestStr, "error response bucket name differs from expected value"))
-		}
-
-		if actualError.Key != objectName {
-			t.Fatal(failTestStr(unknownSignTestStr, "error response object name differs from expected value"))
+		if path.Clean(actualError.Resource) != pathJoin(SlashSeparator, bucketName, SlashSeparator, objectName) {
+			t.Fatal(failTestStr(unknownSignTestStr, "error response resource differs from expected value"))
 		}
 	}
 
@@ -2035,13 +2032,15 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
 	// initialize a new mux router.
 	// goriilla/mux is the library used to register all the routes and handle them.
-	muxRouter := mux.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
+		muxRouter.Use(globalHandlers...)
 		return muxRouter
 	}
 	registerAPIRouter(muxRouter)
+	muxRouter.Use(globalHandlers...)
 	return muxRouter
 }
 

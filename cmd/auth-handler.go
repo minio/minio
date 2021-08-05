@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -61,13 +62,13 @@ func isRequestSignatureV2(r *http.Request) bool {
 
 // Verify if request has AWS PreSign Version '4'.
 func isRequestPresignedSignatureV4(r *http.Request) bool {
-	_, ok := r.URL.Query()[xhttp.AmzCredential]
+	_, ok := r.Form[xhttp.AmzCredential]
 	return ok
 }
 
 // Verify request has AWS PreSign Version '2'.
 func isRequestPresignedSignatureV2(r *http.Request) bool {
-	_, ok := r.URL.Query()[xhttp.AmzAccessKeyID]
+	_, ok := r.Form[xhttp.AmzAccessKeyID]
 	return ok
 }
 
@@ -102,6 +103,14 @@ const (
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
+	if r.URL != nil {
+		var err error
+		r.Form, err = url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			logger.LogIf(r.Context(), err)
+			return authTypeUnknown
+		}
+	}
 	if isRequestSignatureV2(r) {
 		return authTypeSignedV2
 	} else if isRequestPresignedSignatureV2(r) {
@@ -116,7 +125,7 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeJWT
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
-	} else if _, ok := r.URL.Query()[xhttp.Action]; ok {
+	} else if _, ok := r.Form[xhttp.Action]; ok {
 		return authTypeSTS
 	} else if _, ok := r.Header[xhttp.Authorization]; !ok {
 		return authTypeAnonymous
@@ -183,7 +192,7 @@ func getSessionToken(r *http.Request) (token string) {
 	if token != "" {
 		return token
 	}
-	return r.URL.Query().Get(xhttp.AmzSecurityToken)
+	return r.Form.Get(xhttp.AmzSecurityToken)
 }
 
 // Fetch claims in the security token returned by the client, doesn't return
@@ -444,7 +453,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 	// Do not verify 'X-Amz-Content-Sha256' if skipSHA256.
 	var contentSHA256 []byte
 	if skipSHA256 := skipContentSha256Cksum(r); !skipSHA256 && isRequestPresignedSignatureV4(r) {
-		if sha256Sum, ok := r.URL.Query()[xhttp.AmzContentSha256]; ok && len(sha256Sum) > 0 {
+		if sha256Sum, ok := r.Form[xhttp.AmzContentSha256]; ok && len(sha256Sum) > 0 {
 			contentSHA256, err = hex.DecodeString(sha256Sum[0])
 			if err != nil {
 				return ErrContentSHA256Mismatch

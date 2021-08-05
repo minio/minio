@@ -458,7 +458,7 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
 	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
-	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
+	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {

@@ -46,7 +46,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 	)
 
 	if isRequestPresignedSignatureV4(r) {
-		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
+		v, ok = r.Form[xhttp.AmzContentSha256]
 		if !ok {
 			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
@@ -82,7 +82,7 @@ func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 		// X-Amz-Content-Sha256, if not set in presigned requests, checksum
 		// will default to 'UNSIGNED-PAYLOAD'.
 		defaultSha256Cksum = unsignedPayload
-		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
+		v, ok = r.Form[xhttp.AmzContentSha256]
 		if !ok {
 			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
@@ -151,7 +151,7 @@ func sumHMAC(key []byte, data []byte) []byte {
 // extractSignedHeaders extract signed headers from Authorization header
 func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header, APIErrorCode) {
 	reqHeaders := r.Header
-	reqQueries := r.URL.Query()
+	reqQueries := r.Form
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
 	if !contains(signedHeaders, "host") {

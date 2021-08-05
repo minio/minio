@@ -851,7 +851,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 
 	var targetAccount string
 
-	user := r.URL.Query().Get("user")
+	user := r.Form.Get("user")
 	if user != "" {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
@@ -997,7 +997,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// Check if we are asked to return prefix usage
-	enablePrefixUsage := r.URL.Query().Get("prefix-usage") == "true"
+	enablePrefixUsage := r.Form.Get("prefix-usage") == "true"
 
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
 		if globalIAMSys.IsAllowed(iampolicy.Args{
