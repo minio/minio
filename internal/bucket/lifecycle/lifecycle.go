@@ -287,12 +287,23 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 		return action
 	}
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if obj.ExpiredObjectDeleteMarker() && rule.Expiration.DeleteMarker.val {
-			// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
-			// Only latest marker is removed. If set to true, the delete marker will be expired;
-			// if set to false the policy takes no action. This cannot be specified with Days or
-			// Date in a Lifecycle Expiration Policy.
-			return DeleteVersionAction
+		if obj.ExpiredObjectDeleteMarker() {
+			if rule.Expiration.DeleteMarker.val {
+				// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
+				// Only latest marker is removed. If set to true, the delete marker will be expired;
+				// if set to false the policy takes no action. This cannot be specified with Days or
+				// Date in a Lifecycle Expiration Policy.
+				return DeleteVersionAction
+			}
+
+			if !rule.Expiration.IsDaysNull() {
+				// Specifying the Days tag will automatically perform ExpiredObjectDeleteMarker cleanup
+				// once delete markers are old enough to satisfy the age criteria.
+				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
+				if time.Now().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
+					return DeleteVersionAction
+				}
+			}
 		}
 
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
@@ -300,17 +311,6 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
-					return DeleteVersionAction
-				}
-			}
-
-			if obj.VersionID != "" && obj.ExpiredObjectDeleteMarker() {
-				// From https: //docs.aws.amazon.com/AmazonS3/latest/dev/lifecycle-configuration-examples.html :
-				//   The NoncurrentVersionExpiration action in the same Lifecycle configuration removes noncurrent objects X days
-				//   after they become noncurrent. Thus, in this example, all object versions are permanently removed X days after
-				//   object creation. You will have expired object delete markers, but Amazon S3 detects and removes the expired
-				//   object delete markers for you.
-				if time.Now().After(ExpectedExpiryTime(obj.ModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
 					return DeleteVersionAction
 				}
 			}
