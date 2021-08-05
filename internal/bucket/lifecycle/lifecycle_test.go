@@ -210,11 +210,12 @@ func TestExpectedExpiryTime(t *testing.T) {
 
 func TestComputeActions(t *testing.T) {
 	testCases := []struct {
-		inputConfig    string
-		objectName     string
-		objectTags     string
-		objectModTime  time.Time
-		expectedAction Action
+		inputConfig        string
+		objectName         string
+		objectTags         string
+		objectModTime      time.Time
+		isExpiredDelMarker bool
+		expectedAction     Action
 	}{
 		// Empty object name (unexpected case) should always return NoneAction
 		{
@@ -355,6 +356,30 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: DeleteAction,
 		},
+		// Should delete expired delete marker right away
+		{
+			inputConfig:        `<BucketLifecycleConfiguration><Rule><Expiration><ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:         "foodir/fooobject",
+			objectModTime:      time.Now().UTC().Add(-1 * time.Hour), // Created one hour ago
+			isExpiredDelMarker: true,
+			expectedAction:     DeleteVersionAction,
+		},
+		// Should not delete expired marker if its time has not come yet
+		{
+			inputConfig:        `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
+			objectName:         "foodir/fooobject",
+			objectModTime:      time.Now().UTC().Add(-12 * time.Hour), // Created 12 hours ago
+			isExpiredDelMarker: true,
+			expectedAction:     NoneAction,
+		},
+		// Should delete expired marker since its time has come
+		{
+			inputConfig:        `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
+			objectName:         "foodir/fooobject",
+			objectModTime:      time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isExpiredDelMarker: true,
+			expectedAction:     DeleteVersionAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -365,10 +390,12 @@ func TestComputeActions(t *testing.T) {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
 			if resultAction := lc.ComputeAction(ObjectOpts{
-				Name:     tc.objectName,
-				UserTags: tc.objectTags,
-				ModTime:  tc.objectModTime,
-				IsLatest: true,
+				Name:         tc.objectName,
+				UserTags:     tc.objectTags,
+				ModTime:      tc.objectModTime,
+				DeleteMarker: tc.isExpiredDelMarker,
+				NumVersions:  1,
+				IsLatest:     true,
 			}); resultAction != tc.expectedAction {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
