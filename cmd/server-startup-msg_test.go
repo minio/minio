@@ -58,7 +58,7 @@ func TestStripStandardPorts(t *testing.T) {
 
 	apiEndpoints = []string{"http://%%%%%:9000"}
 	newAPIEndpoints = stripStandardPorts(apiEndpoints, "")
-	if !reflect.DeepEqual([]string{""}, newAPIEndpoints) {
+	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
 	}
 

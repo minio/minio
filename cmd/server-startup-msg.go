@@ -20,6 +20,7 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"runtime"
 	"strings"
 
@@ -79,38 +80,40 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	}
 }
 
-// Returns true if input is not IPv4, false if it is.
-func isNotIPv4(host string) bool {
+// Returns true if input is IPv6
+func isIPv6(host string) bool {
 	h, _, err := net.SplitHostPort(host)
 	if err != nil {
 		h = host
 	}
 	ip := net.ParseIP(h)
-	ok := ip.To4() != nil // This is always true of IP is IPv4
-
-	// Returns true if input is not IPv4.
-	return !ok
+	return ip.To16() != nil && ip.To4() == nil
 }
 
 // strip api endpoints list with standard ports such as
 // port "80" and "443" before displaying on the startup
 // banner.  Returns a new list of API endpoints.
 func stripStandardPorts(apiEndpoints []string, host string) (newAPIEndpoints []string) {
-	if len(apiEndpoints) == 1 && globalBrowserRedirectURL != nil {
-		if apiEndpoints[0] == globalBrowserRedirectURL.String() {
-			return []string{globalBrowserRedirectURL.String()}
-		}
+	if len(apiEndpoints) == 1 {
+		return apiEndpoints
 	}
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
-		u, err := xnet.ParseHTTPURL(apiEndpoint)
+		_, err := xnet.ParseHTTPURL(apiEndpoint)
 		if err != nil {
 			continue
 		}
-		if host == "" && isNotIPv4(u.Host) {
-			// Skip all non-IPv4 endpoints when we bind to all interfaces.
+		u, err := url.Parse(apiEndpoint)
+		if err != nil {
 			continue
+		}
+		if host == "" && isIPv6(u.Hostname()) {
+			// Skip all IPv6 endpoints
+			continue
+		}
+		if u.Port() == "80" && u.Scheme == "http" || u.Port() == "443" && u.Scheme == "https" {
+			u.Host = u.Hostname()
 		}
 		newAPIEndpoints[i] = u.String()
 	}
