@@ -632,6 +632,9 @@ subject*                          (string)    NATS subscription subject
 username                          (string)    NATS username
 password                          (string)    NATS password
 token                             (string)    NATS token
+jwt                               (string)    NATS jwt token
+nkey_seed                         (string)    NATS nkey seed corresponding to the seed in creds file
+creds                             (string)    NATS path of the user credentials
 tls                               (on|off)    set to 'on' to enable TLS
 tls_skip_verify                   (on|off)    trust server TLS without verification, defaults to "on" (verify)
 ping_interval                     (duration)  client ping commands interval in s,m,h,d. Disabled by default

@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"github.com/nats-io/nkeys"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -40,6 +41,9 @@ const (
 	NATSUsername      = "username"
 	NATSPassword      = "password"
 	NATSToken         = "token"
+	NATSJWT           = "jwt"
+	NATSNkeySeed      = "nkey_seed"
+	NATSCreds         = "creds"
 	NATSTLS           = "tls"
 	NATSTLSSkipVerify = "tls_skip_verify"
 	NATSPingInterval  = "ping_interval"
@@ -61,6 +65,9 @@ const (
 	EnvNATSUsername      = "MINIO_NOTIFY_NATS_USERNAME"
 	EnvNATSPassword      = "MINIO_NOTIFY_NATS_PASSWORD"
 	EnvNATSToken         = "MINIO_NOTIFY_NATS_TOKEN"
+	EnvNATSJWT           = "MINIO_NOTIFY_NATS_JWT"
+	EnvNATSNkeySeed      = "MINIO_NOTIFY_NATS_NKEY_SEED"
+	EnvNATSCreds         = "MINIO_NOTIFY_NATS_CREDS"
 	EnvNATSTLS           = "MINIO_NOTIFY_NATS_TLS"
 	EnvNATSTLSSkipVerify = "MINIO_NOTIFY_NATS_TLS_SKIP_VERIFY"
 	EnvNATSPingInterval  = "MINIO_NOTIFY_NATS_PING_INTERVAL"
@@ -85,6 +92,9 @@ type NATSArgs struct {
 	Username      string    `json:"username"`
 	Password      string    `json:"password"`
 	Token         string    `json:"token"`
+	JWT           string    `json:"jwt"`
+	Creds         string    `json:"creds"`
+	NkeySeed      []byte    `json:"nkeySeed"`
 	TLS           bool      `json:"tls"`
 	TLSSkipVerify bool      `json:"tlsSkipVerify"`
 	Secure        bool      `json:"secure"`
@@ -150,6 +160,18 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 	if n.Token != "" {
 		connOpts = append(connOpts, nats.Token(n.Token))
 	}
+	if n.JWT != "" && n.NkeySeed != nil {
+		userJWT := nats.UserJWTHandler(func() (string, error) {
+			return n.JWT, nil
+		})
+		userSignature := func(nonce []byte) ([]byte, error) {
+			return sigHandler(nonce, n.NkeySeed)
+		}
+		connOpts = append(connOpts, nats.UserJWT(userJWT, userSignature))
+	}
+	if n.Creds != "" {
+		connOpts = append(connOpts, nats.UserCredentials(n.Creds))
+	}
 	if n.Secure || n.TLS && n.TLSSkipVerify {
 		connOpts = append(connOpts, nats.Secure(nil))
 	} else if n.TLS {
@@ -162,6 +184,19 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 		connOpts = append(connOpts, nats.ClientCert(n.ClientCert, n.ClientKey))
 	}
 	return nats.Connect(n.Address.String(), connOpts...)
+}
+
+func sigHandler(nonce []byte, seed []byte) ([]byte, error) {
+	kp, err := nkeys.FromSeed(seed)
+	if err != nil {
+		return nil, err
+	}
+	// Wipe our key on exit.
+	defer kp.Wipe()
+
+	sig, _ := kp.Sign(nonce)
+
+	return sig, nil
 }
 
 // To obtain a streaming connection from args.

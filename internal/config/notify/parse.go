@@ -901,6 +901,18 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.NATSJWT,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSNkeySeed,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSCreds,
+			Value: "",
+		},
+		config.KV{
 			Key:   target.NATSTLS,
 			Value: config.EnableOff,
 		},
@@ -1028,6 +1040,21 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			tokenEnv = tokenEnv + config.Default + k
 		}
 
+		jwtEnv := target.EnvNATSJWT
+		if k != config.Default {
+			jwtEnv = jwtEnv + config.Default + k
+		}
+
+		nkeySeedEnv := target.EnvNATSNkeySeed
+		if k != config.Default {
+			nkeySeedEnv = nkeySeedEnv + config.Default + k
+		}
+
+		credsEnv := target.EnvNATSCreds
+		if k != config.Default {
+			credsEnv = credsEnv + config.Default + k
+		}
+
 		queueDirEnv := target.EnvNATSQueueDir
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
@@ -1054,10 +1081,13 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			Subject:       env.Get(subjectEnv, kv.Get(target.NATSSubject)),
 			Username:      env.Get(usernameEnv, kv.Get(target.NATSUsername)),
 			Password:      env.Get(passwordEnv, kv.Get(target.NATSPassword)),
+			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
+			JWT:           env.Get(jwtEnv, kv.Get(target.NATSJWT)),
+			NkeySeed:      []byte(env.Get(nkeySeedEnv, kv.Get(target.NATSNkeySeed))),
+			Creds:         env.Get(credsEnv, kv.Get(target.NATSCreds)),
 			CertAuthority: env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
 			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
 			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
-			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
 			TLS:           env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
 			TLSSkipVerify: env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
 			PingInterval:  pingInterval,
