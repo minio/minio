@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"github.com/nats-io/nkeys"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	xnet "github.com/minio/pkg/net"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nkeys"
 	"github.com/nats-io/stan.go"
 )
 
