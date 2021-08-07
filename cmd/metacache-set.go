@@ -648,9 +648,8 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 		r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
 		logger.LogIf(ctx, err)
 		custom := b.headerKV()
-		_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
+		_, err = er.putMetacacheObject(ctx, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
 			UserDefined: custom,
-			NoLock:      true, // No need to hold namespace lock, each prefix caches uniquely.
 		})
 		if err != nil {
 			mc.setErr(err.Error())
