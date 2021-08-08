@@ -215,11 +215,6 @@ func initConsoleServer() (*restapi.Server, error) {
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
-		logger.Fatal(errInvalidArgument,
-			"Encryption support is requested but '%s' does not support encryption", name)
-	}
-
 	if strings.HasPrefix(name, "gateway") {
 		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
 			uiErr := config.ErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured")
