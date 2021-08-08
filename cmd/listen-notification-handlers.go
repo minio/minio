@@ -65,7 +65,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	values := r.URL.Query()
+	values := r.Form
 
 	var prefix string
 	if len(values[peerRESTListenPrefix]) > 1 {

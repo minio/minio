@@ -196,7 +196,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	setHeadGetRespHeaders(w, r.URL.Query())
+	setHeadGetRespHeaders(w, r.Form)
 
 	httpWriter := ioutil.WriteOnClose(w)
 
@@ -467,7 +467,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	}
 
 	// Set any additional requested response headers.
-	setHeadGetRespHeaders(w, r.URL.Query())
+	setHeadGetRespHeaders(w, r.Form)
 
 	// Successful response.
 	if rs != nil {

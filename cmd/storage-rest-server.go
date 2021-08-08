@@ -119,7 +119,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	diskID := r.URL.Query().Get(storageRESTDiskID)
+	diskID := r.Form.Get(storageRESTDiskID)
 	if diskID == "" {
 		// Request sent empty disk-id, we allow the request
 		// as the peer might be coming up and trying to read format.json
@@ -282,7 +282,7 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	forceDelete := r.URL.Query().Get(storageRESTForceDelete) == "true"
+	forceDelete := r.Form.Get(storageRESTForceDelete) == "true"
 	err := s.storage.DeleteVol(r.Context(), volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -641,10 +641,8 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	vars := r.URL.Query()
-	volume := vars.Get(storageRESTVolume)
-
-	totalVersions, err := strconv.Atoi(vars.Get(storageRESTTotalVersions))
+	volume := r.Form.Get(storageRESTVolume)
+	totalVersions, err := strconv.Atoi(r.Form.Get(storageRESTTotalVersions))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

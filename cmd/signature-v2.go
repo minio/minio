@@ -183,7 +183,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 }
 
 func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
-	if accessKey := r.URL.Query().Get(xhttp.AmzAccessKeyID); accessKey != "" {
+	if accessKey := r.Form.Get(xhttp.AmzAccessKeyID); accessKey != "" {
 		return checkKeyValid(accessKey)
 	}
 

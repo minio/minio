@@ -77,10 +77,10 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		}
 	}
 
-	vid := r.URL.Query().Get("versionId")
+	vid := r.Form.Get(xhttp.VersionID)
 	if vid == "" {
 		if u, err := url.Parse(r.Header.Get(xhttp.AmzCopySource)); err == nil {
-			vid = u.Query().Get("versionId")
+			vid = u.Query().Get(xhttp.VersionID)
 		}
 	}
 
@@ -143,8 +143,8 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		}
 	}
 
-	var cloneURLValues = url.Values{}
-	for k, v := range r.URL.Query() {
+	cloneURLValues := make(url.Values, len(r.Form))
+	for k, v := range r.Form {
 		cloneURLValues[k] = v
 	}
 

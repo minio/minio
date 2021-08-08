@@ -117,7 +117,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	}
 
 	// Query string.
-	queryStr := req.URL.Query().Encode()
+	queryStr := req.Form.Encode()
 
 	// Get canonical request.
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method)

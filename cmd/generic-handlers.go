@@ -406,7 +406,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			return
 		}
 		// Check for bad components in URL query values.
-		for _, vv := range r.URL.Query() {
+		for _, vv := range r.Form {
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
@@ -432,55 +432,6 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 		if globalDNSConfig == nil || len(globalDomainNames) == 0 || !globalBucketFederation ||
 			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
-			h.ServeHTTP(w, r)
-			return
-		}
-
-		// For browser requests, when federation is setup we need to
-		// specifically handle download and upload for browser requests.
-		if guessIsBrowserReq(r) {
-			var bucket, _ string
-			switch r.Method {
-			case http.MethodPut:
-				if getRequestAuthType(r) == authTypeJWT {
-					bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/upload", r.URL.Path)
-				}
-			case http.MethodGet:
-				if t := r.URL.Query().Get("token"); t != "" {
-					bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/download", r.URL.Path)
-				} else if getRequestAuthType(r) != authTypeJWT && !strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-					bucket, _ = request2BucketObjectName(r)
-				}
-			}
-			if bucket == "" {
-				h.ServeHTTP(w, r)
-				return
-			}
-			sr, err := globalDNSConfig.Get(bucket)
-			if err != nil {
-				if err == dns.ErrNoEntriesFound {
-					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket),
-						r.URL)
-				} else {
-					writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err),
-						r.URL)
-				}
-				return
-			}
-			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
-				r.URL.Scheme = "http"
-				if globalIsTLS {
-					r.URL.Scheme = "https"
-				}
-				r.URL.Host = getHostFromSrv(sr)
-				// Make sure we remove any existing headers before
-				// proxying the request to another node.
-				for k := range w.Header() {
-					w.Header().Del(k)
-				}
-				globalForwarder.ServeHTTP(w, r)
-				return
-			}
 			h.ServeHTTP(w, r)
 			return
 		}

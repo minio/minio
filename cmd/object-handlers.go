@@ -491,7 +491,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		setPartsCountHeaders(w, objInfo)
 	}
 
-	setHeadGetRespHeaders(w, r.URL.Query())
+	setHeadGetRespHeaders(w, r.Form)
 
 	statusCodeWritten := false
 	httpWriter := ioutil.WriteOnClose(w)
@@ -739,7 +739,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	// Set any additional requested response headers.
-	setHeadGetRespHeaders(w, r.URL.Query())
+	setHeadGetRespHeaders(w, r.Form)
 
 	// Successful response.
 	if rs != nil || opts.PartNumber > 0 {
@@ -806,7 +806,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	// to the destination metadata.
 	sc := r.Header.Get(xhttp.AmzStorageClass)
 	if sc == "" {
-		sc = r.URL.Query().Get(xhttp.AmzStorageClass)
+		sc = r.Form.Get(xhttp.AmzStorageClass)
 	}
 
 	// if x-amz-metadata-directive says REPLACE then
@@ -2264,8 +2264,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	uploadID := r.URL.Query().Get(xhttp.UploadID)
-	partIDString := r.URL.Query().Get(xhttp.PartNumber)
+	uploadID := r.Form.Get(xhttp.UploadID)
+	partIDString := r.Form.Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -2591,8 +2591,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	uploadID := r.URL.Query().Get(xhttp.UploadID)
-	partIDString := r.URL.Query().Get(xhttp.PartNumber)
+	uploadID := r.Form.Get(xhttp.UploadID)
+	partIDString := r.Form.Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -2812,7 +2812,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 
-	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
+	uploadID, _, _, _, s3Error := getObjectResources(r.Form)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -2851,7 +2851,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	uploadID, partNumberMarker, maxParts, encodingType, s3Error := getObjectResources(r.URL.Query())
+	uploadID, partNumberMarker, maxParts, encodingType, s3Error := getObjectResources(r.Form)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -2997,7 +2997,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Get upload id.
-	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
+	uploadID, _, _, _, s3Error := getObjectResources(r.Form)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return

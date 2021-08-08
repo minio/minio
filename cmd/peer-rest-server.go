@@ -136,7 +136,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	_, isGroup := r.URL.Query()[peerRESTIsGroup]
+	_, isGroup := r.Form[peerRESTIsGroup]
 	if err := globalIAMSys.LoadPolicyMapping(objAPI, userOrGroup, isGroup); err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -841,7 +841,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	values := r.URL.Query()
+	values := r.Form
 
 	var prefix string
 	if len(values[peerRESTListenPrefix]) > 1 {
@@ -932,15 +932,13 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractTraceOptsFromPeerRequest(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+	opts.S3 = r.Form.Get(peerRESTTraceS3) == "true"
+	opts.OS = r.Form.Get(peerRESTTraceOS) == "true"
+	opts.Storage = r.Form.Get(peerRESTTraceStorage) == "true"
+	opts.Internal = r.Form.Get(peerRESTTraceInternal) == "true"
+	opts.OnlyErrors = r.Form.Get(peerRESTTraceErr) == "true"
 
-	q := r.URL.Query()
-	opts.OnlyErrors = q.Get(peerRESTTraceErr) == "true"
-	opts.Storage = q.Get(peerRESTTraceStorage) == "true"
-	opts.Internal = q.Get(peerRESTTraceInternal) == "true"
-	opts.S3 = q.Get(peerRESTTraceS3) == "true"
-	opts.OS = q.Get(peerRESTTraceOS) == "true"
-
-	if t := q.Get(peerRESTTraceThreshold); t != "" {
+	if t := r.Form.Get(peerRESTTraceThreshold); t != "" {
 		d, err := time.ParseDuration(t)
 		if err != nil {
 			return opts, err
@@ -1078,7 +1076,8 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
 		return
 	}
-	bucketsString := r.URL.Query().Get("buckets")
+
+	bucketsString := r.Form.Get("buckets")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
@@ -1259,9 +1258,9 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sizeStr := r.URL.Query().Get(peerRESTSize)
-	durationStr := r.URL.Query().Get(peerRESTDuration)
-	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+	sizeStr := r.Form.Get(peerRESTSize)
+	durationStr := r.Form.Get(peerRESTDuration)
+	concurrentStr := r.Form.Get(peerRESTConcurrent)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {

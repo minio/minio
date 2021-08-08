@@ -450,7 +450,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	count := 10 // by default list only top 10 entries
-	if countStr := r.URL.Query().Get("count"); countStr != "" {
+	if countStr := r.Form.Get("count"); countStr != "" {
 		var err error
 		count, err = strconv.Atoi(countStr)
 		if err != nil {
@@ -458,7 +458,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	stale := r.URL.Query().Get("stale") == "true" // list also stale locks
+	stale := r.Form.Get("stale") == "true" // list also stale locks
 
 	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
@@ -713,7 +713,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hip, errCode := extractHealInitParams(mux.Vars(r), r.URL.Query(), r.Body)
+	hip, errCode := extractHealInitParams(mux.Vars(r), r.Form, r.Body)
 	if errCode != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
@@ -926,9 +926,9 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sizeStr := r.URL.Query().Get(peerRESTSize)
-	durationStr := r.URL.Query().Get(peerRESTDuration)
-	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+	sizeStr := r.Form.Get(peerRESTSize)
+	durationStr := r.Form.Get(peerRESTDuration)
+	concurrentStr := r.Form.Get(peerRESTConcurrent)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1157,7 +1157,7 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
-	q := r.URL.Query()
+	q := r.Form
 
 	opts.OnlyErrors = q.Get("err") == "true"
 	opts.S3 = q.Get("s3") == "true"
@@ -1259,15 +1259,15 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	if objectAPI == nil {
 		return
 	}
-	node := r.URL.Query().Get("node")
+	node := r.Form.Get("node")
 	// limit buffered console entries if client requested it.
-	limitStr := r.URL.Query().Get("limit")
+	limitStr := r.Form.Get("limit")
 	limitLines, err := strconv.Atoi(limitStr)
 	if err != nil {
 		limitLines = 10
 	}
 
-	logKind := r.URL.Query().Get("logType")
+	logKind := r.Form.Get("logType")
 	if logKind == "" {
 		logKind = string(logger.All)
 	}
@@ -1342,7 +1342,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(r.URL.Query().Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(r.Form.Get("key-id")); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1409,7 +1409,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	keyID := r.URL.Query().Get("key-id")
+	keyID := r.Form.Get("key-id")
 	if keyID == "" {
 		keyID = stat.DefaultKey
 	}
@@ -1576,7 +1576,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	query := r.URL.Query()
+	query := r.Form
 	healthInfo := madmin.HealthInfo{Version: madmin.HealthInfoVersion}
 	healthInfoCh := make(chan madmin.HealthInfo)
 
@@ -1600,7 +1600,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	deadline := 1 * time.Hour
-	if dstr := r.URL.Query().Get("deadline"); dstr != "" {
+	if dstr := r.Form.Get("deadline"); dstr != "" {
 		var err error
 		deadline, err = time.ParseDuration(dstr)
 		if err != nil {
@@ -1975,7 +1975,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	reportCh := make(chan madmin.BucketBandwidthReport)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
-	bucketsRequestedString := r.URL.Query().Get("buckets")
+	bucketsRequestedString := r.Form.Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
 	go func() {
 		defer close(reportCh)
@@ -2233,8 +2233,8 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	volume := r.URL.Query().Get("volume")
-	file := r.URL.Query().Get("file")
+	volume := r.Form.Get("volume")
+	file := r.Form.Get("file")
 	if len(volume) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
 		return

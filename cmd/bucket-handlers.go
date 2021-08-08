@@ -246,7 +246,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode := getBucketMultipartResources(r.URL.Query())
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode := getBucketMultipartResources(r.Form)
 	if errCode != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
@@ -1699,7 +1699,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	durationStr := r.URL.Query().Get("older-than")
+	durationStr := r.Form.Get("older-than")
 	var (
 		days time.Duration
 		err  error

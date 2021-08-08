@@ -92,7 +92,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	urlValues := r.URL.Query()
+	urlValues := r.Form
 
 	// Extract all the listBucketVersions query params to their native values.
 	prefix, marker, delimiter, maxkeys, encodingType, versionIDMarker, errCode := getListBucketObjectVersionsArgs(urlValues)
@@ -153,7 +153,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	urlValues := r.URL.Query()
+	urlValues := r.Form
 
 	// Extract all the listObjectsV2 query params to their native values.
 	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, encodingType, errCode := getListObjectsV2Args(urlValues)
@@ -220,7 +220,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	urlValues := r.URL.Query()
+	urlValues := r.Form
 
 	// Extract all the listObjectsV2 query params to their native values.
 	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, encodingType, errCode := getListObjectsV2Args(urlValues)
@@ -329,7 +329,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	// Extract all the litsObjectsV1 query params to their native values.
-	prefix, marker, delimiter, maxKeys, encodingType, s3Error := getListObjectsV1Args(r.URL.Query())
+	prefix, marker, delimiter, maxKeys, encodingType, s3Error := getListObjectsV1Args(r.Form)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
