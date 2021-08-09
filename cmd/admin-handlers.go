@@ -1567,6 +1567,22 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	getAndWriteSysServices := func() {
+		if query.Get(string(madmin.HealthDataTypeSysServices)) == "true" {
+			localSysServices := madmin.GetSysServices(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localSysServices)
+			healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, localSysServices)
+			partialWrite(healthInfo)
+
+			peerSysServices := globalNotificationSys.GetSysServices(deadlinedCtx)
+			for _, sli := range peerSysServices {
+				anonymizeAddr(&sli)
+				healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, sli)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
 	anonymizeCmdLine := func(cmdLine string) string {
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
@@ -1741,6 +1757,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		getAndWriteDrivePerfInfo()
 		getAndWriteNetPerfInfo()
 		getAndWriteSysErrors()
+		getAndWriteSysServices()
 
 		if query.Get("minioinfo") == "true" {
 			infoMessage := getServerInfo(ctx, r)
