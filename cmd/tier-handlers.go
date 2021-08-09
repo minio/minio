@@ -72,7 +72,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.SetTierAction)
+	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -124,7 +124,7 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	objAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListTierAction)
+	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -150,7 +150,7 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	objAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.SetTierAction)
+	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
