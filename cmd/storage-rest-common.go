@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v38" // Remove CheckFile API
+	storageRESTVersion       = "v39" // Add FileInfo.Fresh field
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
