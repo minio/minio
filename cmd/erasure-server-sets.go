@@ -1008,6 +1008,12 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 				continue
 			}
 
+			// Always deduplicate prefixes
+			if lentry.Name == zoneEntries[i][j].Name && strings.HasSuffix(lentry.Name, slashSeparator) {
+				lexicallySortedEntryCount++
+				continue
+			}
+
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
 			if lentry.Name == zoneEntries[i][j].Name && lentry.ModTime.Equal(zoneEntries[i][j].ModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
@@ -1099,6 +1105,12 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	for i, entriesValid := range zoneEntriesValid {
 		for j, valid := range entriesValid {
 			if !valid {
+				continue
+			}
+
+			// Always deduplicate prefixes
+			if lentry.Name == zoneEntries[i][j].Name && strings.HasSuffix(lentry.Name, slashSeparator) {
+				lexicallySortedEntryCount++
 				continue
 			}
 
