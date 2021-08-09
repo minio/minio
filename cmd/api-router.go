@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
@@ -208,15 +209,10 @@ func registerAPIRouter(router *mux.Router) {
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
-	gz := func(h http.HandlerFunc) http.HandlerFunc {
-		return h
-	}
-
-	wrapper, err := gzhttp.NewWrapper(gzhttp.MinSize(1000), gzhttp.CompressionLevel(gzip.BestSpeed))
-	if err == nil {
-		gz = func(h http.HandlerFunc) http.HandlerFunc {
-			return wrapper(h).(http.HandlerFunc)
-		}
+	gz, err := gzhttp.NewWrapper(gzhttp.MinSize(1000), gzhttp.CompressionLevel(gzip.BestSpeed))
+	if err != nil {
+		// Static params, so this is very unlikely.
+		logger.Fatal(err, "Unable to initialize server")
 	}
 
 	for _, router := range routers {
