@@ -179,6 +179,8 @@ type FileInfo struct {
 
 	NumVersions      int
 	SuccessorModTime time.Time
+
+	Fresh bool // indicates this is a first time call to write FileInfo.
 }
 
 // InlineData returns true if object contents are inlined alongside its metadata.
