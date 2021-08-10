@@ -23,7 +23,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -42,10 +41,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/kes"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -957,156 +953,12 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	w.(http.Flusher).Flush()
 }
 
-func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
-	var cred auth.Credentials
-	var adminAPIErr APIErrorCode
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return nil, cred
-	}
-
-	// Validate request signature.
-	cred, adminAPIErr = checkAdminRequestAuth(ctx, r, action, "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
-		return nil, cred
-	}
-
-	return objectAPI, cred
-}
-
-// AdminError - is a generic error for all admin APIs.
-type AdminError struct {
-	Code       string
-	Message    string
-	StatusCode int
-}
-
-func (ae AdminError) Error() string {
-	return ae.Message
-}
-
 // Admin API errors
 const (
 	AdminUpdateUnexpectedFailure = "XMinioAdminUpdateUnexpectedFailure"
 	AdminUpdateURLNotReachable   = "XMinioAdminUpdateURLNotReachable"
 	AdminUpdateApplyFailure      = "XMinioAdminUpdateApplyFailure"
 )
-
-// toAdminAPIErrCode - converts errErasureWriteQuorum error to admin API
-// specific error.
-func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
-	switch err {
-	case errErasureWriteQuorum:
-		return ErrAdminConfigNoQuorum
-	default:
-		return toAPIErrorCode(ctx, err)
-	}
-}
-
-func toAdminAPIErr(ctx context.Context, err error) APIError {
-	if err == nil {
-		return noError
-	}
-
-	var apiErr APIError
-	switch e := err.(type) {
-	case iampolicy.Error:
-		apiErr = APIError{
-			Code:           "XMinioMalformedIAMPolicy",
-			Description:    e.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}
-	case config.Error:
-		apiErr = APIError{
-			Code:           "XMinioConfigError",
-			Description:    e.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}
-	case AdminError:
-		apiErr = APIError{
-			Code:           e.Code,
-			Description:    e.Message,
-			HTTPStatusCode: e.StatusCode,
-		}
-	default:
-		switch {
-		case errors.Is(err, errConfigNotFound):
-			apiErr = APIError{
-				Code:           "XMinioConfigError",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusNotFound,
-			}
-		case errors.Is(err, errIAMActionNotAllowed):
-			apiErr = APIError{
-				Code:           "XMinioIAMActionNotAllowed",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusForbidden,
-			}
-		case errors.Is(err, errIAMNotInitialized):
-			apiErr = APIError{
-				Code:           "XMinioIAMNotInitialized",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusServiceUnavailable,
-			}
-		case errors.Is(err, kes.ErrKeyExists):
-			apiErr = APIError{
-				Code:           "XMinioKMSKeyExists",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusConflict,
-			}
-
-		// Tier admin API errors
-		case errors.Is(err, madmin.ErrTierNameEmpty):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierNameEmpty",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierInvalidConfig):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInvalidConfig",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierInvalidConfigVersion):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInvalidConfigVersion",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierTypeUnsupported):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierTypeUnsupported",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendInUse):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendInUse",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusConflict,
-			}
-		case errors.Is(err, errTierInsufficientCreds):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientCreds",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errIsTierPermError(err):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientPermissions",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		default:
-			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
-		}
-	}
-	return apiErr
-}
 
 // Returns true if the madmin.TraceInfo should be traced,
 // false if certain conditions are not met.
