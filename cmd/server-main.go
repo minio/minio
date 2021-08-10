@@ -530,7 +530,6 @@ func serverMain(ctx *cli.Context) {
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
 		initHealMRF(GlobalContext, newObject)
-		initBackgroundTransition(GlobalContext, newObject)
 	}
 
 	initBackgroundExpiry(GlobalContext, newObject)
@@ -558,6 +557,7 @@ func serverMain(ctx *cli.Context) {
 
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)
+		initBackgroundTransition(GlobalContext, newObject)
 		globalTierJournal, err = initTierDeletionJournal(GlobalContext)
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")

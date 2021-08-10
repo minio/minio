@@ -92,8 +92,6 @@ func init() {
 		},
 	})
 
-	globalTransitionState = newTransitionState()
-
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))

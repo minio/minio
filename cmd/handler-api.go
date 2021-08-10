@@ -39,6 +39,7 @@ type apiConfig struct {
 	totalDriveCount          int
 	replicationWorkers       int
 	replicationFailedWorkers int
+	transitionWorkers        int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -87,6 +88,10 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationFailedWorkers = cfg.ReplicationFailedWorkers
 	t.replicationWorkers = cfg.ReplicationWorkers
+	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
+		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
+	}
+	t.transitionWorkers = cfg.TransitionWorkers
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -172,4 +177,11 @@ func (t *apiConfig) getReplicationWorkers() int {
 	defer t.mu.RUnlock()
 
 	return t.replicationWorkers
+}
+
+func (t *apiConfig) getTransitionWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.transitionWorkers
 }

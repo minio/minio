@@ -58,5 +58,11 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
+		config.HelpKV{
+			Key:         apiTransitionWorkers,
+			Description: `set the number of transition workers, defaults to 100`,
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )

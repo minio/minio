@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -115,9 +114,14 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 }
 
 type transitionState struct {
-	once sync.Once
-	// add future metrics here
+	once         sync.Once
 	transitionCh chan ObjectInfo
+
+	ctx        context.Context
+	objAPI     ObjectLayer
+	mu         sync.Mutex
+	numWorkers int
+	killCh     chan struct{}
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
@@ -132,50 +136,59 @@ func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
 }
 
 var (
-	globalTransitionState      *transitionState
-	globalTransitionConcurrent = runtime.GOMAXPROCS(0) / 2
+	globalTransitionState *transitionState
 )
 
-func newTransitionState() *transitionState {
-	// fix minimum concurrent transition to 1 for single CPU setup
-	if globalTransitionConcurrent == 0 {
-		globalTransitionConcurrent = 1
-	}
+func newTransitionState(ctx context.Context, objAPI ObjectLayer) *transitionState {
 	return &transitionState{
 		transitionCh: make(chan ObjectInfo, 10000),
+		ctx:          ctx,
+		objAPI:       objAPI,
+		killCh:       make(chan struct{}),
 	}
 }
 
-// addWorker creates a new worker to process tasks
-func (t *transitionState) addWorker(ctx context.Context, objectAPI ObjectLayer) {
-	// Add a new worker.
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+// worker waits for transition tasks
+func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
+	for {
+		select {
+		case <-t.killCh:
+			return
+		case <-ctx.Done():
+			return
+		case oi, ok := <-t.transitionCh:
+			if !ok {
 				return
-			case oi, ok := <-t.transitionCh:
-				if !ok {
-					return
-				}
+			}
 
-				if err := transitionObject(ctx, objectAPI, oi); err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
-				}
+			if err := transitionObject(ctx, objectAPI, oi); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
 			}
 		}
-	}()
+	}
+}
+
+// UpdateWorkers at the end of this function leaves n goroutines waiting for
+// transition tasks
+func (t *transitionState) UpdateWorkers(n int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for t.numWorkers < n {
+		go t.worker(t.ctx, t.objAPI)
+		t.numWorkers++
+	}
+
+	for t.numWorkers > n {
+		go func() { t.killCh <- struct{}{} }()
+		t.numWorkers--
+	}
 }
 
 func initBackgroundTransition(ctx context.Context, objectAPI ObjectLayer) {
-	if globalTransitionState == nil {
-		return
-	}
-
-	// Start with globalTransitionConcurrent.
-	for i := 0; i < globalTransitionConcurrent; i++ {
-		globalTransitionState.addWorker(ctx, objectAPI)
-	}
+	globalTransitionState = newTransitionState(ctx, objectAPI)
+	n := globalAPIConfig.getTransitionWorkers()
+	globalTransitionState.UpdateWorkers(n)
 }
 
 var errInvalidStorageClass = errors.New("invalid storage class")
