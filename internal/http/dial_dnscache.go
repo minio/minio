@@ -78,11 +78,6 @@ func DialContextWithDNSCache(cache *DNSCache, baseDialCtx DialContext) DialConte
 	}
 }
 
-const (
-	// cacheSize is initial size of addr and IP list cache map.
-	cacheSize = 64
-)
-
 // defaultFreq is default frequency a resolver refreshes DNS cache.
 var (
 	defaultFreq          = 3 * time.Second
@@ -91,13 +86,11 @@ var (
 
 // DNSCache is DNS cache resolver which cache DNS resolve results in memory.
 type DNSCache struct {
-	sync.RWMutex
-
-	lookupHostFn  func(ctx context.Context, host string) ([]string, error)
+	resolver      *net.Resolver
 	lookupTimeout time.Duration
 	loggerOnce    func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 
-	cache    map[string][]string
+	cache    sync.Map
 	doneOnce sync.Once
 	doneCh   chan struct{}
 }
@@ -114,11 +107,18 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration, loggerOnce fun
 		lookupTimeout = defaultLookupTimeout
 	}
 
+	// PreferGo controls whether Go's built-in DNS resolver
+	// is preferred on platforms where it's available, since
+	// we do not compile with CGO, FIPS builds are CGO based
+	// enable this to enforce Go resolver.
+	defaultResolver := &net.Resolver{
+		PreferGo: true,
+	}
+
 	r := &DNSCache{
-		lookupHostFn:  net.DefaultResolver.LookupHost,
+		resolver:      defaultResolver,
 		lookupTimeout: lookupTimeout,
 		loggerOnce:    loggerOnce,
-		cache:         make(map[string][]string, cacheSize),
 		doneCh:        make(chan struct{}),
 	}
 
@@ -149,38 +149,32 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration, loggerOnce fun
 // LookupHost lookups address list from DNS server, persist the results
 // in-memory cache. `Fetch` is used to obtain the values for a given host.
 func (r *DNSCache) LookupHost(ctx context.Context, host string) ([]string, error) {
-	addrs, err := r.lookupHostFn(ctx, host)
+	addrs, err := r.resolver.LookupHost(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
-	r.Lock()
-	r.cache[host] = addrs
-	r.Unlock()
-
+	r.cache.Store(host, addrs)
 	return addrs, nil
 }
 
 // Fetch fetches IP list from the cache. If IP list of the given addr is not in the cache,
 // then it lookups from DNS server by `Lookup` function.
 func (r *DNSCache) Fetch(ctx context.Context, host string) ([]string, error) {
-	r.RLock()
-	addrs, ok := r.cache[host]
-	r.RUnlock()
+	addrs, ok := r.cache.Load(host)
 	if ok {
-		return addrs, nil
+		return addrs.([]string), nil
 	}
 	return r.LookupHost(ctx, host)
 }
 
 // Refresh refreshes IP list cache, automatically.
 func (r *DNSCache) Refresh() {
-	r.RLock()
-	hosts := make([]string, 0, len(r.cache))
-	for host := range r.cache {
-		hosts = append(hosts, host)
-	}
-	r.RUnlock()
+	var hosts []string
+	r.cache.Range(func(k, v interface{}) bool {
+		hosts = append(hosts, k.(string))
+		return true
+	})
 
 	for _, host := range hosts {
 		ctx, cancelF := context.WithTimeout(context.Background(), r.lookupTimeout)
