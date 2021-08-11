@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -42,16 +43,12 @@ func testDNSCache(t *testing.T) *DNSCache {
 }
 
 func TestDialContextWithDNSCache(t *testing.T) {
-	resolver := &DNSCache{
-		cache: map[string][]string{
-			"play.min.io": {
-				"127.0.0.1",
-				"127.0.0.2",
-				"127.0.0.3",
-			},
-		},
-	}
-
+	resolver := &DNSCache{}
+	resolver.cache.Store("play.min.io", []string{
+		"127.0.0.1",
+		"127.0.0.2",
+		"127.0.0.3",
+	})
 	cases := []struct {
 		permF func(n int) []int
 		dialF DialContext
@@ -113,15 +110,12 @@ func TestDialContextWithDNSCacheRand(t *testing.T) {
 		rand.Seed(1)
 	}()
 
-	resolver := &DNSCache{
-		cache: map[string][]string{
-			"play.min.io": {
-				"127.0.0.1",
-				"127.0.0.2",
-				"127.0.0.3",
-			},
-		},
-	}
+	resolver := &DNSCache{}
+	resolver.cache.Store("play.min.io", []string{
+		"127.0.0.1",
+		"127.0.0.2",
+		"127.0.0.3",
+	})
 
 	count := make(map[string]int)
 	dialF := func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -153,33 +147,39 @@ func TestDialContextWithDNSCacheScenario1(t *testing.T) {
 
 // Verify if the host lookup function failed to return addresses
 func TestDialContextWithDNSCacheScenario2(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't use Dial to connect
+		// so there is no way this test will work
+		// as expected.
+		t.Skip()
+	}
+
 	res := testDNSCache(t)
-	originalFunc := res.lookupHostFn
+	originalResolver := res.resolver
 	defer func() {
-		res.lookupHostFn = originalFunc
+		res.resolver = originalResolver
 	}()
 
-	res.lookupHostFn = func(ctx context.Context, host string) ([]string, error) {
-		return nil, fmt.Errorf("err")
+	res.resolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return nil, fmt.Errorf("err")
+		},
 	}
 
 	if _, err := DialContextWithDNSCache(res, nil)(context.Background(), "tcp", "min.io:443"); err == nil {
-		t.Fatalf("exect to fail")
+		t.Fatalf("expect to fail")
 	}
 }
 
 // Verify we always return the first error from net.Dial failure
 func TestDialContextWithDNSCacheScenario3(t *testing.T) {
-	resolver := &DNSCache{
-		cache: map[string][]string{
-			"min.io": {
-				"1.1.1.1",
-				"2.2.2.2",
-				"3.3.3.3",
-			},
-		},
-	}
-
+	resolver := &DNSCache{}
+	resolver.cache.Store("min.io", []string{
+		"1.1.1.1",
+		"2.2.2.2",
+		"3.3.3.3",
+	})
 	origFunc := randPerm
 	randPerm = func(n int) []int {
 		return []int{0, 1, 2}
