@@ -1173,7 +1173,7 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 			return
 		}
 		// if replication status is Complete on DeleteMarker and existing object resync required
-		if existingObjResync && oi.ReplicationStatus == replication.Completed {
+		if existingObjResync && (oi.ReplicationStatus == replication.Completed) {
 			i.healReplicationDeletes(ctx, o, oi, existingObjResync)
 			return
 		}
