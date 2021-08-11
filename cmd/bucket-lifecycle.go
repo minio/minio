@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,6 +84,11 @@ type expiryState struct {
 	expiryCh chan expiryTask
 }
 
+// PendingTasks returns the number of pending ILM expiry tasks.
+func (es *expiryState) PendingTasks() int {
+	return len(es.expiryCh)
+}
+
 func (es *expiryState) queueExpiryTask(oi ObjectInfo, rmVersion bool) {
 	select {
 	case <-GlobalContext.Done():
@@ -122,6 +128,8 @@ type transitionState struct {
 	mu         sync.Mutex
 	numWorkers int
 	killCh     chan struct{}
+
+	activeTasks int32
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
@@ -148,6 +156,17 @@ func newTransitionState(ctx context.Context, objAPI ObjectLayer) *transitionStat
 	}
 }
 
+// PendingTasks returns the number of ILM transition tasks waiting for a worker
+// goroutine.
+func (t *transitionState) PendingTasks() int {
+	return len(globalTransitionState.transitionCh)
+}
+
+// ActiveTasks returns the number of active (ongoing) ILM transition tasks.
+func (t *transitionState) ActiveTasks() int {
+	return int(atomic.LoadInt32(&t.activeTasks))
+}
+
 // worker waits for transition tasks
 func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 	for {
@@ -160,10 +179,11 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 			if !ok {
 				return
 			}
-
+			atomic.AddInt32(&t.activeTasks, 1)
 			if err := transitionObject(ctx, objectAPI, oi); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
 			}
+			atomic.AddInt32(&t.activeTasks, -1)
 		}
 	}
 }
