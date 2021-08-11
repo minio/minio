@@ -234,6 +234,7 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrOperationMaxedOut
+	ErrClientDisconnected
 	ErrInvalidRequest
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
@@ -1216,6 +1217,11 @@ var errorCodes = errorCodeMap{
 		Description:    "A timeout occurred while trying to lock a resource, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrClientDisconnected: {
+		Code:           "ClientDisconnected",
+		Description:    "Client disconnected before response was ready",
+		HTTPStatusCode: 499, // No official code, use nginx value.
+	},
 	ErrOperationMaxedOut: {
 		Code:           "SlowDown",
 		Description:    "A timeout exceeded while waiting to proceed with the request, please reduce your request rate",
@@ -1740,6 +1746,16 @@ var errorCodes = errorCodeMap{
 func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
+	}
+
+	// Only return ErrClientDisconnected if the provided context is actually canceled.
+	// This way downstream context.Canceled will still report ErrOperationTimedOut
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			return ErrClientDisconnected
+		}
+	default:
 	}
 
 	switch err {
