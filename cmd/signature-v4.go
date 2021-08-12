@@ -181,7 +181,8 @@ func doesPolicySignatureV4Match(formValues http.Header) (auth.Credentials, APIEr
 		return auth.Credentials{}, s3Err
 	}
 
-	cred, _, s3Err := checkKeyValid(credHeader.accessKey)
+	r := &http.Request{Header: formValues}
+	cred, _, s3Err := checkKeyValid(r, credHeader.accessKey)
 	if s3Err != ErrNone {
 		return cred, s3Err
 	}
@@ -214,7 +215,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return err
 	}
 
-	cred, _, s3Err := checkKeyValid(pSignValues.Credential.accessKey)
+	cred, _, s3Err := checkKeyValid(r, pSignValues.Credential.accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -349,7 +350,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, st
 		return errCode
 	}
 
-	cred, _, s3Err := checkKeyValid(signV4Values.Credential.accessKey)
+	cred, _, s3Err := checkKeyValid(r, signV4Values.Credential.accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}

@@ -175,7 +175,7 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 // For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
 // governance bypass headers are set and user has governance bypass permissions.
 // Objects in compliance mode can be overwritten only if retention date is being extended. No mode change is permitted.
-func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, objRetention *objectlock.ObjectRetention, cred auth.Credentials, owner bool, claims map[string]interface{}) (ObjectInfo, APIErrorCode) {
+func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, objRetention *objectlock.ObjectRetention, cred auth.Credentials, owner bool) (ObjectInfo, APIErrorCode) {
 	byPassSet := objectlock.IsObjectLockGovernanceBypassSet(r.Header)
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
@@ -203,7 +203,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 			perm := isPutRetentionAllowed(bucket, object,
 				days, objRetention.RetainUntilDate.Time,
 				objRetention.Mode, byPassSet, r, cred,
-				owner, claims)
+				owner)
 			return oi, perm
 		}
 
@@ -211,7 +211,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 		case objectlock.RetGovernance:
 			govPerm := isPutRetentionAllowed(bucket, object, days,
 				objRetention.RetainUntilDate.Time, objRetention.Mode,
-				byPassSet, r, cred, owner, claims)
+				byPassSet, r, cred, owner)
 			// Governance mode retention period cannot be shortened, if x-amz-bypass-governance is not set.
 			if !byPassSet {
 				if objRetention.Mode != objectlock.RetGovernance || objRetention.RetainUntilDate.Before((ret.RetainUntilDate.Time)) {
@@ -227,7 +227,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 			}
 			compliancePerm := isPutRetentionAllowed(bucket, object,
 				days, objRetention.RetainUntilDate.Time, objRetention.Mode,
-				false, r, cred, owner, claims)
+				false, r, cred, owner)
 			return oi, compliancePerm
 		}
 		return oi, ErrNone
@@ -235,7 +235,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 
 	perm := isPutRetentionAllowed(bucket, object,
 		days, objRetention.RetainUntilDate.Time,
-		objRetention.Mode, byPassSet, r, cred, owner, claims)
+		objRetention.Mode, byPassSet, r, cred, owner)
 	return oi, perm
 }
 

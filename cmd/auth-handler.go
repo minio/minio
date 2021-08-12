@@ -155,12 +155,7 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		return cred, nil, owner, s3Err
 	}
 
-	claims, s3Err := checkClaimsFromToken(r, cred)
-	if s3Err != ErrNone {
-		return cred, nil, owner, s3Err
-	}
-
-	return cred, claims, owner, ErrNone
+	return cred, cred.Claims, owner, ErrNone
 }
 
 // checkAdminRequestAuth checks for authentication and authorization for the incoming
@@ -318,12 +313,6 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 		return cred, owner, s3Err
 	}
 
-	var claims map[string]interface{}
-	claims, s3Err = checkClaimsFromToken(r, cred)
-	if s3Err != ErrNone {
-		return cred, owner, s3Err
-	}
-
 	// LocationConstraint is valid only for CreateBucketAction.
 	var locationConstraint string
 	if action == policy.CreateBucketAction {
@@ -388,10 +377,10 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 		Groups:          cred.Groups,
 		Action:          iampolicy.Action(action),
 		BucketName:      bucketName,
-		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 		ObjectName:      objectName,
 		IsOwner:         owner,
-		Claims:          claims,
+		Claims:          cred.Claims,
 	}) {
 		// Request is allowed return the appropriate access key.
 		return cred, owner, ErrNone
@@ -405,10 +394,10 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketName,
-			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 			ObjectName:      objectName,
 			IsOwner:         owner,
-			Claims:          claims,
+			Claims:          cred.Claims,
 		}) {
 			// Request is allowed return the appropriate access key.
 			return cred, owner, ErrNone
@@ -520,75 +509,39 @@ func setAuthHandler(h http.Handler) http.Handler {
 	})
 }
 
-func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, map[string]interface{}, APIErrorCode) {
+func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	var s3Err APIErrorCode
 	switch atype {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return cred, owner, nil, ErrSignatureVersionNotSupported
+		return cred, owner, ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return cred, owner, nil, s3Err
+			return cred, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypePresigned, authTypeSigned:
 		region := globalServerRegion
 		if s3Err = isReqAuthenticated(GlobalContext, r, region, serviceS3); s3Err != ErrNone {
-			return cred, owner, nil, s3Err
+			return cred, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
-		return cred, owner, nil, s3Err
+		return cred, owner, s3Err
 	}
 
-	claims, s3Err := checkClaimsFromToken(r, cred)
-	if s3Err != ErrNone {
-		return cred, owner, nil, s3Err
-	}
-
-	return cred, owner, claims, ErrNone
+	return cred, owner, ErrNone
 }
 
-func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate time.Time, retMode objectlock.RetMode, byPassSet bool, r *http.Request, cred auth.Credentials, owner bool, claims map[string]interface{}) (s3Err APIErrorCode) {
+func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate time.Time, retMode objectlock.RetMode, byPassSet bool, r *http.Request, cred auth.Credentials, owner bool) (s3Err APIErrorCode) {
 	var retSet bool
 	if cred.AccessKey == "" {
-		conditions := getConditionValues(r, "", "", nil)
-		conditions["object-lock-mode"] = []string{string(retMode)}
-		conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
-		if retDays > 0 {
-			conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
-		}
-		if retMode == objectlock.RetGovernance && byPassSet {
-			byPassSet = globalPolicySys.IsAllowed(policy.Args{
-				AccountName:     cred.AccessKey,
-				Groups:          cred.Groups,
-				Action:          policy.BypassGovernanceRetentionAction,
-				BucketName:      bucketName,
-				ConditionValues: conditions,
-				IsOwner:         false,
-				ObjectName:      objectName,
-			})
-		}
-		if globalPolicySys.IsAllowed(policy.Args{
-			AccountName:     cred.AccessKey,
-			Groups:          cred.Groups,
-			Action:          policy.PutObjectRetentionAction,
-			BucketName:      bucketName,
-			ConditionValues: conditions,
-			IsOwner:         false,
-			ObjectName:      objectName,
-		}) {
-			retSet = true
-		}
-		if byPassSet || retSet {
-			return ErrNone
-		}
 		return ErrAccessDenied
 	}
 
-	conditions := getConditionValues(r, "", cred.AccessKey, claims)
+	conditions := getConditionValues(r, "", cred.AccessKey, cred.Claims)
 	conditions["object-lock-mode"] = []string{string(retMode)}
 	conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
 	if retDays > 0 {
@@ -603,7 +556,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 			ObjectName:      objectName,
 			ConditionValues: conditions,
 			IsOwner:         owner,
-			Claims:          claims,
+			Claims:          cred.Claims,
 		})
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
@@ -614,7 +567,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		ConditionValues: conditions,
 		ObjectName:      objectName,
 		IsOwner:         owner,
-		Claims:          claims,
+		Claims:          cred.Claims,
 	}) {
 		retSet = true
 	}
@@ -639,11 +592,6 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		region := globalServerRegion
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
-	if s3Err != ErrNone {
-		return s3Err
-	}
-
-	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -681,10 +629,10 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		Groups:          cred.Groups,
 		Action:          action,
 		BucketName:      bucketName,
-		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 		ObjectName:      objectName,
 		IsOwner:         owner,
-		Claims:          claims,
+		Claims:          cred.Claims,
 	}) {
 		return ErrNone
 	}
