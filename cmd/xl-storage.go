@@ -1110,12 +1110,50 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
-			if len(fi.Data) > 0 {
-				if !fi.InlineData() {
-					fi.SetInlineData()
+			if fi.InlineData() {
+				// If written with header we are fine.
+				return fi, nil
+			}
+			if fi.Size == 0 || !(fi.VersionID != "" && fi.VersionID != nullVersionID) {
+				// If versioned we have no conflicts.
+				fi.SetInlineData()
+				return fi, nil
+			}
+
+			// For overwritten objects without header we might have a conflict with
+			// data written later.
+			// Check the data path if there is a part with data.
+			// Then rewrite the metadata, so we don't have to check in the future.
+			var xl xlMetaV2
+			err := xl.Load(buf)
+
+			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
+			dataPath := pathJoin(volumeDir, path, fi.DataDir, partPath)
+			_, err = s.StatInfoFile(ctx, volume, dataPath)
+			if err == nil {
+				// Data exists on disk, remove the version from metadata
+				xl.data.remove(fi.VersionID)
+				fi.Data = nil
+			} else {
+				// Set the inline header, our inlined data is fine.
+				fi.SetInlineData()
+				if err := xl.UpdateObjectVersion(fi); err != nil {
+					// We have valid inline data, but can't update for some reason.
+					// Skip the write and return data.
+					logger.LogIf(ctx, err)
+					return fi, nil
 				}
 			}
-			return fi, nil
+
+			// Re-write metadata file.
+			buf, err = xl.AppendTo(nil)
+			logger.LogIf(ctx, err)
+			if err == nil {
+				logger.LogIf(ctx, s.writeAll(context.Background(), volume, pathJoin(path, xlStorageFormatFile), buf, false))
+			}
+			if len(fi.Data) > 0 {
+				return fi, nil
+			}
 		}
 
 		// Reading data for small objects when

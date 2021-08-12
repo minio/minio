@@ -252,7 +252,7 @@ type xlMetaV2 struct {
 //msgp:ignore xlMetaInlineData
 type xlMetaInlineData []byte
 
-// xlMetaInlineDataVer indicates the vesrion of the inline data structure.
+// xlMetaInlineDataVer indicates the version of the inline data structure.
 const xlMetaInlineDataVer = 1
 
 // versionOK returns whether the version is ok.
