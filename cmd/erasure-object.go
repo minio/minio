@@ -860,7 +860,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 	}()
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
+	shardFileSize := erasure.ShardFileSize(data.ActualSize())
 	writers := make([]io.Writer, len(onlineDisks))
 	var inlineBuffers []*bytes.Buffer
 	if shardFileSize >= 0 {
