@@ -1074,7 +1074,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	} else {
 		buf, err = s.readMetadata(pathJoin(volumeDir, path, xlStorageFormatFile))
 		if err != nil {
-			if os.IsNotExist(err) {
+			if osIsNotExist(err) {
 				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
 					return fi, errVolumeNotFound
 				}
