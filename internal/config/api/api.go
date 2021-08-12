@@ -20,6 +20,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ const (
 	apiListQuorum               = "list_quorum"
 	apiReplicationWorkers       = "replication_workers"
 	apiReplicationFailedWorkers = "replication_failed_workers"
+	apiTransitionWorkers        = "transition_workers"
 
 	EnvAPIRequestsMax              = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline         = "MINIO_API_REQUESTS_DEADLINE"
@@ -48,6 +50,7 @@ const (
 	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
+	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
 )
 
 // Deprecated key and ENVs
@@ -91,6 +94,10 @@ var (
 			Key:   apiReplicationFailedWorkers,
 			Value: "8",
 		},
+		config.KV{
+			Key:   apiTransitionWorkers,
+			Value: "100",
+		},
 	}
 )
 
@@ -104,6 +111,7 @@ type Config struct {
 	ListQuorum               string        `json:"list_quorum"`
 	ReplicationWorkers       int           `json:"replication_workers"`
 	ReplicationFailedWorkers int           `json:"replication_failed_workers"`
+	TransitionWorkers        int           `json:"transition_workers"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -195,6 +203,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication failed workers should be 1")
 	}
 
+	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.Get(apiTransitionWorkers)))
+	if err != nil {
+		return cfg, err
+	}
+	if transitionWorkers < runtime.GOMAXPROCS(0)/2 {
+		return cfg, config.ErrInvalidTransitionWorkersValue(nil)
+	}
+
 	return Config{
 		RequestsMax:              requestsMax,
 		RequestsDeadline:         requestsDeadline,
@@ -204,5 +220,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		ListQuorum:               listQuorum,
 		ReplicationWorkers:       replicationWorkers,
 		ReplicationFailedWorkers: replicationFailedWorkers,
+		TransitionWorkers:        transitionWorkers,
 	}, nil
 }
