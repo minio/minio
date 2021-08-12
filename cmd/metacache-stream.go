@@ -56,10 +56,11 @@ const metacacheStreamVersion = 2
 
 // metacacheWriter provides a serializer of metacache objects.
 type metacacheWriter struct {
-	mw        *msgp.Writer
-	creator   func() error
-	closer    func() error
-	blockSize int
+	mw          *msgp.Writer
+	creator     func() error
+	closer      func() error
+	blockSize   int
+	reuseBlocks bool
 
 	streamErr error
 	streamWg  sync.WaitGroup
@@ -140,6 +141,9 @@ func (w *metacacheWriter) write(objs ...metaCacheEntry) error {
 		err = w.mw.WriteBytes(o.metadata)
 		if err != nil {
 			return err
+		}
+		if w.reuseBlocks && cap(o.metadata) >= metaDataReadDefault {
+			metaDataPool.Put(o.metadata)
 		}
 	}
 
