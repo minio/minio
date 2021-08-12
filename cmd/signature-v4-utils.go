@@ -130,13 +130,11 @@ func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 	var owner = true
 	var cred = globalActiveCred
 	if cred.AccessKey != accessKey {
-		// Check if the access key is part of users credentials.
-		ucred, ok := globalIAMSys.GetUser(accessKey)
-		if !ok {
+		var ok bool
+		if cred, ok = globalIAMSys.GetUser(accessKey); !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		owner = cred.AccessKey == ucred.ParentUser
-		cred = ucred
+		owner = false
 	}
 	return cred, owner, ErrNone
 }
