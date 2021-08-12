@@ -25,6 +25,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -1430,20 +1431,26 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	return FileInfo{}, errFileVersionNotFound
 }
 
+// Read at most this much on initial read.
+const metaDataReadDefault = 4 << 10
+
+// Return used metadata byte slices here.
+var metaDataPool = sync.Pool{New: func() interface{} { return make([]byte, 0, metaDataReadDefault) }}
+
 // readXLMetaNoData will load the metadata, but skip data segments.
 // This should only be used when data is never interesting.
 // If data is not xlv2, it is returned in full.
 func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
-	// Read at most this much on initial read.
-	const readDefault = 4 << 10
 	initial := size
 	hasFull := true
-	if initial > readDefault {
-		initial = readDefault
+	if initial > metaDataReadDefault {
+		initial = metaDataReadDefault
 		hasFull = false
 	}
 
-	buf := make([]byte, initial)
+	buf := metaDataPool.Get().([]byte)
+	buf = buf[:initial]
+
 	_, err := io.ReadFull(r, buf)
 	if err != nil {
 		return nil, fmt.Errorf("readXLMetaNoData.ReadFull: %w", err)
