@@ -1126,30 +1126,38 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			// Then rewrite the metadata, so we don't have to check in the future.
 			var xl xlMetaV2
 			err := xl.Load(buf)
+			logger.LogIf(ctx, err)
+			ok := err == nil // very unlikely, since we already decoded, but just in case
 
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(volumeDir, path, fi.DataDir, partPath)
 			_, err = s.StatInfoFile(ctx, volume, dataPath)
 			if err == nil {
 				// Data exists on disk, remove the version from metadata
-				xl.data.remove(fi.VersionID)
+				if ok {
+					xl.data.remove(fi.VersionID)
+				}
 				fi.Data = nil
 			} else {
 				// Set the inline header, our inlined data is fine.
 				fi.SetInlineData()
-				if err := xl.UpdateObjectVersion(fi); err != nil {
-					// We have valid inline data, but can't update for some reason.
-					// Skip the write and return data.
-					logger.LogIf(ctx, err)
-					return fi, nil
+				if ok {
+					if err := xl.UpdateObjectVersion(fi); err != nil {
+						// We have valid inline data, but can't update for some reason.
+						// Skip the write and return data.
+						logger.LogIf(ctx, err)
+						return fi, nil
+					}
 				}
 			}
 
 			// Re-write metadata file.
-			buf, err = xl.AppendTo(nil)
-			logger.LogIf(ctx, err)
-			if err == nil {
-				logger.LogIf(ctx, s.writeAll(context.Background(), volume, pathJoin(path, xlStorageFormatFile), buf, false))
+			if ok {
+				buf, err = xl.AppendTo(nil)
+				logger.LogIf(ctx, err)
+				if err == nil {
+					logger.LogIf(ctx, s.writeAll(context.Background(), volume, pathJoin(path, xlStorageFormatFile), buf, false))
+				}
 			}
 			if len(fi.Data) > 0 {
 				return fi, nil
