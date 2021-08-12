@@ -197,13 +197,11 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	locker := objAPI.NewNSLock(minioMetaBucket, "runDataCrawler.lock")
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		lkctx, err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
+		err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
 		if err != nil {
 			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue
 		}
-		ctx = lkctx.Context()
-		defer lkctx.Cancel()
 		break
 		// No unlock for "leader" lock.
 	}

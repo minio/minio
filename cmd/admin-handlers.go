@@ -1495,12 +1495,11 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "obd-in-progress")
-	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
-	if err != nil { // returns a locked lock
+	if err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}
-	defer nsLock.Unlock(lkctx.Cancel)
+	defer nsLock.Unlock()
 
 	go func() {
 		defer close(obdInfoCh)
