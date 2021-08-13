@@ -248,6 +248,8 @@ type IAMStorageAPI interface {
 	rlock()
 	runlock()
 
+	setUsersSysType(UsersSysType)
+
 	migrateBackendFormat(context.Context) error
 
 	loadPolicyDoc(ctx context.Context, policy string, m map[string]iampolicy.Policy) error
@@ -2057,6 +2059,8 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	defer sys.store.unlock()
 
 	if sys.usersSysType == LDAPUsersSysType {
+		// DNs are case-insensitive in the case of LDAP.
+		name = strings.ToLower(name)
 		return sys.policyDBSet(name, policy, stsUser, isGroup)
 	}
 
@@ -2166,6 +2170,12 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]s
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
 func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, err error) {
+	if sys.usersSysType == LDAPUsersSysType {
+		// For LDAP we lower case, to make the comparison
+		// case-insensitive.
+		name = strings.ToLower(name)
+	}
+
 	if isGroup {
 		if sys.usersSysType == MinIOUsersSysType {
 			g, ok := sys.iamGroupsMap[name]
@@ -2634,6 +2644,7 @@ func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
 // EnableLDAPSys - enable ldap system users type.
 func (sys *IAMSys) EnableLDAPSys() {
 	sys.usersSysType = LDAPUsersSysType
+	sys.store.setUsersSysType(LDAPUsersSysType)
 }
 
 // NewIAMSys - creates new config system object.

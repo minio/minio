@@ -62,6 +62,8 @@ func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
 type IAMEtcdStore struct {
 	sync.RWMutex
 
+	usersSysType UsersSysType
+
 	client *etcd.Client
 }
 
@@ -83,6 +85,10 @@ func (ies *IAMEtcdStore) rlock() {
 
 func (ies *IAMEtcdStore) runlock() {
 	ies.RUnlock()
+}
+
+func (ies *IAMEtcdStore) setUsersSysType(u UsersSysType) {
+	ies.usersSysType = u
 }
 
 func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, itemPath string, opts ...options) error {
@@ -406,20 +412,12 @@ func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, user
 		}
 		return err
 	}
-	m[name] = p
-	return nil
-}
-
-func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, basePrefix string) error {
-	var p MappedPolicy
-	err := getIAMConfig(&p, kv.Value, string(kv.Key))
-	if err != nil {
-		if err == errConfigNotFound {
-			return errNoSuchPolicy
-		}
-		return err
+	// To implement LDAP case-insensitivity (and to avoid data migration -
+	// see comments in `loadMappedPolicies`), we lower-case the key name in
+	// the map `m`.
+	if ies.usersSysType == LDAPUsersSysType {
+		name = strings.ToLower(name)
 	}
-	name := extractPathPrefixAndSuffix(string(kv.Key), basePrefix, ".json")
 	m[name] = p
 	return nil
 }
@@ -440,19 +438,81 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 			basePrefix = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	// Retrieve all keys and values to avoid too many calls to etcd in case of
-	// a large number of policy mappings
-	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
-	if err != nil {
-		return err
-	}
 
-	// Parse all policies mapping to create the proper data model
-	for _, kv := range r.Kvs {
-		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, basePrefix); err != nil && err != errNoSuchPolicy {
+	// In the case of LDAP we need two passes as elaborated in
+	// iam-object-store.go:loadMappedPolicies.
+
+	getMappedPolicy := func(kv *mvccpb.KeyValue, isFirstPass bool) error {
+		var p MappedPolicy
+		err := getIAMConfig(&p, kv.Value, string(kv.Key))
+		if err != nil {
+			if err == errConfigNotFound {
+				return errNoSuchPolicy
+			}
 			return err
 		}
+		name := extractPathPrefixAndSuffix(string(kv.Key), basePrefix, ".json")
+
+		if ies.usersSysType == LDAPUsersSysType {
+			isLowerCased := false
+			if name == strings.ToLower(name) {
+				isLowerCased = true
+			}
+
+			// In the first pass skip lower-cased keys.
+			if isFirstPass && isLowerCased {
+				return nil
+			}
+
+			// In the second pass skip non-lower-cased keys.
+			if !isFirstPass && !isLowerCased {
+				return nil
+			}
+		}
+
+		// To implement LDAP case-insensitivity (and to avoid data migration -
+		// see comments in `loadMappedPolicies`), we lower-case the key name in
+		// the map `m`.
+		if ies.usersSysType == LDAPUsersSysType {
+			name = strings.ToLower(name)
+		}
+
+		m[name] = p
+		return nil
 	}
+
+	// First Pass.
+	{
+		// Retrieve all keys and values to avoid too many calls to etcd in case of
+		// a large number of policy mappings
+		r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
+		if err != nil {
+			return err
+		}
+		// Parse all policies mapping to create the proper data model
+		for _, kv := range r.Kvs {
+			if err = getMappedPolicy(kv, true); err != nil && err != errNoSuchPolicy {
+				return err
+			}
+		}
+	}
+
+	// Second pass - runs only for LDAP.
+	if ies.usersSysType == LDAPUsersSysType {
+		// Retrieve all keys and values to avoid too many calls to etcd in case of
+		// a large number of policy mappings
+		r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
+		if err != nil {
+			return err
+		}
+		// Parse all policies mapping to create the proper data model
+		for _, kv := range r.Kvs {
+			if err = getMappedPolicy(kv, false); err != nil && err != errNoSuchPolicy {
+				return err
+			}
+		}
+	}
+
 	return nil
 
 }

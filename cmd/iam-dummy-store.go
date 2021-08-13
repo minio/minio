@@ -45,6 +45,9 @@ func (ids *iamDummyStore) runlock() {
 	ids.RUnlock()
 }
 
+func (ids *iamDummyStore) setUsersSysType(u UsersSysType) {
+}
+
 func (ids *iamDummyStore) migrateBackendFormat(context.Context) error {
 	return nil
 }

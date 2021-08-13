@@ -38,11 +38,13 @@ type IAMObjectStore struct {
 	// Protect assignment to objAPI
 	sync.RWMutex
 
+	usersSysType UsersSysType
+
 	objAPI ObjectLayer
 }
 
 func newIAMObjectStore(objAPI ObjectLayer) *IAMObjectStore {
-	return &IAMObjectStore{objAPI: objAPI}
+	return &IAMObjectStore{objAPI: objAPI, usersSysType: MinIOUsersSysType}
 }
 
 func (iamOS *IAMObjectStore) lock() {
@@ -59,6 +61,10 @@ func (iamOS *IAMObjectStore) rlock() {
 
 func (iamOS *IAMObjectStore) runlock() {
 	iamOS.RUnlock()
+}
+
+func (iamOS *IAMObjectStore) setUsersSysType(u UsersSysType) {
+	iamOS.usersSysType = u
 }
 
 // Migrate users directory in a single scan.
@@ -338,6 +344,12 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, 
 		}
 		return err
 	}
+	// To implement LDAP case-insensitivity (and to avoid data migration -
+	// see comments in `loadMappedPolicies`), we lower-case the key name in
+	// the map `m`.
+	if iamOS.usersSysType == LDAPUsersSysType {
+		name = strings.ToLower(name)
+	}
 	m[name] = p
 	return nil
 }
@@ -356,6 +368,30 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
+
+	// For LDAP, userDNs and groupDNs should be considered
+	// case-insensitively - this has not been the case previously. Since we
+	// would like to avoid a migration of existing data, the mapped policy
+	// handling is as follows:
+	//
+	// 1. All new policy mappings will be written to disk using lower-case
+	// file names. The file names are the userDN or groupDN.
+	//
+	// 2. The policy mapping Go map's keys will be lower-cased.
+	//
+	// 3. Mapped policies are loaded in two passes: in the first pass, we
+	// load each mapped policy whose `userOrGroupName` below is NOT in
+	// lower-case, and in the second pass load those which are in lower
+	// case.
+	//
+	// This way, older policy mappings not written to disk in lowercase will
+	// still work. If an older policy mapping has been updated, a
+	// lower-cased policy mapping will present on disk, so they will replace
+	// the older key in the second pass. CAVEAT: older mapping files with
+	// non-lower-cased filenames will continue to exist even though the
+	// mappings have been updated.
+
+	// First Pass.
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
 		if item.Err != nil {
 			return item.Err
@@ -363,8 +399,33 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
+		if iamOS.usersSysType == LDAPUsersSysType {
+			// Filter out lower-cased names - see comments above.
+			if userOrGroupName == strings.ToLower(userOrGroupName) {
+				continue
+			}
+		}
 		if err := iamOS.loadMappedPolicy(ctx, userOrGroupName, userType, isGroup, m); err != nil && err != errNoSuchPolicy {
 			return err
+		}
+	}
+
+	// Second Pass - runs only for LDAP.
+	if iamOS.usersSysType == LDAPUsersSysType {
+		for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
+			if item.Err != nil {
+				return item.Err
+			}
+
+			policyFile := item.Item
+			userOrGroupName := strings.TrimSuffix(policyFile, ".json")
+			// Filter out non-lower-cased names.
+			if userOrGroupName != strings.ToLower(userOrGroupName) {
+				continue
+			}
+			if err := iamOS.loadMappedPolicy(ctx, userOrGroupName, userType, isGroup, m); err != nil && err != errNoSuchPolicy {
+				return err
+			}
 		}
 	}
 	return nil
