@@ -37,6 +37,9 @@ type metaCacheEntry struct {
 
 	// cached contains the metadata if decoded.
 	cached *FileInfo
+
+	// Indicates the entry can be reused and only one reference to metadata is expected.
+	reusable bool
 }
 
 // isDir returns if the entry is representing a prefix directory.
@@ -345,6 +348,8 @@ type metaCacheEntriesSorted struct {
 	o metaCacheEntries
 	// list id is not serialized
 	listID string
+	// Reuse buffers
+	reuse bool
 }
 
 // shallowClone will create a shallow clone of the array objects,
@@ -490,6 +495,15 @@ func (m *metaCacheEntriesSorted) forwardTo(s string) {
 	idx := sort.Search(len(m.o), func(i int) bool {
 		return m.o[i].name >= s
 	})
+	if m.reuse {
+		for i, entry := range m.o[:idx] {
+			if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
+				metaDataPool.Put(entry.metadata)
+			}
+			m.o[i].metadata = nil
+		}
+	}
+
 	m.o = m.o[idx:]
 }
 
@@ -501,6 +515,14 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 	idx := sort.Search(len(m.o), func(i int) bool {
 		return m.o[i].name > s
 	})
+	if m.reuse {
+		for i, entry := range m.o[:idx] {
+			if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
+				metaDataPool.Put(entry.metadata)
+			}
+			m.o[i].metadata = nil
+		}
+	}
 	m.o = m.o[idx:]
 }
 
@@ -715,6 +737,14 @@ func (m *metaCacheEntriesSorted) truncate(n int) {
 		return
 	}
 	if len(m.o) > n {
+		if m.reuse {
+			for i, entry := range m.o[n:] {
+				if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
+					metaDataPool.Put(entry.metadata)
+				}
+				m.o[n+i].metadata = nil
+			}
+		}
 		m.o = m.o[:n]
 	}
 }
