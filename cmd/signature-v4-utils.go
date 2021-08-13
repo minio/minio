@@ -136,7 +136,7 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		claims, s3Err := checkClaimsFromToken(r, cred)
+		claims, s3Err := checkClaimsFromToken(r, ucred)
 		if s3Err != ErrNone {
 			return cred, false, s3Err
 		}
