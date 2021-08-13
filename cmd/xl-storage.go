@@ -1130,12 +1130,29 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
-			if len(fi.Data) > 0 {
-				if !fi.InlineData() {
-					fi.SetInlineData()
-				}
+			if fi.InlineData() {
+				// If written with header we are fine.
+				return fi, nil
 			}
-			return fi, nil
+			if fi.Size == 0 || !(fi.VersionID != "" && fi.VersionID != nullVersionID) {
+				// If versioned we have no conflicts.
+				fi.SetInlineData()
+				return fi, nil
+			}
+
+			// For overwritten objects without header we might have a conflict with
+			// data written later.
+			// Check the data path if there is a part with data.
+			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
+			dataPath := pathJoin(path, fi.DataDir, partPath)
+			_, err = s.StatInfoFile(ctx, volume, dataPath)
+			if err != nil {
+				// Set the inline header, our inlined data is fine.
+				fi.SetInlineData()
+				return fi, nil
+			}
+			// Data exists on disk, remove the version from metadata.
+			fi.Data = nil
 		}
 
 		// Reading data for small objects when

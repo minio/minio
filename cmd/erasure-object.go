@@ -256,26 +256,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 		return toObjectErr(err, bucket, object)
 	}
 
-	// This hack is needed to avoid a bug found when overwriting
-	// the inline data object with a un-inlined version, for the
-	// time being we need this as we have released inline-data
-	// version already and this bug is already present in newer
-	// releases.
-	//
-	// This mainly happens with objects < smallFileThreshold when
-	// they are overwritten with un-inlined objects >= smallFileThreshold,
-	// due to a bug in RenameData() the fi.Data is not niled leading to
-	// GetObject thinking that fi.Data is valid while fi.Size has
-	// changed already.
-	if fi.InlineData() {
-		shardFileSize := erasure.ShardFileSize(fi.Size)
-		if shardFileSize >= 0 && shardFileSize >= smallFileThreshold {
-			for i := range metaArr {
-				metaArr[i].Data = nil
-			}
-		}
-	}
-
 	var healOnce sync.Once
 
 	// once we have obtained a common FileInfo i.e latest, we should stick
