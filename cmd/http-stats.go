@@ -38,12 +38,12 @@ type ConnStats struct {
 }
 
 // Increase total input bytes
-func (s *ConnStats) incInputBytes(n int) {
+func (s *ConnStats) incInputBytes(n int64) {
 	atomic.AddUint64(&s.totalInputBytes, uint64(n))
 }
 
 // Increase total output bytes
-func (s *ConnStats) incOutputBytes(n int) {
+func (s *ConnStats) incOutputBytes(n int64) {
 	atomic.AddUint64(&s.totalOutputBytes, uint64(n))
 }
 
@@ -58,12 +58,12 @@ func (s *ConnStats) getTotalOutputBytes() uint64 {
 }
 
 // Increase outbound input bytes
-func (s *ConnStats) incS3InputBytes(n int) {
+func (s *ConnStats) incS3InputBytes(n int64) {
 	atomic.AddUint64(&s.s3InputBytes, uint64(n))
 }
 
 // Increase outbound output bytes
-func (s *ConnStats) incS3OutputBytes(n int) {
+func (s *ConnStats) incS3OutputBytes(n int64) {
 	atomic.AddUint64(&s.s3OutputBytes, uint64(n))
 }
 
