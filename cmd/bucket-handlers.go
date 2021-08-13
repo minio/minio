@@ -622,14 +622,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	}
 
-	// Clean up transitioned objects from remote tier
-	for _, os := range oss {
-		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
-			continue
-		}
-		logger.LogIf(ctx, os.Sweep())
-	}
-
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
@@ -653,6 +645,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
 		})
+	}
+
+	// Clean up transitioned objects from remote tier
+	for _, os := range oss {
+		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
+			continue
+		}
+		logger.LogIf(ctx, os.Sweep())
 	}
 }
 
