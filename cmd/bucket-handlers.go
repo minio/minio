@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -345,9 +344,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// Set delimiter value for "s3:delimiter" policy conditionals.
 		r.Header.Set("delimiter", SlashSeparator)
 
-		// err will be nil here as we already called this function
-		// earlier in this request.
-		claims, _ := getClaimsFromToken(getSessionToken(r))
 		n := 0
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
@@ -357,10 +353,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 				IsOwner:         owner,
 				ObjectName:      "",
-				Claims:          claims,
+				Claims:          cred.Claims,
 			}) {
 				bucketsInfo[n] = bucketInfo
 				n++
@@ -622,14 +618,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	}
 
-	// Clean up transitioned objects from remote tier
-	for _, os := range oss {
-		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
-			continue
-		}
-		logger.LogIf(ctx, os.Sweep())
-	}
-
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
@@ -653,6 +641,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
 		})
+	}
+
+	// Clean up transitioned objects from remote tier
+	for _, os := range oss {
+		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
+			continue
+		}
+		logger.LogIf(ctx, os.Sweep())
 	}
 }
 
@@ -899,41 +895,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Once signature is validated, check if the user has
 	// explicit permissions for the user.
-	{
-		token := formValues.Get(xhttp.AmzSecurityToken)
-		if token != "" && cred.AccessKey == "" {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoAccessKey), r.URL)
-			return
-		}
-
-		if cred.IsServiceAccount() && token == "" {
-			token = cred.SessionToken
-		}
-
-		if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidToken), r.URL)
-			return
-		}
-
-		// Extract claims if any.
-		claims, err := getClaimsFromToken(token)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     cred.AccessKey,
-			Action:          iampolicy.PutObjectAction,
-			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
-			BucketName:      bucket,
-			ObjectName:      object,
-			IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
-			Claims:          claims,
-		}) {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          iampolicy.PutObjectAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+		BucketName:      bucket,
+		ObjectName:      object,
+		IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
+		Claims:          cred.Claims,
+	}) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
 	}
 
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues.Get("Policy"))

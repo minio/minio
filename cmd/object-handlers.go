@@ -1395,8 +1395,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Remove the transitioned object whose object version is being overwritten.
-		logger.LogIf(ctx, os.Sweep())
+		defer logger.LogIf(ctx, os.Sweep())
 	}
+
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
@@ -1684,11 +1685,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
 
-	oc := newObjSweeper(bucket, object)
+	os := newObjSweeper(bucket, object)
 	// Get appropriate object info to identify the remote object to delete
-	goiOpts := oc.GetOpts()
+	goiOpts := os.GetOpts()
 	if goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts); gerr == nil {
-		oc.SetTransitionState(goi)
+		os.SetTransitionState(goi)
 	}
 
 	// Create the object..
@@ -1735,9 +1736,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
-	// Remove the transitioned object whose object version is being overwritten.
-	logger.LogIf(ctx, oc.Sweep())
-
 	setPutObjHeaders(w, objInfo, false)
 
 	writeSuccessResponseHeadersOnly(w)
@@ -1752,6 +1750,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+
+	// Remove the transitioned object whose object version is being overwritten.
+	logger.LogIf(ctx, os.Sweep())
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -3118,9 +3119,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
 
-	// Remove the transitioned object whose object version is being overwritten.
-	logger.LogIf(ctx, os.Sweep())
-
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
@@ -3134,6 +3132,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+
+	// Remove the transitioned object whose object version is being overwritten.
+	logger.LogIf(ctx, os.Sweep())
 }
 
 /// Delete objectAPIHandlers
@@ -3502,7 +3503,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	cred, owner, claims, s3Err := validateSignature(getRequestAuthType(r), r)
+	cred, owner, s3Err := validateSignature(getRequestAuthType(r), r)
 	if s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
@@ -3542,7 +3543,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	objInfo, s3Err := enforceRetentionBypassForPut(ctx, r, bucket, object, getObjectInfo, objRetention, cred, owner, claims)
+	objInfo, s3Err := enforceRetentionBypassForPut(ctx, r, bucket, object, getObjectInfo, objRetention, cred, owner)
 	if s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return

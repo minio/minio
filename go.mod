@@ -41,11 +41,11 @@ require (
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.8.3
+	github.com/minio/console v0.9.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.0.20
+	github.com/minio/madmin-go v1.0.21-0.20210812051916-2b99aca7520a
 	github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.11

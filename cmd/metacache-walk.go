@@ -76,6 +76,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 	// Use a small block size to start sending quickly
 	w := newMetacacheWriter(wr, 16<<10)
+	w.reuseBlocks = true // We are not sharing results, so reuse buffers.
 	defer w.Close()
 	out, err := w.stream()
 	if err != nil {

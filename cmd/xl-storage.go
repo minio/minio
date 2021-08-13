@@ -1068,8 +1068,21 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if err != nil {
 		return fi, err
 	}
+	var buf []byte
+	if readData {
+		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
+	} else {
+		buf, err = s.readMetadata(pathJoin(volumeDir, path, xlStorageFormatFile))
+		if err != nil {
+			if osIsNotExist(err) {
+				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+					return fi, errVolumeNotFound
+				}
+			}
+			err = osErrToFileErr(err)
+		}
+	}
 
-	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
 			if err = s.renameLegacyMetadata(volumeDir, path); err != nil {
@@ -1106,6 +1119,13 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	fi, err = getFileInfo(buf, volume, path, versionID, readData)
 	if err != nil {
 		return fi, err
+	}
+
+	if len(fi.Data) == 0 && cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
+		// We did not read inline data, so we have no references.
+		defer func(b []byte) {
+			metaDataPool.Put(buf)
+		}(buf)
 	}
 
 	if readData {
