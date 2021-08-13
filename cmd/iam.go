@@ -1606,7 +1606,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	}
 	sys.store.unlock()
 
-	expiredUsers, err := globalLDAPConfig.GetNonExistentUserDistNames(parentUsers)
+	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(parentUsers)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
