@@ -190,7 +190,10 @@ func (fi FileInfo) InlineData() bool {
 }
 
 // SetInlineData marks object (version) as inline.
-func (fi FileInfo) SetInlineData() {
+func (fi *FileInfo) SetInlineData() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string, 1)
+	}
 	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
 }
 

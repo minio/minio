@@ -1146,14 +1146,13 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(path, fi.DataDir, partPath)
 			_, err = s.StatInfoFile(ctx, volume, dataPath)
-			if err == nil {
-				// Data exists on disk, remove the version from metadata.
-				fi.Data = nil
-			} else {
+			if err != nil {
 				// Set the inline header, our inlined data is fine.
 				fi.SetInlineData()
 				return fi, nil
 			}
+			// Data exists on disk, remove the version from metadata.
+			fi.Data = nil
 		}
 
 		// Reading data for small objects when
