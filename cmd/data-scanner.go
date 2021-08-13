@@ -913,7 +913,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 			SuccessorModTime:       meta.oi.SuccessorModTime,
 			RestoreOngoing:         meta.oi.RestoreOngoing,
 			RestoreExpires:         meta.oi.RestoreExpires,
-			TransitionStatus:       meta.oi.TransitionStatus,
+			TransitionStatus:       meta.oi.TransitionedObject.Status,
 			RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 		})
 	if i.debug {
@@ -976,7 +976,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 // applyTierObjSweep removes remote object pending deletion and the free-version
 // tracking this information.
 func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta actionMeta) {
-	if !meta.oi.tierFreeVersion {
+	if !meta.oi.TransitionedObject.FreeVersion {
 		// nothing to be done
 		return
 	}
@@ -989,7 +989,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta
 		return err
 	}
 	// Remove the remote object
-	err := deleteObjectFromRemoteTier(ctx, meta.oi.transitionedObjName, meta.oi.transitionVersionID, meta.oi.TransitionTier)
+	err := deleteObjectFromRemoteTier(ctx, meta.oi.TransitionedObject.Name, meta.oi.TransitionedObject.VersionID, meta.oi.TransitionedObject.Tier)
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
 		return
@@ -1065,7 +1065,7 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 
 func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
 	srcOpts := ObjectOptions{}
-	if obj.TransitionStatus == "" {
+	if obj.TransitionedObject.Status == "" {
 		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
 		srcOpts.VersionID = obj.VersionID
 		// mark transition as pending
@@ -1137,7 +1137,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 // Apply object, object version, restored object or restored object version action on the given object
 func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
-	if obj.TransitionStatus != "" {
+	if obj.TransitionedObject.Status != "" {
 		return applyExpiryOnTransitionedObject(ctx, objLayer, obj, restoredObject)
 	}
 	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj, applyOnVersion)

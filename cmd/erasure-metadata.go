@@ -162,11 +162,13 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		objInfo.ReplicationStatus = replication.StatusType(fi.DeleteMarkerReplicationStatus)
 	}
 
-	objInfo.TransitionStatus = fi.TransitionStatus
-	objInfo.transitionedObjName = fi.TransitionedObjName
-	objInfo.transitionVersionID = fi.TransitionVersionID
-	objInfo.tierFreeVersion = fi.TierFreeVersion()
-	objInfo.TransitionTier = fi.TransitionTier
+	objInfo.TransitionedObject = TransitionedObject{
+		Name:        fi.TransitionedObjName,
+		VersionID:   fi.TransitionVersionID,
+		Status:      fi.TransitionStatus,
+		FreeVersion: fi.TierFreeVersion(),
+		Tier:        fi.TransitionTier,
+	}
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
