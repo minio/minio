@@ -56,6 +56,11 @@ verify-healing:
 	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 
+verify-consistency:
+	@echo "Verify healing build with race"
+	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/verify-consistency.sh)
+
 # Builds minio locally.
 build: checks
 	@echo "Building minio binary to './minio'"
