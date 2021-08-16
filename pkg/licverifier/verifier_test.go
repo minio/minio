@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 // at fixes the jwt.TimeFunc at t and calls f in that context.

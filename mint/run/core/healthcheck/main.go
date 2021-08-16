@@ -28,7 +28,7 @@ import (
 	"os"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/golang-jwt/jwt"
 	log "github.com/sirupsen/logrus"
 )
 

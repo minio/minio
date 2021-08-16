@@ -18,8 +18,8 @@ package jwt
 
 // This file is a re-implementation of the original code here with some
 // additional allocation tweaks reproduced using GODEBUG=allocfreetrace=1
-// original file https://github.com/dgrijalva/jwt-go/blob/master/parser.go
-// borrowed under MIT License https://github.com/dgrijalva/jwt-go/blob/master/LICENSE
+// original file https://github.com/golang-jwt/jwt/blob/master/parser.go
+// borrowed under MIT License https://github.com/golang-jwt/jwt/blob/master/LICENSE
 
 import (
 	"crypto"
@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/golang-jwt/jwt"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -108,7 +108,7 @@ func (c *StandardClaims) SetAccessKey(accessKey string) {
 	c.AccessKey = accessKey
 }
 
-// Valid - implements https://godoc.org/github.com/dgrijalva/jwt-go#Claims compatible
+// Valid - implements https://godoc.org/github.com/golang-jwt/jwt#Claims compatible
 // claims interface, additionally validates "accessKey" fields.
 func (c *StandardClaims) Valid() error {
 	if err := c.StandardClaims.Valid(); err != nil {
@@ -153,7 +153,7 @@ func (c *MapClaims) SetAccessKey(accessKey string) {
 	c.MapClaims["accessKey"] = accessKey
 }
 
-// Valid - implements https://godoc.org/github.com/dgrijalva/jwt-go#Claims compatible
+// Valid - implements https://godoc.org/github.com/golang-jwt/jwt#Claims compatible
 // claims interface, additionally validates "accessKey" fields.
 func (c *MapClaims) Valid() error {
 	if err := c.MapClaims.Valid(); err != nil {

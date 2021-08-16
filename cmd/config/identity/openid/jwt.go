@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
+	jwtgo "github.com/golang-jwt/jwt"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
