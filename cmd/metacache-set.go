@@ -131,18 +131,29 @@ func (o *listPathOptions) debugln(data ...interface{}) {
 
 // gatherResults will collect all results on the input channel and filter results according to the options.
 // Caller should close the channel when done.
-// The returned function will return the results once there is enough or input is closed.
-func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCacheEntriesSorted, error) {
+// The returned function will return the results once there is enough or input is closed,
+// or the context is canceled.
+func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCacheEntry) func() (metaCacheEntriesSorted, error) {
 	var resultsDone = make(chan metaCacheEntriesSorted)
 	// Copy so we can mutate
 	resCh := resultsDone
+	var done bool
+	var mu sync.Mutex
 	resErr := io.EOF
 
 	go func() {
 		var results metaCacheEntriesSorted
+		var returned bool
 		for entry := range in {
-			if resCh == nil {
+			if returned {
 				// past limit
+				continue
+			}
+			mu.Lock()
+			returned = done
+			mu.Unlock()
+			if returned {
+				resCh = nil
 				continue
 			}
 			if !o.IncludeDirectories && entry.isDir() {
@@ -167,6 +178,7 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 					resErr = nil
 					resCh <- results
 					resCh = nil
+					returned = true
 				}
 				continue
 			}
@@ -178,7 +190,15 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 		}
 	}()
 	return func() (metaCacheEntriesSorted, error) {
-		return <-resultsDone, resErr
+		select {
+		case <-ctx.Done():
+			mu.Lock()
+			done = true
+			mu.Unlock()
+			return metaCacheEntriesSorted{}, ctx.Err()
+		case r := <-resultsDone:
+			return r, resErr
+		}
 	}
 }
 

@@ -199,8 +199,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	// Create filter for results.
 	o.debugln("Raw List", o)
 	filterCh := make(chan metaCacheEntry, o.Limit)
-	filteredResults := o.gatherResults(filterCh)
 	listCtx, cancelList := context.WithCancel(ctx)
+	filteredResults := o.gatherResults(listCtx, filterCh)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var listErr error
@@ -343,7 +343,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	inCh := make(chan metaCacheEntry, metacacheBlockSize)
 	outCh := make(chan metaCacheEntry, o.Limit)
 
-	filteredResults := o.gatherResults(outCh)
+	filteredResults := o.gatherResults(ctx, outCh)
 
 	mc := o.newMetacache()
 	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: *o}
