@@ -1,4 +1,4 @@
-FROM alpine:3.12
+FROM alpine:3.12.7
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 

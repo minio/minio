@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	jwtreq "github.com/dgrijalva/jwt-go/request"
+	jwtreq "github.com/golang-jwt/jwt/request"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"

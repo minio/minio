@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 // LicenseVerifier needs an ECDSA public key in PEM format for initialization.

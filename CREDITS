@@ -2884,8 +2884,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ================================================================
 
-github.com/dgrijalva/jwt-go
-https://github.com/dgrijalva/jwt-go
+github.com/golang-jwt/jwt
+https://github.com/golang-jwt/jwt
 ----------------------------------------------------------------
 Copyright (c) 2012 Dave Grijalva
 
