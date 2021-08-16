@@ -884,6 +884,16 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 	return newMeta
 }
 
+// compressOpts are the options for writing compressed data.
+var compressOpts []s2.WriterOption
+
+func init() {
+	if runtime.GOARCH == "amd64" {
+		// On amd64 we have assembly and can use stronger compression.
+		compressOpts = append(compressOpts, s2.WriterBetterCompression())
+	}
+}
+
 // newS2CompressReader will read data from r, compress it and return the compressed data as a Reader.
 // Use Close to ensure resources are released on incomplete streams.
 //
@@ -894,7 +904,7 @@ func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 	pr, pw := io.Pipe()
 	// Copy input to compressor
 	go func() {
-		comp := s2.NewWriter(pw)
+		comp := s2.NewWriter(pw, compressOpts...)
 		cn, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
