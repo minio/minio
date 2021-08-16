@@ -186,9 +186,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 			ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 			defer cancel()
-			if c, err := rpc.GetMetacacheListing(ctx, *o); err == nil {
+			c, err := rpc.GetMetacacheListing(ctx, *o)
+			if err == nil {
 				c.error = "no longer used"
 				c.status = scanStateError
+				rpc.UpdateMetacacheListing(ctx, *c)
 			}
 		}()
 		o.ID = ""
