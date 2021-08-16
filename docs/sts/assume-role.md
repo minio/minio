@@ -81,7 +81,7 @@ $ minio server ~/test
 
 Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
 
-Testing with an example
+### Testing an example with awscli tool
 > Use the same username and password created in the previous steps.
 
 ```
@@ -106,6 +106,20 @@ $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --po
         "AccessKeyId": "K9DTIMUVZXEXJL3ATUOY"
     }
 }
+```
+
+### Testing an example with `assume-role.go`
+
+The included program in this directory can also be used for testing:
+
+
+``` shell
+$ go run assume-role.go -u foobar -p foo12345 -d
+Only displaying credentials:
+AccessKeyID: 27YDRYEM0S9B44AJJX9X
+SecretAccessKey: LHPdHeaLiYk+pDZ3hgN3sdwXpJC2qbhBfZ8ii9Z3
+SessionToken: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiIyN1lEUllFTTBTOUI0NEFKSlg5WCIsImV4cCI6MzYwMDAwMDAwMDAwMCwicG9saWN5IjoiY29uc29sZUFkbWluIn0.2d9t0UOm1jQmwe31_5CyN63f6CL-fhqZSO-XhZIp-NH5QteWv9oSMjIrcNWzMgNDblrUfAZ0JSs8a1ciLQF9Ww
+
 ```
 
 ## Explore Further
