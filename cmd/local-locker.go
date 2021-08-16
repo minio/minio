@@ -227,11 +227,19 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 	default:
 		l.mutex.Lock()
 		defer l.mutex.Unlock()
-		if len(args.UID) != 0 {
-			return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
+		if len(args.UID) == 0 {
+			for _, resource := range args.Resources {
+				delete(l.lockMap, resource) // Remove the lock (irrespective of write or read lock)
+			}
+			return true, nil
 		}
-		for _, resource := range args.Resources {
-			delete(l.lockMap, resource) // Remove the lock (irrespective of write or read lock)
+
+		for _, lris := range l.lockMap {
+			for _, lri := range lris {
+				if lri.UID == args.UID {
+					l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
+				}
+			}
 		}
 		return true, nil
 	}

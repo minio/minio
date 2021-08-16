@@ -51,6 +51,9 @@ const drwMutexRefreshCallTimeout = 5 * time.Second
 // dRWMutexUnlockTimeout - timeout for the unlock call
 const drwMutexUnlockCallTimeout = 30 * time.Second
 
+// dRWMutexForceUnlockTimeout - timeout for the unlock call
+const drwMutexForceUnlockCallTimeout = 30 * time.Second
+
 // dRWMutexRefreshInterval - the interval between two refresh calls
 const drwMutexRefreshInterval = 10 * time.Second
 
@@ -237,6 +240,9 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 
 				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum, dm.Names...)
 				if err == nil && !refreshed {
+					// Clean the lock locally and in remote nodes
+					forceUnlock(ctx, dm.clnt, id)
+					// Execute the caller lock loss callback
 					if lockLossCallback != nil {
 						lockLossCallback()
 					}
@@ -245,6 +251,27 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 			}
 		}
 	}()
+}
+
+func forceUnlock(ctx context.Context, ds *Dsync, id string) {
+	ctx, cancel := context.WithTimeout(ctx, drwMutexForceUnlockCallTimeout)
+	defer cancel()
+
+	restClnts, _ := ds.GetLockers()
+
+	var wg sync.WaitGroup
+	for index, c := range restClnts {
+		wg.Add(1)
+		// Send refresh request to all nodes
+		go func(index int, c NetLocker) {
+			defer wg.Done()
+			args := LockArgs{
+				UID: id,
+			}
+			c.ForceUnlock(ctx, args)
+		}(index, c)
+	}
+	wg.Wait()
 }
 
 type refreshResult struct {
