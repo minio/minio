@@ -97,6 +97,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	o.parseMarker()
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
 	o.Transient = o.Transient || isReservedOrInvalidBucket(o.Bucket, false)
+	o.SetFilter()
 	if o.Transient {
 		o.Create = false
 	}
