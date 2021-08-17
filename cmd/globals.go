@@ -216,6 +216,9 @@ var (
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName string
 
+	// The global subnet license
+	globalSubnetLicense string
+
 	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
