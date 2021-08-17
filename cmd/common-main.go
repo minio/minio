@@ -152,6 +152,9 @@ func minioConfigToConsoleFeatures() {
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
+	if globalSubnetLicense != "" {
+		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetLicense)
+	}
 }
 
 func initConsoleServer() (*restapi.Server, error) {
@@ -596,6 +599,8 @@ func handleCommonEnvVars() {
 	if tiers := env.Get("_MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY", ""); tiers != "" {
 		globalDebugRemoteTiersImmediately = strings.Split(tiers, ",")
 	}
+
+	globalSubnetLicense = env.Get(config.EnvMinIOSubnetLicense, "")
 }
 
 func logStartupMessage(msg string) {
