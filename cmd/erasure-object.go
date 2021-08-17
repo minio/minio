@@ -1065,6 +1065,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
 					VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 				}
+				versions[i].SetTierFreeVersionID(mustGetUUID())
 				if opts.Versioned {
 					versions[i].VersionID = uuid
 				}
