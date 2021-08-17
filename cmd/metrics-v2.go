@@ -68,6 +68,7 @@ const (
 	softwareSubsystem         MetricSubsystem = "software"
 	sysCallSubsystem          MetricSubsystem = "syscall"
 	usageSubsystem            MetricSubsystem = "usage"
+	ilmSubsystem              MetricSubsystem = "ilm"
 )
 
 // MetricName are the individual names for the metric.
@@ -121,6 +122,10 @@ const (
 	upTime           = "uptime_seconds"
 	memory           = "resident_memory_bytes"
 	cpu              = "cpu_total_seconds"
+
+	expiryPendingTasks     MetricName = "expiry_pending_tasks"
+	transitionPendingTasks MetricName = "transition_pending_tasks"
+	transitionActiveTasks  MetricName = "transition_active_tasks"
 )
 
 const (
@@ -249,6 +254,7 @@ func GetGeneratorsForPeer() []MetricsGenerator {
 		getMinioVersionMetrics,
 		getNetworkMetrics,
 		getS3TTFBMetric,
+		getILMNodeMetrics,
 	}
 	return g
 }
@@ -996,6 +1002,66 @@ func getS3TTFBMetric() MetricsGroup {
 			close(ch)
 			wg.Wait()
 			return
+		},
+	}
+}
+
+func getTransitionPendingTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionPendingTasks,
+		Help:      "Number of pending ILM transition tasks in the queue.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getTransitionActiveTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionActiveTasks,
+		Help:      "Number of active ILM transition tasks.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getExpiryPendingTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      expiryPendingTasks,
+		Help:      "Number of pending ILM expiry tasks in the queue.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getILMNodeMetrics() MetricsGroup {
+	return MetricsGroup{
+		id:         "ILMNodeMetrics",
+		cachedRead: cachedRead,
+		read: func(_ context.Context) []Metric {
+			expPendingTasks := Metric{
+				Description: getExpiryPendingTasksMD(),
+			}
+			trPendingTasks := Metric{
+				Description: getTransitionPendingTasksMD(),
+			}
+			trActiveTasks := Metric{
+				Description: getTransitionActiveTasksMD(),
+			}
+			if globalExpiryState != nil {
+				expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
+			}
+			if globalTransitionState != nil {
+				trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
+				trActiveTasks.Value = float64(globalTransitionState.ActiveTasks())
+			}
+			return []Metric{
+				expPendingTasks,
+				trPendingTasks,
+				trActiveTasks,
+			}
 		},
 	}
 }
