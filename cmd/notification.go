@@ -1051,6 +1051,32 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 	return reply
 }
 
+// GetSysConfig - Get information about system config
+// (only the config that are of concern to minio)
+func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig {
+	reply := make([]madmin.SysConfig, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetSysConfig(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
 // GetSysServices - Get information about system services
 // (only the services that are of concern to minio)
 func (sys *NotificationSys) GetSysServices(ctx context.Context) []madmin.SysServices {
