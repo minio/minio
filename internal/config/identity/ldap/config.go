@@ -144,7 +144,7 @@ var (
 		},
 		config.KV{
 			Key:   STSExpiry,
-			Value: "1h",
+			Value: "",
 		},
 		config.KV{
 			Key:   TLSSkipVerify,
