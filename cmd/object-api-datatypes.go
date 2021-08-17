@@ -113,16 +113,8 @@ type ObjectInfo struct {
 	// to a delete marker on an object.
 	DeleteMarker bool
 
-	// tierFreeVersion is true if this is a free-version
-	tierFreeVersion bool
-	// TransitionStatus indicates if transition is complete/pending
-	TransitionStatus string
-	// Name of transitioned object on remote tier
-	transitionedObjName string
-	// VersionID on the the remote tier
-	transitionVersionID string
-	// Name of remote tier object has transitioned to
-	TransitionTier string
+	// Transitioned object information
+	TransitionedObject TransitionedObject
 
 	// RestoreExpires indicates date a restored object expires
 	RestoreExpires time.Time
@@ -200,7 +192,7 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		VersionID:          o.VersionID,
 		IsLatest:           o.IsLatest,
 		DeleteMarker:       o.DeleteMarker,
-		TransitionStatus:   o.TransitionStatus,
+		TransitionedObject: o.TransitionedObject,
 		RestoreExpires:     o.RestoreExpires,
 		RestoreOngoing:     o.RestoreOngoing,
 		ContentType:        o.ContentType,
@@ -352,6 +344,15 @@ type ListMultipartsInfo struct {
 	CommonPrefixes []string
 
 	EncodingType string // Not supported yet.
+}
+
+// TransitionedObject transitioned object tier and status.
+type TransitionedObject struct {
+	Name        string
+	VersionID   string
+	Tier        string
+	FreeVersion bool
+	Status      string
 }
 
 // DeletedObjectInfo - container for list objects versions deleted objects.

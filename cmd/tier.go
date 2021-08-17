@@ -115,6 +115,11 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 	return nil
 }
 
+// Empty returns if tier targets are empty
+func (config *TierConfigMgr) Empty() bool {
+	return len(config.ListTiers()) == 0
+}
+
 // ListTiers lists remote tiers configured in this deployment.
 func (config *TierConfigMgr) ListTiers() []madmin.TierConfig {
 	config.RLock()

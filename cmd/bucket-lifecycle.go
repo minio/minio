@@ -232,9 +232,9 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		// When an object is past expiry or when a transitioned object is being
 		// deleted, 'mark' the data in the remote tier for delete.
 		entry := jentry{
-			ObjName:   oi.transitionedObjName,
-			VersionID: oi.transitionVersionID,
-			TierName:  oi.TransitionTier,
+			ObjName:   oi.TransitionedObject.Name,
+			VersionID: oi.TransitionedObject.VersionID,
+			TierName:  oi.TransitionedObject.Tier,
 		}
 		if err := globalTierJournal.AddEntry(entry); err != nil {
 			logger.LogIf(ctx, err)
@@ -316,7 +316,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 
 // getTransitionedObjectReader returns a reader from the transitioned tier.
 func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, oi ObjectInfo, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	tgtClient, err := globalTierConfigMgr.getDriver(oi.TransitionTier)
+	tgtClient, err := globalTierConfigMgr.getDriver(oi.TransitionedObject.Tier)
 	if err != nil {
 		return nil, fmt.Errorf("transition storage class not configured")
 	}
@@ -333,7 +333,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		gopts.length = length
 	}
 
-	reader, err := tgtClient.Get(ctx, oi.transitionedObjName, remoteVersionID(oi.transitionVersionID), gopts)
+	reader, err := tgtClient.Get(ctx, oi.TransitionedObject.Name, remoteVersionID(oi.TransitionedObject.VersionID), gopts)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +557,7 @@ func (fi FileInfo) IsRemote() bool {
 // IsRemote returns true if this object version's contents are in its remote
 // tier.
 func (oi ObjectInfo) IsRemote() bool {
-	if oi.TransitionStatus != lifecycle.TransitionComplete {
+	if oi.TransitionedObject.Status != lifecycle.TransitionComplete {
 		return false
 	}
 	return !isRestoredObjectOnDisk(oi.UserDefined)
@@ -685,7 +685,7 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 		SuccessorModTime:       oi.SuccessorModTime,
 		RestoreOngoing:         oi.RestoreOngoing,
 		RestoreExpires:         oi.RestoreExpires,
-		TransitionStatus:       oi.TransitionStatus,
+		TransitionStatus:       oi.TransitionedObject.Status,
 		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 	}
 }

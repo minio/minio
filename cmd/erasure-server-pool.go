@@ -273,12 +273,7 @@ type poolObjInfo struct {
 	Err       error
 }
 
-// getPoolIdxExisting returns the (first) found object pool index containing an object.
-// If the object exists, but the latest version is a delete marker, the index with it is still returned.
-// If the object does not exist ObjectNotFound error is returned.
-// If any other error is found, it is returned.
-// The check is skipped if there is only one zone, and 0, nil is always returned in that case.
-func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, object string) (idx int, err error) {
+func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, bucket, object string, opts ObjectOptions) (idx int, err error) {
 	if z.SinglePool() {
 		return 0, nil
 	}
@@ -294,7 +289,7 @@ func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, obj
 			pinfo := poolObjInfo{
 				PoolIndex: i,
 			}
-			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool)
 	}
@@ -329,6 +324,19 @@ func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, obj
 	}
 
 	return -1, toObjectErr(errFileNotFound, bucket, object)
+}
+
+func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucket, object string) (idx int, err error) {
+	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{NoLock: true})
+}
+
+// getPoolIdxExisting returns the (first) found object pool index containing an object.
+// If the object exists, but the latest version is a delete marker, the index with it is still returned.
+// If the object does not exist ObjectNotFound error is returned.
+// If any other error is found, it is returned.
+// The check is skipped if there is only one zone, and 0, nil is always returned in that case.
+func (z *erasureServerPools) getPoolIdxExisting(ctx context.Context, bucket, object string) (idx int, err error) {
+	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{})
 }
 
 // getPoolIdx returns the found previous object and its corresponding pool idx,
@@ -837,27 +845,6 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		objSets.Add(objects[i].ObjectName)
 	}
 
-	poolObjIdxMap := map[int][]ObjectToDelete{}
-	origIndexMap := map[int][]int{}
-	if !z.SinglePool() {
-		for j, obj := range objects {
-			idx, err := z.getPoolIdxExisting(ctx, bucket, obj.ObjectName)
-			if isErrObjectNotFound(err) {
-				derrs[j] = err
-				continue
-			}
-			if err != nil {
-				// Unhandled errors return right here.
-				for i := range derrs {
-					derrs[i] = err
-				}
-				return dobjects, derrs
-			}
-			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
-			origIndexMap[idx] = append(origIndexMap[idx], j)
-		}
-	}
-
 	// Acquire a bulk write lock across 'objects'
 	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
 	lkctx, err := multiDeleteLock.GetLock(ctx, globalOperationTimeout)
@@ -874,17 +861,65 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
 	}
 
-	for idx, pool := range z.serverPools {
-		objs := poolObjIdxMap[idx]
-		orgIndexes := origIndexMap[idx]
-		deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
-		for i, derr := range errs {
-			if derr != nil {
-				derrs[orgIndexes[i]] = derr
+	// Fetch location of up to 10 objects concurrently.
+	poolObjIdxMap := map[int][]ObjectToDelete{}
+	origIndexMap := map[int][]int{}
+
+	var mu sync.Mutex
+	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(10)
+	cctx, cancel := eg.WithCancelOnError(ctx)
+	defer cancel()
+	for j, obj := range objects {
+		j := j
+		obj := obj
+		eg.Go(func() error {
+			idx, err := z.getPoolIdxExistingNoLock(cctx, bucket, obj.ObjectName)
+			if isErrObjectNotFound(err) {
+				derrs[j] = err
+				return nil
 			}
-			dobjects[orgIndexes[i]] = deletedObjects[i]
-		}
+			if err != nil {
+				// unhandled errors return right here.
+				return err
+			}
+			mu.Lock()
+			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
+			origIndexMap[idx] = append(origIndexMap[idx], j)
+			mu.Unlock()
+			return nil
+		}, j)
 	}
+
+	if err := eg.WaitErr(); err != nil {
+		for i := range derrs {
+			derrs[i] = err
+		}
+		return dobjects, derrs
+	}
+
+	// Delete concurrently in all server pools.
+	var wg sync.WaitGroup
+	wg.Add(len(z.serverPools))
+	for idx, pool := range z.serverPools {
+		go func(idx int, pool *erasureSets) {
+			defer wg.Done()
+			objs := poolObjIdxMap[idx]
+			if len(objs) > 0 {
+				orgIndexes := origIndexMap[idx]
+				deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
+				mu.Lock()
+				for i, derr := range errs {
+					if derr != nil {
+						derrs[orgIndexes[i]] = derr
+					}
+					dobjects[orgIndexes[i]] = deletedObjects[i]
+				}
+				mu.Unlock()
+			}
+		}(idx, pool)
+	}
+	wg.Wait()
+
 	return dobjects, derrs
 }
 
