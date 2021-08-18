@@ -110,11 +110,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	var scanDir func(path string) error
 
 	scanDir = func(current string) error {
-		// always skip the directory that doesn't match the prefix
-		if len(current) > 0 && !strings.HasPrefix(current, prefix) {
-			return nil
-		}
-
 		// Skip forward, if requested...
 		forward := ""
 		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
@@ -143,7 +138,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
+			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
+				// Do do not retain the file, since it doesn't
+				// match the prefix.
+				entries[i] = ""
+				continue
+			}
 			if len(forward) > 0 && entry < forward {
+				// Do do not retain the file, since its
+				// lexially smaller than 'forward'
+				entries[i] = ""
 				continue
 			}
 			if strings.HasSuffix(entry, slashSeparator) {
@@ -199,6 +203,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		// Process in sort order.
 		sort.Strings(entries)
 		dirStack := make([]string, 0, 5)
+		prefix = "" // Remove prefix after first level as we have already filtered the list.
 		if len(forward) > 0 {
 			idx := sort.SearchStrings(entries, forward)
 			if idx > 0 {
