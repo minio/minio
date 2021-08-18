@@ -117,7 +117,8 @@ func testCreateBucket(obj ObjectLayer, instanceType, bucketName string, apiRoute
 			<-start
 			if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, BucketOptions{}); err != nil {
 				if _, ok := err.(BucketExists); !ok {
-					t.Fatalf("unexpected error: %T: %v", err, err)
+					t.Logf("unexpected error: %T: %v", err, err)
+					return
 				}
 				mu.Lock()
 				errs++
