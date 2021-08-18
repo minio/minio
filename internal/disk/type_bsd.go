@@ -1,3 +1,4 @@
+//go:build darwin || freebsd || dragonfly || openbsd || solaris
 // +build darwin freebsd dragonfly openbsd solaris
 
 // Copyright (c) 2015-2021 MinIO, Inc.

@@ -1,3 +1,4 @@
+//go:build darwin || freebsd || openbsd || netbsd
 // +build darwin freebsd openbsd netbsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.
