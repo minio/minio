@@ -139,6 +139,9 @@ type xlStorage struct {
 
 	ctx context.Context
 	sync.RWMutex
+
+	// mutex to prevent concurrent read operations overloading walks.
+	walkMu sync.Mutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
