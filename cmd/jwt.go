@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const (
@@ -97,29 +98,6 @@ func authenticateURL(accessKey, secretKey string) (string, error) {
 	return authenticateJWTUsers(accessKey, secretKey, defaultURLJWTExpiry)
 }
 
-// Callback function used for parsing
-func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
-	if claims.AccessKey == globalActiveCred.AccessKey {
-		return []byte(globalActiveCred.SecretKey), nil
-	}
-	ok, _, err := globalIAMSys.IsTempUser(claims.AccessKey)
-	if err != nil {
-		if err == errNoSuchUser {
-			return nil, errInvalidAccessKeyID
-		}
-		return nil, err
-	}
-	if ok {
-		return []byte(globalActiveCred.SecretKey), nil
-	}
-	cred, ok := globalIAMSys.GetUser(claims.AccessKey)
-	if !ok {
-		return nil, errInvalidAccessKeyID
-	}
-	return []byte(cred.SecretKey), nil
-
-}
-
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
@@ -132,10 +110,44 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 		return nil, false, err
 	}
 	claims := xjwt.NewMapClaims()
-	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+	if err := xjwt.ParseWithClaims(token, claims, func(claims *xjwt.MapClaims) ([]byte, error) {
+		if claims.AccessKey == globalActiveCred.AccessKey {
+			return []byte(globalActiveCred.SecretKey), nil
+		}
+		cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+		if !ok {
+			return nil, errInvalidAccessKeyID
+		}
+		return []byte(cred.SecretKey), nil
+	}); err != nil {
 		return claims, false, errAuthentication
 	}
-	owner := claims.AccessKey == globalActiveCred.AccessKey
+	owner := true
+	if globalActiveCred.AccessKey != claims.AccessKey {
+		// Check if the access key is part of users credentials.
+		ucred, ok := globalIAMSys.GetUser(claims.AccessKey)
+		if !ok {
+			return nil, false, errInvalidAccessKeyID
+		}
+
+		// get embedded claims
+		eclaims, s3Err := checkClaimsFromToken(req, ucred)
+		if s3Err != ErrNone {
+			return nil, false, errAuthentication
+		}
+
+		for k, v := range eclaims {
+			claims.MapClaims[k] = v
+		}
+
+		// Now check if we have a sessionPolicy.
+		if _, ok = eclaims[iampolicy.SessionPolicyName]; ok {
+			owner = false
+		} else {
+			owner = globalActiveCred.AccessKey == ucred.ParentUser
+		}
+	}
+
 	return claims, owner, nil
 }
 
