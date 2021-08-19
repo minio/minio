@@ -1930,7 +1930,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 	var srcDataPath string
 	var dstDataPath string
-	dataDir := retainSlash(fi.DataDir)
+	var dataDir string
+	if !fi.IsRemote() {
+		dataDir = retainSlash(fi.DataDir)
+	}
 	if dataDir != "" {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
