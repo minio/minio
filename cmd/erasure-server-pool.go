@@ -582,6 +582,15 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
+	// Lock the bucket name before creating.
+	lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
+
 	// Create buckets in parallel across all sets.
 	for index := range z.serverPools {
 		index := index

@@ -26,6 +26,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/minio/minio/internal/auth"
@@ -90,6 +91,52 @@ func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
 			policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
 			condition.NewFunctions(),
 		)},
+	}
+}
+
+// Wrapper for calling Create Bucket and ensure we get one and only one success.
+func TestCreateBucket(t *testing.T) {
+	ExecObjectLayerAPITest(t, testCreateBucket, []string{"MakeBucketWithLocation"})
+}
+
+// testCreateBucket - Test for calling Create Bucket and ensure we get one and only one success.
+func testCreateBucket(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T) {
+	bucketName1 := fmt.Sprintf("%s-1", bucketName)
+
+	const n = 100
+	var start = make(chan struct{})
+	var ok, errs int
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			// Sync start.
+			<-start
+			if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, BucketOptions{}); err != nil {
+				if _, ok := err.(BucketExists); !ok {
+					t.Logf("unexpected error: %T: %v", err, err)
+					return
+				}
+				mu.Lock()
+				errs++
+				mu.Unlock()
+				return
+			}
+			mu.Lock()
+			ok++
+			mu.Unlock()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if ok != 1 {
+		t.Fatalf("want 1 ok, got %d", ok)
+	}
+	if errs != n-1 {
+		t.Fatalf("want %d errors, got %d", n-1, errs)
 	}
 }
 
