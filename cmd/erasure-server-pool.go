@@ -1421,20 +1421,8 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 	return nil
 }
 
-// deleteAll will delete a bucket+prefix unconditionally across all disks.
-// Note that set distribution is ignored so it should only be used in cases where
-// data is not distributed across sets.
-// Errors are logged but individual disk failures are not returned.
-func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix string) {
-	for _, servers := range z.serverPools {
-		for _, set := range servers.sets {
-			set.deleteAll(ctx, bucket, prefix)
-		}
-	}
-}
-
 // renameAll will rename bucket+prefix unconditionally across all disks to
-// minioMetaTmpBucket + unique uuid,
+// minioMetaTmpDeletedBucket + unique uuid,
 // Note that set distribution is ignored so it should only be used in cases where
 // data is not distributed across sets. Errors are logged but individual
 // disk failures are not returned.
