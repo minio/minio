@@ -1,3 +1,4 @@
+//go:build openbsd
 // +build openbsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.

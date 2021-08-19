@@ -18,10 +18,8 @@
 package config
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"testing"
 )
 
@@ -155,39 +153,27 @@ M9ofSEt/bdRD
 	}
 	defer os.Remove(tempFile5)
 
-	nonexistentErr := fmt.Errorf("open nonexistent-file: no such file or directory")
-	if runtime.GOOS == "windows" {
-		// Below concatenation is done to get rid of goline error
-		// "error strings should not be capitalized or end with punctuation or a newline"
-		nonexistentErr = fmt.Errorf("open nonexistent-file:" + " The system cannot find the file specified.")
-	}
-
 	testCases := []struct {
 		certFile          string
 		expectedResultLen int
-		expectedErr       error
+		expectedErr       bool
 	}{
-		{"nonexistent-file", 0, nonexistentErr},
-		{tempFile1, 0, fmt.Errorf("Empty public certificate file %s", tempFile1)},
-		{tempFile2, 0, fmt.Errorf("Could not read PEM block from file %s", tempFile2)},
-		{tempFile3, 0, fmt.Errorf("asn1: structure error: sequence tag mismatch")},
-		{tempFile4, 1, nil},
-		{tempFile5, 2, nil},
+		{"nonexistent-file", 0, true},
+		{tempFile1, 0, true},
+		{tempFile2, 0, true},
+		{tempFile3, 0, true},
+		{tempFile4, 1, false},
+		{tempFile5, 2, false},
 	}
 
 	for _, testCase := range testCases {
 		certs, err := ParsePublicCertFile(testCase.certFile)
-
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		if !testCase.expectedErr && err != nil {
+			t.Fatalf("error: expected = <nil>, got = %v", err)
 		}
-
+		if testCase.expectedErr && err == nil {
+			t.Fatal("error: expected err, got = <nil>")
+		}
 		if len(certs) != testCase.expectedResultLen {
 			t.Fatalf("certs: expected = %v, got = %v", testCase.expectedResultLen, len(certs))
 		}

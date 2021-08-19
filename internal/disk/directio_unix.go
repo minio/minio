@@ -1,3 +1,4 @@
+//go:build linux || netbsd || freebsd
 // +build linux netbsd freebsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.

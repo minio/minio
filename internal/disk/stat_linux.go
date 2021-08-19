@@ -1,3 +1,4 @@
+//go:build linux && !s390x && !arm && !386
 // +build linux,!s390x,!arm,!386
 
 // Copyright (c) 2015-2021 MinIO, Inc.
