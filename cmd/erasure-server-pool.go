@@ -583,7 +583,7 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Lock the bucket name before creating.
-	lk := z.NewNSLock(bucket, "/MakeBucketWithLocation")
+	lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return err
