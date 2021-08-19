@@ -67,7 +67,7 @@ function start_minio_3_node() {
 
 
 function check_online() {
-    if grep -q 'Unable to initialize sub-systems' ${WORK_DIR}/dist-minio-*.log; then
+    if grep -q 'Unable to initialize' ${WORK_DIR}/dist-minio-*.log; then
         echo "1"
     fi
 }
@@ -88,22 +88,24 @@ function __init__()
 }
 
 function perform_test() {
-    start_minio_3_node 60
+    start_minio_3_node 90
 
     echo "Testing Distributed Erasure setup healing of drives"
     echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
     rm -rf ${WORK_DIR}/${1}/*/
 
-    start_minio_3_node 60
+    start_minio_3_node 90
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then
-        pkill -9 minio
         for i in $(seq 1 3); do
             echo "server$i log:"
             cat "${WORK_DIR}/dist-minio-server$i.log"
         done
+        if ! pkill -9 minio; then
+            echo "no minio process running anymore, proceed."
+        fi
         echo "FAILED"
         purge "$WORK_DIR"
         exit 1

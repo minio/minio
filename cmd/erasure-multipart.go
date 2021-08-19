@@ -121,6 +121,8 @@ func (er erasureObjects) renameAll(ctx context.Context, bucket, prefix string) {
 		}
 		wg.Add(1)
 		go func(disk StorageAPI) {
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
 			defer wg.Done()
 			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpDeletedBucket, mustGetUUID())
 		}(disk)
@@ -136,6 +138,8 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 		}
 		wg.Add(1)
 		go func(disk StorageAPI) {
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
 			defer wg.Done()
 			disk.Delete(ctx, bucket, prefix, true)
 		}(disk)

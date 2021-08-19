@@ -128,8 +128,8 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	m.mu.Lock()
 	// See if someone else fetched it while we waited for the lock.
 	b, ok = m.buckets[bucket]
+	m.mu.Unlock()
 	if ok {
-		m.mu.Unlock()
 		if b.bucket != bucket {
 			logger.Info("getBucket: newly cached bucket %s does not match this bucket %s", b.bucket, bucket)
 			debug.PrintStack()
@@ -145,6 +145,7 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	if b.bucket != bucket {
 		logger.LogIf(ctx, fmt.Errorf("getBucket: loaded bucket %s does not match this bucket %s", b.bucket, bucket))
 	}
+	m.mu.Lock()
 	m.buckets[bucket] = b
 	m.mu.Unlock()
 	return b

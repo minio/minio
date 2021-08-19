@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"runtime/debug"
 	"sort"
@@ -59,10 +58,11 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 	if cleanup {
 		// Recursively delete all caches.
 		objAPI := newObjectLayerFn()
-		ez, ok := objAPI.(*erasureServerPools)
-		if ok {
-			ctx := context.Background()
-			ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+		if objAPI != nil {
+			ez, ok := objAPI.(*erasureServerPools)
+			if ok {
+				ez.renameAll(context.Background(), minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+			}
 		}
 	}
 	return &bucketMetacache{
@@ -90,23 +90,11 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 			time.Sleep(250 * time.Millisecond)
 		}
 		objAPI = newObjectLayerFn()
-		if objAPI == nil {
-			logger.LogIf(ctx, fmt.Errorf("loadBucketMetaCache: object layer not ready. bucket: %q", bucket))
-		}
 	}
 
-	var meta bucketMetacache
-	var decErr error
 	// Use global context for this.
-	r, err := objAPI.GetObjectNInfo(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), nil, http.Header{}, readLock, ObjectOptions{})
-	if err == nil {
-		dec := s2DecPool.Get().(*s2.Reader)
-		dec.Reset(r)
-		decErr = meta.DecodeMsg(msgp.NewReader(dec))
-		dec.Reset(nil)
-		r.Close()
-		s2DecPool.Put(dec)
-	}
+	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"),
+		nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
@@ -119,6 +107,15 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 		}
 		return newBucketMetacache(bucket, false), err
 	}
+
+	var meta bucketMetacache
+
+	dec := s2DecPool.Get().(*s2.Reader)
+	dec.Reset(r)
+	decErr := meta.DecodeMsg(msgp.NewReader(dec))
+	dec.Reset(nil)
+	r.Close()
+	s2DecPool.Put(dec)
 	if decErr != nil {
 		if errors.Is(err, context.Canceled) {
 			return newBucketMetacache(bucket, false), err
@@ -163,8 +160,7 @@ func (b *bucketMetacache) save(ctx context.Context) error {
 		b.mu.Unlock()
 		return err
 	}
-	err = enc.Close()
-	if err != nil {
+	if err = enc.Close(); err != nil {
 		b.mu.Unlock()
 		return err
 	}
@@ -317,20 +313,28 @@ func (b *bucketMetacache) cloneCaches() (map[string]metacache, map[string][]stri
 // Deletes are performed concurrently.
 func (b *bucketMetacache) deleteAll() {
 	ctx := context.Background()
-	ez, ok := newObjectLayerFn().(*erasureServerPools)
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return
+	}
+
+	ez, ok := objAPI.(*erasureServerPools)
 	if !ok {
 		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasurePools"))
 		return
 	}
 
 	b.mu.Lock()
-	defer b.mu.Unlock()
-
+	bucket := b.bucket
 	b.updated = true
-	// Delete all.
-	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
 	b.caches = make(map[string]metacache, 10)
 	b.cachesRoot = make(map[string][]string, 10)
+	b.mu.Unlock()
+
+	// Delete all.
+	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+
 }
 
 // deleteCache will delete a specific cache and all files related to it across the cluster.
