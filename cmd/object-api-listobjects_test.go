@@ -88,6 +88,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{testBuckets[5], "foo/201910/1112", "content", nil},
 		{testBuckets[5], "foo/201910/2112", "content", nil},
 		{testBuckets[5], "foo/201910_txt", "content", nil},
+		{testBuckets[5], "201910/foo/bar/xl.meta/1.txt", "content", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -499,6 +500,13 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				{Name: "foo/201910_txt"},
 			},
 		},
+		// ListObjectsResult-39 list with prefix match 1 level deep
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "201910/foo/bar/xl.meta/1.txt"},
+			},
+		},
 	}
 
 	testCases := []struct {
@@ -627,6 +635,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		// Test listing with prefix match
 		{testBuckets[5], "foo/201910/11", "", "", 1000, resultCases[37], nil, true},
 		{testBuckets[5], "foo/201910", "", "", 1000, resultCases[38], nil, true},
+		// Test listing with prefix match with 'xl.meta'
+		{testBuckets[5], "201910/foo/bar", "", "", 1000, resultCases[39], nil, true},
 	}
 
 	for i, testCase := range testCases {

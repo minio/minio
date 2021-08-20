@@ -34,6 +34,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -404,6 +405,13 @@ func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
 	stat, err := f.Stat()
 	if err != nil {
 		return nil, err
+	}
+	if stat.IsDir() {
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: itemPath,
+			Err:  syscall.EISDIR,
+		}
 	}
 	return readXLMetaNoData(f, stat.Size())
 }
