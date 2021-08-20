@@ -487,20 +487,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 	// handler for validating incoming authorization headers.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		aType := getRequestAuthType(r)
-		if isSupportedS3AuthType(aType) {
-			// Let top level caller validate for anonymous and known signed requests.
-			h.ServeHTTP(w, r)
-			return
-		} else if aType == authTypeJWT {
-			// Validate Authorization header if its valid for JWT request.
-			if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(authErr.Error()))
-				return
-			}
-			h.ServeHTTP(w, r)
-			return
-		} else if aType == authTypeSTS {
+		if isSupportedS3AuthType(aType) || aType == authTypeJWT || aType == authTypeSTS {
 			h.ServeHTTP(w, r)
 			return
 		}

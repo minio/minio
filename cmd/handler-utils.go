@@ -213,15 +213,6 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	if cred.AccessKey == "" {
 		cred, _, _ = getReqAccessKeyV2(r)
 	}
-	if cred.AccessKey == "" {
-		claims, owner, _ := webRequestAuthenticate(r)
-		if owner {
-			return globalActiveCred
-		}
-		if claims != nil {
-			cred, _ = globalIAMSys.GetUser(claims.AccessKey)
-		}
-	}
 	return cred
 }
 
