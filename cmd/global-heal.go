@@ -26,6 +26,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/wildcard"
@@ -132,6 +133,11 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 	sort.Slice(status.Sets, func(i, j int) bool {
 		return status.Sets[i].ID < status.Sets[j].ID
 	})
+
+	backendInfo := o.BackendInfo()
+	status.SCParity = make(map[string]int)
+	status.SCParity[storageclass.STANDARD] = backendInfo.StandardSCParity
+	status.SCParity[storageclass.RRS] = backendInfo.RRSCParity
 
 	return status, true
 
