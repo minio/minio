@@ -221,7 +221,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 				return true
 			}
 		}
-		if latestMeta.TransitionStatus != meta.TransitionStatus || latestMeta.TransitionTier != meta.TransitionTier || latestMeta.TransitionedObjName != meta.TransitionedObjName || latestMeta.TransitionVersionID != meta.TransitionVersionID {
+		if !latestMeta.TransitionInfoEquals(meta) {
 			return true
 		}
 		if !latestMeta.ModTime.Equal(meta.ModTime) {
@@ -426,15 +426,15 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
+	// Reorder so that we have data disks first and parity disks next.
+	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
+	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
+	copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
+
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		result.DataBlocks = latestMeta.Erasure.DataBlocks
 		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
-
-		// Reorder so that we have data disks first and parity disks next.
-		latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
-		outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
-		partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
-		copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
 
 		// Heal each part. erasureHealFile() will write the healed
 		// part to .minio/tmp/uuid/ which needs to be renamed later to
@@ -532,7 +532,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		if disk == OfflineDisk {
 			continue
 		}
-
 		// record the index of the updated disks
 		partsMetadata[i].Erasure.Index = i + 1
 

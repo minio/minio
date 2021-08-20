@@ -207,6 +207,19 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	return objInfo
 }
 
+// TransitionInfoEquals returns true if transition related information are equal
+// between fi and ofi.
+func (fi FileInfo) TransitionInfoEquals(ofi FileInfo) bool {
+	switch {
+	case fi.TransitionStatus != ofi.TransitionStatus,
+		fi.TransitionTier != ofi.TransitionTier,
+		fi.TransitionedObjName != ofi.TransitionedObjName,
+		fi.TransitionVersionID != ofi.TransitionVersionID:
+		return false
+	}
+	return true
+}
+
 // objectPartIndex - returns the index of matching object part number.
 func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	for i, part := range parts {
