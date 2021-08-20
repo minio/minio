@@ -679,11 +679,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
 						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
-					// FIXME: we should always check for ETag
-					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
-						t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i+1, instanceType, result.Objects[j].Name)
-					}
-
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
@@ -1350,11 +1345,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
 						t.Errorf("%s: Expected object name to be \"%s\", but found \"%s\" instead", instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
-					// FIXME: we should always check for ETag
-					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
-						t.Errorf("%s: Expected ETag to be not empty, but found empty instead (%v)", instanceType, result.Objects[j].Name)
-					}
-
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
