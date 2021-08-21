@@ -258,7 +258,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
 				out <- meta
-			case osIsNotExist(err):
+			case osIsNotExist(err), isSysErrIsDir(err):
 				s.walkMu.Lock()
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				s.walkMu.Unlock()
