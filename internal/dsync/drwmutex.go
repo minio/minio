@@ -56,6 +56,14 @@ const drwMutexRefreshInterval = 10 * time.Second
 
 const drwMutexInfinite = 1<<63 - 1
 
+func sleepDuration(r *rand.Rand) time.Duration {
+	duration := time.Duration(r.Float64() * float64(lockRetryInterval))
+	if duration > lockRetryInterval {
+		duration = lockRetryInterval
+	}
+	return duration
+}
+
 // A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
 	Names         []string
@@ -210,7 +218,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 				return locked
 			}
 
-			time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+			time.Sleep(sleepDuration(r))
 		}
 	}
 }
@@ -565,7 +573,7 @@ func (dm *DRWMutex) Unlock() {
 	isReadLock := false
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+		time.Sleep(sleepDuration(r))
 	}
 }
 
@@ -599,7 +607,7 @@ func (dm *DRWMutex) RUnlock() {
 	isReadLock := true
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+		time.Sleep(sleepDuration(r))
 	}
 }
 
