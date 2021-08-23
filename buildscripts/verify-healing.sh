@@ -86,16 +86,14 @@ function __init__()
 }
 
 function perform_test() {
-    start_minio_3_node 120
+    start_minio_3_node 60
 
     echo "Testing Distributed Erasure setup healing of drives"
     echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
-    set -x
-
     rm -rf ${WORK_DIR}/${1}/*/
 
-    start_minio_3_node 200
+    start_minio_3_node 60
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then

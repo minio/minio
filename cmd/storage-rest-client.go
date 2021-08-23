@@ -298,10 +298,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 		client.diskInfoCache.Update = client.diskInfo
 	})
 	val, err := client.diskInfoCache.Get()
-	if err == nil {
-		info = val.(DiskInfo)
+	if val != nil {
+		return val.(DiskInfo), err
 	}
-
 	return info, err
 }
 
