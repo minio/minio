@@ -328,7 +328,13 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 					continue
 				case errErasureReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+						len(endpoints)/2, getElapsedTime())
+					continue
+				case errErasureWriteQuorum:
+					// no quorum available continue to wait for minimum number of servers.
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+						(len(endpoints)/2)+1, getElapsedTime())
 					continue
 				case errErasureV3ThisEmpty:
 					// need to wait for this error to be healed, so continue.
