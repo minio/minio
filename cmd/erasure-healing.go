@@ -221,7 +221,13 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 				return true
 			}
 		}
+		if !latestMeta.MetadataEquals(meta) {
+			return true
+		}
 		if !latestMeta.TransitionInfoEquals(meta) {
+			return true
+		}
+		if !latestMeta.ReplicationInfoEquals(meta) {
 			return true
 		}
 		if !latestMeta.ModTime.Equal(meta.ModTime) {
