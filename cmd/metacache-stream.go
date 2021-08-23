@@ -358,7 +358,7 @@ func (r *metacacheReader) next() (metaCacheEntry, error) {
 		r.err = err
 		return m, err
 	}
-	m.metadata, err = r.mr.ReadBytes(metaDataPool.Get().([]byte)[:0])
+	m.metadata, err = r.mr.ReadBytes(metaDataPoolGet())
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
 	}
@@ -518,7 +518,7 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 			r.mr.R.Skip(1)
 			return metaCacheEntriesSorted{o: res}, io.EOF
 		}
-		if meta.metadata, err = r.mr.ReadBytes(metaDataPool.Get().([]byte)[:0]); err != nil {
+		if meta.metadata, err = r.mr.ReadBytes(metaDataPoolGet()); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
@@ -577,7 +577,7 @@ func (r *metacacheReader) readAll(ctx context.Context, dst chan<- metaCacheEntry
 			r.err = err
 			return err
 		}
-		if meta.metadata, err = r.mr.ReadBytes(metaDataPool.Get().([]byte)[:0]); err != nil {
+		if meta.metadata, err = r.mr.ReadBytes(metaDataPoolGet()); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}

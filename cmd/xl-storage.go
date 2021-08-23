@@ -903,7 +903,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		}
 	}
 	if !lastVersion {
-		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
 			return err
@@ -971,7 +971,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err := xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		buf, err := xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -998,7 +998,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -1015,7 +1015,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
