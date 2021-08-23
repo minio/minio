@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	//minio "github.com/minio/minio-go/v7"
+	// "github.com/minio/madmin-go"
+	// "github.com/minio/minio-go/v7"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -269,6 +272,26 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		return
 	}
 
+	// Lock the object name before starting replication operation.
+	// Use separate lock that doesn't collide with regular objects.
+	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
+	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, rcfg.RoleArn))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
+		return
+	}
+	defer lk.Unlock()
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
 		VersionID: versionID,
 		Internal: miniogo.AdvancedRemoveOptions{
@@ -603,7 +626,24 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		})
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, writeLock, ObjectOptions{
+
+	// Lock the object name before starting replication.
+	// Use separate lock that doesn't collide with regular objects.
+	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+object)
+	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, cfg.RoleArn))
+		return
+	}
+	defer lk.Unlock()
+
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
