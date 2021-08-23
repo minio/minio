@@ -110,10 +110,10 @@ func registerBootstrapRESTHandlers(router *mux.Router) {
 	subrouter := router.PathPrefix(bootstrapRESTPrefix).Subrouter()
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodHealth).HandlerFunc(
-		httpTraceHdrs(server.HealthHandler))
+		httpTraceHdrs(server.HealthHandler)).Name("BootstrapRESTHealth")
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodVerify).HandlerFunc(
-		httpTraceHdrs(server.VerifyHandler))
+		httpTraceHdrs(server.VerifyHandler)).Name("BootstrapRESTVerify")
 }
 
 // client to talk to bootstrap NEndpoints.

@@ -97,33 +97,33 @@ func registerSTSRouter(router *mux.Router) {
 		authOk := wildcard.MatchSimple(signV4Algorithm+"*", r.Header.Get(xhttp.Authorization))
 		noQueries := len(r.URL.RawQuery) == 0
 		return ctypeOk && authOk && noQueries
-	}).HandlerFunc(httpTraceAll(sts.AssumeRole))
+	}).HandlerFunc(httpTraceAll(sts.AssumeRole)).Name("STSAssumeRole")
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
 	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
 		noQueries := len(r.URL.RawQuery) == 0
 		return ctypeOk && noQueries
-	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithSSO))
+	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithSSO)).Name("STSAssumeRoleSSOCommon")
 
 	// AssumeRoleWithClientGrants
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithClientGrants)).
 		Queries(stsAction, clientGrants).
 		Queries(stsVersion, stsAPIVersion).
-		Queries(stsToken, "{Token:.*}")
+		Queries(stsToken, "{Token:.*}").Name("STSAssumeRoleWithClientGrants")
 
 	// AssumeRoleWithWebIdentity
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithWebIdentity)).
 		Queries(stsAction, webIdentity).
 		Queries(stsVersion, stsAPIVersion).
-		Queries(stsWebIdentityToken, "{Token:.*}")
+		Queries(stsWebIdentityToken, "{Token:.*}").Name("STSAssumeRoleWithWebIdentity")
 
 	// AssumeRoleWithLDAPIdentity
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithLDAPIdentity)).
 		Queries(stsAction, ldapIdentity).
 		Queries(stsVersion, stsAPIVersion).
 		Queries(stsLDAPUsername, "{LDAPUsername:.*}").
-		Queries(stsLDAPPassword, "{LDAPPassword:.*}")
+		Queries(stsLDAPPassword, "{LDAPPassword:.*}").Name("STSAssumeRoleWithLDAPIdentity")
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, isErrCodeSTS bool, stsErr STSErrorCode) {

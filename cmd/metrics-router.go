@@ -49,12 +49,12 @@ func registerMetricsRouter(router *mux.Router) {
 	authType := strings.ToLower(env.Get(EnvPrometheusAuthType, string(prometheusJWT)))
 	switch prometheusAuthType(authType) {
 	case prometheusPublic:
-		metricsRouter.Handle(prometheusMetricsPathLegacy, metricsHandler())
-		metricsRouter.Handle(prometheusMetricsV2ClusterPath, metricsServerHandler())
-		metricsRouter.Handle(prometheusMetricsV2NodePath, metricsNodeHandler())
+		metricsRouter.Handle(prometheusMetricsPathLegacy, metricsHandler()).Name("MetricsPublicPrometheus")
+		metricsRouter.Handle(prometheusMetricsV2ClusterPath, metricsServerHandler()).Name("MetricsPublicCluster")
+		metricsRouter.Handle(prometheusMetricsV2NodePath, metricsNodeHandler()).Name("MetricsPublicNode")
 	case prometheusJWT:
-		metricsRouter.Handle(prometheusMetricsPathLegacy, AuthMiddleware(metricsHandler()))
-		metricsRouter.Handle(prometheusMetricsV2ClusterPath, AuthMiddleware(metricsServerHandler()))
-		metricsRouter.Handle(prometheusMetricsV2NodePath, AuthMiddleware(metricsNodeHandler()))
+		metricsRouter.Handle(prometheusMetricsPathLegacy, AuthMiddleware(metricsHandler())).Name("MetricsJWTPrometheus")
+		metricsRouter.Handle(prometheusMetricsV2ClusterPath, AuthMiddleware(metricsServerHandler())).Name("MetricsJWTCluster")
+		metricsRouter.Handle(prometheusMetricsV2NodePath, AuthMiddleware(metricsNodeHandler())).Name("MetricsJWTNode")
 	}
 }
