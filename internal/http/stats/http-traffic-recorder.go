@@ -38,7 +38,7 @@ func (r *IncomingTrafficMeter) Read(p []byte) (n int, err error) {
 }
 
 // BytesCount returns the number of transferred bytes
-func (r IncomingTrafficMeter) BytesCount() int64 {
+func (r *IncomingTrafficMeter) BytesCount() int64 {
 	return atomic.LoadInt64(&r.countBytes)
 }
 
@@ -62,6 +62,6 @@ func (w *OutgoingTrafficMeter) Flush() {
 }
 
 // BytesCount returns the number of transferred bytes
-func (w OutgoingTrafficMeter) BytesCount() int64 {
+func (w *OutgoingTrafficMeter) BytesCount() int64 {
 	return atomic.LoadInt64(&w.countBytes)
 }
