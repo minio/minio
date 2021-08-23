@@ -337,6 +337,17 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	}
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx.Cancel)
+	// early return if already replicated delete marker for existing object replication
+	if dobj.DeleteMarkerVersionID != "" && dobj.OpType == replication.ExistingObjectReplicationType {
+		_, err := tgt.StatObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+			VersionID: versionID,
+			Internal: miniogo.AdvancedGetOptions{
+				ReplicationProxyRequest: "false",
+			}})
+		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+			return
+		}
+	}
 
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
 		VersionID: versionID,
@@ -766,7 +777,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		if rtype == replicateNone {
 			// object with same VersionID already exists, replication kicked off by
 			// PutObject might have completed
-			if objInfo.ReplicationStatus == replication.Pending || objInfo.ReplicationStatus == replication.Failed {
+			if objInfo.ReplicationStatus == replication.Pending || objInfo.ReplicationStatus == replication.Failed || ri.OpType == replication.ExistingObjectReplicationType {
 				// if metadata is not updated for some reason after replication, such as
 				// 503 encountered while updating metadata - make sure to set ReplicationStatus
 				// as Completed.
@@ -781,6 +792,9 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 				}
 				for k, v := range objInfo.UserDefined {
 					popts.UserDefined[k] = v
+				}
+				if ri.OpType == replication.ExistingObjectReplicationType {
+					popts.UserDefined[xhttp.MinIOReplicationResetStatus] = fmt.Sprintf("%s;%s", UTCNow().Format(http.TimeFormat), ri.ResetID)
 				}
 				popts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Completed.String()
 				if objInfo.UserTags != "" {

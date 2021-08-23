@@ -686,3 +686,9 @@ func isErrPreconditionFailed(err error) bool {
 	_, ok := err.(PreConditionFailed)
 	return ok
 }
+
+// isErrMethodNotAllowed - Check if error type is MethodNotAllowed.
+func isErrMethodNotAllowed(err error) bool {
+	var methodNotAllowed MethodNotAllowed
+	return errors.As(err, &methodNotAllowed)
+}
