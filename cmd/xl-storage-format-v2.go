@@ -1437,6 +1437,13 @@ const metaDataReadDefault = 4 << 10
 // Return used metadata byte slices here.
 var metaDataPool = sync.Pool{New: func() interface{} { return make([]byte, 0, metaDataReadDefault) }}
 
+// metaDataPoolPut will put an unused small buffer.
+func metaDataPoolPut(buf []byte) {
+	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
+		metaDataPool.Put(buf)
+	}
+}
+
 // readXLMetaNoData will load the metadata, but skip data segments.
 // This should only be used when data is never interesting.
 // If data is not xlv2, it is returned in full.

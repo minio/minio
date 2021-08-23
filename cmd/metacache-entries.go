@@ -497,9 +497,7 @@ func (m *metaCacheEntriesSorted) forwardTo(s string) {
 	})
 	if m.reuse {
 		for i, entry := range m.o[:idx] {
-			if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
-				metaDataPool.Put(entry.metadata)
-			}
+			metaDataPoolPut(entry.metadata)
 			m.o[i].metadata = nil
 		}
 	}
@@ -517,9 +515,7 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 	})
 	if m.reuse {
 		for i, entry := range m.o[:idx] {
-			if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
-				metaDataPool.Put(entry.metadata)
-			}
+			metaDataPoolPut(entry.metadata)
 			m.o[i].metadata = nil
 		}
 	}
@@ -739,9 +735,7 @@ func (m *metaCacheEntriesSorted) truncate(n int) {
 	if len(m.o) > n {
 		if m.reuse {
 			for i, entry := range m.o[n:] {
-				if len(entry.metadata) >= metaDataReadDefault && len(entry.metadata) < metaDataReadDefault*4 {
-					metaDataPool.Put(entry.metadata)
-				}
+				metaDataPoolPut(entry.metadata)
 				m.o[n+i].metadata = nil
 			}
 		}

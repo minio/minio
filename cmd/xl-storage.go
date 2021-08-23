@@ -903,7 +903,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		}
 	}
 	if !lastVersion {
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			return err
 		}
@@ -970,7 +971,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err := xlMeta.AppendTo(nil)
+		buf, err := xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -986,6 +988,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	if err != nil && err != errFileNotFound {
 		return err
 	}
+	defer metaDataPoolPut(buf)
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
@@ -995,7 +998,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -1011,7 +1015,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPool.Get().([]byte)[:0])
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -1132,11 +1137,9 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, err
 	}
 
-	if len(fi.Data) == 0 && cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
+	if len(fi.Data) == 0 {
 		// We did not read inline data, so we have no references.
-		defer func(b []byte) {
-			metaDataPool.Put(buf)
-		}(buf)
+		defer metaDataPoolPut(buf)
 	}
 
 	if readData {
