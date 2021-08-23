@@ -207,6 +207,43 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	return objInfo
 }
 
+// TransitionInfoEquals returns true if transition related information are equal, false otherwise.
+func (fi FileInfo) TransitionInfoEquals(ofi FileInfo) bool {
+	switch {
+	case fi.TransitionStatus != ofi.TransitionStatus,
+		fi.TransitionTier != ofi.TransitionTier,
+		fi.TransitionedObjName != ofi.TransitionedObjName,
+		fi.TransitionVersionID != ofi.TransitionVersionID:
+		return false
+	}
+	return true
+}
+
+// MetadataEquals returns true if FileInfos Metadata maps are equal, false otherwise.
+func (fi FileInfo) MetadataEquals(ofi FileInfo) bool {
+	if len(fi.Metadata) != len(ofi.Metadata) {
+		return false
+	}
+	for k, v := range fi.Metadata {
+		if ov, ok := ofi.Metadata[k]; !ok || ov != v {
+			return false
+		}
+	}
+	return true
+}
+
+// ReplicationInfoEquals returns true if server-side replication related fields are equal, false otherwise.
+func (fi FileInfo) ReplicationInfoEquals(ofi FileInfo) bool {
+	switch {
+	case fi.MarkDeleted != ofi.MarkDeleted,
+		fi.DeleteMarkerReplicationStatus != ofi.DeleteMarkerReplicationStatus,
+		fi.VersionPurgeStatus != ofi.VersionPurgeStatus,
+		fi.Metadata[xhttp.AmzBucketReplicationStatus] != ofi.Metadata[xhttp.AmzBucketReplicationStatus]:
+		return false
+	}
+	return true
+}
+
 // objectPartIndex - returns the index of matching object part number.
 func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	for i, part := range parts {

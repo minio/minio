@@ -215,3 +215,62 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 		})
 	}
 }
+
+func TestTransitionInfoEquals(t *testing.T) {
+	inputs := []struct {
+		tier            string
+		remoteObjName   string
+		remoteVersionID string
+		status          string
+	}{
+		{
+			tier:            "S3TIER-1",
+			remoteObjName:   mustGetUUID(),
+			remoteVersionID: mustGetUUID(),
+			status:          "complete",
+		},
+		{
+			tier:            "S3TIER-2",
+			remoteObjName:   mustGetUUID(),
+			remoteVersionID: mustGetUUID(),
+			status:          "complete",
+		},
+	}
+
+	var i uint
+	for i = 0; i < 8; i++ {
+		fi := FileInfo{
+			TransitionTier:      inputs[0].tier,
+			TransitionedObjName: inputs[0].remoteObjName,
+			TransitionVersionID: inputs[0].remoteVersionID,
+			TransitionStatus:    inputs[0].status,
+		}
+		ofi := fi
+		if i&(1<<0) != 0 {
+			ofi.TransitionTier = inputs[1].tier
+		}
+		if i&(1<<1) != 0 {
+			ofi.TransitionedObjName = inputs[1].remoteObjName
+		}
+		if i&(1<<2) != 0 {
+			ofi.TransitionVersionID = inputs[1].remoteVersionID
+		}
+		actual := fi.TransitionInfoEquals(ofi)
+		if i == 0 && !actual {
+			t.Fatalf("Test %d: Expected FileInfo's transition info to be equal: fi %v ofi %v", i, fi, ofi)
+		}
+		if i != 0 && actual {
+			t.Fatalf("Test %d: Expected FileInfo's transition info to be inequal: fi %v ofi %v", i, fi, ofi)
+		}
+	}
+	fi := FileInfo{
+		TransitionTier:      inputs[0].tier,
+		TransitionedObjName: inputs[0].remoteObjName,
+		TransitionVersionID: inputs[0].remoteVersionID,
+		TransitionStatus:    inputs[0].status,
+	}
+	ofi := FileInfo{}
+	if fi.TransitionInfoEquals(ofi) {
+		t.Fatalf("Expected to be inequal: fi %v ofi %v", fi, ofi)
+	}
+}
