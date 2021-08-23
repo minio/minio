@@ -1,0 +1,44 @@
+apiVersion: v1
+entries:
+  minio:
+  - apiVersion: v1
+    appVersion: RELEASE.2021-08-20T18-32-01Z
+    created: "2021-08-20T15:32:19.484344279-07:00"
+    description: High Performance, Kubernetes Native Object Storage
+    digest: ef86ab6df23d6942705da9ef70991b649638c51bc310587d37a425268ba4a06c
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - storage
+    - object-storage
+    - S3
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-1.0.1.tgz
+    version: 1.0.1
+  - apiVersion: v1
+    appVersion: RELEASE.2021-08-17T20-53-08Z
+    created: "2021-08-20T15:32:19.483059794-07:00"
+    description: High Performance, Kubernetes Native Object Storage
+    digest: 1add7608692cbf39aaf9b1252530e566f7b2f306a14e390b0f49b97a20f2b188
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - storage
+    - object-storage
+    - S3
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-1.0.0.tgz
+    version: 1.0.0
+generated: "2021-08-20T15:32:18.619604967-07:00"
