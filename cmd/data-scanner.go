@@ -147,7 +147,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
-			err = objAPI.NSScanner(ctx, bf, results)
+			err = objAPI.NSScanner(ctx, bf, results, uint32(nextBloomCycle))
 			logger.LogIf(ctx, err)
 			if err == nil {
 				// Store new cycle...
@@ -320,7 +320,7 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		console.Debugf(logPrefix+"Finished scanner, %v entries (%+v) %s \n", len(s.newCache.Cache), *s.newCache.sizeRecursive(s.newCache.Info.Name), logSuffix)
 	}
 	s.newCache.Info.LastUpdate = UTCNow()
-	s.newCache.Info.NextCycle++
+	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
 }
 
@@ -929,9 +929,6 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, meta ac
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
-		if i.debug {
-			console.Debugf(applyActionsLogPrefix+" object not expirable: %q\n", i.objectPath())
-		}
 		return false, size
 	}
 
@@ -1063,17 +1060,17 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 	return action
 }
 
-func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
+func applyTransitionAction(obj ObjectInfo) bool {
 	srcOpts := ObjectOptions{}
 	if obj.TransitionedObject.Status == "" {
+		if obj.DeleteMarker {
+			return false
+		}
 		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
 		srcOpts.VersionID = obj.VersionID
 		// mark transition as pending
 		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
 		obj.metadataOnly = true // Perform only metadata updates.
-		if obj.DeleteMarker {
-			return false
-		}
 	}
 	globalTransitionState.queueTransitionTask(obj)
 	return true
@@ -1151,7 +1148,7 @@ func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 		success = applyExpiryRule(ctx, objLayer, obj, true, action == lifecycle.DeleteRestoredVersionAction)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		success = applyTransitionAction(ctx, action, objLayer, obj)
+		success = applyTransitionAction(obj)
 	}
 	return
 }

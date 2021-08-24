@@ -456,7 +456,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error {
 	// Updates must be closed before we return.
 	defer close(updates)
 
@@ -501,7 +501,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.nsScanner(ctx, allBuckets, bf, updates)
+				err := erObj.nsScanner(ctx, allBuckets, bf, wantCycle, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()

@@ -326,7 +326,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 
 // nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
+func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, wantCycle uint32, updates chan<- dataUsageCache) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -419,7 +419,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 			case v, ok := <-bucketResults:
 				if !ok {
 					// Save final state...
-					cache.Info.NextCycle++
+					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
 					logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
 					updates <- cache
@@ -461,12 +461,13 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				cache.Info.BloomFilter = bloom
 				cache.Info.SkipHealing = healing
 				cache.Disks = allDiskIDs
+				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
 					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
 					cache.Info = dataUsageCacheInfo{
 						Name:       bucket.Name,
 						LastUpdate: time.Time{},
-						NextCycle:  0,
+						NextCycle:  wantCycle,
 					}
 				}
 				// Collect updates.
