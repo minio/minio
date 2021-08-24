@@ -1476,7 +1476,6 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	if err != nil {
 		return err
 	}
-	defer NSUpdated(bucket, object)
 
 	// Acquire write lock before starting to transition the object.
 	lk := er.NewNSLock(bucket, object)
@@ -1506,6 +1505,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	if fi.TransitionStatus == lifecycle.TransitionComplete {
 		return nil
 	}
+	defer NSUpdated(bucket, object)
+
 	if fi.XLV1 {
 		if _, err = er.HealObject(ctx, bucket, object, "", madmin.HealOpts{NoLock: true}); err != nil {
 			return err
@@ -1548,6 +1549,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
+
 	for _, disk := range storageDisks {
 		if disk != nil && disk.IsOnline() {
 			continue

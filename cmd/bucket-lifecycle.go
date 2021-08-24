@@ -327,9 +327,10 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 			Tier:   lc.TransitionTier(oi.ToLifecycleOpts()),
 			ETag:   oi.ETag,
 		},
-		VersionID: oi.VersionID,
-		Versioned: globalBucketVersioningSys.Enabled(oi.Bucket),
-		MTime:     oi.ModTime,
+		VersionID:        oi.VersionID,
+		Versioned:        globalBucketVersioningSys.Enabled(oi.Bucket),
+		VersionSuspended: globalBucketVersioningSys.Suspended(oi.Bucket),
+		MTime:            oi.ModTime,
 	}
 	return objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
 }
