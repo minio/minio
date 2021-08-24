@@ -93,7 +93,7 @@ function perform_test() {
 
     rm -rf ${WORK_DIR}/${1}/*/
 
-    start_minio_3_node 60
+    start_minio_3_node 120
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then
