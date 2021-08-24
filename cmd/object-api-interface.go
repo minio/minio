@@ -103,7 +103,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error
+	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error
 
 	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)
