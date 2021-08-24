@@ -1,7 +1,7 @@
 apiVersion: v1
-description: High Performance, Kubernetes Native Object Storage
+description: Multi-Cloud Object Storage
 name: minio
-version: 1.0.2
+version: 1.0.3
 appVersion: RELEASE.2021-08-20T18-32-01Z
 keywords:
 - storage

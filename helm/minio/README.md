@@ -1,5 +1,4 @@
 # MinIO Helm Chart
-=====
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
@@ -15,7 +14,8 @@ Prerequisites
 -------------
 
 - Helm cli with Kubernetes cluster configured.
-- PV provisioner support in the underlying infrastructure.
+- PV provisioner support in the underlying infrastructure. (We recommend using https://github.com/minio/direct-csi)
+- Use Kubernetes version v1.19 and later for best experience.
 
 Configure MinIO Helm repo
 --------------------
@@ -105,7 +105,9 @@ and set `networkPolicy.enabled` to `true`.
 For Kubernetes v1.5 & v1.6, you must also turn on NetworkPolicy by setting
 the DefaultDeny namespace annotation. Note: this will enforce policy for _all_ pods in the namespace:
 
-    kubectl annotate namespace default "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
+```
+kubectl annotate namespace default "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
+```
 
 With NetworkPolicy enabled, traffic will be limited to just port 9000.
 
