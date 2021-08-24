@@ -1037,6 +1037,8 @@ github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78/go.mod h1:mTh
 github.com/minio/minio-go/v7 v7.0.11-0.20210607181445-e162fdb8e584/go.mod h1:WoyW+ySKAKjY98B9+7ZbI8z8S3jaxaisdcvj9TGlazA=
 github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e h1:aVnxKPpUI1gVeEf9vC+QEt8OxMXiiNMeUWcrBM62oDU=
 github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e/go.mod h1:S23iSP5/gbMwtxeY5FM71R+TkAYyzEdoNEDDwpt8yWs=
+github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2 h1:+/AXRNJS9cVfmPqyJVw0Mg2u4XNsXSOBBtLfk2IuK7o=
+github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2/go.mod h1:S23iSP5/gbMwtxeY5FM71R+TkAYyzEdoNEDDwpt8yWs=
 github.com/minio/operator v0.0.0-20210803012017-0f43eee7fd7a h1:jvEyFZBLo1mIc5YTg+AIAieDkzoAnc9+j4yT5kZO15E=
 github.com/minio/operator v0.0.0-20210803012017-0f43eee7fd7a/go.mod h1:zQqn6VGT46xlSpVXh1I/VZRv+eSgHtVu6URdg71YKX8=
 github.com/minio/operator/logsearchapi v0.0.0-20210803012017-0f43eee7fd7a h1:tnyzzgWP0PXM1nrwHtlyawuBguY+6R9/yee0bezbGDY=
