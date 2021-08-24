@@ -705,7 +705,7 @@ func saveUnformattedFormat(ctx context.Context, storageDisks []StorageAPI, forma
 		if format == nil {
 			continue
 		}
-		if storageDisks[index] != nil && storageDisks[index].IsOnline() {
+		if storageDisks[index] != nil {
 			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
 				return err
 			}
