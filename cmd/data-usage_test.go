@@ -424,6 +424,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	// Changed dir must be picked up in this many cycles.
 	for i := 0; i < dataUsageUpdateDirCycles; i++ {
 		got, err = scanDataFolder(context.Background(), base, got, getSize)
+		got.Info.NextCycle++
 		if err != nil {
 			t.Fatal(err)
 		}
