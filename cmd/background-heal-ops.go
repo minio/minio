@@ -52,10 +52,17 @@ type healRoutine struct {
 
 // Add a new task in the tasks queue
 func (h *healRoutine) queueHealTask(task healTask) {
-	h.tasks <- task
+	select {
+	case h.tasks <- task:
+	default:
+	}
 }
 
-func waitForLowHTTPReq(maxIO int, maxWait time.Duration) {
+func waitForLowHTTPReq() {
+	globalHealConfigMu.Lock()
+	maxIO, maxWait := globalHealConfig.IOCount, globalHealConfig.Sleep
+	globalHealConfigMu.Unlock()
+
 	// No need to wait run at full speed.
 	if maxIO <= 0 {
 		return
@@ -115,7 +122,11 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 					res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
 				}
 			}
-			task.responseCh <- healResult{result: res, err: err}
+
+			select {
+			case task.responseCh <- healResult{result: res, err: err}:
+			default:
+			}
 
 		case <-h.doneCh:
 			return
@@ -127,7 +138,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 
 func newHealRoutine() *healRoutine {
 	return &healRoutine{
-		tasks:  make(chan healTask),
+		tasks:  make(chan healTask, 50000),
 		doneCh: make(chan struct{}),
 	}
 
