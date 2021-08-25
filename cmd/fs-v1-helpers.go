@@ -268,6 +268,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
+		fr.Close()
 		err = osErrToFileErr(err)
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
@@ -277,6 +278,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
+		fr.Close()
 		return nil, 0, errIsNotRegular
 	}
 
@@ -284,6 +286,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	if offset > 0 {
 		_, err = fr.Seek(offset, io.SeekStart)
 		if err != nil {
+			fr.Close()
 			logger.LogIf(ctx, err)
 			return nil, 0, err
 		}
