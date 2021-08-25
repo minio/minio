@@ -1,5 +1,5 @@
 {{- if .Values.consoleIngress.enabled -}}
-{{- $fullName := include "minio.fullname" . -}}
+{{- $fullName := printf "%s-console" (include "minio.fullname" .) -}}
 {{- $servicePort := .Values.consoleService.port -}}
 {{- $ingressPath := .Values.consoleIngress.path -}}
 apiVersion: {{ template "minio.consoleIngress.apiVersion" . }}
