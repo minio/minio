@@ -20,6 +20,7 @@ package cmd
 import (
 	"runtime/debug"
 
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sys"
 )
 
@@ -39,6 +40,10 @@ func setMaxResources() (err error) {
 	// Set open files limit to maximum.
 	if _, maxLimit, err = sys.GetMaxOpenFileLimit(); err != nil {
 		return err
+	}
+
+	if maxLimit < 4096 {
+		logger.Info("WARNING: maximum file descriptor limit %d is too low for production servers. At least 4096 is recommended. Fix with \"ulimit -n 4096\"", maxLimit)
 	}
 
 	if err = sys.SetMaxOpenFileLimit(maxLimit, maxLimit); err != nil {

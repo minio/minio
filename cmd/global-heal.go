@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -201,7 +200,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 
 		disks, _ := er.getOnlineDisksWithHealing()
 		if len(disks) == 0 {
-			return errors.New("healErasureSet: No non-healing disks found")
+			// all disks are healing in this set, this is allowed
+			// so we simply proceed to next bucket, marking the bucket
+			// as done as there are no objects to heal.
+			tracker.bucketDone(bucket.Name)
+			logger.LogIf(ctx, tracker.update(ctx))
+			continue
 		}
 
 		// Limit listing to 3 drives.

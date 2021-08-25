@@ -36,6 +36,7 @@ const (
 	peerRESTMethodProcInfo                 = "/procinfo"
 	peerRESTMethodSysErrors                = "/syserrors"
 	peerRESTMethodSysServices              = "/sysservices"
+	peerRESTMethodSysConfig                = "/sysconfig"
 	peerRESTMethodDispatchNetInfo          = "/dispatchnetinfo"
 	peerRESTMethodDeleteBucketMetadata     = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata       = "/loadbucketmetadata"

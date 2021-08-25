@@ -1051,6 +1051,32 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 	return reply
 }
 
+// GetSysConfig - Get information about system config
+// (only the config that are of concern to minio)
+func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig {
+	reply := make([]madmin.SysConfig, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetSysConfig(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
 // GetSysServices - Get information about system services
 // (only the services that are of concern to minio)
 func (sys *NotificationSys) GetSysServices(ctx context.Context) []madmin.SysServices {
@@ -1291,8 +1317,13 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
 
 	respElements := map[string]string{
-		"x-amz-request-id":        args.RespElements["requestId"],
-		"x-minio-origin-endpoint": globalMinioEndpoint, // MinIO specific custom elements.
+		"x-amz-request-id": args.RespElements["requestId"],
+		"x-minio-origin-endpoint": func() string {
+			if globalMinioEndpoint != "" {
+				return globalMinioEndpoint
+			}
+			return getAPIEndpoints()[0]
+		}(), // MinIO specific custom elements.
 	}
 	// Add deployment as part of
 	if globalDeploymentID != "" {
@@ -1338,7 +1369,13 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
 		newEvent.S3.Object.ContentType = args.Object.ContentType
-		newEvent.S3.Object.UserMetadata = args.Object.UserDefined
+		newEvent.S3.Object.UserMetadata = make(map[string]string, len(args.Object.UserDefined))
+		for k, v := range args.Object.UserDefined {
+			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+				continue
+			}
+			newEvent.S3.Object.UserMetadata[k] = v
+		}
 	}
 
 	return newEvent

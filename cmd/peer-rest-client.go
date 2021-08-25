@@ -411,7 +411,18 @@ func (client *peerRESTClient) GetSELinuxInfo(ctx context.Context) (info madmin.S
 	return info, err
 }
 
-// GetSysErrors - fetch memory information for a remote node.
+// GetSysConfig - fetch sys config for a remote node.
+func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.SysConfig, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodSysConfig, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// GetSysErrors - fetch sys errors for a remote node.
 func (client *peerRESTClient) GetSysErrors(ctx context.Context) (info madmin.SysErrors, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodSysErrors, nil, nil, -1)
 	if err != nil {

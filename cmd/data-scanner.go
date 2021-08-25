@@ -993,9 +993,9 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, meta
 	}
 
 	// Remove this free version
-	opts := ObjectOptions{}
-	opts.VersionID = meta.oi.VersionID
-	_, err = o.DeleteObject(ctx, meta.oi.Bucket, meta.oi.Name, opts)
+	_, err = o.DeleteObject(ctx, meta.oi.Bucket, meta.oi.Name, ObjectOptions{
+		VersionID: meta.oi.VersionID,
+	})
 	if err == nil {
 		auditLogLifecycle(ctx, meta.oi, ILMFreeVersionDelete)
 	}
@@ -1060,17 +1060,9 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 	return action
 }
 
-func applyTransitionAction(obj ObjectInfo) bool {
-	srcOpts := ObjectOptions{}
-	if obj.TransitionedObject.Status == "" {
-		if obj.DeleteMarker {
-			return false
-		}
-		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
-		srcOpts.VersionID = obj.VersionID
-		// mark transition as pending
-		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
-		obj.metadataOnly = true // Perform only metadata updates.
+func applyTransitionRule(obj ObjectInfo) bool {
+	if obj.DeleteMarker {
+		return false
 	}
 	globalTransitionState.queueTransitionTask(obj)
 	return true
@@ -1148,7 +1140,7 @@ func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 		success = applyExpiryRule(ctx, objLayer, obj, true, action == lifecycle.DeleteRestoredVersionAction)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		success = applyTransitionAction(obj)
+		success = applyTransitionRule(obj)
 	}
 	return
 }

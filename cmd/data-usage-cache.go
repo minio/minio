@@ -238,6 +238,24 @@ func (e *dataUsageEntry) removeChild(hash dataUsageHash) {
 	}
 }
 
+// Create a clone of the entry.
+func (e dataUsageEntry) clone() dataUsageEntry {
+	// We operate on a copy from the receiver.
+	if e.Children != nil {
+		ch := make(dataUsageHashMap, len(e.Children))
+		for k, v := range e.Children {
+			ch[k] = v
+		}
+		e.Children = ch
+	}
+	if e.ReplicationStats != nil {
+		// Copy to new struct
+		r := *e.ReplicationStats
+		e.ReplicationStats = &r
+	}
+	return e
+}
+
 // find a path in the cache.
 // Returns nil if not found.
 func (d *dataUsageCache) find(path string) *dataUsageEntry {
@@ -672,7 +690,7 @@ func (d *dataUsageCache) clone() dataUsageCache {
 		Cache: make(map[string]dataUsageEntry, len(d.Cache)),
 	}
 	for k, v := range d.Cache {
-		clone.Cache[k] = v
+		clone.Cache[k] = v.clone()
 	}
 	return clone
 }

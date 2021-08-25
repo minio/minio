@@ -41,11 +41,11 @@ require (
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.9.1
+	github.com/minio/console v0.9.4
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.0.21-0.20210820144629-f47e578ef886
+	github.com/minio/madmin-go v1.1.0
 	github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.11
@@ -71,6 +71,7 @@ require (
 	github.com/prometheus/procfs v0.6.0
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
+	github.com/shirou/gopsutil/v3 v3.21.7
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.6-0.20210521143832-0becd170c402
 	github.com/valyala/bytebufferpool v1.0.0
@@ -81,7 +82,7 @@ require (
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.1-0.20210329175301-c23abee72d19
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.1 // indirect
 	google.golang.org/api v0.31.0

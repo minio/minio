@@ -950,16 +950,16 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 	)
 
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(r, partInfo.Size, "", "", partInfo.Size)
+		hr, err = hash.NewReader(r, partInfo.ActualSize, "", "", partInfo.ActualSize)
 		if err != nil {
 			return err
 		}
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, "", "", opts.ServerSideEncryption)
+		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, "", "", opts.ServerSideEncryption)
 		if err != nil {
 			return err
 		}
-		if pInfo.Size != partInfo.Size {
-			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.Size)
+		if pInfo.Size != partInfo.ActualSize {
+			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, miniogo.CompletePart{
 			PartNumber: pInfo.PartNumber,
