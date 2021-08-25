@@ -45,7 +45,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.0.21-0.20210820144629-f47e578ef886
+	github.com/minio/madmin-go v1.1.0
 	github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.0.11
