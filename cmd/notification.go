@@ -1317,8 +1317,13 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
 
 	respElements := map[string]string{
-		"x-amz-request-id":        args.RespElements["requestId"],
-		"x-minio-origin-endpoint": globalMinioEndpoint, // MinIO specific custom elements.
+		"x-amz-request-id": args.RespElements["requestId"],
+		"x-minio-origin-endpoint": func() string {
+			if globalMinioEndpoint != "" {
+				return globalMinioEndpoint
+			}
+			return getAPIEndpoints()[0]
+		}(), // MinIO specific custom elements.
 	}
 	// Add deployment as part of
 	if globalDeploymentID != "" {
@@ -1364,7 +1369,13 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
 		newEvent.S3.Object.ContentType = args.Object.ContentType
-		newEvent.S3.Object.UserMetadata = args.Object.UserDefined
+		newEvent.S3.Object.UserMetadata = make(map[string]string, len(args.Object.UserDefined))
+		for k, v := range args.Object.UserDefined {
+			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+				continue
+			}
+			newEvent.S3.Object.UserMetadata[k] = v
+		}
 	}
 
 	return newEvent
