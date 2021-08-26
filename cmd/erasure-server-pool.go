@@ -1672,7 +1672,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 							cancel()
 							return
 						}
-						waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
+
 						for _, version := range fivs.Versions {
 							if err := healObject(bucket, version.Name, version.VersionID); err != nil {
 								errCh <- err

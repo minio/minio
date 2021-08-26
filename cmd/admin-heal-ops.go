@@ -715,9 +715,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		task.opts.ScanMode = madmin.HealDeepScan
 	}
 
-	// Wait and proceed if there are active requests
-	waitForLowHTTPReq(opts.IOCount, opts.Sleep)
-
 	h.mutex.Lock()
 	h.scannedItemsMap[healType]++
 	h.lastHealActivity = UTCNow()
@@ -963,5 +960,9 @@ func (h *healSequence) healObject(bucket, object, versionID string) error {
 		object:    object,
 		versionID: versionID,
 	}, madmin.HealItemObject)
+
+	// Wait and proceed if there are active requests
+	waitForLowHTTPReq()
+
 	return err
 }

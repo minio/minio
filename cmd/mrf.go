@@ -27,8 +27,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-var mrfHealingOpts = madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}
-
 const (
 	mrfInfoResetInterval = 10 * time.Second
 	mrfOpsQueueSize      = 10000
@@ -185,6 +183,20 @@ func (m *mrfState) healRoutine() {
 	idler := time.NewTimer(mrfInfoResetInterval)
 	defer idler.Stop()
 
+	globalHealConfigMu.Lock()
+	opts := globalHealConfig
+	globalHealConfigMu.Unlock()
+
+	scanMode := madmin.HealNormalScan
+	if opts.Bitrot {
+		scanMode = madmin.HealDeepScan
+	}
+
+	var mrfHealingOpts = madmin.HealOpts{
+		ScanMode: scanMode,
+		Remove:   healDeleteDangling,
+	}
+
 	for {
 		idler.Reset(mrfInfoResetInterval)
 		select {
@@ -214,7 +226,6 @@ func (m *mrfState) healRoutine() {
 
 			// Heal objects
 			for _, u := range mrfOperations {
-				waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
 				if _, err := m.objectAPI.HealObject(m.ctx, u.bucket, u.object, u.versionID, mrfHealingOpts); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						// If not deleted, assume they failed.
@@ -238,6 +249,8 @@ func (m *mrfState) healRoutine() {
 				delete(m.pendingOps, u)
 				m.mu.Unlock()
 			}
+
+			waitForLowHTTPReq()
 		}
 	}
 }

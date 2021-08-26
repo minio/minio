@@ -59,7 +59,7 @@ var (
 		},
 		config.KV{
 			Key:   IOCount,
-			Value: "10",
+			Value: "100",
 		},
 	}
 
