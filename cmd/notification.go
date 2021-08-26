@@ -1505,8 +1505,13 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
-func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []madmin.SpeedtestResult {
-	results := make([]madmin.SpeedtestResult, len(sys.allPeerClients))
+func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []SpeedtestResult {
+	length := len(sys.allPeerClients)
+	if length == 0 {
+		// For single node erasure setup.
+		length = 1
+	}
+	results := make([]SpeedtestResult, length)
 
 	scheme := "http"
 	if globalIsTLS {
@@ -1526,12 +1531,12 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 				Scheme: scheme,
 				Host:   sys.peerClients[index].host.String(),
 			}
-			results[index].Endpoint = u.String()
-			results[index].Err = err
-			if err == nil {
-				results[index].Uploads = r.Uploads
-				results[index].Downloads = r.Downloads
+			if err != nil {
+				results[index].Error = err.Error()
+			} else {
+				results[index] = r
 			}
+			results[index].Endpoint = u.String()
 		}(index)
 	}
 
@@ -1543,12 +1548,12 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 			Scheme: scheme,
 			Host:   globalLocalNodeName,
 		}
-		results[len(results)-1].Endpoint = u.String()
-		results[len(results)-1].Err = err
-		if err == nil {
-			results[len(results)-1].Uploads = r.Uploads
-			results[len(results)-1].Downloads = r.Downloads
+		if err != nil {
+			results[len(results)-1].Error = err.Error()
+		} else {
+			results[len(results)-1] = r
 		}
+		results[len(results)-1].Endpoint = u.String()
 	}()
 	wg.Wait()
 

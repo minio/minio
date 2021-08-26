@@ -925,6 +925,12 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
+	autotuneStr := r.Form.Get("autotune")
+
+	var autotune bool
+	if autotuneStr != "" {
+		autotune = true
+	}
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -941,9 +947,47 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		duration = time.Second * 10
 	}
 
-	results := globalNotificationSys.Speedtest(ctx, size, concurrent, duration)
+	throughputSize := size
+	iopsSize := size
 
-	if err := json.NewEncoder(w).Encode(results); err != nil {
+	if autotune {
+		iopsSize = 4 * humanize.KiByte
+	}
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	endBlankRepliesCh := make(chan error)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				endBlankRepliesCh <- nil
+				return
+			case <-keepAliveTicker.C:
+				// Write a blank entry to prevent client from disconnecting
+				if err := json.NewEncoder(w).Encode(madmin.SpeedTestResult{}); err != nil {
+					endBlankRepliesCh <- err
+					return
+				}
+				w.(http.Flusher).Flush()
+			case endBlankRepliesCh <- nil:
+				return
+			}
+		}
+	}()
+
+	result, err := speedTest(ctx, throughputSize, iopsSize, concurrent, duration, autotune)
+	if <-endBlankRepliesCh != nil {
+		return
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
