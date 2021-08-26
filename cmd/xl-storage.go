@@ -453,9 +453,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		return cache, errServerNotInitialized
 	}
 
-	globalHealConfigMu.Lock()
-	healOpts := globalHealConfig
-	globalHealConfigMu.Unlock()
 	cache.Info.updates = updates
 
 	dataUsageInfo, err := scanDataFolder(ctx, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
@@ -488,10 +485,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			sz := item.applyActions(ctx, objAPI, actionMeta{
-				oi:         oi,
-				bitRotScan: healOpts.Bitrot,
-			}, &sizeS)
+			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			if !oi.DeleteMarker && sz == oi.Size {
 				sizeS.versions++
 			}

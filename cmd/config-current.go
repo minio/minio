@@ -579,9 +579,7 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	globalCompressConfig = cmpCfg
 	globalCompressConfigMu.Unlock()
 
-	globalHealConfigMu.Lock()
-	globalHealConfig = healCfg
-	globalHealConfigMu.Unlock()
+	globalHealConfig.Update(healCfg)
 
 	// update dynamic scanner values.
 	scannerCycle.Update(scannerCfg.Cycle)

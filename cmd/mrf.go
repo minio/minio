@@ -183,17 +183,8 @@ func (m *mrfState) healRoutine() {
 	idler := time.NewTimer(mrfInfoResetInterval)
 	defer idler.Stop()
 
-	globalHealConfigMu.Lock()
-	opts := globalHealConfig
-	globalHealConfigMu.Unlock()
-
-	scanMode := madmin.HealNormalScan
-	if opts.Bitrot {
-		scanMode = madmin.HealDeepScan
-	}
-
 	var mrfHealingOpts = madmin.HealOpts{
-		ScanMode: scanMode,
+		ScanMode: globalHealConfig.ScanMode(),
 		Remove:   healDeleteDangling,
 	}
 

@@ -19,10 +19,8 @@ package cmd
 
 import (
 	"context"
-	"time"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/logger"
 )
 
 // healTask represents what to heal along with options
@@ -52,51 +50,22 @@ type healRoutine struct {
 
 // Add a new task in the tasks queue
 func (h *healRoutine) queueHealTask(task healTask) {
-	select {
-	case h.tasks <- task:
-	default:
-	}
+	h.tasks <- task
+}
+
+func systemIO() int {
+	// Bucket notification and http trace are not costly, it is okay to ignore them
+	// while counting the number of concurrent connections
+	return int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
 }
 
 func waitForLowHTTPReq() {
-	globalHealConfigMu.Lock()
-	maxIO, maxWait := globalHealConfig.IOCount, globalHealConfig.Sleep
-	globalHealConfigMu.Unlock()
-
-	// No need to wait run at full speed.
-	if maxIO <= 0 {
-		return
-	}
-
-	// At max 10 attempts to wait with 100 millisecond interval before proceeding
-	waitTick := 100 * time.Millisecond
-
-	// Bucket notification and http trace are not costly, it is okay to ignore them
-	// while counting the number of concurrent connections
-	maxIOFn := func() int {
-		return maxIO + int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
-	}
-
-	tmpMaxWait := maxWait
+	var currentIO func() int
 	if httpServer := newHTTPServerFn(); httpServer != nil {
-		// Any requests in progress, delay the heal.
-		for httpServer.GetRequestCount() >= maxIOFn() {
-			if tmpMaxWait > 0 {
-				if tmpMaxWait < waitTick {
-					time.Sleep(tmpMaxWait)
-				} else {
-					time.Sleep(waitTick)
-				}
-				tmpMaxWait = tmpMaxWait - waitTick
-			}
-			if tmpMaxWait <= 0 {
-				if intDataUpdateTracker.debug {
-					logger.Info("waitForLowHTTPReq: waited max %s, resuming", maxWait)
-				}
-				break
-			}
-		}
+		currentIO = httpServer.GetRequestCount
 	}
+
+	globalHealConfig.Wait(currentIO, systemIO)
 }
 
 // Wait for heal requests and process them
@@ -123,10 +92,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 				}
 			}
 
-			select {
-			case task.responseCh <- healResult{result: res, err: err}:
-			default:
-			}
+			task.responseCh <- healResult{result: res, err: err}
 
 		case <-h.doneCh:
 			return
@@ -138,7 +104,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 
 func newHealRoutine() *healRoutine {
 	return &healRoutine{
-		tasks:  make(chan healTask, 50000),
+		tasks:  make(chan healTask),
 		doneCh: make(chan struct{}),
 	}
 
