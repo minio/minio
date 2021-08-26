@@ -397,6 +397,10 @@ func (s *xlStorage) Healing() *healingTracker {
 }
 
 func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
+	if err := checkPathLength(itemPath); err != nil {
+		return nil, err
+	}
+
 	f, err := OpenFile(itemPath, readMode, 0)
 	if err != nil {
 		return nil, err
