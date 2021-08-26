@@ -41,24 +41,14 @@ func newBgHealSequence() *healSequence {
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
 	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))
 
-	globalHealConfigMu.Lock()
-	opts := globalHealConfig
-	globalHealConfigMu.Unlock()
-
-	scanMode := madmin.HealNormalScan
-	if opts.Bitrot {
-		scanMode = madmin.HealDeepScan
-	}
-
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum
 		Remove:   healDeleteDangling,
-		ScanMode: scanMode,
+		ScanMode: globalHealConfig.ScanMode(),
 	}
 
 	return &healSequence{
-		sourceCh:    make(chan healSource, 50000),
-		respCh:      make(chan healResult, 50000),
+		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		// run-background heal with reserved bucket
@@ -179,14 +169,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
 	})
 
-	globalHealConfigMu.Lock()
-	opts := globalHealConfig
-	globalHealConfigMu.Unlock()
-
-	scanMode := madmin.HealNormalScan
-	if opts.Bitrot {
-		scanMode = madmin.HealDeepScan
-	}
+	scanMode := globalHealConfig.ScanMode()
 
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
@@ -332,19 +315,15 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 	// Get background heal sequence to send elements to heal
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-	if !ok {
-		return
-	}
-	select {
-	case bgSeq.sourceCh <- healSource{
-		bucket:    bucket,
-		object:    object,
-		versionID: versionID,
-		opts: &madmin.HealOpts{
-			Remove:   healDeleteDangling, // if found dangling purge it.
-			ScanMode: scan,
-		},
-	}:
-	default:
+	if ok {
+		bgSeq.queueHealTask(healSource{
+			bucket:    bucket,
+			object:    object,
+			versionID: versionID,
+			opts: &madmin.HealOpts{
+				Remove:   healDeleteDangling, // if found dangling purge it.
+				ScanMode: scan,
+			},
+		}, madmin.HealItemObject)
 	}
 }

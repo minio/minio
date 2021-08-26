@@ -337,10 +337,10 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 			healDisks := globalBackgroundHealState.getHealLocalDiskEndpoints()
 			if len(healDisks) > 0 {
 				// Reformat disks
-				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
+				bgSeq.queueHealTask(healSource{bucket: SlashSeparator}, madmin.HealItemMetadata)
 
 				// Ensure that reformatting disks is finished
-				bgSeq.sourceCh <- healSource{bucket: nopHeal}
+				bgSeq.queueHealTask(healSource{bucket: nopHeal}, madmin.HealItemMetadata)
 
 				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
 					len(healDisks)))
