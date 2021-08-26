@@ -3,7 +3,27 @@ entries:
   minio:
   - apiVersion: v1
     appVersion: RELEASE.2021-08-25T00-41-18Z
-    created: "2021-08-25T12:44:45.435265874-07:00"
+    created: "2021-08-25T23:02:19.411736135-07:00"
+    description: Multi-Cloud Object Storage
+    digest: fcd944e837ee481307de6aa3d387ea18c234f995a84c15abb211aab4a4054afc
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - storage
+    - object-storage
+    - S3
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-2.0.0.tgz
+    version: 2.0.0
+  - apiVersion: v1
+    appVersion: RELEASE.2021-08-25T00-41-18Z
+    created: "2021-08-25T23:02:19.410465804-07:00"
     description: Multi-Cloud Object Storage
     digest: 7b6c033d43a856479eb493ab8ca05b230f77c3e42e209e8f298fac6af1a9796f
     home: https://min.io
@@ -23,7 +43,7 @@ entries:
     version: 1.0.5
   - apiVersion: v1
     appVersion: RELEASE.2021-08-25T00-41-18Z
-    created: "2021-08-25T12:44:45.43398443-07:00"
+    created: "2021-08-25T23:02:19.409188576-07:00"
     description: Multi-Cloud Object Storage
     digest: abd221245ace16c8e0c6c851cf262d1474a5219dcbf25c4b2e7b77142f9c59ed
     home: https://min.io
@@ -43,7 +63,7 @@ entries:
     version: 1.0.4
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2021-08-25T12:44:45.432713743-07:00"
+    created: "2021-08-25T23:02:19.407909584-07:00"
     description: Multi-Cloud Object Storage
     digest: 922a333f5413d1042f7aa81929f43767f6ffca9b260c46713f04ce1dda86d57d
     home: https://min.io
@@ -63,7 +83,7 @@ entries:
     version: 1.0.3
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2021-08-25T12:44:45.431468414-07:00"
+    created: "2021-08-25T23:02:19.406650868-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: 10e22773506bbfb1c66442937956534cf4057b94f06a977db78b8cd223588388
     home: https://min.io
@@ -83,7 +103,7 @@ entries:
     version: 1.0.2
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2021-08-25T12:44:45.430199198-07:00"
+    created: "2021-08-25T23:02:19.405348994-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: ef86ab6df23d6942705da9ef70991b649638c51bc310587d37a425268ba4a06c
     home: https://min.io
@@ -103,7 +123,7 @@ entries:
     version: 1.0.1
   - apiVersion: v1
     appVersion: RELEASE.2021-08-17T20-53-08Z
-    created: "2021-08-25T12:44:45.428920233-07:00"
+    created: "2021-08-25T23:02:19.404088219-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: 1add7608692cbf39aaf9b1252530e566f7b2f306a14e390b0f49b97a20f2b188
     home: https://min.io
@@ -121,4 +141,4 @@ entries:
     urls:
     - https://charts.min.io/helm-releases/minio-1.0.0.tgz
     version: 1.0.0
-generated: "2021-08-25T12:44:44.566718218-07:00"
+generated: "2021-08-25T23:02:18.72091911-07:00"
