@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -691,11 +692,11 @@ func (h *healSequence) logHeal(healType madmin.HealItemType) {
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
 	// Send heal request
 	task := healTask{
-		bucket:     source.bucket,
-		object:     source.object,
-		versionID:  source.versionID,
-		opts:       h.settings,
-		responseCh: h.respCh,
+		bucket:    source.bucket,
+		object:    source.object,
+		versionID: source.versionID,
+		opts:      h.settings,
+		respCh:    h.respCh,
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
@@ -707,11 +708,18 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	h.lastHealActivity = UTCNow()
 	h.mutex.Unlock()
 
-	globalBackgroundHealRoutine.queueHealTask(task)
+	select {
+	case globalBackgroundHealRoutine.tasks <- task:
+	case <-h.ctx.Done():
+		return nil
+	}
 
 	select {
 	case res := <-h.respCh:
 		if !h.reportProgress {
+			if errors.Is(res.err, errSkipFile) { // this is only sent usually by nopHeal
+				return nil
+			}
 			// Object might have been deleted, by the time heal
 			// was attempted, we should ignore this object and
 			// return the error and not calculate this object
