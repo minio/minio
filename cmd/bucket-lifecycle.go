@@ -180,8 +180,15 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 				return
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
-			if err := transitionObject(ctx, objectAPI, oi); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
+			// Retrieve consistent object info.
+			obj, err := objectAPI.GetObjectInfo(ctx, oi.Bucket, oi.Name, ObjectOptions{
+				VersionID: oi.VersionID,
+			})
+			if err == nil {
+				// Ignore errors, the object may have changed since it was queued.
+				if err := transitionObject(ctx, objectAPI, obj); err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
+				}
 			}
 			atomic.AddInt32(&t.activeTasks, -1)
 		}

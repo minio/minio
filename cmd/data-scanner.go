@@ -921,6 +921,9 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+		// Apply without re-reading object info.
+		// This is done by the worker.
+		return applyLifecycleAction(ctx, action, o, oi), size
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
