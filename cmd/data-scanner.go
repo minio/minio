@@ -674,13 +674,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
-						for _, err := range errs {
-							if err != nil {
-								return
-							}
-						}
-
-						// If no errors, queue it for healing.
+						// check if we can get one entry atleast
+						// proceed to heal nonetheless.
 						entry, _ = entries.firstFound()
 					}
 

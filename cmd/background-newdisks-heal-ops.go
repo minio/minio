@@ -308,14 +308,6 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 
 }
 
-func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
-	// Run the background healer
-	globalBackgroundHealRoutine = newHealRoutine()
-	go globalBackgroundHealRoutine.run(ctx, objAPI)
-
-	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
-}
-
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed
 //  1. Only the concerned erasure set will be listed and healed
 //  2. Only the node hosting the disk is responsible to perform the heal

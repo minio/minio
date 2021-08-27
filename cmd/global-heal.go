@@ -234,17 +234,26 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 					return
 				}
 			}
+
 			fivs, err := entry.fileInfoVersions(bucket.Name)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				err := bgSeq.queueHealTask(healSource{
+					bucket:    bucket.Name,
+					object:    entry.name,
+					versionID: "",
+				}, madmin.HealItemObject)
+				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+					logger.LogIf(ctx, err)
+				}
 				return
 			}
 
 			for _, version := range fivs.Versions {
-				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{
-					ScanMode: scanMode,
-					Remove:   healDeleteDangling,
-				}); err != nil {
+				if _, err := er.HealObject(ctx, bucket.Name, version.Name,
+					version.VersionID, madmin.HealOpts{
+						ScanMode: scanMode,
+						Remove:   healDeleteDangling,
+					}); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						// If not deleted, assume they failed.
 						tracker.ItemsFailed++
@@ -283,9 +292,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			agreed:         healEntry,
 			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 				entry, ok := entries.resolve(&resolver)
-				if ok {
-					healEntry(*entry)
+				if !ok {
+					// check if we can get one entry atleast
+					// proceed to heal nonetheless.
+					entry, _ = entries.firstFound()
 				}
+				healEntry(*entry)
 			},
 			finished: nil,
 		})
