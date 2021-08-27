@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"runtime"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -52,8 +54,8 @@ type bootstrapRESTServer struct{}
 // ServerSystemConfig - captures information about server configuration.
 type ServerSystemConfig struct {
 	MinioPlatform  string
-	MinioRuntime   string
 	MinioEndpoints EndpointServerPools
+	MinioEnv       map[string]string
 }
 
 // Diff - returns error on first difference found in two configs.
@@ -82,15 +84,23 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 					s2.MinioEndpoints[i].Endpoints[j])
 			}
 		}
-
+	}
+	if !reflect.DeepEqual(s1.MinioEnv, s2.MinioEnv) {
+		return fmt.Errorf("Expected same MINIO_ environment variables and values")
 	}
 	return nil
 }
 
 func getServerSystemCfg() ServerSystemConfig {
+	envs := env.List("MINIO_")
+	envValues := make(map[string]string, len(envs))
+	for _, envK := range envs {
+		envValues[envK] = env.Get(envK, "")
+	}
 	return ServerSystemConfig{
 		MinioPlatform:  fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
 		MinioEndpoints: globalEndpoints,
+		MinioEnv:       envValues,
 	}
 }
 
