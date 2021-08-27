@@ -234,15 +234,17 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 			return true, nil
 		}
 
+		lockFound := false
 		for _, lris := range l.lockMap {
 			for _, lri := range lris {
 				if lri.UID == args.UID {
-					l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
-					return true, nil
+					l.removeEntry(lri.Name, dsync.LockArgs{UID: lri.UID}, &lris)
+					lockFound = true
 				}
 			}
 		}
-		return false, nil
+
+		return lockFound, nil
 	}
 }
 
@@ -254,24 +256,18 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 		l.mutex.Lock()
 		defer l.mutex.Unlock()
 
-		resource := args.Resources[0] // refresh check is always per resource.
-
-		// Lock found, proceed to verify if belongs to given uid.
-		lri, ok := l.lockMap[resource]
-		if !ok {
-			// lock doesn't exist yet, return false
-			return false, nil
-		}
-
-		// Check whether uid is still active
-		for i := range lri {
-			if lri[i].UID == args.UID && lri[i].Owner == args.Owner {
-				lri[i].TimeLastRefresh = UTCNow()
-				return true, nil
+		lockFound := false
+		for _, lri := range l.lockMap {
+			// Check whether uid is still active
+			for i := range lri {
+				if lri[i].UID == args.UID {
+					lri[i].TimeLastRefresh = UTCNow()
+					lockFound = true
+				}
 			}
 		}
 
-		return false, nil
+		return lockFound, nil
 	}
 }
 
