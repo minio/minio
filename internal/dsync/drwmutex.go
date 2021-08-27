@@ -238,7 +238,7 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 			case <-refreshTimer.C:
 				refreshTimer.Reset(drwMutexRefreshInterval)
 
-				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum, dm.Names...)
+				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum)
 				if err == nil && !refreshed {
 					// Clean the lock locally and in remote nodes
 					forceUnlock(ctx, dm.clnt, id)
@@ -279,8 +279,8 @@ type refreshResult struct {
 	succeeded bool
 }
 
-func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lockNames ...string) (bool, error) {
-	restClnts, owner := ds.GetLockers()
+func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (bool, error) {
+	restClnts, _ := ds.GetLockers()
 
 	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan refreshResult, len(restClnts))
@@ -298,11 +298,7 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 			}
 
 			args := LockArgs{
-				Owner:     owner,
-				UID:       id,
-				Resources: lockNames,
-				Source:    source,
-				Quorum:    quorum,
+				UID: id,
 			}
 
 			ctx, cancel := context.WithTimeout(ctx, drwMutexRefreshCallTimeout)
