@@ -238,10 +238,11 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 			for _, lri := range lris {
 				if lri.UID == args.UID {
 					l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
+					return true, nil
 				}
 			}
 		}
-		return true, nil
+		return false, nil
 	}
 }
 
