@@ -54,12 +54,14 @@ type storageRESTServer struct {
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
-	if errors.Is(err, errDiskStale) {
-		w.WriteHeader(http.StatusPreconditionFailed)
-	} else {
-		w.WriteHeader(http.StatusForbidden)
+	if err != nil {
+		if errors.Is(err, errDiskStale) {
+			w.WriteHeader(http.StatusPreconditionFailed)
+		} else {
+			w.WriteHeader(http.StatusForbidden)
+		}
+		w.Write([]byte(err.Error()))
 	}
-	w.Write([]byte(err.Error()))
 	w.(http.Flusher).Flush()
 }
 
@@ -326,8 +328,9 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	done, body := keepHTTPReqResponseAlive(w, r)
-	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), body))
+	if err = s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body); err != nil {
+		s.writeErrorResponse(w, err)
+	}
 }
 
 // DeleteVersion delete updated metadata.
@@ -659,17 +662,13 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	}
 
 	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]error, totalVersions)}
-
-	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
-	done := keepHTTPResponseAlive(w)
 	errs := s.storage.DeleteVersions(r.Context(), volume, versions)
-	done(nil)
 	for idx := range versions {
 		if errs[idx] != nil {
 			dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
 		}
 	}
+	encoder := gob.NewEncoder(w)
 	encoder.Encode(dErrsResp)
 	w.(http.Flusher).Flush()
 }
@@ -717,95 +716,6 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
-}
-
-// closeNotifier is itself a ReadCloser that will notify when either an error occurs or
-// the Close() function is called.
-type closeNotifier struct {
-	rc   io.ReadCloser
-	done chan struct{}
-}
-
-func (c *closeNotifier) Read(p []byte) (n int, err error) {
-	n, err = c.rc.Read(p)
-	if err != nil {
-		if c.done != nil {
-			close(c.done)
-			c.done = nil
-		}
-	}
-	return n, err
-}
-
-func (c *closeNotifier) Close() error {
-	if c.done != nil {
-		close(c.done)
-		c.done = nil
-	}
-	return c.rc.Close()
-}
-
-// keepHTTPReqResponseAlive can be used to avoid timeouts with long storage
-// operations, such as bitrot verification or data usage scanning.
-// Every 10 seconds a space character is sent.
-// keepHTTPReqResponseAlive will wait for the returned body to be read before starting the ticker.
-// The returned function should always be called to release resources.
-// An optional error can be sent which will be picked as text only error,
-// without its original type by the receiver.
-// waitForHTTPResponse should be used to the receiving side.
-func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func(error), body io.ReadCloser) {
-	bodyDoneCh := make(chan struct{})
-	doneCh := make(chan error)
-	ctx := r.Context()
-	go func() {
-		// Wait for body to be read.
-		select {
-		case <-ctx.Done():
-		case <-bodyDoneCh:
-		case err := <-doneCh:
-			if err != nil {
-				w.Write([]byte{1})
-				w.Write([]byte(err.Error()))
-			} else {
-				w.Write([]byte{0})
-			}
-			return
-		}
-		defer close(doneCh)
-		// Initiate ticker after body has been read.
-		ticker := time.NewTicker(time.Second * 10)
-		for {
-			select {
-			case <-ticker.C:
-				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
-				w.(http.Flusher).Flush()
-			case err := <-doneCh:
-				if err != nil {
-					w.Write([]byte{1})
-					w.Write([]byte(err.Error()))
-				} else {
-					w.Write([]byte{0})
-				}
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	return func(err error) {
-		if doneCh == nil {
-			return
-		}
-
-		// Indicate we are ready to write.
-		doneCh <- err
-
-		// Wait for channel to be closed so we don't race on writes.
-		<-doneCh
-
-		// Clear so we can be called multiple times without crashing.
-		doneCh = nil
-	}, &closeNotifier{rc: r.Body, done: bodyDoneCh}
 }
 
 // keepHTTPResponseAlive can be used to avoid timeouts with long storage
@@ -1121,10 +1031,9 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
-	done := keepHTTPResponseAlive(w)
 	si, err := s.storage.StatInfoFile(r.Context(), volume, filePath)
-	done(err)
 	if err != nil {
+		s.writeErrorResponse(w, err)
 		return
 	}
 	msgp.Encode(w, &si)

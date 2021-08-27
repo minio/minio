@@ -377,10 +377,6 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
 	defer xhttp.DrainBody(respBody)
-	if err != nil {
-		return err
-	}
-	_, err = waitForHTTPResponse(respBody)
 	return err
 }
 
@@ -616,16 +612,8 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 		return errs
 	}
 
-	reader, err := waitForHTTPResponse(respBody)
-	if err != nil {
-		for i := range errs {
-			errs[i] = err
-		}
-		return errs
-	}
-
 	dErrResp := &DeleteVersionsErrsResp{}
-	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
+	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
 		for i := range errs {
 			errs[i] = err
 		}
@@ -689,11 +677,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		return stat, err
 	}
 	defer xhttp.DrainBody(respBody)
-	respReader, err := waitForHTTPResponse(respBody)
-	if err != nil {
-		return stat, err
-	}
-	err = stat.DecodeMsg(msgpNewReader(respReader))
+	err = stat.DecodeMsg(msgpNewReader(respBody))
 	return stat, err
 }
 
