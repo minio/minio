@@ -919,29 +919,14 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		}
 	}
 	switch action {
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
+	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+		return applyLifecycleAction(action, oi), 0
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+		return applyLifecycleAction(action, oi), size
 	default:
 		// No action.
 		return false, size
 	}
-
-	action = evalActionFromLifecycle(ctx, *i.lifeCycle, oi, i.debug)
-	if action != lifecycle.NoneAction {
-		applied = applyLifecycleAction(ctx, action, o, oi)
-	}
-
-	if applied {
-		switch action {
-		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-			return true, size
-		}
-		// For all other lifecycle actions that remove data
-		return true, 0
-	}
-
-	return false, size
 }
 
 // applyTierObjSweep removes remote object pending deletion and the free-version
@@ -1060,7 +1045,9 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 }
 
 func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, applyOnVersion bool) bool {
-	opts := ObjectOptions{}
+	opts := ObjectOptions{
+		Expiration: ExpirationOptions{Expire: true},
+	}
 
 	if applyOnVersion {
 		opts.VersionID = obj.VersionID
@@ -1105,7 +1092,7 @@ func applyExpiryRule(obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
 }
 
 // Perform actions (removal or transitioning of objects), return true the action is successfully performed
-func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
+func applyLifecycleAction(action lifecycle.Action, obj ObjectInfo) (success bool) {
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 		success = applyExpiryRule(obj, false, action == lifecycle.DeleteVersionAction)

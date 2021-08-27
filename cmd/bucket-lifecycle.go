@@ -252,6 +252,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(oi.Bucket)
 	opts.VersionID = lcOpts.VersionID
+	opts.Expiration = ExpirationOptions{Expire: true}
 	switch action {
 	case expireObj:
 		// When an object is past expiry or when a transitioned object is being

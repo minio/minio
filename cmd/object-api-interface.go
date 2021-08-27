@@ -52,6 +52,7 @@ type ObjectOptions struct {
 	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	Transition                    TransitionOptions
+	Expiration                    ExpirationOptions
 
 	NoLock         bool // indicates to lower layers if the caller is expecting to hold locks.
 	ProxyRequest   bool // only set for GET/HEAD in active-active replication scenario
@@ -61,6 +62,11 @@ type ObjectOptions struct {
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
+}
+
+// ExpirationOptions represents object options for object expiration at objectLayer.
+type ExpirationOptions struct {
+	Expire bool
 }
 
 // TransitionOptions represents object options for transition ObjectLayer operation
