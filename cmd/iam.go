@@ -1177,6 +1177,10 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
+	if parentUser == "" {
+		return auth.Credentials{}, errInvalidArgument
+	}
+
 	var policyBuf []byte
 	if opts.sessionPolicy != nil {
 		err := opts.sessionPolicy.Validate()
@@ -1192,8 +1196,34 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
+	// found newly requested service account, to be same as
+	// parentUser, reject such operations.
+	if parentUser == opts.accessKey {
+		return auth.Credentials{}, errIAMActionNotAllowed
+	}
+
 	sys.store.lock()
 	defer sys.store.unlock()
+
+	// Handle validation of incoming service accounts.
+	{
+		cr, found := sys.iamUsersMap[opts.accessKey]
+		// found newly requested service account, to be an existing
+		// user, reject such operations.
+		if found && !cr.IsTemp() && !cr.IsServiceAccount() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+		// found newly requested service account, to be an existing
+		// temporary user, reject such operations.
+		if found && cr.IsTemp() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+		// found newly requested service account, to be an existing
+		// service account for another parentUser, reject such operations.
+		if found && cr.IsServiceAccount() && cr.ParentUser != parentUser {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+	}
 
 	cr, found := sys.iamUsersMap[parentUser]
 	// Disallow service accounts to further create more service accounts.

@@ -82,7 +82,7 @@ var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove 
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 
 // error returned in IAM subsystem when an external users systems is configured.
-var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed with LDAP configuration")
+var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed")
 
 // error returned in IAM subsystem when IAM sub-system is still being initialized.
 var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
