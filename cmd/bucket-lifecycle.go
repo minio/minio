@@ -75,8 +75,9 @@ func NewLifecycleSys() *LifecycleSys {
 }
 
 type expiryTask struct {
-	objInfo       ObjectInfo
-	versionExpiry bool
+	objInfo        ObjectInfo
+	versionExpiry  bool
+	restoredObject bool
 }
 
 type expiryState struct {
@@ -89,13 +90,13 @@ func (es *expiryState) PendingTasks() int {
 	return len(es.expiryCh)
 }
 
-func (es *expiryState) queueExpiryTask(oi ObjectInfo, rmVersion bool) {
+func (es *expiryState) queueExpiryTask(oi ObjectInfo, restoredObject bool, rmVersion bool) {
 	select {
 	case <-GlobalContext.Done():
 		es.once.Do(func() {
 			close(es.expiryCh)
 		})
-	case es.expiryCh <- expiryTask{objInfo: oi, versionExpiry: rmVersion}:
+	case es.expiryCh <- expiryTask{objInfo: oi, versionExpiry: rmVersion, restoredObject: restoredObject}:
 	default:
 	}
 }
@@ -114,7 +115,11 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
 	go func() {
 		for t := range globalExpiryState.expiryCh {
-			applyExpiryRule(ctx, objectAPI, t.objInfo, false, t.versionExpiry)
+			if t.objInfo.TransitionedObject.Status != "" {
+				applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.restoredObject)
+			} else {
+				applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
+			}
 		}
 	}()
 }

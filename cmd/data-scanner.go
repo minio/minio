@@ -927,30 +927,9 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		return false, size
 	}
 
-	obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{
-		VersionID: versionID,
-	})
-	if err != nil {
-		switch err.(type) {
-		case MethodNotAllowed: // This happens usually for a delete marker
-			if !obj.DeleteMarker { // if this is not a delete marker log and return
-				// Do nothing - heal in the future.
-				logger.LogIf(ctx, err)
-				return false, size
-			}
-		case ObjectNotFound, VersionNotFound:
-			// object not found or version not found return 0
-			return false, 0
-		default:
-			// All other errors proceed.
-			logger.LogIf(ctx, err)
-			return false, size
-		}
-	}
-
-	action = evalActionFromLifecycle(ctx, *i.lifeCycle, obj, i.debug)
+	action = evalActionFromLifecycle(ctx, *i.lifeCycle, oi, i.debug)
 	if action != lifecycle.NoneAction {
-		applied = applyLifecycleAction(ctx, action, o, obj)
+		applied = applyLifecycleAction(ctx, action, o, oi)
 	}
 
 	if applied {
@@ -1120,20 +1099,18 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 }
 
 // Apply object, object version, restored object or restored object version action on the given object
-func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
-	if obj.TransitionedObject.Status != "" {
-		return applyExpiryOnTransitionedObject(ctx, objLayer, obj, restoredObject)
-	}
-	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj, applyOnVersion)
+func applyExpiryRule(obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
+	globalExpiryState.queueExpiryTask(obj, restoredObject, applyOnVersion)
+	return true
 }
 
 // Perform actions (removal or transitioning of objects), return true the action is successfully performed
 func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
 	switch action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-		success = applyExpiryRule(ctx, objLayer, obj, false, action == lifecycle.DeleteVersionAction)
+		success = applyExpiryRule(obj, false, action == lifecycle.DeleteVersionAction)
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		success = applyExpiryRule(ctx, objLayer, obj, true, action == lifecycle.DeleteRestoredVersionAction)
+		success = applyExpiryRule(obj, true, action == lifecycle.DeleteRestoredVersionAction)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 		success = applyTransitionRule(obj)
 	}

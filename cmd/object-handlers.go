@@ -450,8 +450,16 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
-		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
-			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
+		var success bool
+		switch action {
+		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+			success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
+		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+			// Restored object delete would be still allowed to proceed as success
+			// since transition behavior is slightly different.
+			applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+		}
+		if success {
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 			return
 		}
@@ -656,8 +664,16 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
-		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
-			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
+		var success bool
+		switch action {
+		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+			success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
+		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+			// Restored object delete would be still allowed to proceed as success
+			// since transition behavior is slightly different.
+			applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+		}
+		if success {
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 			return
 		}
