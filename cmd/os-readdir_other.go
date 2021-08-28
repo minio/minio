@@ -96,7 +96,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 	maxEntries := 1000
 	if opts.count > 0 && opts.count < maxEntries {
-		maxEntries = count
+		maxEntries = opts.count
 	}
 
 	done := false
