@@ -61,6 +61,7 @@ import (
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 	"github.com/minio/sio"
+	"github.com/minio/pkg/env"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -895,6 +896,574 @@ func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer
 	}
 	return false
 }
+
+//copy object to trash. This function is used in Delete Object
+func (api objectAPIHandlers) CopyObjectToTrash(w http.ResponseWriter, r *http.Request, srcBucket string, srcObject string) {
+
+	trashEnable := env.Get("MINIO_TRASH", "ENABLE")
+	if !strings.EqualFold(trashEnable, "ENABLE") {
+		return
+	}
+
+	ctx := newContext(r, w, "CopyObject")
+	dstBucket := "trash"
+	dstObject := srcBucket + "/" + srcObject
+	if srcBucket == dstBucket {
+		return
+	}
+
+	trashOpts := BucketOptions{
+		LockEnabled:       true,
+		VersioningEnabled: true,
+	}
+	objectAPI := api.ObjectAPI()
+	objectAPI.MakeBucketWithLocation(ctx, dstBucket, trashOpts)
+
+	api.CopyObject(ctx, w, r, srcBucket, dstBucket, srcObject, dstObject)
+}
+
+func (api objectAPIHandlers) CopyObject(ctx context.Context, w http.ResponseWriter, r *http.Request, srcBucket string, dstBucket string, srcObject string, dstObject string) {
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+
+		logger.Error(r.URL.Path + " " + "ErrServerNotInitialized")
+		return
+	}
+
+	if _, ok := crypto.IsRequested(r.Header); ok && !objectAPI.IsEncryptionSupported() {
+
+		logger.Error(r.URL.Path + " " + "ErrNotImplemented")
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
+
+		logger.Error(r.URL.Path + " " + s3Error.String())
+		return
+	}
+
+	// Read escaped copy source path to check for parameters.
+	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
+	var vid string
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
+		// Note that url.Parse does the unescaping
+	}
+
+	// If source object is empty or bucket is empty, reply back invalid copy source.
+	if srcObject == "" || srcBucket == "" {
+
+		logger.Error(r.URL.Path + " " + "ErrInvalidCopySource")
+		return
+	}
+
+	if vid != "" && vid != nullVersionID {
+		_, err := uuid.Parse(vid)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, VersionNotFound{
+				Bucket:    srcBucket,
+				Object:    srcObject,
+				VersionID: vid,
+			}), r.URL)
+			return
+		}
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
+
+		logger.Error(r.URL.Path + " " + s3Error.String())
+		return
+	}
+
+	// Check if metadata directive is valid.
+	if !isDirectiveValid(r.Header.Get(xhttp.AmzMetadataDirective)) {
+
+		logger.Error(r.URL.Path + " " + "ErrInvalidMetadataDirective")
+		return
+	}
+
+	// check if tag directive is valid
+	if !isDirectiveValid(r.Header.Get(xhttp.AmzTagDirective)) {
+
+		logger.Error(r.URL.Path + " " + "ErrInvalidTagDirective")
+		return
+	}
+
+	// Validate storage class metadata if present
+	dstSc := r.Header.Get(xhttp.AmzStorageClass)
+	if dstSc != "" && !storageclass.IsValid(dstSc) {
+
+		logger.Error(r.URL.Path + " " + "ErrInvalidStorageClass")
+		return
+	}
+
+	// Check if bucket encryption is enabled
+	sseConfig, _ := globalBucketSSEConfigSys.Get(dstBucket)
+	sseConfig.Apply(r.Header, globalAutoEncryption)
+
+	var srcOpts, dstOpts ObjectOptions
+	srcOpts, err := copySrcOpts(ctx, r, srcBucket, srcObject)
+	if err != nil {
+		logger.LogIf(ctx, err)
+
+		logger.Error(r.URL.Path + " " + err.Error())
+		return
+	}
+	srcOpts.VersionID = vid
+
+	// convert copy src encryption options for GET calls
+	var getOpts = ObjectOptions{VersionID: srcOpts.VersionID, Versioned: srcOpts.Versioned}
+	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
+	if getSSE != srcOpts.ServerSideEncryption {
+		getOpts.ServerSideEncryption = getSSE
+	}
+
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		logger.Error(r.URL.Path + " " + err.Error())
+		return
+	}
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
+
+	checkCopyPrecondFn := func(o ObjectInfo) bool {
+		if objectAPI.IsEncryptionSupported() {
+			if _, err := DecryptObjectInfo(&o, r); err != nil {
+
+				logger.Error(r.URL.Path + " " + err.Error())
+				return true
+			}
+		}
+		return checkCopyObjectPreconditions(ctx, w, r, o)
+	}
+	getOpts.CheckPrecondFn = checkCopyPrecondFn
+
+	lock := noLock
+	if !cpSrcDstSame {
+		lock = readLock
+	}
+
+	var rs *HTTPRangeSpec
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
+	if err != nil {
+		if isErrPreconditionFailed(err) {
+			return
+		}
+		if globalBucketVersioningSys.Enabled(srcBucket) && gr != nil {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+			}
+		}
+		// Update context bucket & object names for correct S3 XML error response
+		reqInfo := logger.GetReqInfo(ctx)
+		reqInfo.BucketName = srcBucket
+		reqInfo.ObjectName = srcObject
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	defer gr.Close()
+	srcInfo := gr.ObjInfo
+
+	// maximum Upload size for object in a single CopyObject operation.
+	if isMaxObjectSize(srcInfo.Size) {
+
+		logger.Error(r.URL.Path + " " + "ErrEntityTooLarge")
+		return
+	}
+
+	// We have to copy metadata only if source and destination are same.
+	// this changes for encryption which can be observed below.
+	if cpSrcDstSame {
+		srcInfo.metadataOnly = true
+	}
+
+	var chStorageClass bool
+	if dstSc != "" {
+		chStorageClass = true
+		srcInfo.metadataOnly = false
+	}
+
+	var reader io.Reader = gr
+
+	// Set the actual size to the compressed/decrypted size if encrypted.
+	actualSize, err := srcInfo.GetActualSize()
+	if err != nil {
+		logger.Error(r.URL.Path + " " + err.Error())
+		return
+	}
+	length := actualSize
+
+	if !cpSrcDstSame {
+		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
+			logger.Error(r.URL.Path + " " + err.Error())
+			return
+		}
+	}
+
+	// Check if either the source is encrypted or the destination will be encrypted.
+	_, objectEncryption := crypto.IsRequested(r.Header)
+	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
+
+	var compressMetadata map[string]string
+	// No need to compress for remote etcd calls
+	// Pass the decompressed stream to such calls.
+	isDstCompressed := objectAPI.IsCompressionSupported() &&
+		isCompressible(r.Header, dstObject) &&
+		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame && !objectEncryption
+	if isDstCompressed {
+		compressMetadata = make(map[string]string, 2)
+		// Preserving the compression metadata.
+		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
+		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
+
+		reader = etag.NewReader(reader, nil)
+		s2c := newS2CompressReader(reader, actualSize)
+		defer s2c.Close()
+		reader = etag.Wrap(s2c, reader)
+		length = -1
+	} else {
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"compression")
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"actual-size")
+		reader = gr
+	}
+
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize)
+	if err != nil {
+		logger.Error(r.URL.Path + " " + err.Error())
+		return
+	}
+
+	pReader := NewPutObjReader(srcInfo.Reader)
+
+	// Handle encryption
+	var encMetadata = make(map[string]string)
+	if objectAPI.IsEncryptionSupported() {
+		// Encryption parameters not applicable for this object.
+		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); !ok && crypto.SSECopy.IsRequested(r.Header) {
+			logger.Error(r.URL.Path + " " + err.Error())
+			return
+		}
+		// Encryption parameters not present for this object.
+		if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) {
+			logger.Error(r.URL.Path + " " + err.Error())
+			return
+		}
+
+		var oldKey, newKey []byte
+		var newKeyID string
+		var kmsCtx kms.Context
+		var objEncKey crypto.ObjectKey
+		sseCopyKMS := crypto.S3KMS.IsEncrypted(srcInfo.UserDefined)
+		sseCopyS3 := crypto.S3.IsEncrypted(srcInfo.UserDefined)
+		sseCopyC := crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header)
+		sseC := crypto.SSEC.IsRequested(r.Header)
+		sseS3 := crypto.S3.IsRequested(r.Header)
+		sseKMS := crypto.S3KMS.IsRequested(r.Header)
+
+		isSourceEncrypted := sseCopyC || sseCopyS3 || sseCopyKMS
+		isTargetEncrypted := sseC || sseS3 || sseKMS
+
+		if sseC {
+			newKey, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				logger.Error(r.URL.Path + " " + err.Error())
+				return
+			}
+		}
+		if crypto.S3KMS.IsRequested(r.Header) {
+			newKeyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(r.Header)
+			if err != nil {
+				logger.Error(r.URL.Path + " " + err.Error())
+				return
+			}
+		}
+
+		// If src == dst and either
+		// - the object is encrypted using SSE-C and two different SSE-C keys are present
+		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
+		// - the object storage class is not changing
+		// then execute a key rotation.
+		if cpSrcDstSame && (sseCopyC && sseC) && !chStorageClass {
+			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
+			if err != nil {
+				logger.Error(r.URL.Path + " " + err.Error())
+				return
+			}
+
+			for k, v := range srcInfo.UserDefined {
+				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+					encMetadata[k] = v
+				}
+			}
+
+			if err = rotateKey(oldKey, newKeyID, newKey, srcBucket, srcObject, encMetadata, kmsCtx); err != nil {
+
+				logger.Error(r.URL.Path + " " + err.Error())
+				return
+			}
+
+			// Since we are rotating the keys, make sure to update the metadata.
+			srcInfo.metadataOnly = true
+			srcInfo.keyRotation = true
+		} else {
+			if isSourceEncrypted || isTargetEncrypted {
+				// We are not only copying just metadata instead
+				// we are creating a new object at this point, even
+				// if source and destination are same objects.
+				if !srcInfo.keyRotation {
+					srcInfo.metadataOnly = false
+				}
+			}
+
+			// Calculate the size of the target object
+			var targetSize int64
+
+			switch {
+			case isDstCompressed:
+				targetSize = -1
+			case !isSourceEncrypted && !isTargetEncrypted:
+				targetSize, _ = srcInfo.GetActualSize()
+			case isSourceEncrypted && isTargetEncrypted:
+				objInfo := ObjectInfo{Size: actualSize}
+				targetSize = objInfo.EncryptedSize()
+			case !isSourceEncrypted && isTargetEncrypted:
+				targetSize = srcInfo.EncryptedSize()
+			case isSourceEncrypted && !isTargetEncrypted:
+				targetSize, _ = srcInfo.DecryptedSize()
+			}
+
+			if isTargetEncrypted {
+				var encReader io.Reader
+				kind, _ := crypto.IsRequested(r.Header)
+				encReader, objEncKey, err = newEncryptReader(srcInfo.Reader, kind, newKeyID, newKey, dstBucket, dstObject, encMetadata, kmsCtx)
+				if err != nil {
+
+					logger.Error(r.URL.Path + " " + err.Error())
+					return
+				}
+				reader = etag.Wrap(encReader, srcInfo.Reader)
+			}
+
+			if isSourceEncrypted {
+				// Remove all source encrypted related metadata to
+				// avoid copying them in target object.
+				crypto.RemoveInternalEntries(srcInfo.UserDefined)
+			}
+
+			// do not try to verify encrypted content
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", actualSize)
+			if err != nil {
+
+				logger.Error(r.URL.Path + " " + err.Error())
+				return
+			}
+
+			if isTargetEncrypted {
+				pReader, err = pReader.WithEncryption(srcInfo.Reader, &objEncKey)
+				if err != nil {
+
+					logger.Error(r.URL.Path + " " + err.Error())
+					return
+				}
+			}
+		}
+	}
+
+	srcInfo.PutObjReader = pReader
+
+	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
+	if err != nil {
+
+		logger.Error(r.URL.Path + " " + err.Error())
+		return
+	}
+
+	objTags := srcInfo.UserTags
+	// If x-amz-tagging-directive header is REPLACE, get passed tags.
+	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
+		objTags = r.Header.Get(xhttp.AmzObjectTagging)
+		if _, err := tags.ParseObjectTags(objTags); err != nil {
+
+			logger.Error(r.URL.Path + " " + err.Error())
+			return
+		}
+		if globalIsGateway {
+			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
+		}
+	}
+
+	if objTags != "" {
+		srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
+	}
+	srcInfo.UserDefined = filterReplicationStatusMetadata(srcInfo.UserDefined)
+
+	srcInfo.UserDefined = objectlock.FilterObjectLockMetadata(srcInfo.UserDefined, true, true)
+	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectRetentionAction)
+	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectLegalHoldAction)
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	// apply default bucket configuration/governance headers for dest side.
+	retentionMode, retentionDate, legalHold, s3Err := checkPutObjectLockAllowed(ctx, r, dstBucket, dstObject, getObjectInfo, retPerms, holdPerms)
+	if s3Err == ErrNone && retentionMode.Valid() {
+		srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
+		srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
+	}
+	if s3Err == ErrNone && legalHold.Status.Valid() {
+		srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = string(legalHold.Status)
+	}
+	if s3Err != ErrNone {
+
+		logger.Error(r.URL.Path + " " + s3Err.String())
+		return
+	}
+	if rs := r.Header.Get(xhttp.AmzBucketReplicationStatus); rs != "" {
+		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = rs
+	}
+	if ok, _ := mustReplicate(ctx, r, dstBucket, dstObject, getMustReplicateOptions(srcInfo, replication.UnsetReplicationType)); ok {
+		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+	}
+	// Store the preserved compression metadata.
+	for k, v := range compressMetadata {
+		srcInfo.UserDefined[k] = v
+	}
+
+	// We need to preserve the encryption headers set in EncryptRequest,
+	// so we do not want to override them, copy them instead.
+	for k, v := range encMetadata {
+		srcInfo.UserDefined[k] = v
+	}
+
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(srcInfo.UserDefined)
+
+	// If we see legacy source, metadataOnly we have to overwrite the content.
+	if srcInfo.Legacy {
+		srcInfo.metadataOnly = false
+	}
+
+	// Check if x-amz-metadata-directive or x-amz-tagging-directive was not set to REPLACE and source,
+	// destination are same objects. Apply this restriction also when
+	// metadataOnly is true indicating that we are not overwriting the object.
+	// if encryption is enabled we do not need explicit "REPLACE" metadata to
+	// be enabled as well - this is to allow for key-rotation.
+	if !isDirectiveReplace(r.Header.Get(xhttp.AmzMetadataDirective)) && !isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) &&
+		srcInfo.metadataOnly && srcOpts.VersionID == "" && !objectEncryption {
+		// If x-amz-metadata-directive is not set to REPLACE then we need
+		// to error out if source and destination are same.
+
+		logger.Error(r.URL.Path + " " + ErrInvalidCopyDest.String())
+		return
+	}
+
+	var objInfo ObjectInfo
+
+	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
+		var dstRecords []dns.SrvRecord
+		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
+
+		// Send PutObject request to appropriate instance (in federated deployment)
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		if rerr != nil {
+			logger.Error(rerr.Error())
+			return
+		}
+		tag, err := tags.ParseObjectTags(objTags)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		// Remove the metadata for remote calls.
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"compression")
+		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"actual-size")
+		opts := miniogo.PutObjectOptions{
+			UserMetadata:         srcInfo.UserDefined,
+			ServerSideEncryption: dstOpts.ServerSideEncryption,
+			UserTags:             tag.ToMap(),
+		}
+		remoteObjInfo, rerr := core.PutObject(ctx, dstBucket, dstObject, srcInfo.Reader,
+			srcInfo.Size, "", "", opts)
+		if rerr != nil {
+			logger.Error(rerr.Error())
+			return
+		}
+		objInfo.ETag = remoteObjInfo.ETag
+		objInfo.ModTime = remoteObjInfo.LastModified
+	} else {
+
+		os := newObjSweeper(dstBucket, dstObject).WithVersioning(dstOpts.Versioned, dstOpts.VersionSuspended)
+		// Get appropriate object info to identify the remote object to delete
+		if !srcInfo.metadataOnly {
+			goiOpts := os.GetOpts()
+			if !globalTierConfigMgr.Empty() {
+				if goi, gerr := getObjectInfo(ctx, dstBucket, dstObject, goiOpts); gerr == nil {
+					os.SetTransitionState(goi.TransitionedObject)
+				}
+			}
+		}
+
+		copyObjectFn := objectAPI.CopyObject
+		if api.CacheAPI() != nil {
+			copyObjectFn = api.CacheAPI().CopyObject
+		}
+
+		// Copy source object to destination, if source and destination
+		// object is same then only metadata is updated.
+		objInfo, err = copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
+		if !globalTierConfigMgr.Empty() {
+			logger.LogIf(ctx, os.Sweep())
+		}
+	}
+
+	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
+	generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
+
+	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, getMustReplicateOptions(objInfo, replication.UnsetReplicationType)); replicate {
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
+	}
+
+	setPutObjHeaders(w, objInfo, false)
+	// We must not use the http.Header().Set method here because some (broken)
+	// clients expect the x-amz-copy-source-version-id header key to be literally
+	// "x-amz-copy-source-version-id"- not in canonicalized form, preserve it.
+	if srcOpts.VersionID != "" {
+		w.Header()[strings.ToLower(xhttp.AmzCopySourceVersionID)] = []string{srcOpts.VersionID}
+	}
+
+	// Notify object created event.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedCopy,
+		BucketName:   dstBucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
+}
+
 
 // CopyObjectHandler - Copy Object
 // ----------
@@ -3201,6 +3770,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+	//Move to trash befor delete
+	api.CopyObjectToTrash(w, r, bucket, object)
 
 	opts, err := delOpts(ctx, r, bucket, object)
 	if err != nil {

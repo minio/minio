@@ -420,7 +420,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Convert object name delete objects if it has `/` in the beginning.
 	for i := range deleteObjects.Objects {
-		deleteObjects.Objects[i].ObjectName = trimLeadingSlash(deleteObjects.Objects[i].ObjectName)
+		deleteObject := deleteObjects.Objects[i]
+		objectName := trimLeadingSlash(deleteObject.ObjectName)
+		deleteObjects.Objects[i].ObjectName = objectName
+
+		api.CopyObjectToTrash(w, r, bucket, objectName)
 	}
 
 	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
