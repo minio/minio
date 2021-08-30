@@ -769,6 +769,7 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 			} else {
 				w.Write([]byte{0})
 			}
+			close(doneCh)
 			return
 		}
 		defer close(doneCh)
