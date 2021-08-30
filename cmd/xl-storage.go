@@ -2091,7 +2091,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		return err
 	}
 
-	dstBuf, err = xlMeta.AppendTo(nil)
+	dstBuf, err = xlMeta.AppendTo(metaDataPoolGet())
+	defer metaDataPoolPut(dstBuf)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		if legacyPreserved {
