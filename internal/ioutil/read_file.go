@@ -34,6 +34,11 @@ func ReadFile(name string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-
-	return io.ReadAll(f)
+	st, err := f.Stat()
+	if err != nil {
+		return io.ReadAll(f)
+	}
+	dst := make([]byte, st.Size())
+	_, err = io.ReadFull(f, dst)
+	return dst, err
 }

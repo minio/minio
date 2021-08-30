@@ -135,7 +135,7 @@ GLOBAL FLAGS:
 				}
 				data = b
 			default:
-				return errors.New("unknown metadata version")
+				return fmt.Errorf("unknown metadata version %d", minor)
 			}
 
 			if c.Bool("data") {
