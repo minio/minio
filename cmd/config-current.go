@@ -412,8 +412,6 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig, setDriveCounts)
-
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
 		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
