@@ -155,7 +155,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	data, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
-			lookupConfigs(srvCfg, objAPI.SetDriveCounts())
+			lookupConfigs(srvCfg, objAPI)
 			return srvCfg, nil
 		}
 		return nil, err
@@ -166,7 +166,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 			minioMetaBucket: path.Join(minioMetaBucket, configFile),
 		})
 		if err != nil {
-			lookupConfigs(srvCfg, objAPI.SetDriveCounts())
+			lookupConfigs(srvCfg, objAPI)
 			return nil, err
 		}
 	}
