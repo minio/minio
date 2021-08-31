@@ -1014,9 +1014,18 @@ func (client *peerRESTClient) Speedtest(ctx context.Context, size, concurrent in
 		return SpeedtestResult{}, err
 	}
 	defer http.DrainBody(respBody)
+	waitReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return SpeedtestResult{}, err
+	}
 
-	dec := gob.NewDecoder(respBody)
 	var result SpeedtestResult
-	err = dec.Decode(&result)
-	return result, err
+	err = gob.NewDecoder(waitReader).Decode(&result)
+	if err != nil {
+		return result, err
+	}
+	if result.Error != "" {
+		return result, errors.New(result.Error)
+	}
+	return result, nil
 }
