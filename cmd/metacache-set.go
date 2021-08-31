@@ -696,6 +696,8 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 			switch err.(type) {
 			case ObjectNotFound:
 				return err
+			case StorageErr:
+				return err
 			case InsufficientReadQuorum:
 			default:
 				logger.LogIf(ctx, err)
