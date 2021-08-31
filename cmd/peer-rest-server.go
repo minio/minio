@@ -1158,6 +1158,7 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 type SpeedtestResult struct {
 	Uploads   uint64
 	Downloads uint64
+	Error     string
 }
 
 // SpeedtestObject implements "random-read" object reader
@@ -1280,7 +1281,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		}(i)
 	}
 	wg.Wait()
-	return SpeedtestResult{objUploadCount, objDownloadCount}, nil
+	return SpeedtestResult{Uploads: objUploadCount, Downloads: objDownloadCount}, nil
 }
 
 func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
@@ -1313,17 +1314,15 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 		duration = time.Second * 10
 	}
 
+	done := keepHTTPResponseAlive(w)
+
 	result, err := selfSpeedtest(r.Context(), size, concurrent, duration)
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		result.Error = err.Error()
 	}
 
-	enc := gob.NewEncoder(w)
-	if err := enc.Encode(result); err != nil {
-		s.writeErrorResponse(w, errors.New("Encoding report failed: "+err.Error()))
-		return
-	}
+	done(nil)
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 	w.(http.Flusher).Flush()
 }
 
