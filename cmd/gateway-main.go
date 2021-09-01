@@ -218,8 +218,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
-	enableConfigOps := false
-
 	// TODO: We need to move this code with globalConfigSys.Init()
 	// for now keep it here such that "s3" gateway layer initializes
 	// itself properly when KMS is set.
@@ -245,7 +243,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
-	registerAdminRouter(router, enableConfigOps)
+	registerAdminRouter(router, false)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)

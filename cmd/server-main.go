@@ -105,10 +105,18 @@ EXAMPLES:
 }
 
 func serverCmdArgs(ctx *cli.Context) []string {
-	v := env.Get(config.EnvArgs, "")
+	v, _, _, err := env.LookupEnv(config.EnvArgs)
+	if err != nil {
+		logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
+			config.EnvArgs, os.Getenv(config.EnvArgs))
+	}
 	if v == "" {
-		// Fall back to older ENV MINIO_ENDPOINTS
-		v = env.Get(config.EnvEndpoints, "")
+		// Fall back to older environment value MINIO_ENDPOINTS
+		v, _, _, err = env.LookupEnv(config.EnvEndpoints)
+		if err != nil {
+			logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
+				config.EnvEndpoints, os.Getenv(config.EnvEndpoints))
+		}
 	}
 	if v == "" {
 		if !ctx.Args().Present() || ctx.Args().First() == "help" {
