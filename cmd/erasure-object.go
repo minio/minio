@@ -1628,6 +1628,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	}
 
 	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+		logger.LogIf(ctx, tgtClient.Remove(ctx, destObj, rv))
 		eventName = event.ObjectTransitionFailed
 	}
 
