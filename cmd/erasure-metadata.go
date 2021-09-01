@@ -349,7 +349,24 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		}
 	}
 
-	if maxCount < quorum {
+	// Verify if the available maximally common values
+	// satisfy the input quorum, if they do then we are
+	// good to proceed and return.
+	//
+	// Additionally if we see that we have `len(disks)/2+1`
+	// available as well, we can safely proceed. This
+	// is due to the fact refer #13125 a DeleteObject()
+	// or TransitionObject() could have created "xl.meta"
+	// with a custom "writeQuorum" for existing content.
+	//
+	// Since this kind of occurrence is only during delete
+	// phase we are okay to relax this quorum check for
+	// these situations. NOTE: It is important to not use
+	// len(disks)/2 since that can lead to inconsistent
+	// behavior for the caller instead we have to choose
+	// len(disks)/2+1 to make sure we are still consistent
+	// with callers expectations.
+	if maxCount < quorum && maxCount < len(metaArr)/2+1 {
 		return FileInfo{}, errErasureReadQuorum
 	}
 
