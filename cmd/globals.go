@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/console/restapi"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/handlers"
@@ -314,6 +315,8 @@ var (
 	globalTierConfigMgr *TierConfigMgr
 
 	globalTierJournal *tierJournal
+
+	globalConsoleSrv *restapi.Server
 
 	globalDebugRemoteTiersImmediately []string
 	// Add new variable global values here.

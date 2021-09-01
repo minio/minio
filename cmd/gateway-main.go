@@ -345,18 +345,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	if globalBrowserEnabled {
-		consoleSrv, err := initConsoleServer()
+		globalConsoleSrv, err = initConsoleServer()
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize console service")
 		}
 
 		go func() {
-			<-globalOSSignalCh
-			consoleSrv.Shutdown()
+			logger.FatalIf(globalConsoleSrv.Serve(), "Unable to initialize console server")
 		}()
-
-		consoleSrv.Serve()
-	} else {
-		<-globalOSSignalCh
 	}
+	<-globalOSSignalCh
 }

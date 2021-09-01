@@ -582,20 +582,17 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if globalBrowserEnabled {
-		consoleSrv, err := initConsoleServer()
+		globalConsoleSrv, err = initConsoleServer()
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize console service")
 		}
 
 		go func() {
-			logger.FatalIf(consoleSrv.Serve(), "Unable to initialize console server")
+			logger.FatalIf(globalConsoleSrv.Serve(), "Unable to initialize console server")
 		}()
-
-		<-globalOSSignalCh
-		consoleSrv.Shutdown()
-	} else {
-		<-globalOSSignalCh
 	}
+
+	<-globalOSSignalCh
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
