@@ -91,10 +91,21 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 	return nil
 }
 
+var skipEnvs = map[string]struct{}{
+	"MINIO_OPTS": {},
+}
+
 func getServerSystemCfg() ServerSystemConfig {
 	envs := env.List("MINIO_")
 	envValues := make(map[string]string, len(envs))
 	for _, envK := range envs {
+		// skip certain environment variables as part
+		// of the whitelist and could be configured
+		// differently on each nodes, update skipEnvs()
+		// map if there are such environment values
+		if _, ok := skipEnvs[envK]; ok {
+			continue
+		}
 		envValues[envK] = env.Get(envK, "")
 	}
 	return ServerSystemConfig{
