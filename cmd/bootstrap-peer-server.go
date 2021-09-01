@@ -92,7 +92,8 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 }
 
 var skipEnvs = map[string]struct{}{
-	"MINIO_OPTS": {},
+	"MINIO_OPTS":        {},
+	"MINIO_CERT_PASSWD": {},
 }
 
 func getServerSystemCfg() ServerSystemConfig {
