@@ -1,4 +1,4 @@
-{{- if eq .Values.mode "standalone" }}
+{{- if eq .Values.mode "gateway" }}
 {{ $scheme := "http" }}
 {{- if .Values.tls.enabled }}
 {{ $scheme = "https" }}
@@ -28,7 +28,7 @@ spec:
       maxSurge: {{ .Values.DeploymentUpdate.maxSurge }}
       maxUnavailable: {{ .Values.DeploymentUpdate.maxUnavailable }}
     {{- end}}
-  replicas: 1
+  replicas: {{ .Values.gateway.replicas }}
   selector:
     matchLabels:
       app: {{ template "minio.name" . }}
@@ -65,7 +65,7 @@ spec:
           command:
             - "/bin/sh"
             - "-ce"
-            - "/usr/bin/docker-entrypoint.sh minio server {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }}"
+            - "/usr/bin/docker-entrypoint.sh minio gateway nas {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
           volumeMounts:
             {{- if .Values.persistence.enabled }}
             - name: export
