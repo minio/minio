@@ -1453,6 +1453,9 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
 func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
+	if sys == nil {
+		return nil
+	}
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	peerChannels := make([]<-chan Metric, len(sys.peerClients))
 	for index := range sys.peerClients {
