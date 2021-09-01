@@ -128,7 +128,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 
 // ListObjectsV2MHandler - GET Bucket (List Objects) Version 2 with metadata.
 // --------------------------
-// This implementation of the GET operation returns some or all (up to 10000)
+// This implementation of the GET operation returns some or all (up to 1000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
@@ -195,7 +195,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
 // --------------------------
-// This implementation of the GET operation returns some or all (up to 10000)
+// This implementation of the GET operation returns some or all (up to 1000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
@@ -305,7 +305,7 @@ func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
 // --------------------------
-// This implementation of the GET operation returns some or all (up to 10000)
+// This implementation of the GET operation returns some or all (up to 1000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
