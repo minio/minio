@@ -21,10 +21,8 @@ for more complete documentation.
 Run the following command to run the latest stable image of MinIO as a container using an ephemeral data volume:
 
 ```sh
-podman run \
-  -p 9000:9000 \
-  -p 9001:9001 \
-  minio/minio server /data --console-address ":9001"
+podman run -p 9000:9000 -p 9001:9001 \
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Console, an embedded
@@ -259,5 +257,5 @@ mc admin update <minio alias, e.g., myminio>
 Please follow MinIO [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
 
 # License
-MinIO source is licensed under the GNU AGPLv3 license that can be found in the [LICENSE](https://github.com/minio/minio/blob/master/LICENSE) file. 
+MinIO source is licensed under the GNU AGPLv3 license that can be found in the [LICENSE](https://github.com/minio/minio/blob/master/LICENSE) file.
 MinIO [Documentation](https://github.com/minio/minio/tree/master/docs) © 2021 by MinIO, Inc is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
