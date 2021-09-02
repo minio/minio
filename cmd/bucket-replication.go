@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const throttleDeadline = 1 * time.Hour
@@ -134,16 +133,7 @@ func getMustReplicateOptions(o ObjectInfo, op replication.Type) mustReplicateOpt
 
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
-func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, opts mustReplicateOptions) (replicate bool, sync bool) {
-	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, "", r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
-		return
-	}
-	return mustReplicater(ctx, bucket, object, opts)
-}
-
-// mustReplicater returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
-// a synchronous manner.
-func mustReplicater(ctx context.Context, bucket, object string, mopts mustReplicateOptions) (replicate bool, sync bool) {
+func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplicateOptions) (replicate bool, sync bool) {
 	if globalIsGateway {
 		return replicate, sync
 	}
@@ -1440,7 +1430,7 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo) bool {
 		// Ignore previous replication status when deciding if object can be re-replicated
 		objInfo := oi.Clone()
 		objInfo.ReplicationStatus = replication.StatusType("")
-		replicate, _ = mustReplicater(ctx, oi.Bucket, oi.Name, getMustReplicateOptions(objInfo, replication.ExistingObjectReplicationType))
+		replicate, _ = mustReplicate(ctx, oi.Bucket, oi.Name, getMustReplicateOptions(objInfo, replication.ExistingObjectReplicationType))
 	}
 	return c.resync(oi, replicate)
 }
