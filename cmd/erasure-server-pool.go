@@ -1668,8 +1668,11 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						}
 						fivs, err := entry.fileInfoVersions(bucket)
 						if err != nil {
-							errCh <- err
-							cancel()
+							if err := healObject(bucket, entry.name, ""); err != nil {
+								errCh <- err
+								cancel()
+								return
+							}
 							return
 						}
 
@@ -1705,9 +1708,13 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						agreed:         healEntry,
 						partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 							entry, ok := entries.resolve(&resolver)
-							if ok {
-								healEntry(*entry)
+							if !ok {
+								// check if we can get one entry atleast
+								// proceed to heal nonetheless.
+								entry, _ = entries.firstFound()
 							}
+
+							healEntry(*entry)
 						},
 						finished: nil,
 					}

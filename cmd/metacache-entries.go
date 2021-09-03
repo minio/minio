@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 )
 
@@ -104,18 +105,21 @@ func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
 		return a
 	}
 
-	if !aFi.ModTime.Equal(bFi.ModTime) {
+	if aFi.NumVersions == bFi.NumVersions {
+		if aFi.ModTime.Equal(bFi.ModTime) {
+			return a
+		}
 		if aFi.ModTime.After(bFi.ModTime) {
 			return a
 		}
 		return b
 	}
 
-	if aFi.NumVersions > bFi.NumVersions {
-		return a
+	if bFi.NumVersions > aFi.NumVersions {
+		return b
 	}
 
-	return b
+	return a
 }
 
 // isInDir returns whether the entry is in the dir when considering the separator.
@@ -269,6 +273,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 		// Get new entry metadata
 		if _, err := entry.fileInfo(r.bucket); err != nil {
+			logger.LogIf(context.Background(), err)
 			continue
 		}
 
@@ -318,7 +323,11 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 			return nil, false
 		}
 
-		if r.candidates[0].n > r.candidates[1].n {
+		// if r.objQuorum == 1 then it is guaranteed that
+		// this resolver is for HealObjects(), so use resolveEntries()
+		// instead to resolve candidates, this check is only useful
+		// for regular cases of ListObjects()
+		if r.candidates[0].n > r.candidates[1].n && r.objQuorum > 1 {
 			ok := r.candidates[0].e != nil && r.candidates[0].e.name != ""
 			return r.candidates[0].e, ok
 		}
