@@ -192,9 +192,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		if _, err := er.HealBucket(ctx, bucket.Name, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
-			if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-				logger.LogIf(ctx, err)
-			}
+			logger.LogIf(ctx, err)
 		}
 
 		if serverDebugLog {
@@ -242,9 +240,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 					object:    entry.name,
 					versionID: "",
 				}, madmin.HealItemObject)
-				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-					logger.LogIf(ctx, err)
-				}
+				logger.LogIf(ctx, err)
 				return
 			}
 
@@ -254,12 +250,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
 					}); err != nil {
-					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-						// If not deleted, assume they failed.
-						tracker.ItemsFailed++
-						tracker.BytesFailed += uint64(version.Size)
-						logger.LogIf(ctx, err)
-					}
+					// If not deleted, assume they failed.
+					tracker.ItemsFailed++
+					tracker.BytesFailed += uint64(version.Size)
+					logger.LogIf(ctx, err)
 				} else {
 					tracker.ItemsHealed++
 					tracker.BytesDone += uint64(version.Size)

@@ -699,9 +699,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
-						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
-						}
+						logger.LogIf(ctx, err)
 						foundObjs = foundObjs || err == nil
 						return
 					}
@@ -716,9 +714,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
-						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
-						}
+						logger.LogIf(ctx, err)
 						foundObjs = foundObjs || err == nil
 					}
 				},
@@ -872,9 +868,6 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 		ScanMode: globalHealConfig.ScanMode(),
 	}
 	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
-	if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-		return 0
-	}
 	if err != nil && !errors.Is(err, NotImplemented{}) {
 		logger.LogIf(ctx, err)
 		return 0
