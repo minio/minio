@@ -288,6 +288,61 @@ func TestHealingDanglingObject(t *testing.T) {
 	if fileInfoPostHeal.NumVersions != 2 {
 		t.Fatalf("Expected versions 2, got %d", fileInfoPreHeal.NumVersions)
 	}
+
+	rd = mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
+	objInfo, err = objLayer.PutObject(ctx, bucket, object, rd, ObjectOptions{
+		Versioned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0400); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create delete marker under quorum.
+	_, err = objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{
+		Versioned: true,
+		VersionID: objInfo.VersionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPreHeal.NumVersions != 3 {
+		t.Fatalf("Expected versions 3, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+		func(bucket, object, vid string) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+			return err
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPostHeal.NumVersions != 2 {
+		t.Fatalf("Expected versions 2, got %d", fileInfoPreHeal.NumVersions)
+	}
 }
 
 func TestHealObjectCorrupted(t *testing.T) {

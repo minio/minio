@@ -1738,9 +1738,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		result, err := pool.HealObject(ctx, bucket, object, versionID, opts)
 		result.Object = decodeDirObject(result.Object)
 		if err != nil {
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				continue
-			}
 			return result, err
 		}
 		return result, nil
