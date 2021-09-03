@@ -237,6 +237,19 @@ func (j xlMetaV2Version) Valid() bool {
 	return false
 }
 
+// getModTime will return the ModTime of the underlying version.
+func (j xlMetaV2Version) getModTime() time.Time {
+	switch j.Type {
+	case ObjectType:
+		return time.Unix(0, j.ObjectV2.ModTime)
+	case DeleteType:
+		return time.Unix(0, j.DeleteMarker.ModTime)
+	case LegacyType:
+		return j.ObjectV1.Stat.ModTime
+	}
+	return time.Time{}
+}
+
 // xlMetaV2 - object meta structure defines the format and list of
 // the journals for the object.
 type xlMetaV2 struct {
@@ -1314,18 +1327,6 @@ func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, erro
 	return versions, versions[0].ModTime, nil
 }
 
-func getModTimeFromVersion(v xlMetaV2Version) time.Time {
-	switch v.Type {
-	case ObjectType:
-		return time.Unix(0, v.ObjectV2.ModTime)
-	case DeleteType:
-		return time.Unix(0, v.DeleteMarker.ModTime)
-	case LegacyType:
-		return v.ObjectV1.Stat.ModTime
-	}
-	return time.Time{}
-}
-
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
 func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
@@ -1338,6 +1339,7 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		}
 	}
 
+	orderedVersions := make([]xlMetaV2Version, 0, len(z.Versions))
 	for _, version := range z.Versions {
 		if !version.Valid() {
 			logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", version))
@@ -1347,27 +1349,18 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 			return FileInfo{}, errFileVersionNotFound
 
 		}
-	}
-
-	orderedVersions := make([]xlMetaV2Version, len(z.Versions))
-	copy(orderedVersions, z.Versions)
-	n := 0
-	for _, version := range orderedVersions {
 		// skip listing free-version unless explicitly requested via versionID
 		if version.FreeVersion() && version.DeleteMarker.VersionID != uv {
 			continue
 		}
-		orderedVersions[n] = version
-		n++
-
+		orderedVersions = append(orderedVersions, version)
 	}
-	orderedVersions = orderedVersions[:n]
 
-	sort.Slice(orderedVersions, func(i, j int) bool {
-		mtime1 := getModTimeFromVersion(orderedVersions[i])
-		mtime2 := getModTimeFromVersion(orderedVersions[j])
-		return mtime1.After(mtime2)
-	})
+	if len(orderedVersions) > 1 {
+		sort.Slice(orderedVersions, func(i, j int) bool {
+			return orderedVersions[i].getModTime().After(orderedVersions[j].getModTime())
+		})
+	}
 
 	if versionID == "" {
 		if len(orderedVersions) >= 1 {
@@ -1403,7 +1396,7 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 				break
 			}
 		case DeleteType:
-			if bytes.Equal(orderedVersions[i].DeleteMarker.VersionID[:], uv[:]) {
+			if orderedVersions[i].DeleteMarker.VersionID == uv {
 				fi, err = orderedVersions[i].DeleteMarker.ToFileInfo(volume, path)
 				foundIndex = i
 				break
@@ -1419,7 +1412,7 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		fi.IsLatest = foundIndex == 0
 		fi.NumVersions = len(z.Versions)
 		if foundIndex > 0 {
-			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[foundIndex-1])
+			fi.SuccessorModTime = orderedVersions[foundIndex-1].getModTime()
 		}
 		return fi, nil
 	}
