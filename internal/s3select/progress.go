@@ -25,7 +25,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/klauspost/compress/s2"
+	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
+	"github.com/pierrec/lz4"
 )
 
 type countUpReader struct {
@@ -58,7 +61,7 @@ type progressReader struct {
 	processedReader *countUpReader
 
 	closedMu sync.Mutex
-	gzr      *gzip.Reader
+	closer   io.ReadCloser
 	closed   bool
 }
 
@@ -80,8 +83,8 @@ func (pr *progressReader) Close() error {
 		return nil
 	}
 	pr.closed = true
-	if pr.gzr != nil {
-		pr.gzr.Close()
+	if pr.closer != nil {
+		pr.closer.Close()
 	}
 	return pr.rc.Close()
 }
@@ -102,23 +105,37 @@ func newProgressReader(rc io.ReadCloser, compType CompressionType) (*progressRea
 		rc:            rc,
 		scannedReader: scannedReader,
 	}
-	var err error
 	var r io.Reader
 
 	switch compType {
 	case noneType:
 		r = scannedReader
 	case gzipType:
-		pr.gzr, err = gzip.NewReader(scannedReader)
+		gzr, err := gzip.NewReader(scannedReader)
 		if err != nil {
 			if errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) {
-				return nil, errInvalidGZIPCompressionFormat(err)
+				return nil, errInvalidCompression(err, compType)
 			}
 			return nil, errTruncatedInput(err)
 		}
-		r = pr.gzr
+		r = gzr
+		pr.closer = gzr
 	case bzip2Type:
 		r = bzip2.NewReader(scannedReader)
+	case zstdType:
+		// Set a max window of 64MB. More than reasonable.
+		zr, err := zstd.NewReader(scannedReader, zstd.WithDecoderConcurrency(2), zstd.WithDecoderMaxWindow(64<<20))
+		if err != nil {
+			return nil, errInvalidCompression(err, compType)
+		}
+		r = zr
+		pr.closer = zr.IOReadCloser()
+	case lz4Type:
+		r = lz4.NewReader(scannedReader)
+	case s2Type:
+		r = s2.NewReader(scannedReader)
+	case snappyType:
+		r = s2.NewReader(scannedReader, s2.ReaderMaxBlockSize(64<<10))
 	default:
 		return nil, errInvalidCompressionFormat(fmt.Errorf("unknown compression type '%v'", compType))
 	}

@@ -17,6 +17,8 @@
 
 package s3select
 
+import "strings"
+
 // SelectError - represents s3 select error specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html#RESTObjectSELECTContent-responses-special-errors.
 type SelectError interface {
@@ -66,25 +68,16 @@ func errMalformedXML(err error) *s3Error {
 func errInvalidCompressionFormat(err error) *s3Error {
 	return &s3Error{
 		code:       "InvalidCompressionFormat",
-		message:    "The file is not in a supported compression format. Only GZIP and BZIP2 are supported.",
+		message:    "The file is not in a supported compression format. GZIP, BZIP2, ZSTD, LZ4, S2 and SNAPPY are supported.",
 		statusCode: 400,
 		cause:      err,
 	}
 }
 
-func errInvalidBZIP2CompressionFormat(err error) *s3Error {
+func errInvalidCompression(err error, t CompressionType) *s3Error {
 	return &s3Error{
 		code:       "InvalidCompressionFormat",
-		message:    "BZIP2 is not applicable to the queried object. Please correct the request and try again.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errInvalidGZIPCompressionFormat(err error) *s3Error {
-	return &s3Error{
-		code:       "InvalidCompressionFormat",
-		message:    "GZIP is not applicable to the queried object. Please correct the request and try again.",
+		message:    strings.ToUpper(string(t)) + " is not applicable to the queried object. Please correct the request and try again.",
 		statusCode: 400,
 		cause:      err,
 	}
