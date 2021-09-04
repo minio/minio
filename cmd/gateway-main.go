@@ -301,9 +301,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
-	// Initialize users credentials and policies in background.
-	globalIAMSys.InitStore(newObject)
-
 	go globalIAMSys.Init(GlobalContext, newObject)
 
 	if globalCacheConfig.Enabled {
