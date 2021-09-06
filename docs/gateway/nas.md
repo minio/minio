@@ -16,7 +16,7 @@ podman run \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
  -v /shared/nasvol:/container/vol \
- minio/minio gateway nas /container/vol --console-address ":9001"
+ quay.io/minio/minio gateway nas /container/vol --console-address ":9001"
 ```
 
 ### Using Binary

@@ -720,14 +720,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 			if errors.Is(res.err, errSkipFile) { // this is only sent usually by nopHeal
 				return nil
 			}
-			// Object might have been deleted, by the time heal
-			// was attempted, we should ignore this object and
-			// return the error and not calculate this object
-			// as part of the metrics.
-			if isErrObjectNotFound(res.err) || isErrVersionNotFound(res.err) {
-				// Return the error so that caller can handle it.
-				return res.err
-			}
 
 			h.mutex.Lock()
 			defer h.mutex.Unlock()
@@ -751,11 +743,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		}
 		res.result.Type = healType
 		if res.err != nil {
-			// Object might have been deleted, by the time heal
-			// was attempted, we should ignore this object and return success.
-			if isErrObjectNotFound(res.err) || isErrVersionNotFound(res.err) {
-				return nil
-			}
 			// Only report object error
 			if healType != madmin.HealItemObject {
 				return res.err
@@ -812,11 +799,6 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 				object:    object,
 				versionID: versionID,
 			}, madmin.HealItemBucketMetadata)
-			// Object might have been deleted, by the time heal
-			// was attempted we ignore this object an move on.
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				return nil
-			}
 			return err
 		})
 	}
@@ -865,9 +847,7 @@ func (h *healSequence) healBuckets(objAPI ObjectLayer, bucketsOnly bool) error {
 // healBucket - traverses and heals given bucket
 func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly bool) error {
 	if err := h.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket); err != nil {
-		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			return err
-		}
+		return err
 	}
 
 	if bucketsOnly {
@@ -881,9 +861,6 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 			oi, err := objAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
 			if err == nil {
 				if err = h.healObject(bucket, h.object, oi.VersionID); err != nil {
-					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-						return nil
-					}
 					return err
 				}
 			}
@@ -893,11 +870,7 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 	}
 
 	if err := objAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject); err != nil {
-		// Object might have been deleted, by the time heal
-		// was attempted we ignore this object an move on.
-		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			return errFnHealFromAPIErr(h.ctx, err)
-		}
+		return errFnHealFromAPIErr(h.ctx, err)
 	}
 	return nil
 }

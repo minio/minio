@@ -218,15 +218,8 @@ func (m *mrfState) healRoutine() {
 			// Heal objects
 			for _, u := range mrfOperations {
 				if _, err := m.objectAPI.HealObject(m.ctx, u.bucket, u.object, u.versionID, mrfHealingOpts); err != nil {
-					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-						// If not deleted, assume they failed.
-						logger.LogIf(m.ctx, err)
-					} else {
-						m.mu.Lock()
-						m.itemsHealed++
-						m.pendingItems--
-						m.mu.Unlock()
-					}
+					// If not deleted, assume they failed.
+					logger.LogIf(m.ctx, err)
 				} else {
 					m.mu.Lock()
 					m.itemsHealed++

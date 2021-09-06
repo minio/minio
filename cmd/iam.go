@@ -608,6 +608,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
 			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, globalEtcdClient); err != nil {
 				txnLk.Unlock(lkctx.Cancel)
+				if errors.Is(err, errEtcdUnreachable) {
+					logger.Info("Connection to etcd timed out. Retrying..")
+					continue
+				}
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
 				return

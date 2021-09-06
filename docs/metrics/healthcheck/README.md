@@ -4,12 +4,29 @@ MinIO server exposes three un-authenticated, healthcheck endpoints liveness prob
 
 ### Liveness probe
 
-This probe always responds with '200 OK'. When liveness probe fails, Kubernetes like platforms restart the container.
+This probe always responds with '200 OK'. Only fails if 'etcd' is configured and unreachable. This behavior is specific to gateway. When liveness probe fails, Kubernetes like platforms restart the container.
 
 ```
 livenessProbe:
   httpGet:
     path: /minio/health/live
+    port: 9000
+    scheme: HTTP
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
+```
+
+### Readiness probe
+
+This probe always responds with '200 OK'. Only fails if 'etcd' is configured and unreachable. This behavior is specific to gateway. When readiness probe fails, Kubernetes like platforms turn-off routing to the container.
+
+```
+readinessProbe:
+  httpGet:
+    path: /minio/health/ready
     port: 9000
     scheme: HTTP
   initialDelaySeconds: 120

@@ -461,7 +461,7 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 	// Check if we are docker environment, return docker update command
 	if IsDocker() {
 		// Construct release tag name.
-		return fmt.Sprintf("podman pull minio/minio:%s", releaseTag)
+		return fmt.Sprintf("podman pull quay.io/minio/minio:%s", releaseTag)
 	}
 
 	// For binary only installations, we return link to the latest binary.

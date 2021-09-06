@@ -227,7 +227,9 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateConfig(s config.Config, setDriveCounts []int) error {
+func validateConfig(s config.Config) error {
+	objAPI := newObjectLayerFn()
+
 	// We must have a global lock for this so nobody else modifies env while we do.
 	defer env.LockSetEnv()()
 
@@ -250,7 +252,10 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 	}
 
 	if globalIsErasure {
-		for _, setDriveCount := range setDriveCounts {
+		if objAPI == nil {
+			return errServerNotInitialized
+		}
+		for _, setDriveCount := range objAPI.SetDriveCounts() {
 			if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
 				return err
 			}
@@ -265,7 +270,7 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 	if err != nil {
 		return err
 	}
-	objAPI := newObjectLayerFn()
+
 	if objAPI != nil {
 		if compCfg.Enabled && !objAPI.IsCompressionSupported() {
 			return fmt.Errorf("Backend does not support compression")
@@ -325,7 +330,7 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
 }
 
-func lookupConfigs(s config.Config, setDriveCounts []int) {
+func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	ctx := GlobalContext
 
 	var err error
@@ -337,7 +342,15 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		}
 	}
 
-	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
+	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
+	if err != nil {
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+		}
+	}
+	if err == nil && dnsURL != "" {
 		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
@@ -412,14 +425,13 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig, setDriveCounts)
-
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
 		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
 	})
 
-	if globalIsErasure {
+	if globalIsErasure && objAPI != nil {
+		setDriveCounts := objAPI.SetDriveCounts()
 		for i, setDriveCount := range setDriveCounts {
 			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 			if err != nil {
@@ -531,16 +543,18 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 	}
 
 	// Apply dynamic config values
-	logger.LogIf(ctx, applyDynamicConfig(ctx, newObjectLayerFn(), s))
+	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to initialize dynamic configuration")
+		} else {
+			logger.LogIf(ctx, err)
+		}
+	}
 }
 
 // applyDynamicConfig will apply dynamic config values.
 // Dynamic systems should be in config.SubSystemsDynamic as well.
 func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config) error {
-	if objAPI == nil {
-		return nil
-	}
-
 	// Read all dynamic configs.
 	// API
 	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
@@ -555,8 +569,10 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	}
 
 	// Validate if the object layer supports compression.
-	if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
-		return fmt.Errorf("Backend does not support compression")
+	if objAPI != nil {
+		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
+		}
 	}
 
 	// Heal
@@ -573,7 +589,11 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 
 	// Apply configurations.
 	// We should not fail after this.
-	globalAPIConfig.init(apiConfig, objAPI.SetDriveCounts())
+	var setDriveCounts []int
+	if objAPI != nil {
+		setDriveCounts = objAPI.SetDriveCounts()
+	}
+	globalAPIConfig.init(apiConfig, setDriveCounts)
 
 	globalCompressConfigMu.Lock()
 	globalCompressConfig = cmpCfg
@@ -704,7 +724,7 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg, objAPI.SetDriveCounts())
+	lookupConfigs(srvCfg, objAPI)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

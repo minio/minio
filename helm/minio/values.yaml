@@ -13,8 +13,8 @@ clusterDomain: cluster.local
 ## Set default image, imageTag, and imagePullPolicy. mode is used to indicate the
 ##
 image:
-  repository: minio/minio
-  tag: RELEASE.2021-08-20T18-32-01Z
+  repository: quay.io/minio/minio
+  tag: RELEASE.2021-08-31T05-46-54Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -24,14 +24,16 @@ imagePullSecrets: []
 ## client used to create a default bucket).
 ##
 mcImage:
-  repository: minio/mc
+  repository: quay.io/minio/mc
   tag: RELEASE.2021-07-27T06-46-19Z
   pullPolicy: IfNotPresent
 
-## minio server mode, i.e. standalone or distributed.
+## minio mode, i.e. standalone or distributed or gateway (nas)
 ## Distributed MinIO ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
-##
+## NAS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-nas.html
 mode: distributed
+
+## NOTE: currently only "nas" gateway is supported.
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: []
@@ -100,6 +102,11 @@ drivesPerNode: 1
 replicas: 16
 # Number of expanded MinIO clusters
 pools: 1
+
+# Deploy if 'mode == gateway' - 4 replicas.
+gateway:
+  type: "nas" # currently only "nas" is supported.
+  replicas: 4
 
 ## TLS Settings for MinIO
 tls:
@@ -248,6 +255,7 @@ users:
   - accessKey: console
     secretKey: console123
     policy: consoleAdmin
+
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:

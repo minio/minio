@@ -84,7 +84,7 @@ var (
 		},
 		config.KV{
 			Key:   apiListQuorum,
-			Value: "optimal",
+			Value: "strict",
 		},
 		config.KV{
 			Key:   apiReplicationWorkers,
