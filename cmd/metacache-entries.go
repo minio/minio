@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 )
 
@@ -37,6 +38,9 @@ type metaCacheEntry struct {
 
 	// cached contains the metadata if decoded.
 	cached *FileInfo
+
+	// Indicates the entry can be reused and only one reference to metadata is expected.
+	reusable bool
 }
 
 // isDir returns if the entry is representing a prefix directory.
@@ -101,18 +105,21 @@ func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
 		return a
 	}
 
-	if !aFi.ModTime.Equal(bFi.ModTime) {
+	if aFi.NumVersions == bFi.NumVersions {
+		if aFi.ModTime.Equal(bFi.ModTime) {
+			return a
+		}
 		if aFi.ModTime.After(bFi.ModTime) {
 			return a
 		}
 		return b
 	}
 
-	if aFi.NumVersions > bFi.NumVersions {
-		return a
+	if bFi.NumVersions > aFi.NumVersions {
+		return b
 	}
 
-	return b
+	return a
 }
 
 // isInDir returns whether the entry is in the dir when considering the separator.
@@ -160,6 +167,10 @@ func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
 		}, nil
 	}
 	if e.cached == nil {
+		if len(e.metadata) == 0 {
+			// only happens if the entry is not found.
+			return nil, errFileNotFound
+		}
 		fi, err := getFileInfo(e.metadata, bucket, e.name, "", false)
 		if err != nil {
 			return nil, err
@@ -262,6 +273,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 		// Get new entry metadata
 		if _, err := entry.fileInfo(r.bucket); err != nil {
+			logger.LogIf(context.Background(), err)
 			continue
 		}
 
@@ -305,15 +317,25 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		sort.Slice(r.candidates, func(i, j int) bool {
 			return r.candidates[i].n > r.candidates[j].n
 		})
+
 		// Check if we have enough.
 		if r.candidates[0].n < r.objQuorum {
 			return nil, false
 		}
-		if r.candidates[0].n > r.candidates[1].n {
-			return r.candidates[0].e, true
+
+		// if r.objQuorum == 1 then it is guaranteed that
+		// this resolver is for HealObjects(), so use resolveEntries()
+		// instead to resolve candidates, this check is only useful
+		// for regular cases of ListObjects()
+		if r.candidates[0].n > r.candidates[1].n && r.objQuorum > 1 {
+			ok := r.candidates[0].e != nil && r.candidates[0].e.name != ""
+			return r.candidates[0].e, ok
 		}
+
+		e := resolveEntries(r.candidates[0].e, r.candidates[1].e, r.bucket)
 		// Tie between two, resolve using modtime+versions.
-		return resolveEntries(r.candidates[0].e, r.candidates[1].e, r.bucket), true
+		ok := e != nil && e.name != ""
+		return e, ok
 	}
 }
 
@@ -345,6 +367,8 @@ type metaCacheEntriesSorted struct {
 	o metaCacheEntries
 	// list id is not serialized
 	listID string
+	// Reuse buffers
+	reuse bool
 }
 
 // shallowClone will create a shallow clone of the array objects,
@@ -490,6 +514,13 @@ func (m *metaCacheEntriesSorted) forwardTo(s string) {
 	idx := sort.Search(len(m.o), func(i int) bool {
 		return m.o[i].name >= s
 	})
+	if m.reuse {
+		for i, entry := range m.o[:idx] {
+			metaDataPoolPut(entry.metadata)
+			m.o[i].metadata = nil
+		}
+	}
+
 	m.o = m.o[idx:]
 }
 
@@ -501,6 +532,12 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 	idx := sort.Search(len(m.o), func(i int) bool {
 		return m.o[i].name > s
 	})
+	if m.reuse {
+		for i, entry := range m.o[:idx] {
+			metaDataPoolPut(entry.metadata)
+			m.o[i].metadata = nil
+		}
+	}
 	m.o = m.o[idx:]
 }
 
@@ -715,6 +752,12 @@ func (m *metaCacheEntriesSorted) truncate(n int) {
 		return
 	}
 	if len(m.o) > n {
+		if m.reuse {
+			for i, entry := range m.o[n:] {
+				metaDataPoolPut(entry.metadata)
+				m.o[n+i].metadata = nil
+			}
+		}
 		m.o = m.o[:n]
 	}
 }

@@ -333,6 +333,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = PartTooSmall{}
 	}
 
+	switch minioErr.StatusCode {
+	case http.StatusMethodNotAllowed:
+		err = toObjectErr(errMethodNotAllowed, bucket, object)
+	}
 	return err
 }
 
@@ -384,7 +388,7 @@ func gatewayHandleEnvVars() {
 
 // shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics
 func shouldMeterRequest(req *http.Request) bool {
-	return !(guessIsBrowserReq(req) || guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
+	return req.URL != nil && !strings.HasPrefix(req.URL.Path, minioReservedBucketPath+slashSeparator)
 }
 
 // MetricsTransport is a custom wrapper around Transport to track metrics

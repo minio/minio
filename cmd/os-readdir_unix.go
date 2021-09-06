@@ -1,3 +1,4 @@
+//go:build (linux && !appengine) || darwin || freebsd || netbsd || openbsd
 // +build linux,!appengine darwin freebsd netbsd openbsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.

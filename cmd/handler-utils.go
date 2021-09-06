@@ -112,7 +112,7 @@ var userMetadataKeyPrefixes = []string{
 
 // extractMetadata extracts metadata from HTTP header and HTTP queryString.
 func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
-	query := r.URL.Query()
+	query := r.Form
 	header := r.Header
 	metadata = make(map[string]string)
 	// Extract all query values.
@@ -212,15 +212,6 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	cred, _, _ = getReqAccessKeyV4(r, region, serviceS3)
 	if cred.AccessKey == "" {
 		cred, _, _ = getReqAccessKeyV2(r)
-	}
-	if cred.AccessKey == "" {
-		claims, owner, _ := webRequestAuthenticate(r)
-		if owner {
-			return globalActiveCred
-		}
-		if claims != nil {
-			cred, _ = globalIAMSys.GetUser(claims.AccessKey)
-		}
 	}
 	return cred
 }

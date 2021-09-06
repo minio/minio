@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -36,11 +37,11 @@ import (
 
 const (
 	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-	iso8601TimeFormat = "2006-01-02T15:04:05.000Z"                     // Reply date format with nanosecond precision.
-	maxObjectList     = metacacheBlockSize - (metacacheBlockSize / 10) // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
-	maxDeleteList     = 10000                                          // Limit number of objects deleted in a delete call.
-	maxUploadsList    = 10000                                          // Limit number of uploads in a listUploadsResponse.
-	maxPartsList      = 10000                                          // Limit number of parts in a listPartsResponse.
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxDeleteList     = 10000                      // Limit number of objects deleted in a delete call.
+	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
+	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -570,6 +571,14 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		content.Owner = owner
 		if metadata {
 			content.UserMetadata = make(StringMap)
+			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
+			case crypto.S3:
+				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
+			case crypto.S3KMS:
+				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionKMS
+			case crypto.SSEC:
+				content.UserMetadata[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
+			}
 			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
 				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 					// Do not need to send any internal metadata

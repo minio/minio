@@ -140,6 +140,8 @@ $ mc admin config set myminio/ notify_amqp:1 exchange="bucketevents" exchange_ty
 
 MinIO supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using `fanout` exchange.
 
+MinIO also sends with the notifications two headers: `minio-bucket` and `minio-event`. An exchange using the type "headers" can use this information to route the notifications to proper queues.
+
 Note that, you can add as many AMQP server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the AMQP instance and an object of per-server configuration parameters.
 
 ### Step 2: Enable bucket notification using MinIO client

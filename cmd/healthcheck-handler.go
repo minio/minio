@@ -42,7 +42,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
-	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
+	opts := HealthOptions{Maintenance: r.Form.Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
 	if result.WriteQuorum > 0 {
 		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
@@ -95,6 +95,17 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
 
+	if globalIsGateway && globalEtcdClient != nil {
+		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
+		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+		defer cancel()
+		// etcd unreachable throw an error for readiness.
+		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
+			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+			return
+		}
+	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
@@ -104,5 +115,17 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
+
+	if globalIsGateway && globalEtcdClient != nil {
+		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
+		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+		defer cancel()
+		// etcd unreachable throw an error for readiness.
+		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
+			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+			return
+		}
+	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }

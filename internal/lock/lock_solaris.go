@@ -1,3 +1,4 @@
+//go:build solaris
 // +build solaris
 
 // Copyright (c) 2015-2021 MinIO, Inc.

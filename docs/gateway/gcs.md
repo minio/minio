@@ -29,7 +29,7 @@ podman run \
  -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
  -e "MINIO_ROOT_USER=minioaccountname" \
  -e "MINIO_ROOT_PASSWORD=minioaccountkey" \
- minio/minio gateway gcs yourprojectid --console-address ":9001"
+ quay.io/minio/minio gateway gcs yourprojectid --console-address ":9001"
 ```
 
 ### 1.3 Run MinIO GCS Gateway Using the MinIO Binary

@@ -136,7 +136,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	_, isGroup := r.URL.Query()[peerRESTIsGroup]
+	_, isGroup := r.Form[peerRESTIsGroup]
 	if err := globalIAMSys.LoadPolicyMapping(objAPI, userOrGroup, isGroup); err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -510,7 +510,43 @@ func (s *peerRESTServer) GetMemInfoHandler(w http.ResponseWriter, r *http.Reques
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
-// GetSysErrorsHandler - returns memory information.
+// GetSysConfigHandler - returns system config information.
+// (only the config that are of concern to minio)
+func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		fmt.Println("Invalid request")
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	info := madmin.GetSysConfig(ctx, r.Host)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// GetSysServicesHandler - returns system services information.
+// (only the services that are of concern to minio)
+func (s *peerRESTServer) GetSysServicesHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		fmt.Println("Invalid request")
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	info := madmin.GetSysServices(ctx, r.Host)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// GetSysErrorsHandler - returns system level errors
 func (s *peerRESTServer) GetSysErrorsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
@@ -841,7 +877,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	values := r.URL.Query()
+	values := r.Form
 
 	var prefix string
 	if len(values[peerRESTListenPrefix]) > 1 {
@@ -932,15 +968,13 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractTraceOptsFromPeerRequest(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
+	opts.S3 = r.Form.Get(peerRESTTraceS3) == "true"
+	opts.OS = r.Form.Get(peerRESTTraceOS) == "true"
+	opts.Storage = r.Form.Get(peerRESTTraceStorage) == "true"
+	opts.Internal = r.Form.Get(peerRESTTraceInternal) == "true"
+	opts.OnlyErrors = r.Form.Get(peerRESTTraceErr) == "true"
 
-	q := r.URL.Query()
-	opts.OnlyErrors = q.Get(peerRESTTraceErr) == "true"
-	opts.Storage = q.Get(peerRESTTraceStorage) == "true"
-	opts.Internal = q.Get(peerRESTTraceInternal) == "true"
-	opts.S3 = q.Get(peerRESTTraceS3) == "true"
-	opts.OS = q.Get(peerRESTTraceOS) == "true"
-
-	if t := q.Get(peerRESTTraceThreshold); t != "" {
+	if t := r.Form.Get(peerRESTTraceThreshold); t != "" {
 		d, err := time.ParseDuration(t)
 		if err != nil {
 			return opts, err
@@ -1078,7 +1112,8 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
 		return
 	}
-	bucketsString := r.URL.Query().Get("buckets")
+
+	bucketsString := r.Form.Get("buckets")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
@@ -1123,6 +1158,7 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 type SpeedtestResult struct {
 	Uploads   uint64
 	Downloads uint64
+	Error     string
 }
 
 // SpeedtestObject implements "random-read" object reader
@@ -1245,7 +1281,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		}(i)
 	}
 	wg.Wait()
-	return SpeedtestResult{objUploadCount, objDownloadCount}, nil
+	return SpeedtestResult{Uploads: objUploadCount, Downloads: objDownloadCount}, nil
 }
 
 func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
@@ -1259,9 +1295,9 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sizeStr := r.URL.Query().Get(peerRESTSize)
-	durationStr := r.URL.Query().Get(peerRESTDuration)
-	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+	sizeStr := r.Form.Get(peerRESTSize)
+	durationStr := r.Form.Get(peerRESTDuration)
+	concurrentStr := r.Form.Get(peerRESTConcurrent)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1278,17 +1314,15 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 		duration = time.Second * 10
 	}
 
+	done := keepHTTPResponseAlive(w)
+
 	result, err := selfSpeedtest(r.Context(), size, concurrent, duration)
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		result.Error = err.Error()
 	}
 
-	enc := gob.NewEncoder(w)
-	if err := enc.Encode(result); err != nil {
-		s.writeErrorResponse(w, errors.New("Encoding report failed: "+err.Error()))
-		return
-	}
+	done(nil)
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 	w.(http.Flusher).Flush()
 }
 
@@ -1302,6 +1336,8 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(httpTraceHdrs(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(httpTraceHdrs(server.GetMemInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysErrors).HandlerFunc(httpTraceHdrs(server.GetSysErrorsHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysServices).HandlerFunc(httpTraceHdrs(server.GetSysServicesHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(httpTraceHdrs(server.GetSysConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodOsInfo).HandlerFunc(httpTraceHdrs(server.GetOSInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDiskHwInfo).HandlerFunc(httpTraceHdrs(server.GetPartitionsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCPUInfo).HandlerFunc(httpTraceHdrs(server.GetCPUsHandler))

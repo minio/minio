@@ -56,7 +56,7 @@ $ git push origin my-new-feature
 Pull requests can be created via GitHub. Refer to [this document](https://help.github.com/articles/creating-a-pull-request/) for detailed steps on how to create a pull request. After a Pull Request gets peer reviewed and approved, it will be merged.
 
 ## FAQs
-### How does ``MinIO`` manages dependencies?
+### How does ``MinIO`` manage dependencies?
 ``MinIO`` uses `go mod` to manage its dependencies.
 - Run `go get foo/bar` in the source folder to add the dependency to `go.mod` file.
 

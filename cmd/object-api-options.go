@@ -83,7 +83,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 
 	var partNumber int
 	var err error
-	if pn := r.URL.Query().Get(xhttp.PartNumber); pn != "" {
+	if pn := r.Form.Get(xhttp.PartNumber); pn != "" {
 		partNumber, err = strconv.Atoi(pn)
 		if err != nil {
 			return opts, err
@@ -93,7 +93,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}
 	}
 
-	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
+	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
@@ -219,7 +219,8 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 // get ObjectOptions for PUT calls from encryption headers and metadata
 func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
-	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
+	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
+	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
@@ -266,6 +267,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 		}, nil
 	}
@@ -273,6 +275,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts, err = getOpts(ctx, r, bucket, object)
 		opts.VersionID = vid
 		opts.Versioned = versioned
+		opts.VersionSuspended = versionSuspended
 		opts.UserDefined = metadata
 		return
 	}
@@ -290,6 +293,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 		}, nil
 	}
@@ -300,6 +304,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	}
 	opts.VersionID = vid
 	opts.Versioned = versioned
+	opts.VersionSuspended = versionSuspended
 	opts.MTime = mtime
 	return opts, nil
 }

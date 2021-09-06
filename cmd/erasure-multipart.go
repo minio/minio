@@ -122,7 +122,7 @@ func (er erasureObjects) renameAll(ctx context.Context, bucket, prefix string) {
 		wg.Add(1)
 		go func(disk StorageAPI) {
 			defer wg.Done()
-			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpBucket, mustGetUUID())
+			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpDeletedBucket, mustGetUUID())
 		}(disk)
 	}
 	wg.Wait()
@@ -347,8 +347,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// Fill all the necessary metadata.
 	// Update `xl.meta` content on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Metadata = opts.UserDefined
+		partsMetadata[index].Fresh = true
 		partsMetadata[index].ModTime = modTime
+		partsMetadata[index].Metadata = opts.UserDefined
 	}
 
 	uploadID := mustGetUUID()

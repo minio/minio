@@ -400,7 +400,29 @@ func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo
 	return info, err
 }
 
-// GetSysErrors - fetch memory information for a remote node.
+// GetSELinuxInfo - fetch SELinux information for a remote node.
+func (client *peerRESTClient) GetSELinuxInfo(ctx context.Context) (info madmin.SysServices, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodSysServices, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// GetSysConfig - fetch sys config for a remote node.
+func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.SysConfig, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodSysConfig, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// GetSysErrors - fetch sys errors for a remote node.
 func (client *peerRESTClient) GetSysErrors(ctx context.Context) (info madmin.SysErrors, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodSysErrors, nil, nil, -1)
 	if err != nil {
@@ -992,9 +1014,18 @@ func (client *peerRESTClient) Speedtest(ctx context.Context, size, concurrent in
 		return SpeedtestResult{}, err
 	}
 	defer http.DrainBody(respBody)
+	waitReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return SpeedtestResult{}, err
+	}
 
-	dec := gob.NewDecoder(respBody)
 	var result SpeedtestResult
-	err = dec.Decode(&result)
-	return result, err
+	err = gob.NewDecoder(waitReader).Decode(&result)
+	if err != nil {
+		return result, err
+	}
+	if result.Error != "" {
+		return result, errors.New(result.Error)
+	}
+	return result, nil
 }

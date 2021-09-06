@@ -1,7 +1,6 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 
-set -e
 set -E
 set -o pipefail
 
@@ -13,8 +12,6 @@ fi
 WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
-
-export GOGC=25
 
 function start_minio_3_node() {
     export MINIO_ROOT_USER=minio
@@ -88,22 +85,22 @@ function __init__()
 }
 
 function perform_test() {
-    start_minio_3_node 60
+    start_minio_3_node 120
 
     echo "Testing Distributed Erasure setup healing of drives"
     echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
     rm -rf ${WORK_DIR}/${1}/*/
 
-    start_minio_3_node 60
+    start_minio_3_node 120
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then
-        pkill -9 minio
         for i in $(seq 1 3); do
             echo "server$i log:"
             cat "${WORK_DIR}/dist-minio-server$i.log"
         done
+        pkill -9 minio
         echo "FAILED"
         purge "$WORK_DIR"
         exit 1

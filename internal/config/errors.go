@@ -289,4 +289,10 @@ Example 1:
 		"",
 		"MINIO_API_REPLICATION_WORKERS: should be > 0",
 	)
+
+	ErrInvalidTransitionWorkersValue = newErrFn(
+		"Invalid value for transition workers",
+		"",
+		"MINIO_API_TRANSITION_WORKERS: should be >= GOMAXPROCS/2",
+	)
 )

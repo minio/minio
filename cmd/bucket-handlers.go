@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -246,7 +245,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode := getBucketMultipartResources(r.URL.Query())
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode := getBucketMultipartResources(r.Form)
 	if errCode != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
@@ -345,9 +344,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// Set delimiter value for "s3:delimiter" policy conditionals.
 		r.Header.Set("delimiter", SlashSeparator)
 
-		// err will be nil here as we already called this function
-		// earlier in this request.
-		claims, _ := getClaimsFromToken(getSessionToken(r))
 		n := 0
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
@@ -357,10 +353,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 				IsOwner:         owner,
 				ObjectName:      "",
-				Claims:          claims,
+				Claims:          cred.Claims,
 			}) {
 				bucketsInfo[n] = bucketInfo
 				n++
@@ -454,6 +450,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if api.CacheAPI() != nil {
 		getObjectInfoFn = api.CacheAPI().GetObjectInfo
 	}
+
 	var (
 		hasLockEnabled, replicateSync bool
 		goi                           ObjectInfo
@@ -463,6 +460,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
 		hasLockEnabled = true
 	}
+
+	versioned := globalBucketVersioningSys.Enabled(bucket)
+	suspended := globalBucketVersioningSys.Suspended(bucket)
 
 	dErrs := make([]DeleteError, len(deleteObjects.Objects))
 	oss := make([]*objSweeper, len(deleteObjects.Objects))
@@ -495,16 +495,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 		}
 
-		oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(multiDelete(object))
-		// Mutations of objects on versioning suspended buckets
-		// affect its null version. Through opts below we select
-		// the null version's remote object to delete if
-		// transitioned.
-		opts := oss[index].GetOpts()
-		goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
-		if gerr == nil {
-			oss[index].SetTransitionState(goi)
+		opts := ObjectOptions{
+			VersionID:        object.VersionID,
+			Versioned:        versioned,
+			VersionSuspended: suspended,
 		}
+
+		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
+			if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
+				opts.VersionID = nullVersionID
+			}
+			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
+		}
+
+		if !globalTierConfigMgr.Empty() {
+			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, suspended)
+			oss[index].SetTransitionState(goi.TransitionedObject)
+		}
+
 		if replicateDeletes {
 			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
@@ -526,18 +534,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 			}
 		}
-		if object.VersionID != "" {
-			if hasLockEnabled {
-				if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
-					apiErr := errorCodes.ToAPIErr(apiErrCode)
-					dErrs[index] = DeleteError{
-						Code:      apiErr.Code,
-						Message:   apiErr.Description,
-						Key:       object.ObjectName,
-						VersionID: object.VersionID,
-					}
-					continue
+		if object.VersionID != "" && hasLockEnabled {
+			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
+				apiErr := errorCodes.ToAPIErr(apiErrCode)
+				dErrs[index] = DeleteError{
+					Code:      apiErr.Code,
+					Message:   apiErr.Description,
+					Key:       object.ObjectName,
+					VersionID: object.VersionID,
 				}
+				continue
 			}
 		}
 
@@ -559,8 +565,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned:        globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+		Versioned:        versioned,
+		VersionSuspended: suspended,
 	})
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
@@ -622,16 +628,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	}
 
-	// Clean up transitioned objects from remote tier
-	for _, os := range oss {
-		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
-			continue
-		}
-		logger.LogIf(ctx, os.Sweep())
-	}
-
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
+		if dobj.ObjectName == "" {
+			continue
+		}
+
 		eventName := event.ObjectRemovedDelete
 		objInfo := ObjectInfo{
 			Name:         dobj.ObjectName,
@@ -653,6 +655,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
 		})
+	}
+
+	// Clean up transitioned objects from remote tier
+	for _, os := range oss {
+		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
+			continue
+		}
+		logger.LogIf(ctx, os.Sweep())
 	}
 }
 
@@ -899,41 +909,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Once signature is validated, check if the user has
 	// explicit permissions for the user.
-	{
-		token := formValues.Get(xhttp.AmzSecurityToken)
-		if token != "" && cred.AccessKey == "" {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoAccessKey), r.URL)
-			return
-		}
-
-		if cred.IsServiceAccount() && token == "" {
-			token = cred.SessionToken
-		}
-
-		if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidToken), r.URL)
-			return
-		}
-
-		// Extract claims if any.
-		claims, err := getClaimsFromToken(token)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     cred.AccessKey,
-			Action:          iampolicy.PutObjectAction,
-			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
-			BucketName:      bucket,
-			ObjectName:      object,
-			IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
-			Claims:          claims,
-		}) {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          iampolicy.PutObjectAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+		BucketName:      bucket,
+		ObjectName:      object,
+		IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
+		Claims:          cred.Claims,
+	}) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
 	}
 
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues.Get("Policy"))
@@ -1699,7 +1685,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	durationStr := r.URL.Query().Get("older-than")
+	durationStr := r.Form.Get("older-than")
 	var (
 		days time.Duration
 		err  error

@@ -1,3 +1,4 @@
+//go:build !linux && !windows
 // +build !linux,!windows
 
 // Copyright (c) 2015-2021 MinIO, Inc.

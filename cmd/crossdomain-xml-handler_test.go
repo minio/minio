@@ -28,7 +28,7 @@ import (
 // Test cross domain xml handler.
 func TestCrossXMLHandler(t *testing.T) {
 	// Server initialization.
-	router := mux.NewRouter().SkipClean(true)
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	handler := setCrossDomainPolicy(router)
 	srv := httptest.NewServer(handler)
 

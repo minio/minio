@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/console/restapi"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/handlers"
@@ -216,6 +217,9 @@ var (
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName string
 
+	// The global subnet license
+	globalSubnetLicense string
+
 	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
@@ -311,6 +315,8 @@ var (
 	globalTierConfigMgr *TierConfigMgr
 
 	globalTierJournal *tierJournal
+
+	globalConsoleSrv *restapi.Server
 
 	globalDebugRemoteTiersImmediately []string
 	// Add new variable global values here.

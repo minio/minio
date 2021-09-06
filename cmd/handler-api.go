@@ -24,7 +24,7 @@ import (
 
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sys"
+	mem "github.com/shirou/gopsutil/v3/mem"
 )
 
 type apiConfig struct {
@@ -39,6 +39,7 @@ type apiConfig struct {
 	totalDriveCount          int
 	replicationWorkers       int
 	replicationFailedWorkers int
+	transitionWorkers        int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -47,29 +48,41 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 
 	t.clusterDeadline = cfg.ClusterDeadline
 	t.corsAllowOrigins = cfg.CorsAllowOrigin
+	maxSetDrives := 0
 	for _, setDriveCount := range setDriveCounts {
 		t.totalDriveCount += setDriveCount
+		if setDriveCount > maxSetDrives {
+			maxSetDrives = setDriveCount
+		}
 	}
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
-		stats, err := sys.GetStats()
+		var maxMem uint64
+		memStats, err := mem.VirtualMemory()
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
 			// Default to 8 GiB, not critical.
-			stats.TotalRAM = 8 << 30
+			maxMem = 8 << 30
+		} else {
+			maxMem = memStats.Available / 2
 		}
+
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
 		// ram_per_request is (2MiB+128KiB) * driveCount \
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
-		apiRequestsMaxPerNode = int(stats.TotalRAM / uint64(t.totalDriveCount*(blockSizeLarge+blockSizeSmall)+int(blockSizeV1*2+blockSizeV2*2)))
+		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*(blockSizeLarge+blockSizeSmall)+int(blockSizeV1*2+blockSizeV2*2)))
+
+		if globalIsErasure {
+			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
+		}
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
 		if len(globalEndpoints.Hostnames()) > 0 {
 			apiRequestsMaxPerNode /= len(globalEndpoints.Hostnames())
 		}
 	}
+
 	if cap(t.requestsPool) < apiRequestsMaxPerNode {
 		// Only replace if needed.
 		// Existing requests will use the previous limit,
@@ -87,6 +100,10 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationFailedWorkers = cfg.ReplicationFailedWorkers
 	t.replicationWorkers = cfg.ReplicationWorkers
+	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
+		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
+	}
+	t.transitionWorkers = cfg.TransitionWorkers
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -172,4 +189,11 @@ func (t *apiConfig) getReplicationWorkers() int {
 	defer t.mu.RUnlock()
 
 	return t.replicationWorkers
+}
+
+func (t *apiConfig) getTransitionWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.transitionWorkers
 }

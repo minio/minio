@@ -20,8 +20,10 @@ package heal
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )
@@ -37,6 +39,8 @@ const (
 	EnvIOCount = "MINIO_HEAL_MAX_IO"
 )
 
+var configMutex sync.RWMutex
+
 // Config represents the heal settings.
 type Config struct {
 	// Bitrot will perform bitrot scan on local disk when checking objects.
@@ -44,6 +48,61 @@ type Config struct {
 	// maximum sleep duration between objects to slow down heal operation.
 	Sleep   time.Duration `json:"sleep"`
 	IOCount int           `json:"iocount"`
+}
+
+// ScanMode returns configured scan mode
+func (opts Config) ScanMode() madmin.HealScanMode {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	if opts.Bitrot {
+		return madmin.HealDeepScan
+	}
+	return madmin.HealNormalScan
+}
+
+// Wait waits for IOCount to go down or max sleep to elapse before returning.
+// usually used in healing paths to wait for specified amount of time to
+// throttle healing.
+func (opts Config) Wait(currentIO func() int, systemIO func() int) {
+	configMutex.RLock()
+	maxIO, maxWait := opts.IOCount, opts.Sleep
+	configMutex.RUnlock()
+
+	// No need to wait run at full speed.
+	if maxIO <= 0 {
+		return
+	}
+
+	// At max 10 attempts to wait with 100 millisecond interval before proceeding
+	waitTick := 100 * time.Millisecond
+
+	tmpMaxWait := maxWait
+
+	if currentIO != nil {
+		for currentIO() >= maxIO+systemIO() {
+			if tmpMaxWait > 0 {
+				if tmpMaxWait < waitTick {
+					time.Sleep(tmpMaxWait)
+				} else {
+					time.Sleep(waitTick)
+				}
+				tmpMaxWait = tmpMaxWait - waitTick
+			}
+			if tmpMaxWait <= 0 {
+				return
+			}
+		}
+	}
+}
+
+// Update updates opts with nopts
+func (opts *Config) Update(nopts Config) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	opts.Bitrot = nopts.Bitrot
+	opts.IOCount = nopts.IOCount
+	opts.Sleep = nopts.Sleep
 }
 
 var (
@@ -59,7 +118,7 @@ var (
 		},
 		config.KV{
 			Key:   IOCount,
-			Value: "10",
+			Value: "100",
 		},
 	}
 

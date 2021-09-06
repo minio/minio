@@ -608,6 +608,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
 			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, globalEtcdClient); err != nil {
 				txnLk.Unlock(lkctx.Cancel)
+				if errors.Is(err, errEtcdUnreachable) {
+					logger.Info("Connection to etcd timed out. Retrying..")
+					continue
+				}
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
 				return
@@ -1177,6 +1181,10 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
+	if parentUser == "" {
+		return auth.Credentials{}, errInvalidArgument
+	}
+
 	var policyBuf []byte
 	if opts.sessionPolicy != nil {
 		err := opts.sessionPolicy.Validate()
@@ -1192,8 +1200,34 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
+	// found newly requested service account, to be same as
+	// parentUser, reject such operations.
+	if parentUser == opts.accessKey {
+		return auth.Credentials{}, errIAMActionNotAllowed
+	}
+
 	sys.store.lock()
 	defer sys.store.unlock()
+
+	// Handle validation of incoming service accounts.
+	{
+		cr, found := sys.iamUsersMap[opts.accessKey]
+		// found newly requested service account, to be an existing
+		// user, reject such operations.
+		if found && !cr.IsTemp() && !cr.IsServiceAccount() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+		// found newly requested service account, to be an existing
+		// temporary user, reject such operations.
+		if found && cr.IsTemp() {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+		// found newly requested service account, to be an existing
+		// service account for another parentUser, reject such operations.
+		if found && cr.IsServiceAccount() && cr.ParentUser != parentUser {
+			return auth.Credentials{}, errIAMActionNotAllowed
+		}
+	}
 
 	cr, found := sys.iamUsersMap[parentUser]
 	// Disallow service accounts to further create more service accounts.
@@ -1606,7 +1640,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	}
 	sys.store.unlock()
 
-	expiredUsers, err := globalLDAPConfig.GetNonExistentUserDistNames(parentUsers)
+	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(parentUsers)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)

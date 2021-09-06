@@ -222,6 +222,11 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp.Channel, confirms
 		return err
 	}
 
+	headers := make(amqp.Table)
+	// Add more information here as required, but be aware to not overload headers
+	headers["minio-bucket"] = eventData.S3.Bucket.Name
+	headers["minio-event"] = eventData.EventName.String()
+
 	if err = ch.ExchangeDeclare(target.args.Exchange, target.args.ExchangeType, target.args.Durable,
 		target.args.AutoDeleted, target.args.Internal, target.args.NoWait, nil); err != nil {
 		return err
@@ -229,6 +234,7 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp.Channel, confirms
 
 	if err = ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
 		target.args.Immediate, amqp.Publishing{
+			Headers:      headers,
 			ContentType:  "application/json",
 			DeliveryMode: target.args.DeliveryMode,
 			Body:         data,

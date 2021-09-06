@@ -10,7 +10,7 @@ podman run \
  --name azure-s3 \
  -e "MINIO_ROOT_USER=azurestorageaccountname" \
  -e "MINIO_ROOT_PASSWORD=azurestorageaccountkey" \
- minio/minio gateway azure --console-address ":9001"
+ quay.io/minio/minio gateway azure --console-address ":9001"
 ```
 
 ### Using Binary

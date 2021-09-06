@@ -23,7 +23,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -42,10 +41,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/kes"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -373,10 +369,10 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 		}
 		for k, v := range peerLock.Locks {
 			for _, lockReqInfo := range v {
-				if val, ok := entryMap[lockReqInfo.UID]; ok {
+				if val, ok := entryMap[lockReqInfo.Name]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
+					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 				}
 			}
 		}
@@ -450,7 +446,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	count := 10 // by default list only top 10 entries
-	if countStr := r.URL.Query().Get("count"); countStr != "" {
+	if countStr := r.Form.Get("count"); countStr != "" {
 		var err error
 		count, err = strconv.Atoi(countStr)
 		if err != nil {
@@ -458,7 +454,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	stale := r.URL.Query().Get("stale") == "true" // list also stale locks
+	stale := r.Form.Get("stale") == "true" // list also stale locks
 
 	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
@@ -713,7 +709,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hip, errCode := extractHealInitParams(mux.Vars(r), r.URL.Query(), r.Body)
+	hip, errCode := extractHealInitParams(mux.Vars(r), r.Form, r.Body)
 	if errCode != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
@@ -926,9 +922,9 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sizeStr := r.URL.Query().Get(peerRESTSize)
-	durationStr := r.URL.Query().Get(peerRESTDuration)
-	concurrentStr := r.URL.Query().Get(peerRESTConcurrent)
+	sizeStr := r.Form.Get(peerRESTSize)
+	durationStr := r.Form.Get(peerRESTDuration)
+	concurrentStr := r.Form.Get(peerRESTConcurrent)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -957,156 +953,12 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	w.(http.Flusher).Flush()
 }
 
-func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
-	var cred auth.Credentials
-	var adminAPIErr APIErrorCode
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return nil, cred
-	}
-
-	// Validate request signature.
-	cred, adminAPIErr = checkAdminRequestAuth(ctx, r, action, "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
-		return nil, cred
-	}
-
-	return objectAPI, cred
-}
-
-// AdminError - is a generic error for all admin APIs.
-type AdminError struct {
-	Code       string
-	Message    string
-	StatusCode int
-}
-
-func (ae AdminError) Error() string {
-	return ae.Message
-}
-
 // Admin API errors
 const (
 	AdminUpdateUnexpectedFailure = "XMinioAdminUpdateUnexpectedFailure"
 	AdminUpdateURLNotReachable   = "XMinioAdminUpdateURLNotReachable"
 	AdminUpdateApplyFailure      = "XMinioAdminUpdateApplyFailure"
 )
-
-// toAdminAPIErrCode - converts errErasureWriteQuorum error to admin API
-// specific error.
-func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
-	switch err {
-	case errErasureWriteQuorum:
-		return ErrAdminConfigNoQuorum
-	default:
-		return toAPIErrorCode(ctx, err)
-	}
-}
-
-func toAdminAPIErr(ctx context.Context, err error) APIError {
-	if err == nil {
-		return noError
-	}
-
-	var apiErr APIError
-	switch e := err.(type) {
-	case iampolicy.Error:
-		apiErr = APIError{
-			Code:           "XMinioMalformedIAMPolicy",
-			Description:    e.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}
-	case config.Error:
-		apiErr = APIError{
-			Code:           "XMinioConfigError",
-			Description:    e.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}
-	case AdminError:
-		apiErr = APIError{
-			Code:           e.Code,
-			Description:    e.Message,
-			HTTPStatusCode: e.StatusCode,
-		}
-	default:
-		switch {
-		case errors.Is(err, errConfigNotFound):
-			apiErr = APIError{
-				Code:           "XMinioConfigError",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusNotFound,
-			}
-		case errors.Is(err, errIAMActionNotAllowed):
-			apiErr = APIError{
-				Code:           "XMinioIAMActionNotAllowed",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusForbidden,
-			}
-		case errors.Is(err, errIAMNotInitialized):
-			apiErr = APIError{
-				Code:           "XMinioIAMNotInitialized",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusServiceUnavailable,
-			}
-		case errors.Is(err, kes.ErrKeyExists):
-			apiErr = APIError{
-				Code:           "XMinioKMSKeyExists",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusConflict,
-			}
-
-		// Tier admin API errors
-		case errors.Is(err, madmin.ErrTierNameEmpty):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierNameEmpty",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierInvalidConfig):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInvalidConfig",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierInvalidConfigVersion):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInvalidConfigVersion",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, madmin.ErrTierTypeUnsupported):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierTypeUnsupported",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendInUse):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendInUse",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusConflict,
-			}
-		case errors.Is(err, errTierInsufficientCreds):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientCreds",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errIsTierPermError(err):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientPermissions",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		default:
-			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
-		}
-	}
-	return apiErr
-}
 
 // Returns true if the madmin.TraceInfo should be traced,
 // false if certain conditions are not met.
@@ -1157,7 +1009,7 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
-	q := r.URL.Query()
+	q := r.Form
 
 	opts.OnlyErrors = q.Get("err") == "true"
 	opts.S3 = q.Get("s3") == "true"
@@ -1259,15 +1111,15 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	if objectAPI == nil {
 		return
 	}
-	node := r.URL.Query().Get("node")
+	node := r.Form.Get("node")
 	// limit buffered console entries if client requested it.
-	limitStr := r.URL.Query().Get("limit")
+	limitStr := r.Form.Get("limit")
 	limitLines, err := strconv.Atoi(limitStr)
 	if err != nil {
 		limitLines = 10
 	}
 
-	logKind := r.URL.Query().Get("logType")
+	logKind := r.Form.Get("logType")
 	if logKind == "" {
 		logKind = string(logger.All)
 	}
@@ -1342,7 +1194,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(r.URL.Query().Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(r.Form.Get("key-id")); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1409,7 +1261,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	keyID := r.URL.Query().Get("key-id")
+	keyID := r.Form.Get("key-id")
 	if keyID == "" {
 		keyID = stat.DefaultKey
 	}
@@ -1576,7 +1428,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	query := r.URL.Query()
+	query := r.Form
 	healthInfo := madmin.HealthInfo{Version: madmin.HealthInfoVersion}
 	healthInfoCh := make(chan madmin.HealthInfo)
 
@@ -1600,7 +1452,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	deadline := 1 * time.Hour
-	if dstr := r.URL.Query().Get("deadline"); dstr != "" {
+	if dstr := r.Form.Get("deadline"); dstr != "" {
 		var err error
 		deadline, err = time.ParseDuration(dstr)
 		if err != nil {
@@ -1710,6 +1562,38 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			for _, se := range peerSysErrs {
 				anonymizeAddr(&se)
 				healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, se)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
+	getAndWriteSysConfig := func() {
+		if query.Get(string(madmin.HealthDataTypeSysConfig)) == "true" {
+			localSysConfig := madmin.GetSysConfig(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localSysConfig)
+			healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, localSysConfig)
+			partialWrite(healthInfo)
+
+			peerSysConfig := globalNotificationSys.GetSysConfig(deadlinedCtx)
+			for _, sc := range peerSysConfig {
+				anonymizeAddr(&sc)
+				healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, sc)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
+	getAndWriteSysServices := func() {
+		if query.Get(string(madmin.HealthDataTypeSysServices)) == "true" {
+			localSysServices := madmin.GetSysServices(deadlinedCtx, globalLocalNodeName)
+			anonymizeAddr(&localSysServices)
+			healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, localSysServices)
+			partialWrite(healthInfo)
+
+			peerSysServices := globalNotificationSys.GetSysServices(deadlinedCtx)
+			for _, ss := range peerSysServices {
+				anonymizeAddr(&ss)
+				healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, ss)
 			}
 			partialWrite(healthInfo)
 		}
@@ -1889,6 +1773,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		getAndWriteDrivePerfInfo()
 		getAndWriteNetPerfInfo()
 		getAndWriteSysErrors()
+		getAndWriteSysServices()
+		getAndWriteSysConfig()
 
 		if query.Get("minioinfo") == "true" {
 			infoMessage := getServerInfo(ctx, r)
@@ -1975,7 +1861,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	reportCh := make(chan madmin.BucketBandwidthReport)
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
-	bucketsRequestedString := r.URL.Query().Get("buckets")
+	bucketsRequestedString := r.Form.Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
 	go func() {
 		defer close(reportCh)
@@ -2233,8 +2119,8 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	volume := r.URL.Query().Get("volume")
-	file := r.URL.Query().Get("file")
+	volume := r.Form.Get("volume")
+	file := r.Form.Get("file")
 	if len(volume) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
 		return

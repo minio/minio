@@ -32,6 +32,9 @@ These metrics can be from any MinIO server once per collection.
 | `minio_heal_time_last_activity_nano_seconds` | Time elapsed (in nano seconds) since last self healing activity. This is set to -1 until initial self heal activity |
 | `minio_inter_node_traffic_received_bytes`    | Total number of bytes received from other peer nodes.                                                               |
 | `minio_inter_node_traffic_sent_bytes`        | Total number of bytes sent to the other peer nodes.                                                                 |
+| `minio_node_ilm_expiry_pending_tasks`        | Current number of pending ILM expiry tasks in the queue.                                                            |
+| `minio_node_ilm_transition_active_tasks`     | Current number of active ILM transition tasks.                                                                      |
+| `minio_node_ilm_transition_pending_tasks`    | Current number of pending ILM transition tasks in the queue.                                                        |
 | `minio_node_disk_free_bytes`                 | Total storage available on a disk.                                                                                  |
 | `minio_node_disk_total_bytes`                | Total storage on a disk.                                                                                            |
 | `minio_node_disk_used_bytes`                 | Total storage used on a disk.                                                                                       |

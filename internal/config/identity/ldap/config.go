@@ -144,7 +144,7 @@ var (
 		},
 		config.KV{
 			Key:   STSExpiry,
-			Value: "1h",
+			Value: "",
 		},
 		config.KV{
 			Key:   TLSSkipVerify,
@@ -478,9 +478,9 @@ func (l Config) IsLDAPUserDN(user string) bool {
 	return strings.HasSuffix(user, ","+l.UserDNSearchBaseDN)
 }
 
-// GetNonExistentUserDistNames - find user accounts (DNs) that are no longer
-// present in the LDAP server.
-func (l *Config) GetNonExistentUserDistNames(userDistNames []string) ([]string, error) {
+// GetNonEligibleUserDistNames - find user accounts (DNs) that are no longer
+// present in the LDAP server or do not meet filter criteria anymore
+func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, error) {
 	if !l.isUsingLookupBind {
 		return nil, errors.New("current LDAP configuration does not permit looking for expired user accounts")
 	}
@@ -496,12 +496,15 @@ func (l *Config) GetNonExistentUserDistNames(userDistNames []string) ([]string, 
 		return nil, err
 	}
 
+	// Evaluate the filter again with generic wildcard instead of  specific values
+	filter := strings.Replace(l.UserDNSearchFilter, "%s", "*", -1)
+
 	nonExistentUsers := []string{}
 	for _, dn := range userDistNames {
 		searchRequest := ldap.NewSearchRequest(
 			dn,
 			ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
-			"(objectclass=*)",
+			filter,
 			[]string{}, // only need DN, so no pass no attributes here
 			nil,
 		)

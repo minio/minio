@@ -265,6 +265,24 @@ func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
 }
 
+func (client *storageRESTClient) diskInfo() (interface{}, error) {
+	var info DiskInfo
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
+	if err != nil {
+		return info, err
+	}
+	defer xhttp.DrainBody(respBody)
+	if err = msgp.Decode(respBody, &info); err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
+}
+
 // DiskInfo - fetch disk information for a remote disk.
 func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
 	if !client.IsOnline() {
@@ -277,28 +295,12 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 	}
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.Update = func() (interface{}, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
-			if err != nil {
-				return info, err
-			}
-			defer xhttp.DrainBody(respBody)
-			if err = msgp.Decode(respBody, &info); err != nil {
-				return info, err
-			}
-			if info.Error != "" {
-				return info, toStorageErr(errors.New(info.Error))
-			}
-			return info, nil
-		}
+		client.diskInfoCache.Update = client.diskInfo
 	})
 	val, err := client.diskInfoCache.Get()
-	if err == nil {
-		info = val.(DiskInfo)
+	if val != nil {
+		return val.(DiskInfo), err
 	}
-
 	return info, err
 }
 
@@ -375,6 +377,10 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
 	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	_, err = waitForHTTPResponse(respBody)
 	return err
 }
 

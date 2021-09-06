@@ -1818,3 +1818,23 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal("expected to fail bitrot check")
 	}
 }
+
+// TestXLStorageReadMetadata tests readMetadata
+func TestXLStorageReadMetadata(t *testing.T) {
+	volume, object := "test-vol", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	tmpDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	disk, err := newLocalXLStorage(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	disk.MakeVol(context.Background(), volume)
+	if _, err := disk.readMetadata(pathJoin(tmpDir, volume, object)); err != errFileNameTooLong {
+		t.Fatalf("Unexpected error from readMetadata - expect %v: got %v", errFileNameTooLong, err)
+	}
+}

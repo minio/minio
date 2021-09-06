@@ -179,6 +179,8 @@ type FileInfo struct {
 
 	NumVersions      int
 	SuccessorModTime time.Time
+
+	Fresh bool // indicates this is a first time call to write FileInfo.
 }
 
 // InlineData returns true if object contents are inlined alongside its metadata.
@@ -188,7 +190,10 @@ func (fi FileInfo) InlineData() bool {
 }
 
 // SetInlineData marks object (version) as inline.
-func (fi FileInfo) SetInlineData() {
+func (fi *FileInfo) SetInlineData() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string, 1)
+	}
 	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
 }
 

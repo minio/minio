@@ -34,6 +34,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -139,6 +140,9 @@ type xlStorage struct {
 
 	ctx context.Context
 	sync.RWMutex
+
+	// mutex to prevent concurrent read operations overloading walks.
+	walkMu sync.Mutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -393,6 +397,10 @@ func (s *xlStorage) Healing() *healingTracker {
 }
 
 func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
+	if err := checkPathLength(itemPath); err != nil {
+		return nil, err
+	}
+
 	f, err := OpenFile(itemPath, readMode, 0)
 	if err != nil {
 		return nil, err
@@ -401,6 +409,13 @@ func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
 	stat, err := f.Stat()
 	if err != nil {
 		return nil, err
+	}
+	if stat.IsDir() {
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: itemPath,
+			Err:  syscall.EISDIR,
+		}
 	}
 	return readXLMetaNoData(f, stat.Size())
 }
@@ -442,9 +457,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		return cache, errServerNotInitialized
 	}
 
-	globalHealConfigMu.Lock()
-	healOpts := globalHealConfig
-	globalHealConfigMu.Unlock()
 	cache.Info.updates = updates
 
 	dataUsageInfo, err := scanDataFolder(ctx, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
@@ -462,6 +474,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
+		defer metaDataPoolPut(buf)
 
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
@@ -476,10 +489,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		sizeS := sizeSummary{}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			sz := item.applyActions(ctx, objAPI, actionMeta{
-				oi:         oi,
-				bitRotScan: healOpts.Bitrot,
-			}, &sizeS)
+			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			if !oi.DeleteMarker && sz == oi.Size {
 				sizeS.versions++
 			}
@@ -892,7 +902,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		}
 	}
 	if !lastVersion {
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			return err
 		}
@@ -953,10 +964,30 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
 func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+	if fi.Fresh {
+		var xlMeta xlMetaV2
+		if err := xlMeta.AddVersion(fi); err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
+		buf, err := xlMeta.AppendTo(metaDataPoolGet())
+		defer metaDataPoolPut(buf)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
+		// First writes for special situations do not write to stable storage.
+		// this is currently used by
+		// - emphemeral objects such as objects created during listObjects() calls
+		// - newMultipartUpload() call..
+		return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, false)
+	}
+
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil && err != errFileNotFound {
 		return err
 	}
+	defer metaDataPoolPut(buf)
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
@@ -966,7 +997,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -982,7 +1014,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		buf, err = xlMeta.AppendTo(nil)
+		buf, err = xlMeta.AppendTo(metaDataPoolGet())
+		defer metaDataPoolPut(buf)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -1050,8 +1083,21 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if err != nil {
 		return fi, err
 	}
+	var buf []byte
+	if readData {
+		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
+	} else {
+		buf, err = s.readMetadata(pathJoin(volumeDir, path, xlStorageFormatFile))
+		if err != nil {
+			if osIsNotExist(err) {
+				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+					return fi, errVolumeNotFound
+				}
+			}
+			err = osErrToFileErr(err)
+		}
+	}
 
-	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
 			if err = s.renameLegacyMetadata(volumeDir, path); err != nil {
@@ -1090,14 +1136,36 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, err
 	}
 
+	if len(fi.Data) == 0 {
+		// We did not read inline data, so we have no references.
+		defer metaDataPoolPut(buf)
+	}
+
 	if readData {
 		if len(fi.Data) > 0 || fi.Size == 0 {
-			if len(fi.Data) > 0 {
-				if !fi.InlineData() {
-					fi.SetInlineData()
-				}
+			if fi.InlineData() {
+				// If written with header we are fine.
+				return fi, nil
 			}
-			return fi, nil
+			if fi.Size == 0 || !(fi.VersionID != "" && fi.VersionID != nullVersionID) {
+				// If versioned we have no conflicts.
+				fi.SetInlineData()
+				return fi, nil
+			}
+
+			// For overwritten objects without header we might have a conflict with
+			// data written later.
+			// Check the data path if there is a part with data.
+			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
+			dataPath := pathJoin(path, fi.DataDir, partPath)
+			_, err = s.StatInfoFile(ctx, volume, dataPath)
+			if err != nil {
+				// Set the inline header, our inlined data is fine.
+				fi.SetInlineData()
+				return fi, nil
+			}
+			// Data exists on disk, remove the version from metadata.
+			fi.Data = nil
 		}
 
 		// Reading data for small objects when
@@ -1288,7 +1356,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 	return int64(len(buffer)), nil
 }
 
-func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) {
+func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
@@ -1296,6 +1364,33 @@ func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) 
 	}
 
 	w, err := OpenFile(filePath, mode|writeMode, 0666)
+	if err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		switch {
+		case isSysErrIsDir(err):
+			return nil, errIsNotRegular
+		case osIsPermission(err):
+			return nil, errFileAccessDenied
+		case isSysErrIO(err):
+			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
+		default:
+			return nil, err
+		}
+	}
+
+	return w, nil
+}
+
+func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err error) {
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+		return nil, osErrToFileErr(err)
+	}
+
+	w, err := OpenFile(filePath, mode, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
@@ -1525,7 +1620,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	if fileSize >= 0 && fileSize <= smallFileThreshold {
 		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
 		// and not O_DIRECT to avoid the complexities of aligned I/O.
-		w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
+		w, err := s.openFileSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 		if err != nil {
 			return err
 		}
@@ -1585,7 +1680,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	return nil
 }
 
-func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
+func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1596,7 +1691,12 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b 
 		return err
 	}
 
-	w, err := s.openFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+	var w *os.File
+	if sync {
+		w, err = s.openFileSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+	} else {
+		w, err = s.openFileNoSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+	}
 	if err != nil {
 		return err
 	}
@@ -1612,6 +1712,10 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b 
 	}
 
 	return nil
+}
+
+func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
+	return s.writeAll(ctx, volume, path, b, true)
 }
 
 // AppendFile - append a byte array at path, if file doesn't exist at
@@ -1642,7 +1746,7 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 	var w *os.File
 	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
 	// AppendFile() is only used by healing code to heal objects written in old format.
-	w, err = s.openFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	w, err = s.openFileSync(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
@@ -1825,7 +1929,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 	var srcDataPath string
 	var dstDataPath string
-	dataDir := retainSlash(fi.DataDir)
+	var dataDir string
+	if !fi.IsRemote() {
+		dataDir = retainSlash(fi.DataDir)
+	}
 	if dataDir != "" {
 		srcDataPath = retainSlash(pathJoin(srcVolumeDir, srcPath, dataDir))
 		// make sure to always use path.Join here, do not use pathJoin as
@@ -1984,7 +2091,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		return err
 	}
 
-	dstBuf, err = xlMeta.AppendTo(nil)
+	dstBuf, err = xlMeta.AppendTo(metaDataPoolGet())
+	defer metaDataPoolPut(dstBuf)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		if legacyPreserved {

@@ -85,7 +85,7 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -122,7 +122,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
-	update := r.URL.Query().Get("update") == "true"
+	update := r.Form.Get("update") == "true"
 
 	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -130,7 +130,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -169,7 +169,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	target.SourceBucket = bucket
 	var ops []madmin.TargetUpdateType
 	if update {
-		ops = madmin.GetTargetUpdateOps(r.URL.Query())
+		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
 		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
 	}
@@ -258,7 +258,7 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 		return
 	}
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketTargetAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -298,7 +298,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 		return
 	}
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return

@@ -57,6 +57,10 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 		b.closeWithErr(err)
 		return n, err
 	}
+	if n != len(p) {
+		err = io.ErrShortWrite
+		b.closeWithErr(err)
+	}
 	return n, err
 }
 

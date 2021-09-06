@@ -162,11 +162,13 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		objInfo.ReplicationStatus = replication.StatusType(fi.DeleteMarkerReplicationStatus)
 	}
 
-	objInfo.TransitionStatus = fi.TransitionStatus
-	objInfo.transitionedObjName = fi.TransitionedObjName
-	objInfo.transitionVersionID = fi.TransitionVersionID
-	objInfo.tierFreeVersion = fi.TierFreeVersion()
-	objInfo.TransitionTier = fi.TransitionTier
+	objInfo.TransitionedObject = TransitionedObject{
+		Name:        fi.TransitionedObjName,
+		VersionID:   fi.TransitionVersionID,
+		Status:      fi.TransitionStatus,
+		FreeVersion: fi.TierFreeVersion(),
+		Tier:        fi.TransitionTier,
+	}
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
@@ -203,6 +205,43 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	}
 	// Success.
 	return objInfo
+}
+
+// TransitionInfoEquals returns true if transition related information are equal, false otherwise.
+func (fi FileInfo) TransitionInfoEquals(ofi FileInfo) bool {
+	switch {
+	case fi.TransitionStatus != ofi.TransitionStatus,
+		fi.TransitionTier != ofi.TransitionTier,
+		fi.TransitionedObjName != ofi.TransitionedObjName,
+		fi.TransitionVersionID != ofi.TransitionVersionID:
+		return false
+	}
+	return true
+}
+
+// MetadataEquals returns true if FileInfos Metadata maps are equal, false otherwise.
+func (fi FileInfo) MetadataEquals(ofi FileInfo) bool {
+	if len(fi.Metadata) != len(ofi.Metadata) {
+		return false
+	}
+	for k, v := range fi.Metadata {
+		if ov, ok := ofi.Metadata[k]; !ok || ov != v {
+			return false
+		}
+	}
+	return true
+}
+
+// ReplicationInfoEquals returns true if server-side replication related fields are equal, false otherwise.
+func (fi FileInfo) ReplicationInfoEquals(ofi FileInfo) bool {
+	switch {
+	case fi.MarkDeleted != ofi.MarkDeleted,
+		fi.DeleteMarkerReplicationStatus != ofi.DeleteMarkerReplicationStatus,
+		fi.VersionPurgeStatus != ofi.VersionPurgeStatus,
+		fi.Metadata[xhttp.AmzBucketReplicationStatus] != ofi.Metadata[xhttp.AmzBucketReplicationStatus]:
+		return false
+	}
+	return true
 }
 
 // objectPartIndex - returns the index of matching object part number.
@@ -276,6 +315,18 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 			h.Write([]byte(fmt.Sprintf("%v", meta.Erasure.Distribution)))
 			// make sure that length of Data is same
 			h.Write([]byte(fmt.Sprintf("%v", len(meta.Data))))
+
+			// ILM transition fields
+			h.Write([]byte(meta.TransitionStatus))
+			h.Write([]byte(meta.TransitionTier))
+			h.Write([]byte(meta.TransitionedObjName))
+			h.Write([]byte(meta.TransitionVersionID))
+
+			// Server-side replication fields
+			h.Write([]byte(fmt.Sprintf("%v", meta.MarkDeleted)))
+			h.Write([]byte(meta.DeleteMarkerReplicationStatus))
+			h.Write([]byte(meta.VersionPurgeStatus))
+			h.Write([]byte(meta.Metadata[xhttp.AmzBucketReplicationStatus]))
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()
 		}

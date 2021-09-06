@@ -119,7 +119,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	diskID := r.URL.Query().Get(storageRESTDiskID)
+	diskID := r.Form.Get(storageRESTDiskID)
 	if diskID == "" {
 		// Request sent empty disk-id, we allow the request
 		// as the peer might be coming up and trying to read format.json
@@ -282,7 +282,7 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	forceDelete := r.URL.Query().Get(storageRESTForceDelete) == "true"
+	forceDelete := r.Form.Get(storageRESTForceDelete) == "true"
 	err := s.storage.DeleteVol(r.Context(), volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -326,8 +326,8 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	done := keepHTTPResponseAlive(w)
-	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), r.Body))
+	done, body := keepHTTPReqResponseAlive(w, r)
+	done(s.storage.CreateFile(r.Context(), volume, filePath, int64(fileSize), body))
 }
 
 // DeleteVersion delete updated metadata.
@@ -641,10 +641,8 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	vars := r.URL.Query()
-	volume := vars.Get(storageRESTVolume)
-
-	totalVersions, err := strconv.Atoi(vars.Get(storageRESTTotalVersions))
+	volume := r.Form.Get(storageRESTVolume)
+	totalVersions, err := strconv.Atoi(r.Form.Get(storageRESTTotalVersions))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -721,8 +719,100 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// closeNotifier is itself a ReadCloser that will notify when either an error occurs or
+// the Close() function is called.
+type closeNotifier struct {
+	rc   io.ReadCloser
+	done chan struct{}
+}
+
+func (c *closeNotifier) Read(p []byte) (n int, err error) {
+	n, err = c.rc.Read(p)
+	if err != nil {
+		if c.done != nil {
+			close(c.done)
+			c.done = nil
+		}
+	}
+	return n, err
+}
+
+func (c *closeNotifier) Close() error {
+	if c.done != nil {
+		close(c.done)
+		c.done = nil
+	}
+	return c.rc.Close()
+}
+
+// keepHTTPReqResponseAlive can be used to avoid timeouts with long storage
+// operations, such as bitrot verification or data usage scanning.
+// Every 10 seconds a space character is sent.
+// keepHTTPReqResponseAlive will wait for the returned body to be read before starting the ticker.
+// The returned function should always be called to release resources.
+// An optional error can be sent which will be picked as text only error,
+// without its original type by the receiver.
+// waitForHTTPResponse should be used to the receiving side.
+func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func(error), body io.ReadCloser) {
+	bodyDoneCh := make(chan struct{})
+	doneCh := make(chan error)
+	ctx := r.Context()
+	go func() {
+		// Wait for body to be read.
+		select {
+		case <-ctx.Done():
+		case <-bodyDoneCh:
+		case err := <-doneCh:
+			if err != nil {
+				w.Write([]byte{1})
+				w.Write([]byte(err.Error()))
+			} else {
+				w.Write([]byte{0})
+			}
+			close(doneCh)
+			return
+		}
+		defer close(doneCh)
+		// Initiate ticker after body has been read.
+		ticker := time.NewTicker(time.Second * 10)
+		for {
+			select {
+			case <-ticker.C:
+				// Response not ready, write a filler byte.
+				w.Write([]byte{32})
+				w.(http.Flusher).Flush()
+			case err := <-doneCh:
+				if err != nil {
+					w.Write([]byte{1})
+					w.Write([]byte(err.Error()))
+				} else {
+					w.Write([]byte{0})
+				}
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+	return func(err error) {
+		if doneCh == nil {
+			return
+		}
+
+		// Indicate we are ready to write.
+		doneCh <- err
+
+		// Wait for channel to be closed so we don't race on writes.
+		<-doneCh
+
+		// Clear so we can be called multiple times without crashing.
+		doneCh = nil
+	}, &closeNotifier{rc: r.Body, done: bodyDoneCh}
+}
+
 // keepHTTPResponseAlive can be used to avoid timeouts with long storage
 // operations, such as bitrot verification or data usage scanning.
+// keepHTTPResponseAlive may NOT be used until the request body has been read,
+// use keepHTTPReqResponseAlive instead.
 // Every 10 seconds a space character is sent.
 // The returned function should always be called to release resources.
 // An optional error can be sent which will be picked as text only error,

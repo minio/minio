@@ -63,15 +63,16 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
-	quorum, err := strconv.Atoi(r.URL.Query().Get(lockRESTQuorum))
+	values := r.Form
+	quorum, err := strconv.Atoi(values.Get(lockRESTQuorum))
 	if err != nil {
 		return args, err
 	}
 
 	args = dsync.LockArgs{
-		Owner:  r.URL.Query().Get(lockRESTOwner),
-		UID:    r.URL.Query().Get(lockRESTUID),
-		Source: r.URL.Query().Get(lockRESTSource),
+		Owner:  values.Get(lockRESTOwner),
+		UID:    values.Get(lockRESTUID),
+		Source: values.Get(lockRESTSource),
 		Quorum: quorum,
 	}
 

@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -46,7 +47,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 	)
 
 	if isRequestPresignedSignatureV4(r) {
-		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
+		v, ok = r.Form[xhttp.AmzContentSha256]
 		if !ok {
 			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
@@ -82,7 +83,7 @@ func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 		// X-Amz-Content-Sha256, if not set in presigned requests, checksum
 		// will default to 'UNSIGNED-PAYLOAD'.
 		defaultSha256Cksum = unsignedPayload
-		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
+		v, ok = r.Form[xhttp.AmzContentSha256]
 		if !ok {
 			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
@@ -120,7 +121,7 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 
 // check if the access key is valid and recognized, additionally
 // also returns if the access key is owner/admin.
-func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
+func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, APIErrorCode) {
 	if !globalIAMSys.Initialized() && !globalIsGateway {
 		// Check if server has initialized, then only proceed
 		// to check for IAM users otherwise its okay for clients
@@ -135,7 +136,17 @@ func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		owner = cred.AccessKey == ucred.ParentUser
+		claims, s3Err := checkClaimsFromToken(r, ucred)
+		if s3Err != ErrNone {
+			return cred, false, s3Err
+		}
+		ucred.Claims = claims
+		// Now check if we have a sessionPolicy.
+		if _, ok = claims[iampolicy.SessionPolicyName]; ok {
+			owner = false
+		} else {
+			owner = cred.AccessKey == ucred.ParentUser
+		}
 		cred = ucred
 	}
 	return cred, owner, ErrNone
@@ -151,7 +162,7 @@ func sumHMAC(key []byte, data []byte) []byte {
 // extractSignedHeaders extract signed headers from Authorization header
 func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header, APIErrorCode) {
 	reqHeaders := r.Header
-	reqQueries := r.URL.Query()
+	reqQueries := r.Form
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
 	if !contains(signedHeaders, "host") {

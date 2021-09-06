@@ -19,10 +19,9 @@ package cmd
 
 import (
 	"context"
-	"time"
+	"runtime"
 
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/logger"
 )
 
 // healTask represents what to heal along with options
@@ -35,7 +34,7 @@ type healTask struct {
 	versionID string
 	opts      madmin.HealOpts
 	// Healing response will be sent here
-	responseCh chan healResult
+	respCh chan healResult
 }
 
 // healResult represents a healing result with a possible error
@@ -46,54 +45,37 @@ type healResult struct {
 
 // healRoutine receives heal tasks, to heal buckets, objects and format.json
 type healRoutine struct {
-	tasks  chan healTask
-	doneCh chan struct{}
+	tasks   chan healTask
+	workers int
 }
 
-// Add a new task in the tasks queue
-func (h *healRoutine) queueHealTask(task healTask) {
-	h.tasks <- task
-}
-
-func waitForLowHTTPReq(maxIO int, maxWait time.Duration) {
-	// No need to wait run at full speed.
-	if maxIO <= 0 {
-		return
-	}
-
-	// At max 10 attempts to wait with 100 millisecond interval before proceeding
-	waitTick := 100 * time.Millisecond
-
+func systemIO() int {
 	// Bucket notification and http trace are not costly, it is okay to ignore them
 	// while counting the number of concurrent connections
-	maxIOFn := func() int {
-		return maxIO + int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
+	return int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
+}
+
+func waitForLowHTTPReq() {
+	var currentIO func() int
+	if httpServer := newHTTPServerFn(); httpServer != nil {
+		currentIO = httpServer.GetRequestCount
 	}
 
-	tmpMaxWait := maxWait
-	if httpServer := newHTTPServerFn(); httpServer != nil {
-		// Any requests in progress, delay the heal.
-		for httpServer.GetRequestCount() >= maxIOFn() {
-			if tmpMaxWait > 0 {
-				if tmpMaxWait < waitTick {
-					time.Sleep(tmpMaxWait)
-				} else {
-					time.Sleep(waitTick)
-				}
-				tmpMaxWait = tmpMaxWait - waitTick
-			}
-			if tmpMaxWait <= 0 {
-				if intDataUpdateTracker.debug {
-					logger.Info("waitForLowHTTPReq: waited max %s, resuming", maxWait)
-				}
-				break
-			}
-		}
+	globalHealConfig.Wait(currentIO, systemIO)
+}
+
+func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
+	// Run the background healer
+	globalBackgroundHealRoutine = newHealRoutine()
+	for i := 0; i < globalBackgroundHealRoutine.workers; i++ {
+		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI)
 	}
+
+	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
 }
 
 // Wait for heal requests and process them
-func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
+func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		select {
 		case task, ok := <-h.tasks:
@@ -105,6 +87,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			var err error
 			switch task.bucket {
 			case nopHeal:
+				task.respCh <- healResult{err: errSkipFile}
 				continue
 			case SlashSeparator:
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
@@ -115,10 +98,8 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 					res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
 				}
 			}
-			task.responseCh <- healResult{result: res, err: err}
 
-		case <-h.doneCh:
-			return
+			task.respCh <- healResult{result: res, err: err}
 		case <-ctx.Done():
 			return
 		}
@@ -126,9 +107,13 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func newHealRoutine() *healRoutine {
+	workers := runtime.GOMAXPROCS(0) / 2
+	if workers == 0 {
+		workers = 4
+	}
 	return &healRoutine{
-		tasks:  make(chan healTask),
-		doneCh: make(chan struct{}),
+		tasks:   make(chan healTask),
+		workers: workers,
 	}
 
 }

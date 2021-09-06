@@ -240,7 +240,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 }
 
 // NSScanner returns data usage stats of the current FS deployment
-func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo) error {
+func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error {
 	defer close(updates)
 	// Load bucket totals
 	var totalCache dataUsageCache
@@ -386,7 +386,7 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 		}
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
-		sz := item.applyActions(ctx, fs, actionMeta{oi: oi}, &sizeSummary{})
+		sz := item.applyActions(ctx, fs, oi, &sizeSummary{})
 		if sz >= 0 {
 			return sizeSummary{totalSize: sz, versions: 1}, nil
 		}

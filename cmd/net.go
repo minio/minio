@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -46,20 +47,30 @@ func mustSplitHostPort(hostPort string) (host, port string) {
 // mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
 func mustGetLocalIP4() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
-	addrs, err := net.InterfaceAddrs()
+	ifs, err := net.Interfaces()
 	logger.FatalIf(err, "Unable to get IP addresses of this host")
 
-	for _, addr := range addrs {
-		var ip net.IP
-		switch v := addr.(type) {
-		case *net.IPNet:
-			ip = v.IP
-		case *net.IPAddr:
-			ip = v.IP
+	for _, interf := range ifs {
+		addrs, err := interf.Addrs()
+		if err != nil {
+			continue
+		}
+		if runtime.GOOS == "windows" && interf.Flags&net.FlagUp == 0 {
+			continue
 		}
 
-		if ip.To4() != nil {
-			ipList.Add(ip.String())
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			if ip.To4() != nil {
+				ipList.Add(ip.String())
+			}
 		}
 	}
 

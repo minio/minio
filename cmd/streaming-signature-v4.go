@@ -93,7 +93,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 		return cred, "", "", time.Time{}, errCode
 	}
 
-	cred, _, errCode = checkKeyValid(signV4Values.Credential.accessKey)
+	cred, _, errCode = checkKeyValid(r, signV4Values.Credential.accessKey)
 	if errCode != ErrNone {
 		return cred, "", "", time.Time{}, errCode
 	}
@@ -117,7 +117,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	}
 
 	// Query string.
-	queryStr := req.URL.Query().Encode()
+	queryStr := req.Form.Encode()
 
 	// Get canonical request.
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method)

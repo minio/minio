@@ -92,8 +92,6 @@ func init() {
 		},
 	})
 
-	globalTransitionState = newTransitionState()
-
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
@@ -154,6 +152,9 @@ func minioConfigToConsoleFeatures() {
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
+	if globalSubnetLicense != "" {
+		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetLicense)
+	}
 }
 
 func initConsoleServer() (*restapi.Server, error) {
@@ -215,11 +216,6 @@ func initConsoleServer() (*restapi.Server, error) {
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
-		logger.Fatal(errInvalidArgument,
-			"Encryption support is requested but '%s' does not support encryption", name)
-	}
-
 	if strings.HasPrefix(name, "gateway") {
 		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
 			uiErr := config.ErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured")
@@ -603,6 +599,8 @@ func handleCommonEnvVars() {
 	if tiers := env.Get("_MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY", ""); tiers != "" {
 		globalDebugRemoteTiersImmediately = strings.Split(tiers, ",")
 	}
+
+	globalSubnetLicense = env.Get(config.EnvMinIOSubnetLicense, "")
 }
 
 func logStartupMessage(msg string) {

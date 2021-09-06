@@ -97,6 +97,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	o.parseMarker()
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
 	o.Transient = o.Transient || isReservedOrInvalidBucket(o.Bucket, false)
+	o.SetFilter()
 	if o.Transient {
 		o.Create = false
 	}
@@ -162,6 +163,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			if o.pool < len(z.serverPools) && o.set < len(z.serverPools[o.pool].sets) {
 				o.debugln("Resuming", o)
 				entries, err = z.serverPools[o.pool].sets[o.set].streamMetadataParts(ctx, *o)
+				entries.reuse = true // We read from stream and are not sharing results.
 				if err == nil {
 					return entries, nil
 				}
@@ -185,9 +187,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 			ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 			defer cancel()
-			if c, err := rpc.GetMetacacheListing(ctx, *o); err == nil {
+			c, err := rpc.GetMetacacheListing(ctx, *o)
+			if err == nil {
 				c.error = "no longer used"
 				c.status = scanStateError
+				rpc.UpdateMetacacheListing(ctx, *c)
 			}
 		}()
 		o.ID = ""
@@ -198,8 +202,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	// Create filter for results.
 	o.debugln("Raw List", o)
 	filterCh := make(chan metaCacheEntry, o.Limit)
-	filteredResults := o.gatherResults(filterCh)
 	listCtx, cancelList := context.WithCancel(ctx)
+	filteredResults := o.gatherResults(listCtx, filterCh)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var listErr error
@@ -217,6 +221,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	if listErr != nil && !errors.Is(listErr, context.Canceled) {
 		return entries, listErr
 	}
+	entries.reuse = true
 	truncated := entries.len() > o.Limit || err == nil
 	entries.truncate(o.Limit)
 	if !o.Transient && truncated {
@@ -341,7 +346,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	inCh := make(chan metaCacheEntry, metacacheBlockSize)
 	outCh := make(chan metaCacheEntry, o.Limit)
 
-	filteredResults := o.gatherResults(outCh)
+	filteredResults := o.gatherResults(ctx, outCh)
 
 	mc := o.newMetacache()
 	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: *o}
@@ -363,13 +368,33 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 		o.debugln("listAndSave: listing", o.ID, "finished with ", err)
 	}(*o)
 
+	// Keep track of when we return since we no longer have to send entries to output.
+	var funcReturned bool
+	var funcReturnedMu sync.Mutex
+	defer func() {
+		funcReturnedMu.Lock()
+		funcReturned = true
+		funcReturnedMu.Unlock()
+	}()
 	// Write listing to results and saver.
 	go func() {
+		var returned bool
 		for entry := range inCh {
-			outCh <- entry
+			if !returned {
+				funcReturnedMu.Lock()
+				returned = funcReturned
+				funcReturnedMu.Unlock()
+				outCh <- entry
+				if returned {
+					close(outCh)
+				}
+			}
+			entry.reusable = returned
 			saveCh <- entry
 		}
-		close(outCh)
+		if !returned {
+			close(outCh)
+		}
 		close(saveCh)
 	}()
 

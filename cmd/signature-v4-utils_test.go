@@ -89,6 +89,7 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 				inputReq.Header.Set(testCase.inputHeaderKey, testCase.inputHeaderValue)
 			}
 		}
+		inputReq.ParseForm()
 
 		actualResult := skipContentSha256Cksum(inputReq)
 		if testCase.expectedResult != actualResult {
@@ -163,6 +164,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// set headers value through Get parameter
 	inputQuery.Add("x-amz-server-side-encryption", xhttp.AmzEncryptionAES)
 	r.URL.RawQuery = inputQuery.Encode()
+	r.ParseForm()
 	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
@@ -267,6 +269,7 @@ func TestGetContentSha256Cksum(t *testing.T) {
 		if testCase.h != "" {
 			r.Header.Set("x-amz-content-sha256", testCase.h)
 		}
+		r.ParseForm()
 		got := getContentSha256Cksum(r, serviceS3)
 		if got != testCase.expected {
 			t.Errorf("Test %d: got:%s expected:%s", i+1, got, testCase.expected)
