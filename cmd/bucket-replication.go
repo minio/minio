@@ -263,6 +263,21 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		})
 		return
 	}
+	if tgt.isOffline() {
+		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, rcfg.RoleArn))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
+		return
+	}
 
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
 		VersionID: versionID,
@@ -594,6 +609,17 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		})
 		return
 	}
+	if tgt.isOffline() {
+		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, cfg.RoleArn))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return
+	}
+
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
