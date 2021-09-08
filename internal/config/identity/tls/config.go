@@ -18,9 +18,10 @@
 package tls
 
 import (
-	"errors"
+	"strconv"
 	"time"
 
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )
@@ -29,11 +30,6 @@ const (
 	// EnvEnabled is an environment variable that controls whether the X.509
 	// TLS STS API is enabled. By default, if not set, it is enabled.
 	EnvEnabled = "MINIO_IDENTITY_TLS_ENABLE"
-
-	// EnvSTSExpiry is an environment variable for the expiry of temp.
-	// generated STS credentials. Its minimum value is 15 minutes and
-	// defaults to 1 hour, if not set.
-	EnvSTSExpiry = "MINIO_IDENTITY_TLS_STS_EXPIRY"
 
 	// EnvSkipVerify is an environment variable that controls whether
 	// MinIO verifies the client certificate present by the client
@@ -52,13 +48,35 @@ const (
 type Config struct {
 	Enabled bool `json:"enabled"`
 
-	// STSExpiry is the expiry duration of generated credentials.
-	STSExpiry time.Duration `json:"sts_expiry"`
-
 	// InsecureSkipVerify, if set to true, disables the client
 	// certificate verification. It should only be set for
 	// debugging or testing purposes.
 	InsecureSkipVerify bool `json:"skip_verify"`
+}
+
+const (
+	defaultExpiry time.Duration = 1 * time.Hour
+	minExpiry     time.Duration = 15 * time.Minute
+	maxExpiry     time.Duration = 365 * 24 * time.Hour
+)
+
+// GetExpiryDuration - return parsed expiry duration.
+func (l Config) GetExpiryDuration(dsecs string) (time.Duration, error) {
+	if dsecs == "" {
+		return defaultExpiry, nil
+	}
+
+	d, err := strconv.Atoi(dsecs)
+	if err != nil {
+		return 0, auth.ErrInvalidDuration
+	}
+
+	dur := time.Duration(d) * time.Second
+
+	if dur < minExpiry || dur > maxExpiry {
+		return 0, auth.ErrInvalidDuration
+	}
+	return dur, nil
 }
 
 // Lookup returns a new Config by merging the given K/V config
@@ -66,19 +84,6 @@ type Config struct {
 func Lookup(kvs config.KVS) (Config, error) {
 	if err := config.CheckValidKeys(config.IdentityTLSSubSys, kvs, DefaultKVS); err != nil {
 		return Config{}, err
-	}
-	expiry, err := time.ParseDuration(env.Get(EnvSTSExpiry, kvs.Get(stsExpiry)))
-	if err != nil {
-		return Config{}, err
-	}
-	if expiry < 0 {
-		return Config{}, errors.New("tls: STS expiry must not be negative")
-	}
-	if expiry == 0 {
-		expiry = 1 * time.Hour // Set default expiry, if empty
-	}
-	if expiry < 15*time.Minute {
-		expiry = 15 * time.Minute // The minimal expiry duration is 15 minutes
 	}
 	insecureSkipVerify, err := config.ParseBool(env.Get(EnvSkipVerify, kvs.Get(skipVerify)))
 	if err != nil {
@@ -90,23 +95,17 @@ func Lookup(kvs config.KVS) (Config, error) {
 	}
 	return Config{
 		Enabled:            enabled,
-		STSExpiry:          expiry,
 		InsecureSkipVerify: insecureSkipVerify,
 	}, nil
 }
 
 const (
-	stsExpiry  = "sts_expiry"
 	skipVerify = "skip_verify"
 )
 
 // DefaultKVS is the the default K/V config system for
 // the STS TLS API.
 var DefaultKVS = config.KVS{
-	config.KV{
-		Key:   stsExpiry,
-		Value: (1 * time.Hour).String(),
-	},
 	config.KV{
 		Key:   skipVerify,
 		Value: "off",
@@ -115,12 +114,6 @@ var DefaultKVS = config.KVS{
 
 // Help is the help and description for the STS API K/V configuration.
 var Help = config.HelpKVS{
-	config.HelpKV{
-		Key:         stsExpiry,
-		Description: `temporary credentials validity duration in s,m,h,d. Default is "1h"`,
-		Optional:    true,
-		Type:        "duration",
-	},
 	config.HelpKV{
 		Key:         skipVerify,
 		Description: `trust client certificates without verification. Defaults to "off" (verify)`,

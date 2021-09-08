@@ -1,16 +1,11 @@
 # AssumeRoleWithCertificate [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 ## Introduction
-
 MinIO provides a custom STS API that allows authentication with client X.509 / TLS certificates.
 
-A major advantage of certificate-based authentication compared to other STS authentication methods,
-like OpenID Connect or LDAP/AD, is that client authentication works without any additional/external
-component that must be constantly available. Therefore, certificate-based authentication may provide
-better availability / lower operational complexity.
+A major advantage of certificate-based authentication compared to other STS authentication methods, like OpenID Connect or LDAP/AD, is that client authentication works without any additional/external component that must be constantly available. Therefore, certificate-based authentication may provide better availability / lower operational complexity.
 
-The MinIO TLS STS API can be configured via MinIO's standard configuration API (i.e. using `mc admin config set/get`).
-Further, it can be configured via the following environment variables:
+The MinIO TLS STS API can be configured via MinIO's standard configuration API (i.e. using `mc admin config set/get`). Further, it can be configured via the following environment variables:
 
 ```
 mc admin config set myminio identity_tls --env
@@ -18,7 +13,6 @@ KEY:
 identity_tls  enable X.509 TLS certificate SSO support
 
 ARGS:
-MINIO_IDENTITY_TLS_STS_EXPIRY   (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
 MINIO_IDENTITY_TLS_SKIP_VERIFY  (on|off)    trust client certificates without verification. Defaults to "off" (verify)
 ```
 
@@ -28,17 +22,13 @@ MINIO_IDENTITY_TLS_ENABLE=off
 ```
 
 ## Example
-
-MinIO exposes a custom S3 STS API endpoint as `Action=AssumeRoleWithCertificate`. A client has to send an HTTP `POST`
-request to `https://<host>:<port>?Action=AssumeRoleWithCertificate&Version=2011-06-15`. Since the authentication and
-authorization happens via X.509 certificates the client has to send the request over **TLS** and has to provide
+MinIO exposes a custom S3 STS API endpoint as `Action=AssumeRoleWithCertificate`. A client has to send an HTTP `POST` request to `https://<host>:<port>?Action=AssumeRoleWithCertificate&Version=2011-06-15`. Since the authentication and authorization happens via X.509 certificates the client has to send the request over **TLS** and has to provide
 a client certificate.
 
-The following curl example shows how to authenticate to a MinIO server with client certificate and obtain temp. S3
-access/secret key credentials. 
+The following curl example shows how to authenticate to a MinIO server with client certificate and obtain STS access credentials.
 
 ```curl
-curl -X POST --key private.key --cert public.crt "https://minio:9000?Action=AssumeRoleWithCertificate&Version=2011-06-15"
+curl -X POST --key private.key --cert public.crt "https://minio:9000?Action=AssumeRoleWithCertificate&Version=2011-06-15&DurationSeconds=3600"
 ```
 
 ```xml
@@ -60,16 +50,11 @@ curl -X POST --key private.key --cert public.crt "https://minio:9000?Action=Assu
 
 ## Authentication Flow
 
-A client can request temp. S3 credentials via the STS API. It can authenticate via a client certificate and
-obtain a access/secret key pair as well as a session token. These credentials are associated to an S3 policy
-at the MinIO server.
+A client can request temp. S3 credentials via the STS API. It can authenticate via a client certificate and obtain a access/secret key pair as well as a session token. These credentials are associated to an S3 policy at the MinIO server.
 
-In case of certificate-based authentication, MinIO has to map the client-provided certificate to an S3 policy.
-MinIO does this via the subject common name field of the X.509 certificate. So, MinIO will associate a certificate
-with a subject `CN = foobar` to a S3 policy named `foobar`.
+In case of certificate-based authentication, MinIO has to map the client-provided certificate to an S3 policy. MinIO does this via the subject common name field of the X.509 certificate. So, MinIO will associate a certificate with a subject `CN = foobar` to a S3 policy named `foobar`.
 
-The following self-signed certificate is issued for `consoleAdmin`. So, MinIO would associate it with the
-pre-defined `consoleAdmin` policy.
+The following self-signed certificate is issued for `consoleAdmin`. So, MinIO would associate it with the pre-defined `consoleAdmin` policy.
 ```
 Certificate:
     Data:
@@ -104,22 +89,18 @@ Certificate:
 ```
 > Observe the `Subject: CN = consoleAdmin` field.
 
-Also, note that the certificate has to contain the `Extended Key Usage: TLS Web Client Authentication`.
-Otherwise, MinIO would not accept the certificate as client certificate.
+Also, note that the certificate has to contain the `Extended Key Usage: TLS Web Client Authentication`. Otherwise, MinIO would not accept the certificate as client certificate.
 
 Now, the STS certificate-based authentication happens in 4 steps:
- 1. Client sends HTTP `POST` request over a TLS connection hitting the MinIO TLS STS API.
- 2. MinIO verifies that the client certificate is valid.
- 3. MinIO tries to find a policy that matches the `CN` of the client certificate.
- 4. MinIO returns temp. S3 credentials associated to the found policy.
 
-The returned credentials expiry after a certain period of time that can be configured via
-`MINIO_IDENTITY_TLS_STS_EXPIRY` - for example: `export MINIO_IDENTITY_TLS_STS_EXPIRY=30m`.
-By default, the temp. S3 credentials are valid for 1 hour. The minimum expiration is 15 minutes.
+- Client sends HTTP `POST` request over a TLS connection hitting the MinIO TLS STS API.
+- MinIO verifies that the client certificate is valid.
+- MinIO tries to find a policy that matches the `CN` of the client certificate.
+- MinIO returns temp. S3 credentials associated to the found policy.
 
-Further, the temp. S3 credentials will never out-live the client certificate. For example,
-if the `MINIO_IDENTITY_TLS_STS_EXPIRY` is 7 days but the certificate itself is only valid
-for the next 3 days, then MinIO will return S3 credentials that are valid for 3 days only.
+The returned credentials expiry after a certain period of time that can be configured via `&DurationSeconds=3600`. By default, the STS credentials are valid for 1 hour. The minimum expiration allowed is 15 minutes.
+
+Further, the temp. S3 credentials will never out-live the client certificate. For example, if the `MINIO_IDENTITY_TLS_STS_EXPIRY` is 7 days but the certificate itself is only valid for the next 3 days, then MinIO will return S3 credentials that are valid for 3 days only.
 
 ## Explore Further
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)

@@ -703,23 +703,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 	}
 
-	// We set the expiry of the temp. credentials to the minimum of the
-	// configured expiry and the duration until the certificate itself
-	// expires.
-	// We must not issue credentials that out-live the certificate.
-	var expiry = globalSTSTLSConfig.STSExpiry
-	if validUntil := time.Until(certificate.NotAfter); validUntil < expiry {
-		expiry = validUntil
-	}
-
-	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim: time.Now().UTC().Add(expiry).Unix(),
-	}, globalActiveCred.SecretKey)
-	if err != nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
-		return
-	}
-
 	// We map the X.509 subject common name to the policy. So, a client
 	// with the common name "foo" will be associated with the policy "foo".
 	// Other mapping functions - e.g. public-key hash based mapping - are
@@ -727,11 +710,42 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	//
 	// Group mapping is not possible with standard X.509 certificates.
 	if certificate.Subject.CommonName == "" {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("The certificate subject CN is empty"))
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("certificate subject CN cannot be empty"))
 		return
 	}
-	tmpCredentials.ParentUser = "tls:" + certificate.Subject.CommonName // Associate any service accounts to the certificate CN
-	if err = globalIAMSys.SetTempUser(tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName); err != nil {
+
+	expiry, err := globalSTSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, err)
+		return
+	}
+
+	// We set the expiry of the temp. credentials to the minimum of the
+	// configured expiry and the duration until the certificate itself
+	// expires.
+	// We must not issue credentials that out-live the certificate.
+	if validUntil := time.Until(certificate.NotAfter); validUntil < expiry {
+		expiry = validUntil
+	}
+
+	// Associate any service accounts to the certificate CN
+	parentUser := "tls:" + certificate.Subject.CommonName
+
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
+		expClaim:    time.Now().UTC().Add(expiry).Unix(),
+		parentClaim: parentUser,
+		subClaim:    certificate.Subject.CommonName,
+		audClaim:    certificate.Subject.Organization,
+		issClaim:    certificate.Issuer.CommonName,
+	}, globalActiveCred.SecretKey)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
+		return
+	}
+
+	tmpCredentials.ParentUser = parentUser
+	err = globalIAMSys.SetTempUser(tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName)
+	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
