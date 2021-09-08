@@ -1036,8 +1036,8 @@ github.com/minio/minio-go/v7 v7.0.10/go.mod h1:td4gW1ldOsj1PbSNS+WYK43j+P1XVhX/8
 github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78/go.mod h1:mTh2uJuAbEqdhMVl6CMIIZLUeiMiWtJR4JB8/5g2skw=
 github.com/minio/minio-go/v7 v7.0.11-0.20210607181445-e162fdb8e584/go.mod h1:WoyW+ySKAKjY98B9+7ZbI8z8S3jaxaisdcvj9TGlazA=
 github.com/minio/minio-go/v7 v7.0.13-0.20210715203016-9e713532886e/go.mod h1:S23iSP5/gbMwtxeY5FM71R+TkAYyzEdoNEDDwpt8yWs=
-github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2 h1:+/AXRNJS9cVfmPqyJVw0Mg2u4XNsXSOBBtLfk2IuK7o=
-github.com/minio/minio-go/v7 v7.0.13-0.20210823191913-cee488b95ff2/go.mod h1:S23iSP5/gbMwtxeY5FM71R+TkAYyzEdoNEDDwpt8yWs=
+github.com/minio/minio-go/v7 v7.0.14-0.20210908194250-617d530ffac5 h1:c6okzYcdOLPP9tHoOE/JxiWi5qSQpvFC6VqbA4FB/Iw=
+github.com/minio/minio-go/v7 v7.0.14-0.20210908194250-617d530ffac5/go.mod h1:S23iSP5/gbMwtxeY5FM71R+TkAYyzEdoNEDDwpt8yWs=
 github.com/minio/operator v0.0.0-20210812082324-26350f153661 h1:dGAJHpfmhNukFg0M0wDqH+G1OB2YPgZCcT6uv4n9YQk=
 github.com/minio/operator v0.0.0-20210812082324-26350f153661/go.mod h1:zQqn6VGT46xlSpVXh1I/VZRv+eSgHtVu6URdg71YKX8=
 github.com/minio/operator/logsearchapi v0.0.0-20210812082324-26350f153661 h1:tJw15hS3b1dVTf5PwA4roXZ/oRNnHyZ/8Y+yNTmQ5rA=
