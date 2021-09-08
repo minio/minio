@@ -39,6 +39,9 @@ const (
 	// Time in which the initiator of a scan must have reported back.
 	metacacheMaxRunningAge = time.Minute
 
+	// Max time between client calls before dropping an async cache listing.
+	metacacheMaxClientWait = 3 * time.Minute
+
 	// metacacheBlockSize is the number of file/directory entries to have in each block.
 	metacacheBlockSize = 5000
 
@@ -82,8 +85,9 @@ func (m *metacache) worthKeeping() bool {
 	case !cache.finished() && time.Since(cache.lastUpdate) > metacacheMaxRunningAge:
 		// Not finished and update for metacacheMaxRunningAge, discard it.
 		return false
-	case cache.finished() && time.Since(cache.lastHandout) > 30*time.Minute:
-		// Keep only for 30 minutes.
+	case cache.finished() && time.Since(cache.lastHandout) > 5*metacacheMaxClientWait:
+		// Keep for 15 minutes after we last saw the client.
+		// Since the cache is finished keeping it a bit longer doesn't hurt us.
 		return false
 	case cache.status == scanStateError || cache.status == scanStateNone:
 		// Remove failed listings after 5 minutes.
@@ -113,6 +117,9 @@ func baseDirFromPrefix(prefix string) string {
 func (m *metacache) update(update metacache) {
 	m.lastUpdate = UTCNow()
 
+	if m.lastHandout.After(m.lastHandout) {
+		m.lastHandout = UTCNow()
+	}
 	if m.status == scanStateStarted && update.status == scanStateSuccess {
 		m.ended = UTCNow()
 	}
@@ -121,7 +128,8 @@ func (m *metacache) update(update metacache) {
 		m.status = update.status
 	}
 
-	if m.status == scanStateStarted && time.Since(m.lastHandout) > 15*time.Minute {
+	if m.status == scanStateStarted && time.Since(m.lastHandout) > metacacheMaxClientWait {
+		// Drop if client hasn't been seen for 3 minutes.
 		m.status = scanStateError
 		m.error = "client not seen"
 	}
