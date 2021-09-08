@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/storageclass"
 	xhttp "github.com/minio/minio/internal/http"
@@ -188,6 +189,7 @@ var (
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
 	globalOpenIDConfig openid.Config
+	globalSTSTLSConfig xtls.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool

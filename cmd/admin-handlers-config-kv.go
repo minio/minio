@@ -417,6 +417,8 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 				off = !openid.Enabled(kv)
 			case config.IdentityLDAPSubSys:
 				off = !xldap.Enabled(kv)
+			case config.IdentityTLSSubSys:
+				off = !globalSTSTLSConfig.Enabled
 			}
 			if off {
 				s.WriteString(config.KvComment)
