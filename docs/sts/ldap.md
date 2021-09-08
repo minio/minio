@@ -1,35 +1,6 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
-
-- [AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)](#assumerolewithldapidentity-slackhttpsslackminioslacktypesvghttpsslackminio)
-    - [Introduction](#introduction)
-    - [Configuring AD/LDAP on MinIO](#configuring-adldap-on-minio)
-        - [Supported modes of operation](#supported-modes-of-operation)
-            - [Lookup-Bind Mode](#lookup-bind-mode)
-            - [Username-Format Mode](#username-format-mode)
-        - [Group membership search](#group-membership-search)
-        - [Variable substitution in AD/LDAP configuration strings](#variable-substitution-in-adldap-configuration-strings)
-    - [Managing User/Group Access Policy](#managing-usergroup-access-policy)
-    - [API Request Parameters](#api-request-parameters)
-        - [LDAPUsername](#ldapusername)
-        - [LDAPPassword](#ldappassword)
-        - [Version](#version)
-        - [DurationSeconds](#durationseconds)
-        - [Policy](#policy)
-        - [Response Elements](#response-elements)
-        - [Errors](#errors)
-    - [Sample `POST` Request](#sample-post-request)
-    - [Sample Response](#sample-response)
-    - [Using LDAP STS API](#using-ldap-sts-api)
-    - [Explore Further](#explore-further)
-
-<!-- markdown-toc end -->
-
-
 ## Introduction
-
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server can be configured in two possible modes: either using a LDAP separate service account, called lookup-bind mode or in username-format mode. In either case the login flow for a user is the same as the STS flow:
 
 1. User provides their AD/LDAP username and password to the STS API.
@@ -58,7 +29,6 @@ MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only se
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
-MINIO_IDENTITY_LDAP_USERNAME_FORMAT         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
@@ -67,19 +37,11 @@ MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection 
 MINIO_IDENTITY_LDAP_COMMENT                 (sentence)  optionally add a comment to this setting
 ```
 
-### Supported modes of operation ###
-
-The two supported modes of LDAP configuration differ in how the MinIO server derives the Distinguished Name (DN) of the user from their username provided in the STS API. _Exactly one must be used in a valid configuration_.
-
 Once a unique DN for the user is derived, the server verifies the user's credentials with the LDAP server and on success, looks up the user's groups via a configured group search query and finally temporary object storage credentials are generated and returned.
 
-#### Lookup-Bind Mode (Recommended) ####
+### Lookup-Bind
 
-In this mode, the a low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. It is the new and preferred mode for LDAP integration.
-
-This service account is used by the MinIO server to lookup a user's DN given their username. The lookup is performed via an LDAP search filter query that is also configured by the administrator.
-
-This mode is enabled by setting the following variables:
+A low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. This service account is used by the MinIO server to lookup a user's DN given their username. The lookup is performed via an LDAP search filter query that is also configured by the administrator.
 
 ```
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
@@ -90,26 +52,15 @@ MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup 
 
 If you set an empty lookup bind password, the lookup bind will use the unauthenticated authentication mechanism, as described in [RFC 4513 Section 5.1.2](https://tools.ietf.org/html/rfc4513#section-5.1.2).
 
-**Automatic LDAP sync:** In Lookup-Bind mode, the server periodically queries the LDAP service to:
+**Automatic LDAP sync:** MinIO server also periodically queries the LDAP service to:
 
-1. find accounts (user DNs) that have been removed;
-2. find accounts whose group memberships have changed.
+- find accounts (user DNs) that have been removed
 
-In case 1 above, any active STS credentials or MinIO service accounts belonging to these users are purged.
+Any active STS credentials or MinIO service accounts belonging to these users are purged.
 
-In case 2 above, access policies available to the credential are updated to reflect the change - i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
+- find accounts whose group memberships have changed
 
-#### Username-Format Mode (Deprecated) ####
-
-In this mode, the server does not use a separate LDAP service account. Instead, the username and password provided in the STS API call are used to login to the LDAP server and also to lookup the user's groups. This mode preserves older behavior for compatibility, but users are encouraged to use the Lookup-Bind mode. Some newer features may not be available in this mode of operation.
-
-The DN to use to login to LDAP is computed from a username format configuration parameter. This is a list of possible DN templates to be used. For each such template, the username is substituted and the DN is generated. Each generated DN is tried by the MinIO server to login to LDAP. If exactly one successful DN is found, it is used to perform the groups lookup as well.
-
-This mode is enabled by setting the following variables:
-
-```
-MINIO_IDENTITY_LDAP_USERNAME_FORMAT         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
-```
+Access policies available to the credential are updated to reflect the change - i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
 
 ### Group membership search
 
@@ -128,19 +79,19 @@ If a self-signed certificate is being used, the certificate can be added to MinI
 
 ```shell
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
-export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=%s,cn=accounts,dc=myldapserver,dc=com"
+export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
+export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
 
-### Variable substitution in AD/LDAP configuration strings ###
+### Variable substitution in AD/LDAP configuration strings
 
 In the configuration variables, `%s` is substituted with the *username* from the STS request and `%d` is substituted with the *distinguished username (user DN)* of the LDAP user. Please see the following table for which configuration variables support these substitution variables:
 
 | Variable                                    | Supported substitutions |
 |---------------------------------------------|-------------------------|
-| `MINIO_IDENTITY_LDAP_USERNAME_FORMAT`       | `%s`                    |
 | `MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER` | `%s`                    |
 | `MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER`   | `%s` and `%d`           |
 
@@ -254,7 +205,8 @@ With multiple OU hierarchies for users, and multiple group search base DN's.
 $ export MINIO_ROOT_USER=minio
 $ export MINIO_ROOT_PASSWORD=minio123
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com;cn=%s,ou=Users,ou=BUS2,ou=LOB,dc=somedomain,dc=com'
+$ export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
+$ export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=groupOfNames)(member=%d))'
 $ minio server ~/test
