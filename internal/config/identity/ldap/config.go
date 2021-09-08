@@ -686,3 +686,34 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 
 	return l, nil
 }
+
+// GetDNStr - returns a standard DN string representation. A DN is a sequence of
+// relative DNs (RDNs). An RDN is a sequence of AttributeTypeAndValue's. The
+// case of AttributeType is not relevant and is always lower-cased here. When
+// `isCaseSensitive` is set, the case of AttributeValue's are preserved,
+// otherwise they are folded to lower case. Extraneous spaces are removed.
+//
+// Ref: https://datatracker.ietf.org/doc/html/rfc4514
+func GetDNStr(dn *ldap.DN, isCaseSensitive bool) string {
+	const (
+		attribTypeValueSeparator = "="
+		attribsSeparator         = "+"
+		rdnSeparator             = ","
+	)
+
+	parts := make([]string, 0, len(dn.RDNs))
+	for _, rdn := range dn.RDNs {
+		rParts := make([]string, 0, len(rdn.Attributes))
+		for _, attr := range rdn.Attributes {
+			value := attr.Value
+			if !isCaseSensitive {
+				value = strings.ToLower(value)
+			}
+			attrib := strings.ToLower(attr.Type) + attribTypeValueSeparator + value
+			rParts = append(rParts, attrib)
+		}
+		rdnStr := strings.Join(rParts, attribsSeparator)
+		parts = append(parts, rdnStr)
+	}
+	return strings.Join(parts, rdnSeparator)
+}
