@@ -643,11 +643,20 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 			metaMu.Lock()
 			meta := *mc.meta
 			meta, err = o.updateMetacacheListing(meta, rpc)
-			*mc.meta = meta
-			if meta.status == scanStateError {
-				logger.LogIf(ctx, err)
+			if err == nil && time.Since(meta.lastHandout) > metacacheMaxClientWait {
 				cancel()
 				exit = true
+				meta.status = scanStateError
+				meta.error = fmt.Sprintf("listing canceled since time since last handout was %v ago", time.Since(meta.lastHandout).Round(time.Second))
+				o.debugln(color.Green("saveMetaCacheStream: ") + meta.error)
+				meta, err = o.updateMetacacheListing(meta, rpc)
+			}
+			if err == nil {
+				*mc.meta = meta
+				if meta.status == scanStateError {
+					cancel()
+					exit = true
+				}
 			}
 			metaMu.Unlock()
 		}
@@ -664,7 +673,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 		if len(b.data) == 0 && b.n == 0 && o.Transient {
 			return nil
 		}
-		o.debugln(color.Green("listPath:")+" saving block", b.n, "to", o.objectPath(b.n))
+		o.debugln(color.Green("saveMetaCacheStream:")+" saving block", b.n, "to", o.objectPath(b.n))
 		r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
 		logger.LogIf(ctx, err)
 		custom := b.headerKV()

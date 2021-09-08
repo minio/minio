@@ -127,9 +127,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 				return entries, io.EOF
 			}
 			if !errors.Is(err, context.DeadlineExceeded) {
-				// TODO: Remove, not really informational.
-				logger.LogIf(ctx, err)
-				o.debugln("listPath: deadline exceeded")
+				o.debugln("listPath: got error", err)
 			}
 			o.Transient = true
 			o.Create = false
@@ -146,6 +144,22 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			} else {
 				// Continue listing
 				o.ID = c.id
+				go func(meta metacache) {
+					// Continuously update while we wait.
+					t := time.NewTicker(metacacheMaxClientWait / 10)
+					defer t.Stop()
+					select {
+					case <-ctx.Done():
+						// Request is done, stop updating.
+						return
+					case <-t.C:
+						meta.lastHandout = time.Now()
+						if rpc == nil {
+							meta, _ = localMetacacheMgr.updateCacheEntry(meta)
+						}
+						meta, _ = rpc.UpdateMetacacheListing(ctx, meta)
+					}
+				}(*c)
 			}
 		}
 	}
