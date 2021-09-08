@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	defaultHealthCheckDuration = 100 * time.Second
+	defaultHealthCheckDuration = 30 * time.Second
 )
 
 // BucketTargetSys represents bucket targets subsystem
@@ -93,6 +93,9 @@ func (sys *BucketTargetSys) Delete(bucket string) {
 		return
 	}
 	for _, t := range tgts {
+		if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
+			tgt.healthCancelFn()
+		}
 		delete(sys.arnRemotesMap, t.Arn)
 	}
 	delete(sys.targetsMap, bucket)
@@ -224,6 +227,9 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 		return BucketRemoteTargetNotFound{Bucket: bucket}
 	}
 	sys.targetsMap[bucket] = targets
+	if tgt, ok := sys.arnRemotesMap[arnStr]; ok && tgt.healthCancelFn != nil {
+		tgt.healthCancelFn()
+	}
 	delete(sys.arnRemotesMap, arnStr)
 	sys.updateBandwidthLimit(bucket, 0)
 	return nil
@@ -286,6 +292,9 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 		// remove target and arn association
 		if tgts, ok := sys.targetsMap[bucket]; ok {
 			for _, t := range tgts {
+				if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
+					tgt.healthCancelFn()
+				}
 				delete(sys.arnRemotesMap, t.Arn)
 			}
 		}
@@ -360,6 +369,10 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	if tcfg.HealthCheckDuration >= 1 { // require minimum health check duration of 1 sec.
 		hcDuration = tcfg.HealthCheckDuration
 	}
+	cancelFn, err := api.HealthCheck(hcDuration)
+	if err != nil {
+		return nil, err
+	}
 	tc := &TargetClient{
 		Client:              api,
 		healthCheckDuration: hcDuration,
@@ -367,6 +380,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		Bucket:              tcfg.TargetBucket,
 		StorageClass:        tcfg.StorageClass,
 		disableProxy:        tcfg.DisableProxy,
+		healthCancelFn:      cancelFn,
 	}
 	return tc, nil
 }
@@ -445,4 +459,5 @@ type TargetClient struct {
 	replicateSync       bool
 	StorageClass        string // storage class on remote
 	disableProxy        bool
+	healthCancelFn      context.CancelFunc // cancellation function for client healthcheck
 }
