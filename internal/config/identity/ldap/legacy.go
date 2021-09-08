@@ -31,14 +31,6 @@ func SetIdentityLDAP(s config.Config, ldapArgs Config) {
 			Value: ldapArgs.ServerAddr,
 		},
 		config.KV{
-			Key:   STSExpiry,
-			Value: ldapArgs.STSExpiryDuration,
-		},
-		config.KV{
-			Key:   UsernameFormat,
-			Value: ldapArgs.UsernameFormat,
-		},
-		config.KV{
 			Key:   GroupSearchFilter,
 			Value: ldapArgs.GroupSearchFilter,
 		},

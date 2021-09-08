@@ -22,7 +22,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -32,7 +31,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
 
@@ -51,13 +49,6 @@ type Config struct {
 
 	// E.g. "ldap.minio.io:636"
 	ServerAddr string `json:"serverAddr"`
-
-	// STS credentials expiry duration
-	STSExpiryDuration string `json:"stsExpiryDuration"`
-
-	// Format string for usernames
-	UsernameFormat  string   `json:"usernameFormat"`
-	UsernameFormats []string `json:"-"`
 
 	// User DN search parameters
 	UserDNSearchBaseDN string `json:"userDNSearchBaseDN"`
@@ -83,12 +74,10 @@ type Config struct {
 // LDAP keys and envs.
 const (
 	ServerAddr         = "server_addr"
-	STSExpiry          = "sts_expiry"
 	LookupBindDN       = "lookup_bind_dn"
 	LookupBindPassword = "lookup_bind_password"
 	UserDNSearchBaseDN = "user_dn_search_base_dn"
 	UserDNSearchFilter = "user_dn_search_filter"
-	UsernameFormat     = "username_format"
 	GroupSearchFilter  = "group_search_filter"
 	GroupSearchBaseDN  = "group_search_base_dn"
 	TLSSkipVerify      = "tls_skip_verify"
@@ -96,7 +85,6 @@ const (
 	ServerStartTLS     = "server_starttls"
 
 	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
-	EnvSTSExpiry          = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
 	EnvTLSSkipVerify      = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
 	EnvServerInsecure     = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
 	EnvServerStartTLS     = "MINIO_IDENTITY_LDAP_SERVER_STARTTLS"
@@ -110,6 +98,8 @@ const (
 )
 
 var removedKeys = []string{
+	"sts_expiry",
+	"username_format",
 	"username_search_filter",
 	"username_search_base_dn",
 	"group_name_attribute",
@@ -120,10 +110,6 @@ var (
 	DefaultKVS = config.KVS{
 		config.KV{
 			Key:   ServerAddr,
-			Value: "",
-		},
-		config.KV{
-			Key:   UsernameFormat,
 			Value: "",
 		},
 		config.KV{
@@ -140,10 +126,6 @@ var (
 		},
 		config.KV{
 			Key:   GroupSearchBaseDN,
-			Value: "",
-		},
-		config.KV{
-			Key:   STSExpiry,
 			Value: "",
 		},
 		config.KV{
@@ -199,47 +181,6 @@ func (l *Config) lookupBind(conn *ldap.Conn) error {
 		return fmt.Errorf("LDAP Lookup Bind user invalid credentials error: %w", err)
 	}
 	return err
-}
-
-// usernameFormatsBind - Iterates over all given username formats and expects
-// that only one will succeed if the credentials are valid. The succeeding
-// bindDN is returned or an error.
-//
-// In the rare case that multiple username formats succeed, implying that two
-// (or more) distinct users in the LDAP directory have the same username and
-// password, we return an error as we cannot identify the account intended by
-// the user.
-func (l *Config) usernameFormatsBind(conn *ldap.Conn, username, password string) (string, error) {
-	var bindDistNames []string
-	var errs = make([]error, len(l.UsernameFormats))
-	var successCount = 0
-	for i, usernameFormat := range l.UsernameFormats {
-		bindDN := fmt.Sprintf(usernameFormat, username)
-		// Bind with user credentials to validate the password
-		errs[i] = conn.Bind(bindDN, password)
-		if errs[i] == nil {
-			bindDistNames = append(bindDistNames, bindDN)
-			successCount++
-		} else if !ldap.IsErrorWithCode(errs[i], 49) {
-			return "", fmt.Errorf("LDAP Bind request failed with unexpected error: %w", errs[i])
-		}
-	}
-	if successCount == 0 {
-		var errStrings []string
-		for _, err := range errs {
-			if err != nil {
-				errStrings = append(errStrings, err.Error())
-			}
-		}
-		outErr := fmt.Sprintf("All username formats failed due to invalid credentials: %s", strings.Join(errStrings, "; "))
-		return "", errors.New(outErr)
-	}
-	if successCount > 1 {
-		successDistNames := strings.Join(bindDistNames, ", ")
-		errMsg := fmt.Sprintf("Multiple username formats succeeded - ambiguous user login (succeeded for: %s)", successDistNames)
-		return "", errors.New(errMsg)
-	}
-	return bindDistNames[0], nil
 }
 
 // lookupUserDN searches for the DN of the user given their username. conn is
@@ -339,43 +280,28 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 	defer conn.Close()
 
 	var bindDN string
-	if l.isUsingLookupBind {
-		// Bind to the lookup user account
-		if err = l.lookupBind(conn); err != nil {
-			return "", nil, err
-		}
+	// Bind to the lookup user account
+	if err = l.lookupBind(conn); err != nil {
+		return "", nil, err
+	}
 
-		// Lookup user DN
-		bindDN, err = l.lookupUserDN(conn, username)
-		if err != nil {
-			errRet := fmt.Errorf("Unable to find user DN: %w", err)
-			return "", nil, errRet
-		}
+	// Lookup user DN
+	bindDN, err = l.lookupUserDN(conn, username)
+	if err != nil {
+		errRet := fmt.Errorf("Unable to find user DN: %w", err)
+		return "", nil, errRet
+	}
 
-		// Authenticate the user credentials.
-		err = conn.Bind(bindDN, password)
-		if err != nil {
-			errRet := fmt.Errorf("LDAP auth failed for DN %s: %w", bindDN, err)
-			return "", nil, errRet
-		}
+	// Authenticate the user credentials.
+	err = conn.Bind(bindDN, password)
+	if err != nil {
+		errRet := fmt.Errorf("LDAP auth failed for DN %s: %w", bindDN, err)
+		return "", nil, errRet
+	}
 
-		// Bind to the lookup user account again to perform group search.
-		if err = l.lookupBind(conn); err != nil {
-			return "", nil, err
-		}
-	} else {
-		// Verify login credentials by checking the username formats.
-		bindDN, err = l.usernameFormatsBind(conn, username, password)
-		if err != nil {
-			return "", nil, err
-		}
-
-		// Bind to the successful bindDN again.
-		err = conn.Bind(bindDN, password)
-		if err != nil {
-			errRet := fmt.Errorf("LDAP conn failed though auth for DN %s succeeded: %w", bindDN, err)
-			return "", nil, errRet
-		}
+	// Bind to the lookup user account again to perform group search.
+	if err = l.lookupBind(conn); err != nil {
+		return "", nil, err
 	}
 
 	// User groups lookup.
@@ -447,30 +373,11 @@ func (l Config) testConnection() error {
 		return fmt.Errorf("Error creating connection to LDAP server: %w", err)
 	}
 	defer conn.Close()
-	if l.isUsingLookupBind {
-		if err = l.lookupBind(conn); err != nil {
-			return fmt.Errorf("Error connecting as LDAP Lookup Bind user: %w", err)
-		}
-		return nil
-	}
 
-	// Generate some random user credentials for username formats mode test.
-	username := fmt.Sprintf("sometestuser%09d", rand.Int31n(1000000000))
-	charset := []byte("abcdefghijklmnopqrstuvwxyz" +
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	rand.Shuffle(len(charset), func(i, j int) {
-		charset[i], charset[j] = charset[j], charset[i]
-	})
-	password := string(charset[:20])
-	_, err = l.usernameFormatsBind(conn, username, password)
-	if err == nil {
-		// We don't expect to successfully guess a credential in this
-		// way.
-		return fmt.Errorf("Unexpected random credentials success for user=%s password=%s", username, password)
-	} else if strings.HasPrefix(err.Error(), "All username formats failed due to invalid credentials: ") {
-		return nil
+	if err = l.lookupBind(conn); err != nil {
+		return fmt.Errorf("Error connecting as LDAP Lookup Bind user: %w", err)
 	}
-	return fmt.Errorf("LDAP connection test error: %w", err)
+	return nil
 }
 
 // IsLDAPUserDN determines if the given string could be a user DN from LDAP.
@@ -588,21 +495,6 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	l.rootCAs = rootCAs
 	l.ServerAddr = ldapServer
 	l.stsExpiryDuration = defaultLDAPExpiry
-	if v := env.Get(EnvSTSExpiry, kvs.Get(STSExpiry)); v != "" {
-		logger.Info("DEPRECATION WARNING: Support for configuring the default LDAP credentials expiry duration will be removed by October 2021. Please use the `DurationSeconds` parameter in the LDAP STS API instead.")
-		expDur, err := time.ParseDuration(v)
-		if err != nil {
-			return l, errors.New("LDAP expiry time err:" + err.Error())
-		}
-		if expDur < minLDAPExpiry {
-			return l, fmt.Errorf("LDAP expiry time must be at least %s", minLDAPExpiry)
-		}
-		if expDur > maxLDAPExpiry {
-			return l, fmt.Errorf("LDAP expiry time may not exceed %s", maxLDAPExpiry)
-		}
-		l.STSExpiryDuration = v
-		l.stsExpiryDuration = expDur
-	}
 
 	// LDAP connection configuration
 	if v := env.Get(EnvServerInsecure, kvs.Get(ServerInsecure)); v != "" {
@@ -642,26 +534,9 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		l.UserDNSearchFilter = userDNSearchFilter
 	}
 
-	// Username format configuration.
-	if v := env.Get(EnvUsernameFormat, kvs.Get(UsernameFormat)); v != "" {
-		if !strings.Contains(v, "%s") {
-			return l, errors.New("LDAP username format does not support '%s' substitution")
-		}
-		l.UsernameFormats = strings.Split(v, dnDelimiter)
-	}
-
-	if len(l.UsernameFormats) > 0 {
-		logger.Info("DEPRECATION WARNING: Support for %s will be removed by October 2021, please migrate your LDAP settings to lookup bind mode", UsernameFormat)
-	}
-
-	// Either lookup bind mode or username format is supported, but not both.
-	if l.isUsingLookupBind && len(l.UsernameFormats) > 0 {
-		return l, errors.New("Lookup Bind mode and Username Format mode are not supported at the same time")
-	}
-
-	// At least one of bind mode or username format must be used.
-	if !l.isUsingLookupBind && len(l.UsernameFormats) == 0 {
-		return l, errors.New("Either Lookup Bind mode or Username Format mode is required")
+	// Lookup bind mode is mandatory
+	if !l.isUsingLookupBind {
+		return l, errors.New("Lookup Bind mode is required")
 	}
 
 	// Test connection to LDAP server.

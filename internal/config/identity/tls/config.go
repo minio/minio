@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
 
@@ -89,7 +90,10 @@ func Lookup(kvs config.KVS) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	enabled, err := config.ParseBool(env.Get(EnvEnabled, "on"))
+	if insecureSkipVerify {
+		logger.Info("CRITICAL: enabling MINIO_IDENTITY_TLS_SKIP_VERIFY is not recommended in a production environment")
+	}
+	enabled, err := config.ParseBool(env.Get(EnvEnabled, config.EnableOn))
 	if err != nil {
 		return Config{}, err
 	}
