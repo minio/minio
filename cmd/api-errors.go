@@ -20,9 +20,11 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -2177,10 +2179,30 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 			// Add more Gateway SDKs here if any in future.
 		default:
-			apiErr = APIError{
-				Code:           apiErr.Code,
-				Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
-				HTTPStatusCode: apiErr.HTTPStatusCode,
+			if errors.Is(err, errMalformedEncoding) {
+				apiErr = APIError{
+					Code:           "BadRequest",
+					Description:    err.Error(),
+					HTTPStatusCode: http.StatusBadRequest,
+				}
+			} else if errors.Is(err, errChunkTooBig) {
+				apiErr = APIError{
+					Code:           "BadRequest",
+					Description:    err.Error(),
+					HTTPStatusCode: http.StatusBadRequest,
+				}
+			} else if errors.Is(err, strconv.ErrRange) {
+				apiErr = APIError{
+					Code:           "BadRequest",
+					Description:    err.Error(),
+					HTTPStatusCode: http.StatusBadRequest,
+				}
+			} else {
+				apiErr = APIError{
+					Code:           apiErr.Code,
+					Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
+					HTTPStatusCode: apiErr.HTTPStatusCode,
+				}
 			}
 		}
 	}

@@ -1113,7 +1113,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			dataLen:            1024,
 			chunkSize:          1024,
 			expectedContent:    []byte{},
-			expectedRespStatus: http.StatusInternalServerError,
+			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
@@ -1174,7 +1174,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			dataLen:            1024,
 			chunkSize:          1024,
 			expectedContent:    []byte{},
-			expectedRespStatus: http.StatusInternalServerError,
+			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
@@ -3381,7 +3381,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 
 	noAPIErr := APIError{}
 	missingDateHeaderErr := getAPIError(ErrMissingDateHeader)
-	internalErr := getAPIError(ErrInternalError)
+	internalErr := getAPIError(ErrBadRequest)
 	testCases := []struct {
 		fault       Fault
 		expectedErr APIError
