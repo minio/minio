@@ -161,6 +161,11 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 
 				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r), ObjectOptions{})
 				if !isErrBucketNotFound(err) {
+					if err == errCorruptedFormat {
+						// Delete corrupted object and try saving again.
+						objAPI.DeleteObject(ctx, dataUsageBucket, dataUsageObjName, ObjectOptions{})
+						_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r), ObjectOptions{})
+					}
 					logger.LogIf(ctx, err)
 				}
 			}
