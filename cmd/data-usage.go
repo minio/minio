@@ -56,6 +56,10 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 		_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageObjName, NewPutObjReader(r), ObjectOptions{})
 		if !isErrBucketNotFound(err) {
 			logger.LogIf(ctx, err)
+			if err == errCorruptedFormat {
+				// Delete corrupted object and wait for next update.
+				objAPI.DeleteObject(ctx, dataUsageBucket, dataUsageObjName, ObjectOptions{})
+			}
 		}
 	}
 }
