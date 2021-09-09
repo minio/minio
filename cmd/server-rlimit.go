@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"runtime"
 	"runtime/debug"
 
 	"github.com/minio/minio/internal/logger"
@@ -42,7 +43,7 @@ func setMaxResources() (err error) {
 		return err
 	}
 
-	if maxLimit < 4096 {
+	if maxLimit < 4096 && runtime.GOOS != "windows" {
 		logger.Info("WARNING: maximum file descriptor limit %d is too low for production servers. At least 4096 is recommended. Fix with \"ulimit -n 4096\"", maxLimit)
 	}
 
