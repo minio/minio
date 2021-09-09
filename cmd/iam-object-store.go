@@ -400,8 +400,13 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
 		if iamOS.usersSysType == LDAPUsersSysType {
-			// Filter out lower-cased names - see comments above.
-			if userOrGroupName == strings.ToLower(userOrGroupName) {
+			standardDNStr, err := globalLDAPConfig.GetDNStr(userOrGroupName)
+			if err != nil {
+				continue
+			}
+			// Filter out names that are already standard DN string
+			// representations.
+			if userOrGroupName == standardDNStr {
 				continue
 			}
 		}
