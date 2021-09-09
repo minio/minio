@@ -869,7 +869,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			defer cancel()
 		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-		if objInfo.Multipart {
+		if objInfo.isMultipart() {
 			if err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object,
 				r, objInfo, putOpts); err != nil {
 				replicationStatus = replication.Failed

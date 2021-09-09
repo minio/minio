@@ -564,9 +564,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5 := getCompleteMultipartMD5(parts)
-
 	// ensure that part ETag is canonicalized to strip off extraneous quotes
 	for i := range parts {
 		parts[i].ETag = canonicalizeETag(parts[i].ETag)
@@ -755,7 +752,12 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	if fsMeta.Meta == nil {
 		fsMeta.Meta = make(map[string]string)
 	}
-	fsMeta.Meta["etag"] = s3MD5
+
+	fsMeta.Meta["etag"] = opts.UserDefined["etag"]
+	if fsMeta.Meta["etag"] == "" {
+		fsMeta.Meta["etag"] = getCompleteMultipartMD5(parts)
+	}
+
 	// Save consolidated actual size.
 	fsMeta.Meta[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
 	if _, err = fsMeta.WriteTo(metaFile); err != nil {
