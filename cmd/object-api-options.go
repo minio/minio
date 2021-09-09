@@ -357,5 +357,6 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 		}
 	}
 	opts.MTime = mtime
+	opts.UserDefined = make(map[string]string)
 	return opts, nil
 }

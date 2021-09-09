@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/scanner"
@@ -54,6 +55,7 @@ func initHelp() {
 		config.CompressionSubSys:    compress.DefaultKVS,
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
+		config.IdentityTLSSubSys:    xtls.DefaultKVS,
 		config.PolicyOPASubSys:      opa.DefaultKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
@@ -97,6 +99,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.IdentityLDAPSubSys,
 			Description: "enable LDAP SSO support",
+		},
+		config.HelpKV{
+			Key:         config.IdentityTLSSubSys,
+			Description: "enable X.509 TLS certificate SSO support",
 		},
 		config.HelpKV{
 			Key:         config.PolicyOPASubSys,
@@ -202,6 +208,7 @@ func initHelp() {
 		config.ScannerSubSys:        scanner.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
+		config.IdentityTLSSubSys:    xtls.Help,
 		config.PolicyOPASubSys:      opa.Help,
 		config.LoggerWebhookSubSys:  logger.Help,
 		config.AuditWebhookSubSys:   logger.HelpWebhook,
@@ -315,6 +322,12 @@ func validateConfig(s config.Config) error {
 				return cerr
 			}
 			conn.Close()
+		}
+	}
+	{
+		_, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
+		if err != nil {
+			return err
 		}
 	}
 
@@ -467,6 +480,11 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
 	if globalAutoEncryption && GlobalKMS == nil {
 		logger.Fatal(errors.New("no KMS configured"), "MINIO_KMS_AUTO_ENCRYPTION requires a valid KMS configuration")
+	}
+
+	globalSTSTLSConfig, err = xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err))
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],

@@ -29,8 +29,6 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/minio/internal/etag"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/lock"
 	"github.com/minio/minio/internal/logger"
@@ -170,11 +168,6 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 
 	objInfo.ETag = extractETag(m.Meta)
 
-	et, e := etag.Parse(objInfo.ETag)
-	if e == nil {
-		objInfo.Multipart = et.IsMultipart()
-	}
-
 	objInfo.ContentType = m.Meta["content-type"]
 	objInfo.ContentEncoding = m.Meta["content-encoding"]
 	if storageClass, ok := m.Meta[xhttp.AmzStorageClass]; ok {
@@ -184,6 +177,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	}
 	var (
 		t time.Time
+		e error
 	)
 	if exp, ok := m.Meta["expires"]; ok {
 		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
@@ -199,14 +193,6 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	// response headers. e.g, X-Minio-* or X-Amz-*.
 	// Tags have also been extracted, we remove that as well.
 	objInfo.UserDefined = cleanMetadata(m.Meta)
-
-	// Set multipart for encryption properly if
-	// not set already.
-	if !objInfo.Multipart {
-		if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
-			objInfo.Multipart = crypto.IsMultiPart(objInfo.UserDefined)
-		}
-	}
 
 	// All the parts per object.
 	objInfo.Parts = m.Parts

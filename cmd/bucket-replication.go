@@ -306,6 +306,21 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		return
 	}
 
+	if tgt.IsOffline() {
+		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, rcfg.RoleArn))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
+		return
+	}
 	// Lock the object name before starting replication operation.
 	// Use separate lock that doesn't collide with regular objects.
 	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
@@ -692,7 +707,16 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		})
 		return
 	}
-
+	if tgt.IsOffline() {
+		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, cfg.RoleArn))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return
+	}
 	// Lock the object name before starting replication.
 	// Use separate lock that doesn't collide with regular objects.
 	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+object)
@@ -845,7 +869,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			defer cancel()
 		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-		if objInfo.Multipart {
+		if objInfo.isMultipart() {
 			if err := replicateObjectWithMultipart(ctx, c, dest.Bucket, object,
 				r, objInfo, putOpts); err != nil {
 				replicationStatus = replication.Failed
@@ -1318,7 +1342,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		return nil, oi, false, nil
 	}
 	tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
-	if tgt == nil {
+	if tgt == nil || tgt.IsOffline() {
 		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
 	// if proxying explicitly disabled on remote target

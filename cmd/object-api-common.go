@@ -276,8 +276,13 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	var eof bool
 	var nextMarker string
 
+	maxConcurrent := maxKeys / 10
+	if maxConcurrent == 0 {
+		maxConcurrent = maxKeys
+	}
+
 	// List until maxKeys requested.
-	g := errgroup.WithNErrs(maxKeys).WithConcurrency(10)
+	g := errgroup.WithNErrs(maxKeys).WithConcurrency(maxConcurrent)
 	ctx, cancel := g.WithCancelOnError(ctx)
 	defer cancel()
 

@@ -64,7 +64,6 @@ func (m *metacacheManager) initManager() {
 		defer t.Stop()
 
 		var exit bool
-		bg := context.Background()
 		for !exit {
 			select {
 			case <-t.C:
@@ -76,7 +75,6 @@ func (m *metacacheManager) initManager() {
 				if !exit {
 					v.cleanup()
 				}
-				logger.LogIf(bg, v.save(bg))
 			}
 			m.mu.RUnlock()
 			m.mu.Lock()
@@ -116,8 +114,8 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	// Return a transient bucket for invalid or system buckets.
 	m.mu.RLock()
 	b, ok := m.buckets[bucket]
-	m.mu.RUnlock()
 	if ok {
+		m.mu.RUnlock()
 		if b.bucket != bucket {
 			logger.Info("getBucket: cached bucket %s does not match this bucket %s", b.bucket, bucket)
 			debug.PrintStack()
@@ -125,11 +123,12 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 		return b
 	}
 
+	m.mu.RUnlock()
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	// See if someone else fetched it while we waited for the lock.
 	b, ok = m.buckets[bucket]
 	if ok {
-		m.mu.Unlock()
 		if b.bucket != bucket {
 			logger.Info("getBucket: newly cached bucket %s does not match this bucket %s", b.bucket, bucket)
 			debug.PrintStack()
@@ -137,16 +136,9 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 		return b
 	}
 
-	// Load bucket. If we fail return the transient bucket.
-	b, err := loadBucketMetaCache(ctx, bucket)
-	if err != nil {
-		logger.LogIf(ctx, err)
-	}
-	if b.bucket != bucket {
-		logger.LogIf(ctx, fmt.Errorf("getBucket: loaded bucket %s does not match this bucket %s", b.bucket, bucket))
-	}
+	// New bucket. If we fail return the transient bucket.
+	b = newBucketMetacache(bucket, true)
 	m.buckets[bucket] = b
-	m.mu.Unlock()
 	return b
 }
 

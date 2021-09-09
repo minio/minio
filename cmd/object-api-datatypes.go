@@ -165,8 +165,6 @@ type ObjectInfo struct {
 
 	Legacy bool // indicates object on disk is in legacy data format
 
-	Multipart bool // indicates if object is multipart object.
-
 	// backendType indicates which backend filled this structure
 	backendType BackendType
 
@@ -187,7 +185,6 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		Size:               o.Size,
 		IsDir:              o.IsDir,
 		ETag:               o.ETag,
-		Multipart:          o.Multipart,
 		InnerETag:          o.InnerETag,
 		VersionID:          o.VersionID,
 		IsLatest:           o.IsLatest,

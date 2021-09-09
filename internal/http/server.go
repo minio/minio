@@ -172,6 +172,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 			GetCertificate:           getCert,
+			ClientAuth:               tls.RequestClientCert,
 		}
 		if secureCiphers || fips.Enabled {
 			tlsConfig.CipherSuites = fips.CipherSuitesTLS()

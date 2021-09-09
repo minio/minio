@@ -191,3 +191,15 @@ type AssumeRoleWithLDAPResponse struct {
 type LDAPIdentityResult struct {
 	Credentials auth.Credentials `xml:",omitempty"`
 }
+
+// AssumeRoleWithCertificateResponse contains the result of
+// a successful AssumeRoleWithCertificate request.
+type AssumeRoleWithCertificateResponse struct {
+	XMLName xml.Name `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithCertificateResponse" json:"-"`
+	Result  struct {
+		Credentials auth.Credentials `xml:"Credentials,omitempty"`
+	} `xml:"AssumeRoleWithCertificateResult"`
+	Metadata struct {
+		RequestID string `xml:"RequestId,omitempty"`
+	} `xml:"ResponseMetadata,omitempty"`
+}

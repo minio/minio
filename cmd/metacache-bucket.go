@@ -18,24 +18,16 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/klauspost/compress/s2"
-	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
-	"github.com/tinylib/msgp/msgp"
 )
-
-//go:generate msgp -file $GOFILE -unexported
 
 // a bucketMetacache keeps track of all caches generated
 // for a bucket.
@@ -76,108 +68,6 @@ func (b *bucketMetacache) debugf(format string, data ...interface{}) {
 	if serverDebugLog {
 		console.Debugf(format+"\n", data...)
 	}
-}
-
-// loadBucketMetaCache will load the cache from the object layer.
-// If the cache cannot be found a new one is created.
-func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, error) {
-	objAPI := newObjectLayerFn()
-	for objAPI == nil {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-		objAPI = newObjectLayerFn()
-		if objAPI == nil {
-			logger.LogIf(ctx, fmt.Errorf("loadBucketMetaCache: object layer not ready. bucket: %q", bucket))
-		}
-	}
-
-	var meta bucketMetacache
-	var decErr error
-	// Use global context for this.
-	r, err := objAPI.GetObjectNInfo(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), nil, http.Header{}, readLock, ObjectOptions{})
-	if err == nil {
-		dec := s2DecPool.Get().(*s2.Reader)
-		dec.Reset(r)
-		decErr = meta.DecodeMsg(msgp.NewReader(dec))
-		dec.Reset(nil)
-		r.Close()
-		s2DecPool.Put(dec)
-	}
-	if err != nil {
-		switch err.(type) {
-		case ObjectNotFound:
-			err = nil
-		case InsufficientReadQuorum:
-			// Cache is likely lost. Clean up and return new.
-			return newBucketMetacache(bucket, true), nil
-		default:
-			logger.LogIf(ctx, err)
-		}
-		return newBucketMetacache(bucket, false), err
-	}
-	if decErr != nil {
-		if errors.Is(err, context.Canceled) {
-			return newBucketMetacache(bucket, false), err
-		}
-		// Log the error, but assume the data is lost and return a fresh bucket.
-		// Otherwise a broken cache will never recover.
-		logger.LogIf(ctx, decErr)
-		return newBucketMetacache(bucket, true), nil
-	}
-	// Sanity check...
-	if meta.bucket != bucket {
-		logger.Info("loadBucketMetaCache: loaded cache name mismatch, want %s, got %s. Discarding.", bucket, meta.bucket)
-		return newBucketMetacache(bucket, true), nil
-	}
-	meta.cachesRoot = make(map[string][]string, len(meta.caches)/10)
-	// Index roots
-	for id, cache := range meta.caches {
-		meta.cachesRoot[cache.root] = append(meta.cachesRoot[cache.root], id)
-	}
-	return &meta, nil
-}
-
-// save the bucket cache to the object storage.
-func (b *bucketMetacache) save(ctx context.Context) error {
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// Keep lock while we marshal.
-	// We need a write lock since we update 'updated'
-	b.mu.Lock()
-	if !b.updated {
-		b.mu.Unlock()
-		return nil
-	}
-	// Save as s2 compressed msgpack
-	tmp := bytes.NewBuffer(make([]byte, 0, b.Msgsize()))
-	enc := s2.NewWriter(tmp)
-	err := msgp.Encode(enc, b)
-	if err != nil {
-		b.mu.Unlock()
-		return err
-	}
-	err = enc.Close()
-	if err != nil {
-		b.mu.Unlock()
-		return err
-	}
-	b.updated = false
-	b.mu.Unlock()
-
-	hr, err := hash.NewReader(tmp, int64(tmp.Len()), "", "", int64(tmp.Len()))
-	if err != nil {
-		return err
-	}
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, pathJoin("buckets", b.bucket, ".metacache", "index.s2"), NewPutObjReader(hr), ObjectOptions{})
-	logger.LogIf(ctx, err)
-	return err
 }
 
 // findCache will attempt to find a matching cache for the provided options.
@@ -267,7 +157,7 @@ func (b *bucketMetacache) cleanup() {
 			})
 			// Keep first metacacheMaxEntries...
 			for _, cache := range remainCaches[metacacheMaxEntries:] {
-				if time.Since(cache.lastHandout) > 30*time.Minute {
+				if time.Since(cache.lastHandout) > metacacheMaxClientWait {
 					remove[cache.id] = struct{}{}
 				}
 			}
