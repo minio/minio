@@ -744,6 +744,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		case ObjectNotFound:
 		case BucketNotFound:
 		case InsufficientReadQuorum:
+		case StorageErr:
 		default:
 			return toObjectErr(err, dataUsageBucket, name)
 		}
