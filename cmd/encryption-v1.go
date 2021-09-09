@@ -75,7 +75,8 @@ func (o *ObjectInfo) isMultipart() bool {
 	if len(o.Parts) == 0 {
 		return false
 	}
-	if !crypto.IsMultiPart(o.UserDefined) {
+	_, encrypted := crypto.IsEncrypted(o.UserDefined)
+	if encrypted && !crypto.IsMultiPart(o.UserDefined) {
 		return false
 	}
 	for _, part := range o.Parts {
