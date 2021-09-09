@@ -428,7 +428,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	var inlineBuffers []*bytes.Buffer
-	if len(latestMeta.Parts) <= 1 && latestMeta.Size < smallFileThreshold {
+	if latestMeta.InlineData() {
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
 
@@ -479,7 +479,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 				partPath := pathJoin(tmpID, dstDataDir, fmt.Sprintf("part.%d", partNumber))
 				if len(inlineBuffers) > 0 {
-					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)))
+					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)+32))
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 				} else {
 					writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
