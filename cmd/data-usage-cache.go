@@ -729,7 +729,6 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 type objectIO interface {
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 }
 
 // load the cache content with name from minioMetaBackgroundOpsBucket.
@@ -776,23 +775,15 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 	// Abandon if more than 5 minutes, so we don't hold up scanner.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	retry := true
-	for {
-		_, err = store.PutObject(ctx,
-			dataUsageBucket,
-			name,
-			NewPutObjReader(r),
-			ObjectOptions{})
-		if isErrBucketNotFound(err) || err == nil {
-			return nil
-		}
-		if err != errCorruptedFormat || !retry {
-			return err
-		}
-		// Clean up corrupted.
-		store.DeleteObject(ctx, dataUsageBucket, name, ObjectOptions{})
-		retry = false
+	_, err = store.PutObject(ctx,
+		dataUsageBucket,
+		name,
+		NewPutObjReader(r),
+		ObjectOptions{})
+	if isErrBucketNotFound(err) {
+		return nil
 	}
+	return err
 }
 
 // dataUsageCacheVer indicates the cache version.
