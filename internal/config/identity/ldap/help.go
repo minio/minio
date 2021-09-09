@@ -80,6 +80,12 @@ var (
 			Type:        "list",
 		},
 		config.HelpKV{
+			Key:         DNCaseSensitive,
+			Description: "enable case-sensitive DN attributes comparison",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
 			Key:         TLSSkipVerify,
 			Description: `trust server TLS without verification, defaults to "off" (verify)`,
 			Optional:    true,

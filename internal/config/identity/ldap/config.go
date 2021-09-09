@@ -68,6 +68,9 @@ type Config struct {
 	GroupSearchBaseDistNames []string `json:"-"`
 	GroupSearchFilter        string   `json:"groupSearchFilter"`
 
+	// DN Case sensitivity
+	DNCaseSensitive bool `json:"DNCaseSensitive"`
+
 	// Lookup bind LDAP service account
 	LookupBindDN       string `json:"lookupBindDN"`
 	LookupBindPassword string `json:"lookupBindPassword"`
@@ -91,6 +94,7 @@ const (
 	UsernameFormat     = "username_format"
 	GroupSearchFilter  = "group_search_filter"
 	GroupSearchBaseDN  = "group_search_base_dn"
+	DNCaseSensitive    = "dn_case_sensitive"
 	TLSSkipVerify      = "tls_skip_verify"
 	ServerInsecure     = "server_insecure"
 	ServerStartTLS     = "server_starttls"
@@ -105,6 +109,7 @@ const (
 	EnvUserDNSearchFilter = "MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER"
 	EnvGroupSearchFilter  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
 	EnvGroupSearchBaseDN  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
+	EnvDNCaseSensitive    = "MINIO_IDENTITY_LDAP_DN_CASE_SENSITIVE"
 	EnvLookupBindDN       = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN"
 	EnvLookupBindPassword = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD"
 )
@@ -141,6 +146,10 @@ var (
 		config.KV{
 			Key:   GroupSearchBaseDN,
 			Value: "",
+		},
+		config.KV{
+			Key:   DNCaseSensitive,
+			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   STSExpiry,
@@ -478,6 +487,16 @@ func (l Config) IsLDAPUserDN(user string) bool {
 	return strings.HasSuffix(user, ","+l.UserDNSearchBaseDN)
 }
 
+// GetDNStr returns a standard DN representation string under the LDAP
+// configuration.
+func (l Config) GetDNStr(s string) (string, error) {
+	dn, err := ldap.ParseDN(s)
+	if err != nil {
+		return "", fmt.Errorf("invalid DN syntax for %s: %v", s, err)
+	}
+	return GetDNStr(dn, l.DNCaseSensitive), nil
+}
+
 // GetNonEligibleUserDistNames - find user accounts (DNs) that are no longer
 // present in the LDAP server or do not meet filter criteria anymore
 func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, error) {
@@ -682,6 +701,13 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		l.GroupSearchFilter = grpSearchFilter
 		l.GroupSearchBaseDistName = grpSearchBaseDN
 		l.GroupSearchBaseDistNames = strings.Split(l.GroupSearchBaseDistName, dnDelimiter)
+	}
+
+	if v := env.Get(EnvDNCaseSensitive, kvs.Get(DNCaseSensitive)); v != "" {
+		l.DNCaseSensitive, err = config.ParseBool(v)
+		if err != nil {
+			return l, err
+		}
 	}
 
 	return l, nil

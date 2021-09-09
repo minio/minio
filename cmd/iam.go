@@ -2058,12 +2058,6 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if sys.usersSysType == LDAPUsersSysType {
-		// DNs are case-insensitive in the case of LDAP.
-		name = strings.ToLower(name)
-		return sys.policyDBSet(name, policy, stsUser, isGroup)
-	}
-
 	return sys.policyDBSet(name, policy, regUser, isGroup)
 }
 
@@ -2072,6 +2066,15 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, isGroup bool) error {
 	if name == "" {
 		return errInvalidArgument
+	}
+
+	if sys.usersSysType == LDAPUsersSysType {
+		// standardize the LDAP DN string
+		var err error
+		name, err = globalLDAPConfig.GetDNStr(name)
+		if err != nil {
+			return err
+		}
 	}
 
 	if sys.usersSysType == MinIOUsersSysType {
@@ -2171,9 +2174,11 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]s
 // and group map and check the appropriate policy maps directly.
 func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, err error) {
 	if sys.usersSysType == LDAPUsersSysType {
-		// For LDAP we lower case, to make the comparison
-		// case-insensitive.
-		name = strings.ToLower(name)
+		// standardize the LDAP DN string
+		name, err = globalLDAPConfig.GetDNStr(name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if isGroup {
