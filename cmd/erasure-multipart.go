@@ -783,9 +783,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
 
-	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5 := getCompleteMultipartMD5(parts)
-
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 
 	storageDisks := er.getDisks()
@@ -882,9 +879,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Save successfully calculated md5sum.
-	fi.Metadata["etag"] = s3MD5
-	if opts.UserDefined["etag"] != "" { // preserve ETag if set
-		fi.Metadata["etag"] = opts.UserDefined["etag"]
+	fi.Metadata["etag"] = opts.UserDefined["etag"]
+	if fi.Metadata["etag"] == "" {
+		fi.Metadata["etag"] = getCompleteMultipartMD5(parts)
 	}
 
 	// Save the consolidated actual size.
