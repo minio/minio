@@ -113,7 +113,7 @@ func (h *Target) Init() error {
 }
 
 //Accpet HTTP Statue Code
-var acceptedStatueCodeMap map[int]bool = map[int]bool{200: true, 201: true, 202: true}
+var acceptedStatueCodeMap = map[int]bool{200: true, 201: true, 202: true}
 
 func acceptedRespondStatusCode(code int) bool {
 	if _, ok := acceptedStatueCodeMap[code]; ok {
