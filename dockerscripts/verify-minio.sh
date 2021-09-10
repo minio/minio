@@ -8,6 +8,11 @@ if [ ! -x "/opt/bin/minio" ]; then
     exit 1
 fi
 
+if [ ! -x "/usr/bin/minio" ]; then
+    echo "minio executable binary not found at old location refusing to proceed"
+    exit 1
+fi
+
 verify_sha256sum() {
     echo "verifying binary checksum"
     echo "$(awk '{print $1}' /opt/bin/minio.sha256sum)  /opt/bin/minio" | sha256sum -c
