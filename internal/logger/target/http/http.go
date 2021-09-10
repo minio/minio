@@ -112,7 +112,7 @@ func (h *Target) Init() error {
 	return nil
 }
 
-// Accepted HTTP Statue Codes
+// Accepted HTTP Status Codes
 var acceptedStatusCodeMap = map[int]bool{http.StatusOK: true, http.StatusCreated: true, http.StatusAccepted: true, http.StatusNoContent: true}
 
 func acceptedResponseStatusCode(code int) bool {
