@@ -140,6 +140,8 @@ $ mc admin config set myminio/ notify_amqp:1 exchange="bucketevents" exchange_ty
 
 MinIO supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using `fanout` exchange.
 
+MinIO also sends with the notifications two headers: `minio-bucket` and `minio-event`. An exchange using the type "headers" can use this information to route the notifications to proper queues.
+
 Note that, you can add as many AMQP server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the AMQP instance and an object of per-server configuration parameters.
 
 ### Step 2: Enable bucket notification using MinIO client
@@ -1298,7 +1300,7 @@ MINIO_NOTIFY_WEBHOOK_QUEUE_DIR    (path)      staging dir for undelivered messag
 MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT  (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_WEBHOOK_COMMENT      (sentence)  optionally add a comment to this setting
 MINIO_NOTIFY_WEBHOOK_CLIENT_CERT  (string)    client cert for Webhook mTLS auth
-MINIO_NOTIFY_WEBHOOK_CLIENT_KEY   (string)    client cert key for Webhook mTLS auth   
+MINIO_NOTIFY_WEBHOOK_CLIENT_KEY   (string)    client cert key for Webhook mTLS auth
 ```
 
 ```sh
@@ -1371,7 +1373,7 @@ Install an NSQ Daemon from [here](https://nsq.io/). Or use the following Docker
 command for starting an nsq daemon:
 
 ```
-docker run --rm -p 4150-4151:4150-4151 nsqio/nsq /nsqd
+podman run --rm -p 4150-4151:4150-4151 nsqio/nsq /nsqd
 ```
 
 ### Step 1: Add NSQ endpoint to MinIO

@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -83,6 +84,11 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{testBuckets[4], "file1/guidSplunk-aaaa/file", "content", nil},
 		{testBuckets[5], "dir/day_id=2017-10-10/issue", "content", nil},
 		{testBuckets[5], "dir/day_id=2017-10-11/issue", "content", nil},
+		{testBuckets[5], "foo/201910/1122", "content", nil},
+		{testBuckets[5], "foo/201910/1112", "content", nil},
+		{testBuckets[5], "foo/201910/2112", "content", nil},
+		{testBuckets[5], "foo/201910_txt", "content", nil},
+		{testBuckets[5], "201910/foo/bar/xl.meta/1.txt", "content", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -476,6 +482,31 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 			IsTruncated: true,
 			Prefixes:    []string{"dir/day_id=2017-10-10/"},
 		},
+		// ListObjectsResult-37 list with prefix match 2 levels deep
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "foo/201910/1112"},
+				{Name: "foo/201910/1122"},
+			},
+		},
+		// ListObjectsResult-38 list with prefix match 1 level deep
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "foo/201910/1112"},
+				{Name: "foo/201910/1122"},
+				{Name: "foo/201910/2112"},
+				{Name: "foo/201910_txt"},
+			},
+		},
+		// ListObjectsResult-39 list with prefix match 1 level deep
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "201910/foo/bar/xl.meta/1.txt"},
+			},
+		},
 	}
 
 	testCases := []struct {
@@ -601,6 +632,11 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
 		// Test listing at prefix with expected prefix markers
 		{testBuckets[5], "dir/", "", SlashSeparator, 1, resultCases[36], nil, true},
+		// Test listing with prefix match
+		{testBuckets[5], "foo/201910/11", "", "", 1000, resultCases[37], nil, true},
+		{testBuckets[5], "foo/201910", "", "", 1000, resultCases[38], nil, true},
+		// Test listing with prefix match with 'xl.meta'
+		{testBuckets[5], "201910/foo/bar", "", "", 1000, resultCases[39], nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -643,11 +679,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
 						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
-					// FIXME: we should always check for ETag
-					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
-						t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i+1, instanceType, result.Objects[j].Name)
-					}
-
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
@@ -1314,11 +1345,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
 						t.Errorf("%s: Expected object name to be \"%s\", but found \"%s\" instead", instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
-					// FIXME: we should always check for ETag
-					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
-						t.Errorf("%s: Expected ETag to be not empty, but found empty instead (%v)", instanceType, result.Objects[j].Name)
-					}
-
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {

@@ -5,7 +5,8 @@ You can use the Select API to query objects with following features:
 
 - Objects must be in CSV, JSON, or Parquet(*) format. 
 - UTF-8 is the only encoding type the Select API supports.
-- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP or BZIP2. The Select API supports columnar compression for Parquet using GZIP, Snappy, LZ4. Whole object compression is not supported for Parquet objects.
+- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP, BZIP2, [ZSTD](https://facebook.github.io/zstd/), and streaming formats of [LZ4](https://lz4.github.io/lz4/), [S2](https://github.com/klauspost/compress/tree/master/s2#s2-compression) and [SNAPPY](http://google.github.io/snappy/). 
+- Parquet API supports columnar compression for  using GZIP, Snappy, LZ4. Whole object compression is not supported for Parquet objects.
 - Server-side encryption - The Select API supports querying objects that are protected with server-side encryption.
 
 Type inference and automatic conversion of values is performed based on the context when the value is un-typed (such as when reading CSV data). If present, the CAST function overrides automatic conversion.
@@ -24,7 +25,7 @@ To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 # Example using Python API 
 
 ## 1. Prerequisites
-- Install MinIO Server from [here](http://docs.min.io/docs/minio-quickstart-guide).
+- Install MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
 - Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 

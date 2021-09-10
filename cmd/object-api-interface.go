@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,10 +23,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // CheckPreconditionFn returns true if precondition check failed.
@@ -44,17 +45,38 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker                  bool                                                  // Is only set in DELETE operations for delete marker replication
-	UserDefined                   map[string]string                                     // only set in case of POST/PUT operations
-	PartNumber                    int                                                   // only useful in case of GetObject/HeadObject
-	CheckPrecondFn                CheckPreconditionFn                                   // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	DeleteMarkerReplicationStatus string                                                // Is only set in DELETE operations
-	VersionPurgeStatus            VersionPurgeStatusType                                // Is only set in DELETE operations for delete marker version to be permanently deleted.
-	TransitionStatus              string                                                // status of the transition
-	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet                bool                                                  // only set for GET/HEAD in active-active replication scenario
-	ParentIsObject                func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
+	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
+	UserDefined                   map[string]string      // only set in case of POST/PUT operations
+	PartNumber                    int                    // only useful in case of GetObject/HeadObject
+	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
+	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
+	Transition                    TransitionOptions
+	Expiration                    ExpirationOptions
+
+	NoLock         bool // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest   bool // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet bool // only set for GET/HEAD in active-active replication scenario
+
+	DeletePrefix bool //  set true to enforce a prefix deletion, only application for DeleteObject API,
+
+	// Use the maximum parity (N/2), used when saving server configuration files
+	MaxParity bool
+}
+
+// ExpirationOptions represents object options for object expiration at objectLayer.
+type ExpirationOptions struct {
+	Expire bool
+}
+
+// TransitionOptions represents object options for transition ObjectLayer operation
+type TransitionOptions struct {
+	Status         string
+	Tier           string
+	ETag           string
+	RestoreRequest *RestoreObjectRequest
+	RestoreExpiry  time.Time
+	ExpireRestored bool
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -87,10 +109,11 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error
 
-	BackendInfo() BackendInfo
-	StorageInfo(ctx context.Context) (StorageInfo, []error) // local queries only local disks
+	BackendInfo() madmin.BackendInfo
+	StorageInfo(ctx context.Context) (StorageInfo, []error)
+	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
@@ -112,12 +135,13 @@ type ObjectLayer interface {
 	// IMPORTANTLY, when implementations return err != nil, this
 	// function MUST NOT return a non-nil ReadCloser.
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
-	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
+	TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
+	RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
@@ -155,9 +179,33 @@ type ObjectLayer interface {
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
+	ReadHealth(ctx context.Context) bool
+
+	// Metadata operations
+	PutObjectMetadata(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
 	DeleteObjectTags(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
+}
+
+// GetObject - TODO(aead): This function just acts as an adapter for GetObject tests and benchmarks
+// since the GetObject method of the ObjectLayer interface has been removed. Once, the
+// tests are adjusted to use GetObjectNInfo this function can be removed.
+func GetObject(ctx context.Context, api ObjectLayer, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
+	var header http.Header
+	if etag != "" {
+		header.Set("ETag", etag)
+	}
+	Range := &HTTPRangeSpec{Start: startOffset, End: startOffset + length}
+
+	reader, err := api.GetObjectNInfo(ctx, bucket, object, Range, header, readLock, opts)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	_, err = io.Copy(writer, reader)
+	return err
 }

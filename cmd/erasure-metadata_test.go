@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -157,10 +158,11 @@ func TestObjectToPartOffset(t *testing.T) {
 }
 
 func TestFindFileInfoInQuorum(t *testing.T) {
-	getNFInfo := func(n int, quorum int, t int64) []FileInfo {
+	getNFInfo := func(n int, quorum int, t int64, dataDir string) []FileInfo {
 		fi := newFileInfo("test", 8, 8)
 		fi.AddObjectPart(1, "etag", 100, 100)
 		fi.ModTime = time.Unix(t, 0)
+		fi.DataDir = dataDir
 		fis := make([]FileInfo, n)
 		for i := range fis {
 			fis[i] = fi
@@ -174,29 +176,101 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	}
 
 	tests := []struct {
-		fis         []FileInfo
-		modTime     time.Time
-		expectedErr error
+		fis            []FileInfo
+		modTime        time.Time
+		dataDir        string
+		expectedErr    error
+		expectedQuorum int
 	}{
 		{
-			fis:         getNFInfo(16, 16, 1603863445),
-			modTime:     time.Unix(1603863445, 0),
-			expectedErr: nil,
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			modTime:        time.Unix(1603863445, 0),
+			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
+			expectedErr:    nil,
+			expectedQuorum: 8,
 		},
 		{
-			fis:         getNFInfo(16, 7, 1603863445),
-			modTime:     time.Unix(1603863445, 0),
-			expectedErr: errErasureReadQuorum,
+			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			modTime:        time.Unix(1603863445, 0),
+			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
+			expectedErr:    errErasureReadQuorum,
+			expectedQuorum: 8,
+		},
+		{
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			modTime:        time.Unix(1603863445, 0),
+			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
+			expectedErr:    errErasureReadQuorum,
+			expectedQuorum: 0,
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run("", func(t *testing.T) {
-			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, 8)
+			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, test.dataDir, test.expectedQuorum)
 			if err != test.expectedErr {
 				t.Errorf("Expected %s, got %s", test.expectedErr, err)
 			}
 		})
+	}
+}
+
+func TestTransitionInfoEquals(t *testing.T) {
+	inputs := []struct {
+		tier            string
+		remoteObjName   string
+		remoteVersionID string
+		status          string
+	}{
+		{
+			tier:            "S3TIER-1",
+			remoteObjName:   mustGetUUID(),
+			remoteVersionID: mustGetUUID(),
+			status:          "complete",
+		},
+		{
+			tier:            "S3TIER-2",
+			remoteObjName:   mustGetUUID(),
+			remoteVersionID: mustGetUUID(),
+			status:          "complete",
+		},
+	}
+
+	var i uint
+	for i = 0; i < 8; i++ {
+		fi := FileInfo{
+			TransitionTier:      inputs[0].tier,
+			TransitionedObjName: inputs[0].remoteObjName,
+			TransitionVersionID: inputs[0].remoteVersionID,
+			TransitionStatus:    inputs[0].status,
+		}
+		ofi := fi
+		if i&(1<<0) != 0 {
+			ofi.TransitionTier = inputs[1].tier
+		}
+		if i&(1<<1) != 0 {
+			ofi.TransitionedObjName = inputs[1].remoteObjName
+		}
+		if i&(1<<2) != 0 {
+			ofi.TransitionVersionID = inputs[1].remoteVersionID
+		}
+		actual := fi.TransitionInfoEquals(ofi)
+		if i == 0 && !actual {
+			t.Fatalf("Test %d: Expected FileInfo's transition info to be equal: fi %v ofi %v", i, fi, ofi)
+		}
+		if i != 0 && actual {
+			t.Fatalf("Test %d: Expected FileInfo's transition info to be inequal: fi %v ofi %v", i, fi, ofi)
+		}
+	}
+	fi := FileInfo{
+		TransitionTier:      inputs[0].tier,
+		TransitionedObjName: inputs[0].remoteObjName,
+		TransitionVersionID: inputs[0].remoteVersionID,
+		TransitionStatus:    inputs[0].status,
+	}
+	ofi := FileInfo{}
+	if fi.TransitionInfoEquals(ofi) {
+		t.Fatalf("Expected to be inequal: fi %v ofi %v", fi, ofi)
 	}
 }

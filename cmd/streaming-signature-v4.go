@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Package cmd This file implements helper functions to validate Streaming AWS
 // Signature Version '4' authorization header.
@@ -21,6 +22,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"hash"
@@ -29,9 +31,8 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/auth"
-	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/minio/internal/auth"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // Streaming AWS Signature Version '4' constants.
@@ -92,7 +93,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 		return cred, "", "", time.Time{}, errCode
 	}
 
-	cred, _, errCode = checkKeyValid(signV4Values.Credential.accessKey)
+	cred, _, errCode = checkKeyValid(r, signV4Values.Credential.accessKey)
 	if errCode != ErrNone {
 		return cred, "", "", time.Time{}, errCode
 	}
@@ -116,7 +117,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	}
 
 	// Query string.
-	queryStr := req.URL.Query().Encode()
+	queryStr := req.Form.Encode()
 
 	// Get canonical request.
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method)
@@ -144,8 +145,11 @@ const maxLineLength = 4 * humanize.KiByte // assumed <= bufio.defaultBufSize 4Ki
 // lineTooLong is generated as chunk header is bigger than 4KiB.
 var errLineTooLong = errors.New("header line too long")
 
-// Malformed encoding is generated when chunk header is wrongly formed.
+// malformed encoding is generated when chunk header is wrongly formed.
 var errMalformedEncoding = errors.New("malformed chunked encoding")
+
+// chunk is considered too big if its bigger than > 16MiB.
+var errChunkTooBig = errors.New("chunk too big: choose chunk size <= 16MiB")
 
 // newSignV4ChunkedReader returns a new s3ChunkedReader that translates the data read from r
 // out of HTTP "chunked" format before returning it.
@@ -166,158 +170,192 @@ func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
 		seedDate:          seedDate,
 		region:            region,
 		chunkSHA256Writer: sha256.New(),
-		state:             readChunkHeader,
+		buffer:            make([]byte, 64*1024),
 	}, ErrNone
 }
 
 // Represents the overall state that is required for decoding a
 // AWS Signature V4 chunked reader.
 type s3ChunkedReader struct {
-	reader            *bufio.Reader
-	cred              auth.Credentials
-	seedSignature     string
-	seedDate          time.Time
-	region            string
-	state             chunkState
-	lastChunk         bool
-	chunkSignature    string
+	reader        *bufio.Reader
+	cred          auth.Credentials
+	seedSignature string
+	seedDate      time.Time
+	region        string
+
 	chunkSHA256Writer hash.Hash // Calculates sha256 of chunk data.
-	n                 uint64    // Unread bytes in chunk
+	buffer            []byte
+	offset            int
 	err               error
-}
-
-// Read chunk reads the chunk token signature portion.
-func (cr *s3ChunkedReader) readS3ChunkHeader() {
-	// Read the first chunk line until CRLF.
-	var hexChunkSize, hexChunkSignature []byte
-	hexChunkSize, hexChunkSignature, cr.err = readChunkLine(cr.reader)
-	if cr.err != nil {
-		return
-	}
-	// <hex>;token=value - converts the hex into its uint64 form.
-	cr.n, cr.err = parseHexUint(hexChunkSize)
-	if cr.err != nil {
-		return
-	}
-	if cr.n == 0 {
-		cr.err = io.EOF
-	}
-	// Save the incoming chunk signature.
-	cr.chunkSignature = string(hexChunkSignature)
-}
-
-type chunkState int
-
-const (
-	readChunkHeader chunkState = iota
-	readChunkTrailer
-	readChunk
-	verifyChunk
-	eofChunk
-)
-
-func (cs chunkState) String() string {
-	stateString := ""
-	switch cs {
-	case readChunkHeader:
-		stateString = "readChunkHeader"
-	case readChunkTrailer:
-		stateString = "readChunkTrailer"
-	case readChunk:
-		stateString = "readChunk"
-	case verifyChunk:
-		stateString = "verifyChunk"
-	case eofChunk:
-		stateString = "eofChunk"
-
-	}
-	return stateString
 }
 
 func (cr *s3ChunkedReader) Close() (err error) {
 	return nil
 }
 
+// Now, we read one chunk from the underlying reader.
+// A chunk has the following format:
+//   <chunk-size-as-hex> + ";chunk-signature=" + <signature-as-hex> + "\r\n" + <payload> + "\r\n"
+//
+// First, we read the chunk size but fail if it is larger
+// than 16 MiB. We must not accept arbitrary large chunks.
+// One 16 MiB is a reasonable max limit.
+//
+// Then we read the signature and payload data. We compute the SHA256 checksum
+// of the payload and verify that it matches the expected signature value.
+//
+// The last chunk is *always* 0-sized. So, we must only return io.EOF if we have encountered
+// a chunk with a chunk size = 0. However, this chunk still has a signature and we must
+// verify it.
+const maxChunkSize = 16 << 20 // 16 MiB
+
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
+	// First, if there is any unread data, copy it to the client
+	// provided buffer.
+	if cr.offset > 0 {
+		n = copy(buf, cr.buffer[cr.offset:])
+		if n == len(buf) {
+			cr.offset += n
+			return n, nil
+		}
+		cr.offset = 0
+		buf = buf[n:]
+	}
+
+	var size int
 	for {
-		switch cr.state {
-		case readChunkHeader:
-			cr.readS3ChunkHeader()
-			// If we're at the end of a chunk.
-			if cr.n == 0 && cr.err == io.EOF {
-				cr.state = readChunkTrailer
-				cr.lastChunk = true
-				continue
-			}
-			if cr.err != nil {
-				return 0, cr.err
-			}
-			cr.state = readChunk
-		case readChunkTrailer:
-			cr.err = readCRLF(cr.reader)
-			if cr.err != nil {
-				return 0, errMalformedEncoding
-			}
-			cr.state = verifyChunk
-		case readChunk:
-			// There is no more space left in the request buffer.
-			if len(buf) == 0 {
-				return n, nil
-			}
-			rbuf := buf
-			// The request buffer is larger than the current chunk size.
-			// Read only the current chunk from the underlying reader.
-			if uint64(len(rbuf)) > cr.n {
-				rbuf = rbuf[:cr.n]
-			}
-			var n0 int
-			n0, cr.err = cr.reader.Read(rbuf)
-			if cr.err != nil {
-				// We have lesser than chunk size advertised in chunkHeader, this is 'unexpected'.
-				if cr.err == io.EOF {
-					cr.err = io.ErrUnexpectedEOF
-				}
-				return 0, cr.err
-			}
+		b, err := cr.reader.ReadByte()
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		if err != nil {
+			cr.err = err
+			return n, cr.err
+		}
+		if b == ';' { // separating character
+			break
+		}
 
-			// Calculate sha256.
-			cr.chunkSHA256Writer.Write(rbuf[:n0])
-			// Update the bytes read into request buffer so far.
-			n += n0
-			buf = buf[n0:]
-			// Update bytes to be read of the current chunk before verifying chunk's signature.
-			cr.n -= uint64(n0)
-
-			// If we're at the end of a chunk.
-			if cr.n == 0 {
-				cr.state = readChunkTrailer
-				continue
-			}
-		case verifyChunk:
-			// Calculate the hashed chunk.
-			hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
-			// Calculate the chunk signature.
-			newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
-			if !compareSignatureV4(cr.chunkSignature, newSignature) {
-				// Chunk signature doesn't match we return signature does not match.
-				cr.err = errSignatureMismatch
-				return 0, cr.err
-			}
-			// Newly calculated signature becomes the seed for the next chunk
-			// this follows the chaining.
-			cr.seedSignature = newSignature
-			cr.chunkSHA256Writer.Reset()
-			if cr.lastChunk {
-				cr.state = eofChunk
-			} else {
-				cr.state = readChunkHeader
-			}
-		case eofChunk:
-			return n, io.EOF
+		// Manually deserialize the size since AWS specified
+		// the chunk size to be of variable width. In particular,
+		// a size of 16 is encoded as `10` while a size of 64 KB
+		// is `10000`.
+		switch {
+		case b >= '0' && b <= '9':
+			size = size<<4 | int(b-'0')
+		case b >= 'a' && b <= 'f':
+			size = size<<4 | int(b-('a'-10))
+		case b >= 'A' && b <= 'F':
+			size = size<<4 | int(b-('A'-10))
+		default:
+			cr.err = errMalformedEncoding
+			return n, cr.err
+		}
+		if size > maxChunkSize {
+			cr.err = errChunkTooBig
+			return n, cr.err
 		}
 	}
+
+	// Now, we read the signature of the following payload and expect:
+	//   chunk-signature=" + <signature-as-hex> + "\r\n"
+	//
+	// The signature is 64 bytes long (hex-encoded SHA256 hash) and
+	// starts with a 16 byte header: len("chunk-signature=") + 64 == 80.
+	var signature [80]byte
+	_, err = io.ReadFull(cr.reader, signature[:])
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if !bytes.HasPrefix(signature[:], []byte("chunk-signature=")) {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err := cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\r' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\n' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+
+	if cap(cr.buffer) < size {
+		cr.buffer = make([]byte, size)
+	} else {
+		cr.buffer = cr.buffer[:size]
+	}
+
+	// Now, we read the payload and compute its SHA-256 hash.
+	_, err = io.ReadFull(cr.reader, cr.buffer)
+	if err == io.EOF && size != 0 {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil && err != io.EOF {
+		cr.err = err
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if b != '\r' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\n' {
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+
+	// Once we have read the entire chunk successfully, we verify
+	// that the received signature matches our computed signature.
+	cr.chunkSHA256Writer.Write(cr.buffer)
+	newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil)))
+	if !compareSignatureV4(string(signature[16:]), newSignature) {
+		cr.err = errSignatureMismatch
+		return n, cr.err
+	}
+	cr.seedSignature = newSignature
+	cr.chunkSHA256Writer.Reset()
+
+	// If the chunk size is zero we return io.EOF. As specified by AWS,
+	// only the last chunk is zero-sized.
+	if size == 0 {
+		cr.err = io.EOF
+		return n, cr.err
+	}
+
+	cr.offset = copy(buf, cr.buffer)
+	n += cr.offset
+	return n, err
 }
 
 // readCRLF - check if reader only has '\r\n' CRLF character.

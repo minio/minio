@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,9 +23,9 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/bucket/replication"
-	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/hash"
 )
 
 // BackendType - represents different backend types.
@@ -32,36 +33,18 @@ type BackendType int
 
 // Enum for different backend types.
 const (
-	Unknown BackendType = iota
+	Unknown = BackendType(madmin.Unknown)
 	// Filesystem backend.
-	BackendFS
+	BackendFS = BackendType(madmin.FS)
 	// Multi disk BackendErasure (single, distributed) backend.
-	BackendErasure
+	BackendErasure = BackendType(madmin.Erasure)
 	// Gateway backend.
-	BackendGateway
+	BackendGateway = BackendType(madmin.Gateway)
 	// Add your own backend.
 )
 
-// BackendInfo - contains info of the underlying backend
-type BackendInfo struct {
-	// Represents various backend types, currently on FS, Erasure and Gateway
-	Type BackendType
-
-	// Following fields are only meaningful if BackendType is Gateway.
-	GatewayOnline bool
-
-	// Following fields are only meaningful if BackendType is Erasure.
-	StandardSCData   []int // Data disks for currently configured Standard storage class.
-	StandardSCParity int   // Parity disks for currently configured Standard storage class.
-	RRSCData         []int // Data disks for currently configured Reduced Redundancy storage class.
-	RRSCParity       int   // Parity disks for currently configured Reduced Redundancy storage class.
-}
-
 // StorageInfo - represents total capacity of underlying storage.
-type StorageInfo struct {
-	Disks   []madmin.Disk
-	Backend BackendInfo
-}
+type StorageInfo = madmin.StorageInfo
 
 // objectHistogramInterval is an interval that will be
 // used to report the histogram of objects data sizes
@@ -85,57 +68,6 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
 	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
 	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
-}
-
-// BucketUsageInfo - bucket usage info provides
-// - total size of the bucket
-// - total objects in a bucket
-// - object size histogram per bucket
-type BucketUsageInfo struct {
-	Size                   uint64            `json:"size"`
-	ReplicationPendingSize uint64            `json:"objectsPendingReplicationTotalSize"`
-	ReplicationFailedSize  uint64            `json:"objectsFailedReplicationTotalSize"`
-	ReplicatedSize         uint64            `json:"objectsReplicatedTotalSize"`
-	ReplicaSize            uint64            `json:"objectReplicaTotalSize"`
-	ObjectsCount           uint64            `json:"objectsCount"`
-	ObjectSizesHistogram   map[string]uint64 `json:"objectsSizesHistogram"`
-}
-
-// DataUsageInfo represents data usage stats of the underlying Object API
-type DataUsageInfo struct {
-	// LastUpdate is the timestamp of when the data usage info was last updated.
-	// This does not indicate a full scan.
-	LastUpdate time.Time `json:"lastUpdate"`
-
-	// Objects total count across all buckets
-	ObjectsTotalCount uint64 `json:"objectsCount"`
-
-	// Objects total size across all buckets
-	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
-
-	// Total Size for objects that have not yet been replicated
-	ReplicationPendingSize uint64 `json:"objectsPendingReplicationTotalSize"`
-
-	// Total size for objects that have witness one or more failures and will be retried
-	ReplicationFailedSize uint64 `json:"objectsFailedReplicationTotalSize"`
-
-	// Total size for objects that have been replicated to destination
-	ReplicatedSize uint64 `json:"objectsReplicatedTotalSize"`
-
-	// Total size for objects that are replicas
-	ReplicaSize uint64 `json:"objectsReplicaTotalSize"`
-
-	// Total number of buckets in this cluster
-	BucketsCount uint64 `json:"bucketsCount"`
-
-	// Buckets usage info provides following information across all buckets
-	// - total size of the bucket
-	// - total objects in a bucket
-	// - object size histogram per bucket
-	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
-
-	// Deprecated kept here for backward compatibility reasons.
-	BucketSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // BucketInfo - represents bucket metadata.
@@ -181,8 +113,8 @@ type ObjectInfo struct {
 	// to a delete marker on an object.
 	DeleteMarker bool
 
-	// TransitionStatus indicates if transition is complete/pending
-	TransitionStatus string
+	// Transitioned object information
+	TransitionedObject TransitionedObject
 
 	// RestoreExpires indicates date a restored object expires
 	RestoreExpires time.Time
@@ -257,7 +189,7 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		VersionID:          o.VersionID,
 		IsLatest:           o.IsLatest,
 		DeleteMarker:       o.DeleteMarker,
-		TransitionStatus:   o.TransitionStatus,
+		TransitionedObject: o.TransitionedObject,
 		RestoreExpires:     o.RestoreExpires,
 		RestoreOngoing:     o.RestoreOngoing,
 		ContentType:        o.ContentType,
@@ -287,6 +219,14 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		cinfo.UserDefined[k] = v
 	}
 	return cinfo
+}
+
+// ReplicateObjectInfo represents object info to be replicated
+type ReplicateObjectInfo struct {
+	ObjectInfo
+	OpType     replication.Type
+	RetryCount uint32
+	ResetID    string
 }
 
 // MultipartInfo captures metadata information about the uploadId
@@ -401,6 +341,15 @@ type ListMultipartsInfo struct {
 	CommonPrefixes []string
 
 	EncodingType string // Not supported yet.
+}
+
+// TransitionedObject transitioned object tier and status.
+type TransitionedObject struct {
+	Name        string
+	VersionID   string
+	Tier        string
+	FreeVersion bool
+	Status      string
 }
 
 // DeletedObjectInfo - container for list objects versions deleted objects.

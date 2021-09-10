@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,6 +21,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -54,6 +56,10 @@ func (d *naughtyDisk) IsOnline() bool {
 	return d.disk.IsOnline()
 }
 
+func (d *naughtyDisk) LastConn() time.Time {
+	return d.disk.LastConn()
+}
+
 func (d *naughtyDisk) IsLocal() bool {
 	return d.disk.IsLocal()
 }
@@ -66,7 +72,7 @@ func (d *naughtyDisk) Hostname() string {
 	return d.disk.Hostname()
 }
 
-func (d *naughtyDisk) Healing() bool {
+func (d *naughtyDisk) Healing() *healingTracker {
 	return d.disk.Healing()
 }
 
@@ -90,6 +96,12 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
+func (d *naughtyDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return -1, -1, -1
+}
+
+func (d *naughtyDisk) SetDiskLoc(poolIdx, setIdx, diskIdx int) {}
+
 func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()
 }
@@ -98,8 +110,8 @@ func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }
 
-func (d *naughtyDisk) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
-	return d.disk.CrawlAndGetDataUsage(ctx, cache)
+func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (info dataUsageCache, err error) {
+	return d.disk.NSScanner(ctx, cache, updates)
 }
 
 func (d *naughtyDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
@@ -150,13 +162,6 @@ func (d *naughtyDisk) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Wr
 	return d.disk.WalkDir(ctx, opts, wr)
 }
 
-func (d *naughtyDisk) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
-	if err := d.calcError(); err != nil {
-		return nil, err
-	}
-	return d.disk.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
-}
-
 func (d *naughtyDisk) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
@@ -192,11 +197,11 @@ func (d *naughtyDisk) AppendFile(ctx context.Context, volume string, path string
 	return d.disk.AppendFile(ctx, volume, path, buf)
 }
 
-func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
+func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.RenameData(ctx, srcVolume, srcPath, dataDir, dstVolume, dstPath)
+	return d.disk.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath)
 }
 
 func (d *naughtyDisk) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {
@@ -211,13 +216,6 @@ func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string
 		return err
 	}
 	return d.disk.CheckParts(ctx, volume, path, fi)
-}
-
-func (d *naughtyDisk) CheckFile(ctx context.Context, volume string, path string) (err error) {
-	if err := d.calcError(); err != nil {
-		return err
-	}
-	return d.disk.CheckFile(ctx, volume, path)
 }
 
 func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
@@ -243,6 +241,13 @@ func (d *naughtyDisk) WriteMetadata(ctx context.Context, volume, path string, fi
 		return err
 	}
 	return d.disk.WriteMetadata(ctx, volume, path, fi)
+}
+
+func (d *naughtyDisk) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.UpdateMetadata(ctx, volume, path, fi)
 }
 
 func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
@@ -278,4 +283,11 @@ func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi Fi
 		return err
 	}
 	return d.disk.VerifyFile(ctx, volume, path, fi)
+}
+
+func (d *naughtyDisk) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	if err := d.calcError(); err != nil {
+		return stat, err
+	}
+	return d.disk.StatInfoFile(ctx, volume, path)
 }

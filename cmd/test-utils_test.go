@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -30,7 +31,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
@@ -45,6 +45,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"sort"
 	"strconv"
@@ -54,17 +55,18 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // TestMain to set up global env.
@@ -76,16 +78,13 @@ func TestMain(m *testing.M) {
 		SecretKey: auth.DefaultSecretKey,
 	}
 
-	globalConfigEncrypted = true
-
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
-		crypto.EnvAutoEncryptionLegacy,
 		crypto.EnvKMSAutoEncryption,
 		config.EnvAccessKey,
-		config.EnvAccessKeyOld,
 		config.EnvSecretKey,
-		config.EnvSecretKeyOld,
+		config.EnvRootUser,
+		config.EnvRootPassword,
 	} {
 		os.Unsetenv(env)
 	}
@@ -160,11 +159,11 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 }
 
 func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjReader {
-	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size, globalCLIContext.StrictS3Compat)
+	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewPutObjReader(hr, nil, nil)
+	return NewPutObjReader(hr)
 }
 
 // calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)
@@ -233,13 +232,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 // Using this interface, functionalities to be used in tests can be
 // made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Failed() bool
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
+	testing.TB
 }
 
 const (
@@ -356,6 +349,8 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	newAllSubsystems()
 
 	initAllSubsystems(ctx, objLayer)
+
+	globalIAMSys.InitStore(objLayer)
 
 	return testServer
 }
@@ -1177,78 +1172,6 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	return req, nil
 }
 
-// Return new WebRPC request object.
-func newWebRPCRequest(methodRPC, authorization string, body io.ReadSeeker) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodPost, "/minio/webrpc", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla")
-	req.Header.Set("Content-Type", "application/json")
-	if authorization != "" {
-		req.Header.Set("Authorization", "Bearer "+authorization)
-	}
-	// Seek back to beginning.
-	if body != nil {
-		body.Seek(0, 0)
-		// Add body
-		req.Body = ioutil.NopCloser(body)
-	} else {
-		// this is added to avoid panic during ioutil.ReadAll(req.Body).
-		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
-		// This is very similar to https://github.com/golang/go/issues/7527.
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
-	}
-	return req, nil
-}
-
-// Marshal request and return a new HTTP request object to call the webrpc
-func newTestWebRPCRequest(rpcMethod string, authorization string, data interface{}) (*http.Request, error) {
-	type genericJSON struct {
-		JSONRPC string      `json:"jsonrpc"`
-		ID      string      `json:"id"`
-		Method  string      `json:"method"`
-		Params  interface{} `json:"params"`
-	}
-	encapsulatedData := genericJSON{JSONRPC: "2.0", ID: "1", Method: rpcMethod, Params: data}
-	jsonData, err := json.Marshal(encapsulatedData)
-	if err != nil {
-		return nil, err
-	}
-	req, err := newWebRPCRequest(rpcMethod, authorization, bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-type ErrWebRPC struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
-}
-
-// Unmarshal response and return the webrpc response
-func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) error {
-	type rpcReply struct {
-		ID      string      `json:"id"`
-		JSONRPC string      `json:"jsonrpc"`
-		Result  interface{} `json:"result"`
-		Error   *ErrWebRPC  `json:"error"`
-	}
-	reply := &rpcReply{Result: &data}
-	err := json.NewDecoder(resp.Body).Decode(reply)
-	if err != nil {
-		return err
-	}
-	// For the moment, web handlers errors code are not meaningful
-	// Return only the error message
-	if reply.Error != nil {
-		return errors.New(reply.Error.Message)
-	}
-	return nil
-}
-
 // Function to generate random string for bucket/object names.
 func randString(n int) string {
 	src := rand.NewSource(UTCNow().UnixNano())
@@ -1279,35 +1202,6 @@ func getRandomObjectName() string {
 func getRandomBucketName() string {
 	return randString(60)
 
-}
-
-// NewEOFWriter returns a Writer that writes to w,
-// but returns EOF error after writing n bytes.
-func NewEOFWriter(w io.Writer, n int64) io.Writer {
-	return &EOFWriter{w, n}
-}
-
-type EOFWriter struct {
-	w io.Writer
-	n int64
-}
-
-// io.Writer implementation designed to error out with io.EOF after reading `n` bytes.
-func (t *EOFWriter) Write(p []byte) (n int, err error) {
-	if t.n <= 0 {
-		return -1, io.EOF
-	}
-	// real write
-	n = len(p)
-	if int64(n) > t.n {
-		n = int(t.n)
-	}
-	n, err = t.w.Write(p[0:n])
-	t.n -= int64(n)
-	if err == nil {
-		n = len(p)
-	}
-	return
 }
 
 // construct URL for http requests for bucket operations.
@@ -1576,6 +1470,8 @@ func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerP
 
 	initAllSubsystems(ctx, z)
 
+	globalIAMSys.InitStore(z)
+
 	return z, nil
 }
 
@@ -1621,6 +1517,8 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	newAllSubsystems()
 
 	initAllSubsystems(context.Background(), obj)
+
+	globalIAMSys.InitStore(obj)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -1751,12 +1649,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 			t.Fatal(failTestStr(unknownSignTestStr, "error response failed to parse error XML"))
 		}
 
-		if actualError.BucketName != bucketName {
-			t.Fatal(failTestStr(unknownSignTestStr, "error response bucket name differs from expected value"))
-		}
-
-		if actualError.Key != objectName {
-			t.Fatal(failTestStr(unknownSignTestStr, "error response object name differs from expected value"))
+		if path.Clean(actualError.Resource) != pathJoin(SlashSeparator, bucketName, SlashSeparator, objectName) {
+			t.Fatal(failTestStr(unknownSignTestStr, "error response resource differs from expected value"))
 		}
 	}
 
@@ -1914,6 +1808,8 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	initAllSubsystems(ctx, objLayer)
 
+	globalIAMSys.InitStore(objLayer)
+
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
@@ -1932,6 +1828,8 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	defer objLayer.Shutdown(context.Background())
 
 	initAllSubsystems(ctx, objLayer)
+
+	globalIAMSys.InitStore(objLayer)
 
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for Erasure.
@@ -2134,25 +2032,15 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
 	// initialize a new mux router.
 	// goriilla/mux is the library used to register all the routes and handle them.
-	muxRouter := mux.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
+		muxRouter.Use(globalHandlers...)
 		return muxRouter
 	}
 	registerAPIRouter(muxRouter)
-	return muxRouter
-}
-
-// Initialize Web RPC Handlers for testing
-func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Initialize router.
-	muxRouter := mux.NewRouter().SkipClean(true)
-	registerWebRouter(muxRouter)
+	muxRouter.Use(globalHandlers...)
 	return muxRouter
 }
 

@@ -1,29 +1,82 @@
-/*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	minio "github.com/minio/minio-go/v7"
 )
+
+func TestParsePostPolicyForm(t *testing.T) {
+	testCases := []struct {
+		policy  string
+		success bool
+	}{
+		// missing expiration, will fail.
+		{
+			policy:  `{"conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: false,
+		},
+		// invalid json.
+		{
+			policy:  `{"conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]`,
+			success: false,
+		},
+		// duplicate 'expiration' reject
+		{
+			policy: `{"expiration":"2021-03-22T09:16:21.310Z","expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","evil"],["eq","$key","hello.txt"],["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+		},
+		// duplicate '$bucket' reject
+		{
+			policy:  `{"expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","good"],["eq","$key","hello.txt"]],"conditions":[["eq","$bucket","evil"],["eq","$key","hello.txt"],["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: false,
+		},
+		// duplicate conditions, reject
+		{
+			policy:  `{"expiration":"2021-03-22T09:16:21.310Z","conditions":[["eq","$bucket","asdf"],["eq","$key","hello.txt"]],"conditions":[["eq","$success_action_status","201"],["eq","$Content-Type","plain/text"],["eq","$success_action_status","201"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210315/us-east-1/s3/aws4_request"],["eq","$x-amz-date","20210315T091621Z"]]}`,
+			success: false,
+		},
+		// no duplicates, shall be parsed properly.
+		{
+			policy:  `{"expiration":"2021-03-27T20:35:28.458Z","conditions":[["eq","$bucket","testbucket"],["eq","$key","wtf.txt"],["eq","$x-amz-date","20210320T203528Z"],["eq","$x-amz-algorithm","AWS4-HMAC-SHA256"],["eq","$x-amz-credential","Q3AM3UQ867SPQQA43P2F/20210320/us-east-1/s3/aws4_request"]]}`,
+			success: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			_, err := parsePostPolicyForm(strings.NewReader(testCase.policy))
+			if testCase.success && err != nil {
+				t.Errorf("Expected success but failed with %s", err)
+			}
+			if !testCase.success && err == nil {
+				t.Errorf("Expected failed but succeeded")
+			}
+		})
+	}
+}
 
 // Test Post Policy parsing and checking conditions
 func TestPostPolicyForm(t *testing.T) {
@@ -94,7 +147,7 @@ func TestPostPolicyForm(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
 		if err != nil {
 			t.Fatal(err)
 		}

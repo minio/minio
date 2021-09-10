@@ -86,9 +86,7 @@ mc encrypt info myminio/bucket/
 Auto encryption 'sse-s3' is enabled
 ```
 
-### Using environment (deprecated)
-> NOTE: The following ENV might be removed in future, you are advised to move to the previously recommended approach using `mc encrypt`. S3 gateway supports encryption at gateway layer which may  be dropped in favor of simplicity at a later time. It is advised that S3 gateway users migrate to MinIO server mode or enable encryption at REST at the backend.
-
+### Using environment (not-recommended)
 MinIO automatically encrypts all objects on buckets if KMS is successfully configured and following ENV is enabled:
 ```
 export MINIO_KMS_AUTO_ENCRYPTION=on

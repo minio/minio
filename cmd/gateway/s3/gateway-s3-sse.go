@@ -1,11 +1,11 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -226,7 +226,7 @@ func (l *s3EncObjects) getGWMetadata(ctx context.Context, bucket, metaFileName s
 		return m, err1
 	}
 	var buffer bytes.Buffer
-	err = l.s3Objects.GetObject(ctx, bucket, metaFileName, 0, oi.Size, &buffer, oi.ETag, minio.ObjectOptions{})
+	err = l.s3Objects.getObject(ctx, bucket, metaFileName, 0, oi.Size, &buffer, oi.ETag, minio.ObjectOptions{})
 	if err != nil {
 		return m, err
 	}
@@ -272,7 +272,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 	dmeta, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(key))
 	if err != nil {
 		// unencrypted content
-		return l.s3Objects.GetObject(ctx, bucket, key, startOffset, length, writer, etag, o)
+		return l.s3Objects.getObject(ctx, bucket, key, startOffset, length, writer, etag, o)
 	}
 	if startOffset < 0 {
 		logger.LogIf(ctx, minio.InvalidRange{})
@@ -303,7 +303,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 	if _, _, err := dmeta.ObjectToPartOffset(ctx, endOffset); err != nil {
 		return minio.InvalidRange{OffsetBegin: startOffset, OffsetEnd: length, ResourceSize: dmeta.Stat.Size}
 	}
-	return l.s3Objects.GetObject(ctx, bucket, key, partOffset, endOffset, writer, dmeta.ETag, o)
+	return l.s3Objects.getObject(ctx, bucket, key, partOffset, endOffset, writer, dmeta.ETag, o)
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
@@ -345,7 +345,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return fn(pr, h, o.CheckPrecondFn, pipeCloser)
+	return fn(pr, h, pipeCloser)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
@@ -405,6 +405,20 @@ func (l *s3EncObjects) DeleteObject(ctx context.Context, bucket string, object s
 	// delete encrypted object
 	l.s3Objects.DeleteObject(ctx, bucket, getGWContentPath(object), opts)
 	return l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
+}
+
+func (l *s3EncObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
+	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
+	for idx, object := range objects {
+		_, errs[idx] = l.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
+	}
+	return dobjects, errs
 }
 
 // ListMultipartUploads lists all multipart uploads.

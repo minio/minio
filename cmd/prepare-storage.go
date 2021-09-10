@@ -1,36 +1,34 @@
-/*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/sync/errgroup"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 var printEndpointError = func() func(Endpoint, error, bool) {
@@ -71,86 +69,37 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 	}
 }()
 
-// Migrates backend format of local disks.
-func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			err := formatErasureMigrate(epPath)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return nil
-		}, index)
+// Cleans up tmp directory of the local disk.
+func formatErasureCleanupTmp(diskPath string) error {
+	// Need to move temporary objects left behind from previous run of minio
+	// server to a unique directory under `minioMetaTmpBucket-old` to clean
+	// up `minioMetaTmpBucket` for the current run.
+	//
+	// /disk1/.minio.sys/tmp-old/
+	//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
+	//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
+	//
+	// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
+	// temporary objects from one of the previous runs of minio server.
+	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", mustGetUUID())
+	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
+		tmpOld); err != nil && err != errFileNotFound {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			tmpOld,
+			osErrToFileErr(err)))
 	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
-// Cleans up tmp directory of local disks.
-func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
-	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			epPath := endpoints[index].Path
-			// Need to move temporary objects left behind from previous run of minio
-			// server to a unique directory under `minioMetaTmpBucket-old` to clean
-			// up `minioMetaTmpBucket` for the current run.
-			//
-			// /disk1/.minio.sys/tmp-old/
-			//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
-			//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
-			//
-			// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
-			// temporary objects from one of the previous runs of minio server.
-			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
-			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
-				tmpOld); err != nil && err != errFileNotFound {
-				return fmt.Errorf("unable to rename (%s -> %s) %w",
-					pathJoin(epPath, minioMetaTmpBucket),
-					tmpOld,
-					osErrToFileErr(err))
-			}
+	// Renames and schedules for purging all bucket metacache.
+	renameAllBucketMetacache(diskPath)
 
-			// Move .minio.sys/buckets/.minio.sys/metacache transient list cache
-			// folder to speed up startup routines.
-			tmpMetacacheOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
-			if err := renameAll(pathJoin(epPath, minioMetaBucket, metacachePrefixForID(minioMetaBucket, "")),
-				tmpMetacacheOld); err != nil && err != errFileNotFound {
-				return fmt.Errorf("unable to rename (%s -> %s) %w",
-					pathJoin(epPath, minioMetaBucket+metacachePrefixForID(minioMetaBucket, "")),
-					tmpMetacacheOld,
-					osErrToFileErr(err))
-			}
+	// Removal of tmp-old folder is backgrounded completely.
+	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
 
-			// Removal of tmp-old folder is backgrounded completely.
-			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
-
-			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
-				return fmt.Errorf("unable to create (%s) %w",
-					pathJoin(epPath, minioMetaTmpBucket),
-					err)
-			}
-			return nil
-		}, index)
-	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0777); err != nil {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			err))
 	}
 	return nil
 }
@@ -175,8 +124,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	var tlsConfig *tls.Config
 	if globalIsTLS {
 		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
+			RootCAs: globalRootCAs,
 		}
 	}
 
@@ -214,14 +162,6 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	}
 	xhttp.DrainBody(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		return StorageErr(resp.Status)
-	}
-
-	if resp.Header.Get(xhttp.MinIOServerStatus) == unavailable {
-		return StorageErr(unavailable)
-	}
-
 	return nil
 }
 
@@ -238,13 +178,19 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		}
 	}(storageDisks)
 
+	// Sanitize all local disks during server startup.
+	for _, disk := range storageDisks {
+		if disk != nil && disk.IsLocal() {
+			disk.(*xlStorageDiskIDCheck).storage.(*xlStorage).Sanitize()
+		}
+	}
+
 	for i, err := range errs {
 		if err != nil {
-			if err != errDiskNotFound {
-				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
-			}
-			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+			if err == errDiskNotFound && retryCount >= 5 {
+				logger.Info("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+			} else {
+				logger.Info("Unable to use the drive %s: %v", endpoints[i], err)
 			}
 		}
 	}
@@ -308,6 +254,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// the disk UUID association. Below function is called to handle and fix
 	// this regression, for more info refer https://github.com/minio/minio/issues/5667
 	if err = fixFormatErasureV3(storageDisks, endpoints, formatConfigs); err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
@@ -318,6 +265,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	format, err = getFormatErasureInQuorum(formatConfigs)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
@@ -327,6 +275,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 			return nil, nil, errNotFirstDisk
 		}
 		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format); err != nil {
+			logger.LogIf(GlobalContext, err)
 			return nil, nil, err
 		}
 	}
@@ -334,6 +283,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	globalDeploymentID = format.ID
 
 	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
@@ -348,14 +298,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) ([]StorageAPI, *formatErasureV3, error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
-	}
-
-	if err := formatErasureMigrateLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
-	}
-
-	if err := formatErasureCleanupTmpLocalEndpoints(endpoints); err != nil {
-		return nil, nil, err
 	}
 
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
@@ -386,7 +328,13 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 					continue
 				case errErasureReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+						len(endpoints)/2, getElapsedTime())
+					continue
+				case errErasureWriteQuorum:
+					// no quorum available continue to wait for minimum number of servers.
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+						(len(endpoints)/2)+1, getElapsedTime())
 					continue
 				case errErasureV3ThisEmpty:
 					// need to wait for this error to be healed, so continue.

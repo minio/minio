@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,29 +21,42 @@ import (
 	"context"
 	"errors"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/bucket/versioning"
+	bucketsse "github.com/minio/minio/internal/bucket/encryption"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/versioning"
+	"github.com/minio/pkg/bucket/policy"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
 
 // BackendInfo returns the underlying backend information
-func (a GatewayUnsupported) BackendInfo() BackendInfo {
-	return BackendInfo{Type: BackendGateway}
+func (a GatewayUnsupported) BackendInfo() madmin.BackendInfo {
+	return madmin.BackendInfo{Type: madmin.Gateway}
 }
 
-// CrawlAndGetDataUsage - crawl is not implemented for gateway
-func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+// LocalStorageInfo returns the local disks information, mainly used
+// in prometheus - for gateway this just a no-op
+func (a GatewayUnsupported) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return StorageInfo{}, nil
+}
+
+// NSScanner - scanner is not implemented for gateway
+func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return NotImplemented{}
+}
+
+// PutObjectMetadata - not implemented for gateway.
+func (a GatewayUnsupported) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return ObjectInfo{}, NotImplemented{}
 }
 
 // NewNSLock is a dummy stub for gateway.
@@ -253,4 +267,19 @@ func (a GatewayUnsupported) IsCompressionSupported() bool {
 // Health - No Op.
 func (a GatewayUnsupported) Health(_ context.Context, _ HealthOptions) HealthResult {
 	return HealthResult{}
+}
+
+// ReadHealth - No Op.
+func (a GatewayUnsupported) ReadHealth(_ context.Context) bool {
+	return true
+}
+
+// TransitionObject - transition object content to target tier.
+func (a GatewayUnsupported) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (a GatewayUnsupported) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
 }

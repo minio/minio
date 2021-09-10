@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -26,9 +27,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 // set encryption options for pass through to backend in the case of gateway and UserDefined metadata
@@ -82,7 +83,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 
 	var partNumber int
 	var err error
-	if pn := r.URL.Query().Get(xhttp.PartNumber); pn != "" {
+	if pn := r.Form.Get(xhttp.PartNumber); pn != "" {
 		partNumber, err = strconv.Atoi(pn)
 		if err != nil {
 			return opts, err
@@ -92,7 +93,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}
 	}
 
-	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
+	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
@@ -120,11 +121,21 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}, nil
 	}
 
+	deletePrefix := false
+	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
+		if b, err := strconv.ParseBool(d); err == nil {
+			deletePrefix = b
+		} else {
+			return opts, err
+		}
+	}
+
 	// default case of passing encryption headers to backend
 	opts, err = getDefaultOpts(r.Header, false, nil)
 	if err != nil {
 		return opts, err
 	}
+	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
@@ -208,7 +219,8 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 // get ObjectOptions for PUT calls from encryption headers and metadata
 func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
-	vid := strings.TrimSpace(r.URL.Query().Get(xhttp.VersionID))
+	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
+	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
@@ -255,6 +267,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 		}, nil
 	}
@@ -262,6 +275,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts, err = getOpts(ctx, r, bucket, object)
 		opts.VersionID = vid
 		opts.Versioned = versioned
+		opts.VersionSuspended = versionSuspended
 		opts.UserDefined = metadata
 		return
 	}
@@ -279,6 +293,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 		}, nil
 	}
@@ -289,6 +304,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	}
 	opts.VersionID = vid
 	opts.Versioned = versioned
+	opts.VersionSuspended = versionSuspended
 	opts.MTime = mtime
 	return opts, nil
 }
@@ -323,5 +339,24 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 	if err != nil {
 		return opts, err
 	}
+	return opts, nil
+}
+
+// get ObjectOptions for CompleteMultipart calls
+func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	mtime := UTCNow()
+	if mtimeStr != "" {
+		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		if err != nil {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
+			}
+		}
+	}
+	opts.MTime = mtime
+	opts.UserDefined = make(map[string]string)
 	return opts, nil
 }

@@ -1,20 +1,22 @@
+//go:build ignore
 // +build ignore
 
-/*
- * MinIO Cloud Storage, (C) 2015 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -63,19 +65,41 @@ func releaseTag(version string) string {
 
 // commitID returns the abbreviated commit-id hash of the last commit.
 func commitID() string {
-	// git log --format="%h" -n1
+	// git log --format="%H" -n1
 	var (
 		commit []byte
-		e      error
+		err    error
 	)
 	cmdName := "git"
 	cmdArgs := []string{"log", "--format=%H", "-n1"}
-	if commit, e = exec.Command(cmdName, cmdArgs...).Output(); e != nil {
-		fmt.Fprintln(os.Stderr, "Error generating git commit-id: ", e)
+	if commit, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error generating git commit-id: ", err)
 		os.Exit(1)
 	}
 
 	return strings.TrimSpace(string(commit))
+}
+
+func commitTime() time.Time {
+	// git log --format=%cD -n1
+	var (
+		commitUnix []byte
+		err        error
+	)
+	cmdName := "git"
+	cmdArgs := []string{"log", "--format=%cI", "-n1"}
+	if commitUnix, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error generating git commit-time: ", err)
+		os.Exit(1)
+	}
+
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(commitUnix)))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error generating git commit-time: ", err)
+		os.Exit(1)
+	}
+
+	return t.UTC()
 }
 
 func main() {
@@ -83,7 +107,7 @@ func main() {
 	if len(os.Args) > 1 {
 		version = os.Args[1]
 	} else {
-		version = time.Now().UTC().Format(time.RFC3339)
+		version = commitTime().Format(time.RFC3339)
 	}
 
 	fmt.Println(genLDFlags(version))

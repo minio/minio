@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -25,6 +26,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"path"
 	"runtime"
 	"strings"
 
@@ -37,9 +39,9 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/auth"
-	ioutilx "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/internal/auth"
+	xhttp "github.com/minio/minio/internal/http"
+	ioutilx "github.com/minio/minio/internal/ioutil"
 )
 
 // Type to capture different modifications to API request to simulate failure cases.
@@ -556,12 +558,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
 
-		if actualError.BucketName != testCase.bucketName {
-			t.Fatalf("Test %d: %s: Unexpected bucket name, expected %s, got %s", i+1, instanceType, testCase.bucketName, actualError.BucketName)
-		}
-
-		if actualError.Key != testCase.objectName {
-			t.Fatalf("Test %d: %s: Unexpected object name, expected %s, got %s", i+1, instanceType, testCase.objectName, actualError.Key)
+		if path.Clean(actualError.Resource) != pathJoin(SlashSeparator, testCase.bucketName, testCase.objectName) {
+			t.Fatalf("Test %d: %s: Unexpected resource, expected %s, got %s", i+1, instanceType, pathJoin(SlashSeparator, testCase.bucketName, testCase.objectName), actualError.Resource)
 		}
 
 		// Verify response of the V2 signed HTTP request.
@@ -605,12 +603,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
 
-		if actualError.BucketName != testCase.bucketName {
-			t.Fatalf("Test %d: %s: Unexpected bucket name, expected %s, got %s", i+1, instanceType, testCase.bucketName, actualError.BucketName)
-		}
-
-		if actualError.Key != testCase.objectName {
-			t.Fatalf("Test %d: %s: Unexpected object name, expected %s, got %s", i+1, instanceType, testCase.objectName, actualError.Key)
+		if path.Clean(actualError.Resource) != pathJoin(SlashSeparator, testCase.bucketName, testCase.objectName) {
+			t.Fatalf("Test %d: %s: Unexpected resource, expected %s, got %s", i+1, instanceType, pathJoin(SlashSeparator, testCase.bucketName, testCase.objectName), actualError.Resource)
 		}
 	}
 
@@ -917,7 +911,6 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 
 	mkGetReqWithPartNumber := func(oindex int, oi ObjectInput, partNumber int) {
 		object := oi.objectName
-		rec := httptest.NewRecorder()
 
 		queries := url.Values{}
 		queries.Add("partNumber", strconv.Itoa(partNumber))
@@ -929,6 +922,7 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 				object, oindex, partNumber, err)
 		}
 
+		rec := httptest.NewRecorder()
 		apiRouter.ServeHTTP(rec, req)
 
 		// Check response code (we make only valid requests in this test)
@@ -1119,7 +1113,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			dataLen:            1024,
 			chunkSize:          1024,
 			expectedContent:    []byte{},
-			expectedRespStatus: http.StatusInternalServerError,
+			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
@@ -1180,7 +1174,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			dataLen:            1024,
 			chunkSize:          1024,
 			expectedContent:    []byte{},
-			expectedRespStatus: http.StatusInternalServerError,
+			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
@@ -2983,7 +2977,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		}
 
 		if actualError.Key != objectName {
-			t.Errorf("MinIO %s: error response object name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response object name (%s) differs from expected value (%s)", instanceType, actualError.Key, objectName)
 		}
 	}
 
@@ -3387,7 +3381,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 
 	noAPIErr := APIError{}
 	missingDateHeaderErr := getAPIError(ErrMissingDateHeader)
-	internalErr := getAPIError(ErrInternalError)
+	internalErr := getAPIError(ErrBadRequest)
 	testCases := []struct {
 		fault       Fault
 		expectedErr APIError

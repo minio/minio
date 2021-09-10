@@ -1,29 +1,31 @@
+//go:build ignore
 // +build ignore
 
-/*
- * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,36 +39,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/pkg/auth"
 )
-
-// AssumedRoleUser - The identifiers for the temporary security credentials that
-// the operation returns. Please also see https://docs.aws.amazon.com/goto/WebAPI/sts-2011-06-15/AssumedRoleUser
-type AssumedRoleUser struct {
-	Arn           string
-	AssumedRoleID string `xml:"AssumeRoleId"`
-	// contains filtered or unexported fields
-}
-
-// AssumeRoleWithWebIdentityResponse contains the result of successful AssumeRoleWithWebIdentity request.
-type AssumeRoleWithWebIdentityResponse struct {
-	XMLName          xml.Name          `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithWebIdentityResponse" json:"-"`
-	Result           WebIdentityResult `xml:"AssumeRoleWithWebIdentityResult"`
-	ResponseMetadata struct {
-		RequestID string `xml:"RequestId,omitempty"`
-	} `xml:"ResponseMetadata,omitempty"`
-}
-
-// WebIdentityResult - Contains the response to a successful AssumeRoleWithWebIdentity
-// request, including temporary credentials that can be used to make MinIO API requests.
-type WebIdentityResult struct {
-	AssumedRoleUser             AssumedRoleUser  `xml:",omitempty"`
-	Audience                    string           `xml:",omitempty"`
-	Credentials                 auth.Credentials `xml:",omitempty"`
-	PackedPolicySize            int              `xml:",omitempty"`
-	Provider                    string           `xml:",omitempty"`
-	SubjectFromWebIdentityToken string           `xml:",omitempty"`
-}
 
 // Returns a base64 encoded random 32 byte string.
 func randomState() string {
@@ -137,9 +110,34 @@ func init() {
 	flag.IntVar(&port, "port", 8080, "Port")
 }
 
+func implicitFlowURL(c oauth2.Config, state string) string {
+	var buf bytes.Buffer
+	buf.WriteString(c.Endpoint.AuthURL)
+	v := url.Values{
+		"response_type": {"id_token"},
+		"response_mode": {"form_post"},
+		"client_id":     {c.ClientID},
+	}
+	if c.RedirectURL != "" {
+		v.Set("redirect_uri", c.RedirectURL)
+	}
+	if len(c.Scopes) > 0 {
+		v.Set("scope", strings.Join(c.Scopes, " "))
+	}
+	v.Set("state", state)
+	v.Set("nonce", state)
+	if strings.Contains(c.Endpoint.AuthURL, "?") {
+		buf.WriteByte('&')
+	} else {
+		buf.WriteByte('?')
+	}
+	buf.WriteString(v.Encode())
+	return buf.String()
+}
+
 func main() {
 	flag.Parse()
-	if clientID == "" || clientSec == "" {
+	if clientID == "" {
 		flag.PrintDefaults()
 		return
 	}
@@ -165,7 +163,7 @@ func main() {
 			AuthURL:  ddoc.AuthEndpoint,
 			TokenURL: ddoc.TokenEndpoint,
 		},
-		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
+		RedirectURL: fmt.Sprintf("http://10.0.0.67:%d/oauth2/callback", port),
 		Scopes:      scopes,
 	}
 
@@ -177,29 +175,47 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		http.Redirect(w, r, config.AuthCodeURL(state), http.StatusFound)
+		if clientSec != "" {
+			http.Redirect(w, r, config.AuthCodeURL(state), http.StatusFound)
+		} else {
+			http.Redirect(w, r, implicitFlowURL(config, state), http.StatusFound)
+		}
 	})
 
 	http.HandleFunc("/oauth2/callback", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.RequestURI)
-		if r.URL.Query().Get("state") != state {
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if r.Form.Get("state") != state {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
 
-		getWebTokenExpiry := func() (*credentials.WebIdentityToken, error) {
-			oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
-			if err != nil {
-				return nil, err
+		var getWebTokenExpiry func() (*credentials.WebIdentityToken, error)
+		if clientSec == "" {
+			getWebTokenExpiry = func() (*credentials.WebIdentityToken, error) {
+				return &credentials.WebIdentityToken{
+					Token: r.Form.Get("id_token"),
+				}, nil
 			}
-			if !oauth2Token.Valid() {
-				return nil, errors.New("invalid token")
-			}
+		} else {
+			getWebTokenExpiry = func() (*credentials.WebIdentityToken, error) {
+				oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
+				if err != nil {
+					return nil, err
+				}
+				if !oauth2Token.Valid() {
+					return nil, errors.New("invalid token")
+				}
 
-			return &credentials.WebIdentityToken{
-				Token:  oauth2Token.Extra("id_token").(string),
-				Expiry: int(oauth2Token.Expiry.Sub(time.Now().UTC()).Seconds()),
-			}, nil
+				return &credentials.WebIdentityToken{
+					Token:  oauth2Token.Extra("id_token").(string),
+					Expiry: int(oauth2Token.Expiry.Sub(time.Now().UTC()).Seconds()),
+				}, nil
+			}
 		}
 
 		sts, err := credentials.NewSTSWebIdentity(stsEndpoint, getWebTokenExpiry)
@@ -252,7 +268,7 @@ func main() {
 		w.Write(c)
 	})
 
-	address := fmt.Sprintf("localhost:%v", port)
+	address := fmt.Sprintf(":%v", port)
 	log.Printf("listening on http://%s/", address)
 	log.Fatal(http.ListenAndServe(address, nil))
 }

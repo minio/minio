@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,7 +21,6 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 )
@@ -28,7 +28,7 @@ import (
 func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -46,35 +46,35 @@ func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 
 	_, err = writer.Write([]byte("aaaaaaaaaa"))
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	_, err = writer.Write([]byte("aaaaaaaaaa"))
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	_, err = writer.Write([]byte("aaaaaaaaaa"))
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	_, err = writer.Write([]byte("aaaaa"))
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	writer.(io.Closer).Close()
 
 	reader := newBitrotReader(disk, nil, volume, filePath, 35, bitrotAlgo, bitrotWriterSum(writer), 10)
 	b := make([]byte, 10)
 	if _, err = reader.ReadAt(b, 0); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	if _, err = reader.ReadAt(b, 10); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	if _, err = reader.ReadAt(b, 20); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	if _, err = reader.ReadAt(b[:5], 30); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 }
 

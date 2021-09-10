@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,16 +21,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/ioutil"
+	"net/http"
 
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
 )
 
 var errConfigNotFound = errors.New("config file not found")
 
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
-	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
+	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
+	if err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
 			return nil, errConfigNotFound
@@ -37,13 +40,16 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 
 		return nil, err
 	}
+	defer r.Close()
 
-	// Return config not found on empty content.
-	if buffer.Len() == 0 {
+	buf, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	if len(buf) == 0 {
 		return nil, errConfigNotFound
 	}
-
-	return buffer.Bytes(), nil
+	return buf, nil
 }
 
 type objectDeleter interface {
@@ -59,12 +65,12 @@ func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) 
 }
 
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
 	if err != nil {
 		return err
 	}
 
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader, nil, nil), ObjectOptions{})
+	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader), ObjectOptions{MaxParity: true})
 	return err
 }
 

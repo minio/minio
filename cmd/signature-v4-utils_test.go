@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -20,7 +21,7 @@ import (
 	"net/http"
 	"testing"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // TestSkipContentSha256Cksum - Test validate the logic which decides whether
@@ -88,6 +89,7 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 				inputReq.Header.Set(testCase.inputHeaderKey, testCase.inputHeaderValue)
 			}
 		}
+		inputReq.ParseForm()
 
 		actualResult := skipContentSha256Cksum(inputReq)
 		if testCase.expectedResult != actualResult {
@@ -162,6 +164,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// set headers value through Get parameter
 	inputQuery.Add("x-amz-server-side-encryption", xhttp.AmzEncryptionAES)
 	r.URL.RawQuery = inputQuery.Encode()
+	r.ParseForm()
 	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
@@ -266,6 +269,7 @@ func TestGetContentSha256Cksum(t *testing.T) {
 		if testCase.h != "" {
 			r.Header.Set("x-amz-content-sha256", testCase.h)
 		}
+		r.ParseForm()
 		got := getContentSha256Cksum(r, serviceS3)
 		if got != testCase.expected {
 			t.Errorf("Test %d: got:%s expected:%s", i+1, got, testCase.expected)

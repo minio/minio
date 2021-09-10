@@ -1,23 +1,25 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,12 +29,12 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/sync/errgroup"
-	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/storageclass"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 const (
@@ -156,7 +158,7 @@ func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 // successfully the version only if the backend is Erasure.
 func formatGetBackendErasureVersion(formatPath string) (string, error) {
 	meta := &formatMetaV1{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return "", err
 	}
@@ -218,7 +220,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 
 	formatV1 := &formatErasureV1{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return err
 	}
@@ -240,7 +242,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
@@ -251,7 +253,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 	formatV2 := &formatErasureV2{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return err
 	}
@@ -282,7 +284,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0644)
+	return ioutil.WriteFile(formatPath, b, 0666)
 }
 
 // countErrs - count a specific error.
@@ -339,19 +341,6 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 	return formats, g.Wait()
 }
 
-func saveHealingTracker(disk StorageAPI, diskID string) error {
-	htracker := healingTracker{
-		ID: diskID,
-	}
-	htrackerBytes, err := htracker.MarshalMsg(nil)
-	if err != nil {
-		return err
-	}
-	return disk.WriteAll(context.TODO(), minioMetaBucket,
-		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
-		htrackerBytes)
-}
-
 func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) error {
 	if disk == nil || format == nil {
 		return errDiskNotFound
@@ -386,7 +375,9 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) erro
 
 	disk.SetDiskID(diskID)
 	if heal {
-		return saveHealingTracker(disk, diskID)
+		ctx := context.Background()
+		ht := newHealingTracker(disk)
+		return ht.save(ctx)
 	}
 	return nil
 }
@@ -673,7 +664,7 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatErasureV3) error {
 
 	// Compute the local disks eligible for meta volumes (re)initialization
-	var disksToInit []StorageAPI
+	disksToInit := make([]StorageAPI, 0, len(storageDisks))
 	for index := range storageDisks {
 		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
 			// Ignore create meta volume on disks which are not found or not local.
@@ -714,8 +705,10 @@ func saveUnformattedFormat(ctx context.Context, storageDisks []StorageAPI, forma
 		if format == nil {
 			continue
 		}
-		if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
-			return err
+		if storageDisks[index] != nil {
+			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -923,7 +916,7 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 		return errDiskNotFound
 	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
+	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket, dataUsageBucket, minioMetaTmpBucket+"-old")
 }
 
 // Initialize a new set of set formats which will be written to all disks.

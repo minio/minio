@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -31,13 +32,23 @@ type DiskInfo struct {
 	Free       uint64
 	Used       uint64
 	UsedInodes uint64
+	FreeInodes uint64
 	FSType     string
 	RootDisk   bool
 	Healing    bool
 	Endpoint   string
 	MountPath  string
 	ID         string
+	Metrics    DiskMetrics
 	Error      string // carries the error over the network
+}
+
+// DiskMetrics has the information about XL Storage APIs
+// the number of calls of each API and the moving average of
+// the duration of each API.
+type DiskMetrics struct {
+	APILatencies map[string]string `json:"apiLatencies,omitempty"`
+	APICalls     map[string]uint64 `json:"apiCalls,omitempty"`
 }
 
 // VolsInfo is a collection of volume(bucket) information
@@ -85,18 +96,18 @@ type FileInfoVersions struct {
 	Versions []FileInfo
 }
 
-// forwardPastVersion will truncate the result to only contain versions after 'v'.
-// If v is empty or the version isn't found no changes will be made.
-func (f *FileInfoVersions) forwardPastVersion(v string) {
-	if v == "" {
-		return
+// findVersionIndex will return the version index where the version
+// was found. Returns -1 if not found.
+func (f *FileInfoVersions) findVersionIndex(v string) int {
+	if f == nil || v == "" {
+		return -1
 	}
 	for i, ver := range f.Versions {
 		if ver.VersionID == v {
-			f.Versions = f.Versions[i+1:]
-			return
+			return i
 		}
 	}
+	return -1
 }
 
 // FileInfo - represents file stat information.
@@ -122,6 +133,16 @@ type FileInfo struct {
 	// TransitionStatus is set to Pending/Complete for transitioned
 	// entries based on state of transition
 	TransitionStatus string
+	// TransitionedObjName is the object name on the remote tier corresponding
+	// to object (version) on the source tier.
+	TransitionedObjName string
+	// TransitionTier is the storage class label assigned to remote tier.
+	TransitionTier string
+	// TransitionVersionID stores a version ID of the object associate
+	// with the remote tier.
+	TransitionVersionID string
+	// ExpireRestored indicates that the restored object is to be expired.
+	ExpireRestored bool
 
 	// DataDir of the file
 	DataDir string
@@ -158,6 +179,22 @@ type FileInfo struct {
 
 	NumVersions      int
 	SuccessorModTime time.Time
+
+	Fresh bool // indicates this is a first time call to write FileInfo.
+}
+
+// InlineData returns true if object contents are inlined alongside its metadata.
+func (fi FileInfo) InlineData() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]
+	return ok
+}
+
+// SetInlineData marks object (version) as inline.
+func (fi *FileInfo) SetInlineData() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string, 1)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata
@@ -193,7 +230,7 @@ func newFileInfo(object string, dataBlocks, parityBlocks int) (fi FileInfo) {
 		Algorithm:    erasureAlgorithm,
 		DataBlocks:   dataBlocks,
 		ParityBlocks: parityBlocks,
-		BlockSize:    blockSizeV1,
+		BlockSize:    blockSizeV2,
 		Distribution: hashOrder(object, dataBlocks+parityBlocks),
 	}
 	return fi

@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -21,7 +22,7 @@ import (
 	"net/http"
 	"strconv"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 const unavailable = "offline"
@@ -41,7 +42,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
-	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
+	opts := HealthOptions{Maintenance: r.Form.Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
 	if result.WriteQuorum > 0 {
 		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
@@ -64,11 +65,45 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
+// ClusterReadCheckHandler returns if the server is ready for requests.
+func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ClusterReadCheckHandler")
+
+	if shouldProxy() {
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+
+	objLayer := newObjectLayerFn()
+
+	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
+	defer cancel()
+
+	result := objLayer.ReadHealth(ctx)
+	if !result {
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+	writeResponse(w, http.StatusOK, nil, mimeNone)
+}
+
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if shouldProxy() {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+	}
+
+	if globalIsGateway && globalEtcdClient != nil {
+		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
+		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+		defer cancel()
+		// etcd unreachable throw an error for readiness.
+		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
+			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+			return
+		}
 	}
 
 	writeResponse(w, http.StatusOK, nil, mimeNone)
@@ -80,5 +115,17 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
+
+	if globalIsGateway && globalEtcdClient != nil {
+		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
+		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+		defer cancel()
+		// etcd unreachable throw an error for readiness.
+		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
+			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+			return
+		}
+	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }

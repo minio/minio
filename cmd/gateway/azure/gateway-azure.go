@@ -1,11 +1,11 @@
 /*
- * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -35,20 +36,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/env"
-
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/bucket/policy/condition"
-	sha256 "github.com/minio/sha256-simd"
-
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/bucket/policy/condition"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -139,14 +137,14 @@ func (g *Azure) Name() string {
 }
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
-func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *Azure) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	var err error
 
 	// Override credentials from the Azure storage environment variables if specified
 	if acc, key := env.Get("AZURE_STORAGE_ACCOUNT", creds.AccessKey), env.Get("AZURE_STORAGE_KEY", creds.SecretKey); acc != "" && key != "" {
-		creds, err = auth.CreateCredentials(acc, key)
-		if err != nil {
-			return nil, err
+		creds = madmin.Credentials{
+			AccessKey: acc,
+			SecretKey: key,
 		}
 	}
 
@@ -243,11 +241,6 @@ func parseStorageEndpoint(host string, accountName string) (*url.URL, error) {
 	}
 
 	return url.Parse(endpoint)
-}
-
-// Production - Azure gateway is production ready.
-func (g *Azure) Production() bool {
-	return true
 }
 
 // s3MetaToAzureProperties converts metadata meant for S3 PUT/COPY
@@ -545,7 +538,7 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo - Not relevant to Azure backend.
 func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	host := a.endpoint.Host
 	if a.endpoint.Port() == "" {
 		host = a.endpoint.Host + ":" + a.endpoint.Scheme
@@ -793,9 +786,13 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return nil, err
 	}
 
+	if startOffset != 0 || length != objInfo.Size {
+		delete(objInfo.UserDefined, "Content-MD5")
+	}
+
 	pr, pw := io.Pipe()
 	go func() {
-		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
+		err := a.getObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -810,7 +807,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
+func (a *azureObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	// startOffset cannot be negative.
 	if startOffset < 0 {
 		return azureToObjectError(minio.InvalidRange{}, bucket, object)

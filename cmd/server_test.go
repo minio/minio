@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -33,8 +34,8 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/bucket/policy"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 // API suite container common to both FS and Erasure.
@@ -1267,20 +1268,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	c.Assert(response.StatusCode, http.StatusBadRequest)
 	verifyError(c, response, "KeyTooLongError", "Your key is too long", http.StatusBadRequest)
 
-	// make object name with prefix as slash
-	longObjName = fmt.Sprintf("/%0255d/%0255d", 1, 1)
-	buffer = bytes.NewReader([]byte("hello world"))
-	// create new HTTP request to insert the object.
-	request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, longObjName),
-		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	// execute the HTTP request.
-	response, err = s.client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusBadRequest)
-	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains a leading slash.", http.StatusBadRequest)
-
-	//make object name as unsupported
+	// make object name as unsupported
 	longObjName = fmt.Sprintf("%0256d", 1)
 	buffer = bytes.NewReader([]byte("hello world"))
 	request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, longObjName),
@@ -1595,14 +1583,14 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
-				"<Owner><ID></ID><DisplayName></DisplayName></Owner>",
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
-				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>", globalMinioDefaultOwnerID),
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},

@@ -1,11 +1,11 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,8 +20,8 @@ import (
 	"context"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/auth"
 )
 
 func init() {
@@ -85,18 +85,13 @@ func (g *NAS) Name() string {
 }
 
 // NewGatewayLayer returns nas gatewaylayer.
-func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *NAS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
 	}
 	return &nasObjects{newObject}, nil
-}
-
-// Production - nas gateway is production ready.
-func (g *NAS) Production() bool {
-	return true
 }
 
 // IsListenSupported returns whether listen bucket notification is applicable for this gateway.
@@ -106,8 +101,8 @@ func (n *nasObjects) IsListenSupported() bool {
 
 func (n *nasObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si, errs := n.ObjectLayer.StorageInfo(ctx)
-	si.Backend.GatewayOnline = si.Backend.Type == minio.BackendFS
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = si.Backend.Type == madmin.FS
+	si.Backend.Type = madmin.Gateway
 	return si, errs
 }
 

@@ -1,30 +1,36 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bcicen/jstream"
+	"github.com/minio/minio-go/v7/pkg/set"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -39,7 +45,7 @@ var startsWithConds = map[string]bool{
 	"$key":                     true,
 	"$success_action_redirect": true,
 	"$redirect":                true,
-	"$success_action_status":   false,
+	"$success_action_status":   true,
 	"$x-amz-algorithm":         false,
 	"$x-amz-credential":        false,
 	"$x-amz-date":              false,
@@ -110,8 +116,45 @@ type PostPolicyForm struct {
 	}
 }
 
+// implemented to ensure that duplicate keys in JSON
+// are merged together into a single JSON key, also
+// to remove any extraneous JSON bodies.
+//
+// Go stdlib doesn't support parsing JSON with duplicate
+// keys, so we need to use this technique to merge the
+// keys.
+func sanitizePolicy(r io.Reader) (io.Reader, error) {
+	var buf bytes.Buffer
+	e := json.NewEncoder(&buf)
+	d := jstream.NewDecoder(r, 0).ObjectAsKVS()
+	sset := set.NewStringSet()
+	for mv := range d.Stream() {
+		var kvs jstream.KVS
+		if mv.ValueType == jstream.Object {
+			// This is a JSON object type (that preserves key order)
+			kvs = mv.Value.(jstream.KVS)
+			for _, kv := range kvs {
+				if sset.Contains(kv.Key) {
+					// Reject duplicate conditions or expiration.
+					return nil, fmt.Errorf("input policy has multiple %s, please fix your client code", kv.Key)
+				}
+				sset.Add(kv.Key)
+			}
+			e.Encode(kvs)
+		}
+	}
+	return &buf, d.Err()
+}
+
 // parsePostPolicyForm - Parse JSON policy string into typed PostPolicyForm structure.
-func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
+func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
+	reader, err := sanitizePolicy(r)
+	if err != nil {
+		return PostPolicyForm{}, err
+	}
+
+	d := json.NewDecoder(reader)
+
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
@@ -119,9 +162,9 @@ func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 		Conditions []interface{} `json:"conditions"`
 	}
 
-	err := json.Unmarshal([]byte(policy), &rawPolicy)
-	if err != nil {
-		return ppf, err
+	d.DisallowUnknownFields()
+	if err := d.Decode(&rawPolicy); err != nil {
+		return PostPolicyForm{}, err
 	}
 
 	parsedPolicy := PostPolicyForm{}
@@ -129,7 +172,7 @@ func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 	// Parse expiry time.
 	parsedPolicy.Expiration, err = time.Parse(time.RFC3339Nano, rawPolicy.Expiration)
 	if err != nil {
-		return ppf, err
+		return PostPolicyForm{}, err
 	}
 
 	// Parse conditions.

@@ -2,6 +2,8 @@
 
 MinIO server supports storage class in erasure coding mode. This allows configurable data and parity disks per object.
 
+This page is intended as a summary of MinIO Erasure Coding. For a more complete explanation, see https://docs.min.io/minio/baremetal/concepts/erasure-coding.html. 
+
 ## Overview
 
 MinIO supports two storage classes, Reduced Redundancy class and Standard class. These classes can be defined using environment variables
@@ -43,7 +45,16 @@ You can calculate _approximate_ storage usage ratio using the formula - total dr
 
 Parity blocks can not be higher than data blocks, so `STANDARD` storage class parity can not be higher than N/2. (N being total number of disks)
 
-Default value for `STANDARD` storage class is `N/2` (N is the total number of drives).
+The default value for the `STANDARD` storage class depends on the number of volumes in the erasure set:
+
+| Erasure Set Size | Default Parity (EC:N) |
+|------------------|-----------------------|
+| 5 or fewer       |                 EC:2  |
+| 6-7              |                 EC:3  |
+| 8 or more        |                 EC:4  |
+
+Prior to the ``RELEASE.2021-01-30T00-20-58Z`` MinIO release, the default `STANDARD` value was `EC(N/2)` where `N` was the number of erasure set drives.
+For more complete documentation on Erasure Set sizing, see the [MinIO Documentation on Erasure Sets](https://docs.min.io/minio/baremetal/concepts/erasure-coding.html#erasure-sets).
 
 ### Allowed values for REDUCED_REDUNDANCY storage class
 

@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -28,24 +29,31 @@ import (
 	"strings"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/handlers"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
 	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-	iso8601TimeFormat = "2006-01-02T15:04:05.000Z"                     // Reply date format with nanosecond precision.
-	maxObjectList     = metacacheBlockSize - (metacacheBlockSize / 10) // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
-	maxDeleteList     = 10000                                          // Limit number of objects deleted in a delete call.
-	maxUploadsList    = 10000                                          // Limit number of uploads in a listUploadsResponse.
-	maxPartsList      = 10000                                          // Limit number of parts in a listPartsResponse.
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxDeleteList     = 10000                      // Limit number of objects deleted in a delete call.
+	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
+	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
 type LocationResponse struct {
 	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint" json:"-"`
 	Location string   `xml:",chardata"`
+}
+
+// PolicyStatus captures information returned by GetBucketPolicyStatusHandler
+type PolicyStatus struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ PolicyStatus" json:"-"`
+	IsPublic string
 }
 
 // ListVersionsResponse - format for list bucket versions response.
@@ -410,9 +418,11 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	listbuckets := make([]Bucket, 0, len(buckets))
 	var data = ListBucketsResponse{}
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
@@ -429,10 +439,12 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 	var data = ListVersionsResponse{}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, object := range resp.Objects {
 		var content = ObjectVersion{}
 		if object.Name == "" {
@@ -485,10 +497,12 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 	var data = ListObjectsResponse{}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, object := range resp.Objects {
 		var content = Object{}
 		if object.Name == "" {
@@ -532,12 +546,11 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
-	var owner = Owner{}
-	var data = ListObjectsV2Response{}
-
-	if fetchOwner {
-		owner.ID = globalMinioDefaultOwnerID
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
 	}
+	var data = ListObjectsV2Response{}
 
 	for _, object := range objects {
 		var content = Object{}
@@ -558,6 +571,14 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		content.Owner = owner
 		if metadata {
 			content.UserMetadata = make(StringMap)
+			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
+			case crypto.S3:
+				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
+			case crypto.S3KMS:
+				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionKMS
+			case crypto.SSEC:
+				content.UserMetadata[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
+			}
 			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
 				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 					// Do not need to send any internal metadata
@@ -763,7 +784,7 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 }
 
 // writeErrorRespone writes error headers
-func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, browser bool) {
+func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	switch err.Code {
 	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
@@ -773,14 +794,6 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalServerRegion)
 	case "AuthorizationHeaderMalformed":
 		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
-	case "AccessDenied":
-		// The request is from browser and also if browser
-		// is enabled we need to redirect.
-		if browser && globalBrowserEnabled {
-			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
-			w.WriteHeader(http.StatusTemporaryRedirect)
-			return
-		}
 	}
 
 	// Generate error response.

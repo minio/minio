@@ -1,28 +1,28 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
 	"context"
 	"io"
-
 	"sync"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // Writes in parallel to writers
@@ -41,13 +41,18 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 			p.errs[i] = errDiskNotFound
 			continue
 		}
-
+		if p.errs[i] != nil {
+			continue
+		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, p.errs[i] = p.writers[i].Write(blocks[i])
-			if p.errs[i] != nil {
-				p.writers[i] = nil
+			var n int
+			n, p.errs[i] = p.writers[i].Write(blocks[i])
+			if p.errs[i] == nil {
+				if n != len(blocks[i]) {
+					p.errs[i] = io.ErrShortWrite
+				}
 			}
 		}(i)
 	}
@@ -57,12 +62,7 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
 	// i.e if we do no return here in such a case, reduceWriteQuorumErrs() would
 	// return a quorum error to HealFile().
-	nilCount := 0
-	for _, err := range p.errs {
-		if err == nil {
-			nilCount++
-		}
-	}
+	nilCount := countErrs(p.errs, nil)
 	if nilCount >= p.writeQuorum {
 		return nil
 	}

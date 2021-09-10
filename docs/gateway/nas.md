@@ -9,11 +9,14 @@ MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple 
 Please ensure to replace `/shared/nasvol` with actual mount path.
 
 ```
-docker run -p 9000:9000 --name nas-s3 \
+podman run \
+ -p 9000:9000 \
+ -p 9001:9001 \
+ --name nas-s3 \
  -e "MINIO_ROOT_USER=minio" \
  -e "MINIO_ROOT_PASSWORD=minio123" \
  -v /shared/nasvol:/container/vol \
- minio/minio gateway nas /container/vol
+ quay.io/minio/minio gateway nas /container/vol --console-address ":9001"
 ```
 
 ### Using Binary
@@ -24,11 +27,13 @@ export MINIO_ROOT_PASSWORD=minio123
 minio gateway nas /shared/nasvol
 ```
 
-## Test using MinIO Browser
+## Test using MinIO Console
 
 MinIO Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
-![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
+| Dashboard                                                                                   | Creating a bucket                                                                           |
+| -------------                                                                               | -------------                                                                               |
+| ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic1.png?raw=true) | ![Dashboard](https://github.com/minio/minio/blob/master/docs/screenshots/pic2.png?raw=true) |
 
 ## Test using MinIO Client `mc`
 
@@ -78,6 +83,23 @@ export MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_1=/tmp/webhk
 ```
 
 > NOTE: Please check the docs for the corresponding ENV setting. Alternatively, We can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
+
+## Symlink support
+
+NAS gateway implementation allows symlinks on regular files,
+
+### Behavior
+
+- For reads symlink resolves to file symlink points to.
+- For deletes
+  - Delete of symlink deletes the symlink but not the real file to which the symlink points.
+  - Delete of actual file automatically makes symlink'ed file invisible, dangling symlinks won't be visible.
+
+#### Caveats
+- Disallows follow of directory symlinks to avoid security issues, and leaving them as is on namespace makes them very inconsistent.
+- Dangling symlinks are ignored automatically.
+
+*Directory symlinks is not and will not be supported as there are no safe ways to handle them.*
 
 ## Explore Further
 - [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)

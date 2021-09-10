@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,73 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
-
-// Tests for if parent directory is object
-func TestFSParentDirIsObject(t *testing.T) {
-	obj, disk, err := prepareFS()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(disk)
-
-	bucketName := "testbucket"
-	objectName := "object"
-
-	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	objectContent := "12345"
-	objInfo, err := obj.PutObject(GlobalContext, bucketName, objectName,
-		mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if objInfo.Name != objectName {
-		t.Fatalf("Unexpected object name returned got %s, expected %s", objInfo.Name, objectName)
-	}
-
-	fs := obj.(*FSObjects)
-	testCases := []struct {
-		parentIsObject bool
-		objectName     string
-	}{
-		// parentIsObject is true if object is available.
-		{
-			parentIsObject: true,
-			objectName:     objectName,
-		},
-		{
-			parentIsObject: false,
-			objectName:     "",
-		},
-		{
-			parentIsObject: false,
-			objectName:     ".",
-		},
-		// Should not cause infinite loop.
-		{
-			parentIsObject: false,
-			objectName:     SlashSeparator,
-		},
-		{
-			parentIsObject: false,
-			objectName:     "\\",
-		},
-		// Should not cause infinite loop with double forward slash.
-		{
-			parentIsObject: false,
-			objectName:     "//",
-		},
-	}
-	for i, testCase := range testCases {
-		gotValue := fs.parentDirIsObject(GlobalContext, bucketName, testCase.objectName)
-		if testCase.parentIsObject != gotValue {
-			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
-		}
-	}
-}
 
 // TestNewFS - tests initialization of all input disks
 // and constructs a valid `FS` object layer.
@@ -224,35 +160,6 @@ func TestFSPutObject(t *testing.T) {
 	_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
-	}
-	_, err = obj.PutObject(GlobalContext, bucketName, objectName+"/1", mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
-	if err == nil {
-		t.Fatal("Unexpected should fail here, backend corruption occurred")
-	}
-	if nerr, ok := err.(ParentIsObject); !ok {
-		t.Fatalf("Expected ParentIsObject, got %#v", err)
-	} else {
-		if nerr.Bucket != "bucket" {
-			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
-		}
-		if nerr.Object != "1/2/3/4/object/1" {
-			t.Fatalf("Expected '1/2/3/4/object/1', got %s", nerr.Object)
-		}
-	}
-
-	_, err = obj.PutObject(GlobalContext, bucketName, objectName+"/1/", mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), ObjectOptions{})
-	if err == nil {
-		t.Fatal("Unexpected should fail here, backned corruption occurred")
-	}
-	if nerr, ok := err.(ParentIsObject); !ok {
-		t.Fatalf("Expected ParentIsObject, got %#v", err)
-	} else {
-		if nerr.Bucket != "bucket" {
-			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
-		}
-		if nerr.Object != "1/2/3/4/object/1/" {
-			t.Fatalf("Expected '1/2/3/4/object/1/', got %s", nerr.Object)
-		}
 	}
 }
 

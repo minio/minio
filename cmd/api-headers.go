@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -27,9 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // Returns a hexadecimal representation of time at the
@@ -158,14 +158,14 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		return err
 	}
 
+	if rs == nil && opts.PartNumber > 0 {
+		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
+	}
+
 	// For providing ranged content
 	start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
 	if err != nil {
 		return err
-	}
-
-	if rs == nil && opts.PartNumber > 0 {
-		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
 	}
 
 	// Set content length.
@@ -179,26 +179,19 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if objInfo.VersionID != "" {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
+
 	if objInfo.ReplicationStatus.String() != "" {
 		w.Header()[xhttp.AmzBucketReplicationStatus] = []string{objInfo.ReplicationStatus.String()}
 	}
+
+	if objInfo.IsRemote() {
+		// Check if object is being restored. For more information on x-amz-restore header see
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
+		w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionedObject.Tier}
+	}
+
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
-		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
-			Name:         objInfo.Name,
-			UserTags:     objInfo.UserTags,
-			VersionID:    objInfo.VersionID,
-			ModTime:      objInfo.ModTime,
-			IsLatest:     objInfo.IsLatest,
-			DeleteMarker: objInfo.DeleteMarker,
-		})
-		if !expiryTime.IsZero() {
-			w.Header()[xhttp.AmzExpiration] = []string{
-				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
-			}
-		}
-		if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-			w.Header()[xhttp.AmzStorageClass] = []string{objInfo.StorageClass}
-		}
+		lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 	}
 
 	return nil

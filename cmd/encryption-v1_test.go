@@ -1,35 +1,32 @@
-/*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/sio"
 )
 
@@ -619,97 +616,10 @@ func TestGetDefaultOpts(t *testing.T) {
 		if err == nil {
 			if opts.ServerSideEncryption == nil && test.encryptionType != "" {
 				t.Errorf("Case %d: expected opts to be of %v encryption type", i, test.encryptionType)
-
 			}
 			if opts.ServerSideEncryption != nil && test.encryptionType != opts.ServerSideEncryption.Type() {
 				t.Errorf("Case %d: expected opts to have encryption type %v but was %v ", i, test.encryptionType, opts.ServerSideEncryption.Type())
 			}
 		}
 	}
-}
-func Test_decryptObjectInfo(t *testing.T) {
-	var testSet []struct {
-		Bucket  string
-		Name    string
-		UserDef map[string]string
-	}
-	file, err := os.Open("testdata/decryptObjectInfo.json.zst")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	dec, err := zstd.NewReader(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dec.Close()
-	js := json.NewDecoder(dec)
-	err = js.Decode(&testSet)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
-	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var dst [32]byte
-	for i := range testSet {
-		t.Run(fmt.Sprint("case-", i), func(t *testing.T) {
-			test := &testSet[i]
-			_, err := decryptObjectInfo(dst[:], test.Bucket, test.Name, test.UserDef)
-			if err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
-func Benchmark_decryptObjectInfo(b *testing.B) {
-	var testSet []struct {
-		Bucket  string
-		Name    string
-		UserDef map[string]string
-	}
-	file, err := os.Open("testdata/decryptObjectInfo.json.zst")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer file.Close()
-	dec, err := zstd.NewReader(file)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer dec.Close()
-	js := json.NewDecoder(dec)
-	err = js.Decode(&testSet)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
-	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
-	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	b.SetBytes(int64(len(testSet)))
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			var dst [32]byte
-			for i := range testSet {
-				test := &testSet[i]
-				_, err := decryptObjectInfo(dst[:], test.Bucket, test.Name, test.UserDef)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
 }

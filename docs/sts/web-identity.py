@@ -1,16 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 import json
 import logging
@@ -75,19 +64,20 @@ def callback():
 
     data = {'grant_type': 'authorization_code',
             'code': authorization_code, 'redirect_uri': callback_uri}
-    access_token_response = requests.post(
-        token_url, data=data, verify=False, allow_redirects=False, auth=(client_id, client_secret))
+    id_token_response = requests.post(
+        token_url, data=data, verify=False,
+        allow_redirects=False, auth=(client_id, client_secret))
 
-    print('body: ' + access_token_response.text)
+    print('body: ' + id_token_response.text)
 
-    # we can now use the access_token as much as we want to access protected resources.
-    tokens = json.loads(access_token_response.text)
-    access_token = tokens['access_token']
+    # we can now use the id_token as much as we want to access protected resources.
+    tokens = json.loads(id_token_response.text)
+    id_token = tokens['id_token']
 
     response = sts_client.assume_role_with_web_identity(
         RoleArn='arn:aws:iam::123456789012:user/svc-internal-api',
         RoleSessionName='test',
-        WebIdentityToken=access_token,
+        WebIdentityToken=id_token,
         DurationSeconds=3600
     )
 

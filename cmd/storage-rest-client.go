@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -31,11 +32,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/http"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	xnet "github.com/minio/minio/pkg/net"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	xnet "github.com/minio/pkg/net"
 	xbufio "github.com/philhofer/fwd"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -121,7 +121,23 @@ type storageRESTClient struct {
 	restClient *rest.Client
 	diskID     string
 
+	// Indexes, will be -1 until assigned a set.
+	poolIndex, setIndex, diskIndex int
+
 	diskInfoCache timedValue
+	diskHealCache timedValue
+}
+
+// Retrieve location indexes.
+func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return client.poolIndex, client.setIndex, client.diskIndex
+}
+
+// Set location indexes.
+func (client *storageRESTClient) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	client.poolIndex = poolIdx
+	client.setIndex = setIdx
+	client.diskIndex = diskIdx
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -151,6 +167,11 @@ func (client *storageRESTClient) IsOnline() bool {
 	return client.restClient.IsOnline()
 }
 
+// LastConn - returns when the disk is seen to be connected the last time
+func (client *storageRESTClient) LastConn() time.Time {
+	return client.restClient.LastConn()
+}
+
 func (client *storageRESTClient) IsLocal() bool {
 	return false
 }
@@ -163,45 +184,73 @@ func (client *storageRESTClient) Endpoint() Endpoint {
 	return client.endpoint
 }
 
-func (client *storageRESTClient) Healing() bool {
-	// This call should never be called over the network
-	// this function should always return 'false'
-	//
-	// To know if a remote disk is being healed
-	// perform DiskInfo() call which would return
-	// back the correct data if disk is being healed.
-	return false
+func (client *storageRESTClient) Healing() *healingTracker {
+	client.diskHealCache.Once.Do(func() {
+		// Update at least every second.
+		client.diskHealCache.TTL = time.Second
+		client.diskHealCache.Update = func() (interface{}, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			b, err := client.ReadAll(ctx, minioMetaBucket,
+				pathJoin(bucketMetaPrefix, healingTrackerFilename))
+			if err != nil {
+				// If error, likely not healing.
+				return (*healingTracker)(nil), nil
+			}
+			var h healingTracker
+			_, err = h.UnmarshalMsg(b)
+			return &h, err
+		}
+	})
+	val, _ := client.diskHealCache.Get()
+	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
 	}()
-	defer pr.Close()
-	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, pr, -1)
-	defer http.DrainBody(respBody)
+	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
+	defer xhttp.DrainBody(respBody)
+	pr.CloseWithError(err)
 	if err != nil {
 		return cache, err
 	}
 
-	var wg sync.WaitGroup
-	var newCache dataUsageCache
-	var decErr error
-	pr, pw = io.Pipe()
-	wg.Add(1)
+	rr, rw := io.Pipe()
 	go func() {
-		defer wg.Done()
-		decErr = newCache.deserialize(pr)
-		pr.CloseWithError(err)
+		rw.CloseWithError(waitForHTTPStream(respBody, rw))
 	}()
-	err = waitForHTTPStream(respBody, pw)
-	pw.CloseWithError(err)
-	if err != nil {
-		return cache, err
+
+	ms := msgp.NewReader(rr)
+	for {
+		// Read whether it is an update.
+		upd, err := ms.ReadBool()
+		if err != nil {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		if !upd {
+			// No more updates... New cache follows.
+			break
+		}
+		var update dataUsageEntry
+		err = update.DecodeMsg(ms)
+		if err != nil || err == io.EOF {
+			rr.CloseWithError(err)
+			return cache, err
+		}
+		updates <- update
 	}
-	wg.Wait()
-	return newCache, decErr
+	var newCache dataUsageCache
+	err = newCache.DecodeMsg(ms)
+	rr.CloseWithError(err)
+	if err == io.EOF {
+		err = nil
+	}
+	return newCache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
@@ -216,28 +265,42 @@ func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
 }
 
+func (client *storageRESTClient) diskInfo() (interface{}, error) {
+	var info DiskInfo
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
+	if err != nil {
+		return info, err
+	}
+	defer xhttp.DrainBody(respBody)
+	if err = msgp.Decode(respBody, &info); err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
+}
+
 // DiskInfo - fetch disk information for a remote disk.
 func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	if !client.IsOnline() {
+		// make sure to check if the disk is offline, since the underlying
+		// value is cached we should attempt to invalidate it if such calls
+		// were attempted. This can lead to false success under certain conditions
+		// - this change attempts to avoid stale information if the underlying
+		// transport is already down.
+		return info, errDiskNotFound
+	}
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.Update = func() (interface{}, error) {
-			var info DiskInfo
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
-			if err != nil {
-				return info, err
-			}
-			defer http.DrainBody(respBody)
-			if err = msgp.Decode(respBody, &info); err != nil {
-				return info, err
-			}
-			if info.Error != "" {
-				return info, toStorageErr(errors.New(info.Error))
-			}
-			return info, nil
-		}
+		client.diskInfoCache.Update = client.diskInfo
 	})
-	v, err := client.diskInfoCache.Get()
-	info = v.(DiskInfo)
+	val, err := client.diskInfoCache.Get()
+	if val != nil {
+		return val.(DiskInfo), err
+	}
 	return info, err
 }
 
@@ -246,7 +309,7 @@ func (client *storageRESTClient) MakeVolBulk(ctx context.Context, volumes ...str
 	values := make(url.Values)
 	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
 	respBody, err := client.call(ctx, storageRESTMethodMakeVolBulk, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -255,7 +318,7 @@ func (client *storageRESTClient) MakeVol(ctx context.Context, volume string) (er
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	respBody, err := client.call(ctx, storageRESTMethodMakeVol, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -265,7 +328,7 @@ func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, 
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	vinfos := VolsInfo(vols)
 	err = msgp.Decode(respBody, &vinfos)
 	return vinfos, err
@@ -279,7 +342,7 @@ func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vo
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = msgp.Decode(respBody, &vol)
 	return vol, err
 }
@@ -292,7 +355,7 @@ func (client *storageRESTClient) DeleteVol(ctx context.Context, volume string, f
 		values.Set(storageRESTForceDelete, "true")
 	}
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVol, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -303,7 +366,7 @@ func (client *storageRESTClient) AppendFile(ctx context.Context, volume string, 
 	values.Set(storageRESTFilePath, path)
 	reader := bytes.NewReader(buf)
 	respBody, err := client.call(ctx, storageRESTMethodAppendFile, values, reader, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -313,7 +376,11 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	_, err = waitForHTTPResponse(respBody)
 	return err
 }
 
@@ -328,7 +395,22 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodWriteMetadata, values, &reader, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
+	return err
+}
+
+func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var reader bytes.Buffer
+	if err := msgp.Encode(&reader, &fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodUpdateMetadata, values, &reader, -1)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -344,7 +426,7 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVersion, values, &buffer, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -354,17 +436,7 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	respBody, err := client.call(ctx, storageRESTMethodWriteAll, values, bytes.NewBuffer(b), int64(len(b)))
-	defer http.DrainBody(respBody)
-	return err
-}
-
-// CheckFile - stat a file metadata.
-func (client *storageRESTClient) CheckFile(ctx context.Context, volume string, path string) error {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(ctx, storageRESTMethodCheckFile, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -381,20 +453,25 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodCheckParts, values, &reader, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTSrcVolume, srcVolume)
 	values.Set(storageRESTSrcPath, srcPath)
-	values.Set(storageRESTDataDir, dataDir)
 	values.Set(storageRESTDstVolume, dstVolume)
 	values.Set(storageRESTDstPath, dstPath)
-	respBody, err := client.call(ctx, storageRESTMethodRenameData, values, nil, -1)
-	defer http.DrainBody(respBody)
+
+	var reader bytes.Buffer
+	if err = msgp.Encode(&reader, &fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodRenameData, values, &reader, -1)
+	defer xhttp.DrainBody(respBody)
 
 	return err
 }
@@ -425,7 +502,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	if err != nil {
 		return fi, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	dec := msgpNewReader(respBody)
 	defer readMsgpReaderPool.Put(dec)
@@ -443,7 +520,7 @@ func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, pat
 	if err != nil {
 		return nil, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return ioutil.ReadAll(respBody)
 }
 
@@ -479,48 +556,9 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 	if err != nil {
 		return 0, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	n, err := io.ReadFull(respBody, buf)
 	return int64(n), err
-}
-
-func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTDirPath, dirPath)
-	values.Set(storageRESTMarkerPath, marker)
-	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(ctx, storageRESTMethodWalkVersions, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan FileInfoVersions)
-	go func() {
-		defer close(ch)
-		defer http.DrainBody(respBody)
-
-		dec := msgpNewReader(respBody)
-		defer readMsgpReaderPool.Put(dec)
-
-		for {
-			var fi FileInfoVersions
-			if gerr := fi.DecodeMsg(dec); gerr != nil {
-				// Upon error return
-				if msgp.Cause(gerr) != io.EOF {
-					logger.LogIf(GlobalContext, gerr)
-				}
-				return
-			}
-			select {
-			case ch <- fi:
-			case <-endWalkCh:
-				return
-			}
-		}
-	}()
-
-	return ch, nil
 }
 
 // ListDir - lists a directory.
@@ -533,7 +571,7 @@ func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath st
 	if err != nil {
 		return nil, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&entries)
 	return entries, err
 }
@@ -546,7 +584,7 @@ func (client *storageRESTClient) Delete(ctx context.Context, volume string, path
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -570,7 +608,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	errs = make([]error, len(versions))
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVersions, values, &buffer, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	if err != nil {
 		for i := range errs {
 			errs[i] = err
@@ -609,7 +647,7 @@ func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcP
 	values.Set(storageRESTDstVolume, dstVolume)
 	values.Set(storageRESTDstPath, dstPath)
 	respBody, err := client.call(ctx, storageRESTMethodRenameFile, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -624,7 +662,7 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodVerifyFile, values, &reader, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	if err != nil {
 		return err
 	}
@@ -640,6 +678,23 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	}
 
 	return toStorageErr(verifyResp.Err)
+}
+
+func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	respBody, err := client.call(ctx, storageRESTMethodStatInfoFile, values, nil, -1)
+	if err != nil {
+		return stat, err
+	}
+	defer xhttp.DrainBody(respBody)
+	respReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return stat, err
+	}
+	err = stat.DecodeMsg(msgpNewReader(respReader))
+	return stat, err
 }
 
 // Close - marks the client as closed.
@@ -662,6 +717,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 		healthClient.ExpectTimeouts = true
+		healthClient.NoMetrics = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 			defer cancel()
@@ -671,5 +727,5 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		}
 	}
 
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1}
 }

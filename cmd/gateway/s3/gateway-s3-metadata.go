@@ -1,11 +1,11 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,8 +26,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 )
 
 var (
@@ -168,9 +168,9 @@ func getGWMetadata(ctx context.Context, bucket, prefix string, gwMeta gwMetaV1) 
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-	hashReader, err := hash.NewReader(bytes.NewReader(metadataBytes), int64(len(metadataBytes)), "", "", int64(len(metadataBytes)), false)
+	hashReader, err := hash.NewReader(bytes.NewReader(metadataBytes), int64(len(metadataBytes)), "", "", int64(len(metadataBytes)))
 	if err != nil {
 		return nil, err
 	}
-	return minio.NewPutObjReader(hashReader, nil, nil), nil
+	return minio.NewPutObjReader(hashReader), nil
 }

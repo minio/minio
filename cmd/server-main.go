@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -21,6 +22,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -31,16 +34,18 @@ import (
 	"time"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/bandwidth"
-	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/fips"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
+	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 // ServerFlags - server command specific flags
@@ -49,6 +54,10 @@ var ServerFlags = []cli.Flag{
 		Name:  "address",
 		Value: ":" + GlobalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+	},
+	cli.StringFlag{
+		Name:  "console-address",
+		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
 	},
 }
 
@@ -96,10 +105,18 @@ EXAMPLES:
 }
 
 func serverCmdArgs(ctx *cli.Context) []string {
-	v := env.Get(config.EnvArgs, "")
+	v, _, _, err := env.LookupEnv(config.EnvArgs)
+	if err != nil {
+		logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
+			config.EnvArgs, os.Getenv(config.EnvArgs))
+	}
 	if v == "" {
-		// Fall back to older ENV MINIO_ENDPOINTS
-		v = env.Get(config.EnvEndpoints, "")
+		// Fall back to older environment value MINIO_ENDPOINTS
+		v, _, _, err = env.LookupEnv(config.EnvEndpoints)
+		if err != nil {
+			logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
+				config.EnvEndpoints, os.Getenv(config.EnvEndpoints))
+		}
 	}
 	if v == "" {
 		if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -114,7 +131,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(globalMinioAddr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
@@ -135,30 +152,33 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalMinioAddr = globalCLIContext.Addr
+	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
+	logger.FatalIf(err, "Invalid command line arguments")
 
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
 			if ep.IsLocal {
-				globalRemoteEndpoints[GetLocalPeer(globalEndpoints)] = ep
+				globalRemoteEndpoints[globalLocalNodeName] = ep
 			} else {
 				globalRemoteEndpoints[ep.Host] = ep
 			}
 		}
 	}
-	logger.FatalIf(err, "Invalid command line arguments")
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.CipherSuitesTLS(),
+		CurvePreferences: fips.EllipticCurvesTLS(),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -202,7 +222,7 @@ func newAllSubsystems() {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
+	globalBucketMonitor = bandwidth.NewMonitor(GlobalContext, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -234,6 +254,32 @@ func newAllSubsystems() {
 
 	// Create new bucket replication subsytem
 	globalBucketTargetSys = NewBucketTargetSys()
+
+	// Create new ILM tier configuration subsystem
+	globalTierConfigMgr = NewTierConfigMgr()
+}
+
+func configRetriableErrors(err error) bool {
+	// Initializing sub-systems needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+
+	// One of these retriable errors shall be retried.
+	return errors.Is(err, errDiskNotFound) ||
+		errors.Is(err, errConfigNotFound) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, errErasureWriteQuorum) ||
+		errors.Is(err, errErasureReadQuorum) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.As(err, &rquorum) ||
+		errors.As(err, &wquorum) ||
+		isErrBucketNotFound(err) ||
+		errors.Is(err, os.ErrDeadlineExceeded)
 }
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
@@ -251,20 +297,10 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 
-	// Initializing sub-systems needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	//  - Write quorum not met when upgrading configuration
-	//    version is needed, migration is needed etc.
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
-	var err error
 	for {
 		select {
 		case <-ctx.Done():
@@ -275,7 +311,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(ctx, lockTimeout); err != nil {
+		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
+		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -294,7 +331,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(ctx, newObject); err == nil {
-				txnLk.Unlock()
+				txnLk.Unlock(lkctx.Cancel)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -304,15 +341,10 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			}
 		}
 
-		txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+		txnLk.Unlock(lkctx.Cancel)
 
-		// One of these retriable errors shall be retried.
-		if errors.Is(err, errDiskNotFound) ||
-			errors.Is(err, errConfigNotFound) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			errors.As(err, &rquorum) ||
-			errors.As(err, &wquorum) ||
-			isErrBucketNotFound(err) {
+		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
@@ -330,8 +362,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
 	// List buckets to heal, and be re-used for loading configs.
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
 
 	buckets, err := newObject.ListBuckets(ctx)
 	if err != nil {
@@ -346,21 +376,26 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 				logger.Info(fmt.Sprintf("Verifying if %d buckets are consistent across drives...", len(buckets)))
 			}
 		}
-		for _, bucket := range buckets {
-			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{Recreate: true}); err != nil {
-				return fmt.Errorf("Unable to list buckets to heal: %w", err)
-			}
+
+		// Limit to no more than 50 concurrent buckets.
+		g := errgroup.WithNErrs(len(buckets)).WithConcurrency(50)
+		ctx, cancel := g.WithCancelOnError(ctx)
+		defer cancel()
+		for index := range buckets {
+			index := index
+			g.Go(func() error {
+				_, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
+				return berr
+			}, index)
+		}
+		if err := g.WaitErr(); err != nil {
+			return fmt.Errorf("Unable to list buckets to heal: %w", err)
 		}
 	}
 
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
-		if errors.Is(err, errDiskNotFound) ||
-			errors.Is(err, errConfigNotFound) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			errors.As(err, &rquorum) ||
-			errors.As(err, &wquorum) ||
-			isErrBucketNotFound(err) {
+		if configRetriableErrors(err) {
 			return fmt.Errorf("Unable to initialize config system: %w", err)
 		}
 		// Any other config errors we simply print a message and proceed forward.
@@ -382,7 +417,20 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// Initialize bucket targets sub-system.
 	globalBucketTargetSys.Init(ctx, buckets, newObject)
 
+	if globalIsErasure {
+		// Initialize transition tier configuration manager
+		err = globalTierConfigMgr.Init(ctx, newObject)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+type nullWriter struct{}
+
+func (lw nullWriter) Write(b []byte) (int, error) {
+	return len(b), nil
 }
 
 // serverMain handler called for 'minio server' command.
@@ -399,6 +447,11 @@ func serverMain(ctx *cli.Context) {
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
 	logger.AddTarget(globalConsoleSys)
 
+	// Perform any self-tests
+	bitrotSelfTest()
+	erasureSelfTest()
+	compressSelfTest()
+
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
@@ -406,21 +459,13 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Set node name, only set for distributed setup.
-	globalConsoleSys.SetNodeName(globalEndpoints)
+	globalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
 	initHelp()
 
 	// Initialize all sub-systems
 	newAllSubsystems()
-
-	globalMinioEndpoint = func() string {
-		host := globalMinioHost
-		if host == "" {
-			host = sortIPs(localIP4.ToSlice())[0]
-		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
-	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
@@ -438,8 +483,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
-		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
-			"Unable to initialize the server in distributed mode")
+		globalActiveCred = auth.DefaultCredentials
 	}
 
 	// Set system resources to maximum.
@@ -460,6 +504,8 @@ func serverMain(ctx *cli.Context) {
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
+	// Turn-off random logging by Go internally
+	httpServer.ErrorLog = log.New(&nullWriter{}, "", 0)
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -486,17 +532,15 @@ func serverMain(ctx *cli.Context) {
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
-
 	logger.SetDeploymentID(globalDeploymentID)
 
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
-		initBackgroundTransition(GlobalContext, newObject)
-		initBackgroundExpiry(GlobalContext, newObject)
+		initHealMRF(GlobalContext, newObject)
 	}
 
-	initDataCrawler(GlobalContext, newObject)
+	initBackgroundExpiry(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
@@ -510,11 +554,24 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+
+		logger.LogIf(GlobalContext, err)
 	}
+
+	// Initialize users credentials and policies in background right after config has initialized.
+	go globalIAMSys.Init(GlobalContext, newObject)
+
+	initDataScanner(GlobalContext, newObject)
 
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)
+		initBackgroundTransition(GlobalContext, newObject)
+		globalTierJournal, err = initTierDeletionJournal(GlobalContext)
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
+		}
 	}
+
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
@@ -524,15 +581,23 @@ func serverMain(ctx *cli.Context) {
 		setCacheObjectLayer(cacheAPI)
 	}
 
-	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject)
-
 	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
-		logger.StartupMessage(color.RedBold(msg))
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables", globalActiveCred)
+		logStartupMessage(color.RedBold(msg))
+	}
+
+	if globalBrowserEnabled {
+		globalConsoleSrv, err = initConsoleServer()
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize console service")
+		}
+
+		go func() {
+			logger.FatalIf(globalConsoleSrv.Serve(), "Unable to initialize console server")
+		}()
 	}
 
 	<-globalOSSignalCh

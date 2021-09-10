@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,11 +24,12 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/madmin-go"
 )
 
 // Tests both object and bucket healing.
@@ -144,6 +146,205 @@ func TestHealing(t *testing.T) {
 	}
 }
 
+func TestHealingDanglingObject(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resetGlobalHealState()
+	defer resetGlobalHealState()
+
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//defer removeRoots(fsDirs)
+
+	// Everything is fine, should return nil
+	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := getRandomBucketName()
+	object := getRandomObjectName()
+	data := bytes.Repeat([]byte("a"), 128*1024)
+
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	if err != nil {
+		t.Fatalf("Failed to make a bucket - %v", err)
+	}
+
+	// Enable versioning.
+	globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
+
+	_, err = objLayer.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{
+		Versioned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0400); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create delete marker under quorum.
+	objInfo, err := objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{Versioned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fileInfoPreHeal, err := disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPreHeal.NumVersions != 1 {
+		t.Fatalf("Expected versions 1, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+		func(bucket, object, vid string) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+			return err
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal, err := disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPostHeal.NumVersions != 2 {
+		t.Fatalf("Expected versions 2, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	if objInfo.DeleteMarker {
+		if _, err = objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{
+			Versioned: true,
+			VersionID: objInfo.VersionID,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0400); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rd := mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
+	_, err = objLayer.PutObject(ctx, bucket, object, rd, ObjectOptions{
+		Versioned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPreHeal.NumVersions != 1 {
+		t.Fatalf("Expected versions 1, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+		func(bucket, object, vid string) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+			return err
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPostHeal.NumVersions != 2 {
+		t.Fatalf("Expected versions 2, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	rd = mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
+	objInfo, err = objLayer.PutObject(ctx, bucket, object, rd, ObjectOptions{
+		Versioned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0400); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create delete marker under quorum.
+	_, err = objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{
+		Versioned: true,
+		VersionID: objInfo.VersionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fsDir := range fsDirs[:4] {
+		if err = os.Chmod(fsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPreHeal.NumVersions != 3 {
+		t.Fatalf("Expected versions 3, got %d", fileInfoPreHeal.NumVersions)
+	}
+
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+		func(bucket, object, vid string) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+			return err
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileInfoPostHeal.NumVersions != 2 {
+		t.Fatalf("Expected versions 2, got %d", fileInfoPreHeal.NumVersions)
+	}
+}
+
 func TestHealObjectCorrupted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -165,8 +366,8 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bucket := "bucket"
-	object := "object"
+	bucket := getRandomBucketName()
+	object := getRandomObjectName()
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
@@ -220,7 +421,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
 
-	if err = firstDisk.CheckFile(context.Background(), bucket, object); err != nil {
+	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile); err != nil {
 		t.Errorf("Expected er.meta file to be present but stat failed - %v", err)
 	}
 
@@ -364,7 +565,7 @@ func TestHealObjectErasure(t *testing.T) {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
 
-	if err = firstDisk.CheckFile(context.Background(), bucket, object); err != nil {
+	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile); err != nil {
 		t.Errorf("Expected er.meta file to be present but stat failed - %v", err)
 	}
 

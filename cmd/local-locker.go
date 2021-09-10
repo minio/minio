@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -22,18 +23,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/minio/internal/dsync"
 )
 
 // lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	Name          string    // name of the resource lock was requested for
-	Writer        bool      // Bool whether write or read lock.
-	UID           string    // UID to uniquely identify request of client.
-	Timestamp     time.Time // Timestamp set at the time of initialization.
-	TimeLastCheck time.Time // Timestamp for last check of validity of lock.
-	Source        string    // Contains line, function and filename reqesting the lock.
-	Group         bool      // indicates if it was a group lock.
+	Name            string    // name of the resource lock was requested for
+	Writer          bool      // Bool whether write or read lock.
+	UID             string    // UID to uniquely identify request of client.
+	Timestamp       time.Time // Timestamp set at the time of initialization.
+	TimeLastRefresh time.Time // Timestamp for last lock refresh.
+	Source          string    // Contains line, function and filename reqesting the lock.
+	Group           bool      // indicates if it was a group lock.
 	// Owner represents the UUID of the owner who originally requested the lock
 	// useful in expiry.
 	Owner string
@@ -93,22 +94,22 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 	for _, resource := range args.Resources {
 		l.lockMap[resource] = []lockRequesterInfo{
 			{
-				Name:          resource,
-				Writer:        true,
-				Source:        args.Source,
-				Owner:         args.Owner,
-				UID:           args.UID,
-				Timestamp:     UTCNow(),
-				TimeLastCheck: UTCNow(),
-				Group:         len(args.Resources) > 1,
-				Quorum:        args.Quorum,
+				Name:            resource,
+				Writer:          true,
+				Source:          args.Source,
+				Owner:           args.Owner,
+				UID:             args.UID,
+				Timestamp:       UTCNow(),
+				TimeLastRefresh: UTCNow(),
+				Group:           len(args.Resources) > 1,
+				Quorum:          args.Quorum,
 			},
 		}
 	}
 	return true, nil
 }
 
-func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -154,14 +155,14 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 	defer l.mutex.Unlock()
 	resource := args.Resources[0]
 	lrInfo := lockRequesterInfo{
-		Name:          resource,
-		Writer:        false,
-		Source:        args.Source,
-		Owner:         args.Owner,
-		UID:           args.UID,
-		Timestamp:     UTCNow(),
-		TimeLastCheck: UTCNow(),
-		Quorum:        args.Quorum,
+		Name:            resource,
+		Writer:          false,
+		Source:          args.Source,
+		Owner:           args.Owner,
+		UID:             args.UID,
+		Timestamp:       UTCNow(),
+		TimeLastRefresh: UTCNow(),
+		Quorum:          args.Quorum,
 	}
 	if lri, ok := l.lockMap[resource]; ok {
 		if reply = !isWriteLock(lri); reply {
@@ -176,7 +177,7 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 	return reply, nil
 }
 
-func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) RUnlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	var lri []lockRequesterInfo
@@ -226,17 +227,28 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 	default:
 		l.mutex.Lock()
 		defer l.mutex.Unlock()
-		if len(args.UID) != 0 {
-			return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
+		if len(args.UID) == 0 {
+			for _, resource := range args.Resources {
+				delete(l.lockMap, resource) // Remove the lock (irrespective of write or read lock)
+			}
+			return true, nil
 		}
-		for _, resource := range args.Resources {
-			delete(l.lockMap, resource) // Remove the lock (irrespective of write or read lock)
+
+		lockFound := false
+		for _, lris := range l.lockMap {
+			for _, lri := range lris {
+				if lri.UID == args.UID {
+					l.removeEntry(lri.Name, dsync.LockArgs{UID: lri.UID}, &lris)
+					lockFound = true
+				}
+			}
 		}
-		return true, nil
+
+		return lockFound, nil
 	}
 }
 
-func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
+func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refreshed bool, err error) {
 	select {
 	case <-ctx.Done():
 		return false, ctx.Err()
@@ -244,42 +256,33 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 		l.mutex.Lock()
 		defer l.mutex.Unlock()
 
-		resource := args.Resources[0] // expiry check is always per resource.
-
-		// Lock found, proceed to verify if belongs to given uid.
-		lri, ok := l.lockMap[resource]
-		if !ok {
-			return true, nil
-		}
-
-		// Check whether uid is still active
-		for _, entry := range lri {
-			if entry.UID == args.UID && entry.Owner == args.Owner {
-				ep := globalRemoteEndpoints[args.Owner]
-				if !ep.IsLocal {
-					// check if the owner is online
-					return isServerResolvable(ep, 250*time.Millisecond) != nil, nil
+		lockFound := false
+		for _, lri := range l.lockMap {
+			// Check whether uid is still active
+			for i := range lri {
+				if lri[i].UID == args.UID {
+					lri[i].TimeLastRefresh = UTCNow()
+					lockFound = true
 				}
-				return false, nil
 			}
 		}
 
-		return true, nil
+		return lockFound, nil
 	}
 }
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
 // Caller must hold 'l.mutex' lock.
-func (l *localLocker) removeEntryIfExists(lrip lockRequesterInfo) {
+func (l *localLocker) expireOldLocks(interval time.Duration) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
-	if lri, ok := l.lockMap[lrip.Name]; ok {
-		// Even if the entry exists, it may not be the same entry which was
-		// considered as expired, so we simply an attempt to remove it if its
-		// not possible there is nothing we need to do.
-		l.removeEntry(lrip.Name, dsync.LockArgs{Owner: lrip.Owner, UID: lrip.UID}, &lri)
+	for _, lris := range l.lockMap {
+		for _, lri := range lris {
+			if time.Since(lri.TimeLastRefresh) > interval {
+				l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
+			}
+		}
 	}
 }
 

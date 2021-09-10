@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 )
 
 // localMetacacheMgr is the *local* manager for this peer.
@@ -42,15 +43,11 @@ type metacacheManager struct {
 	trash   map[string]metacache // Recently deleted lists.
 }
 
-const metacacheManagerTransientBucket = "**transient**"
+const metacacheMaxEntries = 5000
 
 // initManager will start async saving the cache.
 func (m *metacacheManager) initManager() {
 	// Add a transient bucket.
-	tb := newBucketMetacache(metacacheManagerTransientBucket, false)
-	tb.transient = true
-	m.buckets[metacacheManagerTransientBucket] = tb
-
 	// Start saver when object layer is ready.
 	go func() {
 		objAPI := newObjectLayerFn()
@@ -58,14 +55,15 @@ func (m *metacacheManager) initManager() {
 			time.Sleep(time.Second)
 			objAPI = newObjectLayerFn()
 		}
+
 		if !globalIsErasure {
-			logger.Info("metacacheManager was initialized in non-erasure mode, skipping save")
 			return
 		}
 
 		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+
 		var exit bool
-		bg := context.Background()
 		for !exit {
 			select {
 			case <-t.C:
@@ -77,7 +75,6 @@ func (m *metacacheManager) initManager() {
 				if !exit {
 					v.cleanup()
 				}
-				logger.LogIf(bg, v.save(bg))
 			}
 			m.mu.RUnlock()
 			m.mu.Lock()
@@ -89,27 +86,7 @@ func (m *metacacheManager) initManager() {
 			}
 			m.mu.Unlock()
 		}
-		m.getTransient().deleteAll()
 	}()
-}
-
-// findCache will get a metacache.
-func (m *metacacheManager) findCache(ctx context.Context, o listPathOptions) metacache {
-	if o.Transient || isReservedOrInvalidBucket(o.Bucket, false) {
-		return m.getTransient().findCache(o)
-	}
-	m.mu.RLock()
-	b, ok := m.buckets[o.Bucket]
-	if ok {
-		m.mu.RUnlock()
-		return b.findCache(o)
-	}
-	if meta, ok := m.trash[o.ID]; ok {
-		m.mu.RUnlock()
-		return meta
-	}
-	m.mu.RUnlock()
-	return m.getBucket(ctx, o.Bucket).findCache(o)
 }
 
 // updateCacheEntry will update non-transient state.
@@ -121,11 +98,11 @@ func (m *metacacheManager) updateCacheEntry(update metacache) (metacache, error)
 	}
 
 	b, ok := m.buckets[update.bucket]
+	m.mu.RUnlock()
 	if ok {
-		m.mu.RUnlock()
 		return b.updateCacheEntry(update)
 	}
-	m.mu.RUnlock()
+
 	// We should have either a trashed bucket or this
 	return metacache{}, errVolumeNotFound
 }
@@ -135,13 +112,10 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	m.init.Do(m.initManager)
 
 	// Return a transient bucket for invalid or system buckets.
-	if isReservedOrInvalidBucket(bucket, false) {
-		return m.getTransient()
-	}
 	m.mu.RLock()
 	b, ok := m.buckets[bucket]
-	m.mu.RUnlock()
 	if ok {
+		m.mu.RUnlock()
 		if b.bucket != bucket {
 			logger.Info("getBucket: cached bucket %s does not match this bucket %s", b.bucket, bucket)
 			debug.PrintStack()
@@ -149,11 +123,12 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 		return b
 	}
 
+	m.mu.RUnlock()
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	// See if someone else fetched it while we waited for the lock.
 	b, ok = m.buckets[bucket]
 	if ok {
-		m.mu.Unlock()
 		if b.bucket != bucket {
 			logger.Info("getBucket: newly cached bucket %s does not match this bucket %s", b.bucket, bucket)
 			debug.PrintStack()
@@ -161,18 +136,9 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 		return b
 	}
 
-	// Load bucket. If we fail return the transient bucket.
-	b, err := loadBucketMetaCache(ctx, bucket)
-	if err != nil {
-		m.mu.Unlock()
-		logger.LogIf(ctx, err)
-		return m.getTransient()
-	}
-	if b.bucket != bucket {
-		logger.LogIf(ctx, fmt.Errorf("getBucket: loaded bucket %s does not match this bucket %s", b.bucket, bucket))
-	}
+	// New bucket. If we fail return the transient bucket.
+	b = newBucketMetacache(bucket, true)
 	m.buckets[bucket] = b
-	m.mu.Unlock()
 	return b
 }
 
@@ -212,19 +178,8 @@ func (m *metacacheManager) deleteAll() {
 	defer m.mu.Unlock()
 	for bucket, b := range m.buckets {
 		b.deleteAll()
-		if !b.transient {
-			delete(m.buckets, bucket)
-		}
+		delete(m.buckets, bucket)
 	}
-}
-
-// getTransient will return a transient bucket.
-func (m *metacacheManager) getTransient() *bucketMetacache {
-	m.init.Do(m.initManager)
-	m.mu.RLock()
-	bmc := m.buckets[metacacheManagerTransientBucket]
-	m.mu.RUnlock()
-	return bmc
 }
 
 // checkMetacacheState should be used if data is not updating.
@@ -232,16 +187,11 @@ func (m *metacacheManager) getTransient() *bucketMetacache {
 func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTClient) error {
 	// We operate on a copy...
 	o.Create = false
-	var cache metacache
-	if rpc == nil || o.Transient {
-		cache = localMetacacheMgr.findCache(ctx, o)
-	} else {
-		c, err := rpc.GetMetacacheListing(ctx, o)
-		if err != nil {
-			return err
-		}
-		cache = *c
+	c, err := rpc.GetMetacacheListing(ctx, o)
+	if err != nil {
+		return err
 	}
+	cache := *c
 
 	if cache.status == scanStateNone || cache.fileNotFound {
 		return errFileNotFound
@@ -252,11 +202,7 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 			err := fmt.Errorf("timeout: list %s not updated", cache.id)
 			cache.error = err.Error()
 			cache.status = scanStateError
-			if rpc == nil || o.Transient {
-				localMetacacheMgr.updateCacheEntry(cache)
-			} else {
-				rpc.UpdateMetacacheListing(ctx, cache)
-			}
+			rpc.UpdateMetacacheListing(ctx, cache)
 			return err
 		}
 		return nil

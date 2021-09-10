@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -21,140 +22,147 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
-	"strings"
 )
 
 // Converts underlying storage error. Convenience function written to
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
-	if len(params) > 1 {
-		if HasSuffix(params[1], globalDirSuffix) {
-			params[1] = strings.TrimSuffix(params[1], globalDirSuffix) + slashSeparator
-		}
+	if err == nil {
+		return nil
 	}
-	switch err {
-	case errVolumeNotFound:
+	switch err.Error() {
+	case errVolumeNotFound.Error():
+		apiErr := BucketNotFound{}
 		if len(params) >= 1 {
-			err = BucketNotFound{Bucket: params[0]}
+			apiErr.Bucket = params[0]
 		}
-	case errVolumeNotEmpty:
+		return apiErr
+	case errVolumeNotEmpty.Error():
+		apiErr := BucketNotEmpty{}
 		if len(params) >= 1 {
-			err = BucketNotEmpty{Bucket: params[0]}
+			apiErr.Bucket = params[0]
 		}
-	case errVolumeExists:
+		return apiErr
+	case errVolumeExists.Error():
+		apiErr := BucketExists{}
 		if len(params) >= 1 {
-			err = BucketExists{Bucket: params[0]}
+			apiErr.Bucket = params[0]
 		}
-	case errDiskFull:
-		err = StorageFull{}
-	case errTooManyOpenFiles:
-		err = SlowDown{}
-	case errFileAccessDenied:
+		return apiErr
+	case errDiskFull.Error():
+		return StorageFull{}
+	case errTooManyOpenFiles.Error():
+		return SlowDown{}
+	case errFileAccessDenied.Error():
+		apiErr := PrefixAccessDenied{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
 		if len(params) >= 2 {
-			err = PrefixAccessDenied{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errFileParentIsFile:
+		return apiErr
+	case errIsNotRegular.Error():
+		apiErr := ObjectExistsAsDirectory{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
 		if len(params) >= 2 {
-			err = ParentIsObject{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errIsNotRegular:
+		return apiErr
+	case errFileVersionNotFound.Error():
+		apiErr := VersionNotFound{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
 		if len(params) >= 2 {
-			err = ObjectExistsAsDirectory{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errFileVersionNotFound:
-		switch len(params) {
-		case 2:
-			err = VersionNotFound{
-				Bucket: params[0],
-				Object: params[1],
-			}
-		case 3:
-			err = VersionNotFound{
-				Bucket:    params[0],
-				Object:    params[1],
-				VersionID: params[2],
-			}
+		if len(params) >= 3 {
+			apiErr.VersionID = params[2]
 		}
-	case errMethodNotAllowed:
-		switch len(params) {
-		case 2:
-			err = MethodNotAllowed{
-				Bucket: params[0],
-				Object: params[1],
-			}
+		return apiErr
+	case errMethodNotAllowed.Error():
+		apiErr := MethodNotAllowed{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
 		}
-	case errFileNotFound:
-		switch len(params) {
-		case 2:
-			err = ObjectNotFound{
-				Bucket: params[0],
-				Object: params[1],
-			}
-		case 3:
-			err = InvalidUploadID{
-				Bucket:   params[0],
-				Object:   params[1],
-				UploadID: params[2],
-			}
-		}
-	case errFileNameTooLong:
 		if len(params) >= 2 {
-			err = ObjectNameInvalid{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errDataTooLarge:
+		return apiErr
+	case errFileNotFound.Error():
+		apiErr := ObjectNotFound{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
 		if len(params) >= 2 {
-			err = ObjectTooLarge{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errDataTooSmall:
+		return apiErr
+	case errUploadIDNotFound.Error():
+		apiErr := InvalidUploadID{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
 		if len(params) >= 2 {
-			err = ObjectTooSmall{
-				Bucket: params[0],
-				Object: params[1],
-			}
+			apiErr.Object = decodeDirObject(params[1])
 		}
-	case errErasureReadQuorum:
-		if len(params) == 1 {
-			err = InsufficientReadQuorum{
-				Bucket: params[0],
-			}
-		} else if len(params) >= 2 {
-			err = InsufficientReadQuorum{
-				Bucket: params[0],
-				Object: params[1],
-			}
+		if len(params) >= 3 {
+			apiErr.UploadID = params[2]
 		}
-	case errErasureWriteQuorum:
-		if len(params) == 1 {
-			err = InsufficientWriteQuorum{
-				Bucket: params[0],
-			}
-		} else if len(params) >= 2 {
-			err = InsufficientWriteQuorum{
-				Bucket: params[0],
-				Object: params[1],
-			}
+		return apiErr
+	case errFileNameTooLong.Error():
+		apiErr := ObjectNameInvalid{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
 		}
-	case io.ErrUnexpectedEOF, io.ErrShortWrite:
-		err = IncompleteBody{}
-	case context.Canceled, context.DeadlineExceeded:
-		err = IncompleteBody{}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
+	case errDataTooLarge.Error():
+		apiErr := ObjectTooLarge{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
+	case errDataTooSmall.Error():
+		apiErr := ObjectTooSmall{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
+	case errErasureReadQuorum.Error():
+		apiErr := InsufficientReadQuorum{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
+	case errErasureWriteQuorum.Error():
+		apiErr := InsufficientWriteQuorum{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
+	case io.ErrUnexpectedEOF.Error(), io.ErrShortWrite.Error():
+		return IncompleteBody{}
+	case context.Canceled.Error(), context.DeadlineExceeded.Error():
+		return IncompleteBody{}
 	}
 	return err
 }
@@ -304,27 +312,11 @@ func (e PrefixAccessDenied) Error() string {
 	return "Prefix access is denied: " + e.Bucket + SlashSeparator + e.Object
 }
 
-// ParentIsObject object access is denied.
-type ParentIsObject GenericError
-
-func (e ParentIsObject) Error() string {
-	return "Parent is object " + e.Bucket + SlashSeparator + path.Dir(e.Object)
-}
-
 // BucketExists bucket exists.
 type BucketExists GenericError
 
 func (e BucketExists) Error() string {
 	return "Bucket exists: " + e.Bucket
-}
-
-// UnsupportedDelimiter - unsupported delimiter.
-type UnsupportedDelimiter struct {
-	Delimiter string
-}
-
-func (e UnsupportedDelimiter) Error() string {
-	return fmt.Sprintf("delimiter '%s' is not supported. Only '/' is supported", e.Delimiter)
 }
 
 // InvalidUploadIDKeyCombination - invalid upload id and key marker combination.
@@ -426,7 +418,7 @@ func (e BucketRemoteTargetNotFound) Error() string {
 type BucketRemoteConnectionErr GenericError
 
 func (e BucketRemoteConnectionErr) Error() string {
-	return "Remote service endpoint or target bucket not available: " + e.Bucket
+	return fmt.Sprintf("Remote service endpoint or target bucket not available: %s \n\t%s", e.Bucket, e.Err.Error())
 }
 
 // BucketRemoteAlreadyExists remote already exists for this target type.
@@ -476,6 +468,20 @@ type BucketReplicationSourceNotVersioned GenericError
 
 func (e BucketReplicationSourceNotVersioned) Error() string {
 	return "Replication source does not have versioning enabled: " + e.Bucket
+}
+
+// TransitionStorageClassNotFound remote tier not configured.
+type TransitionStorageClassNotFound GenericError
+
+func (e TransitionStorageClassNotFound) Error() string {
+	return "Transition storage class not found "
+}
+
+// InvalidObjectState restore-object doesn't apply for the current state of the object.
+type InvalidObjectState GenericError
+
+func (e InvalidObjectState) Error() string {
+	return "The operation is not valid for the current state of the object " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
 }
 
 /// Bucket related errors.
@@ -538,7 +544,7 @@ type InvalidRange struct {
 }
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
+	return fmt.Sprintf("The requested range \"bytes %d -> %d of %d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
 }
 
 // ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
@@ -624,14 +630,11 @@ func (e InvalidETag) Error() string {
 
 // NotImplemented If a feature is not implemented
 type NotImplemented struct {
-	API string
+	Message string
 }
 
 func (e NotImplemented) Error() string {
-	if e.API != "" {
-		return e.API + " is Not Implemented"
-	}
-	return "Not Implemented"
+	return e.Message
 }
 
 // UnsupportedMetadata - unsupported metadata
@@ -666,6 +669,12 @@ func isErrVersionNotFound(err error) bool {
 	return errors.As(err, &versionNotFound)
 }
 
+// isErrSignatureDoesNotMatch - Check if error type is SignatureDoesNotMatch.
+func isErrSignatureDoesNotMatch(err error) bool {
+	var signatureDoesNotMatch SignatureDoesNotMatch
+	return errors.As(err, &signatureDoesNotMatch)
+}
+
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 
@@ -676,4 +685,10 @@ func (e PreConditionFailed) Error() string {
 func isErrPreconditionFailed(err error) bool {
 	_, ok := err.(PreConditionFailed)
 	return ok
+}
+
+// isErrMethodNotAllowed - Check if error type is MethodNotAllowed.
+func isErrMethodNotAllowed(err error) bool {
+	var methodNotAllowed MethodNotAllowed
+	return errors.As(err, &methodNotAllowed)
 }

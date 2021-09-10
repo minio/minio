@@ -92,6 +92,13 @@ mc admin policy set myminio-admin1 user1policy user=user1
 - admin:ServerTrace
 - admin:ConsoleLog
 - admin:KMSKeyStatus
+- admin:KMSCreateKey
+- admin:ServiceRestart
+- admin:ServiceStop
+- admin:Prometheus
+- admin:ForceUnlock
+- admin:TopLocksInfo
+- admin:BandwidthMonitor
 
 #### User/Group management permissions
 - admin:AddUserToGroup
@@ -107,6 +114,27 @@ mc admin policy set myminio-admin1 user1policy user=user1
 - admin:GetPolicy
 - admin:AttachUserOrGroupPolicy
 - admin:ListUserPolicies
+
+#### Heal management permissions
+- admin:Heal
+
+#### Service account management permissions
+- admin:CreateServiceAccount
+- admin:UpdateServiceAccount
+- admin:RemoveServiceAccount
+- admin:ListServiceAccounts
+
+#### Bucket quota management permissions
+- admin:SetBucketQuota
+- admin:GetBucketQuota
+
+#### Bucket target management permissions
+- admin:SetBucketTarget
+- admin:GetBucketTarget
+
+#### Remote tier management permissions
+- admin:SetTier
+- admin:ListTier
 
 #### Give full admin permissions
 - admin:*

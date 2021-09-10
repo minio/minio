@@ -1,22 +1,5 @@
 # AssumeRole [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-**Table of Contents**
-
-- [Introduction](#introduction)
-- [API Request Parameters](#api-request-parameters)
-    - [Version](#version)
-    - [AUTHPARAMS](#authparams)
-    - [DurationSeconds](#durationseconds)
-    - [Policy](#policy)
-    - [Response Elements](#response-elements)
-    - [Errors](#errors)
-- [Sample `POST` Request](#sample-post-request)
-- [Sample Response](#sample-response)
-- [Using AssumeRole API](#using-assumerole-api)
-- [Explore Further](#explore-further)
-
-<!-- markdown-toc end -->
-
 ## Introduction
 
 Returns a set of temporary security credentials that you can use to access MinIO resources. AssumeRole requires authorization credentials for an existing user on MinIO. The advantages of this API are
@@ -24,7 +7,7 @@ Returns a set of temporary security credentials that you can use to access MinIO
 - To be able to reliably use S3 multipart APIs feature of the SDKs without re-inventing the wheel of pre-signing the each URL in multipart API. This is very tedious to implement with all the scenarios of fault tolerance that's already implemented by the client SDK. The general client SDKs don't support multipart with presigned URLs.
 - To be able to easily get the temporary credentials to upload to a prefix. Make it possible for a client to upload a whole folder using the session. The server side applications need not create a presigned URL and serve to the client for each file. Since, the client would have the session it can do it by itself.
 
-The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 7 days.
+The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
 
 ## API Request Parameters
 ### Version
@@ -39,13 +22,13 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
 
 ### DurationSeconds
-The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 7 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 365 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
-| Params        | Value                                            |
-| :--           | :--                                              |
-| *Type*        | *Integer*                                        |
-| *Valid Range* | *Minimum value of 900. Maximum value of 604800.* |
-| *Required*    | *No*                                             |
+| Params        | Value                                              |
+| :--           | :--                                                |
+| *Type*        | *Integer*                                          |
+| *Valid Range* | *Minimum value of 900. Maximum value of 31536000.* |
+| *Required*    | *No*                                               |
 
 ### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
@@ -98,7 +81,7 @@ $ minio server ~/test
 
 Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
 
-Testing with an example
+### Testing an example with awscli tool
 > Use the same username and password created in the previous steps.
 
 ```
@@ -123,6 +106,20 @@ $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --po
         "AccessKeyId": "K9DTIMUVZXEXJL3ATUOY"
     }
 }
+```
+
+### Testing an example with `assume-role.go`
+
+The included program in this directory can also be used for testing:
+
+
+``` shell
+$ go run assume-role.go -u foobar -p foo12345 -d
+Only displaying credentials:
+AccessKeyID: 27YDRYEM0S9B44AJJX9X
+SecretAccessKey: LHPdHeaLiYk+pDZ3hgN3sdwXpJC2qbhBfZ8ii9Z3
+SessionToken: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiIyN1lEUllFTTBTOUI0NEFKSlg5WCIsImV4cCI6MzYwMDAwMDAwMDAwMCwicG9saWN5IjoiY29uc29sZUFkbWluIn0.2d9t0UOm1jQmwe31_5CyN63f6CL-fhqZSO-XhZIp-NH5QteWv9oSMjIrcNWzMgNDblrUfAZ0JSs8a1ciLQF9Ww
+
 ```
 
 ## Explore Further

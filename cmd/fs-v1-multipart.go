@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,16 +24,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	pathutil "path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/cmd/logger"
-	mioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/trie"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/trie"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -114,7 +114,7 @@ func (fs *FSObjects) backgroundAppend(ctx context.Context, bucket, object, uploa
 		}
 
 		partPath := pathJoin(uploadIDDir, entry)
-		err = mioutil.AppendFile(file.filePath, partPath, globalFSOSync)
+		err = xioutil.AppendFile(file.filePath, partPath, globalFSOSync)
 		if err != nil {
 			reqInfo := logger.GetReqInfo(ctx).AppendTags("partPath", partPath)
 			reqInfo.AppendTags("filepath", file.filePath)
@@ -240,7 +240,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 		return "", err
 	}
 
-	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0644); err != nil {
+	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0666); err != nil {
 		logger.LogIf(ctx, err)
 		return "", err
 	}
@@ -390,7 +390,7 @@ func (fs *FSObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploa
 		return minfo, toObjectErr(err, bucket, object)
 	}
 
-	fsMetaBytes, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	fsMetaBytes, err := xioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return minfo, toObjectErr(err, bucket, object)
@@ -549,15 +549,10 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, toObjectErr(err)
 	}
 
-	// Check if an object is present as one of the parent dir.
-	if fs.parentDirIsObject(ctx, bucket, pathutil.Dir(object)) {
-		return oi, toObjectErr(errFileParentIsFile, bucket, object)
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return oi, toObjectErr(err, bucket)
 	}
-	defer ObjectPathUpdated(pathutil.Join(bucket, object))
+	defer NSUpdated(bucket, object)
 
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
@@ -568,9 +563,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		}
 		return oi, toObjectErr(err, bucket, object)
 	}
-
-	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5 := getCompleteMultipartMD5(parts)
 
 	// ensure that part ETag is canonicalized to strip off extraneous quotes
 	for i := range parts {
@@ -700,7 +692,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 					GotETag:    part.ETag,
 				}
 			}
-			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partFile), globalFSOSync); err != nil {
+			if err = xioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partFile), globalFSOSync); err != nil {
 				logger.LogIf(ctx, err)
 				return oi, toObjectErr(err)
 			}
@@ -709,10 +701,12 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	// Hold write lock on the object.
 	destLock := fs.NewNSLock(bucket, object)
-	if err = destLock.GetLock(ctx, globalOperationTimeout); err != nil {
+	lkctx, err := destLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return oi, err
 	}
-	defer destLock.Unlock()
+	ctx = lkctx.Context()
+	defer destLock.Unlock(lkctx.Cancel)
 
 	bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
 	fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
@@ -744,7 +738,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	}()
 
 	// Read saved fs metadata for ongoing multipart.
-	fsMetaBuf, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	fsMetaBuf, err := xioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)
@@ -758,7 +752,12 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	if fsMeta.Meta == nil {
 		fsMeta.Meta = make(map[string]string)
 	}
-	fsMeta.Meta["etag"] = s3MD5
+
+	fsMeta.Meta["etag"] = opts.UserDefined["etag"]
+	if fsMeta.Meta["etag"] == "" {
+		fsMeta.Meta["etag"] = getCompleteMultipartMD5(parts)
+	}
+
 	// Save consolidated actual size.
 	fsMeta.Meta[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
 	if _, err = fsMeta.WriteTo(metaFile); err != nil {
@@ -849,14 +848,17 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 // on all buckets for every `cleanupInterval`, this function is
 // blocking and should be run in a go-routine.
 func (fs *FSObjects) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
+	timer := time.NewTimer(cleanupInterval)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
+			// Reset for the next interval
+			timer.Reset(cleanupInterval)
+
 			now := time.Now()
 			entries, err := readDir(pathJoin(fs.fsPath, minioMetaMultipartBucket))
 			if err != nil {

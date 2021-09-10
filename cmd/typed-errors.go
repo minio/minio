@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -32,9 +33,6 @@ var errSignatureMismatch = errors.New("Signature does not match")
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")
 
-// used when we deal with data with unknown size
-var errSizeUnspecified = errors.New("Data size is unspecified")
-
 // When upload object size is greater than 5G in a single PUT/POST operation.
 var errDataTooLarge = errors.New("Object size larger than allowed limit")
 
@@ -50,10 +48,6 @@ var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
-// errInvalidBucketName - bucket name is reserved for MinIO, usually
-// returned for 'minio', '.minio.sys', buckets with capital letters.
-var errInvalidBucketName = errors.New("The specified bucket is not valid")
-
 // errInvalidRange - returned when given range value is not valid.
 var errInvalidRange = errors.New("Invalid range")
 
@@ -68,14 +62,14 @@ var errNotFirstDisk = errors.New("Not first disk")
 // error returned by first disk waiting to initialize other servers.
 var errFirstDiskWait = errors.New("Waiting on other disks")
 
-// error returned when a bucket already exists
-var errBucketAlreadyExists = errors.New("Your previous request to create the named bucket succeeded and you already own it")
-
 // error returned for a negative actual size.
 var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 
 // error returned in IAM subsystem when user doesn't exist.
 var errNoSuchUser = errors.New("Specified user does not exist")
+
+// error returned when service account is not found
+var errNoSuchServiceAccount = errors.New("Specified service account does not exist")
 
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")
@@ -88,13 +82,10 @@ var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove 
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 
 // error returned in IAM subsystem when an external users systems is configured.
-var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed with LDAP configuration")
+var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed")
 
 // error returned in IAM subsystem when IAM sub-system is still being initialized.
 var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
 
-// error returned when access is denied.
-var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
-
-// error returned when object is locked.
-var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")
+// error returned when upload id not found
+var errUploadIDNotFound = errors.New("Specified Upload ID is not found")

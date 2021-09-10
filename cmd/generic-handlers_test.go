@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,66 +24,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/minio/minio/cmd/crypto"
-	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 )
-
-// Tests getRedirectLocation function for all its criteria.
-func TestRedirectLocation(t *testing.T) {
-	testCases := []struct {
-		urlPath  string
-		location string
-	}{
-		{
-			// 1. When urlPath is '/minio'
-			urlPath:  minioReservedBucketPath,
-			location: minioReservedBucketPath + SlashSeparator,
-		},
-		{
-			// 2. When urlPath is '/'
-			urlPath:  SlashSeparator,
-			location: minioReservedBucketPath + SlashSeparator,
-		},
-		{
-			// 3. When urlPath is '/webrpc'
-			urlPath:  "/webrpc",
-			location: minioReservedBucketPath + "/webrpc",
-		},
-		{
-			// 4. When urlPath is '/login'
-			urlPath:  "/login",
-			location: minioReservedBucketPath + "/login",
-		},
-		{
-			// 5. When urlPath is '/favicon-16x16.png'
-			urlPath:  "/favicon-16x16.png",
-			location: minioReservedBucketPath + "/favicon-16x16.png",
-		},
-		{
-			// 6. When urlPath is '/favicon-16x16.png'
-			urlPath:  "/favicon-32x32.png",
-			location: minioReservedBucketPath + "/favicon-32x32.png",
-		},
-		{
-			// 7. When urlPath is '/favicon-96x96.png'
-			urlPath:  "/favicon-96x96.png",
-			location: minioReservedBucketPath + "/favicon-96x96.png",
-		},
-		{
-			// 8. When urlPath is '/unknown'
-			urlPath:  "/unknown",
-			location: "",
-		},
-	}
-
-	// Validate all conditions.
-	for i, testCase := range testCases {
-		loc := getRedirectLocation(testCase.urlPath)
-		if testCase.location != loc {
-			t.Errorf("Test %d: Unexpected location expected %s, got %s", i+1, testCase.location, loc)
-		}
-	}
-}
 
 // Tests request guess function for net/rpc requests.
 func TestGuessIsRPC(t *testing.T) {
@@ -109,34 +53,6 @@ func TestGuessIsRPC(t *testing.T) {
 	}
 	if guessIsRPCReq(r) {
 		t.Fatal("Test shouldn't report as net/rpc for a non net/rpc request.")
-	}
-}
-
-// Tests browser request guess function.
-func TestGuessIsBrowser(t *testing.T) {
-	globalBrowserEnabled = true
-	if guessIsBrowserReq(nil) {
-		t.Fatal("Unexpected return for nil request")
-	}
-	r := &http.Request{
-		Header: http.Header{},
-		URL:    &url.URL{},
-	}
-	r.Header.Set("User-Agent", "Mozilla")
-	if !guessIsBrowserReq(r) {
-		t.Fatal("Test shouldn't fail for a possible browser request anonymous user")
-	}
-	r.Header.Set("Authorization", "Bearer token")
-	if !guessIsBrowserReq(r) {
-		t.Fatal("Test shouldn't fail for a possible browser request JWT user")
-	}
-	r = &http.Request{
-		Header: http.Header{},
-		URL:    &url.URL{},
-	}
-	r.Header.Set("User-Agent", "mc")
-	if guessIsBrowserReq(r) {
-		t.Fatal("Test shouldn't report as browser for a non browser request.")
 	}
 }
 

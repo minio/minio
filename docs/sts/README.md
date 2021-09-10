@@ -11,12 +11,11 @@ Following are advantages for using temporary credentials:
 - Temporary credentials have a limited lifetime, there is no need to rotate them or explicitly revoke them. Expired temporary credentials cannot be reused.
 
 ## Identity Federation
-|AuthN | Description |
-| :---------------------- | ------------------------------------------ |
-| [**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) | Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, Okta. This is known as the client grants approach to temporary access. Using this approach helps clients keep MinIO credentials to be secured. MinIO STS supports client grants, tested against identity providers such as KeyCloak, Okta. |
+| AuthN                                                                                  | Description                                                                                                                                   |
+| :----------------------                                                                | ------------------------------------------                                                                                                    |
 | [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) | Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as KeyCloak, Dex, Facebook, Google etc. |
-| [**AssumeRole**](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md) | Let MinIO users request temporary credentials using user access and secret keys. |
-| [**AD/LDAP**](https://github.com/minio/minio/blob/master/docs/sts/ldap.md) | Let AD/LDAP users request temporary credentials using AD/LDAP username and password. |
+| [**AD/LDAP**](https://github.com/minio/minio/blob/master/docs/sts/ldap.md)             | Let AD/LDAP users request temporary credentials using AD/LDAP username and password.                                                          |
+| [**AssumeRole**](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md)   | Let MinIO users request temporary credentials using user access and secret keys.                                                              |
 
 ### Understanding JWT Claims
 > NOTE: JWT claims are only meant for WebIdentity and ClientGrants.
@@ -24,7 +23,7 @@ Following are advantages for using temporary credentials:
 > - [**AssumeRole**](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md)
 > - [**AD/LDAP**](https://github.com/minio/minio/blob/master/docs/sts/ldap.md)
 
-The access token received is a signed JSON Web Token (JWT). Use a JWT decoder to decode the access token to access the payload of the token that includes following JWT claims, `policy` claim is mandatory and should be present as part of your JWT claim. Without this claim the generated credentials will not have access to any resources on the server, using these credentials application would receive 'Access Denied' errors.
+The id_token received is a signed JSON Web Token (JWT). Use a JWT decoder to decode the id_token to access the payload of the token that includes following JWT claims, `policy` claim is mandatory and should be present as part of your JWT claim. Without this claim the generated credentials will not have access to any resources on the server, using these credentials application would receive 'Access Denied' errors.
 
 | Claim Name | Type                                              | Claim Value                                                                                                                                                                                                        |
 |:----------:|:-------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
@@ -65,7 +64,7 @@ minio gateway s3
 ```
 
 ### Using WebIdentiy API
-On another terminal run `web-identity.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its Keycloak. Uses the returned access token response to get new temporary credentials from the MinIO server using the STS API call `AssumeRoleWithWebIdentity`.
+On another terminal run `web-identity.go` a sample client application which obtains JWT id_tokens from an identity provider, in our case its Keycloak. Uses the returned id_token response to get new temporary credentials from the MinIO server using the STS API call `AssumeRoleWithWebIdentity`.
 
 ```
 $ go run docs/sts/web-identity.go -cid account -csec 072e7f00-4289-469c-9ab2-bbe843c7f5a8  -config-ep "http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" -port 8888
@@ -92,11 +91,10 @@ This will open the login page of keycloak, upon successful login, STS credential
 
 These credentials can now be used to perform MinIO API operations.
 
-### Using MinIO Browser
+### Using MinIO Console
 
-- Open MinIO URL on the browser, lets say http://localhost:9000
-- Click on `Log in with OpenID`
-- Provide `Client ID` and press ENTER, if `client_id` is already configured for MinIO this page will automatically redirect to Keycloak user login page.
+- Open MinIO URL on the browser, lets say http://localhost:9000/
+- Click on `Login with SSO`
 - User will be redirected to the Keycloak user login page, upon successful login the user will be redirected to MinIO page and logged in automatically,
   the user should see now the buckets and objects they have access to.
 

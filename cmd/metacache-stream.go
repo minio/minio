@@ -1,23 +1,23 @@
-/*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,8 +27,9 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
-	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
+	"github.com/valyala/bytebufferpool"
 )
 
 // metadata stream format:
@@ -51,14 +52,15 @@ import (
 // Streams can be assumed to be sorted in ascending order.
 // If the stream ends before a false boolean it can be assumed it was truncated.
 
-const metacacheStreamVersion = 1
+const metacacheStreamVersion = 2
 
 // metacacheWriter provides a serializer of metacache objects.
 type metacacheWriter struct {
-	mw        *msgp.Writer
-	creator   func() error
-	closer    func() error
-	blockSize int
+	mw          *msgp.Writer
+	creator     func() error
+	closer      func() error
+	blockSize   int
+	reuseBlocks bool
 
 	streamErr error
 	streamWg  sync.WaitGroup
@@ -139,6 +141,9 @@ func (w *metacacheWriter) write(objs ...metaCacheEntry) error {
 		err = w.mw.WriteBytes(o.metadata)
 		if err != nil {
 			return err
+		}
+		if w.reuseBlocks || o.reusable {
+			metaDataPoolPut(o.metadata)
 		}
 	}
 
@@ -230,7 +235,8 @@ func (w *metacacheWriter) Reset(out io.Writer) {
 }
 
 var s2DecPool = sync.Pool{New: func() interface{} {
-	return s2.NewReader(nil)
+	// Default alloc block for network transfer.
+	return s2.NewReader(nil, s2.ReaderAllocBlock(16<<10))
 }}
 
 // metacacheReader allows reading a cache stream.
@@ -244,11 +250,11 @@ type metacacheReader struct {
 
 // newMetacacheReader creates a new cache reader.
 // Nothing will be read from the stream yet.
-func newMetacacheReader(r io.Reader) (*metacacheReader, error) {
+func newMetacacheReader(r io.Reader) *metacacheReader {
 	dec := s2DecPool.Get().(*s2.Reader)
 	dec.Reset(r)
 	mr := msgp.NewReader(dec)
-	m := metacacheReader{
+	return &metacacheReader{
 		mr: mr,
 		closer: func() {
 			dec.Reset(nil)
@@ -260,14 +266,13 @@ func newMetacacheReader(r io.Reader) (*metacacheReader, error) {
 				return err
 			}
 			switch v {
-			case metacacheStreamVersion:
+			case 1, 2:
 			default:
 				return fmt.Errorf("metacacheReader: Unknown version: %d", v)
 			}
 			return nil
 		},
 	}
-	return &m, nil
 }
 
 func (r *metacacheReader) checkInit() {
@@ -353,9 +358,13 @@ func (r *metacacheReader) next() (metaCacheEntry, error) {
 		r.err = err
 		return m, err
 	}
-	m.metadata, err = r.mr.ReadBytes(nil)
+	m.metadata, err = r.mr.ReadBytes(metaDataPoolGet())
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
+	}
+	if len(m.metadata) == 0 && cap(m.metadata) >= metaDataReadDefault {
+		metaDataPoolPut(m.metadata)
+		m.metadata = nil
 	}
 	r.err = err
 	return m, err
@@ -509,12 +518,16 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 			r.mr.R.Skip(1)
 			return metaCacheEntriesSorted{o: res}, io.EOF
 		}
-		if meta.metadata, err = r.mr.ReadBytes(nil); err != nil {
+		if meta.metadata, err = r.mr.ReadBytes(metaDataPoolGet()); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			r.err = err
 			return metaCacheEntriesSorted{o: res}, err
+		}
+		if len(meta.metadata) == 0 {
+			metaDataPoolPut(meta.metadata)
+			meta.metadata = nil
 		}
 		if !inclDirs && meta.isDir() {
 			continue
@@ -564,12 +577,16 @@ func (r *metacacheReader) readAll(ctx context.Context, dst chan<- metaCacheEntry
 			r.err = err
 			return err
 		}
-		if meta.metadata, err = r.mr.ReadBytes(nil); err != nil {
+		if meta.metadata, err = r.mr.ReadBytes(metaDataPoolGet()); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			r.err = err
 			return err
+		}
+		if len(meta.metadata) == 0 {
+			metaDataPoolPut(meta.metadata)
+			meta.metadata = nil
 		}
 		select {
 		case <-ctx.Done():
@@ -745,12 +762,6 @@ type metacacheBlockWriter struct {
 	blockEntries int
 }
 
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
 // newMetacacheBlockWriter provides a streaming block writer.
 // Each block is the size of the capacity of the input channel.
 // The caller should close to indicate the stream has ended.
@@ -761,11 +772,13 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 		defer w.wg.Done()
 		var current metacacheBlock
 		var n int
-		buf := bufferPool.Get().(*bytes.Buffer)
+
+		buf := bytebufferpool.Get()
 		defer func() {
 			buf.Reset()
-			bufferPool.Put(buf)
+			bytebufferpool.Put(buf)
 		}()
+
 		block := newMetacacheWriter(buf, 1<<20)
 		defer block.Close()
 		finishBlock := func() {

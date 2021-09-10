@@ -27,6 +27,7 @@ cat > repladmin-policy-source.json <<EOF
       "Effect": "Allow",
       "Action": [
        "s3:GetReplicationConfiguration",
+       "s3:PutReplicationConfiguration",
        "s3:ListBucket",
        "s3:ListBucketMultipartUploads",
        "s3:GetBucketLocation",

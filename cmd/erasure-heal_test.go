@@ -1,18 +1,19 @@
-/*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package cmd
 
@@ -23,6 +24,9 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/bpool"
 )
 
 var erasureHealTests = []struct {
@@ -39,26 +43,26 @@ var erasureHealTests = []struct {
 	algorithm       BitrotAlgorithm
 	shouldFail      bool
 }{
-	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: SHA256, shouldFail: false},                   // 0
-	{dataBlocks: 3, disks: 6, offDisks: 2, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 1
-	{dataBlocks: 4, disks: 8, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 2
-	{dataBlocks: 5, disks: 10, offDisks: 3, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 3
-	{dataBlocks: 6, disks: 12, offDisks: 2, badDisks: 3, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: SHA256, shouldFail: false},                  // 4
-	{dataBlocks: 7, disks: 14, offDisks: 4, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 5
-	{dataBlocks: 8, disks: 16, offDisks: 6, badDisks: 1, badStaleDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 6
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: SHA256, shouldFail: false},                   // 0
+	{dataBlocks: 3, disks: 6, offDisks: 2, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 1
+	{dataBlocks: 4, disks: 8, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 2
+	{dataBlocks: 5, disks: 10, offDisks: 3, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 3
+	{dataBlocks: 6, disks: 12, offDisks: 2, badDisks: 3, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: SHA256, shouldFail: false},                  // 4
+	{dataBlocks: 7, disks: 14, offDisks: 4, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 5
+	{dataBlocks: 8, disks: 16, offDisks: 6, badDisks: 1, badStaleDisks: 1, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 6
 	{dataBlocks: 7, disks: 14, offDisks: 2, badDisks: 3, badStaleDisks: 0, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},            // 7
 	{dataBlocks: 6, disks: 12, offDisks: 1, badDisks: 0, badStaleDisks: 1, blocksize: int64(oneMiByte - 1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true}, // 8
 	{dataBlocks: 5, disks: 10, offDisks: 3, badDisks: 0, badStaleDisks: 3, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: SHA256, shouldFail: true},                 // 9
-	{dataBlocks: 4, disks: 8, offDisks: 1, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},   // 10
-	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},    // 11
-	{dataBlocks: 6, disks: 12, offDisks: 8, badDisks: 3, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},   // 12
-	{dataBlocks: 7, disks: 14, offDisks: 3, badDisks: 4, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},              // 13
-	{dataBlocks: 7, disks: 14, offDisks: 6, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 14
-	{dataBlocks: 8, disks: 16, offDisks: 4, badDisks: 5, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},   // 15
-	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},   // 16
-	{dataBlocks: 12, disks: 16, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false}, // 17
-	{dataBlocks: 6, disks: 8, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 18
-	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte * 64, algorithm: SHA256, shouldFail: false},              // 19
+	{dataBlocks: 4, disks: 8, offDisks: 1, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},   // 10
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 1, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},    // 11
+	{dataBlocks: 6, disks: 12, offDisks: 8, badDisks: 3, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},   // 12
+	{dataBlocks: 7, disks: 14, offDisks: 3, badDisks: 4, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},              // 13
+	{dataBlocks: 7, disks: 14, offDisks: 6, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 14
+	{dataBlocks: 8, disks: 16, offDisks: 4, badDisks: 5, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},   // 15
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},   // 16
+	{dataBlocks: 12, disks: 16, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false}, // 17
+	{dataBlocks: 6, disks: 8, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 18
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV2), size: oneMiByte * 64, algorithm: SHA256, shouldFail: false},              // 19
 }
 
 func TestErasureHeal(t *testing.T) {
@@ -133,8 +137,15 @@ func TestErasureHeal(t *testing.T) {
 			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 
+		// Number of buffers, max 2GB
+		n := (2 * humanize.GiByte) / (int(test.blocksize) * 2)
+
+		// Initialize byte pool once for all sets, bpool size is set to
+		// setCount * setDriveCount with each memory upto blockSizeV2.
+		bp := bpool.NewBytePoolCap(n, int(test.blocksize), int(test.blocksize)*2)
+
 		// test case setup is complete - now call Heal()
-		err = erasure.Heal(context.Background(), readers, staleWriters, test.size)
+		err = erasure.Heal(context.Background(), readers, staleWriters, test.size, bp)
 		closeBitrotReaders(readers)
 		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {

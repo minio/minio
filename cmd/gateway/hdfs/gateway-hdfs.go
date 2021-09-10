@@ -1,11 +1,11 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Object Storage (c) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,14 +36,14 @@ import (
 	krb "github.com/jcmturner/gokrb5/v8/client"
 	"github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/credentials"
+	"github.com/jcmturner/gokrb5/v8/keytab"
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/madmin"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -121,6 +121,23 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
+	keytabPath := env.Get("KRB5KEYTAB", "")
+	if keytabPath != "" {
+		kt, err := keytab.Load(keytabPath)
+		if err != nil {
+			return nil, err
+		}
+
+		username := env.Get("KRB5USERNAME", "")
+		realm := env.Get("KRB5REALM", "")
+		if username == "" || realm == "" {
+			return nil, errors.New("empty KRB5USERNAME or KRB5REALM")
+
+		}
+
+		return krb.NewWithKeytab(username, realm, kt, cfg), nil
+	}
+
 	// Determine the ccache location from the environment, falling back to the default location.
 	ccachePath := env.Get("KRB5CCNAME", fmt.Sprintf("/tmp/krb5cc_%s", u.Uid))
 	if strings.Contains(ccachePath, ":") {
@@ -140,7 +157,7 @@ func getKerberosClient() (*krb.Client, error) {
 }
 
 // NewGatewayLayer returns hdfs gatewaylayer.
-func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+func (g *HDFS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	dialFunc := (&net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -195,7 +212,7 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 
 	clnt, err := hdfs.NewClient(opts)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize hdfsClient")
+		return nil, fmt.Errorf("unable to initialize hdfsClient: %v", err)
 	}
 
 	if err = clnt.MkdirAll(minio.PathJoin(commonPath, hdfsSeparator, minioMetaTmpBucket), os.FileMode(0755)); err != nil {
@@ -205,13 +222,12 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 	return &hdfsObjects{clnt: clnt, subPath: commonPath, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
 }
 
-// Production - hdfs gateway is production ready.
-func (g *HDFS) Production() bool {
-	return true
-}
-
 func (n *hdfsObjects) Shutdown(ctx context.Context) error {
 	return n.clnt.Close()
+}
+
+func (n *hdfsObjects) LocalStorageInfo(ctx context.Context) (si minio.StorageInfo, errs []error) {
+	return n.StorageInfo(ctx)
 }
 
 func (n *hdfsObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, errs []error) {
@@ -222,7 +238,7 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, er
 	si.Disks = []madmin.Disk{{
 		UsedSpace: fsInfo.Used,
 	}}
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	si.Backend.GatewayOnline = true
 	return si, nil
 }
@@ -479,7 +495,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 	}
 
 	for _, fileInfo := range infos {
-		filePath := n.hdfsPathJoin(filePath, fileInfo.Name())
+		filePath := minio.PathJoin(filePath, fileInfo.Name())
 		fileInfos[filePath] = fileInfo
 	}
 
@@ -573,7 +589,7 @@ func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	pr, pw := io.Pipe()
 	go func() {
-		nerr := n.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
+		nerr := n.getObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(nerr)
 	}()
 
@@ -596,7 +612,7 @@ func (n *hdfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	})
 }
 
-func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOffset, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
+func (n *hdfsObjects) getObject(ctx context.Context, bucket, key string, startOffset, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	if _, err := n.clnt.Stat(n.hdfsPathJoin(bucket)); err != nil {
 		return hdfsToObjectErr(ctx, err, bucket)
 	}

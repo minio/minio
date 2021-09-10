@@ -7,38 +7,42 @@ Docker installed on your machine. Download the relevant installer from [here](ht
 MinIO needs a persistent volume to store configuration and application data. However, for testing purposes, you can launch MinIO by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
 
 ```sh
-docker run -p 9000:9000 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 To create a MinIO container with persistent storage, you need to map local persistent directories from the host OS to virtual config `~/.minio` and export `/data` directories. To do this, run the below commands
 
 #### GNU/Linux and macOS
 ```sh
-docker run -p 9000:9000 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
   --name minio1 \
   -v /mnt/data:/data \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 #### Windows
 ```sh
-docker run -p 9000:9000 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
   --name minio1 \
   -v D:\data:/data \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 ## Run Distributed MinIO on Docker
-Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose) or [Swarm mode](https://docs.min.io/docs/deploy-minio-on-docker-swarm). The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment.
-
-This means Docker Compose lets you quickly get started with Distributed MinIO on your computer - ideal for development, testing, staging environments. While deploying Distributed MinIO on Swarm offers a more robust, production level deployment.
+Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose). This means Docker Compose lets you quickly get started with Distributed MinIO on your computer - ideal for development, testing, staging environments. We recommend kubernetes based deployment for production level deployment https://github.com/minio/operator.
 
 ## MinIO Docker Tips
 
@@ -47,20 +51,26 @@ To override MinIO's auto-generated keys, you may pass secret and access keys exp
 
 #### GNU/Linux and macOS
 ```sh
-docker run -p 9000:9000 --name minio1 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  --name minio1 \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v /mnt/data:/data \
-  minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 #### Windows
 ```powershell
-docker run -p 9000:9000 --name minio1 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  --name minio1 \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
-  minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 ### Run MinIO Docker as a regular user
@@ -72,13 +82,15 @@ On Linux and macOS you can use `--user` to run the container as regular user.
 > NOTE: make sure --user has write permission to *${HOME}/data* prior to using `--user`.
 ```sh
 mkdir -p ${HOME}/data
-docker run -p 9000:9000 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
   --user $(id -u):$(id -g) \
   --name minio1 \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
   -v ${HOME}/data:/data \
-  minio/minio server /data
+  quay.io/minio/minio server /data
 ```
 
 #### Windows
@@ -87,13 +99,15 @@ On windows you would need to use [Docker integrated windows authentication](http
 > NOTE: make sure your AD/Windows user has write permissions to *D:\data* prior to using `credentialspec=`.
 
 ```powershell
-docker run -p 9000:9000 \
+docker run \
+  -p 9000:9000 \
+  -p 9001:9001 \
   --name minio1 \
   --security-opt "credentialspec=file://myuser.json"
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
-  minio/minio server /data
+  quay.io/minio/minio server /data
 ```
 
 ### MinIO Custom Access and Secret Keys using Docker secrets
@@ -106,7 +120,7 @@ echo "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" | docker secret create secret_ke
 
 Create a MinIO service using `docker service` to read from Docker secrets.
 ```
-docker service create --name="minio-service" --secret="access_key" --secret="secret_key" minio/minio server /data
+docker service create --name="minio-service" --secret="access_key" --secret="secret_key" quay.io/minio/minio server /data
 ```
 
 Read more about `docker service` [here](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/)
@@ -119,7 +133,7 @@ docker service create --name="minio-service" \
   --secret="my_secret_key" \
   --env="MINIO_ROOT_USER_FILE=my_access_key" \
   --env="MINIO_ROOT_PASSWORD_FILE=my_secret_key" \
-  minio/minio server /data
+  quay.io/minio/minio server /data
 ```
 `MINIO_ROOT_USER_FILE` and `MINIO_ROOT_PASSWORD_FILE` also support custom absolute paths, in case Docker secrets are mounted to custom locations or other tools are used to mount secrets into the container. For example, HashiCorp Vault injects secrets to `/vault/secrets`. With the custom names above, set the environment variables to
 ```
@@ -165,6 +179,5 @@ docker stats <container_id>
 ## Explore Further
 
 * [Deploy MinIO on Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose)
-* [Deploy MinIO on Docker Swarm](https://docs.min.io/docs/deploy-minio-on-docker-swarm)
 * [Distributed MinIO Quickstart Guide](https://docs.min.io/docs/distributed-minio-quickstart-guide)
 * [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
