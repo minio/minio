@@ -98,7 +98,7 @@ func (h *Target) Init() error {
 	// Drain any response.
 	xhttp.DrainBody(resp.Body)
 
-	if !acceptedRespondStatusCode(resp.StatusCode) {
+	if !acceptedResponseStatusCode(resp.StatusCode) {
 		switch resp.StatusCode {
 		case http.StatusForbidden:
 			return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
@@ -112,14 +112,11 @@ func (h *Target) Init() error {
 	return nil
 }
 
-//Accpet HTTP Statue Code
-var acceptedStatueCodeMap = map[int]bool{200: true, 201: true, 202: true}
+// Accepted HTTP Statue Codes
+var acceptedStatusCodeMap = map[int]bool{http.StatusOK: true, http.StatusCreated: true, http.StatusAccepted: true, http.StatusNoContent: true}
 
-func acceptedRespondStatusCode(code int) bool {
-	if _, ok := acceptedStatueCodeMap[code]; ok {
-		return true
-	}
-	return false
+func acceptedResponseStatusCode(code int) bool {
+	return acceptedStatusCodeMap[code]
 }
 
 func (h *Target) startHTTPLogger() {
