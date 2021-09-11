@@ -1156,6 +1156,7 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 
 // SpeedtestResult return value of the speedtest function
 type SpeedtestResult struct {
+	Endpoint  string
 	Uploads   uint64
 	Downloads uint64
 	Error     string
@@ -1163,8 +1164,9 @@ type SpeedtestResult struct {
 
 // SpeedtestObject implements "random-read" object reader
 type SpeedtestObject struct {
-	buf       []byte
-	remaining int
+	buf               []byte
+	remaining         int
+	totalBytesWritten *uint64
 }
 
 func (bo *SpeedtestObject) Read(b []byte) (int, error) {
@@ -1182,16 +1184,19 @@ func (bo *SpeedtestObject) Read(b []byte) (int, error) {
 	}
 	copy(b, bo.buf)
 	bo.remaining -= len(b)
+
+	atomic.AddUint64(bo.totalBytesWritten, uint64(len(b)))
 	return len(b), nil
 }
 
 // Runs the speedtest on local MinIO process.
 func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Duration) (SpeedtestResult, error) {
-	var result SpeedtestResult
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		return result, errServerNotInitialized
+		return SpeedtestResult{}, errServerNotInitialized
 	}
+
+	var retError string
 
 	bucket := minioMetaSpeedTestBucket
 
@@ -1200,15 +1205,16 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 
 	objCountPerThread := make([]uint64, concurrent)
 
-	var objUploadCount uint64
-	var objDownloadCount uint64
+	uploadsStopped := false
+	var totalBytesWritten uint64
+	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
 
-	doneCh1 := make(chan struct{})
 	go func() {
 		time.Sleep(duration)
-		close(doneCh1)
+		uploadsStopped = true
+		uploadsCancel()
 	}()
 
 	objNamePrefix := minioMetaSpeedTestBucketPrefix + uuid.New().String()
@@ -1218,35 +1224,37 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		go func(i int) {
 			defer wg.Done()
 			for {
-				hashReader, err := hash.NewReader(&SpeedtestObject{buf, size},
+				hashReader, err := hash.NewReader(&SpeedtestObject{buf, size, &totalBytesWritten},
 					int64(size), "", "", int64(size))
 				if err != nil {
+					retError = err.Error()
 					logger.LogIf(ctx, err)
 					break
 				}
 				reader := NewPutObjReader(hashReader)
-				_, err = objAPI.PutObject(ctx, bucket, fmt.Sprintf("%s.%d.%d",
+				_, err = objAPI.PutObject(uploadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{})
-				if err != nil {
+				if err != nil && !uploadsStopped {
+					retError = err.Error()
 					logger.LogIf(ctx, err)
+				}
+				if err != nil {
 					break
 				}
 				objCountPerThread[i]++
-				atomic.AddUint64(&objUploadCount, 1)
-				select {
-				case <-doneCh1:
-					return
-				default:
-				}
 			}
 		}(i)
 	}
 	wg.Wait()
 
-	doneCh2 := make(chan struct{})
+	downloadsStopped := false
+	var totalBytesRead uint64
+	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
+
 	go func() {
 		time.Sleep(duration)
-		close(doneCh2)
+		downloadsStopped = true
+		downloadsCancel()
 	}()
 
 	wg.Add(concurrent)
@@ -1254,34 +1262,39 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		go func(i int) {
 			defer wg.Done()
 			var j uint64
+			if objCountPerThread[i] == 0 {
+				return
+			}
 			for {
 				if objCountPerThread[i] == j {
 					j = 0
 				}
-				r, err := objAPI.GetObjectNInfo(ctx, bucket, fmt.Sprintf("%s.%d.%d",
+				r, err := objAPI.GetObjectNInfo(downloadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
-				if err != nil {
+				if err != nil && !downloadsStopped {
+					retError = err.Error()
 					logger.LogIf(ctx, err)
+				}
+				if err != nil {
 					break
 				}
-				_, err = io.Copy(ioutil.Discard, r)
+				n, err := io.Copy(ioutil.Discard, r)
 				r.Close()
-				if err != nil {
+
+				atomic.AddUint64(&totalBytesRead, uint64(n))
+				if err != nil && !downloadsStopped {
+					retError = err.Error()
 					logger.LogIf(ctx, err)
+				}
+				if err != nil {
 					break
 				}
 				j++
-				atomic.AddUint64(&objDownloadCount, 1)
-				select {
-				case <-doneCh2:
-					return
-				default:
-				}
 			}
 		}(i)
 	}
 	wg.Wait()
-	return SpeedtestResult{Uploads: objUploadCount, Downloads: objDownloadCount}, nil
+	return SpeedtestResult{Uploads: totalBytesWritten, Downloads: totalBytesRead, Error: retError}, nil
 }
 
 func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
