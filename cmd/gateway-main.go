@@ -280,7 +280,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		SecretKey: globalActiveCred.SecretKey,
 	})
 	if err != nil {
-		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 	newObject = NewGatewayLayerWithLocker(newObject)

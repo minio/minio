@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -34,9 +35,11 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/env"
 )
 
 func init() {
@@ -94,12 +97,16 @@ func s3GatewayMain(ctx *cli.Context) {
 	logger.FatalIf(minio.ValidateGatewayArguments(serverAddr, args.First()), "Invalid argument")
 
 	// Start the gateway..
-	minio.StartGateway(ctx, &S3{args.First()})
+	minio.StartGateway(ctx, &S3{
+		host:  args.First(),
+		debug: env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn,
+	})
 }
 
 // S3 implements Gateway.
 type S3 struct {
-	host string
+	host  string
+	debug bool
 }
 
 // Name implements Gateway interface.
@@ -217,6 +224,10 @@ func (g *S3) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error
 	clnt, err := newS3(g.host, t)
 	if err != nil {
 		return nil, err
+	}
+
+	if g.debug {
+		clnt.Client.TraceOn(os.Stderr)
 	}
 
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
