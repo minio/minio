@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -34,9 +35,11 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/env"
 )
 
 func init() {
@@ -198,6 +201,10 @@ func newS3(urlStr string, tripper http.RoundTripper) (*miniogo.Core, error) {
 	clnt, err := miniogo.New(endpoint, options)
 	if err != nil {
 		return nil, err
+	}
+
+	if env.Get("_MINIO_GATEWAY_DEBUG", config.EnableOff) == config.EnableOn {
+		clnt.TraceOn(os.Stderr)
 	}
 
 	return &miniogo.Core{Client: clnt}, nil
