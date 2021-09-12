@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2021-08-31T05-46-54Z
+  tag: RELEASE.2021-09-09T21-37-07Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2021-07-27T06-46-19Z
+  tag: RELEASE.2021-09-02T09-21-27Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed or gateway (nas)
@@ -318,3 +318,19 @@ networkPolicy:
 podDisruptionBudget:
   enabled: false
   maxUnavailable: 1
+
+## Specify the service account to use for the Minio pods. If 'create' is set to 'false'
+## and 'name' is left unspecified, the account 'default' will be used.
+serviceAccount:
+  create: true
+  ## The name of the service account to use. If 'create' is 'true', a service account with that name
+  ## will be created. Otherwise, a name will be auto-generated.
+  name:
+
+metrics:
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {}
+    # namespace: monitoring
+    # interval: 30s
+    # scrapeTimeout: 10s
