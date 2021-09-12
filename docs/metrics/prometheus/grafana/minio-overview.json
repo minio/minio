@@ -1539,7 +1539,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (server,api) (rate(minio_s3_requests_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (server,api) (increase(minio_s3_requests_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{server,api}}",
@@ -1635,7 +1635,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(minio_s3_requests_errors_total{job=\"$scrape_jobs\"}[$__rate_interval])",
+          "expr": "sum by (server,api) (increase(minio_s3_requests_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{server,api}}",
