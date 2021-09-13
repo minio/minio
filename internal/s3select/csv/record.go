@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/bcicen/jstream"
 	csv "github.com/minio/csvparser"
@@ -43,6 +45,20 @@ type Record struct {
 func (r *Record) Get(name string) (*sql.Value, error) {
 	index, found := r.nameIndexMap[name]
 	if !found {
+		// Check if index.
+		if strings.HasPrefix(name, "_") {
+			idx, err := strconv.Atoi(strings.TrimPrefix(name, "_"))
+			if err != nil {
+				return nil, fmt.Errorf("column %v not found", name)
+			}
+			// The position count starts at 1.
+			idx--
+			if idx >= len(r.csvRecord) || idx < 0 {
+				// If field index > number of columns, return null
+				return sql.FromNull(), nil
+			}
+			return sql.FromBytes([]byte(r.csvRecord[idx])), nil
+		}
 		return nil, fmt.Errorf("column %v not found", name)
 	}
 
