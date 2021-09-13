@@ -599,7 +599,7 @@ type metaCacheRPC struct {
 
 func (m *metaCacheRPC) setErr(err string) {
 	m.mu.Lock()
-	defer m.mu.Lock()
+	defer m.mu.Unlock()
 	meta := *m.meta
 	if meta.status != scanStateError {
 		meta.error = err
