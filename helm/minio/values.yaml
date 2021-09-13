@@ -324,8 +324,8 @@ podDisruptionBudget:
 serviceAccount:
   create: true
   ## The name of the service account to use. If 'create' is 'true', a service account with that name
-  ## will be created. Otherwise, a name will be auto-generated.
-  name:
+  ## will be created.
+  name: "minio-sa"
 
 metrics:
   serviceMonitor:
