@@ -27,7 +27,7 @@ import (
 
 type errorValidator struct{}
 
-func (e errorValidator) Validate(token, dsecs string) (map[string]interface{}, error) {
+func (e errorValidator) Validate(idToken, accessToken, dsecs string) (map[string]interface{}, error) {
 	return nil, ErrTokenExpired
 }
 
@@ -79,7 +79,7 @@ func TestValidators(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = v.Validate("", ""); err != ErrTokenExpired {
+	if _, err = v.Validate("", "", ""); err != ErrTokenExpired {
 		t.Fatalf("Expected error %s, got %s", ErrTokenExpired, err)
 	}
 
