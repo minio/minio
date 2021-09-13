@@ -58,9 +58,8 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 				return sql.FromNull(), nil
 			}
 			return sql.FromBytes([]byte(r.csvRecord[idx])), nil
-		} else {
-			return nil, fmt.Errorf("column %v not found", name)
 		}
+		return nil, fmt.Errorf("column %v not found", name)
 	}
 
 	if index >= int64(len(r.csvRecord)) {
