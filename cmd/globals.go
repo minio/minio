@@ -41,6 +41,7 @@ import (
 	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/config/subnet"
 	xhttp "github.com/minio/minio/internal/http"
 	etcd "go.etcd.io/etcd/client/v3"
 
@@ -219,8 +220,8 @@ var (
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName string
 
-	// The global subnet license
-	globalSubnetLicense string
+	// The global subnet config
+	globalSubnetConfig subnet.Config
 
 	globalRemoteEndpoints map[string]Endpoint
 

@@ -517,6 +517,11 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
 
+	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
+	}
+
 	// Load logger targets based on user's configuration
 	loggerUserAgent := getUserAgent(getMinioMode())
 
