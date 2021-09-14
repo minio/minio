@@ -138,7 +138,7 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 	var owner bool
 	s3Err := ErrAccessDenied
 	if _, ok := r.Header[xhttp.AmzContentSha256]; ok &&
-		getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) {
+		getRequestAuthType(r) == authTypeSigned {
 		// We only support admin credentials to access admin APIs.
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {
