@@ -991,6 +991,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 
 	var xlMeta xlMetaV2
 	if !isXL2V1Format(buf) {
+		// This is both legacy and without proper version.
 		err = xlMeta.AddVersion(fi)
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -1006,7 +1007,8 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	} else {
 		if err = xlMeta.Load(buf); err != nil {
 			logger.LogIf(ctx, err)
-			return err
+			// Corrupted data, reset and write.
+			xlMeta = xlMetaV2{}
 		}
 
 		if err = xlMeta.AddVersion(fi); err != nil {
@@ -1982,7 +1984,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		if isXL2V1Format(dstBuf) {
 			if err = xlMeta.Load(dstBuf); err != nil {
 				logger.LogIf(s.ctx, err)
-				return err
+				// Data appears corrupt. Drop data.
+				xlMeta = xlMetaV2{}
 			}
 		} else {
 			// This code-path is to preserve the legacy data.
@@ -1990,13 +1993,13 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(dstBuf, xlMetaLegacy); err != nil {
 				logger.LogIf(s.ctx, err)
-				return errFileCorrupt
+				// Data appears corrupt. Drop data.
+			} else {
+				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
+					logger.LogIf(s.ctx, err)
+				}
+				legacyPreserved = true
 			}
-			if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
-				logger.LogIf(s.ctx, err)
-				return errFileCorrupt
-			}
-			legacyPreserved = true
 		}
 	} else {
 		s.RLock()
