@@ -45,10 +45,10 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.6
+	github.com/minio/madmin-go v1.1.7-0.20211006220118-b4edc0a9f66b
 	github.com/minio/minio-go/v7 v7.0.15-0.20210928020726-a58653d41dd8
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.1.3
+	github.com/minio/pkg v1.1.4-0.20211003161842-fe8a77799a68
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
