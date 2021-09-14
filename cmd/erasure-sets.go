@@ -1292,9 +1292,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			if s.erasureDisks[m][n] != nil {
 				s.erasureDisks[m][n].Close()
 			}
-			storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
-			s.erasureDisks[m][n] = storageDisks[index]
-			s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
+
+			if storageDisks[index] != nil {
+				storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
+				s.erasureDisks[m][n] = storageDisks[index]
+				s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
+			}
 		}
 
 		// Replace reference format with what was loaded from disks.
