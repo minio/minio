@@ -3295,11 +3295,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	vID := opts.VersionID
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-		// check if replica has permission to be deleted.
-		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
-			return
-		}
 		opts.DeleteMarkerReplicationStatus = replication.Replica.String()
 		if opts.VersionPurgeStatus.Empty() {
 			// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
