@@ -405,11 +405,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
 			entName = pathClean(path.Join(folder.name, entName))
-			if entName == "" {
+			if entName == "" || entName == folder.name {
 				if f.dataUsageScannerDebug {
-					console.Debugf(scannerLogPrefix+" no bucket (%s,%s)\n", f.root, entName)
+					console.Debugf(scannerLogPrefix+" no entity (%s,%s)\n", f.root, entName)
 				}
-				return errDoneForNow
+				return nil
 			}
 			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
@@ -435,7 +435,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			if typ&os.ModeDir != 0 {
 				h := hashPath(entName)
 				_, exists := f.oldCache.Cache[h.Key()]
-
+				if h == thisHash {
+					return nil
+				}
 				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
 				delete(abandonedChildren, h.Key()) // h.Key() already accounted for.
 				if exists {
@@ -468,11 +470,14 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			item.heal = item.heal && f.healObjectSelect > 0
 
 			sz, err := f.getSize(item)
-			if err == errSkipFile {
+			if err != nil {
 				wait() // wait to proceed to next entry.
-
+				if err != errSkipFile && f.dataUsageScannerDebug {
+					console.Debugf(scannerLogPrefix+" getSize \"%v/%v\" returned err: %v\n", bucket, item.objectPath(), err)
+				}
 				return nil
 			}
+
 			// successfully read means we have a valid object.
 			foundObjects = true
 			// Remove filename i.e is the meta file to construct object name
