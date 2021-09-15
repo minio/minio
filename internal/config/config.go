@@ -58,6 +58,7 @@ const (
 	RegionName = "name"
 	AccessKey  = "access_key"
 	SecretKey  = "secret_key"
+	License    = "license"
 )
 
 // Top level config constants.
@@ -79,6 +80,7 @@ const (
 	HealSubSys           = "heal"
 	ScannerSubSys        = "scanner"
 	CrawlerSubSys        = "crawler"
+	SubnetSubSys         = "subnet"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -127,6 +129,7 @@ var SubSystems = set.CreateStringSet(
 	NotifyPostgresSubSys,
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
+	SubnetSubSys,
 )
 
 // SubSystemsDynamic - all sub-systems that have dynamic config.
@@ -135,6 +138,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	CompressionSubSys,
 	ScannerSubSys,
 	HealSubSys,
+	SubnetSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.

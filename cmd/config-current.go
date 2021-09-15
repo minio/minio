@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/scanner"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/config/subnet"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
@@ -65,6 +66,7 @@ func initHelp() {
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
 		config.HealSubSys:           heal.DefaultKVS,
 		config.ScannerSubSys:        scanner.DefaultKVS,
+		config.SubnetSubSys:         subnet.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -185,6 +187,12 @@ func initHelp() {
 			Description:     "publish bucket notifications to Redis datastores",
 			MultipleTargets: true,
 		},
+		config.HelpKV{
+			Key:         config.SubnetSubSys,
+			Type:        "string",
+			Description: "set subnet config for the cluster e.g. license token",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -223,6 +231,7 @@ func initHelp() {
 		config.NotifyRedisSubSys:    notify.HelpRedis,
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
+		config.SubnetSubSys:         subnet.HelpLicense,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -506,6 +515,11 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
+	}
+
+	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
 
 	// Load logger targets based on user's configuration
