@@ -177,6 +177,18 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 		if secureCiphers || fips.Enabled {
 			tlsConfig.CipherSuites = fips.CipherSuitesTLS()
 			tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+		} else {
+			// This is temp. solution until we use Go 1.17 for releases.
+			// Go 1.17 disables the ciphers below by default.
+			for _, cipher := range tls.CipherSuites() {
+				if cipher.ID == tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA {
+					continue
+				}
+				if cipher.ID == tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA {
+					continue
+				}
+				tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
+			}
 		}
 	}
 
