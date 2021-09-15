@@ -144,6 +144,9 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)
 		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ClientID)
 		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
+		if globalOpenIDConfig.ClaimUserinfo {
+			os.Setenv("CONSOLE_IDP_USERINFO", "on")
+		}
 		if globalOpenIDConfig.RedirectURI != "" {
 			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.RedirectURI)
 		} else {
