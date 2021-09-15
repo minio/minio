@@ -258,6 +258,12 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 		updates <- totalCache.dui(dataUsageRoot, buckets)
 		return nil
 	}
+	for i, b := range buckets {
+		if isReservedOrInvalidBucket(b.Name, false) {
+			// Delete bucket...
+			buckets = append(buckets[:i], buckets[i+1:]...)
+		}
+	}
 
 	totalCache.Info.BloomFilter = bf.bytes()
 
@@ -282,6 +288,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 			bCache.Info.Name = b.Name
 		}
 		bCache.Info.BloomFilter = totalCache.Info.BloomFilter
+		bCache.Info.NextCycle = wantCycle
 		upds := make(chan dataUsageEntry, 1)
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -290,7 +297,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 			for update := range upds {
 				totalCache.replace(b.Name, dataUsageRoot, update)
 				if intDataUpdateTracker.debug {
-					logger.Info(color.Green("NSScanner:")+" Got update:", len(totalCache.Cache))
+					logger.Info(color.Green("NSScanner:")+" Got update: %v", len(totalCache.Cache))
 				}
 				cloned := totalCache.clone()
 				updates <- cloned.dui(dataUsageRoot, buckets)
