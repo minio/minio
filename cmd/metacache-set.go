@@ -720,26 +720,23 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 		return nil
 	})
 
-	metaMu.Lock()
+	// Blocks while consuming entries or an error occurs.
+	err = bw.Close()
 	if err != nil {
 		mc.setErr(err.Error())
-		return
+	}
+	metaMu.Lock()
+	defer metaMu.Unlock()
+	if mc.meta.error != "" {
+		return err
 	}
 	// Save success
-	if mc.meta.error == "" {
-		mc.meta.status = scanStateSuccess
+	mc.meta.status = scanStateSuccess
+	meta, err := o.updateMetacacheListing(*mc.meta, rpc)
+	if err == nil {
+		*mc.meta = meta
 	}
-
-	meta := *mc.meta
-	meta, _ = o.updateMetacacheListing(meta, rpc)
-	*mc.meta = meta
-	metaMu.Unlock()
-
-	if err := bw.Close(); err != nil {
-		mc.setErr(err.Error())
-	}
-
-	return
+	return nil
 }
 
 type listPathRawOptions struct {
