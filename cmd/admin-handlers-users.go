@@ -522,13 +522,65 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		targetGroups []string
 	)
 
+	// If the request did not set a TargetUser, the service account is
+	// created for the request sender.
 	targetUser = createReq.TargetUser
+	if targetUser == "" {
+		targetUser = cred.AccessKey
+	}
 
-	// Need permission if we are creating a service acccount
-	// for a user <> to the request sender
-	if targetUser != "" && targetUser != cred.AccessKey {
+	opts := newServiceAccountOpts{
+		accessKey: createReq.AccessKey,
+		secretKey: createReq.SecretKey,
+	}
+
+	// Find the user for the request sender (as it may be sent via a service
+	// account or STS account):
+	requestorUser := cred.AccessKey
+	requestorParentUser := cred.AccessKey
+	requestorGroups := cred.Groups
+	requestorIsDerivedCredential := false
+	if cred.IsServiceAccount() || cred.IsTemp() {
+		requestorParentUser = cred.ParentUser
+		requestorIsDerivedCredential = true
+	}
+
+	// Check if we are creating svc account for request sender.
+	isSvcAccForRequestor := false
+	if targetUser == requestorUser || targetUser == requestorParentUser {
+		isSvcAccForRequestor = true
+	}
+
+	// If we are creating svc account for request sender, ensure
+	// that targetUser is a real user (i.e. not derived
+	// credentials).
+	if isSvcAccForRequestor {
+		if requestorIsDerivedCredential {
+			if requestorParentUser == "" {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+					errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+				return
+			}
+			targetUser = requestorParentUser
+		}
+		targetGroups = requestorGroups
+
+		// In case of LDAP we need to set `opts.ldapUsername` to ensure
+		// it is associated with the LDAP user properly. We _only_ do
+		// this if this user is in LDAP (the other possibility is the
+		// root user).
+		if globalLDAPConfig.Enabled {
+			v1, ok1 := cred.Claims[ldapUserN]
+			v2, ok2 := v1.(string)
+			if ok1 && ok2 {
+				opts.ldapUsername = v2
+			}
+		}
+	} else {
+		// Need permission if we are creating a service acccount for a
+		// user <> to the request sender
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     cred.AccessKey,
+			AccountName:     requestorUser,
 			Action:          iampolicy.CreateServiceAccountAdminAction,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
@@ -537,36 +589,22 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-	}
 
-	var ldapUsername string
-	if globalLDAPConfig.Enabled && targetUser != "" {
-		// If LDAP enabled, service accounts need
-		// to be created only for LDAP users.
-		var err error
-		ldapUsername = targetUser
-		targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		// targerUser is set to bindDN at this point in time.
-		// targetGroups is set to the groups at this point in time.
-	} else {
-		if cred.IsServiceAccount() || cred.IsTemp() {
-			if cred.ParentUser == "" {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
-					errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+		// In case of LDAP we need to resolve the targetUser to a DN and
+		// query their groups:
+		if globalLDAPConfig.Enabled {
+			opts.ldapUsername = targetUser
+			targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
-			if targetUser == "" {
-				targetUser = cred.ParentUser
-			}
 		}
-		// targetGroups not yet set, so set this to cred.Groups
-		if len(targetGroups) == 0 {
-			targetGroups = cred.Groups
-		}
+
+		// NOTE: if not using LDAP, then internal IDP or open ID is
+		// being used - in the former, group info is enforced when
+		// generated credentials are used to make requests, and in the
+		// latter, a group notion is not supported.
 	}
 
 	var sp *iampolicy.Policy
@@ -578,14 +616,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	opts := newServiceAccountOpts{
-		accessKey:     createReq.AccessKey,
-		secretKey:     createReq.SecretKey,
-		sessionPolicy: sp,
-	}
-	if ldapUsername != "" {
-		opts.ldapUsername = ldapUsername
-	}
+	opts.sessionPolicy = sp
 	newCred, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
