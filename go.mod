@@ -45,7 +45,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.5
+	github.com/minio/madmin-go v1.1.6-0.20210917204419-f12dc0d0a8bd
 	github.com/minio/minio-go/v7 v7.0.14
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.1.3
@@ -68,7 +68,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/procfs v0.6.0
+	github.com/prometheus/procfs v0.7.3
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.21.7

@@ -306,8 +306,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	metadata := r.Form.Get("metadata") == "true"
-
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil && globalBucketFederation {
@@ -369,49 +367,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		if len(bucketsInfo) == 0 {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 			return
-		}
-	}
-
-	if metadata && !globalIsGateway {
-		usageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		for i, bucket := range bucketsInfo {
-			if bu, ok := usageInfo.BucketsUsage[bucket.Name]; ok {
-				bucketsInfo[i].Usage = &BucketUsageInfo{
-					Size:                 bu.Size,
-					ObjectsCount:         bu.ObjectsCount,
-					ObjectSizesHistogram: StringMap{},
-				}
-				for k, v := range bu.ObjectSizesHistogram {
-					bucketsInfo[i].Usage.ObjectSizesHistogram[k] = fmt.Sprint(v)
-				}
-			} else {
-				bucketsInfo[i].Usage = &BucketUsageInfo{
-					ObjectSizesHistogram: StringMap{},
-				}
-			}
-			lcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
-			quota, _ := globalBucketQuotaSys.Get(bucket.Name)
-			var bquota *BucketQuotaConfig
-			if quota != nil {
-				bquota = &BucketQuotaConfig{
-					Quota: quota.Quota,
-					Type:  quota.Type,
-				}
-			}
-			rcfg, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket.Name)
-			tcfg, _ := globalBucketMetadataSys.GetTaggingConfig(bucket.Name)
-			bucketsInfo[i].Details = &BucketDetailsInfo{
-				Versioning:          globalBucketVersioningSys.Enabled(bucket.Name),
-				VersioningSuspended: globalBucketVersioningSys.Suspended(bucket.Name),
-				Replication:         rcfg != nil,
-				Locking:             lcfg.LockEnabled,
-				Quota:               bquota,
-				Tagging:             tcfg,
-			}
 		}
 	}
 

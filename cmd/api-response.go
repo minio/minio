@@ -240,16 +240,6 @@ type CommonPrefix struct {
 type Bucket struct {
 	Name         string
 	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
-
-	// Usage size of the bucket not reflective of
-	// actual usage atomically, but an ever increasing
-	// value.
-	Usage *BucketUsageInfo `xml:"Usage,omitempty"`
-
-	// Provides information about various bucket features
-	// enabled such as versioning, object locking, tagging
-	// quota, replication config etc.
-	Details *BucketDetailsInfo `xml:"Details,omitempty"`
 }
 
 // ObjectVersion container for object version metadata
@@ -437,8 +427,6 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 		listbuckets = append(listbuckets, Bucket{
 			Name:         bucket.Name,
 			CreationDate: bucket.Created.UTC().Format(iso8601TimeFormat),
-			Usage:        bucket.Usage,
-			Details:      bucket.Details,
 		})
 	}
 
