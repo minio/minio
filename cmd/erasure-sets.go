@@ -893,12 +893,16 @@ func (s *erasureSets) GetObjectInfo(ctx context.Context, bucket, object string, 
 }
 
 func (s *erasureSets) deletePrefix(ctx context.Context, bucket string, prefix string) error {
+	var wg sync.WaitGroup
+	wg.Add(len(s.sets))
 	for _, s := range s.sets {
-		_, err := s.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
-		if err != nil {
-			return err
-		}
+		go func(s *erasureObjects) {
+			defer wg.Done()
+			// This is a force delete, no reason to throw errors.
+			s.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
+		}(s)
 	}
+	wg.Wait()
 	return nil
 }
 

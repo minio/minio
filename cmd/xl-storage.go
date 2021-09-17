@@ -857,10 +857,13 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			// Create a new xl.meta with a delete marker in it
 			return s.WriteMetadata(ctx, volume, path, fi)
 		}
-		if fi.VersionID != "" {
-			return errFileVersionNotFound
+		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
+		if err != nil {
+			if err == errFileNotFound && fi.VersionID != "" {
+				return errFileVersionNotFound
+			}
+			return err
 		}
-		return errFileNotFound
 	}
 
 	if len(buf) == 0 {
@@ -1111,16 +1114,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 
 	if err != nil {
 		if err == errFileNotFound {
-			if err = s.renameLegacyMetadata(volumeDir, path); err != nil {
-				if err == errFileNotFound {
-					if versionID != "" {
-						return fi, errFileVersionNotFound
-					}
-					return fi, errFileNotFound
-				}
-				return fi, err
-			}
-			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
+			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
 			if err != nil {
 				if err == errFileNotFound {
 					if versionID != "" {
