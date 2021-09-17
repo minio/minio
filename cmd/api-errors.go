@@ -1787,12 +1787,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 
 	// Only return ErrClientDisconnected if the provided context is actually canceled.
 	// This way downstream context.Canceled will still report ErrOperationTimedOut
-	select {
-	case <-ctx.Done():
+	if contextCanceled(ctx) {
 		if ctx.Err() == context.Canceled {
 			return ErrClientDisconnected
 		}
-	default:
 	}
 
 	switch err {
