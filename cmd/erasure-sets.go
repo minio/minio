@@ -859,10 +859,7 @@ func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, er
 	}
 
 	for _, v := range healBuckets {
-		listBuckets = append(listBuckets, BucketInfo{
-			Name:    v.Name,
-			Created: v.Created,
-		})
+		listBuckets = append(listBuckets, BucketInfo(v))
 	}
 
 	sort.Slice(listBuckets, func(i, j int) bool {

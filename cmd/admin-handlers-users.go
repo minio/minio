@@ -1081,8 +1081,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		if rd || wr {
 			// Fetch the data usage of the current bucket
 			var size uint64
+			var objectsCount uint64
+			var objectsHist map[string]uint64
 			if !dataUsageInfo.LastUpdate.IsZero() {
 				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
+				objectsCount = dataUsageInfo.BucketsUsage[bucket.Name].ObjectsCount
+				objectsHist = dataUsageInfo.BucketsUsage[bucket.Name].ObjectSizesHistogram
 			}
 			// Fetch the prefix usage of the current bucket
 			var prefixUsage map[string]uint64
@@ -1093,11 +1097,27 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 					logger.LogIf(ctx, err)
 				}
 			}
+
+			lcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
+			quota, _ := globalBucketQuotaSys.Get(bucket.Name)
+			rcfg, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket.Name)
+			tcfg, _ := globalBucketMetadataSys.GetTaggingConfig(bucket.Name)
+
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
-				Name:        bucket.Name,
-				Created:     bucket.Created,
-				Size:        size,
-				PrefixUsage: prefixUsage,
+				Name:                 bucket.Name,
+				Created:              bucket.Created,
+				Size:                 size,
+				Objects:              objectsCount,
+				ObjectSizesHistogram: objectsHist,
+				PrefixUsage:          prefixUsage,
+				Details: &madmin.BucketDetails{
+					Versioning:          globalBucketVersioningSys.Enabled(bucket.Name),
+					VersioningSuspended: globalBucketVersioningSys.Suspended(bucket.Name),
+					Replication:         rcfg != nil,
+					Locking:             lcfg.LockEnabled,
+					Quota:               quota,
+					Tagging:             tcfg,
+				},
 				Access: madmin.AccountAccess{
 					Read:  rd,
 					Write: wr,

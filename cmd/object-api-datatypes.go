@@ -24,7 +24,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
 )
@@ -71,30 +70,6 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
 }
 
-// BucketUsageInfo represents per bucket usage statistics
-type BucketUsageInfo struct {
-	Size                 uint64
-	ObjectsCount         uint64
-	ObjectSizesHistogram StringMap
-}
-
-// BucketQuotaConfig holds bucket quota restrictions
-type BucketQuotaConfig struct {
-	Quota uint64
-	Type  madmin.QuotaType
-}
-
-// BucketDetailsInfo provides information about features currently
-// turned-on per bucket.
-type BucketDetailsInfo struct {
-	Versioning          bool
-	VersioningSuspended bool
-	Locking             bool
-	Replication         bool
-	Tagging             *tags.Tags         `xml:",omitempty"`
-	Quota               *BucketQuotaConfig `xml:",omitempty"`
-}
-
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
 	// Name of the bucket.
@@ -102,16 +77,6 @@ type BucketInfo struct {
 
 	// Date and time when the bucket was created.
 	Created time.Time
-
-	// Usage size of the bucket not reflective of
-	// actual usage atomically, but an ever increasing
-	// value.
-	Usage *BucketUsageInfo `xml:",omitempty"`
-
-	// Provides information about various bucket features
-	// enabled such as versioning, object locking, tagging
-	// quota, replication config etc.
-	Details *BucketDetailsInfo `xml:",omitempty"`
 }
 
 // ObjectInfo - represents object metadata.
