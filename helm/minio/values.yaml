@@ -307,6 +307,7 @@ environment:
   ## Please refer for comprehensive list https://docs.min.io/minio/baremetal/reference/minio-server/minio-server.html
   ## MINIO_SUBNET_LICENSE: "License key obtained from https://subnet.min.io"
   ## MINIO_BROWSER: "off"
+  MINIO_PROMETHEUS_AUTH_TYPE: public
 
 networkPolicy:
   enabled: false

@@ -1,6 +1,6 @@
 {{- if .Values.metrics.serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: {{ template "minio.fullname" . }}
   {{- if .Values.metrics.serviceMonitor.namespace }}
@@ -15,7 +15,7 @@ metadata:
 {{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
     {{- end }}
 spec:
-  endpoints:
+  podMetricsEndpoints:
     {{- if .Values.tls.enabled }}
     - port: https
     {{ else }}
@@ -28,9 +28,6 @@ spec:
       {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
       {{- end }}
-      bearerTokenSecret:
-        name: {{ template "minio.fullname" . }}-prometheus
-        key: token
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace | quote }}
