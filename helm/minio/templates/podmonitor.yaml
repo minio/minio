@@ -1,18 +1,18 @@
-{{- if .Values.metrics.serviceMonitor.enabled }}
+{{- if .Values.metrics.podMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: {{ template "minio.fullname" . }}
-  {{- if .Values.metrics.serviceMonitor.namespace }}
-  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{- if .Values.metrics.podMonitor.namespace }}
+  namespace: {{ .Values.metrics.podMonitor.namespace }}
   {{- end }}
   labels:
     app: {{ template "minio.name" . }}
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-    {{- if .Values.metrics.serviceMonitor.additionalLabels }}
-{{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
+    {{- if .Values.metrics.podMonitor.additionalLabels }}
+{{ toYaml .Values.metrics.podMonitor.additionalLabels | indent 4 }}
     {{- end }}
 spec:
   podMetricsEndpoints:
@@ -22,11 +22,16 @@ spec:
     - port: http
     {{- end }}
       path: /minio/v2/metrics/cluster
-      {{- if .Values.metrics.serviceMonitor.interval }}
-      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      {{- if .Values.metrics.podMonitor.interval }}
+      interval: {{ .Values.metrics.podMonitor.interval }}
       {{- end }}
-      {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
-      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- if .Values.metrics.podMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.metrics.podMonitor.scrapeTimeout }}
+      {{- end }}
+      {{- if not .Values.metrics.podMonitor.public }}
+      bearerTokenSecret:
+        name: {{ template "minio.fullname" . }}-prometheus
+        key: token
       {{- end }}
   namespaceSelector:
     matchNames:
