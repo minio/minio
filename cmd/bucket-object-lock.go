@@ -93,7 +93,7 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 	if gerr != nil { // error from GetObjectInfo
 		switch gerr.(type) {
 		case MethodNotAllowed: // This happens usually for a delete marker
-			if oi.DeleteMarker {
+			if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 				// Delete marker should be present and valid.
 				return ErrNone
 			}
