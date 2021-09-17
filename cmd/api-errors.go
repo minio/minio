@@ -1796,6 +1796,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	}
 
 	switch err {
+	case errVolumeNotFound:
+		apiErr = ErrNoSuchBucket
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:

@@ -123,6 +123,9 @@ func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string)
 	configFile := path.Join(bucketConfigPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, api, configFile)
 	if err != nil {
+		if err == errConfigNotFound {
+			err = errVolumeNotFound
+		}
 		return err
 	}
 	if len(data) <= 4 {
@@ -149,7 +152,7 @@ func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string)
 func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket string) (BucketMetadata, error) {
 	b := newBucketMetadata(bucket)
 	err := b.Load(ctx, objectAPI, b.Name)
-	if err != nil && !errors.Is(err, errConfigNotFound) {
+	if err != nil {
 		return b, err
 	}
 
