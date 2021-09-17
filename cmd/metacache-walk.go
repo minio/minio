@@ -87,7 +87,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	// Fast exit track to check if we are listing an object with
 	// a trailing slash, this will avoid to list the object content.
 	if HasSuffix(opts.BaseDir, SlashSeparator) {
-		metadata, err := s.readMetadata(pathJoin(volumeDir,
+		metadata, err := s.readMetadata(ctx, pathJoin(volumeDir,
 			opts.BaseDir[:len(opts.BaseDir)-1]+globalDirSuffix,
 			xlStorageFormatFile))
 		if err == nil {
@@ -175,7 +175,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
 				s.walkReadMu.Lock()
-				meta.metadata, err = s.readMetadata(pathJoin(volumeDir, current, entry))
+				meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, current, entry))
 				s.walkReadMu.Unlock()
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -250,7 +250,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			}
 
 			s.walkReadMu.Lock()
-			meta.metadata, err = s.readMetadata(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+			meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 			s.walkReadMu.Unlock()
 			switch {
 			case err == nil:
@@ -300,9 +300,15 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
 	defer p.updateStorageMetrics(storageMetricWalkDir, opts.Bucket, opts.BaseDir)()
+
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
+
 	return p.storage.WalkDir(ctx, opts, wr)
 }
 

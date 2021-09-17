@@ -1834,7 +1834,7 @@ func TestXLStorageReadMetadata(t *testing.T) {
 	}
 
 	disk.MakeVol(context.Background(), volume)
-	if _, err := disk.readMetadata(pathJoin(tmpDir, volume, object)); err != errFileNameTooLong {
+	if _, err := disk.readMetadata(context.Background(), pathJoin(tmpDir, volume, object)); err != errFileNameTooLong {
 		t.Fatalf("Unexpected error from readMetadata - expect %v: got %v", errFileNameTooLong, err)
 	}
 }
