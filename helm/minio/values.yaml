@@ -328,7 +328,7 @@ serviceAccount:
   name: "minio-sa"
 
 metrics:
-  podMonitor:
+  serviceMonitor:
     enabled: false
     additionalLabels: {}
     public: true
