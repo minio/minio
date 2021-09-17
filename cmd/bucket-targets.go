@@ -156,6 +156,10 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if !found && !update {
 		newtgts = append(newtgts, *tgt)
 	}
+	// cancel health check for previous target client to avoid leak.
+	if prevClnt, ok := sys.arnRemotesMap[tgt.Arn]; ok && prevClnt.healthCancelFn != nil {
+		prevClnt.healthCancelFn()
+	}
 
 	sys.targetsMap[bucket] = newtgts
 	sys.arnRemotesMap[tgt.Arn] = clnt
