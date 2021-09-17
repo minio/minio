@@ -683,6 +683,24 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInsecureConnection, errors.New("No TLS connection attempt"))
 		return
 	}
+
+	// A client may send a certificate chain such that we end up
+	// with multiple peer certificates. However, we can only accept
+	// a single client certificate. Otherwise, the certificate to
+	// policy mapping would be ambigious.
+	// However, we can filter all CA certificates and only check
+	// whether they client has sent exactly one (non-CA) leaf certificate.
+	var peerCertificates = make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
+	for _, cert := range r.TLS.PeerCertificates {
+		if cert.IsCA {
+			continue
+		}
+		peerCertificates = append(peerCertificates, cert)
+	}
+	r.TLS.PeerCertificates = peerCertificates
+
+	// Now, we have to check that the client has provided exactly one leaf
+	// certificate that we can map to a policy.
 	if len(r.TLS.PeerCertificates) == 0 {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("No client certificate provided"))
 		return
@@ -693,7 +711,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	var certificate = r.TLS.PeerCertificates[0]
-	if !globalSTSTLSConfig.InsecureSkipVerify {
+	if !globalSTSTLSConfig.InsecureSkipVerify { // Verify whether the client certificate has been issued by a trusted CA.
 		_, err := certificate.Verify(x509.VerifyOptions{
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageClientAuth,
