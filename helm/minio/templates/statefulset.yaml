@@ -127,7 +127,7 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
-            {{- if .Values.metrics.podMonitor.public }}
+            {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
             {{- end}}
