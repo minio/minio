@@ -351,10 +351,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 
 	for {
-		select {
-		case <-ctx.Done():
+		if contextCanceled(ctx) {
 			return entries, ctx.Err()
-		default:
 		}
 
 		// If many failures, check the cache state.
@@ -424,10 +422,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// We got a stream to start at.
 		loadedPart := 0
 		for {
-			select {
-			case <-ctx.Done():
+			if contextCanceled(ctx) {
 				return entries, ctx.Err()
-			default:
 			}
 
 			if partN != loadedPart {

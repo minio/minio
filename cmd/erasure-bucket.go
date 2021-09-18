@@ -104,10 +104,7 @@ func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (
 			if err != nil {
 				return err
 			}
-			bucketsInfo[index] = BucketInfo{
-				Name:    volInfo.Name,
-				Created: volInfo.Created,
-			}
+			bucketsInfo[index] = BucketInfo(volInfo)
 			return nil
 		}, index)
 	}

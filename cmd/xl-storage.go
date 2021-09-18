@@ -397,7 +397,11 @@ func (s *xlStorage) Healing() *healingTracker {
 	return &h
 }
 
-func (s *xlStorage) readMetadata(itemPath string) ([]byte, error) {
+func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, error) {
+	if contextCanceled(ctx) {
+		return nil, ctx.Err()
+	}
+
 	if err := checkPathLength(itemPath); err != nil {
 		return nil, err
 	}
@@ -468,7 +472,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 
-		buf, err := s.readMetadata(item.Path)
+		buf, err := s.readMetadata(ctx, item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -791,6 +795,10 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
+	if contextCanceled(ctx) {
+		return nil, ctx.Err()
+	}
+
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1090,7 +1098,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if readData {
 		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	} else {
-		buf, err = s.readMetadata(pathJoin(volumeDir, path, xlStorageFormatFile))
+		buf, err = s.readMetadata(ctx, pathJoin(volumeDir, path, xlStorageFormatFile))
 		if err != nil {
 			if osIsNotExist(err) {
 				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
