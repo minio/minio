@@ -269,6 +269,9 @@ makeUserJob:
   resources:
     requests:
       memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 ## List of buckets to be created after minio install
 ##
@@ -300,6 +303,9 @@ makeBucketJob:
   resources:
     requests:
       memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed

@@ -32,13 +32,13 @@ spec:
 {{- include "minio.imagePullSecrets" . | indent 6 }}
 {{- if .Values.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.nodeSelector | indent 8 }}
+{{ toYaml .Values.makeBucketJob.nodeSelector | indent 8 }}
 {{- end }}
-{{- with .Values.affinity }}
+{{- with .Values.makeBucketJob.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- with .Values.tolerations }}
+{{- with .Values.makeBucketJob.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
 {{- end }}
