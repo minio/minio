@@ -28,14 +28,10 @@ type DeletedObject struct {
 	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
 	ObjectName            string `xml:"Key,omitempty"`
 	VersionID             string `xml:"VersionId,omitempty"`
-
-	// MinIO extensions to support delete marker replication
-	// Replication status of DeleteMarker
-	DeleteMarkerReplicationStatus string `xml:"DeleteMarkerReplicationStatus,omitempty"`
 	// MTime of DeleteMarker on source that needs to be propagated to replica
-	DeleteMarkerMTime DeleteMarkerMTime `xml:"DeleteMarkerMTime,omitempty"`
-	// Status of versioned delete (of object or DeleteMarker)
-	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus,omitempty"`
+	DeleteMarkerMTime DeleteMarkerMTime `xml:"-"`
+	// MinIO extensions to support delete marker replication
+	ReplicationState ReplicationState `xml:"-"`
 }
 
 // DeleteMarkerMTime is an embedded type containing time.Time for XML marshal
@@ -60,8 +56,10 @@ type ObjectToDelete struct {
 	DeleteMarkerReplicationStatus string `xml:"DeleteMarkerReplicationStatus"`
 	// Status of versioned delete (of object or DeleteMarker)
 	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus"`
-	// Version ID of delete marker
-	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId"`
+	// VersionPurgeStatuses holds the internal
+	VersionPurgeStatuses string `xml:"VersionPurgeStatuses"`
+	// ReplicateDecisionStr stringified representation of replication decision
+	ReplicateDecisionStr string `xml:"-"`
 }
 
 // createBucketConfiguration container for bucket configuration request from client.

@@ -20,6 +20,8 @@ The description above details one way replication from source to target w.r.t in
 
 For active-active replication, automatic failover occurs on `GET/HEAD` operations if object or object version requested qualifies for replication and is missing on one site, but present on the other. This allows the applications to take full advantage of two-way replication even before the two sites get fully synced.
 
+In the case of multi destination replication, the replication status shows `COMPLETED` only after the replication operation succeeds on each of the targets specified in the replication configuration. If multiple targets are configured to use active-active replication and multi destination replication, the administrator should ensure that the replication features enabled (such as replica metadata sync, delete marker replication etc) are identical to avoid asymmetric state. This is because all replication activity is inherently a one-way operation from source to target, irrespective of the number of targets.
+
 ### Replication of DeleteMarker and versioned Delete
 
 MinIO allows DeleteMarker replication and versioned delete replication by setting `--replicate delete,delete-marker` while setting up replication configuration using `mc replicate add`. The MinIO implementation is based on V2 configuration, however it has been extended to allow both DeleteMarker replication and replication of versioned deletes with the `DeleteMarkerReplication` and `DeleteReplication` fields in the replication configuration. By default, this is set to `Disabled` unless the user specifies it while adding a replication rule.
@@ -37,56 +39,87 @@ Note that synchronous replication, i.e. when remote target is configured with --
 Existing object replication works similar to regular replication. Objects qualifying for existing object replication are detected when scanner runs, and will be replicated if existing object replication is enabled and applicable replication rules are satisfied. Because replication depends on the immutability of versions, only pre-existing objects created while versioning was enabled can be replicated. Even if replication rules are disabled and re-enabled later, the objects created during the interim will be synced as the scanner queues them. For saving iops, objects qualifying for
 existing object replication are not marked as `PENDING` prior to replication.
 
+Note that objects with `null` versions, i.e. objects created prior to enabling versioning cannot be replicated as this would break the immutability guarantees provided by versioning. For replicating such objects, `mc cp alias/bucket/object alias/bucket/object` can be performed to create a server side copy of the object as a versioned object - this versioned object will replicate if replication is enabled and the previously present `null` version can then be deleted.
+
 If the remote site is fully lost and objects previously replicated need to be re-synced, the `mc replicate resync` command with optional flag of `--older-than` needs to be used to trigger re-syncing of previously replicated objects. This command generates a ResetID which is a unique UUID saved to the remote target config along with the applicable date(defaults to time of initiating the reset). All objects created prior to this date are eligible for re-replication if existing object replication is enabled for the replication rule the object satisfies. At the time of completion of replication, `X-Minio-Replication-Reset-Status` is set in the metadata with the timestamp of replication and ResetID. For saving iops, the objects which are re-replicated are not first set to `PENDING` state.
+
+### Multi destination replication
+The replication design for multiple sites works in a similar manner as described above for two site scenario. However there are some
+important exceptions.
+
+Replication status on the source cluster will be marked as `COMPLETED` only after replication is completed on all targets. If one or more targets failed replication, the replication status is reflected as `PENDING`.
+
+If 3 or more targets are participating in active-active replication, the replication configuration for replica metadata sync, delete marker replication and delete replication should match to avoid inconsistent picture between the clusters. It is not recommended to turn on asymmetric replication - for e.g. if three sites A,B,C are participating in replication, it would be better to avoid replication setups like A -> [B, C], B -> A. In this particular example, an object uploaded to A will be replicated to B,C. If replica metadata sync is turned on in site B, any metadata updates on a replica version made in B would reflect in A, but not in C.
 
 ### Internal metadata for replication
 
 `xl.meta` that is in use for [versioning](https://github.com/minio/minio/blob/master/docs/bucket/versioning/DESIGN.md) has additional metadata for replication of objects,delete markers and versioned deletes.
 
-### Metadata for object replication
+### Metadata for object replication - on source
 
 ```
 ...
-    "MetaSys": {},
-        "MetaUsr": {
-          "X-Amz-Replication-Status": "COMPLETED",
-          "content-type": "application/octet-stream",
-          "etag": "8315e643ed6a5d7c9962fc0a8ef9c11f"
-        },
-        "PartASizes": [
-          26
-        ],
+  "MetaSys": {
+      "x-minio-internal-inline-data": "dHJ1ZQ==",
+      "x-minio-internal-replication-status": "YXJuOm1pbmlvOnJlcGxpY2F0aW9uOjo2YjdmYzFlMS0wNmU4LTQxMTUtYjYxNy00YTgzZGIyODhmNTM6YnVja2V0PUNPTVBMRVRFRDthcm46bWluaW86cmVwbGljYXRpb246OmI5MGYxZWEzLWMzYWQtNDEyMy1iYWE2LWZjMDZhYmEyMjA2MjpidWNrZXQ9Q09NUExFVEVEOw==",
+      "x-minio-internal-replication-timestamp": "MjAyMS0wOS0xN1QwMTo0MzozOC40MDQwMDA0ODNa",
+      "x-minio-internal-tier-free-versionID": "OWZlZjk5N2QtMjMzZi00N2U3LTlkZmMtNWYxNzc3NzdlZTM2"
+    },
+    "MetaUsr": {
+      "X-Amz-Replication-Status": "COMPLETED",
+      "content-type": "application/octet-stream",
+      "etag": "8315e643ed6a5d7c9962fc0a8ef9c11f"
+    },
 ...
 ```
 
+### Metadata for object replication - on target
+
+```
+...
+  "MetaSys": {
+      "x-minio-internal-inline-data": "dHJ1ZQ==",
+      "x-minio-internal-replica-status": "UkVQTElDQQ==",
+      "x-minio-internal-replica-timestamp": "MjAyMS0wOS0xN1QwMTo0MzozOC4zODg5ODU4ODRa"
+    },
+    "MetaUsr": {
+      "X-Amz-Replication-Status": "REPLICA",
+      "content-type": "application/octet-stream",
+      "etag": "8315e643ed6a5d7c9962fc0a8ef9c11f",
+      "x-amz-storage-class": "STANDARD"
+    },
+...
+```
 ### Additional replication metadata for DeleteMarker
 
-```
-{
+ {
       "DelObj": {
-        "ID": "8+jguy20TOuzUCN2PTrESA==",
-        "MTime": 1613601949645331516,
-        "MetaSys": {
-          "X-Amz-Replication-Status": "Q09NUExFVEVE"
-        }
-      },
-      "Type": 2
-    }
+      "ID": "u8H5pYQFRMKgkIgkpSKIkQ==",
+      "MTime": 1631843124147668389,
+      "MetaSys": {
+        "x-minio-internal-replication-status": "YXJuOm1pbmlvOnJlcGxpY2F0aW9uOjpiOTBmMWVhMy1jM2FkLTQxMjMtYmFhNi1mYzA2YWJhMjIwNjI6YnVja2V0PUNPTVBMRVRFRDthcm46bWluaW86cmVwbGljYXRpb246OjZiN2ZjMWUxLTA2ZTgtNDExNS1iNjE3LTRhODNkYjI4OGY1MzpidWNrZXQ9Q09NUExFVEVEOw==",
+        "x-minio-internal-replication-timestamp": "U3VuLCAzMSBEZWMgMDAwMCAxOTowMzo1OCBHTVQ="
+      }
+    },
+    "Type": 2
+}
 ```
 
 ### Additional replication metadata for versioned delete
 
 ```
-{
-      "DelObj": {
-        "ID": "8+jguy20TOuzUCN2PTrESA==",
-        "MTime": 1613601949645331516,
-        "MetaSys": {
-          "purgestatus": "RkFJTEVE"
-        }
-      },
-      "Type": 2
-    }
+{ 
+    "DelObj": {
+      "ID": "u8H5pYQFRMKgkIgkpSKIkQ==",
+      "MTime": 1631843124147668389,
+      "MetaSys": {
+        "purgestatus": "YXJuOm1pbmlvOnJlcGxpY2F0aW9uOjpiOTBmMWVhMy1jM2FkLTQxMjMtYmFhNi1mYzA2YWJhMjIwNjI6YnVja2V0PUNPTVBMRVRFO2FybjptaW5pbzpyZXBsaWNhdGlvbjo6NmI3ZmMxZTEtMDZlOC00MTE1LWI2MTctNGE4M2RiMjg4ZjUzOmJ1Y2tldD1GQUlMRUQ7",
+        "x-minio-internal-replication-status": "YXJuOm1pbmlvOnJlcGxpY2F0aW9uOjpiOTBmMWVhMy1jM2FkLTQxMjMtYmFhNi1mYzA2YWJhMjIwNjI6YnVja2V0PTthcm46bWluaW86cmVwbGljYXRpb246OjZiN2ZjMWUxLTA2ZTgtNDExNS1iNjE3LTRhODNkYjI4OGY1MzpidWNrZXQ9Ow==",
+        "x-minio-internal-replication-timestamp": "U3VuLCAzMSBEZWMgMDAwMCAxOTowMzo1OCBHTVQ="
+      }
+    },
+    "Type": 2
+}
 ```
 
 ## Explore Further

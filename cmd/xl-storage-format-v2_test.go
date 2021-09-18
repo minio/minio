@@ -65,12 +65,10 @@ func TestXLV2FormatData(t *testing.T) {
 				Hash:       nil,
 			}},
 		},
-		MarkDeleted:                   false,
-		DeleteMarkerReplicationStatus: "",
-		VersionPurgeStatus:            "",
-		Data:                          data,
-		NumVersions:                   1,
-		SuccessorModTime:              time.Time{},
+		MarkDeleted:      false,
+		Data:             data,
+		NumVersions:      1,
+		SuccessorModTime: time.Time{},
 	}
 
 	failOnErr(xl.AddVersion(fi))
@@ -264,12 +262,10 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 				Hash:       nil,
 			}},
 		},
-		MarkDeleted:                   false,
-		DeleteMarkerReplicationStatus: "",
-		VersionPurgeStatus:            "",
-		Data:                          data,
-		NumVersions:                   1,
-		SuccessorModTime:              time.Time{},
+		MarkDeleted:      false,
+		Data:             data,
+		NumVersions:      1,
+		SuccessorModTime: time.Time{},
 	}
 
 	d0, d1, d2 := mustGetUUID(), mustGetUUID(), mustGetUUID()

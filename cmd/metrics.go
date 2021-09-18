@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/prometheus/client_golang/prometheus"
@@ -435,30 +434,78 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 }
 
 // get the most current of in-memory replication stats  and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u madmin.BucketUsageInfo) (s BucketReplicationStats) {
+func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
+	s = BucketReplicationStats{}
+
 	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
-
-	replStats := BucketReplicationStats{}
+	// accumulate cluster bucket stats
+	stats := make(map[string]*BucketReplicationStat)
 	for _, bucketStat := range bucketStats {
-		replStats.FailedCount += bucketStat.ReplicationStats.FailedCount
-		replStats.FailedSize += bucketStat.ReplicationStats.FailedSize
-		replStats.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
-		replStats.ReplicatedSize += bucketStat.ReplicationStats.ReplicatedSize
+		s.ReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		for arn, stat := range bucketStat.ReplicationStats.Stats {
+			oldst, ok := stats[arn]
+			if !ok {
+				oldst = &BucketReplicationStat{}
+			}
+			stats[arn] = &BucketReplicationStat{
+				FailedCount:    stat.FailedCount + oldst.FailedCount,
+				FailedSize:     stat.FailedSize + oldst.FailedSize,
+				ReplicatedSize: stat.ReplicatedSize + oldst.ReplicatedSize,
+			}
+			s.FailedCount += stats[arn].FailedCount
+			s.FailedSize += stats[arn].FailedSize
+			s.ReplicatedSize += stats[arn].ReplicatedSize
+		}
 	}
-	usageStat := globalReplicationStats.GetInitialUsage(bucket)
-	replStats.ReplicaSize += usageStat.ReplicaSize
-	replStats.ReplicatedSize += usageStat.ReplicatedSize
+	s.Stats = make(map[string]*BucketReplicationStat, len(stats))
 
-	// use in memory replication stats if it is ahead of usage info.
-	s.ReplicatedSize = u.ReplicatedSize
-	if replStats.ReplicatedSize >= u.ReplicatedSize {
-		s.ReplicatedSize = replStats.ReplicatedSize
+	// add initial usage stat to cluster stats
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	if usageStat.Stats != nil {
+		for arn, stat := range usageStat.Stats {
+			st, ok := stats[arn]
+			if !ok {
+				st = &BucketReplicationStat{
+					ReplicatedSize: stat.ReplicatedSize,
+					FailedSize:     stat.FailedSize,
+					FailedCount:    stat.FailedCount,
+				}
+			} else {
+				st.ReplicatedSize += stat.ReplicatedSize
+				st.FailedSize += stat.FailedSize
+				st.FailedCount += stat.FailedCount
+			}
+			stats[arn] = st
+		}
 	}
-	// Reset FailedSize and FailedCount to 0 for negative overflows which can
-	// happen since data usage picture can lag behind actual usage state at the time of cluster start
-	s.FailedSize = uint64(math.Max(float64(replStats.FailedSize), 0))
-	s.FailedCount = uint64(math.Max(float64(replStats.FailedCount), 0))
-	s.ReplicaSize = uint64(math.Max(float64(replStats.ReplicaSize), float64(u.ReplicaSize)))
+	s.ReplicaSize += usageStat.ReplicaSize
+	// normalize computed real time stats with latest usage stat
+	var usgReplicatedSize int64
+	for arn, tgtstat := range stats {
+		st := BucketReplicationStat{}
+		bu, ok := usageStat.Stats[arn]
+		if !ok {
+			bu = &BucketReplicationStat{}
+		}
+		usgReplicatedSize += bu.ReplicatedSize
+		// use in memory replication stats if it is ahead of usage info.
+		st.ReplicatedSize = bu.ReplicatedSize
+		if tgtstat.ReplicatedSize >= bu.ReplicatedSize {
+			st.ReplicatedSize = tgtstat.ReplicatedSize
+		}
+		// Reset FailedSize and FailedCount to 0 for negative overflows which can
+		// happen since data usage picture can lag behind actual usage state at the time of cluster start
+		st.FailedSize = int64(math.Max(float64(tgtstat.FailedSize), 0))
+		st.FailedCount = int64(math.Max(float64(tgtstat.FailedCount), 0))
+		st.ReplicaSize = int64(math.Max(float64(tgtstat.ReplicaSize), float64(u.ReplicaSize)))
+		s.Stats[arn] = &st
+	}
+	// normalize overall stats
+	s.FailedSize = int64(math.Max(float64(s.FailedSize), 0))
+	s.FailedCount = int64(math.Max(float64(s.FailedCount), 0))
+	s.ReplicaSize = int64(math.Max(float64(s.ReplicaSize), float64(u.ReplicaSize)))
+	s.ReplicatedSize = int64(math.Max(float64(s.ReplicatedSize), float64(usgReplicatedSize)))
+
 	return s
 }
 

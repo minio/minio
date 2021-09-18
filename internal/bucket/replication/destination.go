@@ -28,11 +28,15 @@ import (
 // DestinationARNPrefix - destination ARN prefix as per AWS S3 specification.
 const DestinationARNPrefix = "arn:aws:s3:::"
 
+// DestinationARNMinIOPrefix - destination ARN prefix for MinIO.
+const DestinationARNMinIOPrefix = "arn:minio:replication:"
+
 // Destination - destination in ReplicationConfiguration.
 type Destination struct {
 	XMLName      xml.Name `xml:"Destination" json:"Destination"`
 	Bucket       string   `xml:"Bucket" json:"Bucket"`
 	StorageClass string   `xml:"StorageClass" json:"StorageClass"`
+	ARN          string
 	//EncryptionConfiguration TODO: not needed for MinIO
 }
 
@@ -49,7 +53,20 @@ func (d Destination) IsValid() bool {
 }
 
 func (d Destination) String() string {
-	return DestinationARNPrefix + d.Bucket
+	return d.ARN
+
+}
+
+//LegacyArn returns true if arn format has prefix  "arn:aws:s3:::" which was used
+// prior to multi-destination
+func (d Destination) LegacyArn() bool {
+	return strings.HasPrefix(d.ARN, DestinationARNPrefix)
+}
+
+//TargetArn returns true if arn format has prefix  "arn:minio:replication:::" used
+// for multi-destination targets
+func (d Destination) TargetArn() bool {
+	return strings.HasPrefix(d.ARN, DestinationARNMinIOPrefix)
 }
 
 // MarshalXML - encodes to XML data.
@@ -107,7 +124,7 @@ func (d Destination) Validate(bucketName string) error {
 
 // parseDestination - parses string to Destination.
 func parseDestination(s string) (Destination, error) {
-	if !strings.HasPrefix(s, DestinationARNPrefix) {
+	if !strings.HasPrefix(s, DestinationARNPrefix) && !strings.HasPrefix(s, DestinationARNMinIOPrefix) {
 		return Destination{}, Errorf("invalid destination '%s'", s)
 	}
 
@@ -115,5 +132,6 @@ func parseDestination(s string) (Destination, error) {
 
 	return Destination{
 		Bucket: bucketName,
+		ARN:    s,
 	}, nil
 }

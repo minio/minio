@@ -26,6 +26,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -45,20 +46,22 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
-	UserDefined                   map[string]string      // only set in case of POST/PUT operations
-	PartNumber                    int                    // only useful in case of GetObject/HeadObject
-	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
-	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
-	Transition                    TransitionOptions
-	Expiration                    ExpirationOptions
+	DeleteMarker      bool                // Is only set in DELETE operations for delete marker replication
+	UserDefined       map[string]string   // only set in case of POST/PUT operations
+	PartNumber        int                 // only useful in case of GetObject/HeadObject
+	CheckPrecondFn    CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
+	Transition        TransitionOptions
+	Expiration        ExpirationOptions
 
-	NoLock         bool // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest   bool // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet bool // only set for GET/HEAD in active-active replication scenario
-
-	DeletePrefix bool //  set true to enforce a prefix deletion, only application for DeleteObject API,
+	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
+	ReplicationRequest                  bool      // true only if replication request
+	ReplicationSourceTaggingTimestamp   time.Time // set if MinIOSourceTaggingTimestamp received
+	ReplicationSourceLegalholdTimestamp time.Time // set if MinIOSourceObjectLegalholdTimestamp received
+	ReplicationSourceRetentionTimestamp time.Time // set if MinIOSourceObjectRetentionTimestamp received
+	DeletePrefix                        bool      //  set true to enforce a prefix deletion, only application for DeleteObject API,
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
@@ -86,6 +89,48 @@ type BucketOptions struct {
 	VersioningEnabled bool
 }
 
+// SetReplicaStatus sets replica status and timestamp for delete operations in ObjectOptions
+func (o *ObjectOptions) SetReplicaStatus(st replication.StatusType) {
+	o.DeleteReplication.ReplicaStatus = st
+	o.DeleteReplication.ReplicaTimeStamp = UTCNow()
+}
+
+// DeleteMarkerReplicationStatus - returns replication status of delete marker from DeleteReplication state in ObjectOptions
+func (o *ObjectOptions) DeleteMarkerReplicationStatus() replication.StatusType {
+	return o.DeleteReplication.CompositeReplicationStatus()
+}
+
+// VersionPurgeStatus - returns version purge status from DeleteReplication state in ObjectOptions
+func (o *ObjectOptions) VersionPurgeStatus() VersionPurgeStatusType {
+	return o.DeleteReplication.CompositeVersionPurgeStatus()
+}
+
+// SetDeleteReplicationState sets the delete replication options.
+func (o *ObjectOptions) SetDeleteReplicationState(dsc ReplicateDecision, vID string) {
+	o.DeleteReplication = ReplicationState{
+		ReplicateDecisionStr: dsc.String(),
+	}
+	switch {
+	case o.VersionID == "":
+		o.DeleteReplication.ReplicationStatusInternal = dsc.PendingStatus()
+		o.DeleteReplication.Targets = replicationStatusesMap(o.DeleteReplication.ReplicationStatusInternal)
+	default:
+		o.DeleteReplication.VersionPurgeStatusInternal = dsc.PendingStatus()
+		o.DeleteReplication.PurgeTargets = versionPurgeStatusesMap(o.DeleteReplication.VersionPurgeStatusInternal)
+	}
+}
+
+// PutReplicationState gets ReplicationState for PUT operation from ObjectOptions
+func (o *ObjectOptions) PutReplicationState() (r ReplicationState) {
+	rstatus, ok := o.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus]
+	if !ok {
+		return
+	}
+	r.ReplicationStatusInternal = rstatus
+	r.Targets = replicationStatusesMap(rstatus)
+	return
+}
+
 // LockType represents required locking for ObjectLayer operations
 type LockType int
 
@@ -109,7 +154,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error
+	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32) error
 
 	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)

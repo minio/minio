@@ -116,7 +116,7 @@ func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 
 // enforceFIFOQuota deletes objects in FIFO order until sufficient objects
 // have been deleted so as to bring bucket usage within quota.
-func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket string, bui madmin.BucketUsageInfo) {
+func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket string, bui BucketUsageInfo) {
 	// Check if the current bucket has quota restrictions, if not skip it
 	cfg, err := globalBucketQuotaSys.Get(bucket)
 	if err != nil {

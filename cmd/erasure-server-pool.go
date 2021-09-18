@@ -456,7 +456,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- madmin.DataUsageInfo, wantCycle uint32) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32) error {
 	// Updates must be closed before we return.
 	defer close(updates)
 
@@ -474,7 +474,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 	}
 
 	if len(allBuckets) == 0 {
-		updates <- madmin.DataUsageInfo{} // no buckets found update data usage to reflect latest state
+		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
 

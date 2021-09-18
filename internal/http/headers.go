@@ -173,6 +173,12 @@ const (
 	// Header indicates replication reset status.
 	MinIOReplicationResetStatus = "X-Minio-Replication-Reset-Status"
 
+	// Header indiicates last tag update time on source
+	MinIOSourceTaggingTimestamp = "X-Minio-Source-Replication-Tagging-Timestamp"
+	// Header indiicates last rtention update time on source
+	MinIOSourceObjectRetentionTimestamp = "X-Minio-Source-Replication-Retention-Timestamp"
+	// Header indiicates last rtention update time on source
+	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
 	// predicted date/time of transition
 	MinIOTransition = "X-Minio-Transition"
 )

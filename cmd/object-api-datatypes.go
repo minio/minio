@@ -141,7 +141,8 @@ type ObjectInfo struct {
 	// Specify object storage class
 	StorageClass string
 
-	ReplicationStatus replication.StatusType
+	ReplicationStatusInternal string
+	ReplicationStatus         replication.StatusType
 	// User-Defined metadata
 	UserDefined map[string]string
 
@@ -167,8 +168,9 @@ type ObjectInfo struct {
 
 	// backendType indicates which backend filled this structure
 	backendType BackendType
-
-	VersionPurgeStatus VersionPurgeStatusType
+	// internal representation of version purge status
+	VersionPurgeStatusInternal string
+	VersionPurgeStatus         VersionPurgeStatusType
 
 	// The total count of all versions of this object
 	NumVersions int
@@ -179,40 +181,42 @@ type ObjectInfo struct {
 // Clone - Returns a cloned copy of current objectInfo
 func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 	cinfo = ObjectInfo{
-		Bucket:             o.Bucket,
-		Name:               o.Name,
-		ModTime:            o.ModTime,
-		Size:               o.Size,
-		IsDir:              o.IsDir,
-		ETag:               o.ETag,
-		InnerETag:          o.InnerETag,
-		VersionID:          o.VersionID,
-		IsLatest:           o.IsLatest,
-		DeleteMarker:       o.DeleteMarker,
-		TransitionedObject: o.TransitionedObject,
-		RestoreExpires:     o.RestoreExpires,
-		RestoreOngoing:     o.RestoreOngoing,
-		ContentType:        o.ContentType,
-		ContentEncoding:    o.ContentEncoding,
-		Expires:            o.Expires,
-		CacheStatus:        o.CacheStatus,
-		CacheLookupStatus:  o.CacheLookupStatus,
-		StorageClass:       o.StorageClass,
-		ReplicationStatus:  o.ReplicationStatus,
-		UserTags:           o.UserTags,
-		Parts:              o.Parts,
-		Writer:             o.Writer,
-		Reader:             o.Reader,
-		PutObjReader:       o.PutObjReader,
-		metadataOnly:       o.metadataOnly,
-		versionOnly:        o.versionOnly,
-		keyRotation:        o.keyRotation,
-		backendType:        o.backendType,
-		AccTime:            o.AccTime,
-		Legacy:             o.Legacy,
-		VersionPurgeStatus: o.VersionPurgeStatus,
-		NumVersions:        o.NumVersions,
-		SuccessorModTime:   o.SuccessorModTime,
+		Bucket:                     o.Bucket,
+		Name:                       o.Name,
+		ModTime:                    o.ModTime,
+		Size:                       o.Size,
+		IsDir:                      o.IsDir,
+		ETag:                       o.ETag,
+		InnerETag:                  o.InnerETag,
+		VersionID:                  o.VersionID,
+		IsLatest:                   o.IsLatest,
+		DeleteMarker:               o.DeleteMarker,
+		TransitionedObject:         o.TransitionedObject,
+		RestoreExpires:             o.RestoreExpires,
+		RestoreOngoing:             o.RestoreOngoing,
+		ContentType:                o.ContentType,
+		ContentEncoding:            o.ContentEncoding,
+		Expires:                    o.Expires,
+		CacheStatus:                o.CacheStatus,
+		CacheLookupStatus:          o.CacheLookupStatus,
+		StorageClass:               o.StorageClass,
+		ReplicationStatus:          o.ReplicationStatus,
+		UserTags:                   o.UserTags,
+		Parts:                      o.Parts,
+		Writer:                     o.Writer,
+		Reader:                     o.Reader,
+		PutObjReader:               o.PutObjReader,
+		metadataOnly:               o.metadataOnly,
+		versionOnly:                o.versionOnly,
+		keyRotation:                o.keyRotation,
+		backendType:                o.backendType,
+		AccTime:                    o.AccTime,
+		Legacy:                     o.Legacy,
+		VersionPurgeStatus:         o.VersionPurgeStatus,
+		NumVersions:                o.NumVersions,
+		SuccessorModTime:           o.SuccessorModTime,
+		ReplicationStatusInternal:  o.ReplicationStatusInternal,
+		VersionPurgeStatusInternal: o.VersionPurgeStatusInternal,
 	}
 	cinfo.UserDefined = make(map[string]string, len(o.UserDefined))
 	for k, v := range o.UserDefined {
@@ -224,9 +228,13 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
 	ObjectInfo
-	OpType     replication.Type
-	RetryCount uint32
-	ResetID    string
+	OpType            replication.Type
+	RetryCount        uint32
+	ResetID           string
+	Dsc               ReplicateDecision
+	ExistingObjResync ResyncDecision
+	TargetArn         string
+	TargetStatuses    map[string]replication.StatusType
 }
 
 // MultipartInfo captures metadata information about the uploadId

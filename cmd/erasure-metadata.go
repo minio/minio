@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -148,11 +149,11 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	}
 
 	// Add replication status to the object info
-	objInfo.ReplicationStatus = replication.StatusType(fi.Metadata[xhttp.AmzBucketReplicationStatus])
-	if fi.Deleted {
-		objInfo.ReplicationStatus = replication.StatusType(fi.DeleteMarkerReplicationStatus)
-	}
+	objInfo.ReplicationStatusInternal = fi.ReplicationState.ReplicationStatusInternal
+	objInfo.VersionPurgeStatusInternal = fi.ReplicationState.VersionPurgeStatusInternal
+	objInfo.ReplicationStatus = fi.ReplicationState.CompositeReplicationStatus()
 
+	objInfo.VersionPurgeStatus = fi.ReplicationState.CompositeVersionPurgeStatus()
 	objInfo.TransitionedObject = TransitionedObject{
 		Name:        fi.TransitionedObjName,
 		VersionID:   fi.TransitionVersionID,
@@ -177,7 +178,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
 
-	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus
+	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus()
 	// set restore status for transitioned object
 	restoreHdr, ok := fi.Metadata[xhttp.AmzRestore]
 	if ok {
@@ -219,9 +220,7 @@ func (fi FileInfo) MetadataEquals(ofi FileInfo) bool {
 func (fi FileInfo) ReplicationInfoEquals(ofi FileInfo) bool {
 	switch {
 	case fi.MarkDeleted != ofi.MarkDeleted,
-		fi.DeleteMarkerReplicationStatus != ofi.DeleteMarkerReplicationStatus,
-		fi.VersionPurgeStatus != ofi.VersionPurgeStatus,
-		fi.Metadata[xhttp.AmzBucketReplicationStatus] != ofi.Metadata[xhttp.AmzBucketReplicationStatus]:
+		!fi.ReplicationState.Equal(ofi.ReplicationState):
 		return false
 	}
 	return true
@@ -307,9 +306,12 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 
 			// Server-side replication fields
 			h.Write([]byte(fmt.Sprintf("%v", meta.MarkDeleted)))
-			h.Write([]byte(meta.DeleteMarkerReplicationStatus))
-			h.Write([]byte(meta.VersionPurgeStatus))
-			h.Write([]byte(meta.Metadata[xhttp.AmzBucketReplicationStatus]))
+			h.Write([]byte(meta.Metadata[string(meta.ReplicationState.ReplicaStatus)]))
+			h.Write([]byte(meta.Metadata[meta.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat)]))
+			h.Write([]byte(meta.Metadata[meta.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat)]))
+			h.Write([]byte(meta.Metadata[meta.ReplicationState.ReplicationStatusInternal]))
+			h.Write([]byte(meta.Metadata[meta.ReplicationState.VersionPurgeStatusInternal]))
+
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()
 		}
@@ -448,4 +450,55 @@ func (fi *FileInfo) SetTierFreeVersion() {
 func (fi *FileInfo) TierFreeVersion() bool {
 	_, ok := fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker]
 	return ok
+}
+
+// VersionPurgeStatus returns overall version purge status for this object version across targets
+func (fi *FileInfo) VersionPurgeStatus() VersionPurgeStatusType {
+	return fi.ReplicationState.CompositeVersionPurgeStatus()
+}
+
+// DeleteMarkerReplicationStatus returns overall replication status for this delete marker version across targets
+func (fi *FileInfo) DeleteMarkerReplicationStatus() replication.StatusType {
+	if fi.Deleted {
+		return fi.ReplicationState.CompositeReplicationStatus()
+	}
+	return replication.StatusType("")
+}
+
+// GetInternalReplicationState is a wrapper method to fetch internal replication state from the map m
+func GetInternalReplicationState(m map[string][]byte) ReplicationState {
+	m1 := make(map[string]string, len(m))
+	for k, v := range m {
+		m1[k] = string(v)
+	}
+	return getInternalReplicationState(m1)
+}
+
+// getInternalReplicationState fetches internal replication state from the map m
+func getInternalReplicationState(m map[string]string) ReplicationState {
+	d := ReplicationState{
+		ResetStatusesMap: make(map[string]string),
+	}
+	for k, v := range m {
+		switch {
+		case equals(k, ReservedMetadataPrefixLower+ReplicationTimestamp):
+			tm, _ := time.Parse(http.TimeFormat, v)
+			d.ReplicationTimeStamp = tm
+		case equals(k, ReservedMetadataPrefixLower+ReplicaTimestamp):
+			tm, _ := time.Parse(http.TimeFormat, v)
+			d.ReplicaTimeStamp = tm
+		case equals(k, ReservedMetadataPrefixLower+ReplicaStatus):
+			d.ReplicaStatus = replication.StatusType(v)
+		case equals(k, ReservedMetadataPrefixLower+ReplicationStatus):
+			d.ReplicationStatusInternal = v
+			d.Targets = replicationStatusesMap(v)
+		case equals(k, VersionPurgeStatusKey):
+			d.VersionPurgeStatusInternal = v
+			d.PurgeTargets = versionPurgeStatusesMap(v)
+		case strings.HasPrefix(k, ReservedMetadataPrefixLower+ReplicationReset):
+			arn := strings.TrimPrefix(k, fmt.Sprintf("%s-", ReservedMetadataPrefixLower+ReplicationReset))
+			d.ResetStatusesMap[arn] = v
+		}
+	}
+	return d
 }

@@ -142,7 +142,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Wait before starting next cycle and wait on startup.
-			results := make(chan madmin.DataUsageInfo, 1)
+			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
@@ -834,12 +834,22 @@ type scannerItem struct {
 }
 
 type sizeSummary struct {
-	totalSize      int64
-	versions       uint64
+	totalSize       int64
+	versions        uint64
+	replicatedSize  int64
+	pendingSize     int64
+	failedSize      int64
+	replicaSize     int64
+	pendingCount    uint64
+	failedCount     uint64
+	replTargetStats map[string]replTargetSizeSummary
+}
+
+// replTargetSizeSummary holds summary of replication stats by target
+type replTargetSizeSummary struct {
 	replicatedSize int64
 	pendingSize    int64
 	failedSize     int64
-	replicaSize    int64
 	pendingCount   uint64
 	failedCount    uint64
 }
@@ -1109,27 +1119,50 @@ func (i *scannerItem) objectPath() string {
 
 // healReplication will heal a scanned item that has failed replication.
 func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
-	existingObjResync := i.replication.Resync(ctx, oi)
+	roi := getHealReplicateObjectInfo(oi, i.replication)
+
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure
 		if oi.ReplicationStatus == replication.Pending ||
 			oi.ReplicationStatus == replication.Failed ||
 			oi.VersionPurgeStatus == Failed || oi.VersionPurgeStatus == Pending {
-			i.healReplicationDeletes(ctx, o, oi, existingObjResync)
+			i.healReplicationDeletes(ctx, o, roi)
 			return
 		}
 		// if replication status is Complete on DeleteMarker and existing object resync required
-		if existingObjResync && (oi.ReplicationStatus == replication.Completed) {
-			i.healReplicationDeletes(ctx, o, oi, existingObjResync)
+		if roi.ExistingObjResync.mustResync() && (oi.ReplicationStatus == replication.Completed || oi.ReplicationStatus.Empty()) {
+			i.healReplicationDeletes(ctx, o, roi)
 			return
 		}
 		return
 	}
-	roi := ReplicateObjectInfo{ObjectInfo: oi, OpType: replication.HealReplicationType}
-	if existingObjResync {
+	if roi.ExistingObjResync.mustResync() {
 		roi.OpType = replication.ExistingObjectReplicationType
-		roi.ResetID = i.replication.ResetID
 	}
+
+	if roi.TargetStatuses != nil {
+		if sizeS.replTargetStats == nil {
+			sizeS.replTargetStats = make(map[string]replTargetSizeSummary)
+		}
+		for arn, tgtStatus := range roi.TargetStatuses {
+			tgtSizeS, ok := sizeS.replTargetStats[arn]
+			if !ok {
+				tgtSizeS = replTargetSizeSummary{}
+			}
+			switch tgtStatus {
+			case replication.Pending:
+				tgtSizeS.pendingCount++
+				tgtSizeS.pendingSize += oi.Size
+			case replication.Failed:
+				tgtSizeS.failedSize += oi.Size
+				tgtSizeS.failedCount++
+			case replication.Completed, "COMPLETE":
+				tgtSizeS.replicatedSize += oi.Size
+			}
+			sizeS.replTargetStats[arn] = tgtSizeS
+		}
+	}
+
 	switch oi.ReplicationStatus {
 	case replication.Pending:
 		sizeS.pendingCount++
@@ -1146,37 +1179,38 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
 	}
-	if existingObjResync {
+	if roi.ExistingObjResync.mustResync() {
 		globalReplicationPool.queueReplicaTask(roi)
 	}
 }
 
 // healReplicationDeletes will heal a scanned deleted item that failed to replicate deletes.
-func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, oi ObjectInfo, existingObject bool) {
+func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, roi ReplicateObjectInfo) {
 	// handle soft delete and permanent delete failures here.
-	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
+	if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
 		versionID := ""
 		dmVersionID := ""
-		if oi.VersionPurgeStatus.Empty() {
-			dmVersionID = oi.VersionID
+		if roi.VersionPurgeStatus.Empty() {
+			dmVersionID = roi.VersionID
 		} else {
-			versionID = oi.VersionID
+			versionID = roi.VersionID
 		}
+
 		doi := DeletedObjectReplicationInfo{
 			DeletedObject: DeletedObject{
-				ObjectName:                    oi.Name,
-				DeleteMarkerVersionID:         dmVersionID,
-				VersionID:                     versionID,
-				DeleteMarkerReplicationStatus: string(oi.ReplicationStatus),
-				DeleteMarkerMTime:             DeleteMarkerMTime{oi.ModTime},
-				DeleteMarker:                  oi.DeleteMarker,
-				VersionPurgeStatus:            oi.VersionPurgeStatus,
+				ObjectName:            roi.Name,
+				DeleteMarkerVersionID: dmVersionID,
+				VersionID:             versionID,
+				ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
+				DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
+				DeleteMarker:          roi.DeleteMarker,
 			},
-			Bucket: oi.Bucket,
+			Bucket: roi.Bucket,
 		}
-		if existingObject {
+		if roi.ExistingObjResync.mustResync() {
 			doi.OpType = replication.ExistingObjectReplicationType
-			doi.ResetID = i.replication.ResetID
+			queueReplicateDeletesWrapper(doi, roi.ExistingObjResync)
+			return
 		}
 		globalReplicationPool.queueReplicaDeleteTask(doi)
 	}

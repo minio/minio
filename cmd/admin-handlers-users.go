@@ -1006,7 +1006,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	var dataUsageInfo madmin.DataUsageInfo
+	var dataUsageInfo DataUsageInfo
 	var err error
 	if !globalIsGateway {
 		// Load the latest calculated data usage
