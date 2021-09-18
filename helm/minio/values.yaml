@@ -331,6 +331,7 @@ metrics:
   serviceMonitor:
     enabled: false
     additionalLabels: {}
+    public: true
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s

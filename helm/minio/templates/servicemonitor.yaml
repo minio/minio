@@ -28,9 +28,11 @@ spec:
       {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
       {{- end }}
+      {{- if not .Values.metrics.serviceMonitor.public }}
       bearerTokenSecret:
         name: {{ template "minio.fullname" . }}-prometheus
         key: token
+      {{- end }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace | quote }}
@@ -38,4 +40,5 @@ spec:
     matchLabels:
       app: {{ include "minio.name" . }}
       release: {{ .Release.Name }}
+      monitoring: true
 {{- end }}
