@@ -272,22 +272,6 @@ func NewBucketTargetSys() *BucketTargetSys {
 	}
 }
 
-// Init initializes the bucket targets subsystem for buckets which have targets configured.
-func (sys *BucketTargetSys) Init(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, bucket targets is not supported.
-	if globalIsGateway {
-		return nil
-	}
-
-	// Load bucket targets once during boot in background.
-	go sys.load(ctx, buckets, objAPI)
-	return nil
-}
-
 // UpdateAllTargets updates target to reflect metadata updates
 func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketTargets) {
 	if sys == nil {
@@ -325,30 +309,26 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 }
 
 // create minio-go clients for buckets having remote targets
-func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) {
-	for _, bucket := range buckets {
-		cfg, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket.Name)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		if cfg == nil || cfg.Empty() {
-			continue
-		}
-		if len(cfg.Targets) > 0 {
-			sys.targetsMap[bucket.Name] = cfg.Targets
-		}
-		for _, tgt := range cfg.Targets {
-			tgtClient, err := sys.getRemoteTargetClient(&tgt)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			sys.arnRemotesMap[tgt.Arn] = tgtClient
-			sys.updateBandwidthLimit(bucket.Name, tgt.BandwidthLimit)
-		}
+func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
+	cfg := meta.bucketTargetConfig
+	if cfg == nil || cfg.Empty() {
+		return
+	}
+	sys.Lock()
+	defer sys.Unlock()
+	if len(cfg.Targets) > 0 {
 		sys.targetsMap[bucket.Name] = cfg.Targets
 	}
+	for _, tgt := range cfg.Targets {
+		tgtClient, err := sys.getRemoteTargetClient(&tgt)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+		sys.arnRemotesMap[tgt.Arn] = tgtClient
+		sys.updateBandwidthLimit(bucket.Name, tgt.BandwidthLimit)
+	}
+	sys.targetsMap[bucket.Name] = cfg.Targets
 }
 
 // getRemoteTargetInstanceTransport contains a singleton roundtripper.
