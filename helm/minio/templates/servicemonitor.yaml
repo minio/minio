@@ -40,5 +40,5 @@ spec:
     matchLabels:
       app: {{ include "minio.name" . }}
       release: {{ .Release.Name }}
-      monitoring: true
+      monitoring: "true"
 {{- end }}
