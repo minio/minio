@@ -1640,8 +1640,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 
 					disks, _ := set.getOnlineDisksWithHealing()
 					if len(disks) == 0 {
-						errCh <- errors.New("HealObjects: No non-healing disks found")
 						cancel()
+						errCh <- errors.New("HealObjects: No non-healing disks found")
 						return
 					}
 
@@ -1669,8 +1669,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						fivs, err := entry.fileInfoVersions(bucket)
 						if err != nil {
 							if err := healObject(bucket, entry.name, ""); err != nil {
-								errCh <- err
 								cancel()
+								errCh <- err
 								return
 							}
 							return
@@ -1678,8 +1678,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 
 						for _, version := range fivs.Versions {
 							if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-								errCh <- err
 								cancel()
+								errCh <- err
 								return
 							}
 						}
@@ -1718,9 +1718,10 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						},
 						finished: nil,
 					}
+
 					if err := listPathRaw(ctx, lopts); err != nil {
-						errCh <- fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts)
 						cancel()
+						errCh <- fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts)
 						return
 					}
 				}()
