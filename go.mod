@@ -46,7 +46,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.1.6-0.20210917204419-f12dc0d0a8bd
-	github.com/minio/minio-go/v7 v7.0.15-0.20210917235750-a16dfb14e6f6
+	github.com/minio/minio-go/v7 v7.0.15-0.20210921183434-174b4c070788
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.1.3
 	github.com/minio/selfupdate v0.3.1
