@@ -79,7 +79,7 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
-func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, error) {
+func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, APIError) {
 	var arns []string
 	if rCfg.RoleArn != "" {
 		arns = append(arns, rCfg.RoleArn)
@@ -91,23 +91,23 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	for _, arnStr := range arns {
 		arn, err := madmin.ParseARN(arnStr)
 		if err != nil {
-			return false, BucketRemoteArnInvalid{}
+			return false, errorCodes.ToAPIErrWithErr(ErrBucketRemoteArnInvalid, err)
 		}
 		if arn.Type != madmin.ReplicationService {
-			return false, BucketRemoteArnTypeInvalid{}
+			return false, toAPIError(ctx, BucketRemoteArnTypeInvalid{Bucket: bucket})
 		}
 		clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, arnStr)
 		if clnt == nil {
-			return false, BucketRemoteTargetNotFound{Bucket: bucket}
+			return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
-		if found, _ := clnt.BucketExists(ctx, arn.Bucket); !found {
-			return false, BucketRemoteDestinationNotFound{Bucket: arn.Bucket}
+		if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
+			return false, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
 		}
 		if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 			if ret.LockEnabled {
 				lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
 				if err != nil || lock != "Enabled" {
-					return false, BucketReplicationDestinationMissingLock{Bucket: arn.Bucket}
+					return false, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
 				}
 			}
 		}
@@ -116,11 +116,11 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		if ok {
 			if c.EndpointURL().String() == clnt.EndpointURL().String() {
 				sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
-				return sameTarget, nil
+				return sameTarget, toAPIError(ctx, nil)
 			}
 		}
 	}
-	return false, BucketRemoteTargetNotFound{Bucket: bucket}
+	return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 }
 
 type mustReplicateOptions struct {
