@@ -57,6 +57,26 @@ type dataUsageEntry struct {
 	Compacted        bool
 }
 
+//msgp:tuple replicationStatsV1
+type replicationStatsV1 struct {
+	PendingSize          uint64
+	ReplicatedSize       uint64
+	FailedSize           uint64
+	ReplicaSize          uint64
+	FailedCount          uint64
+	PendingCount         uint64
+	MissedThresholdSize  uint64
+	AfterThresholdSize   uint64
+	MissedThresholdCount uint64
+	AfterThresholdCount  uint64
+}
+
+func (rsv1 replicationStatsV1) Empty() bool {
+	return rsv1.ReplicatedSize == 0 &&
+		rsv1.FailedSize == 0 &&
+		rsv1.FailedCount == 0
+}
+
 //msgp:tuple replicationStats
 type replicationStats struct {
 	PendingSize          uint64
@@ -79,7 +99,7 @@ func (rs replicationStats) Empty() bool {
 //msgp:tuple replicationAllStats
 type replicationAllStats struct {
 	Targets     map[string]replicationStats
-	ReplicaSize uint64
+	ReplicaSize uint64 `msg:"ReplicaSize,omitempty"`
 }
 
 //msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4
@@ -114,7 +134,7 @@ type dataUsageEntryV4 struct {
 	Size             int64
 	Objects          uint64
 	ObjSizes         sizeHistogram
-	ReplicationStats replicationStats
+	ReplicationStats replicationStatsV1
 }
 
 //msgp:tuple dataUsageEntryV5
@@ -125,7 +145,7 @@ type dataUsageEntryV5 struct {
 	Objects          uint64
 	Versions         uint64 // Versions that are not delete markers.
 	ObjSizes         sizeHistogram
-	ReplicationStats *replicationStats
+	ReplicationStats *replicationStatsV1
 	Compacted        bool
 }
 
@@ -968,7 +988,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				ObjSizes: v.ObjSizes,
 				Children: v.Children,
 			}
-			empty := replicationStats{}
+			empty := replicationStatsV1{}
 
 			if v.ReplicationStats != empty {
 				due.ReplicationStats = &replicationAllStats{
@@ -978,7 +998,13 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				if err != nil {
 					return err
 				}
-				due.ReplicationStats.Targets[cfg.RoleArn] = v.ReplicationStats
+				due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
+					ReplicatedSize: v.ReplicationStats.ReplicatedSize,
+					FailedSize:     v.ReplicationStats.FailedSize,
+					FailedCount:    v.ReplicationStats.FailedCount,
+					PendingSize:    v.ReplicationStats.PendingSize,
+				}
+				due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 			}
 			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
 
@@ -1030,7 +1056,13 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				}
 
 				if arn != "" {
-					due.ReplicationStats.Targets[arn] = *v.ReplicationStats
+					due.ReplicationStats.Targets[arn] = replicationStats{
+						ReplicatedSize: v.ReplicationStats.ReplicatedSize,
+						FailedSize:     v.ReplicationStats.FailedSize,
+						FailedCount:    v.ReplicationStats.FailedCount,
+						PendingSize:    v.ReplicationStats.PendingSize,
+					}
+					due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 				}
 			}
 			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
