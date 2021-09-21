@@ -536,6 +536,10 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 
 // LoadBucketMetadata - calls LoadBucketMetadata call on all peers
 func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName string) {
+	if globalIsGateway {
+		return
+	}
+
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -634,23 +638,18 @@ func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
 }
 
 // Loads notification policies for all buckets into NotificationSys.
-func (sys *NotificationSys) load(buckets []BucketInfo) {
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		config, err := globalBucketMetadataSys.GetNotificationConfig(bucket.Name)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		config.SetRegion(globalServerRegion)
-		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
-			if _, ok := err.(*event.ErrARNNotFound); !ok {
-				logger.LogIf(ctx, err)
-			}
-			continue
-		}
-		sys.AddRulesMap(bucket.Name, config.ToRulesMap())
+func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
+	config := meta.notificationConfig
+	if config == nil {
+		return
 	}
+	config.SetRegion(globalServerRegion)
+	if err := config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+		if _, ok := err.(*event.ErrARNNotFound); !ok {
+			logger.LogIf(GlobalContext, err)
+		}
+	}
+	sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
 // Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
@@ -676,7 +675,6 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		}
 	}()
 
-	go sys.load(buckets)
 	return nil
 }
 

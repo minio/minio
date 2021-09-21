@@ -80,46 +80,8 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		return errServerNotInitialized
 	}
 
-	if globalIsGateway {
-		// This code is needed only for gateway implementations.
-		switch configFile {
-		case bucketSSEConfig:
-			if globalGatewayName == NASBackendGateway {
-				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
-				if err != nil {
-					return err
-				}
-				meta.EncryptionConfigXML = configData
-				return meta.Save(GlobalContext, objAPI)
-			}
-		case bucketLifecycleConfig:
-			if globalGatewayName == NASBackendGateway {
-				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
-				if err != nil {
-					return err
-				}
-				meta.LifecycleConfigXML = configData
-				return meta.Save(GlobalContext, objAPI)
-			}
-		case bucketTaggingConfig:
-			if globalGatewayName == NASBackendGateway {
-				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
-				if err != nil {
-					return err
-				}
-				meta.TaggingConfigXML = configData
-				return meta.Save(GlobalContext, objAPI)
-			}
-		case bucketNotificationConfig:
-			if globalGatewayName == NASBackendGateway {
-				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
-				if err != nil {
-					return err
-				}
-				meta.NotificationConfigXML = configData
-				return meta.Save(GlobalContext, objAPI)
-			}
-		case bucketPolicyConfig:
+	if globalIsGateway && globalGatewayName != NASBackendGateway {
+		if configFile == bucketPolicyConfig {
 			if configData == nil {
 				return objAPI.DeleteBucketPolicy(GlobalContext, bucket)
 			}
@@ -138,7 +100,12 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 
 	meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
 	if err != nil {
-		return err
+		if !globalIsErasure && !globalIsDistErasure && errors.Is(err, errVolumeNotFound) {
+			// Only single drive mode needs this fallback.
+			meta = newBucketMetadata(bucket)
+		} else {
+			return err
+		}
 	}
 
 	switch configFile {
@@ -447,9 +414,9 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, we don't need to load the policies
-	// from the backend.
-	if globalIsGateway {
+	// In gateway mode, we don't need to load bucket metadata except
+	// NAS gateway backend.
+	if globalIsGateway && !objAPI.IsNotificationSupported() {
 		return nil
 	}
 
@@ -470,11 +437,20 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 			})
 			meta, err := loadBucketMetadata(ctx, objAPI, buckets[index].Name)
 			if err != nil {
-				return err
+				if !globalIsErasure && !globalIsDistErasure && errors.Is(err, errVolumeNotFound) {
+					meta = newBucketMetadata(buckets[index].Name)
+				} else {
+					return err
+				}
 			}
 			sys.Lock()
 			sys.metadataMap[buckets[index].Name] = meta
 			sys.Unlock()
+
+			globalNotificationSys.set(buckets[index], meta) // set notification targets
+
+			globalBucketTargetSys.set(buckets[index], meta) // set remote replication targets
+
 			return nil
 		}, index)
 	}
