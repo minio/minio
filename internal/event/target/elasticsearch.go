@@ -33,13 +33,11 @@ import (
 	"strings"
 	"time"
 
+	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
+	"github.com/minio/highwayhash"
 	"github.com/minio/minio/internal/event"
 	xnet "github.com/minio/pkg/net"
 	"github.com/pkg/errors"
-
-	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
-	"github.com/minio/highwayhash"
-	"github.com/olivere/elastic/v7"
 )
 
 // Elastic constants
@@ -91,10 +89,8 @@ func getESVersionSupportStatus(version string) (res ESSupportStatus, err error) 
 	}
 
 	switch {
-	case majorVersion <= 4:
-		res = ESSUnsupported
 	case majorVersion <= 6:
-		res = ESSDeprecated
+		res = ESSUnsupported
 	default:
 		res = ESSSupported
 	}
@@ -192,7 +188,7 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 		return target.store.Put(eventData)
 	}
 	err := target.send(eventData)
-	if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
+	if xnet.IsNetworkOrHostDown(err, false) {
 		return errNotConnected
 	}
 	return err
@@ -260,7 +256,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return errNotConnected
 		}
 		return err
@@ -300,11 +296,7 @@ func (target *ElasticsearchTarget) checkAndInitClient(ctx context.Context) error
 		return errors.New("unable to determine support status of ES (should not happen)")
 
 	case ESSDeprecated:
-		fmt.Printf("DEPRECATION WARNING: Support for Elasticsearch version '%s' will be dropped in a future release. Please upgrade to a version >= 7.x.", version)
-		target.client, err = newClientV56(target.args)
-		if err != nil {
-			return err
-		}
+		return errors.New("there is no currently deprecated version of ES in MinIO")
 
 	case ESSSupported:
 		target.client = clientV7
@@ -556,94 +548,4 @@ func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event
 }
 
 func (c *esClientV7) stop() {
-}
-
-// For versions under 7
-type esClientV56 struct {
-	*elastic.Client
-}
-
-func newClientV56(args ElasticsearchArgs) (*esClientV56, error) {
-	// Client options
-	options := []elastic.ClientOptionFunc{elastic.SetURL(args.URL.String()),
-		elastic.SetMaxRetries(10),
-		elastic.SetSniff(false),
-		elastic.SetHttpClient(&http.Client{Transport: args.Transport})}
-	// Set basic auth
-	if args.Username != "" && args.Password != "" {
-		options = append(options, elastic.SetBasicAuth(args.Username, args.Password))
-	}
-	// Create a client
-	client, err := elastic.NewClient(options...)
-	if err != nil {
-		// https://github.com/olivere/elastic/wiki/Connection-Errors
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
-			return nil, errNotConnected
-		}
-		return nil, err
-	}
-	return &esClientV56{client}, nil
-}
-
-func (c *esClientV56) isAtleastV7() bool {
-	return false
-}
-
-// createIndex - creates the index if it does not exist.
-func (c *esClientV56) createIndex(args ElasticsearchArgs) error {
-	exists, err := c.IndexExists(args.Index).Do(context.Background())
-	if err != nil {
-		return err
-	}
-	if !exists {
-		var createIndex *elastic.IndicesCreateResult
-		if createIndex, err = c.CreateIndex(args.Index).Do(context.Background()); err != nil {
-			return err
-		}
-
-		if !createIndex.Acknowledged {
-			return fmt.Errorf("index %v not created", args.Index)
-		}
-	}
-	return nil
-}
-
-func (c *esClientV56) ping(ctx context.Context, args ElasticsearchArgs) (bool, error) {
-	_, code, err := c.Ping(args.URL.String()).HttpHeadOnly(true).Do(ctx)
-	if err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
-			return false, errNotConnected
-		}
-		return false, err
-	}
-	return !(code >= http.StatusBadRequest), nil
-
-}
-
-func (c *esClientV56) entryExists(ctx context.Context, index string, key string) (bool, error) {
-	return c.Exists().Index(index).Type("event").Id(key).Do(ctx)
-}
-
-func (c *esClientV56) removeEntry(ctx context.Context, index string, key string) error {
-	exists, err := c.entryExists(ctx, index, key)
-	if err == nil && exists {
-		_, err = c.Delete().Index(index).Type("event").Id(key).Do(ctx)
-	}
-	return err
-
-}
-
-func (c *esClientV56) updateEntry(ctx context.Context, index string, key string, eventData event.Event) error {
-	_, err := c.Index().Index(index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Id(key).Do(ctx)
-	return err
-}
-
-func (c *esClientV56) addEntry(ctx context.Context, index string, eventData event.Event) error {
-	_, err := c.Index().Index(index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(ctx)
-	return err
-
-}
-
-func (c *esClientV56) stop() {
-	c.Stop()
 }
