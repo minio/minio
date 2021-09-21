@@ -481,6 +481,10 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 		UserMetadata:         opts.UserDefined,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		UserTags:             tagMap,
+		// Content-Md5 is needed for buckets with object locking,
+		// instead of spending an extra API call to detect this
+		// we can set md5sum to be calculated always.
+		SendContentMd5: true,
 	}
 	ui, err := l.Client.PutObject(ctx, bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), putOpts)
 	if err != nil {

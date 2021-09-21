@@ -21,7 +21,7 @@ import (
 	"errors"
 	"io"
 
-	bucketsse "github.com/minio/minio/internal/bucket/encryption"
+	sse "github.com/minio/minio/internal/bucket/encryption"
 )
 
 // BucketSSEConfigSys - in-memory cache of bucket encryption config
@@ -33,7 +33,7 @@ func NewBucketSSEConfigSys() *BucketSSEConfigSys {
 }
 
 // Get - gets bucket encryption config for the given bucket.
-func (sys *BucketSSEConfigSys) Get(bucket string) (*bucketsse.BucketSSEConfig, error) {
+func (sys *BucketSSEConfigSys) Get(bucket string) (*sse.BucketSSEConfig, error) {
 	if globalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
@@ -47,8 +47,8 @@ func (sys *BucketSSEConfigSys) Get(bucket string) (*bucketsse.BucketSSEConfig, e
 }
 
 // validateBucketSSEConfig parses bucket encryption configuration and validates if it is supported by MinIO.
-func validateBucketSSEConfig(r io.Reader) (*bucketsse.BucketSSEConfig, error) {
-	encConfig, err := bucketsse.ParseBucketSSEConfig(r)
+func validateBucketSSEConfig(r io.Reader) (*sse.BucketSSEConfig, error) {
+	encConfig, err := sse.ParseBucketSSEConfig(r)
 	if err != nil {
 		return nil, err
 	}
