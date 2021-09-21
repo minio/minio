@@ -652,7 +652,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			resolver.bucket = bucket
 
 			foundObjs := false
-			dangling := false
 			ctx, cancel := context.WithCancel(ctx)
 
 			err := listPathRaw(ctx, listPathRawOptions{
@@ -674,13 +673,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						console.Debugf(healObjectsPrefix+" got partial, %d agreed, errs: %v\n", nAgreed, errs)
 					}
 
-					// agreed value less than expected quorum
-					dangling = nAgreed < resolver.objQuorum || nAgreed < resolver.dirQuorum
-
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						// check if we can get one entry atleast
-						// proceed to heal nonetheless.
+						// proceed to heal nonetheless, since
+						// this object might be dangling.
 						entry, _ = entries.firstFound()
 					}
 
@@ -734,30 +731,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 			if f.dataUsageScannerDebug && err != nil && err != errFileNotFound {
 				console.Debugf(healObjectsPrefix+" checking returned value %v (%T)\n", err, err)
-			}
-
-			// If we found one or more disks with this folder, delete it.
-			if err == nil && dangling {
-				if f.dataUsageScannerDebug {
-					console.Debugf(healObjectsPrefix+" deleting dangling directory %s\n", prefix)
-				}
-
-				// wait on timer per object.
-				wait := scannerSleeper.Timer(ctx)
-
-				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
-					Recursive: true,
-					Remove:    healDeleteDangling,
-				}, func(bucket, object, versionID string) error {
-					// Wait for each heal as per scanner frequency.
-					wait()
-					wait = scannerSleeper.Timer(ctx)
-					return bgSeq.queueHealTask(healSource{
-						bucket:    bucket,
-						object:    object,
-						versionID: versionID,
-					}, madmin.HealItemObject)
-				})
 			}
 
 			// Add unless healing returned an error.
