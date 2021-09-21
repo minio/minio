@@ -62,7 +62,6 @@ require (
 	github.com/nats-io/stan.go v0.8.3
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8
-	github.com/olivere/elastic/v7 v7.0.22
 	github.com/philhofer/fwd v1.1.1
 	github.com/pierrec/lz4 v2.6.0+incompatible
 	github.com/pkg/errors v0.9.1
@@ -79,6 +78,7 @@ require (
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/api/v3 v3.5.0-beta.4
 	go.etcd.io/etcd/client/v3 v3.5.0-beta.4
+	go.opencensus.io v0.22.5 // indirect
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.1-0.20210329175301-c23abee72d19
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
