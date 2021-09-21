@@ -1909,7 +1909,7 @@ func (z *dataUsageEntryV5) DecodeMsg(dc *msgp.Reader) (err error) {
 		z.ReplicationStats = nil
 	} else {
 		if z.ReplicationStats == nil {
-			z.ReplicationStats = new(replicationStats)
+			z.ReplicationStats = new(replicationStatsV1)
 		}
 		err = z.ReplicationStats.DecodeMsg(dc)
 		if err != nil {
@@ -2071,7 +2071,7 @@ func (z *dataUsageEntryV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		z.ReplicationStats = nil
 	} else {
 		if z.ReplicationStats == nil {
-			z.ReplicationStats = new(replicationStats)
+			z.ReplicationStats = new(replicationStatsV1)
 		}
 		bts, err = z.ReplicationStats.UnmarshalMsg(bts)
 		if err != nil {
@@ -2510,6 +2510,221 @@ func (z *replicationStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *replicationStats) Msgsize() (s int) {
 	s = 1 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *replicationStatsV1) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 10 {
+		err = msgp.ArrayError{Wanted: 10, Got: zb0001}
+		return
+	}
+	z.PendingSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "PendingSize")
+		return
+	}
+	z.ReplicatedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.FailedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "FailedSize")
+		return
+	}
+	z.ReplicaSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	z.FailedCount, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "FailedCount")
+		return
+	}
+	z.PendingCount, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "PendingCount")
+		return
+	}
+	z.MissedThresholdSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdSize")
+		return
+	}
+	z.AfterThresholdSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdSize")
+		return
+	}
+	z.MissedThresholdCount, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdCount")
+		return
+	}
+	z.AfterThresholdCount, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdCount")
+		return
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *replicationStatsV1) EncodeMsg(en *msgp.Writer) (err error) {
+	// array header, size 10
+	err = en.Append(0x9a)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.PendingSize)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicatedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	err = en.WriteUint64(z.FailedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicaSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	err = en.WriteUint64(z.FailedCount)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedCount")
+		return
+	}
+	err = en.WriteUint64(z.PendingCount)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingCount")
+		return
+	}
+	err = en.WriteUint64(z.MissedThresholdSize)
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdSize")
+		return
+	}
+	err = en.WriteUint64(z.AfterThresholdSize)
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdSize")
+		return
+	}
+	err = en.WriteUint64(z.MissedThresholdCount)
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdCount")
+		return
+	}
+	err = en.WriteUint64(z.AfterThresholdCount)
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdCount")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *replicationStatsV1) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// array header, size 10
+	o = append(o, 0x9a)
+	o = msgp.AppendUint64(o, z.PendingSize)
+	o = msgp.AppendUint64(o, z.ReplicatedSize)
+	o = msgp.AppendUint64(o, z.FailedSize)
+	o = msgp.AppendUint64(o, z.ReplicaSize)
+	o = msgp.AppendUint64(o, z.FailedCount)
+	o = msgp.AppendUint64(o, z.PendingCount)
+	o = msgp.AppendUint64(o, z.MissedThresholdSize)
+	o = msgp.AppendUint64(o, z.AfterThresholdSize)
+	o = msgp.AppendUint64(o, z.MissedThresholdCount)
+	o = msgp.AppendUint64(o, z.AfterThresholdCount)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *replicationStatsV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 10 {
+		err = msgp.ArrayError{Wanted: 10, Got: zb0001}
+		return
+	}
+	z.PendingSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingSize")
+		return
+	}
+	z.ReplicatedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.FailedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedSize")
+		return
+	}
+	z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
+		return
+	}
+	z.FailedCount, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "FailedCount")
+		return
+	}
+	z.PendingCount, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "PendingCount")
+		return
+	}
+	z.MissedThresholdSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdSize")
+		return
+	}
+	z.AfterThresholdSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdSize")
+		return
+	}
+	z.MissedThresholdCount, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "MissedThresholdCount")
+		return
+	}
+	z.AfterThresholdCount, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "AfterThresholdCount")
+		return
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *replicationStatsV1) Msgsize() (s int) {
+	s = 1 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size
 	return
 }
 
