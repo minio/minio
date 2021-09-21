@@ -218,7 +218,7 @@ Note that ExistingObjectReplication needs to be enabled in the config via `mc re
 
 ### Multi destination replication
 
-Replication from a source bucket to multiple destination buckets is supported. For each of the targets,repeat the steps to configure a remote target ARN and add replication rules to the source bucket's replication config.
+Replication from a source bucket to multiple destination buckets is supported. For each of the targets, repeat the steps to configure a remote target ARN and add replication rules to the source bucket's replication config.
 
 Note that on the source side, the `X-Amz-Replication-Status` changes from `PENDING` to `COMPLETED` after replication succeeds to each of the targets. On the destination side, a `X-Amz-Replication-Status` status of `REPLICA` indicates that the object was replicated successfully. Any replication failures are automatically re-attempted during a periodic disk scanner cycle.
 
