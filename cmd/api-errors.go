@@ -1967,8 +1967,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationConfigurationNotFoundError
 	case BucketRemoteDestinationNotFound:
 		apiErr = ErrRemoteDestinationNotFoundError
-	case BucketReplicationDestinationMissingLock:
-		apiErr = ErrReplicationDestinationMissingLock
 	case BucketRemoteTargetNotFound:
 		apiErr = ErrRemoteTargetNotFoundError
 	case BucketRemoteConnectionErr:
