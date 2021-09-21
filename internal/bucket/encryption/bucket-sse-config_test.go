@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package sse
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func TestParseBucketSSEConfig(t *testing.T) {
 		XMLName: xml.Name{
 			Local: "ServerSideEncryptionConfiguration",
 		},
-		Rules: []SSERule{
+		Rules: []Rule{
 			{
 				DefaultEncryptionAction: EncryptionAction{
 					Algorithm: AES256,
@@ -44,7 +44,7 @@ func TestParseBucketSSEConfig(t *testing.T) {
 		XMLName: xml.Name{
 			Local: "ServerSideEncryptionConfiguration",
 		},
-		Rules: []SSERule{
+		Rules: []Rule{
 			{
 				DefaultEncryptionAction: EncryptionAction{
 					Algorithm: AES256,
@@ -58,7 +58,7 @@ func TestParseBucketSSEConfig(t *testing.T) {
 		XMLName: xml.Name{
 			Local: "ServerSideEncryptionConfiguration",
 		},
-		Rules: []SSERule{
+		Rules: []Rule{
 			{
 				DefaultEncryptionAction: EncryptionAction{
 					Algorithm:   AWSKms,

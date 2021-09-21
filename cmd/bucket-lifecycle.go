@@ -380,9 +380,9 @@ const (
 
 // Encryption specifies encryption setting on restored bucket
 type Encryption struct {
-	EncryptionType sse.SSEAlgorithm `xml:"EncryptionType"`
-	KMSContext     string           `xml:"KMSContext,omitempty"`
-	KMSKeyID       string           `xml:"KMSKeyId,omitempty"`
+	EncryptionType sse.Algorithm `xml:"EncryptionType"`
+	KMSContext     string        `xml:"KMSContext,omitempty"`
+	KMSKeyID       string        `xml:"KMSKeyId,omitempty"`
 }
 
 // MetadataEntry denotes name and value.
