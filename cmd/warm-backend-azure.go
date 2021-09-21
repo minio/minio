@@ -66,7 +66,10 @@ func (az *warmBackendAzure) Put(ctx context.Context, object string, r io.Reader,
 		}
 	}
 	res, err := azblob.UploadStreamToBlockBlob(ctx, r, blobURL, azblob.UploadStreamToBlockBlobOptions{})
-	return remoteVersionID(res.Version()), azureToObjectError(err, az.Bucket, object)
+	if err != nil {
+		return "", azureToObjectError(err, az.Bucket, object)
+	}
+	return remoteVersionID(res.Version()), nil
 }
 
 func (az *warmBackendAzure) Get(ctx context.Context, object string, rv remoteVersionID, opts WarmBackendGetOpts) (r io.ReadCloser, err error) {
