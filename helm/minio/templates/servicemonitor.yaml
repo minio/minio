@@ -18,8 +18,10 @@ spec:
   endpoints:
     {{- if .Values.tls.enabled }}
     - port: https
+      scheme: https
     {{ else }}
     - port: http
+      scheme: http
     {{- end }}
       path: /minio/v2/metrics/cluster
       {{- if .Values.metrics.serviceMonitor.interval }}
