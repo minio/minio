@@ -90,16 +90,19 @@ func (c *OperatorDNS) Put(bucket string) error {
 	if err = c.addAuthHeader(req); err != nil {
 		return newError(bucket, err)
 	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if derr := c.Delete(bucket); derr != nil {
 			return newError(bucket, derr)
 		}
+		return err
 	}
-	var errorStringBuilder strings.Builder
-	io.Copy(&errorStringBuilder, io.LimitReader(resp.Body, resp.ContentLength))
-	xhttp.DrainBody(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
+		var errorStringBuilder strings.Builder
+		io.Copy(&errorStringBuilder, io.LimitReader(resp.Body, resp.ContentLength))
 		errorString := errorStringBuilder.String()
 		switch resp.StatusCode {
 		case http.StatusConflict:
