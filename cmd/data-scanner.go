@@ -1126,29 +1126,25 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 			case replication.Pending:
 				tgtSizeS.pendingCount++
 				tgtSizeS.pendingSize += oi.Size
+				sizeS.pendingCount++
+				sizeS.pendingSize += oi.Size
 			case replication.Failed:
 				tgtSizeS.failedSize += oi.Size
 				tgtSizeS.failedCount++
+				sizeS.failedSize += oi.Size
+				sizeS.failedCount++
 			case replication.Completed, "COMPLETE":
 				tgtSizeS.replicatedSize += oi.Size
+				sizeS.replicatedSize += oi.Size
 			}
 			sizeS.replTargetStats[arn] = tgtSizeS
 		}
 	}
 
 	switch oi.ReplicationStatus {
-	case replication.Pending:
-		sizeS.pendingCount++
-		sizeS.pendingSize += oi.Size
+	case replication.Pending, replication.Failed:
 		globalReplicationPool.queueReplicaTask(roi)
 		return
-	case replication.Failed:
-		sizeS.failedSize += oi.Size
-		sizeS.failedCount++
-		globalReplicationPool.queueReplicaTask(roi)
-		return
-	case replication.Completed, "COMPLETE":
-		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
 	}

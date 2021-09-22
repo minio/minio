@@ -1003,6 +1003,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 					FailedSize:     v.ReplicationStats.FailedSize,
 					FailedCount:    v.ReplicationStats.FailedCount,
 					PendingSize:    v.ReplicationStats.PendingSize,
+					PendingCount:   v.ReplicationStats.PendingCount,
 				}
 				due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 			}
@@ -1061,6 +1062,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 						FailedSize:     v.ReplicationStats.FailedSize,
 						FailedCount:    v.ReplicationStats.FailedCount,
 						PendingSize:    v.ReplicationStats.PendingSize,
+						PendingCount:   v.ReplicationStats.PendingCount,
 					}
 					due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 				}

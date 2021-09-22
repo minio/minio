@@ -893,10 +893,6 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		}(i, tgt)
 	}
 	wg.Wait()
-	// metadata update once..
-	if objInfo.UserTags != "" {
-		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
-	}
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
@@ -962,7 +958,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 // replicateObjectToTarget replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
 func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
-	objInfo := ri.ObjectInfo
+	objInfo := ri.ObjectInfo.Clone()
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 	var (

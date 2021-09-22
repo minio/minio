@@ -51,29 +51,6 @@ func (brs *BucketReplicationStats) Empty() bool {
 	return len(brs.Stats) == 0 && brs.ReplicaSize == 0
 }
 
-// UpdateStat updates replication stats for the target arn
-func (brs *BucketReplicationStats) UpdateStat(arn string, stat *BucketReplicationStat) {
-	var s BucketReplicationStat
-	if st, ok := brs.Stats[arn]; ok {
-		s = *st
-	}
-	// update target metric
-	atomic.AddInt64(&s.FailedSize, stat.FailedSize)
-	atomic.AddInt64(&s.FailedCount, stat.FailedCount)
-	atomic.AddInt64(&s.PendingCount, stat.PendingCount)
-	atomic.AddInt64(&s.PendingSize, stat.PendingSize)
-	atomic.AddInt64(&s.ReplicaSize, stat.ReplicaSize)
-	atomic.AddInt64(&s.ReplicatedSize, stat.ReplicatedSize)
-	// update total counts across targets
-	atomic.AddInt64(&brs.FailedSize, stat.FailedSize)
-	atomic.AddInt64(&brs.FailedCount, stat.FailedCount)
-	atomic.AddInt64(&brs.PendingCount, stat.PendingCount)
-	atomic.AddInt64(&brs.PendingSize, stat.PendingSize)
-	atomic.AddInt64(&brs.ReplicaSize, stat.ReplicaSize)
-	atomic.AddInt64(&brs.ReplicatedSize, stat.ReplicatedSize)
-	brs.Stats[arn] = &s
-}
-
 // Clone creates a new BucketReplicationStats copy
 func (brs BucketReplicationStats) Clone() BucketReplicationStats {
 	c := BucketReplicationStats{
