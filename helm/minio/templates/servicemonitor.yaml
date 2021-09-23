@@ -5,6 +5,8 @@ metadata:
   name: {{ template "minio.fullname" . }}
   {{- if .Values.metrics.serviceMonitor.namespace }}
   namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{ else }}
+  namespace: {{ .Release.Namespace | quote }}
   {{- end }}
   labels:
     app: {{ template "minio.name" . }}

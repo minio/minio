@@ -3,6 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ template "minio.fullname" . }}-make-user-job
+  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}-make-user-job
     chart: {{ template "minio.chart" . }}
