@@ -411,6 +411,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// Initialize bucket metadata sub-system.
 	globalBucketMetadataSys.Init(ctx, buckets, newObject)
 
+	// Initialize bucket notification sub-system.
+	globalNotificationSys.Init(ctx, buckets, newObject)
+
 	if globalIsErasure {
 		// Initialize transition tier configuration manager
 		if err = globalTierConfigMgr.Init(ctx, newObject); err != nil {
