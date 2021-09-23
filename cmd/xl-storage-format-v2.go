@@ -1492,9 +1492,9 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		buf = append(buf, make([]byte, extra)...)
 		_, err := io.ReadFull(r, buf[has:])
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				// Returned if we read nothing.
-				return io.ErrUnexpectedEOF
+				return fmt.Errorf("readXLMetaNoData.readMore: %w", io.ErrUnexpectedEOF)
 			}
 			return fmt.Errorf("readXLMetaNoData.readMore: %w", err)
 		}
