@@ -537,6 +537,14 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 		Checksum: sha256Sum,
 	}
 
+	if err := opts.CheckPermissions(); err != nil {
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    fmt.Sprintf("server update failed with: %s, do not restart the servers yet", err),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
 	minisignPubkey := env.Get(envMinisignPubKey, "")
 	if minisignPubkey != "" {
 		v := selfupdate.NewVerifier()
