@@ -146,7 +146,7 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 		return errTierNotFound
 	}
 
-	newCfg := config.Tiers[tierName]
+	cfg := config.Tiers[tierName]
 	switch tierType {
 	case madmin.S3:
 		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
@@ -154,30 +154,29 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 		}
 		switch {
 		case creds.AWSRole:
-			newCfg.S3.AWSRole = true
+			cfg.S3.AWSRole = true
 		default:
-			newCfg.S3.AccessKey = creds.AccessKey
-			newCfg.S3.SecretKey = creds.SecretKey
+			cfg.S3.AccessKey = creds.AccessKey
+			cfg.S3.SecretKey = creds.SecretKey
 		}
 	case madmin.Azure:
-		if creds.AccessKey == "" || creds.SecretKey == "" {
+		if creds.SecretKey == "" {
 			return errTierInsufficientCreds
 		}
-		newCfg.Azure.AccountName = creds.AccessKey
-		newCfg.Azure.AccountKey = creds.SecretKey
+		cfg.Azure.AccountKey = creds.SecretKey
 
 	case madmin.GCS:
 		if creds.CredsJSON == nil {
 			return errTierInsufficientCreds
 		}
-		newCfg.GCS.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
+		cfg.GCS.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
 	}
 
-	d, err := newWarmBackend(ctx, newCfg)
+	d, err := newWarmBackend(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	config.Tiers[tierName] = newCfg
+	config.Tiers[tierName] = cfg
 	config.drivercache[tierName] = d
 	return nil
 }
