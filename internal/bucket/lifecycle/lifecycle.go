@@ -137,7 +137,7 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.NoncurrentVersionExpiration.NoncurrentDays > 0 {
 			return true
 		}
-		if rule.NoncurrentVersionTransition.NoncurrentDays > 0 {
+		if !rule.NoncurrentVersionTransition.IsNull() {
 			return true
 		}
 		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
@@ -146,12 +146,16 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now()) {
 			return true
 		}
+		if !rule.Expiration.IsDaysNull() {
+			return true
+		}
 		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now()) {
 			return true
 		}
-		if !rule.Expiration.IsDaysNull() || !rule.Transition.IsDaysNull() {
+		if !rule.Transition.IsNull() { // this allows for Transition.Days to be zero.
 			return true
 		}
+
 	}
 	return false
 }
@@ -175,6 +179,7 @@ func (lc Lifecycle) Validate() error {
 	if len(lc.Rules) == 0 {
 		return errLifecycleNoRule
 	}
+
 	// Validate all the rules in the lifecycle config
 	for _, r := range lc.Rules {
 		if err := r.Validate(); err != nil {
@@ -229,7 +234,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 		// The NoncurrentVersionTransition action requests MinIO to transition
 		// noncurrent versions of objects x days after the objects become
 		// noncurrent.
-		if !rule.NoncurrentVersionTransition.IsDaysNull() {
+		if !rule.NoncurrentVersionTransition.IsNull() {
 			rules = append(rules, rule)
 			continue
 		}
@@ -316,7 +321,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 
-		if !rule.NoncurrentVersionTransition.IsDaysNull() {
+		if !rule.NoncurrentVersionTransition.IsNull() {
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && !obj.DeleteMarker && obj.TransitionStatus != TransitionComplete {
 				// Non current versions should be transitioned if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
@@ -346,17 +351,12 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 
 			if obj.TransitionStatus != TransitionComplete {
-				switch {
-				case !rule.Transition.IsDateNull():
-					if time.Now().UTC().After(rule.Transition.Date.Time) {
+				if due, ok := rule.Transition.NextDue(obj); ok {
+					if time.Now().UTC().After(due) {
 						action = TransitionAction
 					}
-				case !rule.Transition.IsDaysNull():
-					if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
-						action = TransitionAction
-					}
-
 				}
+
 				// this if condition is strictly for debug purposes to force immediate
 				// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
 				if !rule.Transition.IsNull() && doesMatchDebugTiers(rule.Transition.StorageClass, obj.RemoteTiersImmediately) {

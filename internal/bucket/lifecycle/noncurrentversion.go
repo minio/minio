@@ -70,7 +70,7 @@ func (n NoncurrentVersionExpiration) Validate() error {
 
 // NoncurrentVersionTransition - an action for lifecycle configuration rule.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays ExpirationDays `xml:"NoncurrentDays"`
+	NoncurrentDays TransitionDays `xml:"NoncurrentDays"`
 	StorageClass   string         `xml:"StorageClass"`
 	set            bool
 }
@@ -78,16 +78,11 @@ type NoncurrentVersionTransition struct {
 // MarshalXML is extended to leave out
 // <NoncurrentVersionTransition></NoncurrentVersionTransition> tags
 func (n NoncurrentVersionTransition) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if n.NoncurrentDays == ExpirationDays(0) {
+	if n.IsNull() {
 		return nil
 	}
 	type noncurrentVersionTransitionWrapper NoncurrentVersionTransition
 	return e.EncodeElement(noncurrentVersionTransitionWrapper(n), start)
-}
-
-// IsDaysNull returns true if days field is null
-func (n NoncurrentVersionTransition) IsDaysNull() bool {
-	return n.NoncurrentDays == ExpirationDays(0)
 }
 
 // UnmarshalXML decodes NoncurrentVersionExpiration
@@ -103,12 +98,18 @@ func (n *NoncurrentVersionTransition) UnmarshalXML(d *xml.Decoder, startElement 
 	return nil
 }
 
+// IsNull returns true if NoncurrentTransition doesn't refer to any storage-class.
+// Note: It supports immediate transition, i.e zero noncurrent days.
+func (n NoncurrentVersionTransition) IsNull() bool {
+	return n.StorageClass == ""
+}
+
 // Validate returns an error with wrong value
 func (n NoncurrentVersionTransition) Validate() error {
 	if !n.set {
 		return nil
 	}
-	if int(n.NoncurrentDays) <= 0 || n.StorageClass == "" {
+	if n.StorageClass == "" {
 		return errXMLNotWellFormed
 	}
 	return nil
@@ -117,10 +118,12 @@ func (n NoncurrentVersionTransition) Validate() error {
 // NextDue returns upcoming NoncurrentVersionTransition date for obj if
 // applicable, returns false otherwise.
 func (n NoncurrentVersionTransition) NextDue(obj ObjectOpts) (time.Time, bool) {
-	switch {
-	case obj.IsLatest, n.IsDaysNull():
+	if obj.IsLatest || n.StorageClass == "" {
 		return time.Time{}, false
 	}
-
+	// Days == 0 indicates immediate tiering, i.e object is eligible for tiering since it became noncurrent.
+	if n.NoncurrentDays == 0 {
+		return obj.SuccessorModTime, true
+	}
 	return ExpectedExpiryTime(obj.SuccessorModTime, int(n.NoncurrentDays)), true
 }

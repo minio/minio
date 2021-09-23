@@ -230,7 +230,7 @@ func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 	return nil
 }
 
-// enqueueuTransitionImmediate enqueues obj for transition if eligible.
+// enqueueTransitionImmediate enqueues obj for transition if eligible.
 // This is to be called after a successful upload of an object (version).
 func enqueueTransitionImmediate(obj ObjectInfo) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
