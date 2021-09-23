@@ -33,10 +33,10 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.11
 	github.com/klauspost/compress v1.13.5
-	github.com/klauspost/cpuid/v2 v2.0.4
+	github.com/klauspost/cpuid/v2 v2.0.6
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
-	github.com/klauspost/reedsolomon v1.9.11
+	github.com/klauspost/reedsolomon v1.9.13
 	github.com/lib/pq v1.9.0
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/miekg/dns v1.1.35
