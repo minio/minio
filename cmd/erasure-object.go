@@ -443,7 +443,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
-	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
+	if opts.VersionID != "" && !fi.VersionPurgeStatus().Empty() {
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
