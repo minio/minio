@@ -365,12 +365,14 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		}
 
 		const retryDelay = 500 * time.Millisecond
-		// Load first part metadata...
 		// All operations are performed without locks, so we must be careful and allow for failures.
 		// Read metadata associated with the object from a disk.
 		if retries > 0 {
 			for _, disk := range er.getDisks() {
 				if disk == nil {
+					continue
+				}
+				if !disk.IsOnline() {
 					continue
 				}
 				_, err := disk.ReadVersion(ctx, minioMetaBucket,
@@ -384,6 +386,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}
 		}
 
+		// Load first part metadata...
 		// Read metadata associated with the object from all disks.
 		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{}, true)
 		if err != nil {
@@ -441,6 +444,9 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						if disk == nil {
 							continue
 						}
+						if !disk.IsOnline() {
+							continue
+						}
 						_, err := disk.ReadVersion(ctx, minioMetaBucket,
 							o.objectPath(partN), "", false)
 						if err != nil {
@@ -452,7 +458,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					}
 				}
 
-				// Load first part metadata...
+				// Load partN metadata...
 				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{}, true)
 				if err != nil {
 					time.Sleep(retryDelay)
@@ -785,11 +791,13 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	defer cancel()
 
 	fallback := func(err error) bool {
-		if err == nil {
-			return false
+		switch err.(type) {
+		case StorageErr:
+			// all supported disk errors
+			// attempt a fallback.
+			return true
 		}
-		return err.Error() == errUnformattedDisk.Error() ||
-			err.Error() == errVolumeNotFound.Error()
+		return false
 	}
 	askDisks := len(disks)
 	readers := make([]*metacacheReader, askDisks)
@@ -844,6 +852,8 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			if werr != io.EOF && werr != nil &&
 				werr.Error() != errFileNotFound.Error() &&
 				werr.Error() != errVolumeNotFound.Error() &&
+				werr.Error() != errDiskNotFound.Error() &&
+				werr.Error() != errUnformattedDisk.Error() &&
 				!errors.Is(werr, context.Canceled) {
 				logger.LogIf(ctx, werr)
 			}
@@ -874,12 +884,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				continue
 			case nil:
 			default:
-				if err.Error() == errFileNotFound.Error() {
-					atEOF++
-					fnf++
-					continue
-				}
-				if err.Error() == errVolumeNotFound.Error() {
+				switch err.Error() {
+				case errFileNotFound.Error(),
+					errVolumeNotFound.Error(),
+					errUnformattedDisk.Error(),
+					errDiskNotFound.Error():
 					atEOF++
 					fnf++
 					continue
