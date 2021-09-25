@@ -349,6 +349,12 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	endpointStrings := make([]string, len(endpoints))
 
+	// Fill endpointString with the same order of endpoints passed as
+	// arguments but it will be reordered later according to disks order
+	for i, endpoint := range endpoints {
+		endpointStrings[i] = endpoint.String()
+	}
+
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
 		sets:               make([]*erasureObjects, setCount),
