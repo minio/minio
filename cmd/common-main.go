@@ -138,7 +138,7 @@ func minioConfigToConsoleFeatures() {
 	}
 	// if IDP is enabled, set IDP environment variables
 	if globalOpenIDConfig.URL != nil {
-		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.DiscoveryDoc.Issuer)
+		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.URL.String())
 		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ClientID)
 		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ClientSecret)
 		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)

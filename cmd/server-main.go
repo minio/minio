@@ -596,6 +596,14 @@ func serverMain(ctx *cli.Context) {
 		}()
 	}
 
+	if serverDebugLog {
+		logger.Info("== DEBUG Mode enabled ==")
+		logger.Info("Currently set environment settings:")
+		for _, v := range os.Environ() {
+			logger.Info(v)
+		}
+		logger.Info("======")
+	}
 	<-globalOSSignalCh
 }
 
