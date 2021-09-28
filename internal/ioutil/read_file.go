@@ -20,6 +20,8 @@ package ioutil
 import (
 	"io"
 	"os"
+
+	"github.com/minio/minio/internal/disk"
 )
 
 // ReadFile reads the named file and returns the contents.
@@ -33,6 +35,10 @@ func ReadFile(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
+		return nil, err
+	}
+	defer disk.Fadvise(f, disk.FadvNoReuse)
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
