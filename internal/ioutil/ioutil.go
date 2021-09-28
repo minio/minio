@@ -227,9 +227,9 @@ func SameFile(fi1, fi2 os.FileInfo) bool {
 	return true
 }
 
-// DirectIO alignment needs to be 4K. Defined here as
+// DirectioAlignSize - DirectIO alignment needs to be 4K. Defined here as
 // directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
-const directioAlignSize = 4096
+const DirectioAlignSize = 4096
 
 // CopyAligned - copies from reader to writer using the aligned input
 // buffer, it is expected that input buffer is page aligned to
@@ -269,7 +269,7 @@ func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte, totalSize int64) (i
 		}
 		buf = buf[:nr]
 		var nw int64
-		if len(buf)%directioAlignSize == 0 {
+		if len(buf)%DirectioAlignSize == 0 {
 			var n int
 			// buf is aligned for directio write()
 			n, err = w.Write(buf)
