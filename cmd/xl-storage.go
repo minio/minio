@@ -387,7 +387,7 @@ func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.diskPath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
-	b, err := ioutil.ReadFile(healingFile)
+	b, err := xioutil.ReadFile(healingFile)
 	if err != nil {
 		return nil
 	}
@@ -410,6 +410,12 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
+
+	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
+		return nil, err
+	}
+
+	defer disk.Fadvise(f, disk.FadvNoReuse)
 	defer f.Close()
 	stat, err := f.Stat()
 	if err != nil {
@@ -1228,6 +1234,10 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string) (buf []byte, 
 		}
 		return nil, err
 	}
+	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
+		return nil, err
+	}
+	defer disk.Fadvise(f, disk.FadvNoReuse)
 	r := &odirectReader{f, nil, nil, true, true, s, nil}
 	defer r.Close()
 	buf, err = ioutil.ReadAll(r)
@@ -1547,6 +1557,11 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
+	// Enable sequential read access pattern - only applicable on Linux.
+	if err := disk.Fadvise(file, disk.FadvSequential); err != nil {
+		return nil, err
+	}
+
 	if offset == 0 {
 		or := &odirectReader{file, nil, nil, true, false, s, nil}
 		if length <= smallFileThreshold {
@@ -1565,6 +1580,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
+		disk.Fadvise(file, disk.FadvNoReuse)
 		return file.Close()
 	})}
 
