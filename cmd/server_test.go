@@ -2427,7 +2427,7 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *check) {
 	c.Assert(err, nil)
 	// Since max-keys parameter in the ListMultipart request set to invalid value of -2,
 	// its expected to fail with error message "InvalidArgument".
-	verifyError(c, response4, "InvalidArgument", "Argument max-parts must be an integer between 0 and 2147483647", http.StatusBadRequest)
+	verifyError(c, response4, "InvalidArgument", "Part number must be an integer between 1 and 10000, inclusive", http.StatusBadRequest)
 }
 
 // TestObjectValidMD5 - First uploads an object with a valid Content-Md5 header and verifies the status,

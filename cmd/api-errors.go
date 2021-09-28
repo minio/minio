@@ -440,7 +440,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrInvalidMaxParts: {
 		Code:           "InvalidArgument",
-		Description:    "Argument max-parts must be an integer between 0 and 2147483647",
+		Description:    "Part number must be an integer between 1 and 10000, inclusive",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPartNumberMarker: {
