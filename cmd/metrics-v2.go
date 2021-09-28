@@ -24,8 +24,10 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -69,6 +71,7 @@ const (
 	sysCallSubsystem          MetricSubsystem = "syscall"
 	usageSubsystem            MetricSubsystem = "usage"
 	ilmSubsystem              MetricSubsystem = "ilm"
+	scannerSubsystem          MetricSubsystem = "scanner"
 )
 
 // MetricName are the individual names for the metric.
@@ -255,6 +258,7 @@ func GetGeneratorsForPeer() []MetricsGenerator {
 		getNetworkMetrics,
 		getS3TTFBMetric,
 		getILMNodeMetrics,
+		getScannerNodeMetrics,
 	}
 	return g
 }
@@ -1066,6 +1070,93 @@ func getILMNodeMetrics() MetricsGroup {
 	}
 }
 
+func getScannerNodeMetrics() MetricsGroup {
+	return MetricsGroup{
+		id:         "ScannerNodeMetrics",
+		cachedRead: cachedRead,
+		read: func(_ context.Context) []Metric {
+			metrics := []Metric{
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: scannerSubsystem,
+						Name:      "objects_scanned",
+						Help:      "Total number of unique objects scanned since server start.",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.accTotalObjects)),
+				},
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: scannerSubsystem,
+						Name:      "versions_scanned",
+						Help:      "Total number of object versions scanned since server start.",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.accTotalVersions)),
+				},
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: scannerSubsystem,
+						Name:      "directories_scanned",
+						Help:      "Total number of directories scanned since server start.",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.accFolders)),
+				},
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: scannerSubsystem,
+						Name:      "bucket_scans_started",
+						Help:      "Total number of bucket scans started since server start",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.bucketsStarted)),
+				},
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: scannerSubsystem,
+						Name:      "bucket_scans_finished",
+						Help:      "Total number of bucket scans finished since server start",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.bucketsFinished)),
+				},
+				{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: ilmSubsystem,
+						Name:      "versions_scanned",
+						Help:      "Total number of object versions checked for ilm actions since server start",
+						Type:      counterMetric,
+					},
+					Value: float64(atomic.LoadUint64(&globalScannerStats.ilmChecks)),
+				},
+			}
+			for i := range globalScannerStats.actions {
+				action := lifecycle.Action(i)
+				v := atomic.LoadUint64(&globalScannerStats.actions[action])
+				if v == 0 {
+					continue
+				}
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: nodeMetricNamespace,
+						Subsystem: ilmSubsystem,
+						Name:      MetricName("action_count_" + toSnake(action.String())),
+						Help:      "Total action outcome of lifecycle checks since server start",
+						Type:      counterMetric,
+					}})
+			}
+			return metrics
+		},
+	}
+}
+
 func getMinioVersionMetrics() MetricsGroup {
 	return MetricsGroup{
 		id:         "MinioVersionMetrics",
@@ -1752,4 +1843,27 @@ func metricsNodeHandler() http.Handler {
 				ErrorHandling: promhttp.ContinueOnError,
 			}),
 	)
+}
+
+func toSnake(camel string) (snake string) {
+	var b strings.Builder
+	l := len(camel)
+	for i, v := range camel {
+		// A is 65, a is 97
+		if v >= 'a' {
+			b.WriteRune(v)
+			continue
+		}
+		// v is capital letter here
+		// disregard first letter
+		// add underscore if last letter is capital letter
+		// add underscore when previous letter is lowercase
+		// add underscore when next letter is lowercase
+		if (i != 0 || i == l-1) && ((i > 0 && rune(camel[i-1]) >= 'a') ||
+			(i < l-1 && rune(camel[i+1]) >= 'a')) {
+			b.WriteRune('_')
+		}
+		b.WriteRune(v + 'a' - 'A')
+	}
+	return b.String()
 }

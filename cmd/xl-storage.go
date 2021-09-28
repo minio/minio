@@ -34,6 +34,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -495,7 +496,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 		sizeS := sizeSummary{}
+		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
 		for _, version := range fivs.Versions {
+			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			if !oi.DeleteMarker && sz == oi.Size {
