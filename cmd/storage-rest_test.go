@@ -190,7 +190,7 @@ func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+			t.Fatalf("case %v: error: expected: %v, got: %v, err: %v", i+1, expectErr, testCase.expectErr, err)
 		}
 	}
 }
