@@ -53,7 +53,7 @@ func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts mad
 }
 
 // Heal bucket - create buckets on disks where it does not exist.
-func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []string, bucket string, writeQuorum int,
+func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []Endpoint, bucket string, writeQuorum int,
 	opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
@@ -114,7 +114,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 	for i := range beforeState {
 		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[i],
+			Endpoint: storageEndpoints[i].String(),
 			State:    beforeState[i],
 		})
 	}
@@ -124,7 +124,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 		for i := range beforeState {
 			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: storageEndpoints[i],
+				Endpoint: storageEndpoints[i].String(),
 				State:    madmin.DriveStateOk,
 			})
 		}
@@ -159,7 +159,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 	for i := range afterState {
 		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[i],
+			Endpoint: storageEndpoints[i].String(),
 			State:    afterState[i],
 		})
 	}
@@ -345,24 +345,24 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			disksToHealCount++
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: storageEndpoints[i],
+				Endpoint: storageEndpoints[i].String(),
 				State:    driveState,
 			})
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: storageEndpoints[i],
+				Endpoint: storageEndpoints[i].String(),
 				State:    driveState,
 			})
 			continue
 		}
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[i],
+			Endpoint: storageEndpoints[i].String(),
 			State:    driveState,
 		})
 		result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[i],
+			Endpoint: storageEndpoints[i].String(),
 			State:    driveState,
 		})
 	}
@@ -609,7 +609,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 
 	// Prepare object creation in all disks
 	for i, err := range errs {
-		drive := storageEndpoints[i]
+		drive := storageEndpoints[i].String()
 		switch err {
 		case nil:
 			hr.Before.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateOk}
@@ -650,7 +650,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 
 // Populates default heal result item entries with possible values when we are returning prematurely.
 // This is to ensure that in any circumstance we are not returning empty arrays with wrong values.
-func (er erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []string, errs []error, bucket, object, versionID string) madmin.HealResultItem {
+func (er erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []Endpoint, errs []error, bucket, object, versionID string) madmin.HealResultItem {
 	// Initialize heal result object
 	result := madmin.HealResultItem{
 		Type:       madmin.HealItemObject,
@@ -673,12 +673,12 @@ func (er erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageA
 		if disk == nil {
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: storageEndpoints[index],
+				Endpoint: storageEndpoints[index].String(),
 				State:    madmin.DriveStateOffline,
 			})
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: storageEndpoints[index],
+				Endpoint: storageEndpoints[index].String(),
 				State:    madmin.DriveStateOffline,
 			})
 			continue
@@ -692,12 +692,12 @@ func (er erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageA
 		}
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[index],
+			Endpoint: storageEndpoints[index].String(),
 			State:    driveState,
 		})
 		result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: storageEndpoints[index],
+			Endpoint: storageEndpoints[index].String(),
 			State:    driveState,
 		})
 	}
