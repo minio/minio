@@ -1150,7 +1150,9 @@ func getScannerNodeMetrics() MetricsGroup {
 						Name:      MetricName("action_count_" + toSnake(action.String())),
 						Help:      "Total action outcome of lifecycle checks since server start",
 						Type:      counterMetric,
-					}})
+					},
+					Value: float64(v),
+				})
 			}
 			return metrics
 		},
