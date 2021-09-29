@@ -321,7 +321,6 @@ var (
 
 	globalConsoleSrv *restapi.Server
 
-	globalDebugRemoteTiersImmediately []string
 	// Add new variable global values here.
 )
 

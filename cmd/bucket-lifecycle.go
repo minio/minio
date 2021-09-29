@@ -713,17 +713,16 @@ func isRestoredObjectOnDisk(meta map[string]string) (onDisk bool) {
 // ToLifecycleOpts returns lifecycle.ObjectOpts value for oi.
 func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 	return lifecycle.ObjectOpts{
-		Name:                   oi.Name,
-		UserTags:               oi.UserTags,
-		VersionID:              oi.VersionID,
-		ModTime:                oi.ModTime,
-		IsLatest:               oi.IsLatest,
-		NumVersions:            oi.NumVersions,
-		DeleteMarker:           oi.DeleteMarker,
-		SuccessorModTime:       oi.SuccessorModTime,
-		RestoreOngoing:         oi.RestoreOngoing,
-		RestoreExpires:         oi.RestoreExpires,
-		TransitionStatus:       oi.TransitionedObject.Status,
-		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
+		Name:             oi.Name,
+		UserTags:         oi.UserTags,
+		VersionID:        oi.VersionID,
+		ModTime:          oi.ModTime,
+		IsLatest:         oi.IsLatest,
+		NumVersions:      oi.NumVersions,
+		DeleteMarker:     oi.DeleteMarker,
+		SuccessorModTime: oi.SuccessorModTime,
+		RestoreOngoing:   oi.RestoreOngoing,
+		RestoreExpires:   oi.RestoreExpires,
+		TransitionStatus: oi.TransitionedObject.Status,
 	}
 }

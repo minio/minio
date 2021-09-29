@@ -252,29 +252,17 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 // ObjectOpts provides information to deduce the lifecycle actions
 // which can be triggered on the resultant object.
 type ObjectOpts struct {
-	Name                   string
-	UserTags               string
-	ModTime                time.Time
-	VersionID              string
-	IsLatest               bool
-	DeleteMarker           bool
-	NumVersions            int
-	SuccessorModTime       time.Time
-	TransitionStatus       string
-	RestoreOngoing         bool
-	RestoreExpires         time.Time
-	RemoteTiersImmediately []string // strictly for debug only
-}
-
-// doesMatchDebugTiers returns true if tier matches one of the debugTiers, false
-// otherwise.
-func doesMatchDebugTiers(tier string, debugTiers []string) bool {
-	for _, t := range debugTiers {
-		if strings.ToUpper(tier) == strings.ToUpper(t) {
-			return true
-		}
-	}
-	return false
+	Name             string
+	UserTags         string
+	ModTime          time.Time
+	VersionID        string
+	IsLatest         bool
+	DeleteMarker     bool
+	NumVersions      int
+	SuccessorModTime time.Time
+	TransitionStatus string
+	RestoreOngoing   bool
+	RestoreExpires   time.Time
 }
 
 // ExpiredObjectDeleteMarker returns true if an object version referred to by o
@@ -329,11 +317,6 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					return TransitionVersionAction
 				}
 
-				// this if condition is strictly for debug purposes to force immediate
-				// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
-				if doesMatchDebugTiers(rule.NoncurrentVersionTransition.StorageClass, obj.RemoteTiersImmediately) {
-					return TransitionVersionAction
-				}
 			}
 		}
 
@@ -355,12 +338,6 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					if time.Now().UTC().After(due) {
 						action = TransitionAction
 					}
-				}
-
-				// this if condition is strictly for debug purposes to force immediate
-				// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
-				if !rule.Transition.IsNull() && doesMatchDebugTiers(rule.Transition.StorageClass, obj.RemoteTiersImmediately) {
-					action = TransitionAction
 				}
 
 				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
