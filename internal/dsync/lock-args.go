@@ -15,30 +15,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package dsync
 
-import (
-	"errors"
-)
+//go:generate msgp -file $GOFILE
 
-const (
-	lockRESTVersion       = "v7" // Add msgp for lockArgs
-	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
-	lockRESTPrefix        = minioReservedBucketPath + "/lock"
-)
+// LockArgs is minimal required values for any dsync compatible lock operation.
+type LockArgs struct {
+	// Unique ID of lock/unlock request.
+	UID string
 
-const (
-	lockRESTMethodHealth      = "/health"
-	lockRESTMethodRefresh     = "/refresh"
-	lockRESTMethodLock        = "/lock"
-	lockRESTMethodRLock       = "/rlock"
-	lockRESTMethodUnlock      = "/unlock"
-	lockRESTMethodRUnlock     = "/runlock"
-	lockRESTMethodForceUnlock = "/force-unlock"
-)
+	// Resources contains single or multiple entries to be locked/unlocked.
+	Resources []string
 
-var (
-	errLockConflict       = errors.New("lock conflict")
-	errLockNotInitialized = errors.New("lock not initialized")
-	errLockNotFound       = errors.New("lock not found")
-)
+	// Source contains the line number, function and file name of the code
+	// on the client node that requested the lock.
+	Source string
+
+	// Owner represents unique ID for this instance, an owner who originally requested
+	// the locked resource, useful primarily in figuring our stale locks.
+	Owner string
+
+	// Quorum represents the expected quorum for this lock type.
+	Quorum int
+}
