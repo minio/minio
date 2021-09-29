@@ -19,7 +19,6 @@ package ioutil
 
 import (
 	"io"
-	"os"
 
 	"github.com/minio/minio/internal/disk"
 )
@@ -31,20 +30,21 @@ import (
 //
 // passes NOATIME flag for reads on Unix systems to avoid atime updates.
 func ReadFile(name string) ([]byte, error) {
-	f, err := os.OpenFile(name, readMode, 0)
+	f, err := disk.OpenFileDirectIO(name, readMode, 0666)
 	if err != nil {
 		return nil, err
 	}
-	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
-		return nil, err
+	r := &ODirectReader{
+		File:      f,
+		SmallFile: true,
 	}
-	defer disk.Fadvise(f, disk.FadvNoReuse)
-	defer f.Close()
+	defer r.Close()
+
 	st, err := f.Stat()
 	if err != nil {
-		return io.ReadAll(f)
+		return io.ReadAll(r)
 	}
 	dst := make([]byte, st.Size())
-	_, err = io.ReadFull(f, dst)
+	_, err = io.ReadFull(r, dst)
 	return dst, err
 }

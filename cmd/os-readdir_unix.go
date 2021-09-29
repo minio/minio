@@ -28,7 +28,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/minio/minio/internal/disk"
 	"golang.org/x/sys/unix"
 )
 
@@ -111,11 +110,6 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 		}
 		return osErrToFileErr(err)
 	}
-	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
-		return err
-	}
-
-	defer disk.Fadvise(f, disk.FadvNoReuse)
 	defer f.Close()
 
 	bufp := direntPool.Get().(*[]byte)
@@ -191,12 +185,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 	if err != nil {
 		return nil, osErrToFileErr(err)
 	}
-
-	if err := disk.Fadvise(f, disk.FadvSequential); err != nil {
-		return nil, err
-	}
-
-	defer disk.Fadvise(f, disk.FadvNoReuse)
 	defer f.Close()
 
 	bufp := direntPool.Get().(*[]byte)

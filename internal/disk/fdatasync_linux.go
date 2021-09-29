@@ -41,14 +41,7 @@ func Fdatasync(f *os.File) error {
 	return syscall.Fdatasync(int(f.Fd()))
 }
 
-// fdavise advice constants
-const (
-	FadvSequential = unix.FADV_SEQUENTIAL
-	FadvNoReuse    = unix.FADV_NOREUSE
-)
-
-// Fadvise implements possibility of choosing
-// offset: 0, length: 0
-func Fadvise(f *os.File, advice int) error {
-	return unix.Fadvise(int(f.Fd()), 0, 0, advice)
+// FadviseDontNeed invalidates page-cache
+func FadviseDontNeed(f *os.File) error {
+	return unix.Fadvise(int(f.Fd()), 0, 0, unix.FADV_DONTNEED)
 }
