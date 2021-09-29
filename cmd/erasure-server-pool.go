@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -150,29 +151,36 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 // GetRawData will return all files with a given raw path to the callback.
 // Errors are ignored, only errors from the callback are returned.
 // For now only direct file paths are supported.
-func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error {
+func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time, isDir bool) error) error {
 	for _, s := range z.serverPools {
 		for _, disks := range s.erasureDisks {
 			for i, disk := range disks {
 				if disk == OfflineDisk {
 					continue
 				}
-				si, err := disk.StatInfoFile(ctx, volume, file)
+				stats, err := disk.StatInfoFile(ctx, volume, file, true)
 				if err != nil {
 					continue
 				}
-				r, err := disk.ReadFileStream(ctx, volume, file, 0, si.Size)
-				if err != nil {
-					continue
-				}
-				defer r.Close()
 				did, err := disk.GetDiskID()
 				if err != nil {
 					did = fmt.Sprintf("disk-%d", i)
 				}
-				err = fn(r, disk.Hostname(), did, pathJoin(volume, file), si.Size, si.ModTime)
-				if err != nil {
-					return err
+				for _, si := range stats {
+					var r io.ReadCloser
+					if !si.Dir {
+						r, err = disk.ReadFileStream(ctx, volume, si.Name, 0, si.Size)
+						if err != nil {
+							continue
+						}
+					} else {
+						r = io.NopCloser(bytes.NewBuffer([]byte{}))
+					}
+					err = fn(r, disk.Hostname(), did, pathJoin(volume, si.Name), si.Size, si.ModTime, si.Dir)
+					r.Close()
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

@@ -114,7 +114,7 @@ func TestIsValidUmaskFile(t *testing.T) {
 	}
 
 	// CheckFile - stat the file.
-	if _, err := disk.StatInfoFile(context.Background(), testCase.volName, "hello-world.txt/"+xlStorageFormatFile); err != nil {
+	if _, err := disk.StatInfoFile(context.Background(), testCase.volName, "hello-world.txt/"+xlStorageFormatFile, false); err != nil {
 		t.Fatalf("Stat failed with %s expected to pass.", err)
 	}
 }

@@ -421,7 +421,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
 
-	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile); err != nil {
+	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile, false); err != nil {
 		t.Errorf("Expected er.meta file to be present but stat failed - %v", err)
 	}
 
@@ -565,7 +565,7 @@ func TestHealObjectErasure(t *testing.T) {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
 
-	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile); err != nil {
+	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile, false); err != nil {
 		t.Errorf("Expected er.meta file to be present but stat failed - %v", err)
 	}
 

@@ -21,10 +21,13 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/crc32"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -34,25 +37,48 @@ import (
 
 var (
 	key = flag.String("key", "", "decryption string")
-	//js = flag.Bool("json", false, "expect json input")
+	js  = flag.Bool("json", false, "expect json input from stdin")
 )
 
 func main() {
 	flag.Parse()
+
+	if *js {
+		// Match struct in https://github.com/minio/mc/blob/b3ce21fb72a914f50522358668e6464eb97de8d1/cmd/admin-inspect.go#L135
+		input := struct {
+			File string `json:"file"`
+			Key  string `json:"key"`
+		}{}
+		got, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			fatalErr(err)
+		}
+		fatalErr(json.Unmarshal(got, &input))
+		r, err := os.Open(input.File)
+		fatalErr(err)
+		defer r.Close()
+		dstName := strings.TrimSuffix(input.File, ".enc") + ".zip"
+		w, err := os.Create(dstName)
+		fatalErr(err)
+		defer w.Close()
+		decrypt(input.Key, r, w)
+		fmt.Println("Output decrypted to", dstName)
+		return
+	}
 	args := flag.Args()
 	switch len(flag.Args()) {
 	case 0:
 		// Read from stdin, write to stdout.
+		if *key == "" {
+			flag.Usage()
+			fatalErr(errors.New("no key supplied"))
+		}
 		decrypt(*key, os.Stdin, os.Stdout)
 		return
 	case 1:
 		r, err := os.Open(args[0])
 		fatalErr(err)
 		defer r.Close()
-		dstName := strings.TrimSuffix(args[0], ".enc") + ".zip"
-		w, err := os.Create(dstName)
-		fatalErr(err)
-		defer w.Close()
 		if len(*key) == 0 {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("Enter Decryption Key: ")
@@ -61,18 +87,25 @@ func main() {
 			// convert CRLF to LF
 			*key = strings.Replace(text, "\n", "", -1)
 		}
+		*key = strings.TrimSpace(*key)
+		fatalIf(len(*key) != 72, "Unexpected key length: %d, want 72", len(*key))
+
+		dstName := strings.TrimSuffix(args[0], ".enc") + ".zip"
+		w, err := os.Create(dstName)
+		fatalErr(err)
+		defer w.Close()
+
 		decrypt(*key, r, w)
 		fmt.Println("Output decrypted to", dstName)
 		return
 	default:
+		flag.Usage()
 		fatalIf(true, "Only 1 file can be decrypted")
 		os.Exit(1)
 	}
 }
 
 func decrypt(keyHex string, r io.Reader, w io.Writer) {
-	keyHex = strings.TrimSpace(keyHex)
-	fatalIf(len(keyHex) != 72, "Unexpected key length: %d, want 72", len(keyHex))
 	id, err := hex.DecodeString(keyHex[:8])
 	fatalErr(err)
 	key, err := hex.DecodeString(keyHex[8:])

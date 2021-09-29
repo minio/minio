@@ -38,7 +38,7 @@ import (
 	"strings"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
@@ -2144,7 +2144,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 
 // getRawDataer provides an interface for getting raw FS files.
 type getRawDataer interface {
-	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time) error) error
+	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time, isDir bool) error) error
 }
 
 // InspectDataHandler - GET /minio/admin/v3/inspect-data
@@ -2214,15 +2214,19 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	zipWriter := zip.NewWriter(encw)
 	defer zipWriter.Close()
 
-	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, size int64, modtime time.Time) error {
+	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, size int64, modtime time.Time, isDir bool) error {
 		// Prefix host+disk
 		filename = path.Join(host, disk, filename)
+		if isDir {
+			filename += "/"
+			size = 0
+		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
 			size:    size,
 			mode:    0600,
 			modTime: modtime,
-			isDir:   false,
+			isDir:   isDir,
 			sys:     nil,
 		})
 		if zerr != nil {

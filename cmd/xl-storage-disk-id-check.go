@@ -547,18 +547,18 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	return p.storage.ReadAll(ctx, volume, path)
 }
 
-func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	defer p.updateStorageMetrics(storageStatInfoFile, volume, path)()
 
 	if contextCanceled(ctx) {
-		return StatInfo{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	if err = p.checkDiskStale(); err != nil {
-		return StatInfo{}, err
+		return nil, err
 	}
 
-	return p.storage.StatInfoFile(ctx, volume, path)
+	return p.storage.StatInfoFile(ctx, volume, path, glob)
 }
 
 func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {

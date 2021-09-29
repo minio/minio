@@ -285,9 +285,9 @@ func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi Fi
 	return d.disk.VerifyFile(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+func (d *naughtyDisk) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return stat, err
 	}
-	return d.disk.StatInfoFile(ctx, volume, path)
+	return d.disk.StatInfoFile(ctx, volume, path, glob)
 }

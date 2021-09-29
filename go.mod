@@ -76,6 +76,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
+	github.com/yargevad/filepathx v1.0.0
 	go.etcd.io/etcd/api/v3 v3.5.0-beta.4
 	go.etcd.io/etcd/client/v3 v3.5.0-beta.4
 	go.opencensus.io v0.22.5 // indirect

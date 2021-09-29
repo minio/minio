@@ -186,7 +186,7 @@ func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := storage.StatInfoFile(context.Background(), testCase.volumeName, testCase.objectName+"/"+xlStorageFormatFile)
+		_, err := storage.StatInfoFile(context.Background(), testCase.volumeName, testCase.objectName+"/"+xlStorageFormatFile, false)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
