@@ -27,10 +27,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 
+	"github.com/klauspost/compress/zip"
 	"github.com/minio/cli"
 	"github.com/tinylib/msgp/msgp"
+	"github.com/yargevad/filepathx"
 )
 
 func main() {
@@ -44,9 +46,10 @@ func main() {
 USAGE:
   {{.Name}} {{if .VisibleFlags}}[FLAGS]{{end}} METAFILES...
 
-Multiple files can be added.
+Multiple files can be added. Files ending in ".zip" will be searched for 'xl.meta' files.  
 Wildcards are accepted: testdir/*.txt will compress all files in testdir ending with .txt
 Directories can be wildcards as well. testdir/*/*.txt will match testdir/subdir/b.txt
+Double stars means full recursive. testdir/**/xl.meta will search for all xl.meta recursively.
 
 {{if .VisibleFlags}}
 GLOBAL FLAGS:
@@ -72,43 +75,15 @@ GLOBAL FLAGS:
 	}
 
 	app.Action = func(c *cli.Context) error {
-		args := c.Args()
-		if len(args) == 0 {
-			// If no args, assume xl.meta
-			args = []string{"xl.meta"}
-		}
-		var files []string
-		for _, pattern := range args {
-			found, err := filepath.Glob(pattern)
-			if err != nil {
-				return err
-			}
-			if len(found) == 0 {
-				return fmt.Errorf("unable to find file %v", pattern)
-			}
-			files = append(files, found...)
-		}
-		for _, file := range files {
-			var r io.Reader
-			switch file {
-			case "-":
-				r = os.Stdin
-			default:
-				f, err := os.Open(file)
-				if err != nil {
-					return err
-				}
-				defer f.Close()
-				r = f
-			}
-
+		ndjson := c.Bool("ndjson")
+		decode := func(r io.Reader, file string) ([]byte, error) {
 			b, err := ioutil.ReadAll(r)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			b, _, minor, err := checkXL2V1(b)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			buf := bytes.NewBuffer(nil)
@@ -117,12 +92,12 @@ GLOBAL FLAGS:
 			case 0:
 				_, err = msgp.CopyToJSON(buf, bytes.NewBuffer(b))
 				if err != nil {
-					return err
+					return nil, err
 				}
 			case 1, 2:
 				v, b, err := msgp.ReadBytesZC(b)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				if _, nbuf, err := msgp.ReadUint32Bytes(b); err == nil {
 					// Read metadata CRC (added in v2, ignore if not found)
@@ -131,31 +106,47 @@ GLOBAL FLAGS:
 
 				_, err = msgp.CopyToJSON(buf, bytes.NewBuffer(v))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				data = b
 			default:
-				return fmt.Errorf("unknown metadata version %d", minor)
+				return nil, fmt.Errorf("unknown metadata version %d", minor)
 			}
 
 			if c.Bool("data") {
 				b, err := data.json()
 				if err != nil {
-					return err
+					return nil, err
 				}
 				buf = bytes.NewBuffer(b)
 			}
 			if c.Bool("export") {
+				file := strings.Map(func(r rune) rune {
+					switch {
+					case r >= 'a' && r <= 'z':
+						return r
+					case r >= 'A' && r <= 'Z':
+						return r
+					case r >= '0' && r <= '9':
+						return r
+					case strings.ContainsAny(string(r), "+=-_()!@."):
+						return r
+					default:
+						return '_'
+					}
+				}, file)
 				err := data.files(func(name string, data []byte) {
-					ioutil.WriteFile(fmt.Sprintf("%s-%s.data", file, name), data, os.ModePerm)
+					err = ioutil.WriteFile(fmt.Sprintf("%s-%s.data", file, name), data, os.ModePerm)
+					if err != nil {
+						fmt.Println(err)
+					}
 				})
 				if err != nil {
-					return err
+					return nil, err
 				}
 			}
-			if c.Bool("ndjson") {
-				fmt.Println(buf.String())
-				continue
+			if ndjson {
+				return buf.Bytes(), nil
 			}
 			var msi map[string]interface{}
 			dec := json.NewDecoder(buf)
@@ -163,14 +154,113 @@ GLOBAL FLAGS:
 			dec.UseNumber()
 			err = dec.Decode(&msi)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			b, err = json.MarshalIndent(msi, "", "  ")
 			if err != nil {
+				return nil, err
+			}
+			return b, nil
+		}
+
+		args := c.Args()
+		if len(args) == 0 {
+			// If no args, assume xl.meta
+			args = []string{"xl.meta"}
+		}
+		var files []string
+
+		for _, pattern := range args {
+			if pattern == "-" {
+				files = append(files, pattern)
+				continue
+			}
+			found, err := filepathx.Glob(pattern)
+			if err != nil {
 				return err
 			}
-			fmt.Println(string(b))
+			if len(found) == 0 {
+				return fmt.Errorf("unable to find file %v", pattern)
+			}
+			files = append(files, found...)
 		}
+		if len(files) == 0 {
+			return fmt.Errorf("no files found")
+		}
+		multiple := len(files) > 1 || strings.HasSuffix(files[0], ".zip")
+		if multiple {
+			ndjson = true
+			fmt.Println("{")
+		}
+
+		hasWritten := false
+		for _, file := range files {
+			var r io.Reader
+			var sz int64
+			switch file {
+			case "-":
+				r = os.Stdin
+			default:
+				f, err := os.Open(file)
+				if err != nil {
+					return err
+				}
+				if st, err := f.Stat(); err == nil {
+					sz = st.Size()
+				}
+				defer f.Close()
+				r = f
+			}
+			if strings.HasSuffix(file, ".zip") {
+				zr, err := zip.NewReader(r.(io.ReaderAt), sz)
+				if err != nil {
+					return err
+				}
+				for _, file := range zr.File {
+					if !file.FileInfo().IsDir() && strings.HasSuffix(file.Name, "xl.meta") {
+						r, err := file.Open()
+						if err != nil {
+							return err
+						}
+						// Quote string...
+						b, _ := json.Marshal(file.Name)
+						if hasWritten {
+							fmt.Print(",\n")
+						}
+						fmt.Printf("\t%s: ", string(b))
+
+						b, err = decode(r, file.Name)
+						if err != nil {
+							return err
+						}
+						fmt.Print(string(b))
+						hasWritten = true
+					}
+				}
+			} else {
+				if multiple {
+					// Quote string...
+					b, _ := json.Marshal(file)
+					if hasWritten {
+						fmt.Print(",\n")
+					}
+					fmt.Printf("\t%s: ", string(b))
+				}
+
+				b, err := decode(r, file)
+				if err != nil {
+					return err
+				}
+
+				hasWritten = true
+				fmt.Print(string(b))
+			}
+		}
+		fmt.Println("")
+		if multiple {
+			fmt.Println("}")
+		}
+
 		return nil
 	}
 	err := app.Run(os.Args)
