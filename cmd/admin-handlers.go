@@ -2177,6 +2177,13 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
+	file = strings.ReplaceAll(file, string(os.PathSeparator), "/")
+
+	// Reject attempts to traverse parent or absolute paths.
+	if strings.Contains(file, "..") || strings.Contains(volume, "..") {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
 
 	var key [32]byte
 	// MUST use crypto/rand
