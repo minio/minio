@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/rand"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -86,6 +87,7 @@ func isLocked(uid string) bool {
 // NewDRWMutex - initializes a new dsync RW mutex.
 func NewDRWMutex(clnt *Dsync, names ...string) *DRWMutex {
 	restClnts, _ := clnt.GetLockers()
+	sort.Strings(names)
 	return &DRWMutex{
 		writeLocks: make([]string, len(restClnts)),
 		Names:      names,
@@ -372,7 +374,7 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (boo
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, tolerance, quorum int, lockNames ...string) bool {
+func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, tolerance, quorum int, names ...string) bool {
 	for i := range *locks {
 		(*locks)[i] = ""
 	}
@@ -386,7 +388,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	args := LockArgs{
 		Owner:     owner,
 		UID:       id,
-		Resources: lockNames,
+		Resources: names,
 		Source:    source,
 		Quorum:    quorum,
 	}
@@ -468,7 +470,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	if !quorumLocked {
 		log("dsync: Unable to acquire lock in quorum %#v\n", args)
 		// Release all acquired locks without quorum.
-		if !releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...) {
+		if !releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, names...) {
 			log("Unable to release acquired locks, these locks will expire automatically %#v\n", args)
 		}
 	}
@@ -482,7 +484,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				// release abandoned lock
 				log("Releasing abandoned lock\n")
 				sendRelease(ds, restClnts[grantToBeReleased.index],
-					owner, grantToBeReleased.lockUID, isReadLock, lockNames...)
+					owner, grantToBeReleased.lockUID, isReadLock, names...)
 			}
 		}
 	}()
@@ -530,14 +532,14 @@ func checkQuorumLocked(locks *[]string, quorum int) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(ds *Dsync, tolerance int, owner string, locks *[]string, isReadLock bool, restClnts []NetLocker, lockNames ...string) bool {
+func releaseAll(ds *Dsync, tolerance int, owner string, locks *[]string, isReadLock bool, restClnts []NetLocker, names ...string) bool {
 	var wg sync.WaitGroup
 	for lockID := range restClnts {
 		wg.Add(1)
 		go func(lockID int) {
 			defer wg.Done()
 			if isLocked((*locks)[lockID]) {
-				if sendRelease(ds, restClnts[lockID], owner, (*locks)[lockID], isReadLock, lockNames...) {
+				if sendRelease(ds, restClnts[lockID], owner, (*locks)[lockID], isReadLock, names...) {
 					(*locks)[lockID] = ""
 				}
 			}

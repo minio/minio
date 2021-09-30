@@ -157,7 +157,10 @@ func osErrToFileErr(err error) error {
 		return errFaultyDisk
 	}
 	if isSysErrInvalidArg(err) {
-		return errUnsupportedDisk
+		// For some odd calls with O_DIRECT reads
+		// filesystems can return EINVAL, handle
+		// these as FileNotFound instead.
+		return errFileNotFound
 	}
 	if isSysErrNoSpace(err) {
 		return errDiskFull
