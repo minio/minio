@@ -29,14 +29,7 @@ func Fdatasync(f *os.File) error {
 	return nil
 }
 
-// fdavise advice constants
-const (
-	FadvSequential = 0
-	FadvNoReuse    = 0
-)
-
-// Fadvise implements possibility of choosing
-// offset: 0, length: 0
-func Fadvise(f *os.File, advice int) error {
+// FadviseDontNeed is a no-op
+func FadviseDontNeed(f *os.File) error {
 	return nil
 }
