@@ -938,6 +938,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		rs = nil
 	}
 
+	if objInfo.IsCompressed() {
+		// Cache isn't compressed.
+		delete(objInfo.UserDefined, ReservedMetadataPrefix+"compression")
+	}
+
 	// For a directory, we need to send an reader that returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
@@ -945,7 +950,6 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 		return gr, numHits, gerr
 	}
-
 	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, numHits, nErr
