@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -40,7 +39,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/klauspost/readahead"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
@@ -52,18 +50,7 @@ import (
 )
 
 const (
-	nullVersionID        = "null"
-	blockSizeSmall       = 128 * humanize.KiByte // Default r/w block size for smaller objects.
-	blockSizeLarge       = 2 * humanize.MiByte   // Default r/w block size for larger objects.
-	blockSizeReallyLarge = 4 * humanize.MiByte   // Default write block size for objects per shard >= 64MiB
-
-	// On regular files bigger than this;
-	readAheadSize = 16 << 20
-	// Read this many buffers ahead.
-	readAheadBuffers = 4
-	// Size of each buffer.
-	readAheadBufSize = 1 << 20
-
+	nullVersionID = "null"
 	// Really large streams threshold per shard.
 	reallyLargeFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
 
@@ -79,7 +66,7 @@ const (
 var alignedBuf []byte
 
 func init() {
-	alignedBuf = disk.AlignedBlock(4096)
+	alignedBuf = disk.AlignedBlock(xioutil.DirectioAlignSize)
 	_, _ = rand.Read(alignedBuf)
 }
 
@@ -97,27 +84,6 @@ func isValidVolname(volname string) bool {
 
 	return true
 }
-
-var (
-	xlPoolReallyLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(blockSizeReallyLarge)
-			return &b
-		},
-	}
-	xlPoolLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(blockSizeLarge)
-			return &b
-		},
-	}
-	xlPoolSmall = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(blockSizeSmall)
-			return &b
-		},
-	}
-)
 
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
@@ -388,7 +354,7 @@ func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.diskPath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
-	b, err := ioutil.ReadFile(healingFile)
+	b, err := xioutil.ReadFile(healingFile)
 	if err != nil {
 		return nil
 	}
@@ -1231,7 +1197,10 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string) (buf []byte, 
 		}
 		return nil, err
 	}
-	r := &odirectReader{f, nil, nil, true, true, s, nil}
+	r := &xioutil.ODirectReader{
+		File:      f,
+		SmallFile: true,
+	}
 	defer r.Close()
 	buf, err = ioutil.ReadAll(r)
 	if err != nil {
@@ -1421,75 +1390,6 @@ func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err e
 	return w, nil
 }
 
-// To support O_DIRECT reads for erasure backends.
-type odirectReader struct {
-	f         *os.File
-	buf       []byte
-	bufp      *[]byte
-	freshRead bool
-	smallFile bool
-	s         *xlStorage
-	err       error
-}
-
-// Read - Implements Reader interface.
-func (o *odirectReader) Read(buf []byte) (n int, err error) {
-	if o.err != nil && (len(o.buf) == 0 || o.freshRead) {
-		return 0, o.err
-	}
-	if o.buf == nil {
-		if o.smallFile {
-			o.bufp = xlPoolSmall.Get().(*[]byte)
-		} else {
-			o.bufp = xlPoolLarge.Get().(*[]byte)
-		}
-	}
-	if o.freshRead {
-		o.buf = *o.bufp
-		n, err = o.f.Read(o.buf)
-		if err != nil && err != io.EOF {
-			if isSysErrInvalidArg(err) {
-				if err = disk.DisableDirectIO(o.f); err != nil {
-					o.err = err
-					return n, err
-				}
-				n, err = o.f.Read(o.buf)
-			}
-			if err != nil && err != io.EOF {
-				o.err = err
-				return n, err
-			}
-		}
-		if n == 0 {
-			// err is likely io.EOF
-			o.err = err
-			return n, err
-		}
-		o.err = err
-		o.buf = o.buf[:n]
-		o.freshRead = false
-	}
-	if len(buf) >= len(o.buf) {
-		n = copy(buf, o.buf)
-		o.freshRead = true
-		return n, o.err
-	}
-	n = copy(buf, o.buf)
-	o.buf = o.buf[n:]
-	// There is more left in buffer, do not return any EOF yet.
-	return n, nil
-}
-
-// Close - Release the buffer and close the file.
-func (o *odirectReader) Close() error {
-	if o.smallFile {
-		xlPoolSmall.Put(o.bufp)
-	} else {
-		xlPoolLarge.Put(o.bufp)
-	}
-	return o.f.Close()
-}
-
 // ReadFileStream - Returns the read stream of the file.
 func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if offset < 0 {
@@ -1507,14 +1407,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	var file *os.File
-	// O_DIRECT only supported if offset is zero
-	if offset == 0 {
-		file, err = OpenFileDirectIO(filePath, readMode, 0666)
-	} else {
-		// Open the file for reading.
-		file, err = OpenFile(filePath, readMode, 0666)
-	}
+	file, err := OpenFileDirectIO(filePath, readMode, 0666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1550,46 +1443,44 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
-	if offset == 0 {
-		or := &odirectReader{file, nil, nil, true, false, s, nil}
-		if length <= smallFileThreshold {
-			or = &odirectReader{file, nil, nil, true, true, s, nil}
+	alignment := offset%xioutil.DirectioAlignSize == 0
+	if !alignment {
+		if err = disk.DisableDirectIO(file); err != nil {
+			file.Close()
+			return nil, err
 		}
-		r := struct {
-			io.Reader
-			io.Closer
-		}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
-			return or.Close()
-		})}
-		return r, nil
+	}
+
+	if offset > 0 {
+		if _, err = file.Seek(offset, io.SeekStart); err != nil {
+			file.Close()
+			return nil, err
+		}
+	}
+
+	or := &xioutil.ODirectReader{
+		File:      file,
+		SmallFile: false,
+	}
+
+	if length <= smallFileThreshold {
+		or = &xioutil.ODirectReader{
+			File:      file,
+			SmallFile: true,
+		}
 	}
 
 	r := struct {
 		io.Reader
 		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
-		return file.Close()
+	}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
+		if !alignment || offset+length%xioutil.DirectioAlignSize != 0 {
+			// invalidate page-cache for unaligned reads.
+			disk.FadviseDontNeed(file)
+		}
+		return or.Close()
 	})}
 
-	if offset > 0 {
-		if _, err = file.Seek(offset, io.SeekStart); err != nil {
-			r.Close()
-			return nil, err
-		}
-	}
-
-	// Add readahead to big reads
-	if length >= readAheadSize {
-		rc, err := readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
-		if err != nil {
-			r.Close()
-			return nil, err
-		}
-		return rc, nil
-	}
-
-	// Just add a small 64k buffer.
-	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
 	return r, nil
 }
 
@@ -1670,11 +1561,11 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	var bufp *[]byte
 	if fileSize > 0 && fileSize >= reallyLargeFileThreshold {
 		// use a larger 4MiB buffer for really large streams.
-		bufp = xlPoolReallyLarge.Get().(*[]byte)
-		defer xlPoolReallyLarge.Put(bufp)
+		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
+		defer xioutil.ODirectPoolXLarge.Put(bufp)
 	} else {
-		bufp = xlPoolLarge.Get().(*[]byte)
-		defer xlPoolLarge.Put(bufp)
+		bufp = xioutil.ODirectPoolLarge.Get().(*[]byte)
+		defer xioutil.ODirectPoolLarge.Put(bufp)
 	}
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)

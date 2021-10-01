@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v6" // Add Refresh API
+	lockRESTVersion       = "v7" // Add msgp for lockArgs
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
@@ -35,20 +35,6 @@ const (
 	lockRESTMethodUnlock      = "/unlock"
 	lockRESTMethodRUnlock     = "/runlock"
 	lockRESTMethodForceUnlock = "/force-unlock"
-
-	// lockRESTOwner represents owner UUID
-	lockRESTOwner = "owner"
-
-	// Unique ID of lock/unlock request.
-	lockRESTUID = "uid"
-
-	// Source contains the line number, function and file name of the code
-	// on the client node that requested the lock.
-	lockRESTSource = "source"
-
-	// Quroum value to be saved along lock requester info, useful
-	// in verifying stale locks
-	lockRESTQuorum = "quorum"
 )
 
 var (

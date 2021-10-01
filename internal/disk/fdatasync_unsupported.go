@@ -28,3 +28,8 @@ import (
 func Fdatasync(f *os.File) error {
 	return nil
 }
+
+// FadviseDontNeed is a no-op
+func FadviseDontNeed(f *os.File) error {
+	return nil
+}

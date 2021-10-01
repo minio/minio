@@ -22,9 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/internal/config/api"
-	"github.com/minio/minio/internal/logger"
 	mem "github.com/shirou/gopsutil/v3/mem"
+
+	"github.com/minio/minio/internal/config/api"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
 )
 
 type apiConfig struct {
@@ -71,7 +73,8 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		// total_ram / ram_per_request
 		// ram_per_request is (2MiB+128KiB) * driveCount \
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
-		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*(blockSizeLarge+blockSizeSmall)+int(blockSizeV1*2+blockSizeV2*2)))
+		blockSize := xioutil.BlockSizeLarge + xioutil.BlockSizeSmall
+		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
 
 		if globalIsErasure {
 			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)

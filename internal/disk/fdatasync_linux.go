@@ -23,6 +23,8 @@ package disk
 import (
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // Fdatasync - fdatasync() is similar to fsync(), but does not flush modified metadata
@@ -37,4 +39,9 @@ import (
 // do not require all metadata to be synchronized with the disk.
 func Fdatasync(f *os.File) error {
 	return syscall.Fdatasync(int(f.Fd()))
+}
+
+// FadviseDontNeed invalidates page-cache
+func FadviseDontNeed(f *os.File) error {
+	return unix.Fadvise(int(f.Fd()), 0, 0, unix.FADV_DONTNEED)
 }

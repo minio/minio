@@ -57,7 +57,7 @@ type erasureObjects struct {
 
 	// getEndpoints returns list of endpoint strings belonging this set.
 	// some may be local and some remote.
-	getEndpoints func() []string
+	getEndpoints func() []Endpoint
 
 	// Locker mutex map.
 	nsMutex *nsLockMap
@@ -164,7 +164,7 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error) {
+func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk, errs []error) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -175,7 +175,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
-					Endpoint: endpoints[index],
+					Endpoint: endpoints[index].String(),
 				}
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
@@ -222,7 +222,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
+func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) (StorageInfo, []error) {
 	disksInfo, errs := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
@@ -245,14 +245,20 @@ func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error)
 
 // LocalStorageInfo - returns underlying local storage statistics.
 func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
-	disks := er.getLocalDisks()
-	endpoints := make([]string, len(disks))
-	for i, disk := range disks {
-		if disk != nil {
-			endpoints[i] = disk.String()
+	disks := er.getDisks()
+	endpoints := er.getEndpoints()
+
+	var localDisks []StorageAPI
+	var localEndpoints []Endpoint
+
+	for i, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			localDisks = append(localDisks, disks[i])
+			localEndpoints = append(localEndpoints, endpoint)
 		}
 	}
-	return getStorageInfo(disks, endpoints)
+
+	return getStorageInfo(localDisks, localEndpoints)
 }
 
 func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {

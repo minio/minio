@@ -257,7 +257,6 @@ func (s *erasureSets) connectDisks() {
 				s.erasureDisks[setIndex][diskIndex] = disk
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			setsJustConnected[setIndex] = true
 			s.erasureDisksMu.Unlock()
 		}(endpoint)
@@ -314,14 +313,14 @@ func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string
 	}
 }
 
-func (s *erasureSets) GetEndpoints(setIndex int) func() []string {
-	return func() []string {
+func (s *erasureSets) GetEndpoints(setIndex int) func() []Endpoint {
+	return func() []Endpoint {
 		s.erasureDisksMu.RLock()
 		defer s.erasureDisksMu.RUnlock()
 
-		eps := make([]string, s.setDriveCount)
+		eps := make([]Endpoint, s.setDriveCount)
 		for i := 0; i < s.setDriveCount; i++ {
-			eps[i] = s.endpointStrings[setIndex*s.setDriveCount+i]
+			eps[i] = s.endpoints[setIndex*s.setDriveCount+i]
 		}
 		return eps
 	}
@@ -348,9 +347,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	setDriveCount := len(format.Erasure.Sets[0])
 
 	endpointStrings := make([]string, len(endpoints))
-
-	// Fill endpointString with the same order of endpoints passed as
-	// arguments but it will be reordered later according to disks order
 	for i, endpoint := range endpoints {
 		endpointStrings[i] = endpoint.String()
 	}
@@ -421,6 +417,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			m, n, err := findDiskIndexByDiskID(format, diskID)
 			if err != nil {
 				continue
+			}
+			if m != i || n != j {
+				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d)",
+					poolIdx, m, n, i, j)
 			}
 			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
@@ -531,10 +531,15 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 
 	object = decodeDirObject(object)
 
+	var disksEndpoints []string
+	for _, endpoint := range set.getEndpoints() {
+		disksEndpoints = append(disksEndpoints, endpoint.String())
+	}
+
 	op := auditObjectOp{
 		Pool:  set.poolIndex + 1,
 		Set:   set.setIndex + 1,
-		Disks: set.getEndpoints(),
+		Disks: disksEndpoints,
 	}
 
 	var objectErasureSetTag *auditObjectErasureMap
@@ -1306,7 +1311,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			if storageDisks[index] != nil {
 				storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
 				s.erasureDisks[m][n] = storageDisks[index]
-				s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
 			}
 		}
 

@@ -27,8 +27,10 @@ import (
 	"io"
 
 	"github.com/minio/highwayhash"
-	"github.com/minio/minio/internal/logger"
 	"golang.org/x/crypto/blake2b"
+
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/logger"
 )
 
 // magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
@@ -172,8 +174,8 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 		return errFileCorrupt
 	}
 
-	bufp := xlPoolSmall.Get().(*[]byte)
-	defer xlPoolSmall.Put(bufp)
+	bufp := xioutil.ODirectPoolSmall.Get().(*[]byte)
+	defer xioutil.ODirectPoolSmall.Put(bufp)
 
 	for left > 0 {
 		// Read expected hash...

@@ -1,6 +1,3 @@
-//go:build freebsd || netbsd || openbsd || darwin
-// +build freebsd netbsd openbsd darwin
-
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
@@ -18,19 +15,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package disk
+package dsync
 
-import (
-	"os"
-	"syscall"
-)
+//go:generate msgp -file $GOFILE
 
-// Fdatasync is fsync on freebsd/darwin
-func Fdatasync(f *os.File) error {
-	return syscall.Fsync(int(f.Fd()))
-}
+// LockArgs is minimal required values for any dsync compatible lock operation.
+type LockArgs struct {
+	// Unique ID of lock/unlock request.
+	UID string
 
-// FadviseDontNeed is a no-op
-func FadviseDontNeed(f *os.File) error {
-	return nil
+	// Resources contains single or multiple entries to be locked/unlocked.
+	Resources []string
+
+	// Source contains the line number, function and file name of the code
+	// on the client node that requested the lock.
+	Source string
+
+	// Owner represents unique ID for this instance, an owner who originally requested
+	// the locked resource, useful primarily in figuring our stale locks.
+	Owner string
+
+	// Quorum represents the expected quorum for this lock type.
+	Quorum int
 }
