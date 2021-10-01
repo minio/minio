@@ -220,11 +220,15 @@ var errInvalidStorageClass = errors.New("invalid storage class")
 
 func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 	for _, rule := range lc.Rules {
-		if rule.Transition.StorageClass == "" {
-			continue
+		if rule.Transition.StorageClass != "" {
+			if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
+				return errInvalidStorageClass
+			}
 		}
-		if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
-			return errInvalidStorageClass
+		if rule.NoncurrentVersionTransition.StorageClass != "" {
+			if valid := globalTierConfigMgr.IsTierValid(rule.NoncurrentVersionTransition.StorageClass); !valid {
+				return errInvalidStorageClass
+			}
 		}
 	}
 	return nil
