@@ -1711,7 +1711,7 @@ func TestXLStorageStatInfoFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := xlStorage.StatInfoFile(context.Background(), testCase.srcVol, testCase.srcPath+"/"+xlStorageFormatFile)
+		_, err := xlStorage.StatInfoFile(context.Background(), testCase.srcVol, testCase.srcPath+"/"+xlStorageFormatFile, false)
 		if err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}

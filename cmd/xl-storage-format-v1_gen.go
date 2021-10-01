@@ -759,6 +759,18 @@ func (z *StatInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ModTime")
 				return
 			}
+		case "Name":
+			z.Name, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Name")
+				return
+			}
+		case "Dir":
+			z.Dir, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "Dir")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -771,10 +783,10 @@ func (z *StatInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z StatInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+func (z *StatInfo) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
 	// write "Size"
-	err = en.Append(0x82, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+	err = en.Append(0x84, 0xa4, 0x53, 0x69, 0x7a, 0x65)
 	if err != nil {
 		return
 	}
@@ -793,19 +805,45 @@ func (z StatInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ModTime")
 		return
 	}
+	// write "Name"
+	err = en.Append(0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Name)
+	if err != nil {
+		err = msgp.WrapError(err, "Name")
+		return
+	}
+	// write "Dir"
+	err = en.Append(0xa3, 0x44, 0x69, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.Dir)
+	if err != nil {
+		err = msgp.WrapError(err, "Dir")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z StatInfo) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *StatInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 4
 	// string "Size"
-	o = append(o, 0x82, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+	o = append(o, 0x84, 0xa4, 0x53, 0x69, 0x7a, 0x65)
 	o = msgp.AppendInt64(o, z.Size)
 	// string "ModTime"
 	o = append(o, 0xa7, 0x4d, 0x6f, 0x64, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTime(o, z.ModTime)
+	// string "Name"
+	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = msgp.AppendString(o, z.Name)
+	// string "Dir"
+	o = append(o, 0xa3, 0x44, 0x69, 0x72)
+	o = msgp.AppendBool(o, z.Dir)
 	return
 }
 
@@ -839,6 +877,18 @@ func (z *StatInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ModTime")
 				return
 			}
+		case "Name":
+			z.Name, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Name")
+				return
+			}
+		case "Dir":
+			z.Dir, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Dir")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -852,8 +902,8 @@ func (z *StatInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z StatInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.Int64Size + 8 + msgp.TimeSize
+func (z *StatInfo) Msgsize() (s int) {
+	s = 1 + 5 + msgp.Int64Size + 8 + msgp.TimeSize + 5 + msgp.StringPrefixSize + len(z.Name) + 4 + msgp.BoolSize
 	return
 }
 
@@ -1041,39 +1091,10 @@ func (z *xlMetaV1Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Stat":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			err = z.Stat.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Stat")
 				return
-			}
-			for zb0002 > 0 {
-				zb0002--
-				field, err = dc.ReadMapKeyPtr()
-				if err != nil {
-					err = msgp.WrapError(err, "Stat")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Size":
-					z.Stat.Size, err = dc.ReadInt64()
-					if err != nil {
-						err = msgp.WrapError(err, "Stat", "Size")
-						return
-					}
-				case "ModTime":
-					z.Stat.ModTime, err = dc.ReadTime()
-					if err != nil {
-						err = msgp.WrapError(err, "Stat", "ModTime")
-						return
-					}
-				default:
-					err = dc.Skip()
-					if err != nil {
-						err = msgp.WrapError(err, "Stat")
-						return
-					}
-				}
 			}
 		case "Erasure":
 			err = z.Erasure.DecodeMsg(dc)
@@ -1082,14 +1103,14 @@ func (z *xlMetaV1Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Minio":
-			var zb0003 uint32
-			zb0003, err = dc.ReadMapHeader()
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Minio")
 				return
 			}
-			for zb0003 > 0 {
-				zb0003--
+			for zb0002 > 0 {
+				zb0002--
 				field, err = dc.ReadMapKeyPtr()
 				if err != nil {
 					err = msgp.WrapError(err, "Minio")
@@ -1111,21 +1132,21 @@ func (z *xlMetaV1Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "Meta":
-			var zb0004 uint32
-			zb0004, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Meta")
 				return
 			}
 			if z.Meta == nil {
-				z.Meta = make(map[string]string, zb0004)
+				z.Meta = make(map[string]string, zb0003)
 			} else if len(z.Meta) > 0 {
 				for key := range z.Meta {
 					delete(z.Meta, key)
 				}
 			}
-			for zb0004 > 0 {
-				zb0004--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 string
 				za0001, err = dc.ReadString()
@@ -1141,16 +1162,16 @@ func (z *xlMetaV1Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				z.Meta[za0001] = za0002
 			}
 		case "Parts":
-			var zb0005 uint32
-			zb0005, err = dc.ReadArrayHeader()
+			var zb0004 uint32
+			zb0004, err = dc.ReadArrayHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Parts")
 				return
 			}
-			if cap(z.Parts) >= int(zb0005) {
-				z.Parts = (z.Parts)[:zb0005]
+			if cap(z.Parts) >= int(zb0004) {
+				z.Parts = (z.Parts)[:zb0004]
 			} else {
-				z.Parts = make([]ObjectPartInfo, zb0005)
+				z.Parts = make([]ObjectPartInfo, zb0004)
 			}
 			for za0003 := range z.Parts {
 				err = z.Parts[za0003].DecodeMsg(dc)
@@ -1210,25 +1231,9 @@ func (z *xlMetaV1Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 2
-	// write "Size"
-	err = en.Append(0x82, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+	err = z.Stat.EncodeMsg(en)
 	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.Stat.Size)
-	if err != nil {
-		err = msgp.WrapError(err, "Stat", "Size")
-		return
-	}
-	// write "ModTime"
-	err = en.Append(0xa7, 0x4d, 0x6f, 0x64, 0x54, 0x69, 0x6d, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteTime(z.Stat.ModTime)
-	if err != nil {
-		err = msgp.WrapError(err, "Stat", "ModTime")
+		err = msgp.WrapError(err, "Stat")
 		return
 	}
 	// write "Erasure"
@@ -1331,13 +1336,11 @@ func (z *xlMetaV1Object) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Format)
 	// string "Stat"
 	o = append(o, 0xa4, 0x53, 0x74, 0x61, 0x74)
-	// map header, size 2
-	// string "Size"
-	o = append(o, 0x82, 0xa4, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendInt64(o, z.Stat.Size)
-	// string "ModTime"
-	o = append(o, 0xa7, 0x4d, 0x6f, 0x64, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendTime(o, z.Stat.ModTime)
+	o, err = z.Stat.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Stat")
+		return
+	}
 	// string "Erasure"
 	o = append(o, 0xa7, 0x45, 0x72, 0x61, 0x73, 0x75, 0x72, 0x65)
 	o, err = z.Erasure.MarshalMsg(o)
@@ -1408,39 +1411,10 @@ func (z *xlMetaV1Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Stat":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			bts, err = z.Stat.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Stat")
 				return
-			}
-			for zb0002 > 0 {
-				zb0002--
-				field, bts, err = msgp.ReadMapKeyZC(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Stat")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Size":
-					z.Stat.Size, bts, err = msgp.ReadInt64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Stat", "Size")
-						return
-					}
-				case "ModTime":
-					z.Stat.ModTime, bts, err = msgp.ReadTimeBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Stat", "ModTime")
-						return
-					}
-				default:
-					bts, err = msgp.Skip(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Stat")
-						return
-					}
-				}
 			}
 		case "Erasure":
 			bts, err = z.Erasure.UnmarshalMsg(bts)
@@ -1449,14 +1423,14 @@ func (z *xlMetaV1Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Minio":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Minio")
 				return
 			}
-			for zb0003 > 0 {
-				zb0003--
+			for zb0002 > 0 {
+				zb0002--
 				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Minio")
@@ -1478,23 +1452,23 @@ func (z *xlMetaV1Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "Meta":
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Meta")
 				return
 			}
 			if z.Meta == nil {
-				z.Meta = make(map[string]string, zb0004)
+				z.Meta = make(map[string]string, zb0003)
 			} else if len(z.Meta) > 0 {
 				for key := range z.Meta {
 					delete(z.Meta, key)
 				}
 			}
-			for zb0004 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 string
-				zb0004--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Meta")
@@ -1508,16 +1482,16 @@ func (z *xlMetaV1Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Meta[za0001] = za0002
 			}
 		case "Parts":
-			var zb0005 uint32
-			zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0004 uint32
+			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Parts")
 				return
 			}
-			if cap(z.Parts) >= int(zb0005) {
-				z.Parts = (z.Parts)[:zb0005]
+			if cap(z.Parts) >= int(zb0004) {
+				z.Parts = (z.Parts)[:zb0004]
 			} else {
-				z.Parts = make([]ObjectPartInfo, zb0005)
+				z.Parts = make([]ObjectPartInfo, zb0004)
 			}
 			for za0003 := range z.Parts {
 				bts, err = z.Parts[za0003].UnmarshalMsg(bts)
@@ -1552,7 +1526,7 @@ func (z *xlMetaV1Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *xlMetaV1Object) Msgsize() (s int) {
-	s = 1 + 8 + msgp.StringPrefixSize + len(z.Version) + 7 + msgp.StringPrefixSize + len(z.Format) + 5 + 1 + 5 + msgp.Int64Size + 8 + msgp.TimeSize + 8 + z.Erasure.Msgsize() + 6 + 1 + 8 + msgp.StringPrefixSize + len(z.Minio.Release) + 5 + msgp.MapHeaderSize
+	s = 1 + 8 + msgp.StringPrefixSize + len(z.Version) + 7 + msgp.StringPrefixSize + len(z.Format) + 5 + z.Stat.Msgsize() + 8 + z.Erasure.Msgsize() + 6 + 1 + 8 + msgp.StringPrefixSize + len(z.Minio.Release) + 5 + msgp.MapHeaderSize
 	if z.Meta != nil {
 		for za0001, za0002 := range z.Meta {
 			_ = za0002

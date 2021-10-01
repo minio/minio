@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/env"
+	"github.com/yargevad/filepathx"
 )
 
 const (
@@ -1132,7 +1133,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			// Check the data path if there is a part with data.
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(path, fi.DataDir, partPath)
-			_, err = s.StatInfoFile(ctx, volume, dataPath)
+			_, err = s.StatInfoFile(ctx, volume, dataPath, false)
 			if err != nil {
 				// Set the inline header, our inlined data is fine.
 				fi.SetInlineData()
@@ -2204,7 +2205,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	return nil
 }
 
-func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string) (stat StatInfo, err error) {
+func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return stat, err
@@ -2221,14 +2222,29 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string) (stat
 		}
 		return stat, err
 	}
-	filePath := pathJoin(volumeDir, path)
-	if err := checkPathLength(filePath); err != nil {
-		return stat, err
+	var files = []string{pathJoin(volumeDir, path)}
+	if glob {
+		files, err = filepathx.Glob(pathJoin(volumeDir, path))
+		if err != nil {
+			return nil, err
+		}
 	}
-	st, _ := Lstat(filePath)
-	if st == nil {
-		return stat, errPathNotFound
+	for _, filePath := range files {
+		if err := checkPathLength(filePath); err != nil {
+			return stat, err
+		}
+		st, _ := Lstat(filePath)
+		if st == nil {
+			return stat, errPathNotFound
+		}
+		name, err := filepath.Rel(volumeDir, filePath)
+		if err != nil {
+			name = filePath
+		}
+		if os.PathSeparator != '/' {
+			name = strings.Replace(name, string(os.PathSeparator), "/", -1)
+		}
+		stat = append(stat, StatInfo{ModTime: st.ModTime(), Size: st.Size(), Name: name, Dir: st.IsDir()})
 	}
-
-	return StatInfo{ModTime: st.ModTime(), Size: st.Size()}, nil
+	return stat, nil
 }

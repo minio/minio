@@ -1122,13 +1122,16 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
+	glob := vars[storageRESTGlob]
 	done := keepHTTPResponseAlive(w)
-	si, err := s.storage.StatInfoFile(r.Context(), volume, filePath)
+	stats, err := s.storage.StatInfoFile(r.Context(), volume, filePath, glob == "true")
 	done(err)
 	if err != nil {
 		return
 	}
-	msgp.Encode(w, &si)
+	for _, si := range stats {
+		msgp.Encode(w, &si)
+	}
 }
 
 // registerStorageRPCRouter - register storage rpc router.
@@ -1221,7 +1224,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile)).
-				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTGlob)...)
 		}
 	}
 }

@@ -78,4 +78,5 @@ const (
 	storageRESTBitrotHash     = "bitrot-hash"
 	storageRESTDiskID         = "disk-id"
 	storageRESTForceDelete    = "force-delete"
+	storageRESTGlob           = "glob"
 )
