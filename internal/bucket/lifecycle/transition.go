@@ -25,7 +25,7 @@ import (
 var (
 	errTransitionInvalidDays     = Errorf("Days must be 0 or greater when used with Transition")
 	errTransitionInvalidDate     = Errorf("Date must be provided in ISO 8601 format")
-	errTransitionInvalid         = Errorf("Exactly one of Days (0 or greater) or Date (positive ISO 8601 format) should be present inside Expiration.")
+	errTransitionInvalid         = Errorf("Exactly one of Days (0 or greater) or Date (positive ISO 8601 format) should be present in Transition.")
 	errTransitionDateNotMidnight = Errorf("'Date' must be at midnight GMT")
 )
 
@@ -76,24 +76,23 @@ type TransitionDays int
 // UnmarshalXML parses number of days from Transition and validates if
 // >= 0
 func (tDays *TransitionDays) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	var numDays int
-	err := d.DecodeElement(&numDays, &startElement)
+	var days int
+	err := d.DecodeElement(&days, &startElement)
 	if err != nil {
 		return err
 	}
-	if numDays < 0 {
+
+	if days < 0 {
 		return errTransitionInvalidDays
 	}
-	*tDays = TransitionDays(numDays)
+	*tDays = TransitionDays(days)
+
 	return nil
 }
 
 // MarshalXML encodes number of days to expire if it is non-zero and
 // encodes empty string otherwise
 func (tDays TransitionDays) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
-	if tDays == 0 {
-		return nil
-	}
 	return e.EncodeElement(int(tDays), startElement)
 }
 
@@ -135,23 +134,14 @@ func (t Transition) Validate() error {
 		return nil
 	}
 
-	if t.IsDaysNull() && t.IsDateNull() {
-		return errXMLNotWellFormed
-	}
-
-	// Both transition days and date are specified
-	if !t.IsDaysNull() && !t.IsDateNull() {
+	if !t.IsDateNull() && t.Days > 0 {
 		return errTransitionInvalid
 	}
+
 	if t.StorageClass == "" {
 		return errXMLNotWellFormed
 	}
 	return nil
-}
-
-// IsDaysNull returns true if days field is null
-func (t Transition) IsDaysNull() bool {
-	return t.Days == TransitionDays(0)
 }
 
 // IsDateNull returns true if date field is null
@@ -161,22 +151,23 @@ func (t Transition) IsDateNull() bool {
 
 // IsNull returns true if both date and days fields are null
 func (t Transition) IsNull() bool {
-	return t.IsDaysNull() && t.IsDateNull()
+	return t.StorageClass == ""
 }
 
 // NextDue returns upcoming transition date for obj and true if applicable,
 // returns false otherwise.
 func (t Transition) NextDue(obj ObjectOpts) (time.Time, bool) {
-	if !obj.IsLatest {
+	if !obj.IsLatest || t.IsNull() {
 		return time.Time{}, false
 	}
 
-	switch {
-	case !t.IsDateNull():
+	if !t.IsDateNull() {
 		return t.Date.Time, true
-	case !t.IsDaysNull():
-		return ExpectedExpiryTime(obj.ModTime, int(t.Days)), true
 	}
 
-	return time.Time{}, false
+	// Days == 0 indicates immediate tiering, i.e object is eligible for tiering since its creation.
+	if t.Days == 0 {
+		return obj.ModTime, true
+	}
+	return ExpectedExpiryTime(obj.ModTime, int(t.Days)), true
 }

@@ -220,14 +220,29 @@ var errInvalidStorageClass = errors.New("invalid storage class")
 
 func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 	for _, rule := range lc.Rules {
-		if rule.Transition.StorageClass == "" {
-			continue
+		if rule.Transition.StorageClass != "" {
+			if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
+				return errInvalidStorageClass
+			}
 		}
-		if valid := globalTierConfigMgr.IsTierValid(rule.Transition.StorageClass); !valid {
-			return errInvalidStorageClass
+		if rule.NoncurrentVersionTransition.StorageClass != "" {
+			if valid := globalTierConfigMgr.IsTierValid(rule.NoncurrentVersionTransition.StorageClass); !valid {
+				return errInvalidStorageClass
+			}
 		}
 	}
 	return nil
+}
+
+// enqueueTransitionImmediate enqueues obj for transition if eligible.
+// This is to be called after a successful upload of an object (version).
+func enqueueTransitionImmediate(obj ObjectInfo) {
+	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
+		switch lc.ComputeAction(obj.ToLifecycleOpts()) {
+		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+			globalTransitionState.queueTransitionTask(obj)
+		}
+	}
 }
 
 // expireAction represents different actions to be performed on expiry of a
@@ -702,17 +717,16 @@ func isRestoredObjectOnDisk(meta map[string]string) (onDisk bool) {
 // ToLifecycleOpts returns lifecycle.ObjectOpts value for oi.
 func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 	return lifecycle.ObjectOpts{
-		Name:                   oi.Name,
-		UserTags:               oi.UserTags,
-		VersionID:              oi.VersionID,
-		ModTime:                oi.ModTime,
-		IsLatest:               oi.IsLatest,
-		NumVersions:            oi.NumVersions,
-		DeleteMarker:           oi.DeleteMarker,
-		SuccessorModTime:       oi.SuccessorModTime,
-		RestoreOngoing:         oi.RestoreOngoing,
-		RestoreExpires:         oi.RestoreExpires,
-		TransitionStatus:       oi.TransitionedObject.Status,
-		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
+		Name:             oi.Name,
+		UserTags:         oi.UserTags,
+		VersionID:        oi.VersionID,
+		ModTime:          oi.ModTime,
+		IsLatest:         oi.IsLatest,
+		NumVersions:      oi.NumVersions,
+		DeleteMarker:     oi.DeleteMarker,
+		SuccessorModTime: oi.SuccessorModTime,
+		RestoreOngoing:   oi.RestoreOngoing,
+		RestoreExpires:   oi.RestoreExpires,
+		TransitionStatus: oi.TransitionedObject.Status,
 	}
 }

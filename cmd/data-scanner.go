@@ -879,18 +879,17 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	versionID := oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:                   i.objectPath(),
-			UserTags:               oi.UserTags,
-			ModTime:                oi.ModTime,
-			VersionID:              oi.VersionID,
-			DeleteMarker:           oi.DeleteMarker,
-			IsLatest:               oi.IsLatest,
-			NumVersions:            oi.NumVersions,
-			SuccessorModTime:       oi.SuccessorModTime,
-			RestoreOngoing:         oi.RestoreOngoing,
-			RestoreExpires:         oi.RestoreExpires,
-			TransitionStatus:       oi.TransitionedObject.Status,
-			RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
+			Name:             i.objectPath(),
+			UserTags:         oi.UserTags,
+			ModTime:          oi.ModTime,
+			VersionID:        oi.VersionID,
+			DeleteMarker:     oi.DeleteMarker,
+			IsLatest:         oi.IsLatest,
+			NumVersions:      oi.NumVersions,
+			SuccessorModTime: oi.SuccessorModTime,
+			RestoreOngoing:   oi.RestoreOngoing,
+			RestoreExpires:   oi.RestoreExpires,
+			TransitionStatus: oi.TransitionedObject.Status,
 		})
 	if i.debug {
 		if versionID != "" {

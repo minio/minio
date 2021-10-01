@@ -1507,6 +1507,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+	if !globalTierConfigMgr.Empty() {
+		// Schedule object for immediate transition if eligible.
+		enqueueTransitionImmediate(objInfo)
+	}
+
 }
 
 // PutObjectHandler - PUT Object
@@ -1851,6 +1856,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
+		// Schedule object for immediate transition if eligible.
+		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
 }
@@ -3292,6 +3299,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
+		// Schedule object for immediate transition if eligible.
+		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
 }

@@ -104,6 +104,12 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
+		// Lifecycle with zero Transition Days
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Filter></Filter><Status>Enabled</Status><Transition><Days>0</Days><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
 	}
 
 	for i, tc := range testCases {
@@ -119,7 +125,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			}
 			err = lc.Validate()
 			if err != tc.expectedValidationErr {
-				t.Fatalf("%d: Expected %v during parsing but got %v", i+1, tc.expectedValidationErr, err)
+				t.Fatalf("%d: Expected %v during validation but got %v", i+1, tc.expectedValidationErr, err)
 			}
 		})
 	}
@@ -146,7 +152,7 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 				Status:                      "Enabled",
 				Filter:                      Filter{Prefix: Prefix{string: "prefix-1", set: true}},
 				Expiration:                  Expiration{Date: midnightTS},
-				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: 2, StorageClass: "TEST"},
+				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: TransitionDays(2), StorageClass: "TEST"},
 			},
 		},
 	}
@@ -380,6 +386,13 @@ func TestComputeActions(t *testing.T) {
 			isExpiredDelMarker: true,
 			expectedAction:     DeleteVersionAction,
 		},
+		// Should not delete expired marker if its time has not come yet
+		{
+			inputConfig:    `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Transition><Days>0</Days><StorageClass>S3TIER-1</StorageClass></Transition></Rule></BucketLifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC(), // Created now
+			expectedAction: TransitionAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -441,6 +454,16 @@ func TestHasActiveRules(t *testing.T) {
 			prefix:         "foodir/foobject",
 			expectedNonRec: false, expectedRec: false,
 		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/foobject/foo.txt",
+			expectedNonRec: true, expectedRec: true,
+		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/foobject/foo.txt",
+			expectedNonRec: true, expectedRec: true,
+		},
 	}
 
 	for i, tc := range testCases {
@@ -486,7 +509,7 @@ func TestSetPredictionHeaders(t *testing.T) {
 				ID:     "rule-3",
 				Status: "Enabled",
 				NoncurrentVersionTransition: NoncurrentVersionTransition{
-					NoncurrentDays: ExpirationDays(5),
+					NoncurrentDays: TransitionDays(5),
 					StorageClass:   "TIER-2",
 					set:            true,
 				},
@@ -559,7 +582,7 @@ func TestTransitionTier(t *testing.T) {
 				ID:     "rule-2",
 				Status: "Enabled",
 				NoncurrentVersionTransition: NoncurrentVersionTransition{
-					NoncurrentDays: ExpirationDays(3),
+					NoncurrentDays: TransitionDays(3),
 					StorageClass:   "TIER-2",
 				},
 			},
