@@ -63,6 +63,9 @@ const (
 	DeleteRestoredAction
 	// DeleteRestoredVersionAction deletes a particular version that was temporarily restored
 	DeleteRestoredVersionAction
+
+	// ActionCount must be the last action and shouldn't be used as a regular action.
+	ActionCount
 )
 
 // Lifecycle - Configuration for bucket lifecycle.

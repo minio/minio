@@ -393,6 +393,8 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 		}
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
+		atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
+		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
 		sz := item.applyActions(ctx, fs, oi, &sizeSummary{})
 		if sz >= 0 {
 			return sizeSummary{totalSize: sz, versions: 1}, nil

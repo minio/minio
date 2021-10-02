@@ -29,6 +29,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -194,6 +195,22 @@ type folderScanner struct {
 	lastUpdate time.Time
 }
 
+type scannerStats struct {
+	// All fields must be accessed atomically and aligned.
+
+	accTotalObjects  uint64
+	accTotalVersions uint64
+	accFolders       uint64
+	bucketsStarted   uint64
+	bucketsFinished  uint64
+	ilmChecks        uint64
+
+	// actions records actions performed.
+	actions [lifecycle.ActionCount]uint64
+}
+
+var globalScannerStats scannerStats
+
 // Cache structure and compaction:
 //
 // A cache structure will be kept with a tree of usages.
@@ -241,6 +258,10 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 
 	logPrefix := color.Green("data-usage: ")
 	logSuffix := color.Blue("- %v + %v", basePath, cache.Info.Name)
+	atomic.AddUint64(&globalScannerStats.bucketsStarted, 1)
+	defer func() {
+		atomic.AddUint64(&globalScannerStats.bucketsFinished, 1)
+	}()
 	if intDataUpdateTracker.debug {
 		defer func() {
 			console.Debugf(logPrefix+" Scanner time: %v %s\n", time.Since(t), logSuffix)
@@ -349,6 +370,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	thisHash := hashPath(folder.name)
 	// Store initial compaction state.
 	wasCompacted := into.Compacted
+	atomic.AddUint64(&globalScannerStats.accFolders, 1)
 
 	for {
 		select {
@@ -876,6 +898,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		return false, size
 	}
 
+	atomic.AddUint64(&globalScannerStats.ilmChecks, 1)
 	versionID := oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
@@ -898,6 +921,8 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), action)
 		}
 	}
+	atomic.AddUint64(&globalScannerStats.actions[action], 1)
+
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 		return applyLifecycleAction(action, oi), 0
