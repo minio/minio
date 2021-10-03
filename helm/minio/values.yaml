@@ -169,6 +169,7 @@ service:
 
 ingress:
   enabled: false
+  # ingressClassName: ""
   labels: {}
     # node-role.kubernetes.io/ingress: platform
 
@@ -197,6 +198,7 @@ consoleService:
 
 consoleIngress:
   enabled: false
+  # ingressClassName: ""
   labels: {}
     # node-role.kubernetes.io/ingress: platform
 

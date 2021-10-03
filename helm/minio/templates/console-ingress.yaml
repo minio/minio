@@ -21,6 +21,9 @@ metadata:
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:
+{{- if .Values.consoleIngress.ingressClassName }}
+  ingressClassName: {{ .Values.consoleIngress.ingressClassName }}
+{{- end }}
 {{- if .Values.consoleIngress.tls }}
   tls:
   {{- range .Values.consoleIngress.tls }}
