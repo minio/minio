@@ -21,6 +21,9 @@ metadata:
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:
+{{- if .Values.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+{{- end }}
 {{- if .Values.ingress.tls }}
   tls:
   {{- range .Values.ingress.tls }}
@@ -36,9 +39,18 @@ spec:
     - http:
         paths:
           - path: {{ $ingressPath }}
+          {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port: 
+                  number: {{ $servicePort }}
+          {{- else }}
             backend:
               serviceName: {{ $fullName }}
               servicePort: {{ $servicePort }}
+          {{- end }}
       {{- if . }}
       host: {{ . | quote }}
       {{- end }}
