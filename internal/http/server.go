@@ -18,6 +18,7 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 
-	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/fips"
@@ -64,7 +64,7 @@ func (srv *Server) GetRequestCount() int {
 }
 
 // Start - start HTTP server
-func (srv *Server) Start() (err error) {
+func (srv *Server) Start(ctx context.Context) (err error) {
 	// Take a copy of server fields.
 	var tlsConfig *tls.Config
 	if srv.TLSConfig != nil {
@@ -72,12 +72,11 @@ func (srv *Server) Start() (err error) {
 	}
 	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
-	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
-
 	// Create new HTTP listener.
 	var listener *httpListener
 	listener, err = newHTTPListener(
-		addrs,
+		ctx,
+		srv.Addrs,
 	)
 	if err != nil {
 		return err

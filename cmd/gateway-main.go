@@ -154,8 +154,6 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
-	defer globalDNSCache.Stop()
-
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go handleSignals()
@@ -268,7 +266,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		return GlobalContext
 	}
 	go func() {
-		globalHTTPServerErrorCh <- httpServer.Start()
+		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
 	}()
 
 	globalObjLayerMutex.Lock()

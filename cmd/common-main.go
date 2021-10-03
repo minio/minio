@@ -51,7 +51,6 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/handlers"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
@@ -59,6 +58,7 @@ import (
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
+	"github.com/rs/dnscache"
 )
 
 // serverDebugLog will enable debug printing
@@ -71,16 +71,33 @@ func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile() {
-		// 30 seconds matches the orchestrator DNS TTLs, have
-		// a 5 second timeout to lookup from DNS servers.
-		globalDNSCache = xhttp.NewDNSCache(30*time.Second, 5*time.Second, logger.LogOnceIf)
-	} else {
-		// On bare-metals DNS do not change often, so it is
-		// safe to assume a higher timeout upto 10 minutes.
-		globalDNSCache = xhttp.NewDNSCache(10*time.Minute, 5*time.Second, logger.LogOnceIf)
-	}
 	initGlobalContext()
+
+	options := dnscache.ResolverRefreshOptions{
+		ClearUnused:      true,
+		PersistOnFailure: false,
+	}
+
+	// Call to refresh will refresh names in cache. If you pass true, it will also
+	// remove cached names not looked up since the last call to Refresh. It is a good idea
+	// to call this method on a regular interval.
+	go func() {
+		var t *time.Ticker
+		if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile() {
+			t = time.NewTicker(1 * time.Minute)
+		} else {
+			t = time.NewTicker(10 * time.Minute)
+		}
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				globalDNSCache.RefreshWithOptions(options)
+			case <-GlobalContext.Done():
+				return
+			}
+		}
+	}()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
