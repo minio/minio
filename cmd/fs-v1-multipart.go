@@ -847,8 +847,8 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 // Removes multipart uploads if any older than `expiry` duration
 // on all buckets for every `cleanupInterval`, this function is
 // blocking and should be run in a go-routine.
-func (fs *FSObjects) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
-	timer := time.NewTimer(cleanupInterval)
+func (fs *FSObjects) cleanupStaleUploads(ctx context.Context) {
+	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer timer.Stop()
 
 	for {
@@ -857,7 +857,9 @@ func (fs *FSObjects) cleanupStaleUploads(ctx context.Context, cleanupInterval, e
 			return
 		case <-timer.C:
 			// Reset for the next interval
-			timer.Reset(cleanupInterval)
+			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
+
+			expiry := globalAPIConfig.getStaleUploadsExpiry()
 
 			now := time.Now()
 			entries, err := readDir(pathJoin(fs.fsPath, minioMetaMultipartBucket))

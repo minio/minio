@@ -31,15 +31,18 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax              = "requests_max"
-	apiRequestsDeadline         = "requests_deadline"
-	apiClusterDeadline          = "cluster_deadline"
-	apiCorsAllowOrigin          = "cors_allow_origin"
-	apiRemoteTransportDeadline  = "remote_transport_deadline"
-	apiListQuorum               = "list_quorum"
-	apiReplicationWorkers       = "replication_workers"
-	apiReplicationFailedWorkers = "replication_failed_workers"
-	apiTransitionWorkers        = "transition_workers"
+	apiRequestsMax                 = "requests_max"
+	apiRequestsDeadline            = "requests_deadline"
+	apiClusterDeadline             = "cluster_deadline"
+	apiCorsAllowOrigin             = "cors_allow_origin"
+	apiRemoteTransportDeadline     = "remote_transport_deadline"
+	apiListQuorum                  = "list_quorum"
+	apiReplicationWorkers          = "replication_workers"
+	apiReplicationFailedWorkers    = "replication_failed_workers"
+	apiTransitionWorkers           = "transition_workers"
+	apiStaleUploadsCleanupInterval = "stale_uploads_cleanup_interval"
+	apiStaleUploadsExpiry          = "stale_uploads_expiry"
+	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 
 	EnvAPIRequestsMax              = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline         = "MINIO_API_REQUESTS_DEADLINE"
@@ -51,6 +54,11 @@ const (
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
 	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
+
+	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
+	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
+	EnvAPIDeleteCleanupInterval       = "MINIO_API_DELETE_CLEANUP_INTERVAL"
+	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
 )
 
 // Deprecated key and ENVs
@@ -98,20 +106,35 @@ var (
 			Key:   apiTransitionWorkers,
 			Value: "100",
 		},
+		config.KV{
+			Key:   apiStaleUploadsCleanupInterval,
+			Value: "6h",
+		},
+		config.KV{
+			Key:   apiStaleUploadsExpiry,
+			Value: "24h",
+		},
+		config.KV{
+			Key:   apiDeleteCleanupInterval,
+			Value: "5m",
+		},
 	}
 )
 
 // Config storage class configuration
 type Config struct {
-	RequestsMax              int           `json:"requests_max"`
-	RequestsDeadline         time.Duration `json:"requests_deadline"`
-	ClusterDeadline          time.Duration `json:"cluster_deadline"`
-	CorsAllowOrigin          []string      `json:"cors_allow_origin"`
-	RemoteTransportDeadline  time.Duration `json:"remote_transport_deadline"`
-	ListQuorum               string        `json:"list_quorum"`
-	ReplicationWorkers       int           `json:"replication_workers"`
-	ReplicationFailedWorkers int           `json:"replication_failed_workers"`
-	TransitionWorkers        int           `json:"transition_workers"`
+	RequestsMax                 int           `json:"requests_max"`
+	RequestsDeadline            time.Duration `json:"requests_deadline"`
+	ClusterDeadline             time.Duration `json:"cluster_deadline"`
+	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
+	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
+	ListQuorum                  string        `json:"list_quorum"`
+	ReplicationWorkers          int           `json:"replication_workers"`
+	ReplicationFailedWorkers    int           `json:"replication_failed_workers"`
+	TransitionWorkers           int           `json:"transition_workers"`
+	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
+	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
+	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -211,15 +234,38 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, config.ErrInvalidTransitionWorkersValue(nil)
 	}
 
+	v := env.Get(EnvAPIDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
+	if v == "" {
+		v = env.Get(EnvDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
+	}
+
+	deleteCleanupInterval, err := time.ParseDuration(v)
+	if err != nil {
+		return cfg, err
+	}
+
+	staleUploadsCleanupInterval, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsCleanupInterval, kvs.Get(apiStaleUploadsCleanupInterval)))
+	if err != nil {
+		return cfg, err
+	}
+
+	staleUploadsExpiry, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsExpiry, kvs.Get(apiStaleUploadsExpiry)))
+	if err != nil {
+		return cfg, err
+	}
+
 	return Config{
-		RequestsMax:              requestsMax,
-		RequestsDeadline:         requestsDeadline,
-		ClusterDeadline:          clusterDeadline,
-		CorsAllowOrigin:          corsAllowOrigin,
-		RemoteTransportDeadline:  remoteTransportDeadline,
-		ListQuorum:               listQuorum,
-		ReplicationWorkers:       replicationWorkers,
-		ReplicationFailedWorkers: replicationFailedWorkers,
-		TransitionWorkers:        transitionWorkers,
+		RequestsMax:                 requestsMax,
+		RequestsDeadline:            requestsDeadline,
+		ClusterDeadline:             clusterDeadline,
+		CorsAllowOrigin:             corsAllowOrigin,
+		RemoteTransportDeadline:     remoteTransportDeadline,
+		ListQuorum:                  listQuorum,
+		ReplicationWorkers:          replicationWorkers,
+		ReplicationFailedWorkers:    replicationFailedWorkers,
+		TransitionWorkers:           transitionWorkers,
+		StaleUploadsCleanupInterval: staleUploadsCleanupInterval,
+		StaleUploadsExpiry:          staleUploadsExpiry,
+		DeleteCleanupInterval:       deleteCleanupInterval,
 	}, nil
 }

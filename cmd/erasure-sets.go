@@ -41,13 +41,10 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/env"
 )
 
 // setsDsyncLockers is encapsulated type for Close()
 type setsDsyncLockers [][]dsync.NetLocker
-
-const envMinioDeleteCleanupInterval = "MINIO_DELETE_CLEANUP_INTERVAL"
 
 // erasureSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
@@ -443,19 +440,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		}
 	}
 
-	// cleanup ".trash/" folder every 5m minutes with sufficient sleep cycles, between each
-	// deletes a dynamic sleeper is used with a factor of 10 ratio with max delay between
-	// deletes to be 2 seconds.
-	deletedObjectsCleanupInterval, err := time.ParseDuration(env.Get(envMinioDeleteCleanupInterval, "5m"))
-	if err != nil {
-		return nil, err
-	}
-
 	// start cleanup stale uploads go-routine.
-	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
+	go s.cleanupStaleUploads(ctx)
 
 	// start cleanup of deleted objects.
-	go s.cleanupDeletedObjects(ctx, deletedObjectsCleanupInterval)
+	go s.cleanupDeletedObjects(ctx)
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
@@ -463,8 +452,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	return s, nil
 }
 
-func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval time.Duration) {
-	timer := time.NewTimer(cleanupInterval)
+// cleanup ".trash/" folder every 5m minutes with sufficient sleep cycles, between each
+// deletes a dynamic sleeper is used with a factor of 10 ratio with max delay between
+// deletes to be 2 seconds.
+func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
+	timer := time.NewTimer(globalAPIConfig.getDeleteCleanupInterval())
 	defer timer.Stop()
 
 	for {
@@ -473,7 +465,7 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval
 			return
 		case <-timer.C:
 			// Reset for the next interval
-			timer.Reset(cleanupInterval)
+			timer.Reset(globalAPIConfig.getDeleteCleanupInterval())
 
 			for _, set := range s.sets {
 				set.cleanupDeletedObjects(ctx)
@@ -482,8 +474,8 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval
 	}
 }
 
-func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
-	timer := time.NewTimer(cleanupInterval)
+func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
+	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer timer.Stop()
 
 	for {
@@ -492,10 +484,10 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, 
 			return
 		case <-timer.C:
 			// Reset for the next interval
-			timer.Reset(cleanupInterval)
+			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
 
 			for _, set := range s.sets {
-				set.cleanupStaleUploads(ctx, expiry)
+				set.cleanupStaleUploads(ctx, globalAPIConfig.getStaleUploadsExpiry())
 			}
 		}
 	}

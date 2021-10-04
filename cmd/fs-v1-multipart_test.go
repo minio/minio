@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/internal/config/api"
 )
 
 // Tests cleanup multipart uploads for filesystem backend.
@@ -49,11 +51,23 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
+	globalAPIConfig.init(api.Config{
+		ListQuorum:                  "optimal",
+		StaleUploadsExpiry:          time.Millisecond,
+		StaleUploadsCleanupInterval: time.Millisecond,
+	}, obj.SetDriveCounts())
+
+	defer func() {
+		globalAPIConfig = apiConfig{
+			listQuorum: 3,
+		}
+	}()
+
 	var cleanupWg sync.WaitGroup
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		fs.cleanupStaleUploads(ctx, time.Millisecond, 0)
+		fs.cleanupStaleUploads(ctx)
 	}()
 
 	// Wait for 100ms such that - we have given enough time for
