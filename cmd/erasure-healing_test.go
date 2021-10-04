@@ -416,7 +416,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	fileInfos, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-	fi, err := getLatestFileInfo(ctx, fileInfos, errs)
+	fi, err := getLatestFileInfo(ctx, fileInfos, errs, er.defaultParityCount)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
@@ -441,7 +441,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-	nfi, err := getLatestFileInfo(ctx, fileInfos, errs)
+	nfi, err := getLatestFileInfo(ctx, fileInfos, errs, er.defaultParityCount)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
@@ -467,7 +467,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-	nfi, err = getLatestFileInfo(ctx, fileInfos, errs)
+	nfi, err = getLatestFileInfo(ctx, fileInfos, errs, er.defaultParityCount)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
