@@ -1171,8 +1171,7 @@ type newServiceAccountOpts struct {
 	accessKey     string
 	secretKey     string
 
-	// LDAP username
-	ldapUsername string
+	claims map[string]interface{}
 }
 
 // NewServiceAccount - create a new service account
@@ -1260,9 +1259,12 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		m[iamPolicyClaimNameSA()] = "inherited-policy"
 	}
 
-	// For LDAP service account, save the ldap username in the metadata.
-	if opts.ldapUsername != "" {
-		m[ldapUserN] = opts.ldapUsername
+	// Add all the necessary claims for the service accounts.
+	for k, v := range opts.claims {
+		_, ok := m[k]
+		if !ok {
+			m[k] = v
+		}
 	}
 
 	var (
