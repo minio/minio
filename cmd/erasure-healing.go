@@ -275,7 +275,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
 
-	if _, err = getLatestFileInfo(ctx, partsMetadata, errs); err != nil {
+	if _, err = getLatestFileInfo(ctx, partsMetadata, errs, er.defaultParityCount); err != nil {
 		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
 	}
 

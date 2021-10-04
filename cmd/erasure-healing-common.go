@@ -40,7 +40,11 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 	}
 
 	for _, dataDir := range dataDirs {
-		if dataDir == "" {
+		if dataDir == errorDir {
+			continue
+		}
+		if dataDir == delMarkerDir {
+			dataDirOccurenceMap[delMarkerDir]++
 			continue
 		}
 		dataDirOccurenceMap[dataDir]++
@@ -97,6 +101,11 @@ func listObjectModtimes(partsMetadata []FileInfo, errs []error) (modTimes []time
 	return modTimes
 }
 
+const (
+	errorDir     = "error-dir"
+	delMarkerDir = ""
+)
+
 // Notes:
 // There are 5 possible states a disk could be in,
 // 1. __online__             - has the latest copy of xl.meta - returned by listOnlineDisks
@@ -130,6 +139,7 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 	dataDirs := make([]string, len(partsMetadata))
 	for idx, fi := range partsMetadata {
 		if errs[idx] != nil {
+			dataDirs[idx] = errorDir
 			continue
 		}
 		dataDirs[idx] = fi.DataDir
@@ -151,9 +161,9 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 }
 
 // Returns the latest updated FileInfo files and error in case of failure.
-func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error) (FileInfo, error) {
+func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error, quorum int) (FileInfo, error) {
 	// There should be atleast half correct entries, if not return failure
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(partsMetadata)/2); reducedErr != nil {
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum); reducedErr != nil {
 		return FileInfo{}, reducedErr
 	}
 
@@ -182,7 +192,8 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 			count++
 		}
 	}
-	if count < len(partsMetadata)/2 {
+
+	if count < quorum {
 		return FileInfo{}, errErasureReadQuorum
 	}
 

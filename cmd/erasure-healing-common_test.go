@@ -190,7 +190,7 @@ func TestListOnlineDisks(t *testing.T) {
 			}
 
 			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-			fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
+			fi, err := getLatestFileInfo(ctx, partsMetadata, errs, getReadQuorum(len(disks)))
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
@@ -365,7 +365,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			}
 
 			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
+			fi, err := getLatestFileInfo(ctx, partsMetadata, errs, getReadQuorum(len(disks)))
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
@@ -421,7 +421,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 
 			}
 			partsMetadata, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			_, err = getLatestFileInfo(ctx, partsMetadata, errs)
+			_, err = getLatestFileInfo(ctx, partsMetadata, errs, len(disks)/2)
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
