@@ -17,7 +17,12 @@
 
 package cmd
 
-import "errors"
+import (
+	"context"
+	"errors"
+
+	"github.com/minio/minio/internal/logger"
+)
 
 // errUnexpected - unexpected error, requires manual intervention.
 var errUnexpected = StorageErr("unexpected error, please report this issue at https://github.com/minio/minio/issues")
@@ -157,6 +162,7 @@ func osErrToFileErr(err error) error {
 		return errFaultyDisk
 	}
 	if isSysErrInvalidArg(err) {
+		logger.LogIf(context.Background(), err)
 		// For some odd calls with O_DIRECT reads
 		// filesystems can return EINVAL, handle
 		// these as FileNotFound instead.
