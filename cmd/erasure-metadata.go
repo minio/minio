@@ -317,7 +317,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
-	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
+	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs, defaultParityCount)
 	if err != nil {
 		return 0, 0, err
 	}

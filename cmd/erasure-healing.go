@@ -258,6 +258,10 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
 
+	if _, err = getLatestFileInfo(ctx, partsMetadata, errs, er.defaultParityCount); err != nil {
+		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
+	}
+
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
 	latestDisks, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
@@ -853,7 +857,9 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		versionID = nullVersionID
 	}
 
-	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
+	// Perform quick read without lock.
+	// This allows to quickly check if all is ok or all are missing.
+	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)
 		if versionID != "" {
@@ -861,11 +867,6 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		}
 		// Nothing to do, file is already gone.
 		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
-	}
-
-	_, err = getLatestFileInfo(healCtx, partsMetadata, errs)
-	if err != nil {
-		return er.purgeObjectDangling(healCtx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
 	}
 
 	// Heal the object.
