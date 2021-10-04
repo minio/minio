@@ -81,7 +81,9 @@ type DataUsageInfo struct {
 	// - total objects in a bucket
 	// - object size histogram per bucket
 	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
-
 	// Deprecated kept here for backward compatibility reasons.
 	BucketSizes map[string]uint64 `json:"bucketsSizes"`
+
+	// TierStats contains per-tier stats of all configured remote tiers
+	TierStats *AllTierStats
 }

@@ -90,3 +90,5 @@ require (
 	google.golang.org/api v0.31.0
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/minio/madmin-go => ../madmin-go

@@ -1398,7 +1398,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
 	usage := madmin.Usage{}
-
+	var allTierStats map[string]madmin.TierStats
 	objectAPI := newObjectLayerFn()
 	if objectAPI != nil {
 		mode = madmin.ItemOnline
@@ -1409,6 +1409,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
 			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
+			allTierStats = dataUsageInfo.TierStats.adminStats()
 		} else {
 			buckets = madmin.Buckets{Error: err.Error()}
 			objects = madmin.Objects{Error: err.Error()}
@@ -1460,6 +1461,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		Services:     services,
 		Backend:      backend,
 		Servers:      servers,
+		AllTierStats: allTierStats,
 	}
 }
 

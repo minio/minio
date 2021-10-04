@@ -838,6 +838,7 @@ type sizeSummary struct {
 	pendingCount    uint64
 	failedCount     uint64
 	replTargetStats map[string]replTargetSizeSummary
+	tiers           map[string]TierStats
 }
 
 // replTargetSizeSummary holds summary of replication stats by target
