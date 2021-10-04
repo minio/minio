@@ -42,6 +42,10 @@ type apiConfig struct {
 	replicationWorkers       int
 	replicationFailedWorkers int
 	transitionWorkers        int
+
+	staleUploadsExpiry          time.Duration
+	staleUploadsCleanupInterval time.Duration
+	deleteCleanupInterval       time.Duration
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -107,6 +111,10 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
 	t.transitionWorkers = cfg.TransitionWorkers
+
+	t.staleUploadsExpiry = cfg.StaleUploadsExpiry
+	t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
+	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -123,6 +131,39 @@ func (t *apiConfig) getCorsAllowOrigins() []string {
 	corsAllowOrigins := make([]string, len(t.corsAllowOrigins))
 	copy(corsAllowOrigins, t.corsAllowOrigins)
 	return corsAllowOrigins
+}
+
+func (t *apiConfig) getStaleUploadsCleanupInterval() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.staleUploadsCleanupInterval == 0 {
+		return 6 * time.Hour // default 6 hours
+	}
+
+	return t.staleUploadsCleanupInterval
+}
+
+func (t *apiConfig) getStaleUploadsExpiry() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.staleUploadsExpiry == 0 {
+		return 24 * time.Hour // default 24 hours
+	}
+
+	return t.staleUploadsExpiry
+}
+
+func (t *apiConfig) getDeleteCleanupInterval() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.deleteCleanupInterval == 0 {
+		return 5 * time.Minute // every 5 minutes
+	}
+
+	return t.deleteCleanupInterval
 }
 
 func (t *apiConfig) getClusterDeadline() time.Duration {

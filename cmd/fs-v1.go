@@ -177,7 +177,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
 
-	go fs.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
+	go fs.cleanupStaleUploads(ctx)
 	go intDataUpdateTracker.start(ctx, fsPath)
 
 	// Return successfully initialized object layer.

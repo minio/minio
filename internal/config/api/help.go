@@ -64,5 +64,23 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
+		config.HelpKV{
+			Key:         apiStaleUploadsExpiry,
+			Description: `set to expire stale multipart uploads older than this value, defaults to 24 hours`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         apiStaleUploadsCleanupInterval,
+			Description: `set to change intervals when stale multipart uploads are expired, defaults to every 6 hours`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         apiDeleteCleanupInterval,
+			Description: `set to change intervals when deleted objects are permanently deleted from ".trash" folder, defaults to every 5 minutes`,
+			Optional:    true,
+			Type:        "duration",
+		},
 	}
 )

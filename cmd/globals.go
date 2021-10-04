@@ -91,14 +91,12 @@ const (
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
-	// GlobalStaleUploadsExpiry - Expiry duration after which the uploads in multipart, tmp directory are deemed stale.
+	// GlobalStaleUploadsExpiry - Expiry duration after which the uploads in multipart,
+	// tmp directory are deemed stale.
 	GlobalStaleUploadsExpiry = time.Hour * 24 // 24 hrs.
 
 	// GlobalStaleUploadsCleanupInterval - Cleanup interval when the stale uploads cleanup is initiated.
-	GlobalStaleUploadsCleanupInterval = time.Hour * 12 // 12 hrs.
-
-	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
-	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
+	GlobalStaleUploadsCleanupInterval = time.Hour * 6 // 6 hrs.
 
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
