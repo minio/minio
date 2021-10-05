@@ -18,13 +18,15 @@
 package s3select
 
 import (
-	"compress/bzip2"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 	"sync/atomic"
 
+	"github.com/cosnicolaou/pbzip2"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
@@ -121,7 +123,9 @@ func newProgressReader(rc io.ReadCloser, compType CompressionType) (*progressRea
 		r = gzr
 		pr.closer = gzr
 	case bzip2Type:
-		r = bzip2.NewReader(scannedReader)
+		ctx, cancel := context.WithCancel(context.Background())
+		r = pbzip2.NewReader(ctx, scannedReader, pbzip2.DecompressionOptions(pbzip2.BZConcurrency((runtime.GOMAXPROCS(0)+1)/2)))
+		pr.closer = &nopReadCloser{fn: cancel}
 	case zstdType:
 		// Set a max window of 64MB. More than reasonable.
 		zr, err := zstd.NewReader(scannedReader, zstd.WithDecoderConcurrency(2), zstd.WithDecoderMaxWindow(64<<20))
@@ -142,4 +146,20 @@ func newProgressReader(rc io.ReadCloser, compType CompressionType) (*progressRea
 	pr.processedReader = newCountUpReader(r)
 
 	return &pr, nil
+}
+
+type nopReadCloser struct {
+	fn func()
+}
+
+func (n2 *nopReadCloser) Read(p []byte) (n int, err error) {
+	panic("should not be called")
+}
+
+func (n2 *nopReadCloser) Close() error {
+	if n2.fn != nil {
+		n2.fn()
+	}
+	n2.fn = nil
+	return nil
 }
