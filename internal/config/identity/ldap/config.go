@@ -319,9 +319,8 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		return nil, errors.New("LDAP is not configured")
 	}
 
-	serverHost, _, err := net.SplitHostPort(l.ServerAddr)
+	_, _, err = net.SplitHostPort(l.ServerAddr)
 	if err != nil {
-		serverHost = l.ServerAddr
 		// User default LDAP port if none specified "636"
 		l.ServerAddr = net.JoinHostPort(l.ServerAddr, "636")
 	}
@@ -333,7 +332,6 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: l.tlsSkipVerify,
 		RootCAs:            l.rootCAs,
-		ServerName:         serverHost,
 	}
 
 	if l.serverStartTLS {
