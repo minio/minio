@@ -29,7 +29,7 @@ import (
 
 // TODO: if possible implement for non-linux platforms, not a priority at the moment
 //nolint:deadcode
-func setInternalTCPParameters(c syscall.RawConn) error {
+func setTCPParameters(string, string, syscall.RawConn) error {
 	return nil
 }
 
