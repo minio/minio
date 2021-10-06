@@ -44,7 +44,6 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	defer r.Body.Close()
 	var sites []madmin.PeerSite
 	errCode := readJSONBody(ctx, r.Body, &sites, cred.SecretKey)
 	if errCode != ErrNone {
@@ -82,7 +81,6 @@ func (a adminAPIHandlers) SRInternalJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	defer r.Body.Close()
 	var joinArg madmin.SRInternalJoinReq
 	errCode := readJSONBody(ctx, r.Body, &joinArg, cred.SecretKey)
 	if errCode != ErrNone {

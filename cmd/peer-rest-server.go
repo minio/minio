@@ -514,7 +514,6 @@ func (s *peerRESTServer) GetMemInfoHandler(w http.ResponseWriter, r *http.Reques
 // (only the config that are of concern to minio)
 func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
-		fmt.Println("Invalid request")
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
@@ -532,7 +531,6 @@ func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Requ
 // (only the services that are of concern to minio)
 func (s *peerRESTServer) GetSysServicesHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
-		fmt.Println("Invalid request")
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
