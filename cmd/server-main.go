@@ -414,6 +414,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// Initialize bucket notification sub-system.
 	globalNotificationSys.Init(ctx, buckets, newObject)
 
+	// Initialize site replication manager.
+	globalSiteReplicationSys.Init(ctx, newObject)
+
 	if globalIsErasure {
 		// Initialize transition tier configuration manager
 		if err = globalTierConfigMgr.Init(ctx, newObject); err != nil {

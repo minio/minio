@@ -514,6 +514,7 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 		return err
 	}
 
+	// load service accounts
 	if err := store.loadUsers(ctx, svcUser, iamUsersMap); err != nil {
 		return err
 	}
@@ -1425,6 +1426,31 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 	sa.SessionToken = ""
 
 	return sa, embeddedPolicy, nil
+}
+
+// GetClaimsForSvcAcc - gets the claims associated with the service account.
+func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (map[string]interface{}, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, nil
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return nil, errNoSuchServiceAccount
+	}
+
+	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+	if err != nil {
+		return nil, err
+	}
+	return jwtClaims.Map(), nil
 }
 
 // DeleteServiceAccount - delete a service account

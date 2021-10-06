@@ -1557,3 +1557,23 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 
 	return results
 }
+
+// ReloadSiteReplicationConfig - tells all peer minio nodes to reload the
+// site-replication configuration.
+func (sys *NotificationSys) ReloadSiteReplicationConfig(ctx context.Context) []error {
+	errs := make([]error, len(sys.allPeerClients))
+	var wg sync.WaitGroup
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			errs[index] = sys.peerClients[index].ReloadSiteReplicationConfig(ctx)
+		}(index)
+	}
+
+	wg.Wait()
+	return errs
+}

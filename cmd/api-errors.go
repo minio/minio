@@ -267,6 +267,16 @@ const (
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
+
+	// Site-Replication errors
+	ErrSiteReplicationInvalidRequest
+	ErrSiteReplicationPeerResp
+	ErrSiteReplicationBackendIssue
+	ErrSiteReplicationServiceAccountError
+	ErrSiteReplicationBucketConfigError
+	ErrSiteReplicationBucketMetaError
+	ErrSiteReplicationIAMError
+
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
@@ -1269,6 +1279,43 @@ var errorCodes = errorCodeMap{
 		Description:    errObjectTampered.Error(),
 		HTTPStatusCode: http.StatusPartialContent,
 	},
+
+	ErrSiteReplicationInvalidRequest: {
+		Code:           "XMinioSiteReplicationInvalidRequest",
+		Description:    "Invalid site-replication request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSiteReplicationPeerResp: {
+		Code:           "XMinioSiteReplicationPeerResp",
+		Description:    "Error received when contacting a peer site",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSiteReplicationBackendIssue: {
+		Code:           "XMinioSiteReplicationBackendIssue",
+		Description:    "Error when requesting object layer backend",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSiteReplicationServiceAccountError: {
+		Code:           "XMinioSiteReplicationServiceAccountError",
+		Description:    "Site replication related service account error",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSiteReplicationBucketConfigError: {
+		Code:           "XMinioSiteReplicationBucketConfigError",
+		Description:    "Error while configuring replication on a bucket",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSiteReplicationBucketMetaError: {
+		Code:           "XMinioSiteReplicationBucketMetaError",
+		Description:    "Error while replicating bucket metadata",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSiteReplicationIAMError: {
+		Code:           "XMinioSiteReplicationIAMError",
+		Description:    "Error while replicating an IAM item",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
 		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
