@@ -159,7 +159,7 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 }
 
 // DeleteBucket - deletes a bucket.
-func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	// Collect if all disks report volume not found.
 	defer NSUpdated(bucket, slashSeparator)
 
@@ -171,7 +171,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 		index := index
 		g.Go(func() error {
 			if storageDisks[index] != nil {
-				if err := storageDisks[index].DeleteVol(ctx, bucket, forceDelete); err != nil {
+				if err := storageDisks[index].DeleteVol(ctx, bucket, opts.Force); err != nil {
 					return err
 				}
 				if err := storageDisks[index].Delete(ctx, minioMetaMultipartBucket, bucket, true); err != errFileNotFound {
@@ -186,7 +186,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 	// Wait for all the delete vols to finish.
 	dErrs := g.Wait()
 
-	if forceDelete {
+	if opts.Force {
 		for _, err := range dErrs {
 			if err != nil {
 				undoDeleteBucket(storageDisks, bucket)
@@ -199,7 +199,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 
 	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
+	if err == errErasureWriteQuorum && !opts.NoRecreate {
 		undoDeleteBucket(storageDisks, bucket)
 	}
 	if err != nil {

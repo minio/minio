@@ -632,6 +632,10 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
+			if _, ok := err.(BucketExists); !ok {
+				// Delete created buckets, ignoring errors.
+				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: true, NoRecreate: true})
+			}
 			return err
 		}
 	}
@@ -1424,14 +1428,14 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // DeleteBucket - deletes a bucket on all serverPools simultaneously,
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
-func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Delete buckets in parallel across all serverPools.
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			return z.serverPools[index].DeleteBucket(ctx, bucket, forceDelete)
+			return z.serverPools[index].DeleteBucket(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -1441,7 +1445,7 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 	// buckets operation by creating all the buckets again.
 	for _, err := range errs {
 		if err != nil {
-			if !z.SinglePool() {
+			if !z.SinglePool() && !opts.NoRecreate {
 				undoDeleteBucketServerPools(ctx, bucket, z.serverPools, errs)
 			}
 			return err

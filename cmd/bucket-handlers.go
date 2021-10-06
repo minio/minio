@@ -727,7 +727,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
-					objectAPI.DeleteBucket(ctx, bucket, false)
+					objectAPI.DeleteBucket(ctx, bucket, DeleteBucketOptions{Force: false, NoRecreate: true})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
@@ -1240,7 +1240,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	deleteBucket := objectAPI.DeleteBucket
 
 	// Attempt to delete bucket.
-	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
+	if err := deleteBucket(ctx, bucket, DeleteBucketOptions{Force: forceDelete}); err != nil {
 		apiErr := toAPIError(ctx, err)
 		if _, ok := err.(BucketNotEmpty); ok {
 			if globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket) {
