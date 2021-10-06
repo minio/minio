@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
+	"github.com/rs/dnscache"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
@@ -309,7 +310,9 @@ var (
 
 	globalProxyTransport http.RoundTripper
 
-	globalDNSCache *xhttp.DNSCache
+	globalDNSCache = &dnscache.Resolver{
+		Timeout: 5 * time.Second,
+	}
 
 	globalForwarder *handlers.Forwarder
 
