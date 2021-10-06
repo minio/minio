@@ -647,7 +647,7 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 	}
 
-	if err := meta.Save(ctx, z); err != nil {
+	if err := meta.Save(context.Background(), z); err != nil {
 		return toObjectErr(err, bucket)
 	}
 
@@ -1446,13 +1446,13 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	for _, err := range errs {
 		if err != nil {
 			if !z.SinglePool() && !opts.NoRecreate {
-				undoDeleteBucketServerPools(ctx, bucket, z.serverPools, errs)
+				undoDeleteBucketServerPools(context.Background(), bucket, z.serverPools, errs)
 			}
 			return err
 		}
 	}
 
-	deleteBucketMetadata(ctx, z, bucket)
+	deleteBucketMetadata(context.Background(), z, bucket)
 
 	// Success.
 	return nil
