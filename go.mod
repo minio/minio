@@ -41,7 +41,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.10.2
+	github.com/minio/console v0.10.3
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
@@ -69,12 +69,12 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/rs/cors v1.7.0
+	github.com/rs/dnscache v0.0.0-20210201191234-295bba877686
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.21.7
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.6-0.20210521143832-0becd170c402
 	github.com/valyala/bytebufferpool v1.0.0
-	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/yargevad/filepathx v1.0.0
 	go.etcd.io/etcd/api/v3 v3.5.0-beta.4

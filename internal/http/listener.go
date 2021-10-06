@@ -18,11 +18,9 @@
 package http
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"net"
-	"os"
-	"sync"
 	"syscall"
 )
 
@@ -33,45 +31,22 @@ type acceptResult struct {
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
 type httpListener struct {
-	mutex        sync.Mutex         // to guard Close() method.
 	tcpListeners []*net.TCPListener // underlaying TCP listeners.
 	acceptCh     chan acceptResult  // channel where all TCP listeners write accepted connection.
-	doneCh       chan struct{}      // done channel for TCP listener goroutines.
-}
-
-// isRoutineNetErr returns true if error is due to a network timeout,
-// connect reset or io.EOF and false otherwise
-func isRoutineNetErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	if nErr, ok := err.(*net.OpError); ok {
-		// Check if the error is a tcp connection reset
-		if syscallErr, ok := nErr.Err.(*os.SyscallError); ok {
-			if errno, ok := syscallErr.Err.(syscall.Errno); ok {
-				return errno == syscall.ECONNRESET
-			}
-		}
-		// Check if the error is a timeout
-		return nErr.Timeout()
-	}
-	// check for io.EOF and also some times io.EOF is wrapped is another error type.
-	return err == io.EOF || err.Error() == "EOF"
+	ctx          context.Context
+	ctxCanceler  context.CancelFunc
 }
 
 // start - starts separate goroutine for each TCP listener.  A valid new connection is passed to httpListener.acceptCh.
 func (listener *httpListener) start() {
-	listener.acceptCh = make(chan acceptResult)
-	listener.doneCh = make(chan struct{})
-
 	// Closure to send acceptResult to acceptCh.
 	// It returns true if the result is sent else false if returns when doneCh is closed.
-	send := func(result acceptResult, doneCh <-chan struct{}) bool {
+	send := func(result acceptResult) bool {
 		select {
 		case listener.acceptCh <- result:
 			// Successfully written to acceptCh
 			return true
-		case <-doneCh:
+		case <-listener.ctx.Done():
 			// As stop signal is received, close accepted connection.
 			if result.conn != nil {
 				result.conn.Close()
@@ -81,56 +56,52 @@ func (listener *httpListener) start() {
 	}
 
 	// Closure to handle single connection.
-	handleConn := func(tcpConn *net.TCPConn, doneCh <-chan struct{}) {
+	handleConn := func(tcpConn *net.TCPConn) {
 		tcpConn.SetKeepAlive(true)
-		send(acceptResult{tcpConn, nil}, doneCh)
+		send(acceptResult{tcpConn, nil})
 	}
 
 	// Closure to handle TCPListener until done channel is closed.
-	handleListener := func(tcpListener *net.TCPListener, doneCh <-chan struct{}) {
+	handleListener := func(tcpListener *net.TCPListener) {
 		for {
 			tcpConn, err := tcpListener.AcceptTCP()
 			if err != nil {
 				// Returns when send fails.
-				if !send(acceptResult{nil, err}, doneCh) {
+				if !send(acceptResult{nil, err}) {
 					return
 				}
 			} else {
-				go handleConn(tcpConn, doneCh)
+				go handleConn(tcpConn)
 			}
 		}
 	}
 
 	// Start separate goroutine for each TCP listener to handle connection.
 	for _, tcpListener := range listener.tcpListeners {
-		go handleListener(tcpListener, listener.doneCh)
+		go handleListener(tcpListener)
 	}
 }
 
 // Accept - reads from httpListener.acceptCh for one of previously accepted TCP connection and returns the same.
 func (listener *httpListener) Accept() (conn net.Conn, err error) {
-	result, ok := <-listener.acceptCh
-	if ok {
-		return result.conn, result.err
+	select {
+	case result, ok := <-listener.acceptCh:
+		if ok {
+			return result.conn, result.err
+		}
+	case <-listener.ctx.Done():
 	}
-
 	return nil, syscall.EINVAL
 }
 
 // Close - closes underneath all TCP listeners.
 func (listener *httpListener) Close() (err error) {
-	listener.mutex.Lock()
-	defer listener.mutex.Unlock()
-	if listener.doneCh == nil {
-		return syscall.EINVAL
-	}
+	listener.ctxCanceler()
 
 	for i := range listener.tcpListeners {
 		listener.tcpListeners[i].Close()
 	}
-	close(listener.doneCh)
 
-	listener.doneCh = nil
 	return nil
 }
 
@@ -163,7 +134,7 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 // httpListener is capable to
 // * listen to multiple addresses
 // * controls incoming connections only doing HTTP protocol
-func newHTTPListener(serverAddrs []string) (listener *httpListener, err error) {
+func newHTTPListener(ctx context.Context, serverAddrs []string) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 
@@ -181,10 +152,8 @@ func newHTTPListener(serverAddrs []string) (listener *httpListener, err error) {
 
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
-		if l, err = listen("tcp", serverAddr); err != nil {
-			if l, err = fallbackListen("tcp", serverAddr); err != nil {
-				return nil, err
-			}
+		if l, err = listenCfg.Listen(ctx, "tcp", serverAddr); err != nil {
+			return nil, err
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
@@ -197,7 +166,9 @@ func newHTTPListener(serverAddrs []string) (listener *httpListener, err error) {
 
 	listener = &httpListener{
 		tcpListeners: tcpListeners,
+		acceptCh:     make(chan acceptResult, len(tcpListeners)),
 	}
+	listener.ctx, listener.ctxCanceler = context.WithCancel(ctx)
 	listener.start()
 
 	return listener, nil

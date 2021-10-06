@@ -29,10 +29,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func setInternalTCPParameters(c syscall.RawConn) error {
-	return c.Control(func(fdPtr uintptr) {
+func setTCPParameters(network, address string, c syscall.RawConn) error {
+	c.Control(func(fdPtr uintptr) {
 		// got socket file descriptor to set parameters.
 		fd := int(fdPtr)
+
+		_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+
+		_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+
+		// Enable TCP open
+		// https://lwn.net/Articles/508865/ - 16k queue size.
+		_ = syscall.SetsockoptInt(fd, syscall.SOL_TCP, unix.TCP_FASTOPEN, 16*1024)
 
 		// Enable TCP fast connect
 		// TCPFastOpenConnect sets the underlying socket to use
@@ -44,22 +52,8 @@ func setInternalTCPParameters(c syscall.RawConn) error {
 		// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
 
-		// The time (in seconds) the connection needs to remain idle before
-		// TCP starts sending keepalive probes, set this to 5 secs
-		// system defaults to 7200 secs!!!
-		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 5)
-
-		// Number of probes.
-		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
-		// 9
-		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
-
-		// Wait time after successful probe in seconds.
-		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 3 secs)
-		// 75
-		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
-
 	})
+	return nil
 }
 
 // DialContext is a function to make custom Dial for internode communications
@@ -70,9 +64,7 @@ func NewInternodeDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
-			Control: func(network, address string, c syscall.RawConn) error {
-				return setInternalTCPParameters(c)
-			},
+			Control: setTCPParameters,
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}
@@ -83,22 +75,7 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
-			Control: func(network, address string, c syscall.RawConn) error {
-				return c.Control(func(fdPtr uintptr) {
-					// got socket file descriptor to set parameters.
-					fd := int(fdPtr)
-
-					// Enable TCP fast connect
-					// TCPFastOpenConnect sets the underlying socket to use
-					// the TCP fast open connect. This feature is supported
-					// since Linux 4.11.
-					_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
-
-					// Enable TCP quick ACK, John Nagle says
-					// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
-					_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
-				})
-			},
+			Control: setTCPParameters,
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}

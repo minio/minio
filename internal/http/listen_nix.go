@@ -22,19 +22,9 @@ package http
 
 import (
 	"net"
-
-	"github.com/valyala/tcplisten"
 )
 
-var cfg = &tcplisten.Config{
-	ReusePort:   true,
-	DeferAccept: true,
-	FastOpen:    true,
-	// Bump up the soMaxConn value from 128 to 65535 to
-	// handle large incoming concurrent requests.
-	Backlog: 65535,
-}
-
 // Unix listener with special TCP options.
-var listen = cfg.NewListener
-var fallbackListen = net.Listen
+var listenCfg = net.ListenConfig{
+	Control: setTCPParameters,
+}

@@ -499,7 +499,7 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 	}
 	var dsc ReplicateDecision
 	var tgtStatuses map[string]replication.StatusType
-	if oi.DeleteMarker {
+	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		dsc = checkReplicateDelete(GlobalContext, oi.Bucket, ObjectToDelete{
 			ObjectName: oi.Name,
 			VersionID:  oi.VersionID,

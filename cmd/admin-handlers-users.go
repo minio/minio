@@ -532,6 +532,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	opts := newServiceAccountOpts{
 		accessKey: createReq.AccessKey,
 		secretKey: createReq.SecretKey,
+		claims:    make(map[string]interface{}),
 	}
 
 	// Find the user for the request sender (as it may be sent via a service
@@ -565,16 +566,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 		targetGroups = requestorGroups
 
-		// In case of LDAP we need to set `opts.ldapUsername` to ensure
-		// it is associated with the LDAP user properly. We _only_ do
-		// this if this user is in LDAP (the other possibility is the
-		// root user).
-		if globalLDAPConfig.Enabled {
-			v1, ok1 := cred.Claims[ldapUserN]
-			v2, ok2 := v1.(string)
-			if ok1 && ok2 {
-				opts.ldapUsername = v2
+		// In case of LDAP/OIDC we need to set `opts.claims` to ensure
+		// it is associated with the LDAP/OIDC user properly.
+		for k, v := range cred.Claims {
+			if k == expClaim {
+				continue
 			}
+			opts.claims[k] = v
 		}
 	} else {
 		// Need permission if we are creating a service acccount for a
@@ -593,12 +591,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
 		if globalLDAPConfig.Enabled {
-			opts.ldapUsername = targetUser
+			opts.claims[ldapUserN] = targetUser // simple username
 			targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
+			opts.claims[ldapUser] = targetUser // username DN
 		}
 
 		// NOTE: if not using LDAP, then internal IDP or open ID is
