@@ -89,6 +89,12 @@ type BucketOptions struct {
 	VersioningEnabled bool
 }
 
+// DeleteBucketOptions provides options for DeleteBucket calls.
+type DeleteBucketOptions struct {
+	Force      bool // Force deletion
+	NoRecreate bool // Do not recreate on delete failures
+}
+
 // SetReplicaStatus sets replica status and timestamp for delete operations in ObjectOptions
 func (o *ObjectOptions) SetReplicaStatus(st replication.StatusType) {
 	o.DeleteReplication.ReplicaStatus = st
@@ -164,7 +170,7 @@ type ObjectLayer interface {
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
-	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
+	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (result ListObjectVersionsInfo, err error)
