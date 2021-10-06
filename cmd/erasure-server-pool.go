@@ -1448,7 +1448,8 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 		}
 	}
 
-	deleteBucketMetadata(ctx, z, bucket)
+	// Purge the entire bucket metadata entirely.
+	z.renameAll(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
 
 	// Success.
 	return nil
