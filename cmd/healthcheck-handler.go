@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -29,6 +30,11 @@ const unavailable = "offline"
 
 // ClusterCheckHandler returns if the server is ready for requests.
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if globalIsGateway {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
+		return
+	}
+
 	ctx := newContext(r, w, "ClusterCheckHandler")
 
 	if shouldProxy() {
@@ -67,6 +73,11 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // ClusterReadCheckHandler returns if the server is ready for requests.
 func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if globalIsGateway {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
+		return
+	}
+
 	ctx := newContext(r, w, "ClusterReadCheckHandler")
 
 	if shouldProxy() {
@@ -85,28 +96,13 @@ func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if shouldProxy() {
-		// Service not initialized yet
-		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
-	}
-
-	if globalIsGateway && globalEtcdClient != nil {
-		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
-		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
-		defer cancel()
-		// etcd unreachable throw an error for readiness.
-		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
-			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
-			return
-		}
-	}
-
-	writeResponse(w, http.StatusOK, nil, mimeNone)
+	LivenessCheckHandler(w, r)
 }
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.
@@ -116,14 +112,48 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
 
-	if globalIsGateway && globalEtcdClient != nil {
-		// Borrowed from https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
-		ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
-		defer cancel()
-		// etcd unreachable throw an error for readiness.
-		if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
-			writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+	if globalIsGateway {
+		objLayer := newObjectLayerFn()
+		if objLayer == nil {
+			apiErr := toAPIError(r.Context(), errServerNotInitialized)
+			switch r.Method {
+			case http.MethodHead:
+				writeResponse(w, apiErr.HTTPStatusCode, nil, mimeNone)
+			case http.MethodGet:
+				writeErrorResponse(r.Context(), w, apiErr, r.URL)
+			}
 			return
+		}
+
+		storageInfo, _ := objLayer.StorageInfo(r.Context())
+		if !storageInfo.Backend.GatewayOnline {
+			err := errors.New("gateway backend is not reachable")
+			apiErr := toAPIError(r.Context(), err)
+			switch r.Method {
+			case http.MethodHead:
+				writeResponse(w, apiErr.HTTPStatusCode, nil, mimeNone)
+			case http.MethodGet:
+				writeErrorResponse(r.Context(), w, apiErr, r.URL)
+			}
+			return
+		}
+
+		if globalEtcdClient != nil {
+			// Borrowed from
+			// https://github.com/etcd-io/etcd/blob/main/etcdctl/ctlv3/command/ep_command.go#L118
+			ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+			defer cancel()
+			if _, err := globalEtcdClient.Get(ctx, "health"); err != nil {
+				// etcd unreachable throw an error..
+				switch r.Method {
+				case http.MethodHead:
+					apiErr := toAPIError(r.Context(), err)
+					writeResponse(w, apiErr.HTTPStatusCode, nil, mimeNone)
+				case http.MethodGet:
+					writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
+				}
+				return
+			}
 		}
 	}
 
