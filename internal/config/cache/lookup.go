@@ -219,11 +219,11 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		cfg.Range = rng
 	}
 	if commit := env.Get(EnvCacheCommit, kvs.Get(Commit)); commit != "" {
-		cfg.CommitWriteback, err = parseCacheCommitMode(commit)
+		cfg.CacheCommitMode, err = parseCacheCommitMode(commit)
 		if err != nil {
 			return cfg, err
 		}
-		if cfg.After > 0 && cfg.CommitWriteback {
+		if cfg.After > 0 && cfg.CacheCommitMode != "" {
 			err := errors.New("cache after cannot be used with commit writeback")
 			return cfg, config.ErrInvalidCacheSetting(err)
 		}
