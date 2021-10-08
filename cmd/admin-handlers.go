@@ -1461,7 +1461,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		Services:     services,
 		Backend:      backend,
 		Servers:      servers,
-		AllTierStats: allTierStats,
+		TierStats:    allTierStats,
 	}
 }
 
