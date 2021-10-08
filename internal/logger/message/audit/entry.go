@@ -41,6 +41,8 @@ type Entry struct {
 		Object          string `json:"object,omitempty"`
 		Status          string `json:"status,omitempty"`
 		StatusCode      int    `json:"statusCode,omitempty"`
+		InputBytes      int64  `json:"rx"`
+		OutputBytes     int64  `json:"tx"`
 		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
 		TimeToResponse  string `json:"timeToResponse,omitempty"`
 	} `json:"api"`
