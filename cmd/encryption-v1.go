@@ -65,6 +65,29 @@ const (
 
 )
 
+// isMultipart returns true if the current object is
+// uploaded by the user using multipart mechanism:
+// initiate new multipart, upload part, complete upload
+func (o *ObjectInfo) isMultipart() bool {
+	if len(o.Parts) == 0 {
+		return false
+	}
+	_, encrypted := crypto.IsEncrypted(o.UserDefined)
+	if encrypted && !crypto.IsMultiPart(o.UserDefined) {
+		return false
+	}
+	for _, part := range o.Parts {
+		_, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return false
+		}
+	}
+	// Further check if this object is uploaded using multipart mechanism
+	// by the user and it is not about Erasure internally splitting the
+	// object into parts in PutObject()
+	return !(o.backendType == BackendErasure && len(o.ETag) == 32)
+}
+
 // isEncryptedMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
