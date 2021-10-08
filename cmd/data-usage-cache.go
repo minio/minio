@@ -46,22 +46,20 @@ type dataUsageHash string
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
 
-//msgp:tuple dataUsageEntry
 type dataUsageEntry struct {
-	Children dataUsageHashMap
+	Children dataUsageHashMap `msg:"ch"`
 	// These fields do no include any children.
-	Size             int64
-	Objects          uint64
-	Versions         uint64 // Versions that are not delete markers.
-	ObjSizes         sizeHistogram
-	ReplicationStats *replicationAllStats
-	AllTierStats     *AllTierStats
-	Compacted        bool
+	Size             int64                `msg:"sz"`
+	Objects          uint64               `msg:"os"`
+	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
+	ObjSizes         sizeHistogram        `msg:"szs"`
+	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
+	AllTierStats     *AllTierStats        `msg:"ats,omitempty"`
+	Compacted        bool                 `msg:"c"`
 }
 
-//msgp: tuple AllTierStats
 type AllTierStats struct {
-	Tiers map[string]TierStats
+	Tiers map[string]TierStats `msg:"ts"`
 }
 
 func NewAllTierStats() *AllTierStats {
@@ -96,10 +94,9 @@ func (ats *AllTierStats) adminStats() map[string]madmin.TierStats {
 	return ts
 }
 
-//msgp:tuple TierStats
 type TierStats struct {
-	TotalSize   uint64
-	NumVersions int
+	TotalSize   uint64 `msg:"ts"`
+	NumVersions int    `msg:"nv"`
 }
 
 func (ts TierStats) Add(u TierStats) TierStats {
