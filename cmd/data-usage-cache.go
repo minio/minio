@@ -58,11 +58,13 @@ type dataUsageEntry struct {
 	Compacted        bool                 `msg:"c"`
 }
 
+// AllTierStats is a collection of per-tier stats across all configured remote
+// tiers.
 type AllTierStats struct {
 	Tiers map[string]TierStats `msg:"ts"`
 }
 
-func NewAllTierStats() *AllTierStats {
+func newAllTierStats() *AllTierStats {
 	return &AllTierStats{
 		Tiers: make(map[string]TierStats),
 	}
@@ -70,13 +72,13 @@ func NewAllTierStats() *AllTierStats {
 
 func (ats *AllTierStats) addSizes(sz sizeSummary) {
 	for tier, st := range sz.tiers {
-		ats.Tiers[tier] = ats.Tiers[tier].Add(st)
+		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
 }
 
 func (ats *AllTierStats) merge(other *AllTierStats) {
 	for tier, st := range other.Tiers {
-		ats.Tiers[tier] = ats.Tiers[tier].Add(st)
+		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
 }
 
@@ -94,12 +96,13 @@ func (ats *AllTierStats) adminStats() map[string]madmin.TierStats {
 	return ts
 }
 
+// TierStats holds per-tier stats of a remote tier.
 type TierStats struct {
 	TotalSize   uint64 `msg:"ts"`
 	NumVersions int    `msg:"nv"`
 }
 
-func (ts TierStats) Add(u TierStats) TierStats {
+func (ts TierStats) add(u TierStats) TierStats {
 	ts.TotalSize += u.TotalSize
 	ts.NumVersions += u.NumVersions
 	return ts
@@ -305,7 +308,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	}
 	if summary.tiers != nil {
 		if e.AllTierStats == nil {
-			e.AllTierStats = NewAllTierStats()
+			e.AllTierStats = newAllTierStats()
 		}
 		e.AllTierStats.addSizes(summary)
 	}
@@ -341,7 +344,7 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 	if other.AllTierStats != nil {
 		if e.AllTierStats == nil {
-			e.AllTierStats = NewAllTierStats()
+			e.AllTierStats = newAllTierStats()
 		}
 		e.AllTierStats.merge(other.AllTierStats)
 	}
@@ -392,7 +395,7 @@ func (e dataUsageEntry) clone() dataUsageEntry {
 		e.ReplicationStats = &r
 	}
 	if e.AllTierStats != nil {
-		ats := NewAllTierStats()
+		ats := newAllTierStats()
 		ats.merge(e.AllTierStats)
 		e.AllTierStats = ats
 	}
@@ -735,7 +738,7 @@ func (h *sizeHistogram) toMap() map[string]uint64 {
 }
 
 func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *AllTierStats {
-	dst := NewAllTierStats()
+	dst := newAllTierStats()
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
