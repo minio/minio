@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"reflect"
@@ -50,6 +49,11 @@ type recordRequest struct {
 	bytesRead int
 }
 
+func (r *recordRequest) Close() error {
+	// no-op
+	return nil
+}
+
 func (r *recordRequest) Read(p []byte) (n int, err error) {
 	n, err = r.Reader.Read(p)
 	r.bytesRead += n
@@ -62,6 +66,7 @@ func (r *recordRequest) Read(p []byte) (n int, err error) {
 	}
 	return n, err
 }
+
 func (r *recordRequest) Size() int {
 	sz := r.bytesRead
 	for k, v := range r.headers {
@@ -122,7 +127,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	}
 
 	reqBodyRecorder := &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
-	r.Body = ioutil.NopCloser(reqBodyRecorder)
+	r.Body = reqBodyRecorder
 
 	now := time.Now().UTC()
 	t := madmin.TraceInfo{TraceType: madmin.TraceHTTP, FuncName: name, Time: now}

@@ -72,51 +72,60 @@ NOTE:
 ```json
 {
   "version": "1",
-  "deploymentid": "bc0e4d1e-bacc-42eb-91ad-2d7f3eacfa8d",
-  "time": "2019-08-12T21:34:37.187817748Z",
+  "deploymentid": "51bcc7b9-a447-4251-a940-d9d0aab9af69",
+  "time": "2021-10-08T00:46:36.801714978Z",
+  "trigger": "incoming",
   "api": {
     "name": "PutObject",
     "bucket": "testbucket",
     "object": "hosts",
     "status": "OK",
     "statusCode": 200,
-    "timeToFirstByte": "366333ns",
-    "timeToResponse": "16438202ns"
+    "rx": 380,
+    "tx": 476,
+    "timeToResponse": "257694819ns"
   },
   "remotehost": "127.0.0.1",
-  "requestID": "15BA4A72C0C70AFC",
-  "userAgent": "MinIO (linux; amd64) minio-go/v6.0.32 mc/2019-08-12T18:27:13Z",
+  "requestID": "16ABE7A785E7AC2C",
+  "userAgent": "MinIO (linux; amd64) minio-go/v7.0.15 mc/DEVELOPMENT.2021-10-06T23-39-34Z",
   "requestHeader": {
-    "Authorization": "AWS4-HMAC-SHA256 Credential=minio/20190812/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,Signature=d3f02a6aeddeb29b06e1773b6a8422112890981269f2463a26f307b60423177c",
-    "Content-Length": "686",
+    "Authorization": "AWS4-HMAC-SHA256 Credential=minio/20211008/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,Signature=4c60a59e5eb3b0a68693c7fee9dbb5a8a509e0717668669194d37bf182fde031",
+    "Content-Length": "380",
     "Content-Type": "application/octet-stream",
-    "User-Agent": "MinIO (linux; amd64) minio-go/v6.0.32 mc/2019-08-12T18:27:13Z",
+    "User-Agent": "MinIO (linux; amd64) minio-go/v7.0.15 mc/DEVELOPMENT.2021-10-06T23-39-34Z",
     "X-Amz-Content-Sha256": "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
-    "X-Amz-Date": "20190812T213437Z",
-    "X-Amz-Decoded-Content-Length": "512"
+    "X-Amz-Date": "20211008T004636Z",
+    "X-Amz-Decoded-Content-Length": "207",
+    "X-Amz-Server-Side-Encryption": "aws:kms"
   },
   "responseHeader": {
     "Accept-Ranges": "bytes",
     "Content-Length": "0",
     "Content-Security-Policy": "block-all-mixed-content",
-    "ETag": "a414c889dc276457bd7175f974332cb0-1",
-    "Server": "MinIO/DEVELOPMENT.2019-08-12T21-28-07Z",
-    "Vary": "Origin",
-    "X-Amz-Request-Id": "15BA4A72C0C70AFC",
-    "X-Xss-Protection": "1; mode=block"
+    "ETag": "4939450d1beec11e10a91ee7700bb593",
+    "Server": "MinIO",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Vary": "Origin,Accept-Encoding",
+    "X-Amz-Request-Id": "16ABE7A785E7AC2C",
+    "X-Amz-Server-Side-Encryption": "aws:kms",
+    "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": "my-minio-key",
+    "X-Content-Type-Options": "nosniff",
+    "X-Xss-Protection": "1; mode=block",
+    "x-amz-version-id": "ac4639f6-c544-4f3f-af1e-b4c0736f67f9"
   },
   "tags": {
     "objectErasureMap": {
-      "object": {
+      "hosts": {
         "poolId": 1,
-        "setId": 10,
+        "setId": 1,
         "disks": [
-          "http://server01/mnt/pool1/disk01",
-          "http://server02/mnt/pool1/disk02",
-          "http://server03/mnt/pool1/disk03",
-          "http://server04/mnt/pool1/disk04"
+          "/mnt/data1",
+          "/mnt/data2",
+          "/mnt/data3",
+          "/mnt/data4"
         ]
-     }
+      }
+    }
   }
 }
 ```
