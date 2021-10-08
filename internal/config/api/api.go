@@ -50,7 +50,7 @@ const (
 	EnvAPICorsAllowOrigin          = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline  = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPIListQuorum               = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
+	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS" // default "on"
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
 	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"

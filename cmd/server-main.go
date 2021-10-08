@@ -587,6 +587,10 @@ func serverMain(ctx *cli.Context) {
 		logStartupMessage(color.RedBold(msg))
 	}
 
+	if !globalCLIContext.StrictS3Compat {
+		logStartupMessage(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+	}
+
 	if globalBrowserEnabled {
 		globalConsoleSrv, err = initConsoleServer()
 		if err != nil {

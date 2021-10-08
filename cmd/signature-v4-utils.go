@@ -55,9 +55,30 @@ func skipContentSha256Cksum(r *http.Request) bool {
 		v, ok = r.Header[xhttp.AmzContentSha256]
 	}
 
+	// Skip if no header was set.
+	if !ok {
+		return true
+	}
+
 	// If x-amz-content-sha256 is set and the value is not
 	// 'UNSIGNED-PAYLOAD' we should validate the content sha256.
-	return !(ok && v[0] != unsignedPayload)
+	switch v[0] {
+	case unsignedPayload:
+		return true
+	case emptySHA256:
+		// some broken clients set empty-sha256
+		// with > 0 content-length in the body,
+		// we should skip such clients and allow
+		// blindly such insecure clients only if
+		// S3 strict compatibility is disabled.
+		if r.ContentLength > 0 && !globalCLIContext.StrictS3Compat {
+			// We return true only in situations when
+			// deployment has asked MinIO to allow for
+			// such broken clients and content-length > 0.
+			return true
+		}
+	}
+	return false
 }
 
 // Returns SHA256 for calculating canonical-request.
