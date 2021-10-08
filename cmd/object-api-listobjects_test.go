@@ -1385,6 +1385,11 @@ func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
+
+	newTestConfig(globalMinioDefaultRegion, obj)
+
+	newAllSubsystems()
+
 	return obj
 }
 
