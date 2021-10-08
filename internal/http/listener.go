@@ -27,6 +27,7 @@ import (
 type acceptResult struct {
 	conn net.Conn
 	err  error
+	lidx int
 }
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
@@ -47,38 +48,24 @@ func (listener *httpListener) start() {
 			// Successfully written to acceptCh
 			return true
 		case <-listener.ctx.Done():
-			// As stop signal is received, close accepted connection.
-			if result.conn != nil {
-				result.conn.Close()
-			}
 			return false
 		}
 	}
 
-	// Closure to handle single connection.
-	handleConn := func(tcpConn *net.TCPConn) {
-		tcpConn.SetKeepAlive(true)
-		send(acceptResult{tcpConn, nil})
-	}
-
 	// Closure to handle TCPListener until done channel is closed.
-	handleListener := func(tcpListener *net.TCPListener) {
+	handleListener := func(idx int, tcpListener *net.TCPListener) {
 		for {
 			tcpConn, err := tcpListener.AcceptTCP()
-			if err != nil {
-				// Returns when send fails.
-				if !send(acceptResult{nil, err}) {
-					return
-				}
-			} else {
-				go handleConn(tcpConn)
+			if tcpConn != nil {
+				tcpConn.SetKeepAlive(true)
 			}
+			send(acceptResult{tcpConn, err, idx})
 		}
 	}
 
 	// Start separate goroutine for each TCP listener to handle connection.
-	for _, tcpListener := range listener.tcpListeners {
-		go handleListener(tcpListener)
+	for idx, tcpListener := range listener.tcpListeners {
+		go handleListener(idx, tcpListener)
 	}
 }
 
