@@ -380,7 +380,7 @@ func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, e error) {
-	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
+	result, err := l.Client.ListObjectsV2(bucket, prefix, startAfter, continuationToken, delimiter, maxKeys)
 	if err != nil {
 		return loi, minio.ErrorRespToObjectError(err, bucket)
 	}
@@ -670,7 +670,7 @@ func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, obj
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
-	etag, err := l.Client.CompleteMultipartUpload(ctx, bucket, object, uploadID, minio.ToMinioClientCompleteParts(uploadedParts))
+	etag, err := l.Client.CompleteMultipartUpload(ctx, bucket, object, uploadID, minio.ToMinioClientCompleteParts(uploadedParts), miniogo.PutObjectOptions{})
 	if err != nil {
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)
 	}

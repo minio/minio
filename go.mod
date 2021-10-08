@@ -47,7 +47,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/md5-simd v1.1.1 // indirect
-	github.com/minio/minio-go/v7 v7.0.11-0.20210302210017-6ae69c73ce78
+	github.com/minio/minio-go/v7 v7.0.14
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
@@ -77,7 +77,6 @@ require (
 	github.com/tidwall/gjson v1.6.8
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
