@@ -149,6 +149,7 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		// to retry with 503 errors when server is coming up.
 		return auth.Credentials{}, false, ErrServerNotInitialized
 	}
+
 	var owner = true
 	var cred = globalActiveCred
 	if cred.AccessKey != accessKey {
@@ -157,19 +158,25 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		claims, s3Err := checkClaimsFromToken(r, ucred)
-		if s3Err != ErrNone {
-			return cred, false, s3Err
-		}
-		ucred.Claims = claims
-		// Now check if we have a sessionPolicy.
-		if _, ok = claims[iampolicy.SessionPolicyName]; ok {
-			owner = false
-		} else {
-			owner = cred.AccessKey == ucred.ParentUser
-		}
 		cred = ucred
 	}
+
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return cred, false, s3Err
+	}
+
+	if len(claims) > 0 {
+		cred.Claims = claims
+
+		// Now check if we have a sessionPolicy.
+		if _, ok := claims[iampolicy.SessionPolicyName]; ok {
+			owner = false
+		} else {
+			owner = cred.AccessKey == cred.ParentUser
+		}
+	}
+
 	return cred, owner, ErrNone
 }
 
