@@ -900,7 +900,11 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
 	if z.SinglePool() {
-		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
+		deleteObjects, dErrs := z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
+		for i := range deleteObjects {
+			deleteObjects[i].ObjectName = decodeDirObject(deleteObjects[i].ObjectName)
+		}
+		return deleteObjects, dErrs
 	}
 
 	// Fetch location of up to 10 objects concurrently.
@@ -954,6 +958,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 					if derr != nil {
 						derrs[orgIndexes[i]] = derr
 					}
+					deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
 					dobjects[orgIndexes[i]] = deletedObjects[i]
 				}
 				mu.Unlock()
