@@ -29,6 +29,8 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
@@ -169,7 +171,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 		tlsConfig = &tls.Config{
 			PreferServerCipherSuites: true,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"http/1.1", "h2"},
+			NextProtos:               []string{"h2", "http/1.1"},
 			GetCertificate:           getCert,
 			ClientAuth:               tls.RequestClientCert,
 		}
@@ -183,7 +185,12 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 		Addrs:           addrs,
 		ShutdownTimeout: DefaultShutdownTimeout,
 	}
-	httpServer.Handler = handler
+
+	httpServer.Handler = h2c.NewHandler(handler, &http2.Server{
+		MaxConcurrentStreams: 1024,
+		IdleTimeout:          15 * time.Second,
+	})
+
 	httpServer.TLSConfig = tlsConfig
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
 
