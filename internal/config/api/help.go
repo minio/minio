@@ -35,6 +35,12 @@ var (
 			Type:        "duration",
 		},
 		config.HelpKV{
+			Key:         apiClusterDeadline,
+			Description: `set the deadline for cluster readiness check e.g. "10s"`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
 			Key:         apiCorsAllowOrigin,
 			Description: `set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"`,
 			Optional:    true,
@@ -45,6 +51,12 @@ var (
 			Description: `set the deadline for API requests on remote transports while proxying between federated instances e.g. "2h"`,
 			Optional:    true,
 			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         apiListQuorum,
+			Description: `set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", defaults to "strict"`,
+			Optional:    true,
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         apiReplicationWorkers,
