@@ -767,11 +767,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	parentUser := "tls:" + certificate.Subject.CommonName
 
 	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim:    time.Now().UTC().Add(expiry).Unix(),
-		parentClaim: parentUser,
-		subClaim:    certificate.Subject.CommonName,
-		audClaim:    certificate.Subject.Organization,
-		issClaim:    certificate.Issuer.CommonName,
+		expClaim:                   time.Now().UTC().Add(expiry).Unix(),
+		parentClaim:                parentUser,
+		subClaim:                   certificate.Subject.CommonName,
+		audClaim:                   certificate.Subject.Organization,
+		issClaim:                   certificate.Issuer.CommonName,
+		iamPolicyClaimNameOpenID(): certificate.Subject.CommonName,
 	}, globalActiveCred.SecretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)

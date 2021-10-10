@@ -1817,7 +1817,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 
 	if ok && cred.IsValid() {
 		if cred.IsServiceAccount() || cred.IsTemp() {
-			policies, err := sys.policyDBGet(cred.ParentUser, false)
+			policies, err := sys.policyDBGet(cred.AccessKey, false)
 			if err != nil {
 				// Reject if the policy map for user doesn't exist anymore.
 				logger.LogIf(context.Background(), fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
