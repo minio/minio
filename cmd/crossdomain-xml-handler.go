@@ -17,7 +17,11 @@
 
 package cmd
 
-import "net/http"
+import (
+	"net/http"
+	"io/ioutil"
+	"os"
+)
 
 // Standard cross domain policy information located at https://s3.amazonaws.com/crossdomain.xml
 const crossDomainXML = `<?xml version="1.0"?><!DOCTYPE cross-domain-policy SYSTEM "http://www.adobe.com/xml/dtds/cross-domain-policy.dtd"><cross-domain-policy><allow-access-from domain="*" secure="false" /></cross-domain-policy>`
@@ -44,7 +48,14 @@ func (c crossDomainPolicy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case crossDomainXMLEntity:
 		// Write the standard cross domain policy xml.
-		w.Write([]byte(crossDomainXML))
+		crossDomainPath := os.Getenv("CROSSDOMAIN_FILE_PATH")
+		_, err := os.Stat(crossDomainPath)
+		if err == nil || (err != nil && os.IsExist(err)) {
+			b, _ := ioutil.ReadFile(crossDomainPath)
+			w.Write(b)
+		} else {
+			w.Write([]byte(crossDomainXML))
+		}
 		// Request completed, no need to serve to other handlers.
 		return
 	}
