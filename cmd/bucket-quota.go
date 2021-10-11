@@ -89,7 +89,7 @@ func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64)
 			return err
 		}
 
-		dui := v.(madmin.DataUsageInfo)
+		dui := v.(DataUsageInfo)
 
 		bui, ok := dui.BucketsUsage[bucket]
 		if !ok {
