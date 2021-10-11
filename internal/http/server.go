@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
@@ -163,7 +164,6 @@ func (srv *Server) Shutdown() error {
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
 	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
-
 	var tlsConfig *tls.Config
 	if getCert != nil {
 		tlsConfig = &tls.Config{
@@ -171,8 +171,13 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 			GetCertificate:           getCert,
-			ClientAuth:               tls.RequestClientCert,
 		}
+
+		tlsClientIdentity := env.Get(xtls.EnvIdentityTLSEnabled, "") == config.EnableOn
+		if tlsClientIdentity {
+			tlsConfig.ClientAuth = tls.RequestClientCert
+		}
+
 		if secureCiphers || fips.Enabled {
 			tlsConfig.CipherSuites = fips.CipherSuitesTLS()
 			tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
