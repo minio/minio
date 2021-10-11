@@ -89,7 +89,10 @@ func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64)
 			return err
 		}
 
-		dui := v.(DataUsageInfo)
+		dui, ok := v.(DataUsageInfo)
+		if !ok {
+			return fmt.Errorf("internal error: Unexpected DUI data type: %T", v)
+		}
 
 		bui, ok := dui.BucketsUsage[bucket]
 		if !ok {
