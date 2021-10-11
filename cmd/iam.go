@@ -2228,6 +2228,12 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 
 	mp, ok := sys.iamUserPolicyMap[name]
 	if !ok {
+		// Service accounts with root credentials, inherit parent permissions
+		if parentName == globalActiveCred.AccessKey && u.IsServiceAccount() {
+			// even if this is set, the claims present in the service
+			// accounts apply the final permissions if any.
+			return []string{"consoleAdmin"}, nil
+		}
 		if parentName != "" {
 			mp = sys.iamUserPolicyMap[parentName]
 		}
