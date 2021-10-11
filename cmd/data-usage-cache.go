@@ -1211,8 +1211,8 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				Versions:         v.Versions,
 				ObjSizes:         v.ObjSizes,
 				ReplicationStats: v.ReplicationStats,
+				Compacted:        v.Compacted,
 			}
-			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
 			d.Cache[k] = due
 		}
 		return nil

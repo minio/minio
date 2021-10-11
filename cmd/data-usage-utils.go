@@ -85,5 +85,5 @@ type DataUsageInfo struct {
 	BucketSizes map[string]uint64 `json:"bucketsSizes"`
 
 	// TierStats contains per-tier stats of all configured remote tiers
-	TierStats *AllTierStats
+	TierStats *AllTierStats `json:"tierStats,omitempty"`
 }
