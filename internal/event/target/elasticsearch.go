@@ -419,12 +419,14 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 		return fmt.Errorf("Error parsing response body: %v", err)
 	}
 
-	indices := v["indices"].([]interface{})
-	for _, index := range indices {
-		name := index.(map[string]interface{})["name"]
-		if name == args.Index {
-			found = true
-			break
+	indices, ok := v["indices"].([]interface{})
+	if ok {
+		for _, index := range indices {
+			name := index.(map[string]interface{})["name"]
+			if name == args.Index {
+				found = true
+				break
+			}
 		}
 	}
 
