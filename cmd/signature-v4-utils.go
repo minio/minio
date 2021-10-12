@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -150,8 +149,7 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		return auth.Credentials{}, false, ErrServerNotInitialized
 	}
 
-	var owner = true
-	var cred = globalActiveCred
+	cred := globalActiveCred
 	if cred.AccessKey != accessKey {
 		// Check if the access key is part of users credentials.
 		ucred, ok := globalIAMSys.GetUser(accessKey)
@@ -165,18 +163,9 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 	if s3Err != ErrNone {
 		return cred, false, s3Err
 	}
+	cred.Claims = claims
 
-	if len(claims) > 0 {
-		cred.Claims = claims
-
-		// Now check if we have a sessionPolicy.
-		if _, ok := claims[iampolicy.SessionPolicyName]; ok {
-			owner = false
-		} else {
-			owner = cred.AccessKey == cred.ParentUser
-		}
-	}
-
+	owner := cred.AccessKey == globalActiveCred.AccessKey
 	return cred, owner, ErrNone
 }
 
