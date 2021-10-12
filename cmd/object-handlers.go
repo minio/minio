@@ -386,6 +386,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	var rangeErr error
 	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
+		// Both 'Range' and 'partNumber' cannot be specified at the same time
+		if opts.PartNumber > 0 {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber), r.URL)
+			return
+		}
+
 		rs, rangeErr = parseRequestRangeSpec(rangeHeader)
 		// Handle only errInvalidRange. Ignore other
 		// parse error and treat it as regular Get
@@ -397,12 +403,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		if rangeErr != nil {
 			logger.LogIf(ctx, rangeErr, logger.Application)
 		}
-	}
-
-	// Both 'bytes' and 'partNumber' cannot be specified at the same time
-	if rs != nil && opts.PartNumber > 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber), r.URL, guessIsBrowserReq(r))
-		return
 	}
 
 	// Validate pre-conditions if any.
@@ -680,6 +680,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
+		// Both 'Range' and 'partNumber' cannot be specified at the same time
+		if opts.PartNumber > 0 {
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber))
+			return
+		}
+
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
@@ -691,12 +697,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 			logger.LogIf(ctx, err)
 		}
-	}
-
-	// Both 'bytes' and 'partNumber' cannot be specified at the same time
-	if rs != nil && opts.PartNumber > 0 {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber))
-		return
 	}
 
 	// Set encryption response headers
