@@ -54,35 +54,35 @@ type dataUsageEntry struct {
 	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
 	ObjSizes         sizeHistogram        `msg:"szs"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
-	AllTierStats     *AllTierStats        `msg:"ats,omitempty"`
+	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
 	Compacted        bool                 `msg:"c"`
 }
 
-// AllTierStats is a collection of per-tier stats across all configured remote
+// allTierStats is a collection of per-tier stats across all configured remote
 // tiers.
-type AllTierStats struct {
-	Tiers map[string]TierStats `msg:"ts"`
+type allTierStats struct {
+	Tiers map[string]tierStats `msg:"ts"`
 }
 
-func newAllTierStats() *AllTierStats {
-	return &AllTierStats{
-		Tiers: make(map[string]TierStats),
+func newAllTierStats() *allTierStats {
+	return &allTierStats{
+		Tiers: make(map[string]tierStats),
 	}
 }
 
-func (ats *AllTierStats) addSizes(sz sizeSummary) {
+func (ats *allTierStats) addSizes(sz sizeSummary) {
 	for tier, st := range sz.tiers {
 		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
 }
 
-func (ats *AllTierStats) merge(other *AllTierStats) {
+func (ats *allTierStats) merge(other *allTierStats) {
 	for tier, st := range other.Tiers {
 		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
 }
 
-func (ats *AllTierStats) adminStats() map[string]madmin.TierStats {
+func (ats *allTierStats) adminStats() map[string]madmin.TierStats {
 	if ats == nil {
 		return nil
 	}
@@ -96,13 +96,13 @@ func (ats *AllTierStats) adminStats() map[string]madmin.TierStats {
 	return ts
 }
 
-// TierStats holds per-tier stats of a remote tier.
-type TierStats struct {
+// tierStats holds per-tier stats of a remote tier.
+type tierStats struct {
 	TotalSize   uint64 `msg:"ts"`
 	NumVersions int    `msg:"nv"`
 }
 
-func (ts TierStats) add(u TierStats) TierStats {
+func (ts tierStats) add(u tierStats) tierStats {
 	ts.TotalSize += u.TotalSize
 	ts.NumVersions += u.NumVersions
 	return ts
@@ -737,7 +737,7 @@ func (h *sizeHistogram) toMap() map[string]uint64 {
 	return res
 }
 
-func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *AllTierStats {
+func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *allTierStats {
 	dst := newAllTierStats()
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)

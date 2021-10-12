@@ -474,10 +474,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.totalSize += sz
 			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
 				if sizeS.tiers == nil {
-					sizeS.tiers = make(map[string]TierStats)
+					sizeS.tiers = make(map[string]tierStats)
 				}
 				tier := oi.TransitionedObject.Tier
-				stats := TierStats{TotalSize: uint64(oi.Size), NumVersions: 1}
+				stats := tierStats{TotalSize: uint64(oi.Size), NumVersions: 1}
 				sizeS.tiers[tier] = sizeS.tiers[tier].add(stats)
 			}
 		}
