@@ -46,8 +46,8 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.10
-	github.com/minio/minio-go/v7 v7.0.15
+	github.com/minio/madmin-go v1.1.8
+	github.com/minio/minio-go/v7 v7.0.15-0.20210928020726-a58653d41dd8
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.1.5
 	github.com/minio/selfupdate v0.3.1
@@ -90,5 +90,3 @@ require (
 	google.golang.org/api v0.31.0
 	gopkg.in/yaml.v2 v2.4.0
 )
-
-replace github.com/minio/madmin-go => ../madmin-go
