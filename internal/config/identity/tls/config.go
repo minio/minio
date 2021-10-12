@@ -85,18 +85,21 @@ func Lookup(kvs config.KVS) (Config, error) {
 	if err := config.CheckValidKeys(config.IdentityTLSSubSys, kvs, DefaultKVS); err != nil {
 		return Config{}, err
 	}
-	insecureSkipVerify, err := config.ParseBool(env.Get(EnvIdentityTLSSkipVerify, kvs.Get(skipVerify)))
+	cfg := Config{}
+	var err error
+	v := env.Get(EnvIdentityTLSEnabled, "")
+	if v == "" {
+		return cfg, nil
+	}
+	cfg.Enabled, err = config.ParseBool(v)
 	if err != nil {
 		return Config{}, err
 	}
-	enabled, err := config.ParseBool(env.Get(EnvIdentityTLSEnabled, ""))
+	cfg.InsecureSkipVerify, err = config.ParseBool(env.Get(EnvIdentityTLSSkipVerify, kvs.Get(skipVerify)))
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{
-		Enabled:            enabled,
-		InsecureSkipVerify: insecureSkipVerify,
-	}, nil
+	return cfg, nil
 }
 
 const (
