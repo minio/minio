@@ -22,7 +22,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
@@ -370,11 +369,6 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 	return nil
 }
 
-// Refresh IAMSys. If an object layer is passed in use that, otherwise load from global.
-func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
-	return sys.Load(ctx, iamOS)
-}
-
 func (iamOS *IAMObjectStore) savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error {
 	return iamOS.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }
@@ -462,14 +456,4 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 	}()
 
 	return ch
-}
-
-func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
-	// Refresh IAMSys.
-	for {
-		time.Sleep(globalRefreshIAMInterval)
-		if err := iamOS.loadAll(ctx, sys); err != nil {
-			logger.LogIf(ctx, err)
-		}
-	}
 }
