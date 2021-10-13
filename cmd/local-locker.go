@@ -354,6 +354,7 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 				if time.Since(lri.TimeLastRefresh) > interval {
 					l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
 					found = true
+					break
 				}
 			}
 			// We did not find any more to expire.
