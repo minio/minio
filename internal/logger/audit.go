@@ -197,6 +197,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.Object = reqInfo.ObjectName
 		entry.API.Status = http.StatusText(statusCode)
 		entry.API.StatusCode = statusCode
+		entry.API.InputBytes = r.ContentLength
+		entry.API.OutputBytes = int64(st.Size())
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.Tags = reqInfo.GetTagsMap()
 		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.

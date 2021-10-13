@@ -416,8 +416,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 				continue
 			}
 			if m != i || n != j {
-				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d)",
-					poolIdx, m, n, i, j)
+				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d): %s(%s)", poolIdx, m, n, i, j, disk, diskID)
 			}
 			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
@@ -805,14 +804,14 @@ func (s *erasureSets) IsTaggingSupported() bool {
 // DeleteBucket - deletes a bucket on all sets simultaneously,
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
-func (s *erasureSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+func (s *erasureSets) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Delete buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].DeleteBucket(ctx, bucket, forceDelete)
+			return s.sets[index].DeleteBucket(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -820,7 +819,7 @@ func (s *erasureSets) DeleteBucket(ctx context.Context, bucket string, forceDele
 	// For any failure, we attempt undo all the delete buckets operation
 	// by creating buckets again on all sets which were successfully deleted.
 	for _, err := range errs {
-		if err != nil {
+		if err != nil && !opts.NoRecreate {
 			undoDeleteBucketSets(ctx, bucket, s.sets, errs)
 			return err
 		}

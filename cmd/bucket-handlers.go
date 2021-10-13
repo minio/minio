@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -37,6 +38,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	sse "github.com/minio/minio/internal/bucket/encryption"
@@ -727,7 +729,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
-					objectAPI.DeleteBucket(ctx, bucket, false)
+					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: false, NoRecreate: true})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
@@ -770,6 +772,17 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
+	if _, ok := err.(BucketExists); ok {
+		// Though bucket exists locally, we send the site-replication
+		// hook to ensure all sites have this bucket. If the hook
+		// succeeds, the client will still receive a bucket exists
+		// message.
+		err2 := globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
+		if err2 != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -777,6 +790,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// Load updated bucket metadata into memory.
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
+
+	// Call site replication hook
+	err = globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
 
 	// Make sure to add Location information here only for bucket
 	if cp := pathClean(r.URL.Path); cp != "" {
@@ -1240,7 +1260,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	deleteBucket := objectAPI.DeleteBucket
 
 	// Attempt to delete bucket.
-	if err := deleteBucket(ctx, bucket, forceDelete); err != nil {
+	if err := deleteBucket(ctx, bucket, DeleteBucketOptions{Force: forceDelete}); err != nil {
 		apiErr := toAPIError(ctx, err)
 		if _, ok := err.(BucketNotEmpty); ok {
 			if globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket) {
@@ -1257,6 +1277,12 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
+
+	// Call site replication hook.
+	if err := globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1319,6 +1345,20 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	}
 
 	if err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Call site replication hook.
+	//
+	// We encode the xml bytes as base64 to ensure there are no encoding
+	// errors.
+	cfgStr := base64.StdEncoding.EncodeToString(configData)
+	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+		Type:             madmin.SRBucketMetaTypeObjectLockConfig,
+		Bucket:           bucket,
+		ObjectLockConfig: &cfgStr,
+	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1414,6 +1454,20 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Call site replication hook.
+	//
+	// We encode the xml bytes as base64 to ensure there are no encoding
+	// errors.
+	cfgStr := base64.StdEncoding.EncodeToString(configData)
+	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+		Type:   madmin.SRBucketMetaTypeTags,
+		Bucket: bucket,
+		Tags:   &cfgStr,
+	}); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -1478,6 +1532,14 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 	}
 
 	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, nil); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+		Type:   madmin.SRBucketMetaTypeTags,
+		Bucket: bucket,
+	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

@@ -260,8 +260,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr},
-		criticalErrorHandler{corsHandler(router)}, getCert)
+	listeners := ctx.Int("listeners")
+	if listeners == 0 {
+		listeners = 1
+	}
+	addrs := make([]string, 0, listeners)
+	for i := 0; i < listeners; i++ {
+		addrs = append(addrs, globalMinioAddr)
+	}
+
+	httpServer := xhttp.NewServer(addrs, criticalErrorHandler{corsHandler(router)}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}

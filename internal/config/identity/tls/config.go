@@ -23,16 +23,15 @@ import (
 
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
 
 const (
-	// EnvEnabled is an environment variable that controls whether the X.509
+	// EnvIdentityTLSEnabled is an environment variable that controls whether the X.509
 	// TLS STS API is enabled. By default, if not set, it is enabled.
-	EnvEnabled = "MINIO_IDENTITY_TLS_ENABLE"
+	EnvIdentityTLSEnabled = "MINIO_IDENTITY_TLS_ENABLE"
 
-	// EnvSkipVerify is an environment variable that controls whether
+	// EnvIdentityTLSSkipVerify is an environment variable that controls whether
 	// MinIO verifies the client certificate present by the client
 	// when requesting temp. credentials.
 	// By default, MinIO always verify the client certificate.
@@ -41,7 +40,7 @@ const (
 	// when debugging or testing a setup since it allows arbitrary
 	// clients to obtain temp. credentials with arbitrary policy
 	// permissions - including admin permissions.
-	EnvSkipVerify = "MINIO_IDENTITY_TLS_SKIP_VERIFY"
+	EnvIdentityTLSSkipVerify = "MINIO_IDENTITY_TLS_SKIP_VERIFY"
 )
 
 // Config contains the STS TLS configuration for generating temp.
@@ -86,21 +85,21 @@ func Lookup(kvs config.KVS) (Config, error) {
 	if err := config.CheckValidKeys(config.IdentityTLSSubSys, kvs, DefaultKVS); err != nil {
 		return Config{}, err
 	}
-	insecureSkipVerify, err := config.ParseBool(env.Get(EnvSkipVerify, kvs.Get(skipVerify)))
+	cfg := Config{}
+	var err error
+	v := env.Get(EnvIdentityTLSEnabled, "")
+	if v == "" {
+		return cfg, nil
+	}
+	cfg.Enabled, err = config.ParseBool(v)
 	if err != nil {
 		return Config{}, err
 	}
-	if insecureSkipVerify {
-		logger.Info("CRITICAL: enabling MINIO_IDENTITY_TLS_SKIP_VERIFY is not recommended in a production environment")
-	}
-	enabled, err := config.ParseBool(env.Get(EnvEnabled, config.EnableOn))
+	cfg.InsecureSkipVerify, err = config.ParseBool(env.Get(EnvIdentityTLSSkipVerify, kvs.Get(skipVerify)))
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{
-		Enabled:            enabled,
-		InsecureSkipVerify: insecureSkipVerify,
-	}, nil
+	return cfg, nil
 }
 
 const (

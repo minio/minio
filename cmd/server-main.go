@@ -55,6 +55,11 @@ var ServerFlags = []cli.Flag{
 		Value: ":" + GlobalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
 	},
+	cli.IntFlag{
+		Name:  "listeners",
+		Value: 1,
+		Usage: "bind N number of listeners per ADDRESS:PORT",
+	},
 	cli.StringFlag{
 		Name:  "console-address",
 		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
@@ -414,6 +419,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// Initialize bucket notification sub-system.
 	globalNotificationSys.Init(ctx, buckets, newObject)
 
+	// Initialize site replication manager.
+	globalSiteReplicationSys.Init(ctx, newObject)
+
 	if globalIsErasure {
 		// Initialize transition tier configuration manager
 		if err = globalTierConfigMgr.Init(ctx, newObject); err != nil {
@@ -494,8 +502,16 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr},
-		criticalErrorHandler{corsHandler(handler)}, getCert)
+	listeners := ctx.Int("listeners")
+	if listeners == 0 {
+		listeners = 1
+	}
+	addrs := make([]string, 0, listeners)
+	for i := 0; i < listeners; i++ {
+		addrs = append(addrs, globalMinioAddr)
+	}
+
+	httpServer := xhttp.NewServer(addrs, criticalErrorHandler{corsHandler(handler)}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
@@ -582,6 +598,10 @@ func serverMain(ctx *cli.Context) {
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
 		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables", globalActiveCred)
 		logStartupMessage(color.RedBold(msg))
+	}
+
+	if !globalCLIContext.StrictS3Compat {
+		logStartupMessage(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 	}
 
 	if globalBrowserEnabled {

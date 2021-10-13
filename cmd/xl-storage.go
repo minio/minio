@@ -743,13 +743,15 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 	}
 
 	if forceDelete {
-		err = renameAll(volumeDir, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		err = s.moveToTrash(volumeDir, true)
 	} else {
 		err = Remove(volumeDir)
 	}
 
 	if err != nil {
 		switch {
+		case errors.Is(err, errFileNotFound):
+			return errVolumeNotFound
 		case osIsNotExist(err):
 			return errVolumeNotFound
 		case isSysErrNotEmpty(err):
@@ -812,6 +814,14 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	}
 
 	return errs
+}
+
+func (s *xlStorage) moveToTrash(filePath string, recursive bool) error {
+	pathUUID := mustGetUUID()
+	if recursive {
+		return renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, pathUUID))
+	}
+	return Rename(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, pathUUID))
 }
 
 // DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. forceDelMarker
@@ -879,7 +889,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			if err = checkPathLength(filePath); err != nil {
 				return err
 			}
-			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
+			if err = s.moveToTrash(filePath, true); err != nil {
 				if err != errFileNotFound {
 					return err
 				}
@@ -902,7 +912,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	err = Rename(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+	err = s.moveToTrash(filePath, false)
 	if err == nil || err == errFileNotFound {
 		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false)
 	}
@@ -1077,7 +1087,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		buf, err = s.readMetadata(ctx, pathJoin(volumeDir, path, xlStorageFormatFile))
 		if err != nil {
 			if osIsNotExist(err) {
-				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+				if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
 					return fi, errVolumeNotFound
 				}
 			}
@@ -1722,7 +1732,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive bool) erro
 
 	var err error
 	if recursive {
-		err = renameAll(deletePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+		err = s.moveToTrash(deletePath, true)
 	} else {
 		err = Remove(deletePath)
 	}
@@ -1739,6 +1749,8 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive bool) erro
 			// error on parent directories.
 			return nil
 		case osIsNotExist(err):
+			return nil
+		case errors.Is(err, errFileNotFound):
 			return nil
 		case osIsPermission(err):
 			return errFileAccessDenied
@@ -2017,7 +2029,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
-			renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+			s.moveToTrash(dstDataPath, true)
 			if err = renameAll(srcDataPath, dstDataPath); err != nil {
 				if legacyPreserved {
 					// Any failed rename calls un-roll previous transaction.
@@ -2046,7 +2058,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		// movement, this is to ensure that previous data references can co-exist for
 		// any recoverability.
 		if oldDstDataPath != "" {
-			renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID()))
+			s.moveToTrash(oldDstDataPath, true)
 		}
 	} else {
 		// Write meta-file directly, no data

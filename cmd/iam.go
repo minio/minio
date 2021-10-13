@@ -514,6 +514,7 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 		return err
 	}
 
+	// load service accounts
 	if err := store.loadUsers(ctx, svcUser, iamUsersMap); err != nil {
 		return err
 	}
@@ -1427,6 +1428,31 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 	return sa, embeddedPolicy, nil
 }
 
+// GetClaimsForSvcAcc - gets the claims associated with the service account.
+func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (map[string]interface{}, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, nil
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return nil, errNoSuchServiceAccount
+	}
+
+	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+	if err != nil {
+		return nil, err
+	}
+	return jwtClaims.Map(), nil
+}
+
 // DeleteServiceAccount - delete a service account
 func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
 	if !sys.Initialized() {
@@ -1791,7 +1817,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 
 	if ok && cred.IsValid() {
 		if cred.IsServiceAccount() || cred.IsTemp() {
-			policies, err := sys.policyDBGet(cred.ParentUser, false)
+			policies, err := sys.policyDBGet(cred.AccessKey, false)
 			if err != nil {
 				// Reject if the policy map for user doesn't exist anymore.
 				logger.LogIf(context.Background(), fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
@@ -2202,6 +2228,12 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) (policies []string, er
 
 	mp, ok := sys.iamUserPolicyMap[name]
 	if !ok {
+		// Service accounts with root credentials, inherit parent permissions
+		if parentName == globalActiveCred.AccessKey && u.IsServiceAccount() {
+			// even if this is set, the claims present in the service
+			// accounts apply the final permissions if any.
+			return []string{"consoleAdmin"}, nil
+		}
 		if parentName != "" {
 			mp = sys.iamUserPolicyMap[parentName]
 		}

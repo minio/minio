@@ -996,7 +996,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objectAPI.DeleteBucket(ctx, pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix), true)
+	objectAPI.DeleteBucket(ctx, pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix), DeleteBucketOptions{Force: true, NoRecreate: true})
 
 	w.(http.Flusher).Flush()
 }

@@ -249,6 +249,36 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 	}
 }
 
+func TestXLStorageReadVersionLegacy(t *testing.T) {
+	const legacyJSON = `{"version":"1.0.1","format":"xl","stat":{"size":2016,"modTime":"2021-10-11T23:40:34.914361617Z"},"erasure":{"algorithm":"klauspost/reedsolomon/vandermonde","data":2,"parity":2,"blockSize":10485760,"index":2,"distribution":[2,3,4,1],"checksum":[{"name":"part.1","algorithm":"highwayhash256S"}]},"minio":{"release":"RELEASE.2019-12-30T05-45-39Z"},"meta":{"X-Minio-Internal-Server-Side-Encryption-Iv":"kInsJB/0yxyz/40ZI+lmQYJfZacDYqZsGh2wEiv+N50=","X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id":"my-minio-key","X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key":"eyJhZWFkIjoiQUVTLTI1Ni1HQ00tSE1BQy1TSEEtMjU2IiwiaWQiOiJjMzEwNDVjODFmMTA2MWU5NTI4ODcxZmNhMmRkYzA3YyIsIml2IjoiOWQ5cUxGMFhSaFBXbEVqT2JDMmo0QT09Iiwibm9uY2UiOiJYaERsemlCU1cwSENuK2RDIiwiYnl0ZXMiOiJUM0lmY1haQ1dtMWpLeWxBWmFUUnczbDVoYldLWW95dm5iNTZVaWJEbE5LOFZVU2tuQmx3NytIMG8yZnRzZ1UrIn0=","X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key":"IAAfANqt801MT+wwzQRkfFhTrndmhfNiN0alKwDS4AQ1dznNADRQgoq6I4pPVfRsbDp5rQawlripQZvPWUSNJA==","X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm":"DAREv2-HMAC-SHA256","content-type":"application/octet-stream","etag":"20000f00cf5e68d3d6b60e44fcd8b9e8-1"},"parts":[{"number":1,"name":"part.1","etag":"","size":2016,"actualSize":1984}]}`
+
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to cfgreate xlStorage test setup, %s", err)
+	}
+
+	defer os.RemoveAll(path)
+
+	// Create files for the test cases.
+	if err = xlStorage.MakeVol(context.Background(), "exists-legacy"); err != nil {
+		t.Fatalf("Unable to create a volume \"exists-legacy\", %s", err)
+	}
+
+	if err = xlStorage.AppendFile(context.Background(), "exists-legacy", "as-file/xl.json", []byte(legacyJSON)); err != nil {
+		t.Fatalf("Unable to create a file \"as-file\", %s", err)
+	}
+
+	fi, err := xlStorage.ReadVersion(context.Background(), "exists-legacy", "as-file", "", false)
+	if err != nil {
+		t.Fatalf("Unable to read older 'xl.json' content: %s", err)
+	}
+
+	if !fi.XLV1 {
+		t.Fatal("Unexpected 'xl.json' content should be correctly interpreted as legacy content")
+	}
+}
+
 // TestXLStorageReadVersion - TestXLStorages the functionality implemented by xlStorage ReadVersion storage API.
 func TestXLStorageReadVersion(t *testing.T) {
 	// create xlStorage test setup

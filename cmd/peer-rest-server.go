@@ -514,7 +514,6 @@ func (s *peerRESTServer) GetMemInfoHandler(w http.ResponseWriter, r *http.Reques
 // (only the config that are of concern to minio)
 func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
-		fmt.Println("Invalid request")
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
@@ -532,7 +531,6 @@ func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Requ
 // (only the services that are of concern to minio)
 func (s *peerRESTServer) GetSysServicesHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
-		fmt.Println("Invalid request")
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
@@ -582,6 +580,24 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}
+}
+
+// ReloadSiteReplicationConfigHandler - reloads site replication configuration from the disks
+func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "LoadSiteReplication")
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	logger.LogIf(r.Context(), globalSiteReplicationSys.Init(ctx, objAPI))
 }
 
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
@@ -1385,4 +1401,5 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedtest).HandlerFunc(httpTraceHdrs(server.SpeedtestHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadSiteReplicationConfig).HandlerFunc(httpTraceHdrs(server.ReloadSiteReplicationConfigHandler))
 }

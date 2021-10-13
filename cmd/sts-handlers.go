@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	xhttp "github.com/minio/minio/internal/http"
@@ -651,6 +652,19 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
+	// Call hook for cluster-replication.
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemSTSAcc,
+		STSCredential: &madmin.SRSTSCredential{
+			AccessKey:    cred.AccessKey,
+			SecretKey:    cred.SecretKey,
+			SessionToken: cred.SessionToken,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
 		Result: LDAPIdentityResult{
 			Credentials: cred,
@@ -753,11 +767,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	parentUser := "tls:" + certificate.Subject.CommonName
 
 	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim:    time.Now().UTC().Add(expiry).Unix(),
-		parentClaim: parentUser,
-		subClaim:    certificate.Subject.CommonName,
-		audClaim:    certificate.Subject.Organization,
-		issClaim:    certificate.Issuer.CommonName,
+		expClaim:                   time.Now().UTC().Add(expiry).Unix(),
+		parentClaim:                parentUser,
+		subClaim:                   certificate.Subject.CommonName,
+		audClaim:                   certificate.Subject.Organization,
+		issClaim:                   certificate.Issuer.CommonName,
+		iamPolicyClaimNameOpenID(): certificate.Subject.CommonName,
 	}, globalActiveCred.SecretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)

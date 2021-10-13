@@ -632,6 +632,10 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
+			if _, ok := err.(BucketExists); !ok {
+				// Delete created buckets, ignoring errors.
+				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: true, NoRecreate: true})
+			}
 			return err
 		}
 	}
@@ -643,7 +647,7 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 	}
 
-	if err := meta.Save(ctx, z); err != nil {
+	if err := meta.Save(context.Background(), z); err != nil {
 		return toObjectErr(err, bucket)
 	}
 
@@ -896,7 +900,11 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
 	if z.SinglePool() {
-		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
+		deleteObjects, dErrs := z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
+		for i := range deleteObjects {
+			deleteObjects[i].ObjectName = decodeDirObject(deleteObjects[i].ObjectName)
+		}
+		return deleteObjects, dErrs
 	}
 
 	// Fetch location of up to 10 objects concurrently.
@@ -950,6 +958,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 					if derr != nil {
 						derrs[orgIndexes[i]] = derr
 					}
+					deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
 					dobjects[orgIndexes[i]] = deletedObjects[i]
 				}
 				mu.Unlock()
@@ -1424,14 +1433,14 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // DeleteBucket - deletes a bucket on all serverPools simultaneously,
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
-func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Delete buckets in parallel across all serverPools.
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			return z.serverPools[index].DeleteBucket(ctx, bucket, forceDelete)
+			return z.serverPools[index].DeleteBucket(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -1441,14 +1450,15 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 	// buckets operation by creating all the buckets again.
 	for _, err := range errs {
 		if err != nil {
-			if !z.SinglePool() {
-				undoDeleteBucketServerPools(ctx, bucket, z.serverPools, errs)
+			if !z.SinglePool() && !opts.NoRecreate {
+				undoDeleteBucketServerPools(context.Background(), bucket, z.serverPools, errs)
 			}
 			return err
 		}
 	}
 
-	deleteBucketMetadata(ctx, z, bucket)
+	// Purge the entire bucket metadata entirely.
+	z.renameAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
 
 	// Success.
 	return nil
@@ -1593,51 +1603,82 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 		return err
 	}
 
-	if opts.WalkVersions {
-		go func() {
-			defer close(results)
-
-			var marker, versionIDMarker string
-			for {
-				loi, err := z.ListObjectVersions(ctx, bucket, prefix, marker, versionIDMarker, "", 1000)
-				if err != nil {
-					break
-				}
-
-				for _, obj := range loi.Objects {
-					results <- obj
-				}
-
-				if !loi.IsTruncated {
-					break
-				}
-
-				marker = loi.NextMarker
-				versionIDMarker = loi.NextVersionIDMarker
-			}
-		}()
-		return nil
-	}
-
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
+		defer cancel()
 		defer close(results)
 
-		var marker string
-		for {
-			loi, err := z.ListObjects(ctx, bucket, prefix, marker, "", 1000)
-			if err != nil {
-				break
-			}
+		for _, erasureSet := range z.serverPools {
+			var wg sync.WaitGroup
+			for _, set := range erasureSet.sets {
+				set := set
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
 
-			for _, obj := range loi.Objects {
-				results <- obj
-			}
+					disks, _ := set.getOnlineDisksWithHealing()
+					if len(disks) == 0 {
+						cancel()
+						return
+					}
 
-			if !loi.IsTruncated {
-				break
-			}
+					loadEntry := func(entry metaCacheEntry) {
+						if entry.isDir() {
+							return
+						}
 
-			marker = loi.NextMarker
+						fivs, err := entry.fileInfoVersions(bucket)
+						if err != nil {
+							cancel()
+							return
+						}
+
+						for _, version := range fivs.Versions {
+							results <- version.ToObjectInfo(bucket, version.Name)
+						}
+					}
+
+					// How to resolve partial results.
+					resolver := metadataResolutionParams{
+						dirQuorum: 1,
+						objQuorum: 1,
+						bucket:    bucket,
+					}
+
+					path := baseDirFromPrefix(prefix)
+					if path == "" {
+						path = prefix
+					}
+
+					lopts := listPathRawOptions{
+						disks:          disks,
+						bucket:         bucket,
+						path:           path,
+						recursive:      true,
+						forwardTo:      "",
+						minDisks:       1,
+						reportNotFound: false,
+						agreed:         loadEntry,
+						partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+							entry, ok := entries.resolve(&resolver)
+							if !ok {
+								// check if we can get one entry atleast
+								// proceed to heal nonetheless.
+								entry, _ = entries.firstFound()
+							}
+
+							loadEntry(*entry)
+						},
+						finished: nil,
+					}
+
+					if err := listPathRaw(ctx, lopts); err != nil {
+						logger.LogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
+						return
+					}
+				}()
+			}
+			wg.Wait()
 		}
 	}()
 

@@ -364,7 +364,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			retries = 1
 		}
 
-		const retryDelay = 500 * time.Millisecond
+		const retryDelay = 250 * time.Millisecond
 		// All operations are performed without locks, so we must be careful and allow for failures.
 		// Read metadata associated with the object from a disk.
 		if retries > 0 {

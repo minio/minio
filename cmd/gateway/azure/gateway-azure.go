@@ -38,7 +38,7 @@ import (
 
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
@@ -623,8 +623,8 @@ func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 }
 
 // DeleteBucket - delete a container on azure, uses Azure equivalent `ContainerURL.Delete`.
-func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
-	if !forceDelete {
+func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string, opts minio.DeleteBucketOptions) error {
+	if !opts.Force {
 		// Check if the container is empty before deleting it.
 		result, err := a.ListObjects(ctx, bucket, "", "", "", 1)
 		if err != nil {
