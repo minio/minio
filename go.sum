@@ -258,8 +258,8 @@ github.com/coreos/go-systemd/v22 v22.3.1/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSV
 github.com/coreos/pkg v0.0.0-20160727233714-3ac0863d7acf/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
 github.com/coreos/pkg v0.0.0-20180108230652-97fdf19511ea/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
 github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
-github.com/cosnicolaou/pbzip2 v0.0.0-20211005231051-4d6cb0d424ba h1:XFJjL2oCpmNSvmXDnGdKxryHW4RTj8OQQU0rpL9btBA=
-github.com/cosnicolaou/pbzip2 v0.0.0-20211005231051-4d6cb0d424ba/go.mod h1:GSvIbDxSUDybxCJ87biICGzOUT5sbPRp0bpZwulTPX8=
+github.com/cosnicolaou/pbzip2 v1.0.0 h1:T/807kTuUNv7hYj4eYTIdGuJ41N5EcpYX6cOMm46Bdc=
+github.com/cosnicolaou/pbzip2 v1.0.0/go.mod h1:cE04zhBMvwMrCLhsx6aLYh9cGsU9GyFB0oo/GmO+SkY=
 github.com/cpuguy83/go-md2man v1.0.10/go.mod h1:SmD6nW6nTyfqj6ABTjUi3V3JVMnlJmwcJI5acqYI6dE=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=
 github.com/cpuguy83/go-md2man/v2 v2.0.0/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=

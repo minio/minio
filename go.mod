@@ -16,7 +16,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/coredns/coredns v1.4.0
-	github.com/cosnicolaou/pbzip2 v0.0.0-20211005231051-4d6cb0d424ba
+	github.com/cosnicolaou/pbzip2 v1.0.0
 	github.com/dchest/siphash v1.2.1
 	github.com/djherbis/atime v1.0.0
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
