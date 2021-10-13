@@ -249,6 +249,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 					version.VersionID, madmin.HealOpts{
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
+						SoftHeal: true,
 					}); err != nil {
 					// If not deleted, assume they failed.
 					tracker.ItemsFailed++

@@ -394,6 +394,17 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		return result, nil
 	}
 
+	// Skip actual healing if the disks to heal count is less than half of
+	// the Erasure Code Parity. This is soft healing, as it skips non 
+	// critical healing to save IO on busy systems.
+	//
+	// As it is already marked as dirty by NSUpdated(bucket, object) in
+	// the beginning of this function, it would be picked up by the data
+	// scanner for regular healing at a slower pace.
+	if opts.SoftHeal && disksToHealCount < result.ParityBlocks/2 {
+		return result, nil
+	}
+
 	cleanFileInfo := func(fi FileInfo) FileInfo {
 		// Returns a copy of the 'fi' with checksums and parts nil'ed.
 		nfi := fi
