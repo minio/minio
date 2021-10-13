@@ -44,13 +44,12 @@ func BenchmarkLockArgs(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	req := &http.Request{
-		Body: ioutil.NopCloser(bytes.NewReader(argBytes)),
-	}
+	req := &http.Request{}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		req.Body = ioutil.NopCloser(bytes.NewReader(argBytes))
 		getLockArgs(req)
 	}
 }
@@ -64,12 +63,12 @@ func BenchmarkLockArgsOld(b *testing.B) {
 
 	req := &http.Request{
 		Form: values,
-		Body: ioutil.NopCloser(bytes.NewReader([]byte(`obj.txt`))),
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte(`obj.txt`)))
 		getLockArgsOld(req)
 	}
 }
