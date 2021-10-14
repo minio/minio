@@ -54,7 +54,7 @@ require (
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
 	github.com/minio/sio v0.3.0
-	github.com/minio/zipindex v0.2.0
+	github.com/minio/zipindex v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/montanaflynn/stats v0.6.6
 	github.com/nats-io/nats-server/v2 v2.3.2

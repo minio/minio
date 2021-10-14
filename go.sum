@@ -1056,8 +1056,8 @@ github.com/minio/simdjson-go v0.2.1/go.mod h1:JPUSkRykfSPS+AhO0YPA1h0l5vY7NqrF4z
 github.com/minio/sio v0.2.1/go.mod h1:8b0yPp2avGThviy/+OCJBI6OMpvxoUuiLvE6F1lebhw=
 github.com/minio/sio v0.3.0 h1:syEFBewzOMOYVzSTFpp1MqpSZk8rUNbz8VIIc+PNzus=
 github.com/minio/sio v0.3.0/go.mod h1:8b0yPp2avGThviy/+OCJBI6OMpvxoUuiLvE6F1lebhw=
-github.com/minio/zipindex v0.2.0 h1:iqgIhPkYnZ6fNd6q8trtJc8+mtKJNFTaxXlNw4n0We8=
-github.com/minio/zipindex v0.2.0/go.mod h1:s+b/Qyw9JtSEnYfaM4ASOWNO2xGnXCfzQ+SWAzVkVZc=
+github.com/minio/zipindex v0.2.1 h1:A37vDQJ7Uyp4RHpQEEpintgiIxg0t3npH2CWjLT//u4=
+github.com/minio/zipindex v0.2.1/go.mod h1:s+b/Qyw9JtSEnYfaM4ASOWNO2xGnXCfzQ+SWAzVkVZc=
 github.com/mitchellh/cli v1.0.0/go.mod h1:hNIlj7HEI86fIcpObd7a0FcrxTWetlwJDGcceTlRvqc=
 github.com/mitchellh/copystructure v1.0.0/go.mod h1:SNtv71yrdKgLRyLFxmLdkAbkKEFWgYaq1OVrnRcwhnw=
 github.com/mitchellh/go-homedir v1.0.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
