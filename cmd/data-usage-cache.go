@@ -93,6 +93,11 @@ func (ats *allTierStats) adminStats() map[string]madmin.TierStats {
 			NumVersions: st.NumVersions,
 		}
 	}
+	// To include hot-tier in tier-stats when there are no objects remaining
+	// in the hot-tier.
+	if _, ok := ts[minioHotTier]; !ok {
+		ts[minioHotTier] = madmin.TierStats{}
+	}
 	return ts
 }
 
