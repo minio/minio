@@ -322,9 +322,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 					logger.Info("Healing required, triggering async heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
 				switch scan {
-				case madmin.HealNormalScan:
-					fallthrough
-				case madmin.HealDeepScan:
+				case madmin.HealNormalScan, madmin.HealDeepScan:
 					healOnce.Do(func() {
 						if _, healing := er.getOnlineDisksWithHealing(); !healing {
 							go healObject(bucket, object, fi.VersionID, scan)
