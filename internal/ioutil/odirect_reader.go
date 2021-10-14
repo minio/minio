@@ -122,10 +122,15 @@ func (o *ODirectReader) Read(buf []byte) (n int, err error) {
 
 // Close - Release the buffer and close the file.
 func (o *ODirectReader) Close() error {
-	if o.SmallFile {
-		ODirectPoolSmall.Put(o.bufp)
-	} else {
-		ODirectPoolLarge.Put(o.bufp)
+	if o.bufp != nil {
+		if o.SmallFile {
+			ODirectPoolSmall.Put(o.bufp)
+		} else {
+			ODirectPoolLarge.Put(o.bufp)
+		}
+		o.bufp = nil
+		o.buf = nil
 	}
+	o.err = errors.New("internal error: ODirectReader Read after Close")
 	return o.File.Close()
 }
