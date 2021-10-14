@@ -1454,6 +1454,13 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
+	if st.Size() < offset+length {
+		// Expected size cannot be satisfied for
+		// requested offset and length
+		file.Close()
+		return nil, errFileCorrupt
+	}
+
 	alignment := offset%xioutil.DirectioAlignSize == 0
 	if !alignment {
 		if err = disk.DisableDirectIO(file); err != nil {
