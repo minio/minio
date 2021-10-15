@@ -767,9 +767,7 @@ func (sys *IAMSys) ListPolicies(bucketName string) (map[string]iampolicy.Policy,
 
 	policyDocsMap := make(map[string]iampolicy.Policy, len(sys.iamPolicyDocsMap))
 	for k, v := range sys.iamPolicyDocsMap {
-		if bucketName != "" && v.MatchResource(bucketName) {
-			policyDocsMap[k] = v
-		} else {
+		if bucketName == "" || v.MatchResource(bucketName) {
 			policyDocsMap[k] = v
 		}
 	}
