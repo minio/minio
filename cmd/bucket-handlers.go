@@ -421,6 +421,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// AWS S3 returns error for number of objects > 1000
+	if len(deleteObjects.Objects) > maxDeleteList {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr.Description = fmt.Sprintf("%s: input cannot have number of objects -> %d", apiErr.Description, maxDeleteList)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
+
 	// Convert object name delete objects if it has `/` in the beginning.
 	for i := range deleteObjects.Objects {
 		deleteObjects.Objects[i].ObjectName = trimLeadingSlash(deleteObjects.Objects[i].ObjectName)

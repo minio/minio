@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -42,8 +41,16 @@ type lockRequesterInfo struct {
 	Owner string
 	// Quorum represents the quorum required for this lock to be active.
 	Quorum int
-	idx    int
+	idx    string
 }
+
+var lookupTblIdx = func() []string {
+	tblIdx := make([]string, maxDeleteList)
+	for i := 0; i < maxDeleteList; i++ {
+		tblIdx[i] = strconv.Itoa(i)
+	}
+	return tblIdx
+}()
 
 // isWriteLock returns whether the lock is a write or read lock.
 func isWriteLock(lri []lockRequesterInfo) bool {
@@ -81,6 +88,11 @@ func (l *localLocker) canTakeLock(resources ...string) bool {
 }
 
 func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	// Resources more than maxDeleteList are not supported in single bulk call.
+	if len(args.Resources) > maxDeleteList {
+		return false, nil
+	}
+
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -104,16 +116,16 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 				TimeLastRefresh: UTCNow(),
 				Group:           len(args.Resources) > 1,
 				Quorum:          args.Quorum,
-				idx:             i,
+				idx:             lookupTblIdx[i],
 			},
 		}
-		l.lockUID[formatUUID(args.UID, i)] = resource
+		l.lockUID[formatUUID(args.UID, lookupTblIdx[i])] = resource
 	}
 	return true, nil
 }
 
-func formatUUID(s string, idx int) string {
-	return s + strconv.Itoa(idx)
+func formatUUID(s, idx string) string {
+	return s + idx
 }
 
 func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
@@ -183,12 +195,12 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 		if reply = !isWriteLock(lri); reply {
 			// Unless there is a write lock
 			l.lockMap[resource] = append(l.lockMap[resource], lrInfo)
-			l.lockUID[args.UID] = formatUUID(resource, 0)
+			l.lockUID[args.UID] = formatUUID(resource, lookupTblIdx[0])
 		}
 	} else {
 		// No locks held on the given name, so claim (first) read lock
 		l.lockMap[resource] = []lockRequesterInfo{lrInfo}
-		l.lockUID[args.UID] = formatUUID(resource, 0)
+		l.lockUID[args.UID] = formatUUID(resource, lookupTblIdx[0])
 		reply = true
 	}
 	return reply, nil
@@ -265,7 +277,7 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 					lris, ok := l.lockMap[resource]
 					if !ok {
 						// Just to be safe, delete uuids.
-						for idx := 0; idx < math.MaxInt32; idx++ {
+						for _, idx := range lookupTblIdx {
 							mapID := formatUUID(uid, idx)
 							if _, ok := l.lockUID[mapID]; !ok {
 								break
@@ -280,23 +292,22 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 			return true, nil
 		}
 
-		idx := 0
-		for {
-			resource, ok := l.lockUID[formatUUID(args.UID, idx)]
+		for _, idx := range lookupTblIdx {
+			mapID := formatUUID(args.UID, idx)
+			resource, ok := l.lockUID[mapID]
 			if !ok {
-				return idx > 0, nil
+				continue
 			}
 			lris, ok := l.lockMap[resource]
 			if !ok {
-				// Unexpected  inconsistency, delete.
-				delete(l.lockUID, formatUUID(args.UID, idx))
-				idx++
+				// Unexpected inconsistency, delete.
+				delete(l.lockUID, mapID)
 				continue
 			}
-			reply = true
 			l.removeEntry(resource, dsync.LockArgs{UID: args.UID}, &lris)
-			idx++
 		}
+
+		return true, nil
 	}
 }
 
@@ -309,16 +320,16 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 		defer l.mutex.Unlock()
 
 		// Check whether uid is still active.
-		resource, ok := l.lockUID[formatUUID(args.UID, 0)]
+		resource, ok := l.lockUID[formatUUID(args.UID, lookupTblIdx[0])]
 		if !ok {
 			return false, nil
 		}
-		idx := 0
-		for {
+		for idx := 0; idx < maxDeleteList; idx++ {
+			mapID := formatUUID(args.UID, lookupTblIdx[idx])
 			lris, ok := l.lockMap[resource]
 			if !ok {
 				// Inconsistent. Delete UID.
-				delete(l.lockUID, formatUUID(args.UID, idx))
+				delete(l.lockUID, mapID)
 				return idx > 0, nil
 			}
 			for i := range lris {
@@ -326,8 +337,7 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 					lris[i].TimeLastRefresh = UTCNow()
 				}
 			}
-			idx++
-			resource, ok = l.lockUID[formatUUID(args.UID, idx)]
+			resource, ok = l.lockUID[mapID]
 			if !ok {
 				// No more resources for UID, but we did update at least one.
 				return true, nil
@@ -367,7 +377,7 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 
 func newLocker() *localLocker {
 	return &localLocker{
-		lockMap: make(map[string][]lockRequesterInfo, 1000),
-		lockUID: make(map[string]string, 1000),
+		lockMap: make(map[string][]lockRequesterInfo, maxDeleteList),
+		lockUID: make(map[string]string, maxDeleteList),
 	}
 }
