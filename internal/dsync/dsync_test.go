@@ -325,6 +325,9 @@ func TestMutex(t *testing.T) {
 }
 
 func BenchmarkMutexUncontended(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	type PaddedMutex struct {
 		*DRWMutex
 	}
@@ -338,6 +341,9 @@ func BenchmarkMutexUncontended(b *testing.B) {
 }
 
 func benchmarkMutex(b *testing.B, slack, work bool) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	mu := NewDRWMutex(ds, "")
 	if slack {
 		b.SetParallelism(10)
@@ -375,6 +381,9 @@ func BenchmarkMutexWorkSlack(b *testing.B) {
 }
 
 func BenchmarkMutexNoSpin(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	// This benchmark models a situation where spinning in the mutex should be
 	// non-profitable and allows to confirm that spinning does not do harm.
 	// To achieve this we create excess of goroutines most of which do local work.
@@ -409,6 +418,9 @@ func BenchmarkMutexNoSpin(b *testing.B) {
 }
 
 func BenchmarkMutexSpin(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	// This benchmark models a situation where spinning in the mutex should be
 	// profitable. To achieve this we create a goroutine per-proc.
 	// These goroutines access considerable amount of local data so that

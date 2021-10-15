@@ -63,8 +63,9 @@ const drwMutexInfinite = 1<<63 - 1
 // A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
 	Names         []string
-	writeLocks    []string   // Array of nodes that granted a write lock
-	readersLocks  [][]string // Array of array of nodes that granted reader locks
+	writeLocks    []string // Array of nodes that granted a write lock
+	readLocks     []string // Array of array of nodes that granted reader locks
+	rng           *rand.Rand
 	m             sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 	clnt          *Dsync
 	cancelRefresh context.CancelFunc
@@ -90,8 +91,10 @@ func NewDRWMutex(clnt *Dsync, names ...string) *DRWMutex {
 	sort.Strings(names)
 	return &DRWMutex{
 		writeLocks: make([]string, len(restClnts)),
+		readLocks:  make([]string, len(restClnts)),
 		Names:      names,
 		clnt:       clnt,
+		rng:        rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())}),
 	}
 }
 
@@ -159,8 +162,6 @@ const (
 func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), id, source string, isReadLock bool, opts Options) (locked bool) {
 	restClnts, _ := dm.clnt.GetLockers()
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	// Create lock array to capture the successful lockers
 	locks := make([]string, len(restClnts))
 
@@ -198,10 +199,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 
 				// If success, copy array to object
 				if isReadLock {
-					// Append new array of strings at the end
-					dm.readersLocks = append(dm.readersLocks, make([]string, len(restClnts)))
-					// and copy stack array into last spot
-					copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
+					copy(dm.readLocks, locks[:])
 				} else {
 					copy(dm.writeLocks, locks[:])
 				}
@@ -215,7 +213,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 				return locked
 			}
 
-			time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+			time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 		}
 	}
 }
@@ -538,10 +536,8 @@ func releaseAll(ds *Dsync, tolerance int, owner string, locks *[]string, isReadL
 		wg.Add(1)
 		go func(lockID int) {
 			defer wg.Done()
-			if isLocked((*locks)[lockID]) {
-				if sendRelease(ds, restClnts[lockID], owner, (*locks)[lockID], isReadLock, names...) {
-					(*locks)[lockID] = ""
-				}
+			if sendRelease(ds, restClnts[lockID], owner, (*locks)[lockID], isReadLock, names...) {
+				(*locks)[lockID] = ""
 			}
 		}(lockID)
 	}
@@ -590,9 +586,8 @@ func (dm *DRWMutex) Unlock() {
 	tolerance := len(restClnts) / 2
 
 	isReadLock := false
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+		time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 	}
 }
 
@@ -604,29 +599,36 @@ func (dm *DRWMutex) RUnlock() {
 	dm.cancelRefresh()
 	dm.m.Unlock()
 
-	// create temp array on stack
 	restClnts, owner := dm.clnt.GetLockers()
-
+	// create temp array on stack
 	locks := make([]string, len(restClnts))
+
 	{
 		dm.m.Lock()
 		defer dm.m.Unlock()
-		if len(dm.readersLocks) == 0 {
+
+		// Check if minimally a single bool is set in the writeLocks array
+		lockFound := false
+		for _, uid := range dm.readLocks {
+			if isLocked(uid) {
+				lockFound = true
+				break
+			}
+		}
+		if !lockFound {
 			panic("Trying to RUnlock() while no RLock() is active")
 		}
-		// Copy out first element to release it first (FIFO)
-		copy(locks, dm.readersLocks[0][:])
-		// Drop first element from array
-		dm.readersLocks = dm.readersLocks[1:]
+
+		// Copy write locks to stack array
+		copy(locks, dm.readLocks[:])
 	}
 
 	// Tolerance is not set, defaults to half of the locker clients.
 	tolerance := len(restClnts) / 2
 
 	isReadLock := true
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+		time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 	}
 }
 
@@ -634,6 +636,10 @@ func (dm *DRWMutex) RUnlock() {
 func sendRelease(ds *Dsync, c NetLocker, owner string, uid string, isReadLock bool, names ...string) bool {
 	if c == nil {
 		log("Unable to call RUnlock failed with %s\n", errors.New("netLocker is offline"))
+		return false
+	}
+
+	if len(uid) == 0 {
 		return false
 	}
 
