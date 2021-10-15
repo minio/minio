@@ -34,7 +34,7 @@ const (
 	lockMaintenanceInterval = 1 * time.Minute
 
 	// Lock validity duration
-	lockValidityDuration = 20 * time.Second
+	lockValidityDuration = 1 * time.Minute
 )
 
 // To abstract a node over network.
