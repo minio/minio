@@ -313,19 +313,26 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			// - attempt a heal to successfully heal them for future calls.
 			if written == partLength {
 				var scan madmin.HealScanMode
-				if errors.Is(err, errFileNotFound) {
+				switch {
+				case errors.Is(err, errFileNotFound):
 					scan = madmin.HealNormalScan
-					logger.Info("Healing required, attempting to heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
-				} else if errors.Is(err, errFileCorrupt) {
+					logger.Info("Healing required, triggering async heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
+				case errors.Is(err, errFileCorrupt):
 					scan = madmin.HealDeepScan
-					logger.Info("Healing required, attempting to heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
+					logger.Info("Healing required, triggering async heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
-				if scan == madmin.HealNormalScan || scan == madmin.HealDeepScan {
+				switch scan {
+				case madmin.HealNormalScan, madmin.HealDeepScan:
 					healOnce.Do(func() {
 						if _, healing := er.getOnlineDisksWithHealing(); !healing {
 							go healObject(bucket, object, fi.VersionID, scan)
 						}
 					})
+					// Healing is triggered and we have written
+					// successfully the content to client for
+					// the specific part, we should `nil` this error
+					// and proceed forward, instead of throwing errors.
+					err = nil
 				}
 			}
 			if err != nil {
