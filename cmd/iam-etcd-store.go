@@ -457,10 +457,6 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 
 }
 
-func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
-	return sys.Load(ctx, ies)
-}
-
 func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error {
 	return ies.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }
@@ -509,153 +505,58 @@ func (ies *IAMEtcdStore) deleteGroupInfo(ctx context.Context, name string) error
 	return err
 }
 
-func (ies *IAMEtcdStore) watch(ctx context.Context, sys *IAMSys) {
-	for {
-	outerLoop:
-		// Refresh IAMSys with etcd watch.
-		watchCh := ies.client.Watch(ctx,
-			iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+func (ies *IAMEtcdStore) watch(ctx context.Context, keyPath string) <-chan iamWatchEvent {
+	ch := make(chan iamWatchEvent)
 
+	// go routine to read events from the etcd watch channel and send them
+	// down `ch`
+	go func() {
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			case watchResp, ok := <-watchCh:
-				if !ok {
-					time.Sleep(1 * time.Second)
-					// Upon an error on watch channel
-					// re-init the watch channel.
-					goto outerLoop
-				}
-				if err := watchResp.Err(); err != nil {
-					logger.LogIf(ctx, err)
-					// log and retry.
-					time.Sleep(1 * time.Second)
-					// Upon an error on watch channel
-					// re-init the watch channel.
-					goto outerLoop
-				}
-				for _, event := range watchResp.Events {
-					ies.lock()
-					ies.reloadFromEvent(sys, event)
-					ies.unlock()
-				}
-			}
-		}
-	}
-}
+		outerLoop:
+			watchCh := ies.client.Watch(ctx,
+				keyPath, etcd.WithPrefix(), etcd.WithKeysOnly())
 
-// sys.RLock is held by caller.
-func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
-	eventCreate := event.IsModify() || event.IsCreate()
-	eventDelete := event.Type == etcd.EventTypeDelete
-	usersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigUsersPrefix)
-	groupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigGroupsPrefix)
-	stsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigSTSPrefix)
-	svcPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigServiceAccountsPrefix)
-	policyPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPoliciesPrefix)
-	policyDBUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBUsersPrefix)
-	policyDBSTSUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBSTSUsersPrefix)
-	policyDBGroupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBGroupsPrefix)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case watchResp, ok := <-watchCh:
+					if !ok {
+						time.Sleep(1 * time.Second)
+						// Upon an error on watch channel
+						// re-init the watch channel.
+						goto outerLoop
+					}
+					if err := watchResp.Err(); err != nil {
+						logger.LogIf(ctx, err)
+						// log and retry.
+						time.Sleep(1 * time.Second)
+						// Upon an error on watch channel
+						// re-init the watch channel.
+						goto outerLoop
+					}
+					for _, event := range watchResp.Events {
+						isCreateEvent := event.IsModify() || event.IsCreate()
+						isDeleteEvent := event.Type == etcd.EventTypeDelete
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
+						switch {
+						case isCreateEvent:
+							ch <- iamWatchEvent{
+								isCreated: true,
+								keyPath:   string(event.Kv.Key),
+							}
+						case isDeleteEvent:
+							ch <- iamWatchEvent{
+								isCreated: false,
+								keyPath:   string(event.Kv.Key),
+							}
+						}
 
-	switch {
-	case eventCreate:
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigUsersPrefix))
-			ies.loadUser(ctx, accessKey, regUser, sys.iamUsersMap)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigSTSPrefix))
-			// Not using ies.loadUser due to the custom loading of an STS account
-			var u UserIdentity
-			if err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(accessKey, stsUser)); err == nil {
-				ies.addUser(ctx, accessKey, stsUser, u, sys.iamUsersMap)
-				// We are on purpose not persisting the policy map for parent
-				// user, although this is a hack, it is a good enough hack
-				// at this point in time - we need to overhaul our OIDC
-				// usage with service accounts with a more cleaner implementation
-				//
-				// This mapping is necessary to ensure that valid credentials
-				// have necessary ParentUser present - this is mainly for only
-				// webIdentity based STS tokens.
-				parentAccessKey := u.Credentials.ParentUser
-				if parentAccessKey != "" && parentAccessKey != globalActiveCred.AccessKey {
-					if _, ok := sys.iamUserPolicyMap[parentAccessKey]; !ok {
-						sys.iamUserPolicyMap[parentAccessKey] = sys.iamUserPolicyMap[accessKey]
 					}
 				}
 			}
-		case svcPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigServiceAccountsPrefix))
-			ies.loadUser(ctx, accessKey, svcUser, sys.iamUsersMap)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigGroupsPrefix))
-			ies.loadGroup(ctx, group, sys.iamGroupsMap)
-			gi := sys.iamGroupsMap[group]
-			sys.removeGroupFromMembershipsMap(group)
-			sys.updateGroupMembershipsMap(group, &gi)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPoliciesPrefix))
-			ies.loadPolicyDoc(ctx, policyName, sys.iamPolicyDocsMap)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			ies.loadMappedPolicy(ctx, user, regUser, false, sys.iamUserPolicyMap)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			ies.loadMappedPolicy(ctx, user, stsUser, false, sys.iamUserPolicyMap)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			ies.loadMappedPolicy(ctx, user, regUser, true, sys.iamGroupPolicyMap)
 		}
-	case eventDelete:
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigUsersPrefix))
-			delete(sys.iamUsersMap, accessKey)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigSTSPrefix))
-			delete(sys.iamUsersMap, accessKey)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigGroupsPrefix))
-			sys.removeGroupFromMembershipsMap(group)
-			delete(sys.iamGroupsMap, group)
-			delete(sys.iamGroupPolicyMap, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPoliciesPrefix))
-			delete(sys.iamPolicyDocsMap, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			delete(sys.iamUserPolicyMap, user)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			delete(sys.iamUserPolicyMap, user)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			delete(sys.iamGroupPolicyMap, user)
-		}
-	}
+	}()
+	return ch
+
 }
