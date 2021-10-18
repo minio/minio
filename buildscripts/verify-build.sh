@@ -20,6 +20,7 @@ export SECRET_KEY="minio123"
 export ENABLE_HTTPS=0
 export GO111MODULE=on
 export GOGC=25
+export ENABLE_ADMIN=1
 
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" )
