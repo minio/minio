@@ -179,8 +179,14 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 		}
 
 		if secureCiphers || fips.Enabled {
+			// Hardened ciphers
 			tlsConfig.CipherSuites = fips.CipherSuitesTLS()
 			tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+		} else {
+			// Default ciphers while excluding those with security issues
+			for _, cipher := range tls.CipherSuites() {
+				tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
+			}
 		}
 	}
 
