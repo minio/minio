@@ -73,6 +73,12 @@ func (z *allTierStats) DecodeMsg(dc *msgp.Reader) (err error) {
 							err = msgp.WrapError(err, "Tiers", za0001, "NumVersions")
 							return
 						}
+					case "no":
+						za0002.NumObjects, err = dc.ReadInt()
+						if err != nil {
+							err = msgp.WrapError(err, "Tiers", za0001, "NumObjects")
+							return
+						}
 					default:
 						err = dc.Skip()
 						if err != nil {
@@ -113,9 +119,9 @@ func (z *allTierStats) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Tiers")
 			return
 		}
-		// map header, size 2
+		// map header, size 3
 		// write "ts"
-		err = en.Append(0x82, 0xa2, 0x74, 0x73)
+		err = en.Append(0x83, 0xa2, 0x74, 0x73)
 		if err != nil {
 			return
 		}
@@ -134,6 +140,16 @@ func (z *allTierStats) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Tiers", za0001, "NumVersions")
 			return
 		}
+		// write "no"
+		err = en.Append(0xa2, 0x6e, 0x6f)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt(za0002.NumObjects)
+		if err != nil {
+			err = msgp.WrapError(err, "Tiers", za0001, "NumObjects")
+			return
+		}
 	}
 	return
 }
@@ -147,13 +163,16 @@ func (z *allTierStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendMapHeader(o, uint32(len(z.Tiers)))
 	for za0001, za0002 := range z.Tiers {
 		o = msgp.AppendString(o, za0001)
-		// map header, size 2
+		// map header, size 3
 		// string "ts"
-		o = append(o, 0x82, 0xa2, 0x74, 0x73)
+		o = append(o, 0x83, 0xa2, 0x74, 0x73)
 		o = msgp.AppendUint64(o, za0002.TotalSize)
 		// string "nv"
 		o = append(o, 0xa2, 0x6e, 0x76)
 		o = msgp.AppendInt(o, za0002.NumVersions)
+		// string "no"
+		o = append(o, 0xa2, 0x6e, 0x6f)
+		o = msgp.AppendInt(o, za0002.NumObjects)
 	}
 	return
 }
@@ -225,6 +244,12 @@ func (z *allTierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Tiers", za0001, "NumVersions")
 							return
 						}
+					case "no":
+						za0002.NumObjects, bts, err = msgp.ReadIntBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Tiers", za0001, "NumObjects")
+							return
+						}
 					default:
 						bts, err = msgp.Skip(bts)
 						if err != nil {
@@ -253,7 +278,7 @@ func (z *allTierStats) Msgsize() (s int) {
 	if z.Tiers != nil {
 		for za0001, za0002 := range z.Tiers {
 			_ = za0002
-			s += msgp.StringPrefixSize + len(za0001) + 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize
+			s += msgp.StringPrefixSize + len(za0001) + 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize + 3 + msgp.IntSize
 		}
 	}
 	return
@@ -3541,6 +3566,12 @@ func (z *tierStats) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "NumVersions")
 				return
 			}
+		case "no":
+			z.NumObjects, err = dc.ReadInt()
+			if err != nil {
+				err = msgp.WrapError(err, "NumObjects")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -3554,9 +3585,9 @@ func (z *tierStats) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z tierStats) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+	// map header, size 3
 	// write "ts"
-	err = en.Append(0x82, 0xa2, 0x74, 0x73)
+	err = en.Append(0x83, 0xa2, 0x74, 0x73)
 	if err != nil {
 		return
 	}
@@ -3575,19 +3606,32 @@ func (z tierStats) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "NumVersions")
 		return
 	}
+	// write "no"
+	err = en.Append(0xa2, 0x6e, 0x6f)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt(z.NumObjects)
+	if err != nil {
+		err = msgp.WrapError(err, "NumObjects")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z tierStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
 	// string "ts"
-	o = append(o, 0x82, 0xa2, 0x74, 0x73)
+	o = append(o, 0x83, 0xa2, 0x74, 0x73)
 	o = msgp.AppendUint64(o, z.TotalSize)
 	// string "nv"
 	o = append(o, 0xa2, 0x6e, 0x76)
 	o = msgp.AppendInt(o, z.NumVersions)
+	// string "no"
+	o = append(o, 0xa2, 0x6e, 0x6f)
+	o = msgp.AppendInt(o, z.NumObjects)
 	return
 }
 
@@ -3621,6 +3665,12 @@ func (z *tierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "NumVersions")
 				return
 			}
+		case "no":
+			z.NumObjects, bts, err = msgp.ReadIntBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "NumObjects")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -3635,6 +3685,6 @@ func (z *tierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z tierStats) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize + 3 + msgp.IntSize
 	return
 }

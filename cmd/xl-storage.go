@@ -476,16 +476,21 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				sizeS.versions++
 			}
 			sizeS.totalSize += sz
-			if noTiers {
+
+			// Skip tier accounting if,
+			// 1. no tiers configured
+			// 2. object version is a delete-marker or a free-version
+			//    tracking deleted transitioned objects
+			switch {
+			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
+
 				continue
 			}
-
 			tier := minioHotTier
 			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
 				tier = oi.TransitionedObject.Tier
 			}
-			stats := tierStats{TotalSize: uint64(oi.Size), NumVersions: 1}
-			sizeS.tiers[tier] = sizeS.tiers[tier].add(stats)
+			sizeS.tiers[tier] = sizeS.tiers[tier].add(oi.tierStats())
 		}
 		return sizeS, nil
 	})

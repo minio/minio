@@ -191,3 +191,38 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 
 	writeSuccessNoContent(w)
 }
+
+func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "TierStats")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	dui, err := loadDataUsageFromBackend(ctx, objAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	}
+
+	var infos []madmin.TierInfo
+	if dui.TierStats == nil {
+		infos = []madmin.TierInfo{}
+	} else {
+		infos = dui.TierStats.adminStats()
+	}
+
+	data, err := json.Marshal(infos)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	}
+	writeSuccessResponseJSON(w, data)
+}
