@@ -388,7 +388,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	if rangeHeader != "" {
 		// Both 'Range' and 'partNumber' cannot be specified at the same time
 		if opts.PartNumber > 0 {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber), r.URL)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRangePartNumber), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
