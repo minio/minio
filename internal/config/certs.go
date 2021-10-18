@@ -56,7 +56,7 @@ func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 
 		var x509Cert *x509.Certificate
 		if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return nil, ErrSSLUnexpectedData(err)
+			return nil, ErrSSLUnexpectedData(nil).Msg("Failed to parse `%s`: %s", certFile, err.Error())
 		}
 
 		x509Certs = append(x509Certs, x509Cert)
