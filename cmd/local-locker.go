@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -81,6 +80,10 @@ func (l *localLocker) canTakeLock(resources ...string) bool {
 }
 
 func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	if len(args.Resources) > maxDeleteList {
+		return false, fmt.Errorf("internal error: localLocker.Lock called with more than %d resources", maxDeleteList)
+	}
+
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -117,6 +120,10 @@ func formatUUID(s string, idx int) string {
 }
 
 func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
+	if len(args.Resources) > maxDeleteList {
+		return false, fmt.Errorf("internal error: localLocker.Unlock called with more than %d resources", maxDeleteList)
+	}
+
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	err = nil
@@ -265,7 +272,7 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 					lris, ok := l.lockMap[resource]
 					if !ok {
 						// Just to be safe, delete uuids.
-						for idx := 0; idx < math.MaxInt32; idx++ {
+						for idx := 0; idx < maxDeleteList; idx++ {
 							mapID := formatUUID(uid, idx)
 							if _, ok := l.lockUID[mapID]; !ok {
 								break
@@ -282,14 +289,15 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 
 		idx := 0
 		for {
-			resource, ok := l.lockUID[formatUUID(args.UID, idx)]
+			mapID := formatUUID(args.UID, idx)
+			resource, ok := l.lockUID[mapID]
 			if !ok {
 				return idx > 0, nil
 			}
 			lris, ok := l.lockMap[resource]
 			if !ok {
 				// Unexpected  inconsistency, delete.
-				delete(l.lockUID, formatUUID(args.UID, idx))
+				delete(l.lockUID, mapID)
 				idx++
 				continue
 			}
@@ -315,10 +323,11 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 		}
 		idx := 0
 		for {
+			mapID := formatUUID(args.UID, idx)
 			lris, ok := l.lockMap[resource]
 			if !ok {
 				// Inconsistent. Delete UID.
-				delete(l.lockUID, formatUUID(args.UID, idx))
+				delete(l.lockUID, mapID)
 				return idx > 0, nil
 			}
 			for i := range lris {
@@ -327,7 +336,7 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 				}
 			}
 			idx++
-			resource, ok = l.lockUID[formatUUID(args.UID, idx)]
+			resource, ok = l.lockUID[mapID]
 			if !ok {
 				// No more resources for UID, but we did update at least one.
 				return true, nil

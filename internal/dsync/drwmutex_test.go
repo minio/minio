@@ -306,6 +306,9 @@ func TestRUnlockPanic2(t *testing.T) {
 
 // Borrowed from rwmutex_test.go
 func benchmarkRWMutex(b *testing.B, localWork, writeRatio int) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
 	rwm := NewDRWMutex(ds, "test")
 	b.RunParallel(func(pb *testing.PB) {
 		foo := 0
