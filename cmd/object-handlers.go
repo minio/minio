@@ -1683,6 +1683,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+		size, _ := objInfo.GetActualSize()
+		defer globalReplicationStats.Update(bucket, size, replication.Replica, replication.StatusType(""), replication.ObjectReplicationType)
+	}
 	setPutObjHeaders(w, objInfo, false)
 
 	writeSuccessResponseHeadersOnly(w)
@@ -1974,9 +1978,11 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
 			scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 		}
-
+		if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+			size, _ := objInfo.GetActualSize()
+			defer globalReplicationStats.Update(bucket, size, replication.Replica, replication.StatusType(""), replication.ObjectReplicationType)
+		}
 	}
-
 	untar(hreader, putObjectTar)
 
 	w.Header()[xhttp.ETag] = []string{`"` + hex.EncodeToString(hreader.MD5Current()) + `"`}
@@ -3080,6 +3086,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	setPutObjHeaders(w, objInfo, false)
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
+	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+		size, _ := objInfo.GetActualSize()
+		defer globalReplicationStats.Update(bucket, size, replication.Replica, replication.StatusType(""), replication.ObjectReplicationType)
 	}
 
 	// Write success response.
