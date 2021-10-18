@@ -38,6 +38,9 @@ type countUpReader struct {
 	bytesRead int64
 }
 
+// Max bzip2 concurrency across calls. 50% of GOMAXPROCS.
+var bz2Limiter = pbzip2.CreateConcurrencyPool((runtime.GOMAXPROCS(0) + 1) / 2)
+
 func (r *countUpReader) Read(p []byte) (n int, err error) {
 	n, err = r.reader.Read(p)
 	atomic.AddInt64(&r.bytesRead, int64(n))
@@ -124,7 +127,10 @@ func newProgressReader(rc io.ReadCloser, compType CompressionType) (*progressRea
 		pr.closer = gzr
 	case bzip2Type:
 		ctx, cancel := context.WithCancel(context.Background())
-		r = pbzip2.NewReader(ctx, scannedReader, pbzip2.DecompressionOptions(pbzip2.BZConcurrency((runtime.GOMAXPROCS(0)+1)/2)))
+		r = pbzip2.NewReader(ctx, scannedReader, pbzip2.DecompressionOptions(
+			pbzip2.BZConcurrency((runtime.GOMAXPROCS(0)+1)/2),
+			pbzip2.BZConcurrencyPool(bz2Limiter),
+		))
 		pr.closer = &nopReadCloser{fn: cancel}
 	case zstdType:
 		// Set a max window of 64MB. More than reasonable.
