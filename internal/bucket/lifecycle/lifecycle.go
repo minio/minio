@@ -316,10 +316,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && !obj.DeleteMarker && obj.TransitionStatus != TransitionComplete {
 				// Non current versions should be transitioned if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionTransition.NoncurrentDays))) {
+				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && time.Now().UTC().After(due) {
 					return TransitionVersionAction
 				}
-
 			}
 		}
 

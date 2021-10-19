@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -216,12 +217,15 @@ func TestExpectedExpiryTime(t *testing.T) {
 
 func TestComputeActions(t *testing.T) {
 	testCases := []struct {
-		inputConfig        string
-		objectName         string
-		objectTags         string
-		objectModTime      time.Time
-		isExpiredDelMarker bool
-		expectedAction     Action
+		inputConfig            string
+		objectName             string
+		objectTags             string
+		objectModTime          time.Time
+		isExpiredDelMarker     bool
+		expectedAction         Action
+		isNoncurrent           bool
+		objectSuccessorModTime time.Time
+		versionID              string
 	}{
 		// Empty object name (unexpected case) should always return NoneAction
 		{
@@ -386,12 +390,22 @@ func TestComputeActions(t *testing.T) {
 			isExpiredDelMarker: true,
 			expectedAction:     DeleteVersionAction,
 		},
-		// Should not delete expired marker if its time has not come yet
+		// Should transition immediately when Transition days is zero
 		{
 			inputConfig:    `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Transition><Days>0</Days><StorageClass>S3TIER-1</StorageClass></Transition></Rule></BucketLifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
 			objectModTime:  time.Now().UTC(), // Created now
 			expectedAction: TransitionAction,
+		},
+		// Should transition immediately when NoncurrentVersion Transition days is zero
+		{
+			inputConfig:            `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><NoncurrentVersionTransition><NoncurrentDays>0</NoncurrentDays><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></BucketLifecycleConfiguration>`,
+			objectName:             "foodir/fooobject",
+			objectModTime:          time.Now().UTC(), // Created now
+			expectedAction:         TransitionVersionAction,
+			isNoncurrent:           true,
+			objectSuccessorModTime: time.Now().UTC(),
+			versionID:              uuid.New().String(),
 		},
 	}
 
@@ -403,12 +417,14 @@ func TestComputeActions(t *testing.T) {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
 			if resultAction := lc.ComputeAction(ObjectOpts{
-				Name:         tc.objectName,
-				UserTags:     tc.objectTags,
-				ModTime:      tc.objectModTime,
-				DeleteMarker: tc.isExpiredDelMarker,
-				NumVersions:  1,
-				IsLatest:     true,
+				Name:             tc.objectName,
+				UserTags:         tc.objectTags,
+				ModTime:          tc.objectModTime,
+				DeleteMarker:     tc.isExpiredDelMarker,
+				NumVersions:      1,
+				IsLatest:         !tc.isNoncurrent,
+				SuccessorModTime: tc.objectSuccessorModTime,
+				VersionID:        tc.versionID,
 			}); resultAction != tc.expectedAction {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
