@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	etcd "go.etcd.io/etcd/client/v3"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -299,11 +300,6 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 		return errServerNotInitialized
 	}
 
-	if globalEtcdClient != nil {
-		// Watch APIs cover this case, so nothing to do.
-		return nil
-	}
-
 	sys.store.lock()
 	defer sys.store.unlock()
 
@@ -343,12 +339,7 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
-		return sys.store.loadPolicyDoc(context.Background(), policyName, sys.iamPolicyDocsMap)
-	}
-
-	// When etcd is set, we use watch APIs so this code is not needed.
-	return nil
+	return sys.store.loadPolicyDoc(context.Background(), policyName, sys.iamPolicyDocsMap)
 }
 
 // LoadPolicyMapping - loads the mapped policy for a user or group
@@ -361,33 +352,30 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
-		var err error
-		userType := regUser
-		if sys.usersSysType == LDAPUsersSysType {
-			userType = stsUser
-		}
+	var err error
+	userType := regUser
+	if sys.usersSysType == LDAPUsersSysType {
+		userType = stsUser
+	}
 
+	if isGroup {
+		err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamGroupPolicyMap)
+	} else {
+		err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamUserPolicyMap)
+	}
+
+	if err == errNoSuchPolicy {
 		if isGroup {
-			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamGroupPolicyMap)
+			delete(sys.iamGroupPolicyMap, userOrGroup)
 		} else {
-			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, userType, isGroup, sys.iamUserPolicyMap)
-		}
-
-		if err == errNoSuchPolicy {
-			if isGroup {
-				delete(sys.iamGroupPolicyMap, userOrGroup)
-			} else {
-				delete(sys.iamUserPolicyMap, userOrGroup)
-			}
-		}
-		// Ignore policy not mapped error
-		if err != nil && err != errNoSuchPolicy {
-			return err
+			delete(sys.iamUserPolicyMap, userOrGroup)
 		}
 	}
-	// When etcd is set, we use watch APIs so this code is not needed.
-	return nil
+	// Ignore policy not mapped error
+	if err == errNoSuchPolicy {
+		err = nil
+	}
+	return err
 }
 
 // LoadUser - reloads a specific user from backend disks or etcd.
@@ -399,34 +387,34 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
-		err := sys.store.loadUser(context.Background(), accessKey, userType, sys.iamUsersMap)
-		if err != nil {
-			return err
-		}
-		err = sys.store.loadMappedPolicy(context.Background(), accessKey, userType, false, sys.iamUserPolicyMap)
-		// Ignore policy not mapped error
-		if err != nil && err != errNoSuchPolicy {
-			return err
-		}
-		// We are on purpose not persisting the policy map for parent
-		// user, although this is a hack, it is a good enough hack
-		// at this point in time - we need to overhaul our OIDC
-		// usage with service accounts with a more cleaner implementation
-		//
-		// This mapping is necessary to ensure that valid credentials
-		// have necessary ParentUser present - this is mainly for only
-		// webIdentity based STS tokens.
-		cred, ok := sys.iamUsersMap[accessKey]
-		if ok {
-			if cred.IsTemp() && cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
-				if _, ok := sys.iamUserPolicyMap[cred.ParentUser]; !ok {
-					sys.iamUserPolicyMap[cred.ParentUser] = sys.iamUserPolicyMap[accessKey]
-				}
+	err := sys.store.loadUser(context.Background(), accessKey, userType, sys.iamUsersMap)
+	if err != nil {
+		return err
+	}
+	err = sys.store.loadMappedPolicy(context.Background(), accessKey, userType, false, sys.iamUserPolicyMap)
+	// Ignore policy not mapped error
+	if err == errNoSuchPolicy {
+		err = nil
+	}
+	if err != nil {
+		return err
+	}
+	// We are on purpose not persisting the policy map for parent
+	// user, although this is a hack, it is a good enough hack
+	// at this point in time - we need to overhaul our OIDC
+	// usage with service accounts with a more cleaner implementation
+	//
+	// This mapping is necessary to ensure that valid credentials
+	// have necessary ParentUser present - this is mainly for only
+	// webIdentity based STS tokens.
+	cred, ok := sys.iamUsersMap[accessKey]
+	if ok {
+		if cred.IsTemp() && cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
+			if _, ok := sys.iamUserPolicyMap[cred.ParentUser]; !ok {
+				sys.iamUserPolicyMap[cred.ParentUser] = sys.iamUserPolicyMap[accessKey]
 			}
 		}
 	}
-	// When etcd is set, we use watch APIs so this code is not needed.
 	return nil
 }
 
@@ -439,14 +427,7 @@ func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
-		err := sys.store.loadUser(context.Background(), accessKey, svcUser, sys.iamUsersMap)
-		if err != nil {
-			return err
-		}
-	}
-	// When etcd is set, we use watch APIs so this code is not needed.
-	return nil
+	return sys.store.loadUser(context.Background(), accessKey, svcUser, sys.iamUsersMap)
 }
 
 // Perform IAM configuration migration.
@@ -455,18 +436,18 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 }
 
 // InitStore initializes IAM stores
-func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
+func (sys *IAMSys) InitStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	sys.Lock()
 	defer sys.Unlock()
 
-	if globalEtcdClient == nil {
+	if etcdClient == nil {
 		if globalIsGateway {
 			sys.store = &iamDummyStore{}
 		} else {
 			sys.store = newIAMObjectStore(objAPI)
 		}
 	} else {
-		sys.store = newIAMEtcdStore()
+		sys.store = newIAMEtcdStore(etcdClient)
 	}
 
 	if globalLDAPConfig.Enabled {
@@ -584,9 +565,9 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 }
 
 // Init - initializes config system by reading entries from config/iam
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client) {
 	// Initialize IAM store
-	sys.InitStore(objAPI)
+	sys.InitStore(objAPI, etcdClient)
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -611,11 +592,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			continue
 		}
 
-		if globalEtcdClient != nil {
+		if etcdClient != nil {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, globalEtcdClient); err != nil {
+			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
 				txnLk.Unlock(lkctx.Cancel)
 				if errors.Is(err, errEtcdUnreachable) {
 					logger.Info("Connection to etcd timed out. Retrying..")
@@ -683,6 +664,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	go sys.watch(ctx)
+}
+
+// HasWatcher - returns if the IAM system has a watcher to be notified of
+// changes.
+func (sys *IAMSys) HasWatcher() bool {
+	_, ok := sys.store.(iamStorageWatcher)
+	return ok
 }
 
 func (sys *IAMSys) watch(ctx context.Context) {

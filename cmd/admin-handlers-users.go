@@ -242,10 +242,12 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Notify all other MinIO peers to load group.
-	for _, nerr := range globalNotificationSys.LoadGroup(updReq.Group) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadGroup(updReq.Group) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 }
@@ -334,10 +336,12 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Notify all other MinIO peers to reload user.
-	for _, nerr := range globalNotificationSys.LoadGroup(group) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadGroup(group) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 }
@@ -369,10 +373,12 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Notify all other MinIO peers to reload user.
-	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 }
@@ -477,10 +483,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Notify all other Minio peers to reload user
-	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 }
@@ -623,10 +631,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Notify all other Minio peers to reload user the service account
-	for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
@@ -762,10 +772,12 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 	}
 
 	// Notify all other Minio peers to reload user the service account
-	for _, nerr := range globalNotificationSys.LoadServiceAccount(accessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadServiceAccount(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
@@ -1422,10 +1434,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}
 
 	// Notify all other MinIO peers to reload policy
-	for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
@@ -1475,10 +1489,12 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}
 
 	// Notify all other MinIO peers to reload policy
-	for _, nerr := range globalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
