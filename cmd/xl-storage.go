@@ -2044,7 +2044,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				}
 				s.deleteFile(dstVolumeDir, dstDataPath, false)
 
-				logger.LogIf(ctx, err)
+				if err != errFileNotFound {
+					logger.LogIf(ctx, err)
+				}
 				return osErrToFileErr(err)
 			}
 		}
@@ -2057,7 +2059,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			}
 			s.deleteFile(dstVolumeDir, dstFilePath, false)
 
-			logger.LogIf(ctx, err)
+			if err != errFileNotFound {
+				logger.LogIf(ctx, err)
+			}
 			return osErrToFileErr(err)
 		}
 

@@ -378,7 +378,6 @@ const (
 	EnvIdentityOpenIDVendor        = "MINIO_IDENTITY_OPENID_VENDOR"
 	EnvIdentityOpenIDClientID      = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDClientSecret  = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
-	EnvIdentityOpenIDJWKSURL       = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL           = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimName     = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
 	EnvIdentityOpenIDClaimUserInfo = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
@@ -469,27 +468,21 @@ var (
 			Key:   Scopes,
 			Value: "",
 		},
-		config.KV{
-			Key:   JwksURL,
-			Value: "",
-		},
 	}
 )
 
-// Enabled returns if jwks is enabled.
+// Enabled returns if configURL is enabled.
 func Enabled(kvs config.KVS) bool {
-	return kvs.Get(JwksURL) != ""
+	return kvs.Get(ConfigURL) != ""
 }
 
 // LookupConfig lookup jwks from config, override with any ENVs.
 func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
+	// remove this since we have removed this already.
+	kvs.Delete(JwksURL)
+
 	if err = config.CheckValidKeys(config.IdentityOpenIDSubSys, kvs, DefaultKVS); err != nil {
 		return c, err
-	}
-
-	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
-	if jwksURL == "" {
-		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kvs.Get(JwksURL))
 	}
 
 	c = Config{
@@ -538,11 +531,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		c.ClaimName = iampolicy.PolicyName
 	}
 
-	if jwksURL == "" {
-		// Fallback to discovery document jwksURL
-		jwksURL = c.DiscoveryDoc.JwksURI
-	}
-
+	jwksURL := c.DiscoveryDoc.JwksURI
 	if jwksURL == "" {
 		return c, nil
 	}
