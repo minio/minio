@@ -1847,6 +1847,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 					},
 				})
 			}
+
 			healthInfo.Minio.Info = madmin.MinioInfo{
 				Mode:         infoMessage.Mode,
 				Domain:       infoMessage.Domain,
@@ -1859,6 +1860,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				Services:     infoMessage.Services,
 				Backend:      infoMessage.Backend,
 				Servers:      servers,
+				TLS:          getTLSInfo(),
 			}
 			partialWrite(healthInfo)
 		}
@@ -1886,6 +1888,25 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+}
+
+func getTLSInfo() madmin.TLSInfo {
+	tlsInfo := madmin.TLSInfo{
+		TLSEnabled: globalIsTLS,
+		Certs:      []madmin.TLSCert{},
+	}
+
+	if globalIsTLS {
+		for _, c := range globalPublicCerts {
+			tlsInfo.Certs = append(tlsInfo.Certs, madmin.TLSCert{
+				PubKeyAlgo:    c.PublicKeyAlgorithm.String(),
+				SignatureAlgo: c.SignatureAlgorithm.String(),
+				NotBefore:     c.NotBefore,
+				NotAfter:      c.NotAfter,
+			})
+		}
+	}
+	return tlsInfo
 }
 
 // BandwidthMonitorHandler - GET /minio/admin/v3/bandwidth
