@@ -137,16 +137,19 @@ func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, thr
 
 	// ensure enough samples to obtain normal distribution
 	maxSamples := int(10 * threadCount)
+	if maxSamples > 50 {
+		maxSamples = 50
+	}
 
 	innerCtx, cancel := context.WithCancel(ctx)
 
 	slowSamples := int32(0)
-	maxSlowSamples := int32(maxSamples / 20)
+	maxSlowSamples := int32(maxSamples/20) + 1 // 5% of total
 	slowSample := func() {
-		if slowSamples > maxSlowSamples { // 5% of total
+		if slowSamples > maxSlowSamples {
 			return
 		}
-		if atomic.AddInt32(&slowSamples, 1) >= maxSlowSamples {
+		if atomic.AddInt32(&slowSamples, 1) > maxSlowSamples {
 			errChan <- networkOverloaded
 			cancel()
 		}
@@ -159,11 +162,19 @@ func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, thr
 	}
 
 	for i := 0; i < maxSamples; i++ {
+		if slowSamples > maxSlowSamples {
+			break
+		}
+
 		select {
 		case <-ctx.Done():
+			cancel()
 			return info, ctx.Err()
 		case err = <-errChan:
 		case buflimiter <- struct{}{}:
+			if slowSamples > maxSlowSamples {
+				break
+			}
 			wg.Add(1)
 
 			if innerCtx.Err() != nil {
@@ -175,7 +186,7 @@ func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, thr
 				start := time.Now()
 				before := atomic.LoadInt64(&totalTransferred)
 
-				ctx, cancel := context.WithTimeout(innerCtx, 10*time.Second)
+				ctx, cancel := context.WithTimeout(innerCtx, 3*time.Second)
 				defer cancel()
 
 				progress := io.LimitReader(&nullReader{}, dataSize)
@@ -223,6 +234,9 @@ func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, thr
 	}
 	wg.Wait()
 
+	if slowSamples > maxSlowSamples {
+		return info, networkOverloaded
+	}
 	if err != nil {
 		return info, err
 	}
@@ -329,10 +343,6 @@ func (client *peerRESTClient) GetNetPerfInfo(ctx context.Context) (info madmin.P
 
 		if info, err = client.doNetTest(ctx, size, threads); err != nil {
 			if err == networkOverloaded {
-				continue
-			}
-
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				continue
 			}
 		}
