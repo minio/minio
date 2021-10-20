@@ -192,8 +192,9 @@ func ExpToInt64(expI interface{}) (expAt int64, err error) {
 	return expAt, err
 }
 
-// GetNewCredentialsWithMetadata generates and returns new credential with expiry.
-func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
+// GenerateCredentials - creates randomly generated credentials of maximum
+// allowed length.
+func GenerateCredentials() (accessKey, secretKey string, err error) {
 	readBytes := func(size int) (data []byte, err error) {
 		data = make([]byte, size)
 		var n int
@@ -208,22 +209,31 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	// Generate access key.
 	keyBytes, err := readBytes(accessKeyMaxLen)
 	if err != nil {
-		return cred, err
+		return "", "", err
 	}
 	for i := 0; i < accessKeyMaxLen; i++ {
 		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
-	accessKey := string(keyBytes)
+	accessKey = string(keyBytes)
 
 	// Generate secret key.
 	keyBytes, err = readBytes(secretKeyMaxLen)
 	if err != nil {
-		return cred, err
+		return "", "", err
 	}
 
-	secretKey := strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
+	secretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
 		"/", "+", -1)
 
+	return accessKey, secretKey, nil
+}
+
+// GetNewCredentialsWithMetadata generates and returns new credential with expiry.
+func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (Credentials, error) {
+	accessKey, secretKey, err := GenerateCredentials()
+	if err != nil {
+		return Credentials{}, err
+	}
 	return CreateNewCredentialsWithMetadata(accessKey, secretKey, m, tokenSecret)
 }
 
