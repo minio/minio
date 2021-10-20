@@ -350,7 +350,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	return testServer
 }
@@ -1470,7 +1470,7 @@ func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerP
 
 	initAllSubsystems(ctx, z)
 
-	globalIAMSys.InitStore(z)
+	globalIAMSys.InitStore(z, globalEtcdClient)
 
 	return z, nil
 }
@@ -1518,7 +1518,7 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 
 	initAllSubsystems(context.Background(), obj)
 
-	globalIAMSys.InitStore(obj)
+	globalIAMSys.InitStore(obj, globalEtcdClient)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -1808,7 +1808,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
@@ -1829,7 +1829,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for Erasure.

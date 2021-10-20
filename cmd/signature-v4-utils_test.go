@@ -42,7 +42,7 @@ func TestCheckValid(t *testing.T) {
 
 	initAllSubsystems(context.Background(), objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	req, err := newTestRequest(http.MethodGet, "http://example.com:9000/bucket/object", 0, nil)
 	if err != nil {

@@ -570,7 +570,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject)
+	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient)
 
 	initDataScanner(GlobalContext, newObject)
 

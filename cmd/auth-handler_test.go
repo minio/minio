@@ -366,7 +366,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 
 	initAllSubsystems(context.Background(), objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
@@ -457,7 +457,7 @@ func TestValidateAdminSignature(t *testing.T) {
 
 	initAllSubsystems(context.Background(), objLayer)
 
-	globalIAMSys.InitStore(objLayer)
+	globalIAMSys.InitStore(objLayer, globalEtcdClient)
 
 	creds, err := auth.CreateCredentials("admin", "mypassword")
 	if err != nil {

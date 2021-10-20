@@ -380,10 +380,12 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, sites []madmin
 	}
 
 	// Notify all other Minio peers to reload user the service account
-	for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
@@ -489,10 +491,12 @@ func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRI
 	}
 
 	// Notify all other Minio peers to reload the service account
-	for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
@@ -961,11 +965,13 @@ func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyNam
 	}
 
 	if p != nil {
-		// Notify all other MinIO peers to reload policy
-		for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
+		if !globalIAMSys.HasWatcher() {
+			// Notify all other MinIO peers to reload policy
+			for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
+				if nerr.Err != nil {
+					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+					logger.LogIf(ctx, nerr.Err)
+				}
 			}
 		}
 		return nil
@@ -1006,10 +1012,12 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		}
 
 		// Notify all other Minio peers to reload the service account
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
+		if !globalIAMSys.HasWatcher() {
+			for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
+				if nerr.Err != nil {
+					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+					logger.LogIf(ctx, nerr.Err)
+				}
 			}
 		}
 	case change.Update != nil:
@@ -1033,10 +1041,12 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		}
 
 		// Notify all other Minio peers to reload the service account
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(change.Update.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
+		if !globalIAMSys.HasWatcher() {
+			for _, nerr := range globalNotificationSys.LoadServiceAccount(change.Update.AccessKey) {
+				if nerr.Err != nil {
+					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+					logger.LogIf(ctx, nerr.Err)
+				}
 			}
 		}
 
@@ -1066,13 +1076,14 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 	}
 
 	// Notify all other MinIO peers to reload policy
-	for _, nerr := range globalNotificationSys.LoadPolicyMapping(mapping.UserOrGroup, mapping.IsGroup) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(mapping.UserOrGroup, mapping.IsGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
-
 	return nil
 }
 
@@ -1119,10 +1130,12 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 	}
 
 	// Notify in-cluster peers to reload temp users.
-	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	if !globalIAMSys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
 		}
 	}
 
