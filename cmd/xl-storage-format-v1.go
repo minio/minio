@@ -83,6 +83,7 @@ type StatInfo struct {
 	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.meta`.
 	Name    string    `json:"name"`
 	Dir     bool      `json:"dir"`
+	Mode    uint32    `json:"mode"`
 }
 
 // ErasureInfo holds erasure coding and bitrot related information.

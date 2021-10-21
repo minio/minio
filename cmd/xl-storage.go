@@ -2266,7 +2266,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		if os.PathSeparator != '/' {
 			name = strings.Replace(name, string(os.PathSeparator), "/", -1)
 		}
-		stat = append(stat, StatInfo{ModTime: st.ModTime(), Size: st.Size(), Name: name, Dir: st.IsDir()})
+		stat = append(stat, StatInfo{ModTime: st.ModTime(), Size: st.Size(), Name: name, Dir: st.IsDir(), Mode: uint32(st.Mode())})
 	}
 	return stat, nil
 }
