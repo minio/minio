@@ -2165,7 +2165,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 
 // getRawDataer provides an interface for getting raw FS files.
 type getRawDataer interface {
-	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time, isDir bool) error) error
+	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error
 }
 
 // InspectDataHandler - GET /minio/admin/v3/inspect-data
@@ -2242,19 +2242,23 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	zipWriter := zip.NewWriter(encw)
 	defer zipWriter.Close()
 
-	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, size int64, modtime time.Time, isDir bool) error {
+	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, si StatInfo) error {
 		// Prefix host+disk
 		filename = path.Join(host, disk, filename)
-		if isDir {
+		if si.Dir {
 			filename += "/"
-			size = 0
+			si.Size = 0
+		}
+		if si.Mode == 0 {
+			// Not, set it to default.
+			si.Mode = 0600
 		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
-			size:    size,
-			mode:    0600,
-			modTime: modtime,
-			isDir:   isDir,
+			size:    si.Size,
+			mode:    os.FileMode(si.Mode),
+			modTime: si.ModTime,
+			isDir:   si.Dir,
 			sys:     nil,
 		})
 		if zerr != nil {
