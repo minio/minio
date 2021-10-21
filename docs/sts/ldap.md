@@ -1,16 +1,26 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 ## Introduction
-MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server can be configured in two possible modes: either using a LDAP separate service account, called lookup-bind mode or in username-format mode. In either case the login flow for a user is the same as the STS flow:
+MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server uses a separate LDAP service account to lookup user information. The login flow for a user is as follows:
 
 1. User provides their AD/LDAP username and password to the STS API.
-2. MinIO verifies the login credentials with the AD/LDAP server.
-3. On success, MinIO queries the AD/LDAP server for a list of groups that the user is a member of.
-   - This is done via a customizable AD/LDAP search query.
-4. MinIO then generates temporary credentials for the user storing the list of groups in a cryptographically secure session token. The temporary access key, secret key and session token are returned to the user.
-5. The user can now use these credentials to make requests to the MinIO server.
+2. MinIO looks up the user's information (specifically the user's Distinguished Name) in the LDAP server.   
+3. On finding the user's info, MinIO verifies the login credentials with the AD/LDAP server.
+4. MinIO optionally queries the AD/LDAP server for a list of groups that the user is a member of.
+5. MinIO then checks if there are any policies [explicitly associated](#managing-usergroup-access-policy) with the user or their groups.
+6. On finding at least one associated policy, MinIO generates temporary credentials for the user storing the list of groups in a cryptographically secure session token. The temporary access key, secret key and session token are returned to the user.
+7. The user can now use these credentials to make requests to the MinIO server.
 
 The administrator will associate IAM access policies with each group and if required with the user too. The MinIO server then evaluates applicable policies on a user (these are the policies associated with the groups along with the policy on the user if any) to check if the request should be allowed or denied.
+
+To ensure that changes in the LDAP directory are reflected in object storage access changes, MinIO performs an **Automatic LDAP sync**. MinIO periodically queries the LDAP service to:
+
+- find accounts (user DNs) that have been removed; any active STS credentials or MinIO service accounts belonging to these users are purged.
+
+- find accounts whose group memberships have changed; access policies available to a credential are updated to reflect the change, i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
+
+**Please note that when AD/LDAP is configured, MinIO will not support long term users defined internally.** Only AD/LDAP users (and the root user) are allowed. In addition to this, the server will not support operations on users or groups using `mc admin user` or `mc admin group` commands except `mc admin user info` and `mc admin group info` to list set policies for users and groups. This is because users and groups are defined externally in AD/LDAP.
+
 
 ## Configuring AD/LDAP on MinIO
 
@@ -37,56 +47,74 @@ MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection 
 MINIO_IDENTITY_LDAP_COMMENT                 (sentence)  optionally add a comment to this setting
 ```
 
-Once a unique DN for the user is derived, the server verifies the user's credentials with the LDAP server and on success, looks up the user's groups via a configured group search query and finally temporary object storage credentials are generated and returned.
+### LDAP server connectivity
+
+The variables relevant to configuring connectivity to the LDAP service are:
+
+```
+MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e.g. "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
+MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
+MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
+```
+
+The server address variable is _required_. TLS is assumed to be on by default.
+
+**MinIO sends LDAP credentials to the LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
+
+If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. 
 
 ### Lookup-Bind
 
-A low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. This service account is used by the MinIO server to lookup a user's DN given their username. The lookup is performed via an LDAP search filter query that is also configured by the administrator.
+A low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. This service account is used to perform directory lookups as needed.
 
 ```
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
 ```
 
 If you set an empty lookup bind password, the lookup bind will use the unauthenticated authentication mechanism, as described in [RFC 4513 Section 5.1.2](https://tools.ietf.org/html/rfc4513#section-5.1.2).
 
-**Automatic LDAP sync:** MinIO server also periodically queries the LDAP service to:
+### User lookup
 
-- find accounts (user DNs) that have been removed
+When a user provides their LDAP credentials, MinIO runs a lookup query to find the user's Distinguished Name (DN). The search filter and base DN used in this lookup query are configured via the following variables:
 
-Any active STS credentials or MinIO service accounts belonging to these users are purged.
+```
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
+```
 
-- find accounts whose group memberships have changed
+The search filter must use the LDAP username to find the user DN. This is done via [variable substitution](#variable-substitution-in-configuration-strings).
 
-Access policies available to the credential are updated to reflect the change - i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
+The returned user's DN and their password are then verified with the LDAP server. The user DN may also be associated with an [access policy](#managing-usergroup-access-policy).
 
 ### Group membership search
 
-MinIO can be configured to find the groups of a user from AD/LDAP by specifying the folllowing variables:
+MinIO can be optionally configured to find the groups of a user from AD/LDAP by specifying the folllowing variables:
 
 ```
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
 ```
 
-When a user logs in via the STS API, the MinIO server queries the AD/LDAP server with the given search filter and extracts the DN from the search results. These values represent the groups that the user is a member of. On each access MinIO applies the IAM policies attached to these groups in MinIO.
+The search filter must use the username or the DN to find the user's groups. This is done via [variable substitution](#variable-substitution-in-configuration-strings).
 
-**MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
+A group's DN may be associated with an [access policy](#managing-usergroup-access-policy).
 
-If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. An example setup for development or experimentation:
+### Sample settings
+
+Here are some (minimal) sample settings for development or experimentation:
 
 ```shell
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
 export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
+export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN='ou=hwengg,dc=min,dc=io'
+export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER='(uid=%s,cn=accounts,dc=min,dc=io)'
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
 
-### Variable substitution in AD/LDAP configuration strings
+### Variable substitution in configuration strings
 
 In the configuration variables, `%s` is substituted with the *username* from the STS request and `%d` is substituted with the *distinguished username (user DN)* of the LDAP user. Please see the following table for which configuration variables support these substitution variables:
 
@@ -97,17 +125,13 @@ In the configuration variables, `%s` is substituted with the *username* from the
 
 ## Managing User/Group Access Policy
 
-Access policies may be configured on a group or on a user directly. Access policies are first defined on the MinIO server using IAM policy JSON syntax. The `mc` tool is used to issue the necessary commands.
-
-**Note that by default no policy is set on a user**. Thus even if they successfully authenticate with AD/LDAP credentials, they have no access to object storage as the default access policy is to deny all access.
-
-To define a new policy, you can use the [AWS policy generator](https://awspolicygen.s3.amazonaws.com/policygen.html). Copy the policy into a text file `mypolicy.json` and issue the command like so:
+Access policies may be associated by their name with a group or user directly. Access policies are first defined on the MinIO server using IAM policy JSON syntax. To define a new policy, you can use the [AWS policy generator](https://awspolicygen.s3.amazonaws.com/policygen.html). Copy the policy into a text file `mypolicy.json` and issue the command like so:
 
 ```sh
 mc admin policy add myminio mypolicy mypolicy.json
 ```
 
-To assign the policy to a user or group, use the full DN of the user or group:
+To associate the policy with an LDAP user or group, use the full DN of the user or group:
 
 ```sh
 mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver,dc=com'
@@ -117,8 +141,7 @@ mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver
 mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
-**Please note that when AD/LDAP is configured, MinIO will not support long term users defined internally.** Only AD/LDAP users are allowed. In addition to this, the server will not support operations on users or groups using `mc admin user` or `mc admin group` commands except `mc admin user info` and `mc admin group info` to list set policies for users and groups. This is because users and groups are defined externally in AD/LDAP.
-
+**Note that by default no policy is set on a user**. Thus even if they successfully authenticate with AD/LDAP credentials, they have no access to object storage as the default access policy is to deny all access.
 
 ## API Request Parameters
 
