@@ -3,13 +3,13 @@
 ## Introduction
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server uses a separate LDAP service account to lookup user information. The login flow for a user is as follows:
 
-1. User provides their AD/LDAP username and password to the STS API.
-2. MinIO looks up the user's information (specifically the user's Distinguished Name) in the LDAP server.   
-3. On finding the user's info, MinIO verifies the login credentials with the AD/LDAP server.
-4. MinIO optionally queries the AD/LDAP server for a list of groups that the user is a member of.
-5. MinIO then checks if there are any policies [explicitly associated](#managing-usergroup-access-policy) with the user or their groups.
-6. On finding at least one associated policy, MinIO generates temporary credentials for the user storing the list of groups in a cryptographically secure session token. The temporary access key, secret key and session token are returned to the user.
-7. The user can now use these credentials to make requests to the MinIO server.
+- User provides their AD/LDAP username and password to the STS API.
+- MinIO looks up the user's information (specifically the user's Distinguished Name) in the LDAP server.
+- On finding the user's info, MinIO verifies the login credentials with the AD/LDAP server.
+- MinIO optionally queries the AD/LDAP server for a list of groups that the user is a member of.
+- MinIO then checks if there are any policies [explicitly associated](#managing-usergroup-access-policy) with the user or their groups.
+- On finding at least one associated policy, MinIO generates temporary credentials for the user storing the list of groups in a cryptographically secure session token. The temporary access key, secret key and session token are returned to the user.
+- The user can now use these credentials to make requests to the MinIO server.
 
 The administrator will associate IAM access policies with each group and if required with the user too. The MinIO server then evaluates applicable policies on a user (these are the policies associated with the groups along with the policy on the user if any) to check if the request should be allowed or denied.
 
@@ -62,7 +62,7 @@ The server address variable is _required_. TLS is assumed to be on by default.
 
 **MinIO sends LDAP credentials to the LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
 
-If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. 
+If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
 
 ### Lookup-Bind
 
