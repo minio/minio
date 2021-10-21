@@ -47,7 +47,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.9
+	github.com/minio/madmin-go v1.1.10
 	github.com/minio/minio-go/v7 v7.0.15
 	github.com/minio/parquet-go v1.0.0
 	github.com/minio/pkg v1.1.5
@@ -85,8 +85,8 @@ require (
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.1-0.20210329175301-c23abee72d19
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
-	golang.org/x/sys v0.0.0-20211015200801-69063c4bb744
+	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
+	golang.org/x/sys v0.0.0-20211020174200-9d6173849985
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.1 // indirect
 	google.golang.org/api v0.31.0

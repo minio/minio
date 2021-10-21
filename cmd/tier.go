@@ -47,7 +47,7 @@ const (
 	tierConfigFormat  = 1
 	tierConfigVersion = 1
 
-	minioHotTier = "hot-tier"
+	minioHotTier = "STANDARD"
 )
 
 // tierConfigPath refers to remote tier config object name
