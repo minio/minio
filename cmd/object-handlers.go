@@ -3278,9 +3278,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(objInfo, replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.ObjectReplicationType)
 	}
-	if objInfo.ReplicationStatus == replication.Replica {
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		actualSize, _ := objInfo.GetActualSize()
-		globalReplicationStats.UpdateReplicaStat(bucket, actualSize)
+		defer globalReplicationStats.UpdateReplicaStat(bucket, actualSize)
 	}
 
 	// Write success response.

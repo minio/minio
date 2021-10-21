@@ -1497,6 +1497,7 @@ func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 		FailedWorkers: globalAPIConfig.getReplicationFailedWorkers(),
 	})
 	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
+	go globalReplicationStats.loadInitialReplicationMetrics(ctx)
 }
 
 // get Reader from replication target if active-active replication is in place and
