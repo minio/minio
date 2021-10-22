@@ -219,9 +219,14 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Versions += summary.versions
 	e.ObjSizes.add(summary.totalSize)
 
+	if e.ReplicationStats == nil {
+		e.ReplicationStats = &replicationAllStats{}
+	}
+	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
+
 	if summary.replTargetStats != nil {
-		if e.ReplicationStats == nil {
-			e.ReplicationStats = &replicationAllStats{Targets: make(map[string]replicationStats)}
+		if e.ReplicationStats.Targets == nil {
+			e.ReplicationStats.Targets = make(map[string]replicationStats)
 		}
 		for arn, st := range summary.replTargetStats {
 			tgtStat, ok := e.ReplicationStats.Targets[arn]
@@ -243,21 +248,19 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Versions += other.Versions
 	e.Size += other.Size
-	ors := other.ReplicationStats
-	if ors != nil && len(ors.Targets) > 0 {
+	if other.ReplicationStats != nil {
 		if e.ReplicationStats == nil {
 			e.ReplicationStats = &replicationAllStats{Targets: make(map[string]replicationStats)}
 		}
-		if other.ReplicationStats != nil {
-			for arn, stat := range other.ReplicationStats.Targets {
-				st := e.ReplicationStats.Targets[arn]
-				e.ReplicationStats.Targets[arn] = replicationStats{
-					PendingSize:    stat.PendingSize + st.PendingSize,
-					FailedSize:     stat.FailedSize + st.FailedSize,
-					ReplicatedSize: stat.ReplicatedSize + st.ReplicatedSize,
-					PendingCount:   stat.PendingCount + st.PendingCount,
-					FailedCount:    stat.FailedCount + st.FailedCount,
-				}
+		e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
+		for arn, stat := range other.ReplicationStats.Targets {
+			st := e.ReplicationStats.Targets[arn]
+			e.ReplicationStats.Targets[arn] = replicationStats{
+				PendingSize:    stat.PendingSize + st.PendingSize,
+				FailedSize:     stat.FailedSize + st.FailedSize,
+				ReplicatedSize: stat.ReplicatedSize + st.ReplicatedSize,
+				PendingCount:   stat.PendingCount + st.PendingCount,
+				FailedCount:    stat.FailedCount + st.FailedCount,
 			}
 		}
 	}

@@ -1459,6 +1459,12 @@ func getBucketUsageMetrics() MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 
+				metrics = append(metrics, Metric{
+					Description:    getBucketRepReceivedBytesMD(),
+					Value:          float64(stats.ReplicaSize),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
 				if stats.hasReplicationUsage() {
 					for arn, stat := range stats.Stats {
 						metrics = append(metrics, Metric{
@@ -1469,11 +1475,6 @@ func getBucketUsageMetrics() MetricsGroup {
 						metrics = append(metrics, Metric{
 							Description:    getBucketRepSentBytesMD(),
 							Value:          float64(stat.ReplicatedSize),
-							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
-						})
-						metrics = append(metrics, Metric{
-							Description:    getBucketRepReceivedBytesMD(),
-							Value:          float64(stat.ReplicaSize),
 							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
 						})
 						metrics = append(metrics, Metric{
