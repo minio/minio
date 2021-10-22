@@ -141,7 +141,7 @@ func TestServerSuite(t *testing.T) {
 }
 
 // Setting up the test suite.
-// Starting the Test server with temporary FS backend.
+// Starting the Test server with temporary backend.
 func (s *TestSuiteCommon) SetUpSuite(c *check) {
 	if s.secure {
 		cert, key, err := generateTLSCertKey("127.0.0.1")
@@ -158,7 +158,6 @@ func (s *TestSuiteCommon) SetUpSuite(c *check) {
 	s.secretKey = s.testServer.SecretKey
 }
 
-// Called implicitly by "gopkg.in/check.v1" after all tests are run.
 func (s *TestSuiteCommon) TearDownSuite(c *check) {
 	s.testServer.Stop()
 }

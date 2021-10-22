@@ -1,0 +1,469 @@
+// Copyright (c) 2015-2021 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/minio/madmin-go"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/auth"
+)
+
+const (
+	testDefaultTimeout = 10 * time.Second
+)
+
+// API suite container for IAM
+type TestSuiteIAM struct {
+	TestSuiteCommon
+
+	endpoint string
+	adm      *madmin.AdminClient
+	client   *minio.Client
+}
+
+func newTestSuiteIAM(c TestSuiteCommon) *TestSuiteIAM {
+	return &TestSuiteIAM{TestSuiteCommon: c}
+}
+
+func (s *TestSuiteIAM) SetUpSuite(c *check) {
+	s.TestSuiteCommon.SetUpSuite(c)
+
+	var err error
+	// strip url scheme from endpoint
+	s.endpoint = strings.TrimPrefix(s.endPoint, "http://")
+	if s.secure {
+		s.endpoint = strings.TrimPrefix(s.endPoint, "https://")
+	}
+
+	s.adm, err = madmin.New(s.endpoint, s.accessKey, s.secretKey, s.secure)
+	if err != nil {
+		c.Fatalf("error creating admin client: %v", err)
+	}
+	// Set transport, so that TLS is handled correctly.
+	s.adm.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	s.client, err = minio.New(s.endpoint, &minio.Options{
+		Creds:     credentials.NewStaticV4(s.accessKey, s.secretKey, ""),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("error creating minio client: %v", err)
+	}
+}
+
+func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToken string) *minio.Client {
+	client, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     credentials.NewStaticV4(accessKey, secretKey, sessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("error creating user minio client: %s", err)
+	}
+	return client
+}
+
+func runAllIAMTests(suite *TestSuiteIAM, c *check) {
+	suite.SetUpSuite(c)
+	suite.TestUserCreate(c)
+	suite.TestPolicyCreate(c)
+	suite.TestGroupAddRemove(c)
+	suite.TearDownSuite(c)
+}
+
+func TestIAMInternalIDPServerSuite(t *testing.T) {
+	testCases := []*TestSuiteIAM{
+		// Init and run test on FS backend with signature v4.
+		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4}),
+		// Init and run test on FS backend, with tls enabled.
+		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}),
+		// Init and run test on Erasure backend.
+		newTestSuiteIAM(TestSuiteCommon{serverType: "Erasure", signer: signerV4}),
+		// Init and run test on ErasureSet backend.
+		newTestSuiteIAM(TestSuiteCommon{serverType: "ErasureSet", signer: signerV4}),
+	}
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
+			runAllIAMTests(testCase, &check{t, testCase.serverType})
+		})
+	}
+}
+
+func (s *TestSuiteIAM) TestUserCreate(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	// 1. Create a user.
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err := s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	// 2. Check new user appears in listing
+	usersMap, err := s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("error listing: %v", err)
+	}
+	v, ok := usersMap[accessKey]
+	if !ok {
+		c.Fatalf("user not listed: %s", accessKey)
+	}
+	c.Assert(v.Status, madmin.AccountEnabled)
+
+	// 3. Associate policy and check that user can access
+	err = s.adm.SetPolicy(ctx, "readwrite", accessKey, false)
+	if err != nil {
+		c.Fatalf("unable to set policy: %v", err)
+	}
+	client := s.getUserClient(c, accessKey, secretKey, "")
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("user could not create bucket: %v", err)
+	}
+
+	// 4. Check that user can be disabled and verify it.
+	err = s.adm.SetUserStatus(ctx, accessKey, madmin.AccountDisabled)
+	if err != nil {
+		c.Fatalf("could not set user account to disabled")
+	}
+	usersMap, err = s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("error listing: %v", err)
+	}
+	v, ok = usersMap[accessKey]
+	if !ok {
+		c.Fatalf("user was not listed after disabling: %s", accessKey)
+	}
+	c.Assert(v.Status, madmin.AccountDisabled)
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err == nil {
+		c.Fatalf("user account was not disabled!")
+	}
+
+	// 5. Check that user can be deleted and verify it.
+	err = s.adm.RemoveUser(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("user could not be deleted: %v", err)
+	}
+	usersMap, err = s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("error listing: %v", err)
+	}
+	_, ok = usersMap[accessKey]
+	if ok {
+		c.Fatalf("user not deleted: %s", accessKey)
+	}
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err == nil {
+		c.Fatalf("user account was not deleted!")
+	}
+}
+
+func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// 1. Create a policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	// 2. Verify that policy json is validated by server
+	invalidPolicyBytes := policyBytes[:len(policyBytes)-1]
+	err = s.adm.AddCannedPolicy(ctx, policy+"invalid", invalidPolicyBytes)
+	if err == nil {
+		c.Fatalf("invalid policy creation success")
+	}
+
+	// 3. Create a user, associate policy and verify access
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+	// 3.1 check that user does not have any access to the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	res := uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok := <-res
+	if !ok {
+		c.Fatalf("list channel was closed!")
+	}
+	if v.Err == nil {
+		c.Fatalf("User appears to be able to list!")
+	}
+	// 3.2 associate policy to user
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+	// 3.3 check user has access to bucket
+	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok = <-res
+	if ok {
+		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
+	}
+	// 3.4 Check that user cannot exceed their permissions
+	err = uClient.RemoveBucket(ctx, bucket)
+	if err == nil {
+		c.Fatalf("bucket was deleted!")
+	}
+
+	// 4. Verify the policy appears in listing
+	ps, err := s.adm.ListCannedPolicies(ctx)
+	if err != nil {
+		c.Fatalf("policy list err: %v", err)
+	}
+	_, ok = ps[policy]
+	if !ok {
+		c.Fatalf("policy was missing!")
+	}
+
+	// 5. Check that policy can be deleted.
+	err = s.adm.RemoveCannedPolicy(ctx, policy)
+	if err != nil {
+		c.Fatalf("policy delete err: %v", err)
+	}
+}
+
+func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	// 1. Add user to a new group
+	group := "mygroup"
+	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
+		Group:   group,
+		Members: []string{accessKey},
+	})
+	if err != nil {
+		c.Fatalf("Unable to add user to group: %v", err)
+	}
+
+	// 2. Check that user has no access
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	res := uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok := <-res
+	if !ok {
+		c.Fatalf("list channel was closed!")
+	}
+	if v.Err == nil {
+		c.Fatalf("User appears to be able to list!")
+	}
+
+	// 3. Associate policy to group and check user got access.
+	err = s.adm.SetPolicy(ctx, policy, group, true)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+	// 3.1 check user has access to bucket
+	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok = <-res
+	if ok {
+		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
+	}
+	// 3.2 Check that user cannot exceed their permissions
+	err = uClient.RemoveBucket(ctx, bucket)
+	if err == nil {
+		c.Fatalf("bucket was deleted!")
+	}
+
+	// 4. List groups and members and verify
+	groups, err := s.adm.ListGroups(ctx)
+	if err != nil {
+		c.Fatalf("group list err: %v", err)
+	}
+	if !set.CreateStringSet(groups...).Contains(group) {
+		c.Fatalf("created group not present!")
+	}
+	groupInfo, err := s.adm.GetGroupDescription(ctx, group)
+	if err != nil {
+		c.Fatalf("group desc err: %v", err)
+	}
+	c.Assert(groupInfo.Name, group)
+	c.Assert(set.CreateStringSet(groupInfo.Members...), set.CreateStringSet(accessKey))
+	c.Assert(groupInfo.Policy, policy)
+	c.Assert(groupInfo.Status, string(madmin.GroupEnabled))
+
+	// 5. Disable/enable the group and verify that user access is revoked/restored.
+	err = s.adm.SetGroupStatus(ctx, group, madmin.GroupDisabled)
+	if err != nil {
+		c.Fatalf("group set status err: %v", err)
+	}
+	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	if err != nil {
+		c.Fatalf("group desc err: %v", err)
+	}
+	c.Assert(groupInfo.Status, string(madmin.GroupDisabled))
+	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok = <-res
+	if !ok {
+		c.Fatalf("list channel was closed!")
+	}
+	if v.Err == nil {
+		c.Fatalf("User appears to be able to list!")
+	}
+	err = s.adm.SetGroupStatus(ctx, group, madmin.GroupEnabled)
+	if err != nil {
+		c.Fatalf("group set status err: %v", err)
+	}
+	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	if err != nil {
+		c.Fatalf("group desc err: %v", err)
+	}
+	c.Assert(groupInfo.Status, string(madmin.GroupEnabled))
+	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok = <-res
+	if ok {
+		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
+	}
+
+	// 6. Verify that group cannot be deleted with users.
+	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
+		Group:    group,
+		IsRemove: true,
+	})
+	if err == nil {
+		c.Fatalf("group was removed!")
+	}
+	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	if err != nil {
+		c.Fatalf("group desc err: %v", err)
+	}
+	c.Assert(groupInfo.Name, group)
+
+	// 7. Remove user from group and verify access is revoked.
+	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
+		Group:    group,
+		Members:  []string{accessKey},
+		IsRemove: true,
+	})
+	if err != nil {
+		c.Fatalf("group update err: %v", err)
+	}
+	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok = <-res
+	if !ok {
+		c.Fatalf("list channel was closed!")
+	}
+	if v.Err == nil {
+		c.Fatalf("User appears to be able to list!")
+	}
+	// 7.1 verify group still exists
+	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	if err != nil {
+		c.Fatalf("group desc err: %v", err)
+	}
+	c.Assert(groupInfo.Name, group)
+	c.Assert(len(groupInfo.Members), 0)
+
+	// 8. Delete group and verify
+	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
+		Group:    group,
+		IsRemove: true,
+	})
+	if err != nil {
+		c.Fatalf("group update err: %v", err)
+	}
+	groups, err = s.adm.ListGroups(ctx)
+	if err != nil {
+		c.Fatalf("group list err: %v", err)
+	}
+	if set.CreateStringSet(groups...).Contains(group) {
+		c.Fatalf("created group still present!")
+	}
+	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	if err == nil {
+		c.Fatalf("group appears to exist")
+	}
+}
+
+func mustGenerateCredentials(c *check) (string, string) {
+	ak, sk, err := auth.GenerateCredentials()
+	if err != nil {
+		c.Fatalf("unable to generate credentials: %v", err)
+	}
+	return ak, sk
+}
