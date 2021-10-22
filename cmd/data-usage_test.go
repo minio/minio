@@ -615,6 +615,11 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	}
 	for wkey, wval := range want.Cache {
 		gotv := got.Cache[wkey]
+		// FIXME: the following block is needed because msgp:tuple will
+		// deserializes a nil map to a initialized empty map
+		if len(gotv.ReplicationStats.Targets) == 0 {
+			gotv.ReplicationStats.Targets = nil
+		}
 		if !equalAsJSON(gotv, wval) {
 			t.Errorf("deserialize mismatch, key %v\nwant: %#v\ngot:  %#v", wkey, wval, gotv)
 		}
