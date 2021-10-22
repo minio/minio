@@ -90,7 +90,7 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 		if atomic.LoadUint32(&srv.inShutdown) != 0 {
 			// To indicate disable keep-alives
 			w.Header().Set("Connection", "close")
-			w.WriteHeader(http.StatusForbidden)
+			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(http.ErrServerClosed.Error()))
 			w.(http.Flusher).Flush()
 			return
