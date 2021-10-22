@@ -442,8 +442,8 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	for _, bucketStat := range bucketStats {
 		totReplicaSize += bucketStat.ReplicationStats.ReplicaSize
 		for arn, stat := range bucketStat.ReplicationStats.Stats {
-			oldst, ok := stats[arn]
-			if !ok {
+			oldst := stats[arn]
+			if oldst == nil {
 				oldst = &BucketReplicationStat{}
 			}
 			stats[arn] = &BucketReplicationStat{
@@ -459,8 +459,8 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	if usageStat.Stats != nil {
 		totReplicaSize += usageStat.ReplicaSize
 		for arn, stat := range usageStat.Stats {
-			st, ok := stats[arn]
-			if !ok {
+			st := stats[arn]
+			if st == nil {
 				st = &BucketReplicationStat{
 					ReplicatedSize: stat.ReplicatedSize,
 					FailedSize:     stat.FailedSize,
@@ -484,13 +484,13 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	// normalize computed real time stats with latest usage stat
 	for arn, tgtstat := range stats {
 		st := BucketReplicationStat{}
-		bu, ok := usageStat.Stats[arn]
+		bu, ok := u.ReplicationInfo[arn]
 		if !ok {
-			bu = &BucketReplicationStat{}
+			bu = BucketTargetUsageInfo{}
 		}
 		// use in memory replication stats if it is ahead of usage info.
-		st.ReplicatedSize = bu.ReplicatedSize
-		if tgtstat.ReplicatedSize >= bu.ReplicatedSize {
+		st.ReplicatedSize = int64(bu.ReplicatedSize)
+		if tgtstat.ReplicatedSize >= int64(bu.ReplicatedSize) {
 			st.ReplicatedSize = tgtstat.ReplicatedSize
 		}
 		s.ReplicatedSize += st.ReplicatedSize
