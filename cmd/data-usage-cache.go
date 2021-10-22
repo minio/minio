@@ -151,8 +151,13 @@ func (rs replicationStats) Empty() bool {
 		rs.FailedCount == 0
 }
 
-//msgp:tuple replicationAllStats
 type replicationAllStats struct {
+	Targets     map[string]replicationStats `msg:"t,omitempty"`
+	ReplicaSize uint64                      `msg:"r,omitempty"`
+}
+
+//msgp:tuple replicationAllStatsV1
+type replicationAllStatsV1 struct {
 	Targets     map[string]replicationStats
 	ReplicaSize uint64 `msg:"ReplicaSize,omitempty"`
 }
@@ -212,7 +217,7 @@ type dataUsageEntryV6 struct {
 	Objects          uint64
 	Versions         uint64 // Versions that are not delete markers.
 	ObjSizes         sizeHistogram
-	ReplicationStats *replicationAllStats
+	ReplicationStats *replicationAllStatsV1
 	Compacted        bool
 }
 
@@ -1208,13 +1213,20 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
+			var replicationStats *replicationAllStats
+			if v.ReplicationStats != nil {
+				replicationStats = &replicationAllStats{
+					Targets:     v.ReplicationStats.Targets,
+					ReplicaSize: v.ReplicationStats.ReplicaSize,
+				}
+			}
 			due := dataUsageEntry{
 				Children:         v.Children,
 				Size:             v.Size,
 				Objects:          v.Objects,
 				Versions:         v.Versions,
 				ObjSizes:         v.ObjSizes,
-				ReplicationStats: v.ReplicationStats,
+				ReplicationStats: replicationStats,
 				Compacted:        v.Compacted,
 			}
 			d.Cache[k] = due
