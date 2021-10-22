@@ -82,48 +82,20 @@ func (ats *allTierStats) merge(other *allTierStats) {
 	}
 }
 
-func (ats *allTierStats) adminStats() []madmin.TierInfo {
+func (ats *allTierStats) adminStats(stats map[string]madmin.TierStats) map[string]madmin.TierStats {
 	if ats == nil {
-		return nil
+		return stats
 	}
-	ts := make(map[string]madmin.TierStats)
+
+	// Update stats for tiers as they become available.
 	for tier, st := range ats.Tiers {
-		ts[tier] = madmin.TierStats{
+		stats[tier] = madmin.TierStats{
 			TotalSize:   st.TotalSize,
 			NumVersions: st.NumVersions,
 			NumObjects:  st.NumObjects,
 		}
 	}
-	// To include hot-tier in tier-stats when there are no objects remaining
-	// in the hot-tier.
-	if _, ok := ts[minioHotTier]; !ok {
-		ts[minioHotTier] = madmin.TierStats{}
-	}
-	infos := make([]madmin.TierInfo, 0, len(ts)+1)
-	for tier, st := range ts {
-		var tierType string
-		if tier == minioHotTier {
-			tierType = "internal"
-		} else {
-			tierType = globalTierConfigMgr.Tiers[tier].Type.String()
-		}
-		infos = append(infos, madmin.TierInfo{
-			Name:  tier,
-			Type:  tierType,
-			Stats: st,
-		})
-	}
-
-	sort.Slice(infos, func(i, j int) bool {
-		if infos[i].Type == "internal" {
-			return true
-		}
-		if infos[j].Type == "internal" {
-			return false
-		}
-		return infos[i].Name < infos[j].Name
-	})
-	return infos
+	return stats
 }
 
 // tierStats holds per-tier stats of a remote tier.

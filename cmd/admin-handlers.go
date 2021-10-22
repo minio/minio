@@ -1398,6 +1398,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
 	usage := madmin.Usage{}
+
 	objectAPI := newObjectLayerFn()
 	if objectAPI != nil {
 		mode = madmin.ItemOnline

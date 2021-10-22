@@ -60,12 +60,6 @@ var (
 		Message:    "Invalid remote tier credentials",
 		StatusCode: http.StatusBadRequest,
 	}
-	// error returned when no remote tier is configured.
-	errTierNoConfigFound = AdminError{
-		Code:       "XMinioAdminTierNoConfigFound",
-		Message:    "No remote tier configuration found",
-		StatusCode: http.StatusNotFound,
-	}
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {
@@ -220,17 +214,7 @@ func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if globalTierConfigMgr.Empty() {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTierNoConfigFound), r.URL)
-		return
-	}
-
-	var infos []madmin.TierInfo
-	if dui.TierStats != nil {
-		infos = dui.TierStats.adminStats()
-	}
-
-	data, err := json.Marshal(infos)
+	data, err := json.Marshal(dui.tierStats())
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

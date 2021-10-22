@@ -18,7 +18,10 @@
 package cmd
 
 import (
+	"sort"
 	"time"
+
+	"github.com/minio/madmin-go"
 )
 
 // BucketTargetUsageInfo - bucket target usage info provides
@@ -86,4 +89,45 @@ type DataUsageInfo struct {
 
 	// TierStats contains per-tier stats of all configured remote tiers
 	TierStats *allTierStats `json:"tierStats,omitempty"`
+}
+
+func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
+	if globalTierConfigMgr.Empty() {
+		return nil
+	}
+
+	ts := make(map[string]madmin.TierStats)
+	// Add configured remote tiers
+	for tier := range globalTierConfigMgr.Tiers {
+		ts[tier] = madmin.TierStats{}
+	}
+	// Add STANDARD (hot-tier)
+	ts[minioHotTier] = madmin.TierStats{}
+
+	ts = dui.TierStats.adminStats(ts)
+	infos := make([]madmin.TierInfo, 0, len(ts))
+	for tier, st := range ts {
+		var tierType string
+		if tier == minioHotTier {
+			tierType = "internal"
+		} else {
+			tierType = globalTierConfigMgr.Tiers[tier].Type.String()
+		}
+		infos = append(infos, madmin.TierInfo{
+			Name:  tier,
+			Type:  tierType,
+			Stats: st,
+		})
+	}
+
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].Type == "internal" {
+			return true
+		}
+		if infos[j].Type == "internal" {
+			return false
+		}
+		return infos[i].Name < infos[j].Name
+	})
+	return infos
 }
