@@ -87,7 +87,6 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 	defer config.Unlock()
 
 	// check if tier name is in all caps
-
 	tierName := tier.Name
 	if tierName != strings.ToUpper(tierName) {
 		return errTierNameNotUppercase
