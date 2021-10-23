@@ -456,8 +456,8 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 
 	// add initial usage stat to cluster stats
 	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	totReplicaSize += usageStat.ReplicaSize
 	if usageStat.Stats != nil {
-		totReplicaSize += usageStat.ReplicaSize
 		for arn, stat := range usageStat.Stats {
 			st := stats[arn]
 			if st == nil {
