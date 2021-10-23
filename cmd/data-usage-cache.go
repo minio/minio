@@ -219,20 +219,26 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Versions += summary.versions
 	e.ObjSizes.add(summary.totalSize)
 
-	if summary.replTargetStats != nil {
-		if e.ReplicationStats == nil {
-			e.ReplicationStats = &replicationAllStats{Targets: make(map[string]replicationStats)}
+	if e.ReplicationStats == nil {
+		e.ReplicationStats = &replicationAllStats{
+			Targets: make(map[string]replicationStats),
 		}
+	} else if e.ReplicationStats.Targets == nil {
+		e.ReplicationStats.Targets = make(map[string]replicationStats)
+	}
+	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
+
+	if summary.replTargetStats != nil {
 		for arn, st := range summary.replTargetStats {
 			tgtStat, ok := e.ReplicationStats.Targets[arn]
 			if !ok {
 				tgtStat = replicationStats{}
 			}
-			tgtStat.PendingSize = tgtStat.PendingSize + uint64(st.pendingSize)
-			tgtStat.FailedSize = tgtStat.FailedSize + uint64(st.failedSize)
-			tgtStat.ReplicatedSize = tgtStat.ReplicatedSize + uint64(st.replicatedSize)
-			tgtStat.FailedCount = tgtStat.FailedCount + st.failedCount
-			tgtStat.PendingCount = tgtStat.PendingCount + st.pendingCount
+			tgtStat.PendingSize += uint64(st.pendingSize)
+			tgtStat.FailedSize += uint64(st.failedSize)
+			tgtStat.ReplicatedSize += uint64(st.replicatedSize)
+			tgtStat.FailedCount += st.failedCount
+			tgtStat.PendingCount += st.pendingCount
 			e.ReplicationStats.Targets[arn] = tgtStat
 		}
 	}
@@ -243,21 +249,21 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Versions += other.Versions
 	e.Size += other.Size
-	ors := other.ReplicationStats
-	if ors != nil && len(ors.Targets) > 0 {
+	if other.ReplicationStats != nil {
 		if e.ReplicationStats == nil {
 			e.ReplicationStats = &replicationAllStats{Targets: make(map[string]replicationStats)}
+		} else if e.ReplicationStats.Targets == nil {
+			e.ReplicationStats.Targets = make(map[string]replicationStats)
 		}
-		if other.ReplicationStats != nil {
-			for arn, stat := range other.ReplicationStats.Targets {
-				st := e.ReplicationStats.Targets[arn]
-				e.ReplicationStats.Targets[arn] = replicationStats{
-					PendingSize:    stat.PendingSize + st.PendingSize,
-					FailedSize:     stat.FailedSize + st.FailedSize,
-					ReplicatedSize: stat.ReplicatedSize + st.ReplicatedSize,
-					PendingCount:   stat.PendingCount + st.PendingCount,
-					FailedCount:    stat.FailedCount + st.FailedCount,
-				}
+		e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
+		for arn, stat := range other.ReplicationStats.Targets {
+			st := e.ReplicationStats.Targets[arn]
+			e.ReplicationStats.Targets[arn] = replicationStats{
+				PendingSize:    stat.PendingSize + st.PendingSize,
+				FailedSize:     stat.FailedSize + st.FailedSize,
+				ReplicatedSize: stat.ReplicatedSize + st.ReplicatedSize,
+				PendingCount:   stat.PendingCount + st.PendingCount,
+				FailedCount:    stat.FailedCount + st.FailedCount,
 			}
 		}
 	}
