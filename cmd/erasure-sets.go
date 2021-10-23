@@ -415,9 +415,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			if err != nil {
 				continue
 			}
-			if m != i || n != j {
-				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d): %s(%s)", poolIdx, m, n, i, j, disk, diskID)
-			}
 			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
 			s.erasureDisks[m][n] = disk
