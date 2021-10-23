@@ -92,6 +92,7 @@ func runAllIAMTests(suite *TestSuiteIAM, c *check) {
 	suite.TestUserCreate(c)
 	suite.TestPolicyCreate(c)
 	suite.TestGroupAddRemove(c)
+	suite.TestServiceAccountOps(c)
 	suite.TearDownSuite(c)
 }
 
@@ -232,25 +233,15 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 	}
 	// 3.1 check that user does not have any access to the bucket
 	uClient := s.getUserClient(c, accessKey, secretKey, "")
-	res := uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok := <-res
-	if !ok {
-		c.Fatalf("list channel was closed!")
-	}
-	if v.Err == nil {
-		c.Fatalf("User appears to be able to list!")
-	}
+	c.mustNotListObjects(ctx, uClient, bucket)
+
 	// 3.2 associate policy to user
 	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
 	if err != nil {
 		c.Fatalf("Unable to set policy: %v", err)
 	}
 	// 3.3 check user has access to bucket
-	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok = <-res
-	if ok {
-		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
-	}
+	c.mustListObjects(ctx, uClient, bucket)
 	// 3.4 Check that user cannot exceed their permissions
 	err = uClient.RemoveBucket(ctx, bucket)
 	if err == nil {
@@ -262,7 +253,7 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 	if err != nil {
 		c.Fatalf("policy list err: %v", err)
 	}
-	_, ok = ps[policy]
+	_, ok := ps[policy]
 	if !ok {
 		c.Fatalf("policy was missing!")
 	}
@@ -324,14 +315,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 
 	// 2. Check that user has no access
 	uClient := s.getUserClient(c, accessKey, secretKey, "")
-	res := uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok := <-res
-	if !ok {
-		c.Fatalf("list channel was closed!")
-	}
-	if v.Err == nil {
-		c.Fatalf("User appears to be able to list!")
-	}
+	c.mustNotListObjects(ctx, uClient, bucket)
 
 	// 3. Associate policy to group and check user got access.
 	err = s.adm.SetPolicy(ctx, policy, group, true)
@@ -339,11 +323,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 		c.Fatalf("Unable to set policy: %v", err)
 	}
 	// 3.1 check user has access to bucket
-	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok = <-res
-	if ok {
-		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
-	}
+	c.mustListObjects(ctx, uClient, bucket)
 	// 3.2 Check that user cannot exceed their permissions
 	err = uClient.RemoveBucket(ctx, bucket)
 	if err == nil {
@@ -377,14 +357,8 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 		c.Fatalf("group desc err: %v", err)
 	}
 	c.Assert(groupInfo.Status, string(madmin.GroupDisabled))
-	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok = <-res
-	if !ok {
-		c.Fatalf("list channel was closed!")
-	}
-	if v.Err == nil {
-		c.Fatalf("User appears to be able to list!")
-	}
+	c.mustNotListObjects(ctx, uClient, bucket)
+
 	err = s.adm.SetGroupStatus(ctx, group, madmin.GroupEnabled)
 	if err != nil {
 		c.Fatalf("group set status err: %v", err)
@@ -394,11 +368,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 		c.Fatalf("group desc err: %v", err)
 	}
 	c.Assert(groupInfo.Status, string(madmin.GroupEnabled))
-	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok = <-res
-	if ok {
-		c.Fatalf("list channel was not closed - unexpected error or objects in listing: %v", v)
-	}
+	c.mustListObjects(ctx, uClient, bucket)
 
 	// 6. Verify that group cannot be deleted with users.
 	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
@@ -423,14 +393,8 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	if err != nil {
 		c.Fatalf("group update err: %v", err)
 	}
-	res = uClient.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
-	v, ok = <-res
-	if !ok {
-		c.Fatalf("list channel was closed!")
-	}
-	if v.Err == nil {
-		c.Fatalf("User appears to be able to list!")
-	}
+	c.mustNotListObjects(ctx, uClient, bucket)
+
 	// 7.1 verify group still exists
 	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
 	if err != nil {
@@ -457,6 +421,213 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
 	if err == nil {
 		c.Fatalf("group appears to exist")
+	}
+}
+
+func (s *TestSuiteIAM) TestServiceAccountOps(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// 1. Create a service account for the user
+	svcAK, svcSK := mustGenerateCredentials(c)
+	cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+		AccessKey:  svcAK,
+		SecretKey:  svcSK,
+	})
+	if err != nil {
+		c.Fatalf("Unable to create svc acc: %v", err)
+	}
+	// 1.2 Check that svc account appears in listing
+	listResp, err := s.adm.ListServiceAccounts(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("unable to list svc accounts: %v", err)
+	}
+	if !set.CreateStringSet(listResp.Accounts...).Contains(svcAK) {
+		c.Fatalf("created service account did not appear in listing!")
+	}
+	// 1.3 Check that svc account info can be queried
+	infoResp, err := s.adm.InfoServiceAccount(ctx, svcAK)
+	if err != nil {
+		c.Fatalf("unable to get svc acc info: %v", err)
+	}
+	c.Assert(infoResp.ParentUser, accessKey)
+	c.Assert(infoResp.AccountStatus, "on")
+	c.Assert(infoResp.ImpliedPolicy, true)
+
+	// 2. Check that svc account can access the bucket
+	{
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustListObjects(ctx, svcClient, bucket)
+	}
+
+	// 3. Check that svc account can restrict the policy, and that the
+	// session policy can be updated.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:     policyBytes,
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustNotListObjects(ctx, svcClient, bucket)
+
+		newPolicyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewPolicy: newPolicyBytes,
+		})
+		if err != nil {
+			c.Fatalf("unable to update session policy for svc acc: %v", err)
+		}
+		c.mustListObjects(ctx, svcClient, bucket)
+	}
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustListObjects(ctx, svcClient, bucket)
+
+		_, svcSK2 := mustGenerateCredentials(c)
+		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewSecretKey: svcSK2,
+		})
+		if err != nil {
+			c.Fatalf("unable to update secret key for svc acc: %v", err)
+		}
+		// old creds should not work:
+		c.mustNotListObjects(ctx, svcClient, bucket)
+		// new creds work:
+		svcClient2 := s.getUserClient(c, cr.AccessKey, svcSK2, "")
+		c.mustListObjects(ctx, svcClient2, bucket)
+
+		// update status to disabled
+		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewStatus: "off",
+		})
+		if err != nil {
+			c.Fatalf("unable to update secret key for svc acc: %v", err)
+		}
+		c.mustNotListObjects(ctx, svcClient2, bucket)
+	}
+
+	// 5. Check that service account can be deleted.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustListObjects(ctx, svcClient, bucket)
+
+		err = s.adm.DeleteServiceAccount(ctx, svcAK)
+		if err != nil {
+			c.Fatalf("unable to delete svc acc: %v", err)
+		}
+		c.mustNotListObjects(ctx, svcClient, bucket)
+	}
+}
+
+func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bucket string) {
+	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok := <-res
+	if !ok || v.Err == nil {
+		c.Fatalf("user was able to list unexpectedly!")
+	}
+}
+
+func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucket string) {
+	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
+	v, ok := <-res
+	if ok && v.Err != nil {
+		c.Fatalf("user was unable to list unexpectedly!")
 	}
 }
 
