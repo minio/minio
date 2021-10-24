@@ -46,6 +46,8 @@ const (
 	tierConfigFile    = "tier-config.bin"
 	tierConfigFormat  = 1
 	tierConfigVersion = 1
+
+	minioHotTier = "STANDARD"
 )
 
 // tierConfigPath refers to remote tier config object name
@@ -85,7 +87,6 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 	defer config.Unlock()
 
 	// check if tier name is in all caps
-
 	tierName := tier.Name
 	if tierName != strings.ToUpper(tierName) {
 		return errTierNameNotUppercase

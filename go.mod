@@ -25,6 +25,7 @@ require (
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.12.0
 	github.com/go-ldap/ldap/v3 v3.2.4
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/loads v0.20.2
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-jwt/jwt v3.2.1+incompatible
@@ -32,9 +33,9 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.8.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
-	github.com/json-iterator/go v1.1.11
+	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.13.5
-	github.com/klauspost/cpuid/v2 v2.0.6
+	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.13
@@ -72,9 +73,9 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/rs/dnscache v0.0.0-20210201191234-295bba877686
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil/v3 v3.21.7
+	github.com/shirou/gopsutil/v3 v3.21.9
 	github.com/streadway/amqp v1.0.0
-	github.com/tinylib/msgp v1.1.6-0.20210521143832-0becd170c402
+	github.com/tinylib/msgp v1.1.6
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/yargevad/filepathx v1.0.0
@@ -83,10 +84,12 @@ require (
 	go.opencensus.io v0.22.5 // indirect
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.1-0.20210329175301-c23abee72d19
-	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
-	golang.org/x/sys v0.0.0-20210819135213-f52c844e1c1c
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
+	golang.org/x/sys v0.0.0-20211020174200-9d6173849985
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.1 // indirect
 	google.golang.org/api v0.31.0
+	gopkg.in/ini.v1 v1.63.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 )

@@ -463,6 +463,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 		sizeS := sizeSummary{}
+		var noTiers bool
+		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
+			sizeS.tiers = make(map[string]tierStats)
+		}
 		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
 		for _, version := range fivs.Versions {
 			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
@@ -472,6 +476,21 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				sizeS.versions++
 			}
 			sizeS.totalSize += sz
+
+			// Skip tier accounting if,
+			// 1. no tiers configured
+			// 2. object version is a delete-marker or a free-version
+			//    tracking deleted transitioned objects
+			switch {
+			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
+
+				continue
+			}
+			tier := minioHotTier
+			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
+				tier = oi.TransitionedObject.Tier
+			}
+			sizeS.tiers[tier] = sizeS.tiers[tier].add(oi.tierStats())
 		}
 		return sizeS, nil
 	})

@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -60,6 +61,12 @@ var (
 		Message:    "Invalid remote tier credentials",
 		StatusCode: http.StatusBadRequest,
 	}
+	// error returned when reserved internal names are used.
+	errTierReservedName = AdminError{
+		Code:       "XMinioAdminTierReserved",
+		Message:    "Cannot use reserved tier name",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +99,12 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Disallow remote tiers with internal storage class names
+	switch cfg.Name {
+	case storageclass.STANDARD, storageclass.RRS:
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTierReservedName), r.URL)
+		return
+	}
 	// Refresh from the disk in case we had missed notifications about edits from peers.
 	if err := globalTierConfigMgr.Reload(ctx, objAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -190,4 +203,34 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 	globalNotificationSys.LoadTransitionTierConfig(ctx)
 
 	writeSuccessNoContent(w)
+}
+
+func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "TierStats")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	dui, err := loadDataUsageFromBackend(ctx, objAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(dui.tierStats())
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, data)
 }

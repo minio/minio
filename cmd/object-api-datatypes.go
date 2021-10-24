@@ -225,6 +225,18 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 	return cinfo
 }
 
+func (o ObjectInfo) tierStats() tierStats {
+	ts := tierStats{
+		TotalSize:   uint64(o.Size),
+		NumVersions: 1,
+	}
+	// the current version of an object is accounted towards objects count
+	if o.IsLatest {
+		ts.NumObjects = 1
+	}
+	return ts
+}
+
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
 	ObjectInfo
