@@ -19,9 +19,44 @@ package cmd
 
 import (
 	"sync/atomic"
+	"time"
 )
 
 //go:generate msgp -file $GOFILE
+
+// ReplicationLatency holds information of bucket operations latency, such us uploads
+type ReplicationLatency struct {
+	// Single & Multipart PUTs latency
+	UploadHistogram LastMinuteLatencies
+}
+
+// Merge two replication latency into a new one, thread-unsafe
+func (rl ReplicationLatency) merge(other ReplicationLatency) (newReplLatency ReplicationLatency) {
+	newReplLatency.UploadHistogram = rl.UploadHistogram.Merge(other.UploadHistogram)
+	return
+}
+
+// Get upload latency, thread-unsafe
+func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
+	ret = make(map[string]uint64)
+	avg := rl.UploadHistogram.GetAvg()
+	for k, v := range avg {
+		ret[sizeTagToString(k)] = v.avg()
+	}
+	return
+}
+
+// Update replication upload latency with a new value
+func (rl *ReplicationLatency) update(size int64, duration time.Duration) {
+	rl.UploadHistogram.Add(size, duration)
+}
+
+// Safe clone replication latency
+func (rl ReplicationLatency) clone() ReplicationLatency {
+	return ReplicationLatency{
+		UploadHistogram: rl.UploadHistogram.Clone(),
+	}
+}
 
 // BucketStats bucket statistics
 type BucketStats struct {
@@ -65,6 +100,7 @@ func (brs BucketReplicationStats) Clone() BucketReplicationStats {
 			FailedCount:    atomic.LoadInt64(&st.FailedCount),
 			PendingSize:    atomic.LoadInt64(&st.PendingSize),
 			PendingCount:   atomic.LoadInt64(&st.PendingCount),
+			Latency:        st.Latency.clone(),
 		}
 	}
 	// update total counts across targets
@@ -93,6 +129,8 @@ type BucketReplicationStat struct {
 	PendingCount int64 `json:"pendingReplicationCount"`
 	// Total number of failed operations including metadata updates
 	FailedCount int64 `json:"failedReplicationCount"`
+	// Replication latency information
+	Latency ReplicationLatency `json:"replicationLatency"`
 }
 
 func (bs *BucketReplicationStat) hasReplicationUsage() bool {

@@ -60,6 +60,35 @@ func (z *BucketReplicationStat) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "FailedCount")
 				return
 			}
+		case "Latency":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Latency")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Latency")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "UploadHistogram":
+					err = z.Latency.UploadHistogram.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Latency", "UploadHistogram")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Latency")
+						return
+					}
+				}
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -73,9 +102,9 @@ func (z *BucketReplicationStat) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketReplicationStat) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 7
 	// write "PendingSize"
-	err = en.Append(0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	err = en.Append(0x87, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
 	if err != nil {
 		return
 	}
@@ -134,15 +163,31 @@ func (z *BucketReplicationStat) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "FailedCount")
 		return
 	}
+	// write "Latency"
+	err = en.Append(0xa7, 0x4c, 0x61, 0x74, 0x65, 0x6e, 0x63, 0x79)
+	if err != nil {
+		return
+	}
+	// map header, size 1
+	// write "UploadHistogram"
+	err = en.Append(0x81, 0xaf, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x48, 0x69, 0x73, 0x74, 0x6f, 0x67, 0x72, 0x61, 0x6d)
+	if err != nil {
+		return
+	}
+	err = z.Latency.UploadHistogram.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Latency", "UploadHistogram")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketReplicationStat) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 7
 	// string "PendingSize"
-	o = append(o, 0x86, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	o = append(o, 0x87, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
 	o = msgp.AppendInt64(o, z.PendingSize)
 	// string "ReplicatedSize"
 	o = append(o, 0xae, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
@@ -159,6 +204,16 @@ func (z *BucketReplicationStat) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "FailedCount"
 	o = append(o, 0xab, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74)
 	o = msgp.AppendInt64(o, z.FailedCount)
+	// string "Latency"
+	o = append(o, 0xa7, 0x4c, 0x61, 0x74, 0x65, 0x6e, 0x63, 0x79)
+	// map header, size 1
+	// string "UploadHistogram"
+	o = append(o, 0x81, 0xaf, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x48, 0x69, 0x73, 0x74, 0x6f, 0x67, 0x72, 0x61, 0x6d)
+	o, err = z.Latency.UploadHistogram.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Latency", "UploadHistogram")
+		return
+	}
 	return
 }
 
@@ -216,6 +271,35 @@ func (z *BucketReplicationStat) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "FailedCount")
 				return
 			}
+		case "Latency":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Latency")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Latency")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "UploadHistogram":
+					bts, err = z.Latency.UploadHistogram.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Latency", "UploadHistogram")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Latency")
+						return
+					}
+				}
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -230,7 +314,7 @@ func (z *BucketReplicationStat) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketReplicationStat) Msgsize() (s int) {
-	s = 1 + 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size
+	s = 1 + 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size + 8 + 1 + 16 + z.Latency.UploadHistogram.Msgsize()
 	return
 }
 
@@ -705,5 +789,112 @@ func (z *BucketStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketStats) Msgsize() (s int) {
 	s = 1 + 17 + z.ReplicationStats.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *ReplicationLatency) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "UploadHistogram":
+			err = z.UploadHistogram.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "UploadHistogram")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *ReplicationLatency) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "UploadHistogram"
+	err = en.Append(0x81, 0xaf, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x48, 0x69, 0x73, 0x74, 0x6f, 0x67, 0x72, 0x61, 0x6d)
+	if err != nil {
+		return
+	}
+	err = z.UploadHistogram.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "UploadHistogram")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *ReplicationLatency) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "UploadHistogram"
+	o = append(o, 0x81, 0xaf, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x48, 0x69, 0x73, 0x74, 0x6f, 0x67, 0x72, 0x61, 0x6d)
+	o, err = z.UploadHistogram.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "UploadHistogram")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ReplicationLatency) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "UploadHistogram":
+			bts, err = z.UploadHistogram.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UploadHistogram")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *ReplicationLatency) Msgsize() (s int) {
+	s = 1 + 16 + z.UploadHistogram.Msgsize()
 	return
 }

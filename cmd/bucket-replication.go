@@ -433,7 +433,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	// to decrement pending count later.
 	for _, rinfo := range rinfos.Targets {
 		if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
-			globalReplicationStats.Update(dobj.Bucket, rinfo.Arn, 0, replicationStatus,
+			globalReplicationStats.Update(dobj.Bucket, rinfo.Arn, 0, 0, replicationStatus,
 				prevStatus, replication.DeleteReplicationType)
 		}
 	}
@@ -938,7 +938,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		}
 		for _, rinfo := range rinfos.Targets {
 			if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
-				globalReplicationStats.Update(bucket, rinfo.Arn, rinfo.Size, rinfo.ReplicationStatus, rinfo.PrevReplicationStatus, opType)
+				globalReplicationStats.Update(bucket, rinfo.Arn, rinfo.Size, rinfo.Duration, rinfo.ReplicationStatus, rinfo.PrevReplicationStatus, opType)
 			}
 		}
 	}
@@ -963,6 +963,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 // replicateObjectToTarget replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
 func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
+	startTime := time.Now()
 	objInfo := ri.ObjectInfo.Clone()
 	bucket := objInfo.Bucket
 	object := objInfo.Name
@@ -1100,6 +1101,7 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 			rinfo.ResyncTimestamp = fmt.Sprintf("%s;%s", UTCNow().Format(http.TimeFormat), tgt.ResetID)
 			rinfo.ReplicationResynced = true
 		}
+		rinfo.Duration = time.Since(startTime)
 	}()
 	// use core client to avoid doing multipart on PUT
 	c := &miniogo.Core{Client: tgt.Client}
@@ -1634,7 +1636,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 	}
 	if sz, err := objInfo.GetActualSize(); err == nil {
 		for arn := range dsc.targetsMap {
-			globalReplicationStats.Update(objInfo.Bucket, arn, sz, objInfo.ReplicationStatus, replication.StatusType(""), opType)
+			globalReplicationStats.Update(objInfo.Bucket, arn, sz, 0, objInfo.ReplicationStatus, replication.StatusType(""), opType)
 		}
 	}
 }
@@ -1642,10 +1644,10 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer) {
 	globalReplicationPool.queueReplicaDeleteTask(dv)
 	for arn := range dv.ReplicationState.Targets {
-		globalReplicationStats.Update(dv.Bucket, arn, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
+		globalReplicationStats.Update(dv.Bucket, arn, 0, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 	}
 	for arn := range dv.ReplicationState.PurgeTargets {
-		globalReplicationStats.Update(dv.Bucket, arn, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
+		globalReplicationStats.Update(dv.Bucket, arn, 0, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 	}
 }
 

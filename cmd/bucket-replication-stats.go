@@ -73,7 +73,7 @@ func (r *ReplicationStats) UpdateReplicaStat(bucket string, n int64) {
 }
 
 // Update updates in-memory replication statistics with new values.
-func (r *ReplicationStats) Update(bucket string, arn string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
+func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration time.Duration, status, prevStatus replication.StatusType, opType replication.Type) {
 	if r == nil {
 		return
 	}
@@ -98,6 +98,9 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, status, pr
 			switch prevStatus {
 			case replication.Failed:
 				atomic.AddInt64(&b.FailedSize, -1*n)
+			}
+			if duration > 0 {
+				b.Latency.update(n, duration)
 			}
 		}
 	case replication.Failed:

@@ -34,6 +34,7 @@ import (
 type replicatedTargetInfo struct {
 	Arn                   string
 	Size                  int64
+	Duration              time.Duration
 	ReplicationAction     replicationAction // full or metadata only
 	OpType                replication.Type  // whether incoming replication, existing object, healing etc..
 	ReplicationStatus     replication.StatusType
