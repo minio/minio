@@ -29,6 +29,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/pkg/env"
+
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -289,25 +292,27 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityDrives = er.defaultParityCount
 	}
 
-	parityOrig := parityDrives
-	for _, disk := range onlineDisks {
-		if parityDrives >= len(onlineDisks)/2 {
-			parityDrives = len(onlineDisks) / 2
-			break
-		}
-		if disk == nil {
-			parityDrives++
-			continue
-		}
-		di, err := disk.DiskInfo(ctx)
-		if err != nil || di.ID == "" {
-			parityDrives++
-		}
-	}
-	if parityOrig != parityDrives {
-		opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
-	}
+	if on, _ := config.ParseBool(env.Get(config.EnvUpgradeParityEnable, config.EnableOn)); on {
 
+		parityOrig := parityDrives
+		for _, disk := range onlineDisks {
+			if parityDrives >= len(onlineDisks)/2 {
+				parityDrives = len(onlineDisks) / 2
+				break
+			}
+			if disk == nil {
+				parityDrives++
+				continue
+			}
+			di, err := disk.DiskInfo(ctx)
+			if err != nil || di.ID == "" {
+				parityDrives++
+			}
+		}
+		if parityOrig != parityDrives {
+			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+		}
+	}
 	dataDrives := len(onlineDisks) - parityDrives
 
 	// we now know the number of blocks this object needs for data and parity.

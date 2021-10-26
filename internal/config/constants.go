@@ -54,4 +54,6 @@ const (
 	EnvEndpoints = "MINIO_ENDPOINTS" // legacy
 	EnvWorm      = "MINIO_WORM"      // legacy
 	EnvRegion    = "MINIO_REGION"    // legacy
+
+	EnvUpgradeParityEnable = "MINIO_UPGRADE_PARITY_ENABLE"
 )
