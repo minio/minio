@@ -114,6 +114,8 @@ Start (or) Restart Prometheus service by running
 
 Here `prometheus.yml` is the name of configuration file. You can now see MinIO metrics in Prometheus dashboard. By default Prometheus dashboard is accessible at `http://localhost:9090`.
 
+In case you are running MiniIO nodes behind a proxy (like HAProxy), consider adjusting the acl rules to match the header, since Prometheus will always add port to the hostname like `hostname:port`.
+
 ### 6. Configure Grafana
 
 After Prometheus is configured, you can use Grafana to visualize MinIO metrics.
