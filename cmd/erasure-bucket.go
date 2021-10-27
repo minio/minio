@@ -172,19 +172,25 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, opts D
 	if err == errErasureWriteQuorum && !opts.NoRecreate {
 		undoDeleteBucket(storageDisks, bucket)
 	}
-	if err != nil {
-		return toObjectErr(err, bucket)
-	}
 
-	// At this point we have `err == nil` but some errors might be `errVolumeNotEmpty`
-	// we should proceed to attempt a force delete of such buckets.
-	for index, err := range dErrs {
-		if err == errVolumeNotEmpty && storageDisks[index] != nil {
-			storageDisks[index].RenameFile(ctx, bucket, "", minioMetaTmpDeletedBucket, mustGetUUID())
+	if err == nil || errors.Is(err, errVolumeNotFound) {
+		var purgedDangling bool
+		// At this point we have `err == nil` but some errors might be `errVolumeNotEmpty`
+		// we should proceed to attempt a force delete of such buckets.
+		for index, err := range dErrs {
+			if err == errVolumeNotEmpty && storageDisks[index] != nil {
+				storageDisks[index].RenameFile(ctx, bucket, "", minioMetaTmpDeletedBucket, mustGetUUID())
+				purgedDangling = true
+			}
 		}
+		// if we purged dangling buckets, ignore errVolumeNotFound error.
+		if purgedDangling {
+			err = nil
+		}
+
 	}
 
-	return nil
+	return toObjectErr(err, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
