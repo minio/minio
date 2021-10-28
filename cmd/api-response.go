@@ -740,7 +740,6 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	w.WriteHeader(statusCode)
 	if response != nil {
 		w.Write(response)
-		w.(http.Flusher).Flush()
 	}
 }
 

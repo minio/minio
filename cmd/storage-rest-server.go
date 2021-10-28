@@ -60,7 +60,6 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 		w.WriteHeader(http.StatusForbidden)
 	}
 	w.Write([]byte(err.Error()))
-	w.(http.Flusher).Flush()
 }
 
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
@@ -156,7 +155,6 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		info.Error = err.Error()
 	}
-	defer w.(http.Flusher).Flush()
 	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
@@ -255,7 +253,6 @@ func (s *storageRESTServer) ListVolsHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	logger.LogIf(r.Context(), msgp.Encode(w, VolsInfo(infos)))
 }
 
@@ -271,7 +268,6 @@ func (s *storageRESTServer) StatVolHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
@@ -503,7 +499,6 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
-	w.(http.Flusher).Flush()
 }
 
 // ReadFileHandler - read section of a file.
@@ -547,7 +542,6 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
-	w.(http.Flusher).Flush()
 }
 
 // ReadFileHandler - read section of a file.
@@ -583,7 +577,6 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		}
 		return
 	}
-	w.(http.Flusher).Flush()
 }
 
 // ListDirHandler - list a directory.
@@ -606,7 +599,6 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	gob.NewEncoder(w).Encode(&entries)
-	w.(http.Flusher).Flush()
 }
 
 // DeleteFileHandler - delete a file.
@@ -671,7 +663,6 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		}
 	}
 	encoder.Encode(dErrsResp)
-	w.(http.Flusher).Flush()
 }
 
 // RenameDataHandler - renames a meta object and data dir to destination.
@@ -1043,7 +1034,6 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 		vresp.Err = StorageErr(err.Error())
 	}
 	encoder.Encode(vresp)
-	w.(http.Flusher).Flush()
 }
 
 // A single function to write certain errors to be fatal

@@ -123,7 +123,6 @@ func (b *bootstrapRESTServer) VerifyHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "VerifyHandler")
 	cfg := getServerSystemCfg()
 	logger.LogIf(ctx, json.NewEncoder(w).Encode(&cfg))
-	w.(http.Flusher).Flush()
 }
 
 // registerBootstrapRESTHandlers - register bootstrap rest router.
