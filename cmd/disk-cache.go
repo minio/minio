@@ -113,8 +113,6 @@ type cacheObjects struct {
 
 	// if true migration is in progress from v1 to v2
 	migrating bool
-	// mutex to protect migration bool
-	migMutex sync.Mutex
 	// retry queue for writeback cache mode to reattempt upload to backend
 	wbRetryCh chan ObjectInfo
 	// Cache stats
@@ -509,8 +507,6 @@ func (c *cacheObjects) CacheStats() (cs *CacheStats) {
 
 // skipCache() returns true if cache migration is in progress
 func (c *cacheObjects) skipCache() bool {
-	c.migMutex.Lock()
-	defer c.migMutex.Unlock()
 	return c.migrating
 }
 
@@ -640,8 +636,6 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	}
 
 	// update migration status
-	c.migMutex.Lock()
-	defer c.migMutex.Unlock()
 	c.migrating = false
 	logStartupMessage(color.Blue("Cache migration completed successfully."))
 }
@@ -784,7 +778,6 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		exclude:            config.Exclude,
 		after:              config.After,
 		migrating:          migrateSw,
-		migMutex:           sync.Mutex{},
 		commitWriteback:    config.CacheCommitMode == CommitWriteBack,
 		commitWritethrough: config.CacheCommitMode == CommitWriteThrough,
 
@@ -956,7 +949,7 @@ func (c *cacheObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	}
 	size := data.Size()
 
-	// fetch from backend if there is no space on cache drive
+	// avoid caching part if space unavailable
 	if !dcache.diskSpaceAvailable(size) {
 		return putObjectPartFn(ctx, bucket, object, uploadID, partID, data, opts)
 	}
@@ -998,8 +991,8 @@ func (c *cacheObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 		info, err = putObjectPartFn(ctx, bucket, object, uploadID, partID, NewPutObjReader(hashReader), opts)
 		if err != nil {
 			close(pinfoCh)
-			pipeWriter.CloseWithError(err)
-			wPipe.CloseWithError(err)
+			pipeReader.CloseWithError(err)
+			rPipe.CloseWithError(err)
 			errorCh <- err
 			return
 		}
@@ -1009,8 +1002,10 @@ func (c *cacheObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	go func() {
 		pinfo, perr := dcache.PutObjectPart(GlobalContext, bucket, object, uploadID, partID, rPipe, data.Size(), opts)
 		if perr != nil {
-			wPipe.CloseWithError(perr)
+			rPipe.CloseWithError(perr)
 			close(cinfoCh)
+			// clean up upload
+			dcache.AbortUpload(bucket, object, uploadID)
 			return
 		}
 		cinfoCh <- pinfo
@@ -1018,12 +1013,13 @@ func (c *cacheObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 
 	mwriter := cacheMultiWriter(pipeWriter, wPipe)
 	_, err = io.Copy(mwriter, data)
+	pipeWriter.Close()
+	wPipe.Close()
+
 	if err != nil {
 		err = <-errorCh
 		return PartInfo{}, err
 	}
-	pipeWriter.Close()
-	wPipe.Close()
 	info = <-pinfoCh
 	cachedInfo := <-cinfoCh
 	if info.PartNumber == cachedInfo.PartNumber {

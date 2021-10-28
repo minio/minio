@@ -89,7 +89,7 @@ master key to automatically encrypt all cached content.
 
 - `MINIO_CACHE_COMMIT` setting of `writethrough` allows caching of multipart uploads synchronously if enabled. By default, single PUT operations are already cached on write without any special setting.
 
-Note that `MINIO_CACHE_COMMIT` also has a setting of `writeback` which allows staging single uploads in cache before committing to remote. However for consistency reasons, staging uploads in cache is not permitted for multipart uploads.Partially cached stale uploads older than 24 hours are automatically cleaned up.
+NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. However, for consistency reasons, staging uploads in the cache are not permitted for multipart uploads. Partially cached stale uploads older than 24 hours are automatically cleaned up.
 
 > NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
 

@@ -557,16 +557,17 @@ type multiWriter struct {
 // fails close the pipe, but continue writing to the backend
 func (t *multiWriter) Write(p []byte) (n int, err error) {
 	n, err = t.backendWriter.Write(p)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+		return
+	}
 	if err != nil {
 		if !t.pipeClosed {
 			t.cacheWriter.CloseWithError(err)
 		}
 		return
 	}
-	if n != len(p) {
-		err = io.ErrShortWrite
-		return
-	}
+
 	// ignore errors writing to cache
 	if !t.pipeClosed {
 		_, cerr := t.cacheWriter.Write(p)

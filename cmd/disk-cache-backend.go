@@ -1073,7 +1073,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 				// the remaining parts.
 				partOffset = 0
 			} // End of read all parts loop.
-			pw.CloseWithError(err)
+			pr.CloseWithError(err)
 		}()
 	} else {
 		go func() {
@@ -1225,7 +1225,7 @@ func (c *diskCache) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	cachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(cachePath, uploadID)
 
-	partIDLock := c.NewNSLockFn(pathJoin(uploadIDDir, strconv.Itoa(partID), ""))
+	partIDLock := c.NewNSLockFn(pathJoin(uploadIDDir, strconv.Itoa(partID)))
 	lkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		return oi, err
@@ -1446,7 +1446,6 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	uploadMeta.Stat.Size = objectSize
 	uploadMeta.Stat.ModTime = roi.ModTime
 	// if encrypted - make sure ETag updated
-	// TODO  <=== TEST encrypted ETag
 
 	uploadMeta.Meta["etag"] = roi.ETag
 	uploadMeta.Meta[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
