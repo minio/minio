@@ -114,8 +114,6 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 		return
 	}
-
-	w.(http.Flusher).Flush()
 }
 
 // GetBucketACLHandler - GET Bucket ACL
@@ -164,8 +162,6 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
-	w.(http.Flusher).Flush()
 }
 
 // PutObjectACLHandler - PUT Object ACL
@@ -229,8 +225,6 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL)
 		return
 	}
-
-	w.(http.Flusher).Flush()
 }
 
 // GetObjectACLHandler - GET Object ACL
@@ -283,6 +277,4 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
-	w.(http.Flusher).Flush()
 }

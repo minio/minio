@@ -164,7 +164,6 @@ func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *h
 // DeleteBucketWebsiteHandler - DELETE bucket website, a dummy api
 func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseHeadersOnly(w)
-	w.(http.Flusher).Flush()
 }
 
 // GetBucketCorsHandler - GET bucket cors, a dummy api
