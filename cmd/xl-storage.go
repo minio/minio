@@ -1241,6 +1241,9 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string) (buf []byte, 
 		buf, err = ioutil.ReadAll(r)
 		return buf, osErrToFileErr(err)
 	}
+	if stat.IsDir() {
+		return nil, errFileNotFound
+	}
 
 	// Read into appropriate buffer.
 	sz := stat.Size()
