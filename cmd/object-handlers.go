@@ -3209,7 +3209,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		setCommonHeaders(w)
 		w.Header().Set(xhttp.ContentType, string(mimeXML))
 		w.Write(encodedErrorResponse)
-		w.(http.Flusher).Flush()
 	}
 
 	versioned := globalBucketVersioningSys.Enabled(bucket)
