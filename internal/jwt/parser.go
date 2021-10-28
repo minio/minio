@@ -79,6 +79,7 @@ func init() {
 	}
 }
 
+// HashBorrower allows borrowing hashes and will keep track of them.
 func (s *SigningMethodHMAC) HashBorrower() HashBorrower {
 	return HashBorrower{pool: &s.HasherPool, borrowed: make([]hash.Hash, 0, 2)}
 }
