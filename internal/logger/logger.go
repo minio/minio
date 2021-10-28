@@ -379,7 +379,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	}
 
 	// Iterate over all logger targets to send the log entry
-	for _, t := range Targets {
+	for _, t := range Targets() {
 		t.Send(entry, entry.LogKind)
 	}
 }

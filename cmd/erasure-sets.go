@@ -516,7 +516,7 @@ func (a *auditObjectErasureMap) MarshalJSON() ([]byte, error) {
 }
 
 func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjects) {
-	if len(logger.AuditTargets) == 0 {
+	if len(logger.AuditTargets()) == 0 {
 		return
 	}
 
