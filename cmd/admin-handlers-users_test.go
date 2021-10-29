@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	testDefaultTimeout = 10 * time.Second
+	testDefaultTimeout = 30 * time.Second
 )
 
 // API suite container for IAM

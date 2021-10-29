@@ -306,7 +306,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
-	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient)
+	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.

@@ -350,7 +350,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	return testServer
 }
