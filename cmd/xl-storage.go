@@ -859,6 +859,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			// Create a new xl.meta with a delete marker in it
 			return s.WriteMetadata(ctx, volume, path, fi)
 		}
+		metaDataPoolPut(buf) // Never used, return it
+
 		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
 		if err != nil {
 			if err == errFileNotFound && fi.VersionID != "" {
@@ -1232,12 +1234,29 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string) (buf []byte, 
 		SmallFile: true,
 	}
 	defer r.Close()
-	buf, err = ioutil.ReadAll(r)
+
+	// Get size for precise allocation.
+	stat, err := f.Stat()
 	if err != nil {
-		err = osErrToFileErr(err)
+		buf, err = ioutil.ReadAll(r)
+		return buf, osErrToFileErr(err)
+	}
+	if stat.IsDir() {
+		return nil, errFileNotFound
 	}
 
-	return buf, err
+	// Read into appropriate buffer.
+	sz := stat.Size()
+	if sz <= metaDataReadDefault {
+		buf = metaDataPoolGet()
+		buf = buf[:sz]
+	} else {
+		buf = make([]byte, sz)
+	}
+	// Read file...
+	_, err = io.ReadFull(r, buf)
+
+	return buf, osErrToFileErr(err)
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
