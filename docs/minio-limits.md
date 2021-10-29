@@ -27,7 +27,7 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 | Maximum number of parts per upload                                              | 10,000                                        |
 | Part size range                                                                 | 5 MiB to 5 GiB. Last part can be 0 B to 5 GiB |
 | Maximum number of parts returned per list parts request                         | 10000                                         |
-| Maximum number of objects returned per list objects request                     | 4500                                          |
+| Maximum number of objects returned per list objects request                     | 1000                                          |
 | Maximum number of multipart uploads returned per list multipart uploads request | 1000                                          |
 | Maximum length for bucket names                                                 | 63                                            |
 | Maximum length for object names                                                 | 1024                                          |
@@ -50,8 +50,8 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 - ObjectTorrent
 
 ### Object name restrictions on MinIO
-- Object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special charaters. **This list is non exhaustive, it depends on the operating system and filesystem under use - please consult your operating system vendor**. MinIO recommends using Linux based deployments for production workloads.
 
+- Object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special charaters. **This list is non exhaustive, it depends on the operating system and filesystem under use - please consult your operating system vendor**. MinIO recommends using Linux based deployments for production workloads.
 - Objects should not have conflicting objects as parents, applications using this behavior should change their behavior and use proper unique keys, for example situations such as following conflicting key patterns are not supported.
 
 ```
