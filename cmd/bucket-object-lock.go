@@ -175,68 +175,76 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 // For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
 // governance bypass headers are set and user has governance bypass permissions.
 // Objects in compliance mode can be overwritten only if retention date is being extended. No mode change is permitted.
-func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, objRetention *objectlock.ObjectRetention, cred auth.Credentials, owner bool) (ObjectInfo, APIErrorCode) {
+func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi ObjectInfo, objRetention *objectlock.ObjectRetention, cred auth.Credentials, owner bool) error {
 	byPassSet := objectlock.IsObjectLockGovernanceBypassSet(r.Header)
-	opts, err := getOpts(ctx, r, bucket, object)
-	if err != nil {
-		return ObjectInfo{}, toAPIErrorCode(ctx, err)
-	}
-
-	oi, err := getObjectInfoFn(ctx, bucket, object, opts)
-	if err != nil {
-		return oi, toAPIErrorCode(ctx, err)
-	}
 
 	t, err := objectlock.UTCNowNTP()
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return oi, ErrObjectLocked
+		return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 	}
 
-	// Pass in relative days from current time, to additionally to verify "object-lock-remaining-retention-days" policy if any.
+	// Pass in relative days from current time, to additionally
+	// to verify "object-lock-remaining-retention-days" policy if any.
 	days := int(math.Ceil(math.Abs(objRetention.RetainUntilDate.Sub(t).Hours()) / 24))
 
 	ret := objectlock.GetObjectRetentionMeta(oi.UserDefined)
 	if ret.Mode.Valid() {
 		// Retention has expired you may change whatever you like.
 		if ret.RetainUntilDate.Before(t) {
-			perm := isPutRetentionAllowed(bucket, object,
+			apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 				days, objRetention.RetainUntilDate.Time,
 				objRetention.Mode, byPassSet, r, cred,
 				owner)
-			return oi, perm
+			switch apiErr {
+			case ErrAccessDenied:
+				return errAuthentication
+			}
+			return nil
 		}
 
 		switch ret.Mode {
 		case objectlock.RetGovernance:
-			govPerm := isPutRetentionAllowed(bucket, object, days,
+			govPerm := isPutRetentionAllowed(oi.Bucket, oi.Name, days,
 				objRetention.RetainUntilDate.Time, objRetention.Mode,
 				byPassSet, r, cred, owner)
 			// Governance mode retention period cannot be shortened, if x-amz-bypass-governance is not set.
 			if !byPassSet {
 				if objRetention.Mode != objectlock.RetGovernance || objRetention.RetainUntilDate.Before((ret.RetainUntilDate.Time)) {
-					return oi, ErrObjectLocked
+					return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 				}
 			}
-			return oi, govPerm
+			switch govPerm {
+			case ErrAccessDenied:
+				return errAuthentication
+			}
+			return nil
 		case objectlock.RetCompliance:
 			// Compliance retention mode cannot be changed or shortened.
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html#object-lock-retention-modes
 			if objRetention.Mode != objectlock.RetCompliance || objRetention.RetainUntilDate.Before((ret.RetainUntilDate.Time)) {
-				return oi, ErrObjectLocked
+				return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 			}
-			compliancePerm := isPutRetentionAllowed(bucket, object,
+			apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 				days, objRetention.RetainUntilDate.Time, objRetention.Mode,
 				false, r, cred, owner)
-			return oi, compliancePerm
+			switch apiErr {
+			case ErrAccessDenied:
+				return errAuthentication
+			}
+			return nil
 		}
-		return oi, ErrNone
+		return nil
 	} // No pre-existing retention metadata present.
 
-	perm := isPutRetentionAllowed(bucket, object,
+	apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 		days, objRetention.RetainUntilDate.Time,
 		objRetention.Mode, byPassSet, r, cred, owner)
-	return oi, perm
+	switch apiErr {
+	case ErrAccessDenied:
+		return errAuthentication
+	}
+	return nil
 }
 
 // checkPutObjectLockAllowed enforces object retention policy and legal hold policy

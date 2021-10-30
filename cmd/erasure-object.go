@@ -1440,13 +1440,21 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fi.Deleted {
-		if opts.VersionID == "" {
-			return ObjectInfo{}, toObjectErr(errFileNotFound, bucket, object)
-		}
 		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	for k, v := range opts.UserDefined {
+	// if version-id is not specified retention is supposed to be set on the latest object.
+	if opts.VersionID == "" {
+		opts.VersionID = fi.VersionID
+	}
+
+	objInfo := fi.ToObjectInfo(bucket, object)
+	if opts.EvalMetadataFn != nil {
+		if err := opts.EvalMetadataFn(objInfo); err != nil {
+			return ObjectInfo{}, err
+		}
+	}
+	for k, v := range objInfo.UserDefined {
 		fi.Metadata[k] = v
 	}
 	fi.ModTime = opts.MTime
@@ -1456,9 +1464,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	objInfo := fi.ToObjectInfo(bucket, object)
-	return objInfo, nil
-
+	return fi.ToObjectInfo(bucket, object), nil
 }
 
 // PutObjectTags - replace or add tags to an existing object
