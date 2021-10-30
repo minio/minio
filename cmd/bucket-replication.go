@@ -910,24 +910,24 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	// metadata should be updated with last resync timestamp.
 	if objInfo.ReplicationStatusInternal != newReplStatusInternal || rinfos.ReplicationResynced() {
 		popts := ObjectOptions{
-			MTime:       objInfo.ModTime,
-			VersionID:   objInfo.VersionID,
-			UserDefined: make(map[string]string, len(objInfo.UserDefined)),
+			MTime:     objInfo.ModTime,
+			VersionID: objInfo.VersionID,
+			EvalMetadataFn: func(oi ObjectInfo) error {
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = newReplStatusInternal
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
+				oi.UserDefined[xhttp.AmzBucketReplicationStatus] = string(rinfos.ReplicationStatus())
+				for _, rinfo := range rinfos.Targets {
+					if rinfo.ResyncTimestamp != "" {
+						oi.UserDefined[targetResetHeader(rinfo.Arn)] = rinfo.ResyncTimestamp
+					}
+				}
+				if objInfo.UserTags != "" {
+					oi.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
+				}
+				return nil
+			},
 		}
-		for k, v := range objInfo.UserDefined {
-			popts.UserDefined[k] = v
-		}
-		popts.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = newReplStatusInternal
-		popts.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
-		popts.UserDefined[xhttp.AmzBucketReplicationStatus] = string(rinfos.ReplicationStatus())
-		for _, rinfo := range rinfos.Targets {
-			if rinfo.ResyncTimestamp != "" {
-				popts.UserDefined[targetResetHeader(rinfo.Arn)] = rinfo.ResyncTimestamp
-			}
-		}
-		if objInfo.UserTags != "" {
-			popts.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
-		}
+
 		if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w",
 				bucket, objInfo.Name, objInfo.VersionID, err))
