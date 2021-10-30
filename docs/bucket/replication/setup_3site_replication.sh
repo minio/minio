@@ -175,9 +175,15 @@ mc replicate add sitec/olockbucket/ \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 3
 sleep 1
 
+echo "Set default governance retention 30d"
+mc retention set --default governance 30d sitea/olockbucket
 
-echo "Copying data to source sitea"
+echo "Copying data to source sitea/bucket"
 mc cp --quiet /etc/hosts sitea/bucket
+sleep 1
+
+echo "Copying data to source sitea/olockbucket"
+mc cp --quiet /etc/hosts sitea/olockbucket
 sleep 1
 
 echo "Verifying the metadata difference between source and target"
@@ -186,6 +192,15 @@ if diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json siteb
 fi
 
 if diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json sitec/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+    echo "verified sitea-> COMPLETED, sitec-> REPLICA"
+fi
+
+echo "Verifying the metadata difference between source and target"
+if diff -pruN <(mc stat --json sitea/olockbucket/hosts | jq .) <(mc stat --json siteb/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+    echo "verified sitea-> COMPLETED, siteb-> REPLICA"
+fi
+
+if diff -pruN <(mc stat --json sitea/olockbucket/hosts | jq .) <(mc stat --json sitec/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
     echo "verified sitea-> COMPLETED, sitec-> REPLICA"
 fi
 
