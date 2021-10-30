@@ -181,5 +181,12 @@ mc cp --quiet /etc/hosts sitea/bucket
 sleep 1
 
 echo "Verifying the metadata difference between source and target"
-diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json siteb/bucket/hosts | jq .)
-diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json sitec/bucket/hosts | jq .)
+if diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json siteb/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+    echo "verified sitea-> COMPLETED, siteb-> REPLICA"
+fi
+
+if diff -pruN <(mc stat --json sitea/bucket/hosts | jq .) <(mc stat --json sitec/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+    echo "verified sitea-> COMPLETED, sitec-> REPLICA"
+fi
+
+catch
