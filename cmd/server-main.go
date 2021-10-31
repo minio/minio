@@ -511,7 +511,7 @@ func serverMain(ctx *cli.Context) {
 		addrs = append(addrs, globalMinioAddr)
 	}
 
-	httpServer := xhttp.NewServer(addrs, criticalErrorHandler{corsHandler(handler)}, getCert)
+	httpServer := xhttp.NewServer(addrs, setCriticalErrorHandler(corsHandler(handler)), getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
