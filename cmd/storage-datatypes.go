@@ -80,20 +80,20 @@ type FilesInfoVersions struct {
 }
 
 // FileInfoVersions represent a list of versions for a given file.
+//msgp:tuple FileInfoVersions
+// The above means that any added/deleted fields are incompatible.
 type FileInfoVersions struct {
 	// Name of the volume.
-	Volume string
+	Volume string `msg:"v,omitempty"`
 
 	// Name of the file.
-	Name string
-
-	IsEmptyDir bool
+	Name string `msg:"n,omitempty"`
 
 	// Represents the latest mod time of the
 	// latest version.
-	LatestModTime time.Time
+	LatestModTime time.Time `msg:"lm"`
 
-	Versions []FileInfo
+	Versions []FileInfo `msg:"vs"`
 }
 
 // findVersionIndex will return the version index where the version
@@ -115,69 +115,74 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 // The above means that any added/deleted fields are incompatible.
 type FileInfo struct {
 	// Name of the volume.
-	Volume string
+	Volume string `msg:"v,omitempty"`
 
 	// Name of the file.
-	Name string
+	Name string `msg:"n,omitempty"`
 
 	// Version of the file.
-	VersionID string
+	VersionID string `msg:"vid,omitempty"`
 
 	// Indicates if the version is the latest
-	IsLatest bool
+	IsLatest bool `msg:"is"`
 
 	// Deleted is set when this FileInfo represents
 	// a deleted marker for a versioned bucket.
-	Deleted bool
+	Deleted bool `msg:"del"`
 
 	// TransitionStatus is set to Pending/Complete for transitioned
 	// entries based on state of transition
-	TransitionStatus string
+	TransitionStatus string `msg:"ts"`
 	// TransitionedObjName is the object name on the remote tier corresponding
 	// to object (version) on the source tier.
-	TransitionedObjName string
+	TransitionedObjName string `msg:"to"`
 	// TransitionTier is the storage class label assigned to remote tier.
-	TransitionTier string
+	TransitionTier string `msg:"tt"`
 	// TransitionVersionID stores a version ID of the object associate
 	// with the remote tier.
-	TransitionVersionID string
+	TransitionVersionID string `msg:"tv"`
 	// ExpireRestored indicates that the restored object is to be expired.
-	ExpireRestored bool
+	ExpireRestored bool `msg:"exp"`
 
 	// DataDir of the file
-	DataDir string
+	DataDir string `msg:"dd"`
 
 	// Indicates if this object is still in V1 format.
-	XLV1 bool
+	XLV1 bool `msg:"v1"`
 
 	// Date and time when the file was last modified, if Deleted
 	// is 'true' this value represents when while was deleted.
-	ModTime time.Time
+	ModTime time.Time `msg:"mt"`
 
 	// Total file size.
-	Size int64
+	Size int64 `msg:"sz"`
 
 	// File mode bits.
-	Mode uint32
+	Mode uint32 `msg:"m"`
 
 	// File metadata
-	Metadata map[string]string
+	Metadata map[string]string `msg:"meta"`
 
 	// All the parts per object.
-	Parts []ObjectPartInfo
+	Parts []ObjectPartInfo `msg:"parts"`
 
 	// Erasure info for all objects.
-	Erasure ErasureInfo
+	Erasure ErasureInfo `msg:"ei"`
 
-	MarkDeleted      bool             // mark this version as deleted
-	ReplicationState ReplicationState // Internal replication state to be passed back in ObjectInfo
+	MarkDeleted      bool             `msg:"md"` // mark this version as deleted
+	ReplicationState ReplicationState `msg:"rs"` // Internal replication state to be passed back in ObjectInfo
 
-	Data []byte // optionally carries object data
+	Data []byte `msg:"d,allownil"` // optionally carries object data
 
-	NumVersions      int
-	SuccessorModTime time.Time
+	NumVersions      int       `msg:"nv"`
+	SuccessorModTime time.Time `msg:"smt"`
 
-	Fresh bool // indicates this is a first time call to write FileInfo.
+	Fresh bool `msg:"fr"` // indicates this is a first time call to write FileInfo.
+
+	// Position of this version or object in a multi-object delete call,
+	// no other caller must set this value other than multi-object delete call.
+	// usage in other calls in undefined please avoid.
+	Idx int `msg:"i"`
 }
 
 // InlineData returns true if object contents are inlined alongside its metadata.

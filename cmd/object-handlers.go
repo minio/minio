@@ -2283,6 +2283,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
+	if api.CacheAPI() != nil {
+		newMultipartUpload = api.CacheAPI().NewMultipartUpload
+	}
 
 	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
@@ -2597,9 +2600,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	srcInfo.PutObjReader = pReader
+	copyObjectPart := objectAPI.CopyObjectPart
+	if api.CacheAPI() != nil {
+		copyObjectPart = api.CacheAPI().CopyObjectPart
+	}
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
+	partInfo, err := copyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
 		startOffset, length, srcInfo, srcOpts, dstOpts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -2854,6 +2861,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
+	if api.CacheAPI() != nil {
+		putObjectPart = api.CacheAPI().PutObjectPart
+	}
 
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
 	if err != nil {
@@ -2907,6 +2917,9 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 	abortMultipartUpload := objectAPI.AbortMultipartUpload
+	if api.CacheAPI() != nil {
+		abortMultipartUpload = api.CacheAPI().AbortMultipartUpload
+	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.AbortMultipartUploadAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
@@ -3191,7 +3204,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	s3MD5 := getCompleteMultipartMD5(originalCompleteParts)
 
 	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
-
+	if api.CacheAPI() != nil {
+		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
+	}
 	// This code is specifically to handle the requirements for slow
 	// complete multipart upload operations on FS mode.
 	writeErrorResponseWithoutXMLHeader := func(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {

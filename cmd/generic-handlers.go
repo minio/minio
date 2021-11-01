@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"path"
@@ -37,42 +36,39 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-// Adds limiting body size middleware
-
-// Maximum allowed form data field values. 64MiB is a guessed practical value
-// which is more than enough to accommodate any form data fields and headers.
-const requestFormDataSize = 64 * humanize.MiByte
-
-// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
-// where, 16GiB is the maximum allowed object size for object upload.
-const requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
-
-func setRequestSizeLimitHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Restricting read data to a given maximum length
-		r.Body = http.MaxBytesReader(w, r.Body, requestMaxBodySize)
-		h.ServeHTTP(w, r)
-	})
-}
-
 const (
+	// Maximum allowed form data field values. 64MiB is a guessed practical value
+	// which is more than enough to accommodate any form data fields and headers.
+	requestFormDataSize = 64 * humanize.MiByte
+
+	// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
+	// where, 16GiB is the maximum allowed object size for object upload.
+	requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
+
 	// Maximum size for http headers - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxHeaderSize = 8 * 1024
+
 	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxUserDataSize = 2 * 1024
 )
 
-// ServeHTTP restricts the size of the http header to 8 KB and the size
-// of the user-defined metadata to 2 KB.
-func setRequestHeaderSizeLimitHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isHTTPHeaderSizeTooLarge(r.Header) {
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
-			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
-			return
+// ReservedMetadataPrefix is the prefix of a metadata key which
+// is reserved and for internal use only.
+const (
+	ReservedMetadataPrefix      = "X-Minio-Internal-"
+	ReservedMetadataPrefixLower = "x-minio-internal-"
+)
+
+// containsReservedMetadata returns true if the http.Header contains
+// keys which are treated as metadata but are reserved for internal use
+// and must not set by clients
+func containsReservedMetadata(header http.Header) bool {
+	for key := range header {
+		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
+			return true
 		}
-		h.ServeHTTP(w, r)
-	})
+	}
+	return false
 }
 
 // isHTTPHeaderSizeTooLarge returns true if the provided
@@ -96,35 +92,23 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 	return false
 }
 
-// ReservedMetadataPrefix is the prefix of a metadata key which
-// is reserved and for internal use only.
-const (
-	ReservedMetadataPrefix      = "X-Minio-Internal-"
-	ReservedMetadataPrefixLower = "x-minio-internal-"
-)
-
-// ServeHTTP fails if the request contains at least one reserved header which
-// would be treated as metadata.
-func filterReservedMetadata(h http.Handler) http.Handler {
+// Limits body and header to specific allowed maximum limits as per S3/MinIO API requirements.
+func setRequestLimitHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Reject unsupported reserved metadata first before validation.
 		if containsReservedMetadata(r.Header) {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
 			return
 		}
+		if isHTTPHeaderSizeTooLarge(r.Header) {
+			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
+			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
+			return
+		}
+		// Restricting read data to a given maximum length
+		r.Body = http.MaxBytesReader(w, r.Body, requestMaxBodySize)
 		h.ServeHTTP(w, r)
 	})
-}
-
-// containsReservedMetadata returns true if the http.Header contains
-// keys which are treated as metadata but are reserved for internal use
-// and must not set by clients
-func containsReservedMetadata(header http.Header) bool {
-	for key := range header {
-		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
-			return true
-		}
-	}
-	return false
 }
 
 // Reserved bucket.
@@ -133,24 +117,6 @@ const (
 	minioReservedBucketPath = SlashSeparator + minioReservedBucket
 	loginPathPrefix         = SlashSeparator + "login"
 )
-
-func setRedirectHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !shouldProxy() || guessIsRPCReq(r) || guessIsBrowserReq(r) ||
-			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || isAdminReq(r) {
-			h.ServeHTTP(w, r)
-			return
-		}
-		// if this server is still initializing, proxy the request
-		// to any other online servers to avoid 503 for any incoming
-		// API calls.
-		if idx := getOnlineProxyEndpointIdx(); idx >= 0 {
-			proxyRequest(context.TODO(), w, r, globalProxyEndpoints[idx])
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
-}
 
 func guessIsBrowserReq(r *http.Request) bool {
 	aType := getRequestAuthType(r)
@@ -172,10 +138,6 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
-}
-
-func shouldProxy() bool {
-	return newObjectLayerFn() == nil
 }
 
 // Fetch redirect location if urlPath satisfies certain
@@ -261,31 +223,21 @@ func isAdminReq(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, adminPathPrefix)
 }
 
-// Adds verification for incoming paths.
-func setReservedBucketHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// For all other requests reject access to reserved buckets
-		bucketName, _ := request2BucketObjectName(r)
-		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
-				return
-			}
-		}
-		h.ServeHTTP(w, r)
-	})
-}
-
-// Supported Amz date formats.
+// Supported amz date formats.
 var amzDateFormats = []string{
+	// Do not change this order, x-amz-date format is usually in
+	// iso8601Format rest are meant for relaxed handling of other
+	// odd SDKs that might be out there.
+	iso8601Format,
 	time.RFC1123,
 	time.RFC1123Z,
-	iso8601Format,
 	// Add new AMZ date formats here.
 }
 
 // Supported Amz date headers.
 var amzDateHeaders = []string{
+	// Do not chane this order, x-amz-date value should be
+	// validated first.
 	"x-amz-date",
 	"date",
 }
@@ -312,34 +264,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	}
 	// Date header missing.
 	return time.Time{}, ErrMissingDateHeader
-}
-
-// setTimeValidityHandler to validate parsable time over http header
-func setTimeValidityHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		aType := getRequestAuthType(r)
-		if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
-			// Verify if date headers are set, if not reject the request
-			amzDate, errCode := parseAmzDateHeader(r)
-			if errCode != ErrNone {
-				// All our internal APIs are sensitive towards Date
-				// header, for all requests where Date header is not
-				// present we will reject such clients.
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(errCode), r.URL)
-				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
-				return
-			}
-			// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
-			// or in the future, reject request otherwise.
-			curTime := UTCNow()
-			if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrRequestTimeTooSkewed), r.URL)
-				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
-				return
-			}
-		}
-		h.ServeHTTP(w, r)
-	})
 }
 
 // setHttpStatsHandler sets a http Stats handler to gather HTTP statistics
@@ -420,6 +344,23 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
 		}
+		// For all other requests reject access to reserved buckets
+		bucketName, _ := request2BucketObjectName(r)
+		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
+			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
+				return
+			}
+		}
+		// Deny SSE-C requests if not made over TLS
+		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+			if r.Method == http.MethodHead {
+				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
+			} else {
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
+			}
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
 }
@@ -429,8 +370,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalDNSConfig == nil || len(globalDomainNames) == 0 || !globalBucketFederation ||
-			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+		if guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 			h.ServeHTTP(w, r)
 			return
@@ -491,29 +431,23 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 	})
 }
 
-// customHeaderHandler sets x-amz-request-id header.
-// Previously, this value was set right before a response was sent to
-// the client. So, logger and Error response XML were not using this
-// value. This is set here so that this header can be logged as
-// part of the log entry, Error response XML and auditing.
-func addCustomHeaders(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set custom headers such as x-amz-request-id for each request.
-		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
-		h.ServeHTTP(logger.NewResponseWriter(w), r)
-	})
-}
-
-// addSecurityHeaders adds various HTTP(S) response headers.
+// addCustomHeaders adds various HTTP(S) response headers.
 // Security Headers enable various security protections behaviors in the client's browser.
-func addSecurityHeaders(h http.Handler) http.Handler {
+func addCustomHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
 		header.Set("X-XSS-Protection", "1; mode=block")                                // Prevents against XSS attacks
 		header.Set("Content-Security-Policy", "block-all-mixed-content")               // prevent mixed (HTTP / HTTPS content)
 		header.Set("X-Content-Type-Options", "nosniff")                                // Prevent mime-sniff
 		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains") // HSTS mitigates variants of MITM attacks
-		h.ServeHTTP(w, r)
+
+		// Previously, this value was set right before a response was sent to
+		// the client. So, logger and Error response XML were not using this
+		// value. This is set here so that this header can be logged as
+		// part of the log entry, Error response XML and auditing.
+		// Set custom headers such as x-amz-request-id for each request.
+		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
+		h.ServeHTTP(logger.NewResponseWriter(w), r)
 	})
 }
 
@@ -521,32 +455,16 @@ func addSecurityHeaders(h http.Handler) http.Handler {
 // `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
 //
 // It should be always the first / highest HTTP handler.
-type criticalErrorHandler struct{ handler http.Handler }
-
-func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if err := recover(); err == logger.ErrCritical { // handle
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
-			return
-		} else if err != nil {
-			panic(err) // forward other panic calls
-		}
-	}()
-	h.handler.ServeHTTP(w, r)
-}
-
-// sseTLSHandler enforces certain rules for SSE requests which are made / must be made over TLS.
-func setSSETLSHandler(h http.Handler) http.Handler {
+func setCriticalErrorHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Deny SSE-C requests if not made over TLS
-		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
-			if r.Method == http.MethodHead {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
-			} else {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
+		defer func() {
+			if err := recover(); err == logger.ErrCritical { // handle
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+				return
+			} else if err != nil {
+				panic(err) // forward other panic calls
 			}
-			return
-		}
+		}()
 		h.ServeHTTP(w, r)
 	})
 }

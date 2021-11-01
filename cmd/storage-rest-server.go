@@ -643,7 +643,7 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	versions := make([]FileInfo, totalVersions)
+	versions := make([]FileInfoVersions, totalVersions)
 	decoder := msgp.NewReader(r.Body)
 	for i := 0; i < totalVersions; i++ {
 		dst := &versions[i]
