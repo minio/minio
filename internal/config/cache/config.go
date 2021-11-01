@@ -27,6 +27,13 @@ import (
 	"github.com/minio/pkg/ellipses"
 )
 
+const (
+	// WriteBack allows staging and write back of cached content for single object uploads
+	WriteBack = "writeback"
+	// WriteThrough allows caching multipart uploads to disk synchronously
+	WriteThrough = "writethrough"
+)
+
 // Config represents cache config settings
 type Config struct {
 	Enabled         bool     `json:"-"`
@@ -39,7 +46,7 @@ type Config struct {
 	WatermarkLow    int      `json:"watermark_low"`
 	WatermarkHigh   int      `json:"watermark_high"`
 	Range           bool     `json:"range"`
-	CacheCommitMode string   `json:"commit_mode"`
+	CacheCommitMode string   `json:"commit"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
@@ -157,7 +164,7 @@ func parseCacheExcludes(excludes string) ([]string, error) {
 
 func parseCacheCommitMode(commitStr string) (string, error) {
 	switch strings.ToLower(commitStr) {
-	case "writeback", "writethrough":
+	case WriteBack, WriteThrough:
 		return strings.ToLower(commitStr), nil
 	default:
 		return "", config.ErrInvalidCacheCommitValue(nil).Msg("cache commit value must be `writeback` or `writethrough`")
