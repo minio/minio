@@ -952,11 +952,6 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	throughputSize := size
-	iopsSize := size
-
-	if autotune {
-		iopsSize = 4 * humanize.KiByte
-	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -982,7 +977,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}()
 
-	result, err := speedTest(ctx, throughputSize, iopsSize, concurrent, duration, autotune)
+	result, err := speedTest(ctx, throughputSize, concurrent, duration, autotune)
 	if <-endBlankRepliesCh != nil {
 		return
 	}
