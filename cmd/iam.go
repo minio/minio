@@ -206,6 +206,8 @@ func newMappedPolicy(policy string) MappedPolicy {
 type IAMSys struct {
 	sync.Mutex
 
+	iamRefreshInterval time.Duration
+
 	usersSysType UsersSysType
 
 	// map of policy names to policy definitions
@@ -473,9 +475,9 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
 
-	store.rlock()
+	store.lock()
+	defer store.unlock()
 	isMinIOUsersSys := sys.usersSysType == MinIOUsersSysType
-	store.runlock()
 
 	if err := store.loadPolicyDocs(ctx, iamPolicyDocsMap); err != nil {
 		return err
@@ -517,9 +519,6 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	if err := store.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
-
-	store.lock()
-	defer store.unlock()
 
 	for k, v := range iamPolicyDocsMap {
 		sys.iamPolicyDocsMap[k] = v
@@ -565,7 +564,9 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 }
 
 // Init - initializes config system by reading entries from config/iam
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client) {
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	sys.iamRefreshInterval = iamRefreshInterval
+
 	// Initialize IAM store
 	sys.InitStore(objAPI, etcdClient)
 
@@ -649,14 +650,14 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	case globalOpenIDConfig.ProviderEnabled():
 		go func() {
 			for {
-				time.Sleep(globalRefreshIAMInterval)
+				time.Sleep(sys.iamRefreshInterval)
 				sys.purgeExpiredCredentialsForExternalSSO(ctx)
 			}
 		}()
 	case globalLDAPConfig.EnabledWithLookupBind():
 		go func() {
 			for {
-				time.Sleep(globalRefreshIAMInterval)
+				time.Sleep(sys.iamRefreshInterval)
 				sys.purgeExpiredCredentialsForLDAP(ctx)
 				sys.updateGroupMembershipsForLDAP(ctx)
 			}
@@ -686,7 +687,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	} else {
 		// Fall back to loading all items
 		for {
-			time.Sleep(globalRefreshIAMInterval)
+			time.Sleep(sys.iamRefreshInterval)
 			if err := sys.Load(ctx, sys.store); err != nil {
 				logger.LogIf(ctx, err)
 			}
