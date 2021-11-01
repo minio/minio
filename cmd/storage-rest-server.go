@@ -41,6 +41,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
@@ -574,7 +575,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	defer rc.Close()
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-	if _, err = io.Copy(w, rc); err != nil {
+	if _, err = xioutil.Copy(w, rc); err != nil {
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
 			logger.LogIf(r.Context(), err)
 		}
@@ -954,13 +955,22 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 	return &h
 }
 
+var poolBuf8k = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 8192)
+		return &b
+	},
+}
+
 // waitForHTTPStream will wait for responses where
 // streamHTTPResponse has been used.
 // The returned reader contains the payload and must be closed if no error is returned.
 func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 	var tmp [1]byte
 	// 8K copy buffer, reused for less allocs...
-	var buf [8 << 10]byte
+	bufp := poolBuf8k.Get().(*[]byte)
+	buf := *bufp
+	defer poolBuf8k.Put(bufp)
 	for {
 		_, err := io.ReadFull(respBody, tmp[:])
 		if err != nil {
@@ -970,7 +980,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 		switch tmp[0] {
 		case 0:
 			// 0 is unbuffered, copy the rest.
-			_, err := io.CopyBuffer(w, respBody, buf[:])
+			_, err := io.CopyBuffer(w, respBody, buf)
 			if err == io.EOF {
 				return nil
 			}
@@ -989,7 +999,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 				return err
 			}
 			length := binary.LittleEndian.Uint32(tmp[:])
-			_, err = io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf[:])
+			_, err = io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf)
 			if err != nil {
 				return err
 			}

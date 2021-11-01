@@ -23,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	stdioutil "io/ioutil"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/minio/internal/ioutil"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
 	xnet "github.com/minio/pkg/net"
@@ -187,7 +187,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			return
 		}
 	} else {
-		rc = stdioutil.NopCloser(bytes.NewReader([]byte{}))
+		rc = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	}
 
 	defer rc.Close()
@@ -199,10 +199,10 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	setHeadGetRespHeaders(w, r.Form)
 
-	httpWriter := ioutil.WriteOnClose(w)
+	httpWriter := xioutil.WriteOnClose(w)
 
 	// Write object content to response body
-	if _, err = io.Copy(httpWriter, rc); err != nil {
+	if _, err = xioutil.Copy(httpWriter, rc); err != nil {
 		if !httpWriter.HasWritten() {
 			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -324,7 +324,7 @@ func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucke
 		if err != nil {
 			return nil, ObjectInfo{}, err
 		}
-		b, err := stdioutil.ReadAll(gr)
+		b, err := ioutil.ReadAll(gr)
 		if err != nil {
 			gr.Close()
 			return nil, ObjectInfo{}, err

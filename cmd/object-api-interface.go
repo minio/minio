@@ -26,8 +26,10 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/pkg/bucket/policy"
+
+	"github.com/minio/minio/internal/bucket/replication"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 // CheckPreconditionFn returns true if precondition check failed.
@@ -261,6 +263,6 @@ func GetObject(ctx context.Context, api ObjectLayer, bucket, object string, star
 	}
 	defer reader.Close()
 
-	_, err = io.Copy(writer, reader)
+	_, err = xioutil.Copy(writer, reader)
 	return err
 }

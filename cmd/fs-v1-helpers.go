@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/lock"
 	"github.com/minio/minio/internal/logger"
 )
@@ -334,7 +335,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, falloc
 	}
 	defer writer.Close()
 
-	bytesWritten, err := io.Copy(writer, reader)
+	bytesWritten, err := xioutil.Copy(writer, reader)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return 0, err
