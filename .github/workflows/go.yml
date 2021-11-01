@@ -1,13 +1,19 @@
-name: Go
+name: Functional Tests
 
 on:
   pull_request:
     branches:
     - master
 
+# This ensures that previous jobs for the PR are cancelled when the PR is
+# updated.
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: MinIO Setup on ${{ matrix.go-version }} and ${{ matrix.os }}
+    name: Go ${{ matrix.go-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
