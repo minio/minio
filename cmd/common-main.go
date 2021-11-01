@@ -187,7 +187,7 @@ func minioConfigToConsoleFeatures() {
 			os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
 		}
 	}
-	os.Setenv("CONSOLE_MINIO_REGION", globalServerRegion)
+	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 	if globalSubnetConfig.License != "" {
 		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetConfig.License)

@@ -186,11 +186,6 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 // ConfigSys - config system.
 type ConfigSys struct{}
 
-// Load - load config.json.
-func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
-	return sys.Init(objAPI)
-}
-
 // Init - initializes config system from config.json.
 func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {

@@ -31,11 +31,13 @@ const (
 
 	EnvBrowser    = "MINIO_BROWSER"
 	EnvDomain     = "MINIO_DOMAIN"
-	EnvRegionName = "MINIO_REGION_NAME"
 	EnvPublicIPs  = "MINIO_PUBLIC_IPS"
 	EnvFSOSync    = "MINIO_FS_OSYNC"
 	EnvArgs       = "MINIO_ARGS"
 	EnvDNSWebhook = "MINIO_DNS_WEBHOOK_ENDPOINT"
+
+	EnvSiteName   = "MINIO_SITE_NAME"
+	EnvSiteRegion = "MINIO_SITE_REGION"
 
 	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE"
 	EnvMinIOServerURL          = "MINIO_SERVER_URL"
@@ -51,7 +53,8 @@ const (
 	EnvKESClientCert = "MINIO_KMS_KES_CERT_FILE"
 	EnvKESServerCA   = "MINIO_KMS_KES_CAPATH"
 
-	EnvEndpoints = "MINIO_ENDPOINTS" // legacy
-	EnvWorm      = "MINIO_WORM"      // legacy
-	EnvRegion    = "MINIO_REGION"    // legacy
+	EnvEndpoints  = "MINIO_ENDPOINTS"   // legacy
+	EnvWorm       = "MINIO_WORM"        // legacy
+	EnvRegion     = "MINIO_REGION"      // legacy
+	EnvRegionName = "MINIO_REGION_NAME" // legacy
 )

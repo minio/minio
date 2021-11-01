@@ -126,7 +126,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	cred := globalActiveCred
 
 	// Get saved region.
-	region := globalServerRegion
+	region := globalSite.Region
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
