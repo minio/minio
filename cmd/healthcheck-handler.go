@@ -28,6 +28,10 @@ import (
 
 const unavailable = "offline"
 
+func shouldProxy() bool {
+	return newObjectLayerFn() == nil
+}
+
 // ClusterCheckHandler returns if the server is ready for requests.
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if globalIsGateway {
