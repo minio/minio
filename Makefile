@@ -46,6 +46,12 @@ test-race: verifiers build
 	@echo "Running unit tests under -race"
 	@(env bash $(PWD)/buildscripts/race.sh)
 
+test-ldap: build
+	@echo "Running tests for LDAP integration"
+	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAMWithLDAPServerSuite ./cmd
+	@echo "Running tests for LDAP integration with -race"
+	@GOGC=25 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAMWithLDAPServerSuite ./cmd
+
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
 	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
