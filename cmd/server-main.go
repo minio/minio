@@ -511,7 +511,7 @@ func serverMain(ctx *cli.Context) {
 		addrs = append(addrs, globalMinioAddr)
 	}
 
-	httpServer := xhttp.NewServer(addrs, criticalErrorHandler{corsHandler(handler)}, getCert)
+	httpServer := xhttp.NewServer(addrs, setCriticalErrorHandler(corsHandler(handler)), getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
@@ -570,7 +570,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient)
+	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
 	initDataScanner(GlobalContext, newObject)
 

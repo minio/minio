@@ -33,6 +33,9 @@ import (
 // CheckPreconditionFn returns true if precondition check failed.
 type CheckPreconditionFn func(o ObjectInfo) bool
 
+// EvalMetadataFn validates input objInfo and returns an updated metadata
+type EvalMetadataFn func(o ObjectInfo) error
+
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 
@@ -50,6 +53,7 @@ type ObjectOptions struct {
 	UserDefined       map[string]string   // only set in case of POST/PUT operations
 	PartNumber        int                 // only useful in case of GetObject/HeadObject
 	CheckPrecondFn    CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	EvalMetadataFn    EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
 	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions

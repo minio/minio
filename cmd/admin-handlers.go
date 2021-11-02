@@ -997,8 +997,6 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	objectAPI.DeleteBucket(ctx, pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix), DeleteBucketOptions{Force: true, NoRecreate: true})
-
-	w.(http.Flusher).Flush()
 }
 
 // Admin API errors
@@ -2096,7 +2094,7 @@ func fetchKMSStatus() madmin.KMS {
 func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 	var loggerInfo []madmin.Logger
 	var auditloggerInfo []madmin.Audit
-	for _, target := range logger.Targets {
+	for _, target := range logger.Targets() {
 		if target.Endpoint() != "" {
 			tgt := target.String()
 			err := checkConnection(target.Endpoint(), 15*time.Second)
@@ -2112,7 +2110,7 @@ func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 		}
 	}
 
-	for _, target := range logger.AuditTargets {
+	for _, target := range logger.AuditTargets() {
 		if target.Endpoint() != "" {
 			tgt := target.String()
 			err := checkConnection(target.Endpoint(), 15*time.Second)

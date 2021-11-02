@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 const (
@@ -261,6 +261,16 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
+			expectedRespStatus: http.StatusNoContent,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"]]}`,
+		},
+		// Success case, big body.
+		{
+			objectName:         "test",
+			data:               bytes.Repeat([]byte("a"), 10<<20),
 			expectedRespStatus: http.StatusNoContent,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,

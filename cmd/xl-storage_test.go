@@ -443,7 +443,8 @@ func TestXLStorageReadAll(t *testing.T) {
 	for i, testCase := range testCases {
 		dataRead, err = xlStorage.ReadAll(context.Background(), testCase.volume, testCase.path)
 		if err != testCase.err {
-			t.Fatalf("TestXLStorage %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
+			t.Errorf("TestXLStorage %d: Expected err \"%v\", got err \"%v\"", i+1, testCase.err, err)
+			continue
 		}
 		if err == nil {
 			if string(dataRead) != string([]byte("Hello, World")) {

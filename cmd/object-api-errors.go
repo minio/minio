@@ -291,6 +291,13 @@ func (e MethodNotAllowed) Error() string {
 	return "Method not allowed: " + e.Bucket + "/" + e.Object
 }
 
+// ObjectLocked object is currently WORM protected.
+type ObjectLocked GenericError
+
+func (e ObjectLocked) Error() string {
+	return "Object is WORM protected and cannot be overwritten: " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
+}
+
 // ObjectAlreadyExists object already exists.
 type ObjectAlreadyExists GenericError
 

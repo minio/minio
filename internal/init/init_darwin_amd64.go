@@ -15,20 +15,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main // import "github.com/minio/minio"
+package init
 
 import (
-	"os"
-
-	// MUST be first import.
-	_ "github.com/minio/minio/internal/init"
-
-	minio "github.com/minio/minio/cmd"
-
-	// Import gateway
-	_ "github.com/minio/minio/cmd/gateway"
+	"github.com/klauspost/cpuid/v2"
 )
 
-func main() {
-	minio.Main(os.Args)
+func init() {
+	// Temporary workaround for
+	// https://github.com/golang/go/issues/49233
+	// Keep until upstream has been fixed.
+	cpuid.CPU.Disable(cpuid.AVX512F, cpuid.AVX512BW, cpuid.AVX512CD, cpuid.AVX512DQ,
+		cpuid.AVX512ER, cpuid.AVX512FP16, cpuid.AVX512IFMA, cpuid.AVX512PF, cpuid.AVX512VBMI,
+		cpuid.AVX512VBMI2, cpuid.AVX512VL, cpuid.AVX512VNNI, cpuid.AVX512VP2INTERSECT, cpuid.AVX512VPOPCNTDQ)
 }

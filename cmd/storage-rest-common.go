@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v40" // Add ReplicationState field
+	storageRESTVersion       = "v41" // Optimized DeleteVersions API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

@@ -20,7 +20,6 @@ package stats
 import (
 	"io"
 	"net/http"
-	"sync/atomic"
 )
 
 // IncomingTrafficMeter counts the incoming bytes from the underlying request.Body.
@@ -32,14 +31,14 @@ type IncomingTrafficMeter struct {
 // Read calls the underlying Read and counts the transferred bytes.
 func (r *IncomingTrafficMeter) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	atomic.AddInt64(&r.countBytes, int64(n))
+	r.countBytes += int64(n)
 
 	return n, err
 }
 
-// BytesCount returns the number of transferred bytes
-func (r *IncomingTrafficMeter) BytesCount() int64 {
-	return atomic.LoadInt64(&r.countBytes)
+// BytesRead returns the number of transferred bytes
+func (r *IncomingTrafficMeter) BytesRead() int64 {
+	return r.countBytes
 }
 
 // OutgoingTrafficMeter counts the outgoing bytes through the responseWriter.
@@ -52,7 +51,7 @@ type OutgoingTrafficMeter struct {
 // Write calls the underlying write and counts the output bytes
 func (w *OutgoingTrafficMeter) Write(p []byte) (n int, err error) {
 	n, err = w.ResponseWriter.Write(p)
-	atomic.AddInt64(&w.countBytes, int64(n))
+	w.countBytes += int64(n)
 	return n, err
 }
 
@@ -61,7 +60,7 @@ func (w *OutgoingTrafficMeter) Flush() {
 	w.ResponseWriter.(http.Flusher).Flush()
 }
 
-// BytesCount returns the number of transferred bytes
-func (w *OutgoingTrafficMeter) BytesCount() int64 {
-	return atomic.LoadInt64(&w.countBytes)
+// BytesWritten returns the number of transferred bytes
+func (w *OutgoingTrafficMeter) BytesWritten() int64 {
+	return w.countBytes
 }

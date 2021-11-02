@@ -24,8 +24,10 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/gzhttp"
 	"github.com/minio/minio/internal/logger/message/audit"
 )
 
@@ -156,7 +158,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
-	if len(AuditTargets) == 0 {
+	if atomic.LoadInt32(&nAuditTargets) == 0 {
 		return
 	}
 
@@ -183,13 +185,24 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			statusCode      int
 			timeToResponse  time.Duration
 			timeToFirstByte time.Duration
+			outputBytes     int64 = -1 // -1: unknown output bytes
 		)
 
-		st, ok := w.(*ResponseWriter)
-		if ok {
+		var st *ResponseWriter
+		switch v := w.(type) {
+		case *ResponseWriter:
+			st = v
+		case *gzhttp.GzipResponseWriter:
+			// the writer may be obscured by gzip response writer
+			if rw, ok := v.ResponseWriter.(*ResponseWriter); ok {
+				st = rw
+			}
+		}
+		if st != nil {
 			statusCode = st.StatusCode
 			timeToResponse = time.Now().UTC().Sub(st.StartTime)
 			timeToFirstByte = st.TimeToFirstByte
+			outputBytes = int64(st.Size())
 		}
 
 		entry.API.Name = reqInfo.API
@@ -198,7 +211,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.Status = http.StatusText(statusCode)
 		entry.API.StatusCode = statusCode
 		entry.API.InputBytes = r.ContentLength
-		entry.API.OutputBytes = int64(st.Size())
+		entry.API.OutputBytes = outputBytes
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.Tags = reqInfo.GetTagsMap()
 		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
@@ -213,7 +226,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	}
 
 	// Send audit logs only to http targets.
-	for _, t := range AuditTargets {
+	for _, t := range AuditTargets() {
 		_ = t.Send(entry, string(All))
 	}
 }

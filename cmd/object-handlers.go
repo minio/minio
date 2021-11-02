@@ -2283,6 +2283,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
+	if api.CacheAPI() != nil {
+		newMultipartUpload = api.CacheAPI().NewMultipartUpload
+	}
 
 	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
@@ -2597,9 +2600,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	srcInfo.PutObjReader = pReader
+	copyObjectPart := objectAPI.CopyObjectPart
+	if api.CacheAPI() != nil {
+		copyObjectPart = api.CacheAPI().CopyObjectPart
+	}
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
+	partInfo, err := copyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
 		startOffset, length, srcInfo, srcOpts, dstOpts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -2854,6 +2861,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
+	if api.CacheAPI() != nil {
+		putObjectPart = api.CacheAPI().PutObjectPart
+	}
 
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
 	if err != nil {
@@ -2907,6 +2917,9 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 	abortMultipartUpload := objectAPI.AbortMultipartUpload
+	if api.CacheAPI() != nil {
+		abortMultipartUpload = api.CacheAPI().AbortMultipartUpload
+	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.AbortMultipartUploadAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
@@ -3191,7 +3204,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	s3MD5 := getCompleteMultipartMD5(originalCompleteParts)
 
 	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
-
+	if api.CacheAPI() != nil {
+		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
+	}
 	// This code is specifically to handle the requirements for slow
 	// complete multipart upload operations on FS mode.
 	writeErrorResponseWithoutXMLHeader := func(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
@@ -3209,7 +3224,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		setCommonHeaders(w)
 		w.Header().Set(xhttp.ContentType, string(mimeXML))
 		w.Write(encodedErrorResponse)
-		w.(http.Flusher).Flush()
 	}
 
 	versioned := globalBucketVersioningSys.Enabled(bucket)
@@ -3522,53 +3536,39 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
-
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	popts := ObjectOptions{
+		MTime:     opts.MTime,
+		VersionID: opts.VersionID,
+		EvalMetadataFn: func(oi ObjectInfo) error {
+			oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
+			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp] = UTCNow().Format(time.RFC3339Nano)
+
+			dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(oi, replication.MetadataReplicationType, opts))
+			if dsc.ReplicateAny() {
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
+			}
+			return nil
+		},
+	}
+
+	objInfo, err := objectAPI.PutObjectMetadata(ctx, bucket, object, popts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if objInfo.DeleteMarker {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
-	objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp] = UTCNow().Format(time.RFC3339Nano)
 
 	dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(objInfo, replication.MetadataReplicationType, opts))
 	if dsc.ReplicateAny() {
-		objInfo.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
-		objInfo.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
-	}
-	// if version-id is not specified retention is supposed to be set on the latest object.
-	if opts.VersionID == "" {
-		opts.VersionID = objInfo.VersionID
-	}
-	popts := ObjectOptions{
-		MTime:       opts.MTime,
-		VersionID:   opts.VersionID,
-		UserDefined: make(map[string]string, len(objInfo.UserDefined)),
-	}
-	for k, v := range objInfo.UserDefined {
-		popts.UserDefined[k] = v
-	}
-	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if dsc.ReplicateAny() {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.MetadataReplicationType)
 	}
+
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object event.
@@ -3704,50 +3704,37 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
-
-	objInfo, s3Err := enforceRetentionBypassForPut(ctx, r, bucket, object, getObjectInfo, objRetention, cred, owner)
-	if s3Err != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
-		return
-	}
-	if objInfo.DeleteMarker {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-	if objRetention.Mode.Valid() {
-		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
-		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
-	} else {
-		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
-		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
-	}
-	objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = UTCNow().Format(time.RFC3339Nano)
-
-	dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(objInfo, replication.MetadataReplicationType, opts))
-	if dsc.ReplicateAny() {
-		objInfo.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
-		objInfo.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
-	}
-	// if version-id is not specified retention is supposed to be set on the latest object.
-	if opts.VersionID == "" {
-		opts.VersionID = objInfo.VersionID
-	}
 	popts := ObjectOptions{
-		MTime:       opts.MTime,
-		VersionID:   opts.VersionID,
-		UserDefined: make(map[string]string, len(objInfo.UserDefined)),
+		MTime:     opts.MTime,
+		VersionID: opts.VersionID,
+		EvalMetadataFn: func(oi ObjectInfo) error {
+			if err := enforceRetentionBypassForPut(ctx, r, oi, objRetention, cred, owner); err != nil {
+				return err
+			}
+			if objRetention.Mode.Valid() {
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
+			} else {
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
+			}
+			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = UTCNow().Format(time.RFC3339Nano)
+			dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(oi, replication.MetadataReplicationType, opts))
+			if dsc.ReplicateAny() {
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
+				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
+			}
+			return nil
+		},
 	}
-	for k, v := range objInfo.UserDefined {
-		popts.UserDefined[k] = v
-	}
-	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
+
+	objInfo, err := objectAPI.PutObjectMetadata(ctx, bucket, object, popts)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
+	dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(objInfo, replication.MetadataReplicationType, opts))
 	if dsc.ReplicateAny() {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.MetadataReplicationType)
 	}

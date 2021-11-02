@@ -16,7 +16,7 @@ minio gateway <name> -h
      MINIO_CACHE_WATERMARK_LOW: % of cache quota at which cache eviction stops
      MINIO_CACHE_WATERMARK_HIGH: % of cache quota at which cache eviction starts
      MINIO_CACHE_RANGE: set to "on" or "off" caching of independent range requests per object, defaults to "on"
-
+     MINIO_CACHE_COMMIT: set to 'writeback' or 'writethrough' for upload caching
 
 ...
 ...
@@ -86,6 +86,10 @@ master key to automatically encrypt all cached content.
 
   Note that cache KMS master key is not recommended for use in production deployments. If the MinIO server/gateway machine is ever compromised, the cache KMS master key must also be treated as compromised.
   Support for external KMS to manage cache KMS keys is on the roadmap,and would be ideal for production use cases.
+
+- `MINIO_CACHE_COMMIT` setting of `writethrough` allows caching of multipart uploads synchronously if enabled. By default, single PUT operations are already cached on write without any special setting.
+
+NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. However, for consistency reasons, staging uploads in the cache are not permitted for multipart uploads. Partially cached stale uploads older than 24 hours are automatically cleaned up.
 
 > NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
 

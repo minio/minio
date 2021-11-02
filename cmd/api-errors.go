@@ -1956,6 +1956,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchKey
 	case MethodNotAllowed:
 		apiErr = ErrMethodNotAllowed
+	case ObjectLocked:
+		apiErr = ErrObjectLocked
 	case InvalidVersionID:
 		apiErr = ErrInvalidVersionID
 	case VersionNotFound:

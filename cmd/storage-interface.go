@@ -57,7 +57,7 @@ type StorageAPI interface {
 
 	// Metadata operations
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error
-	DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error
+	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)

@@ -39,7 +39,7 @@ type Config struct {
 	WatermarkLow    int      `json:"watermark_low"`
 	WatermarkHigh   int      `json:"watermark_high"`
 	Range           bool     `json:"range"`
-	CommitWriteback bool     `json:"-"`
+	CacheCommitMode string   `json:"commit_mode"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
@@ -155,12 +155,11 @@ func parseCacheExcludes(excludes string) ([]string, error) {
 	return excludesSlice, nil
 }
 
-func parseCacheCommitMode(commitStr string) (bool, error) {
+func parseCacheCommitMode(commitStr string) (string, error) {
 	switch strings.ToLower(commitStr) {
-	case "writeback":
-		return true, nil
-	case "writethrough":
-		return false, nil
+	case "writeback", "writethrough":
+		return strings.ToLower(commitStr), nil
+	default:
+		return "", config.ErrInvalidCacheCommitValue(nil).Msg("cache commit value must be `writeback` or `writethrough`")
 	}
-	return false, config.ErrInvalidCacheCommitValue(nil).Msg("cache commit value must be `writeback` or `writethrough`")
 }

@@ -326,7 +326,6 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	json.NewEncoder(w).Encode(rd)
-	w.(http.Flusher).Flush()
 }
 
 // SetConfigHandler - PUT /minio/admin/v3/config
