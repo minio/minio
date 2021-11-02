@@ -34,30 +34,44 @@ import (
 
 // IAMObjectStore implements IAMStorageAPI
 type IAMObjectStore struct {
-	// Protect assignment to objAPI
+	// Protect access to storage within the current server.
 	sync.RWMutex
+
+	*iamCache
+
+	usersSysType UsersSysType
 
 	objAPI ObjectLayer
 }
 
-func newIAMObjectStore(objAPI ObjectLayer) *IAMObjectStore {
-	return &IAMObjectStore{objAPI: objAPI}
+func newIAMObjectStore(objAPI ObjectLayer, usersSysType UsersSysType) *IAMObjectStore {
+	return &IAMObjectStore{
+		iamCache:     newIamCache(),
+		objAPI:       objAPI,
+		usersSysType: usersSysType,
+	}
 }
 
-func (iamOS *IAMObjectStore) lock() {
+func (iamOS *IAMObjectStore) rlock() *iamCache {
+	iamOS.RLock()
+	return iamOS.iamCache
+}
+
+func (iamOS *IAMObjectStore) runlock() {
+	iamOS.RUnlock()
+}
+
+func (iamOS *IAMObjectStore) lock() *iamCache {
 	iamOS.Lock()
+	return iamOS.iamCache
 }
 
 func (iamOS *IAMObjectStore) unlock() {
 	iamOS.Unlock()
 }
 
-func (iamOS *IAMObjectStore) rlock() {
-	iamOS.RLock()
-}
-
-func (iamOS *IAMObjectStore) runlock() {
-	iamOS.RUnlock()
+func (iamOS *IAMObjectStore) getUsersSysType() UsersSysType {
+	return iamOS.usersSysType
 }
 
 // Migrate users directory in a single scan.
@@ -182,6 +196,8 @@ func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
 
 // Should be called under config migration lock
 func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
+	iamOS.Lock()
+	defer iamOS.Unlock()
 	return iamOS.migrateToV1(ctx)
 }
 
