@@ -394,17 +394,17 @@ func TestComputeActions(t *testing.T) {
 		{
 			inputConfig:    `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Transition><Days>0</Days><StorageClass>S3TIER-1</StorageClass></Transition></Rule></BucketLifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
-			objectModTime:  time.Now().UTC(), // Created now
+			objectModTime:  time.Now().Add(-1 * time.Nanosecond).UTC(), // Created now
 			expectedAction: TransitionAction,
 		},
 		// Should transition immediately when NoncurrentVersion Transition days is zero
 		{
 			inputConfig:            `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><NoncurrentVersionTransition><NoncurrentDays>0</NoncurrentDays><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></BucketLifecycleConfiguration>`,
 			objectName:             "foodir/fooobject",
-			objectModTime:          time.Now().UTC(), // Created now
+			objectModTime:          time.Now().Add(-1 * time.Nanosecond).UTC(), // Created now
 			expectedAction:         TransitionVersionAction,
 			isNoncurrent:           true,
-			objectSuccessorModTime: time.Now().UTC(),
+			objectSuccessorModTime: time.Now().Add(-1 * time.Nanosecond).UTC(),
 			versionID:              uuid.New().String(),
 		},
 	}
