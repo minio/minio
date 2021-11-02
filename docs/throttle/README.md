@@ -27,7 +27,7 @@ mc admin config set myminio/ api requests_max=1600
 mc admin service restart myminio/
 ```
 
-> NOTE: A zero value of `requests_max` means unlimited and that is the default behavior.
+> NOTE: A zero value of `requests_max` means MinIO will automatically calculate requests based on available RAM size and that is the default behavior.
 
 ### Configuring connection (wait) deadline
 This value works in conjunction with max connection setting, setting this value allows for long waiting requests to quickly time out when there is no slot available to perform the request.
