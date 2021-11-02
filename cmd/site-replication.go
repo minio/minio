@@ -1270,9 +1270,7 @@ func (c *SiteReplicationSys) getAdminClient(ctx context.Context, deploymentID st
 }
 
 func (c *SiteReplicationSys) getPeerCreds() (*auth.Credentials, error) {
-	globalIAMSys.store.rlock()
-	defer globalIAMSys.store.runlock()
-	creds, ok := globalIAMSys.iamUsersMap[c.state.ServiceAccountAccessKey]
+	creds, ok := globalIAMSys.store.GetUser(c.state.ServiceAccountAccessKey)
 	if !ok {
 		return nil, errors.New("site replication service account not found!")
 	}
