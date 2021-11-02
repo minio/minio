@@ -202,13 +202,6 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 }
 
 func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
-	restoreGlobalStorageClass := globalStorageClass
-	defer func() {
-		globalStorageClass = restoreGlobalStorageClass
-	}()
-
-	globalStorageClass = storageclass.Config{}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -278,13 +271,6 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 }
 
 func TestErasureDeleteObjectDiskNotFoundErasure4(t *testing.T) {
-	restoreGlobalStorageClass := globalStorageClass
-	defer func() {
-		globalStorageClass = restoreGlobalStorageClass
-	}()
-
-	globalStorageClass = storageclass.Config{}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -345,13 +331,6 @@ func TestErasureDeleteObjectDiskNotFoundErasure4(t *testing.T) {
 }
 
 func TestErasureDeleteObjectDiskNotFoundErr(t *testing.T) {
-	restoreGlobalStorageClass := globalStorageClass
-	defer func() {
-		globalStorageClass = restoreGlobalStorageClass
-	}()
-
-	globalStorageClass = storageclass.Config{}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -807,13 +786,6 @@ func TestObjectQuorumFromMeta(t *testing.T) {
 }
 
 func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
-	restoreGlobalStorageClass := globalStorageClass
-	defer func() {
-		globalStorageClass = restoreGlobalStorageClass
-	}()
-
-	globalStorageClass = storageclass.Config{}
-
 	bucket := getRandomBucketName()
 
 	var opts ObjectOptions
