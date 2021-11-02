@@ -103,6 +103,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusServiceUnavailable,
 			}
+		case errors.Is(err, errPolicyInUse):
+			apiErr = APIError{
+				Code:           "XMinioAdminPolicyInUse",
+				Description:    "The policy cannot be removed, as it is in use",
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case errors.Is(err, kes.ErrKeyExists):
 			apiErr = APIError{
 				Code:           "XMinioKMSKeyExists",
