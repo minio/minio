@@ -973,99 +973,111 @@ func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogO
 }
 
 // Get the max throughput and iops numbers.
-func speedTest(ctx context.Context, throughputSize, concurrencyStart int, duration time.Duration, autotune bool) (madmin.SpeedTestResult, error) {
-	var result madmin.SpeedTestResult
+func speedTest(ctx context.Context, throughputSize, concurrencyStart int, duration time.Duration, autotune bool) chan madmin.SpeedTestResult {
+	ch := make(chan madmin.SpeedTestResult, 1)
+	go func() {
+		defer close(ch)
 
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		return result, errServerNotInitialized
-	}
-
-	concurrency := concurrencyStart
-
-	throughputHighestGet := uint64(0)
-	throughputHighestPut := uint64(0)
-	var throughputHighestGetResults []SpeedtestResult
-
-	for {
-		select {
-		case <-ctx.Done():
-			// If the client got disconnected stop the speedtest.
-			return result, errUnexpected
-		default:
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			return
 		}
 
-		results := globalNotificationSys.Speedtest(ctx, throughputSize, concurrency, duration)
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].Endpoint < results[j].Endpoint
-		})
-		totalPut := uint64(0)
-		totalGet := uint64(0)
-		for _, result := range results {
-			totalPut += result.Uploads
-			totalGet += result.Downloads
+		concurrency := concurrencyStart
+
+		throughputHighestGet := uint64(0)
+		throughputHighestPut := uint64(0)
+		var throughputHighestGetResults []SpeedtestResult
+
+		sendResult := func() {
+			var result madmin.SpeedTestResult
+
+			durationSecs := duration.Seconds()
+
+			result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
+			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(throughputSize) / uint64(durationSecs)
+			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
+			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(throughputSize) / uint64(durationSecs)
+			for i := 0; i < len(throughputHighestGetResults); i++ {
+				errStr := ""
+				if throughputHighestGetResults[i].Error != "" {
+					errStr = throughputHighestGetResults[i].Error
+				}
+				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
+					Endpoint:         throughputHighestGetResults[i].Endpoint,
+					ThroughputPerSec: throughputHighestGetResults[i].Uploads / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestGetResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
+					Err:              errStr,
+				})
+				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
+					Endpoint:         throughputHighestGetResults[i].Endpoint,
+					ThroughputPerSec: throughputHighestGetResults[i].Downloads / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestGetResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
+					Err:              errStr,
+				})
+			}
+
+			numDisks := 0
+			if pools, ok := objAPI.(*erasureServerPools); ok {
+				for _, set := range pools.serverPools {
+					numDisks = set.setCount * set.setDriveCount
+				}
+			}
+			result.Disks = numDisks
+			result.Servers = len(globalNotificationSys.peerClients) + 1
+			result.Version = Version
+			result.Size = throughputSize
+			result.Concurrent = concurrency
+
+			ch <- result
 		}
 
-		if totalGet < throughputHighestGet {
-			break
-		}
+		for {
+			select {
+			case <-ctx.Done():
+				// If the client got disconnected stop the speedtest.
+				return
+			default:
+			}
 
-		doBreak := false
-		if float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025 {
-			doBreak = true
-		}
+			results := globalNotificationSys.Speedtest(ctx, throughputSize, concurrency, duration)
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].Endpoint < results[j].Endpoint
+			})
+			totalPut := uint64(0)
+			totalGet := uint64(0)
+			for _, result := range results {
+				totalPut += result.Uploads
+				totalGet += result.Downloads
+			}
 
-		if totalGet > throughputHighestGet {
+			if totalGet < throughputHighestGet {
+				sendResult()
+				break
+			}
+
+			doBreak := false
+			if float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025 {
+				doBreak = true
+			}
+
 			throughputHighestGet = totalGet
 			throughputHighestGetResults = results
 			throughputHighestPut = totalPut
+
+			if doBreak {
+				sendResult()
+				break
+			}
+
+			if !autotune {
+				sendResult()
+				break
+			}
+			sendResult()
+			// Try with a higher concurrency to see if we get better throughput
+			concurrency += (concurrency + 1) / 2
 		}
-
-		if doBreak {
-			break
-		}
-
-		if !autotune {
-			break
-		}
-		// Try with a higher concurrency to see if we get better throughput
-		concurrency += (concurrency + 1) / 2
-	}
-
-	durationSecs := duration.Seconds()
-
-	result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
-	result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(throughputSize) / uint64(durationSecs)
-	result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
-	result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(throughputSize) / uint64(durationSecs)
-	for i := 0; i < len(throughputHighestGetResults); i++ {
-		errStr := ""
-		if throughputHighestGetResults[i].Error != "" {
-			errStr = throughputHighestGetResults[i].Error
-		}
-		result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
-			Endpoint:         throughputHighestGetResults[i].Endpoint,
-			ThroughputPerSec: throughputHighestGetResults[i].Uploads / uint64(durationSecs),
-			ObjectsPerSec:    throughputHighestGetResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
-			Err:              errStr,
-		})
-		result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
-			Endpoint:         throughputHighestGetResults[i].Endpoint,
-			ThroughputPerSec: throughputHighestGetResults[i].Downloads / uint64(durationSecs),
-			ObjectsPerSec:    throughputHighestGetResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
-			Err:              errStr,
-		})
-	}
-
-	numDisks := 0
-	if pools, ok := objAPI.(*erasureServerPools); ok {
-		for _, set := range pools.serverPools {
-			numDisks = set.setCount * set.setDriveCount
-		}
-	}
-	result.Disks = numDisks
-	result.Servers = len(globalNotificationSys.peerClients) + 1
-	result.Version = Version
-
-	return result, nil
+	}()
+	return ch
 }
