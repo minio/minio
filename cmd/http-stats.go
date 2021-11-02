@@ -178,8 +178,8 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 
 // Update statistics from http request and response data
 func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter) {
-	// A successful request has a 2xx response code
-	successReq := w.StatusCode >= 200 && w.StatusCode < 300
+	// A successful request has a 2xx response code or < 4xx response
+	successReq := w.StatusCode >= 200 && w.StatusCode < 400
 
 	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPathLegacy) ||
 		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
@@ -189,7 +189,7 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 			switch w.StatusCode {
 			case 0:
 			case 499:
-				// 499 is a good error, shall be counted at canceled.
+				// 499 is a good error, shall be counted as canceled.
 				st.totalS3Canceled.Inc(api)
 			default:
 				st.totalS3Errors.Inc(api)
