@@ -63,7 +63,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 
 	var apiRequestsMaxPerNode int
-	if cfg.RequestsMax <= 0 {
+	if cfg.RequestsMax < 0 {
 		var maxMem uint64
 		memStats, err := mem.VirtualMemory()
 		if err != nil {
@@ -90,7 +90,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		}
 	}
 
-	if cap(t.requestsPool) < apiRequestsMaxPerNode {
+	if apiRequestsMaxPerNode == 0 {
+		t.requestsPool = nil
+	} else if cap(t.requestsPool) < apiRequestsMaxPerNode {
 		// Only replace if needed.
 		// Existing requests will use the previous limit,
 		// but new requests will use the new limit.
