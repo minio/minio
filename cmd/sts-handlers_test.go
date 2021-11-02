@@ -95,10 +95,6 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 		c.Fatalf("Unable to set policy: %v", err)
 	}
 
-	// confirm that the user is able to access the bucket
-	uClient := s.getUserClient(c, accessKey, secretKey, "")
-	c.mustListObjects(ctx, uClient, bucket)
-
 	assumeRole := cr.STSAssumeRole{
 		Client:      s.TestSuiteCommon.client,
 		STSEndpoint: s.endPoint,

@@ -62,37 +62,27 @@ func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
 type IAMEtcdStore struct {
 	sync.RWMutex
 
-	*iamCache
-
-	usersSysType UsersSysType
-
 	client *etcd.Client
 }
 
-func newIAMEtcdStore(client *etcd.Client, usersSysType UsersSysType) *IAMEtcdStore {
-	return &IAMEtcdStore{client: client, usersSysType: usersSysType}
+func newIAMEtcdStore(client *etcd.Client) *IAMEtcdStore {
+	return &IAMEtcdStore{client: client}
 }
 
-func (ies *IAMEtcdStore) rlock() *iamCache {
-	ies.RLock()
-	return ies.iamCache
-}
-
-func (ies *IAMEtcdStore) runlock() {
-	ies.RUnlock()
-}
-
-func (ies *IAMEtcdStore) lock() *iamCache {
+func (ies *IAMEtcdStore) lock() {
 	ies.Lock()
-	return ies.iamCache
 }
 
 func (ies *IAMEtcdStore) unlock() {
 	ies.Unlock()
 }
 
-func (ies *IAMEtcdStore) getUsersSysType() UsersSysType {
-	return ies.usersSysType
+func (ies *IAMEtcdStore) rlock() {
+	ies.RLock()
+}
+
+func (ies *IAMEtcdStore) runlock() {
+	ies.RUnlock()
 }
 
 func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, itemPath string, opts ...options) error {
@@ -254,8 +244,6 @@ func (ies *IAMEtcdStore) migrateToV1(ctx context.Context) error {
 
 // Should be called under config migration lock
 func (ies *IAMEtcdStore) migrateBackendFormat(ctx context.Context) error {
-	ies.Lock()
-	defer ies.Unlock()
 	return ies.migrateToV1(ctx)
 }
 
@@ -272,7 +260,7 @@ func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map
 	return nil
 }
 
-func (ies *IAMEtcdStore) getPolicyDocKV(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]iampolicy.Policy) error {
+func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]iampolicy.Policy) error {
 	var p iampolicy.Policy
 	err := getIAMConfig(&p, kvs.Value, string(kvs.Key))
 	if err != nil {
@@ -298,14 +286,14 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 
 	// Parse all values to construct the policies data model.
 	for _, kvs := range r.Kvs {
-		if err = ies.getPolicyDocKV(ctx, kvs, m); err != nil && err != errNoSuchPolicy {
+		if err = ies.getPolicyDoc(ctx, kvs, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
 	return nil
 }
 
-func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
+func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
 	var u UserIdentity
 	err := getIAMConfig(&u, userkv.Value, string(userkv.Key))
 	if err != nil {
@@ -367,7 +355,7 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 
 	// Parse all users values to create the proper data model
 	for _, userKv := range r.Kvs {
-		if err = ies.getUserKV(ctx, userKv, userType, m, basePrefix); err != nil && err != errNoSuchUser {
+		if err = ies.getUser(ctx, userKv, userType, m, basePrefix); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
