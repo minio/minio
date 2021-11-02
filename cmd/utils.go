@@ -973,7 +973,7 @@ func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogO
 }
 
 // Get the max throughput and iops numbers.
-func speedTest(ctx context.Context, throughputSize, iopsSize int, concurrencyStart int, duration time.Duration, autotune bool) (madmin.SpeedTestResult, error) {
+func speedTest(ctx context.Context, throughputSize, concurrencyStart int, duration time.Duration, autotune bool) (madmin.SpeedTestResult, error) {
 	var result madmin.SpeedTestResult
 
 	objAPI := newObjectLayerFn()
@@ -985,7 +985,6 @@ func speedTest(ctx context.Context, throughputSize, iopsSize int, concurrencySta
 
 	throughputHighestGet := uint64(0)
 	throughputHighestPut := uint64(0)
-	var throughputHighestPutResults []SpeedtestResult
 	var throughputHighestGetResults []SpeedtestResult
 
 	for {
@@ -1006,18 +1005,26 @@ func speedTest(ctx context.Context, throughputSize, iopsSize int, concurrencySta
 			totalPut += result.Uploads
 			totalGet += result.Downloads
 		}
-		if totalPut < throughputHighestPut && totalGet < throughputHighestGet {
+
+		if totalGet < throughputHighestGet {
 			break
 		}
 
-		if totalPut > throughputHighestPut {
-			throughputHighestPut = totalPut
-			throughputHighestPutResults = results
+		doBreak := false
+		if float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025 {
+			doBreak = true
 		}
+
 		if totalGet > throughputHighestGet {
 			throughputHighestGet = totalGet
 			throughputHighestGetResults = results
+			throughputHighestPut = totalPut
 		}
+
+		if doBreak {
+			break
+		}
+
 		if !autotune {
 			break
 		}
@@ -1025,96 +1032,27 @@ func speedTest(ctx context.Context, throughputSize, iopsSize int, concurrencySta
 		concurrency += (concurrency + 1) / 2
 	}
 
-	concurrency = concurrencyStart
-	iopsHighestPut := uint64(0)
-	iopsHighestGet := uint64(0)
-	var iopsHighestPutResults []SpeedtestResult
-	var iopsHighestGetResults []SpeedtestResult
-
-	if autotune {
-		for {
-			select {
-			case <-ctx.Done():
-				// If the client got disconnected stop the speedtest.
-				return result, errUnexpected
-			default:
-			}
-			results := globalNotificationSys.Speedtest(ctx, iopsSize, concurrency, duration)
-			sort.Slice(results, func(i, j int) bool {
-				return results[i].Endpoint < results[j].Endpoint
-			})
-			totalPut := uint64(0)
-			totalGet := uint64(0)
-			for _, result := range results {
-				totalPut += result.Uploads
-				totalGet += result.Downloads
-			}
-			if totalPut < iopsHighestPut && totalGet < iopsHighestGet {
-				break
-			}
-			if totalPut > iopsHighestPut {
-				iopsHighestPut = totalPut
-				iopsHighestPutResults = results
-			}
-			if totalGet > iopsHighestGet {
-				iopsHighestGet = totalGet
-				iopsHighestGetResults = results
-			}
-			if !autotune {
-				break
-			}
-			// Try with a higher concurrency to see if we get better throughput
-			concurrency += (concurrency + 1) / 2
-		}
-	} else {
-		iopsHighestPut = throughputHighestPut
-		iopsHighestGet = throughputHighestGet
-		iopsHighestPutResults = throughputHighestPutResults
-		iopsHighestGetResults = throughputHighestGetResults
-	}
-
-	if len(throughputHighestPutResults) != len(iopsHighestPutResults) {
-		return result, errors.New("throughput and iops differ in number of nodes")
-	}
-
-	if len(throughputHighestGetResults) != len(iopsHighestGetResults) {
-		return result, errors.New("throughput and iops differ in number of nodes")
-	}
-
 	durationSecs := duration.Seconds()
 
-	result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
-	result.PUTStats.ObjectsPerSec = iopsHighestPut / uint64(iopsSize) / uint64(durationSecs)
-	for i := 0; i < len(throughputHighestPutResults); i++ {
-		errStr := ""
-		if throughputHighestPutResults[i].Error != "" {
-			errStr = throughputHighestPutResults[i].Error
-		}
-		if iopsHighestPutResults[i].Error != "" {
-			errStr = iopsHighestPutResults[i].Error
-		}
-		result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
-			Endpoint:         throughputHighestPutResults[i].Endpoint,
-			ThroughputPerSec: throughputHighestPutResults[i].Uploads / uint64(durationSecs),
-			ObjectsPerSec:    iopsHighestPutResults[i].Uploads / uint64(iopsSize) / uint64(durationSecs),
-			Err:              errStr,
-		})
-	}
-
 	result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
-	result.GETStats.ObjectsPerSec = iopsHighestGet / uint64(iopsSize) / uint64(durationSecs)
+	result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(throughputSize) / uint64(durationSecs)
+	result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
+	result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(throughputSize) / uint64(durationSecs)
 	for i := 0; i < len(throughputHighestGetResults); i++ {
 		errStr := ""
 		if throughputHighestGetResults[i].Error != "" {
 			errStr = throughputHighestGetResults[i].Error
 		}
-		if iopsHighestGetResults[i].Error != "" {
-			errStr = iopsHighestGetResults[i].Error
-		}
+		result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
+			Endpoint:         throughputHighestGetResults[i].Endpoint,
+			ThroughputPerSec: throughputHighestGetResults[i].Uploads / uint64(durationSecs),
+			ObjectsPerSec:    throughputHighestGetResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
+			Err:              errStr,
+		})
 		result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
 			Endpoint:         throughputHighestGetResults[i].Endpoint,
 			ThroughputPerSec: throughputHighestGetResults[i].Downloads / uint64(durationSecs),
-			ObjectsPerSec:    iopsHighestGetResults[i].Downloads / uint64(iopsSize) / uint64(durationSecs),
+			ObjectsPerSec:    throughputHighestGetResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
 			Err:              errStr,
 		})
 	}
