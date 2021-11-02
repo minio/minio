@@ -54,7 +54,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/ioutil"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
@@ -504,14 +504,14 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	setHeadGetRespHeaders(w, r.Form)
 
 	statusCodeWritten := false
-	httpWriter := ioutil.WriteOnClose(w)
+	httpWriter := xioutil.WriteOnClose(w)
 	if rs != nil || opts.PartNumber > 0 {
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
 	}
 
 	// Write object content to response body
-	if _, err = io.Copy(httpWriter, gr); err != nil {
+	if _, err = xioutil.Copy(httpWriter, gr); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten {
 			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)

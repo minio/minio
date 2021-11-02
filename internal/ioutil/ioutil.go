@@ -24,6 +24,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/disk"
@@ -210,6 +211,22 @@ func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
 }
 
+var copyBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 32*1024)
+		return &b
+	},
+}
+
+// Copy is exactly like io.Copy but with re-usable buffers.
+func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
+	bufp := copyBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer copyBufPool.Put(bufp)
+
+	return io.CopyBuffer(dst, src, buf)
+}
+
 // SameFile returns if the files are same.
 func SameFile(fi1, fi2 os.FileInfo) bool {
 	if !os.SameFile(fi1, fi2) {
@@ -250,6 +267,7 @@ func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte, totalSize int64) (i
 		if err = disk.DisableDirectIO(w); err != nil {
 			return remainingWritten, err
 		}
+		// Since w is *os.File io.Copy shall use ReadFrom() call.
 		return io.Copy(w, bytes.NewReader(buf))
 	}
 
