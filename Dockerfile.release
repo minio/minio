@@ -27,8 +27,9 @@ COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE
 
 RUN \
+     microdnf clean all && \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux iproute iputils --nodocs && \
+     microdnf install curl ca-certificates shadow-utils --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
      microdnf install minisign --nodocs && \
      mkdir -p /opt/bin && chmod -R 777 /opt/bin && \
@@ -39,7 +40,8 @@ RUN \
      chmod +x /opt/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
-     /usr/bin/verify-minio.sh
+     /usr/bin/verify-minio.sh && \
+     microdnf clean all
 
 EXPOSE 9000
 
