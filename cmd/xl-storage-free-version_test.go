@@ -24,8 +24,8 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
-func (z xlMetaV2Shallow) listFreeVersions(volume, path string) ([]FileInfo, error) {
-	fivs, err := z.ListVersions(volume, path)
+func (x xlMetaV2Shallow) listFreeVersions(volume, path string) ([]FileInfo, error) {
+	fivs, err := x.ListVersions(volume, path)
 	if err != nil {
 		return nil, err
 	}
