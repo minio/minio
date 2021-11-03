@@ -929,24 +929,6 @@ func (x *xlMetaV2Shallow) getIdx(idx int) (ver *xlMetaV2Version, err error) {
 	return &dst, err
 }
 
-func (x *xlMetaV2Shallow) getVersion(versionID [16]byte) (idx int, ver *xlMetaV2Version) {
-	for i := range x.versions {
-		if x.versions[i].header.VersionID == versionID {
-			var dst xlMetaV2Version
-			if _, err := dst.UnmarshalMsg(x.versions[i].meta); err != nil {
-				return -1, nil
-			}
-			if true {
-				if dst.getVersionID() != versionID {
-					panic(fmt.Sprintf("%x != %x", dst.getVersionID(), versionID))
-				}
-			}
-			return i, &dst
-		}
-	}
-	return -1, nil
-}
-
 // setIdx will replace a version at a given index.
 // Note that versions may become re-sorted if modtime changes.
 func (x *xlMetaV2Shallow) setIdx(idx int, ver xlMetaV2Version) (err error) {
@@ -969,17 +951,17 @@ func (x *xlMetaV2Shallow) setIdx(idx int, ver xlMetaV2Version) (err error) {
 
 // sortByModTime will sort versions by modtime in descending order,
 // meaning index 0 will be latest version.
-func (z *xlMetaV2Shallow) sortByModTime() {
+func (x *xlMetaV2Shallow) sortByModTime() {
 	// Quick check
-	if len(z.versions) <= 1 || sort.SliceIsSorted(z.versions, func(i, j int) bool {
-		return z.versions[i].header.ModTime > z.versions[j].header.ModTime
+	if len(x.versions) <= 1 || sort.SliceIsSorted(x.versions, func(i, j int) bool {
+		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
 	}) {
 		return
 	}
 
 	// We should sort.
-	sort.Slice(z.versions, func(i, j int) bool {
-		return z.versions[i].header.ModTime > z.versions[j].header.ModTime
+	sort.Slice(x.versions, func(i, j int) bool {
+		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
 	})
 }
 
@@ -1069,8 +1051,6 @@ func (x *xlMetaV2Shallow) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 			return ver.ObjectV1.DataDir, len(x.versions) == 0, err
 		case DeleteType:
-			var err error
-
 			if updateVersion {
 				ver, err := x.getIdx(i)
 				if err != nil {
@@ -1096,11 +1076,12 @@ func (x *xlMetaV2Shallow) DeleteVersion(fi FileInfo) (string, bool, error) {
 					ver.DeleteMarker.MetaSys[k] = []byte(v)
 				}
 				err = x.setIdx(i, *ver)
-			} else {
-				x.versions = append(x.versions[:i], x.versions[i+1:]...)
-				if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
-					err = x.addVersion(ventry)
-				}
+				return "", len(x.versions) == 0, err
+			}
+			var err error
+			x.versions = append(x.versions[:i], x.versions[i+1:]...)
+			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
+				err = x.addVersion(ventry)
 			}
 			return "", len(x.versions) == 0, err
 		case ObjectType:
@@ -1385,7 +1366,7 @@ func (x *xlMetaV2Shallow) SharedDataDirCount(versionID [16]byte, dataDir [16]byt
 	return sameDataDirCount
 }
 
-func (z *xlMetaV2Shallow) SharedDataDirCountStr(versionID, dataDir string) int {
+func (x *xlMetaV2Shallow) SharedDataDirCountStr(versionID, dataDir string) int {
 	var (
 		uv   uuid.UUID
 		ddir uuid.UUID
@@ -1404,19 +1385,19 @@ func (z *xlMetaV2Shallow) SharedDataDirCountStr(versionID, dataDir string) int {
 	if err != nil {
 		return 0
 	}
-	return z.SharedDataDirCount(uv, ddir)
+	return x.SharedDataDirCount(uv, ddir)
 }
 
 // AddLegacy adds a legacy version, is only called when no prior
 // versions exist, safe to use it by only one function in xl-storage(RenameData)
-func (z *xlMetaV2Shallow) AddLegacy(m *xlMetaV1Object) error {
+func (x *xlMetaV2Shallow) AddLegacy(m *xlMetaV1Object) error {
 	if !m.valid() {
 		return errFileCorrupt
 	}
 	m.VersionID = nullVersionID
 	m.DataDir = legacyDataDir
 
-	return z.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
+	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
 }
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
@@ -1590,12 +1571,12 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (z xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
-	versions := make([]FileInfo, 0, len(z.versions))
+func (x xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
+	versions := make([]FileInfo, 0, len(x.versions))
 	var err error
 
 	var dst xlMetaV2Version
-	for _, version := range z.versions {
+	for _, version := range x.versions {
 		_, err = dst.UnmarshalMsg(version.meta)
 		if err != nil {
 			return versions, err
@@ -1604,7 +1585,7 @@ func (z xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
 		if err != nil {
 			return versions, err
 		}
-		fi.NumVersions = len(z.versions)
+		fi.NumVersions = len(x.versions)
 		versions = append(versions, fi)
 	}
 

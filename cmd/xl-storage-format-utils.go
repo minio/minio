@@ -18,26 +18,10 @@
 package cmd
 
 import (
-	"sort"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
-
-// versionsSorter sorts FileInfo slices by version.
-type versionsSorter []FileInfo
-
-func (v versionsSorter) sort() {
-	sort.Slice(v, func(i, j int) bool {
-		if v[i].IsLatest {
-			return true
-		}
-		if v[j].IsLatest {
-			return false
-		}
-		return v[i].ModTime.After(v[j].ModTime)
-	})
-}
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path)
