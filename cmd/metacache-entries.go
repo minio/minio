@@ -37,7 +37,7 @@ type metaCacheEntry struct {
 	metadata []byte
 
 	// cached contains the metadata if decoded.
-	cached *FileInfo
+	cached *xlMetaV2
 
 	// Indicates the entry can be reused and only one reference to metadata is expected.
 	reusable bool
@@ -59,7 +59,7 @@ func (e metaCacheEntry) hasPrefix(s string) bool {
 }
 
 // matches returns if the entries match by comparing their latest version fileinfo.
-func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
+func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
 	if e == nil && other == nil {
 		return true
 	}
@@ -67,28 +67,38 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
 		return false
 	}
 
-	// This should reject 99%
-	if len(e.metadata) != len(other.metadata) || e.name != other.name {
+	// Name should match...
+	if e.name != other.name {
 		return false
 	}
 
-	eFi, eErr := e.fileInfo(bucket)
-	oFi, oErr := other.fileInfo(bucket)
+	eVers, eErr := e.xlmeta()
+	oVers, oErr := e.xlmeta()
 	if eErr != nil || oErr != nil {
 		return eErr == oErr
 	}
 
 	// check both fileInfo's have same number of versions, if not skip
 	// the `other` entry.
-	if eFi.NumVersions != oFi.NumVersions {
+	if len(eVers.versions) != len(eVers.versions) {
 		return false
 	}
 
-	return eFi.ModTime.Equal(oFi.ModTime) && eFi.Size == oFi.Size && eFi.VersionID == oFi.VersionID
+	// Check if each version matches...
+	for i, eVer := range eVers.versions {
+		oVer := oVers.versions[i]
+		if eVer.header != oVer.header {
+			if !strict && eVer.header.matchesNotStrict(oVer.header) {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 // resolveEntries returns if the entries match by comparing their latest version fileinfo.
-func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
+func resolveEntries(a, b *metaCacheEntry) *metaCacheEntry {
 	if b == nil {
 		return a
 	}
@@ -96,27 +106,42 @@ func resolveEntries(a, b *metaCacheEntry, bucket string) *metaCacheEntry {
 		return b
 	}
 
-	aFi, err := a.fileInfo(bucket)
+	if a.name != b.name {
+		if a.name < b.name {
+			return a
+		}
+		return b
+	}
+
+	// Names match...
+	aVers, err := a.xlmeta()
 	if err != nil {
 		return b
 	}
-	bFi, err := b.fileInfo(bucket)
+	bVers, err := b.xlmeta()
 	if err != nil {
 		return a
 	}
-
-	if aFi.NumVersions == bFi.NumVersions {
-		if aFi.ModTime.Equal(bFi.ModTime) {
-			return a
-		}
-		if aFi.ModTime.After(bFi.ModTime) {
-			return a
-		}
+	if len(bVers.versions) == 0 {
+		return a
+	}
+	if len(aVers.versions) == 0 {
 		return b
 	}
-
-	if bFi.NumVersions > aFi.NumVersions {
-		return b
+	// Select the one with latest modtime.
+	for i, aVer := range aVers.versions {
+		// If there are no versions left in b, return a
+		if len(bVers.versions) <= i {
+			return a
+		}
+		bVer := bVers.versions[i]
+		if aVer.header.ModTime != bVer.header.ModTime {
+			// ModTime mismatch, return latest
+			if aVer.header.ModTime > bVer.header.ModTime {
+				return a
+			}
+			return b
+		}
 	}
 
 	return a
@@ -143,7 +168,10 @@ func (e metaCacheEntry) isInDir(dir, separator string) bool {
 // If v2 and UNABLE to load metadata true will be returned.
 func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	if e.cached != nil {
-		return e.cached.Deleted
+		if len(e.cached.versions) == 0 {
+			return true
+		}
+		return e.cached.versions[0].header.Type == DeleteType
 	}
 	if !isXL2V1Format(e.metadata) {
 		return false
@@ -152,8 +180,8 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 		return meta.IsLatestDeleteMarker()
 	}
 	// Fall back...
-	var xlMeta xlMetaV2
-	if err := xlMeta.Load(e.metadata); err != nil || len(xlMeta.versions) == 0 {
+	xlMeta, err := e.xlmeta()
+	if err != nil || len(xlMeta.versions) == 0 {
 		return true
 	}
 	return xlMeta.versions[0].header.Type == DeleteType
@@ -162,24 +190,37 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 // fileInfo returns the decoded metadata.
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.
-func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
+func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 	if e.isDir() {
-		return &FileInfo{
+		return FileInfo{
 			Volume: bucket,
 			Name:   e.name,
 			Mode:   uint32(os.ModeDir),
 		}, nil
+	}
+	if e.cached != nil {
+		return e.cached.ToFileInfo(bucket, e.name, "")
+	}
+	return getFileInfo(e.metadata, bucket, e.name, "", false)
+}
+
+// xlmeta returns the decoded metadata.
+// This should not be called on directories.
+func (e *metaCacheEntry) xlmeta() (*xlMetaV2, error) {
+	if e.isDir() {
+		return nil, errFileNotFound
 	}
 	if e.cached == nil {
 		if len(e.metadata) == 0 {
 			// only happens if the entry is not found.
 			return nil, errFileNotFound
 		}
-		fi, err := getFileInfo(e.metadata, bucket, e.name, "", false)
+		var xl xlMetaV2
+		err := xl.LoadOrConvert(e.metadata)
 		if err != nil {
 			return nil, err
 		}
-		e.cached = &fi
+		e.cached = &xl
 	}
 	return e.cached, nil
 }
@@ -200,6 +241,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 			},
 		}, nil
 	}
+	// Too small gains to reuse cache here.
 	return getFileInfoVersions(e.metadata, bucket, e.name)
 }
 
@@ -240,16 +282,15 @@ type metadataResolutionParams struct {
 	dirQuorum int    // Number if disks needed for a directory to 'exist'.
 	objQuorum int    // Number of disks needed for an object to 'exist'.
 	bucket    string // Name of the bucket. Used for generating cached fileinfo.
+	strict    bool   // Versions must match exactly, including all metadata.
 
 	// Reusable slice for resolution
-	candidates []struct {
-		n int
-		e *metaCacheEntry
-	}
+	candidates [][]xlMetaV2ShallowVersion
 }
 
 // resolve multiple entries.
 // entries are resolved by majority, then if tied by mod-time and versions.
+// Names must match on all entries in m.
 func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCacheEntry, ok bool) {
 	if len(m) == 0 {
 		return nil, false
@@ -257,14 +298,14 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 	dirExists := 0
 	if cap(r.candidates) < len(m) {
-		r.candidates = make([]struct {
-			n int
-			e *metaCacheEntry
-		}, 0, len(m))
+		r.candidates = make([][]xlMetaV2ShallowVersion, 0, len(m))
 	}
 	r.candidates = r.candidates[:0]
+	objsAgree := 0
+	objsValid := 0
 	for i := range m {
 		entry := &m[i]
+		// Empty entry
 		if entry.name == "" {
 			continue
 		}
@@ -276,71 +317,53 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		}
 
 		// Get new entry metadata
-		if _, err := entry.fileInfo(r.bucket); err != nil {
+		xl, err := entry.xlmeta()
+		if err != nil {
 			logger.LogIf(context.Background(), err)
 			continue
 		}
-
-		found := false
-		for i, c := range r.candidates {
-			if c.e.matches(entry, r.bucket) {
-				c.n++
-				r.candidates[i] = c
-				found = true
-				break
-			}
-		}
-		if !found {
-			r.candidates = append(r.candidates, struct {
-				n int
-				e *metaCacheEntry
-			}{n: 1, e: entry})
-		}
-	}
-	if selected != nil && selected.isDir() && dirExists > r.dirQuorum {
-		return selected, true
-	}
-
-	switch len(r.candidates) {
-	case 0:
+		objsValid++
 		if selected == nil {
-			return nil, false
+			if selected != nil {
+				r.candidates = r.candidates[:0]
+			}
+			r.candidates = append(r.candidates, xl.versions)
+			selected = entry
+			objsAgree = 1
+			continue
 		}
-		if !selected.isDir() || dirExists < r.dirQuorum {
-			return nil, false
+		// Names match, check meta...
+		r.candidates = append(r.candidates, xl.versions)
+		if entry.matches(selected, r.strict) {
+			objsAgree++
+			continue
 		}
-		return selected, true
-	case 1:
-		cand := r.candidates[0]
-		if cand.n < r.objQuorum {
-			return nil, false
-		}
-		return cand.e, true
-	default:
-		// Sort by matches....
-		sort.Slice(r.candidates, func(i, j int) bool {
-			return r.candidates[i].n > r.candidates[j].n
-		})
-
-		// Check if we have enough.
-		if r.candidates[0].n < r.objQuorum {
-			return nil, false
-		}
-
-		// if r.objQuorum == 1 then it is guaranteed that
-		// this resolver is for HealObjects(), so use resolveEntries()
-		// instead to resolve candidates, this check is only useful
-		// for regular cases of ListObjects()
-		if r.candidates[0].n > r.candidates[1].n && r.objQuorum > 1 {
-			ok := r.candidates[0].e != nil && r.candidates[0].e.name != ""
-			return r.candidates[0].e, ok
-		}
-
-		e := resolveEntries(r.candidates[0].e, r.candidates[1].e, r.bucket)
-		// Tie between two, resolve using modtime+versions.
-		ok := e != nil && e.name != ""
-		return e, ok
 	}
+	if selected != nil && selected.isDir() && dirExists >= r.dirQuorum {
+		return selected, true
+	}
+
+	if objsValid < r.objQuorum {
+		return nil, false
+	}
+	if selected != nil && objsAgree == objsValid {
+		return selected, true
+	}
+
+	// merge
+	if selected.cached == nil {
+		selected.cached = &xlMetaV2{} // Just be sure...
+	}
+	selected.cached.versions = MergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
+	// Reserialize
+	var err error
+	selected.metadata, err = selected.cached.AppendTo(metaDataPoolGet())
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return nil, false
+	}
+	selected.cached = nil // Defensive, so we don't use buffers from other entries.
+	return selected, true
 }
 
 // firstFound returns the first found and the number of set entries.

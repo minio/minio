@@ -201,9 +201,7 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		Erasure:   m.Erasure,
 		VersionID: m.VersionID,
 		DataDir:   m.DataDir,
-		XLV1:      true,
 	}
-
 	return fi, nil
 }
 

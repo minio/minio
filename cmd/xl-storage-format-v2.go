@@ -33,6 +33,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
@@ -49,7 +50,7 @@ var (
 )
 
 //go:generate msgp -file=$GOFILE -unexported
-//go:generate stringer -type VersionType -output=xl-storage-format-v2_string.go $GOFILE
+//go:generate stringer -type VersionType,ErasureAlgo -output=xl-storage-format-v2_string.go $GOFILE
 
 const (
 	// Breaking changes.
@@ -128,14 +129,6 @@ const (
 
 func (e ErasureAlgo) valid() bool {
 	return e > invalidErasureAlgo && e < lastErasureAlgo
-}
-
-func (e ErasureAlgo) String() string {
-	switch e {
-	case ReedSolomon:
-		return "reedsolomon"
-	}
-	return ""
 }
 
 // ChecksumAlgo defines common type of different checksum algorithms
@@ -269,6 +262,14 @@ func (x xlMetaV2VersionHeader) String() string {
 	)
 }
 
+// matchesNotStrict returns whether x and o have both have non-zero version,
+// their versions match and their type match.
+func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
+	return x.VersionID != [16]byte{} &&
+		x.VersionID == o.VersionID &&
+		x.Type == o.Type
+}
+
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
 	if !j.Type.valid() {
@@ -359,7 +360,7 @@ func (j xlMetaV2Version) getModTime() time.Time {
 	return time.Time{}
 }
 
-// getVersionID will return the versionID of the underlying version.
+// getModTime will return the ModTime of the underlying version.
 func (j xlMetaV2Version) getVersionID() [16]byte {
 	switch j.Type {
 	case ObjectType:
@@ -786,6 +787,26 @@ type xlMetaV2 struct {
 
 	// metadata version.
 	metaV uint8
+}
+
+// LoadOrConvert will load the metadata in the buffer.
+// If this is a legacy format, it will automatically be converted to XLV2.
+func (x *xlMetaV2) LoadOrConvert(buf []byte) error {
+	if isXL2V1Format(buf) {
+		return x.Load(buf)
+	}
+
+	xlMeta := &xlMetaV1Object{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(buf, xlMeta); err != nil {
+		return errFileCorrupt
+	}
+	if len(x.versions) > 0 {
+		x.versions = x.versions[:0]
+	}
+	x.data = nil
+	x.metaV = xlMetaVersion
+	return x.AddLegacy(xlMeta)
 }
 
 // Load all versions of the stored data.
@@ -1605,6 +1626,110 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 	return versions, nil
 }
 
+// MergeXLV2Versions will merge all versions that have at least quorum
+// entries in all metas.
+// Quorum must be the minimum number of matching metadata files.
+// Quorum should be > 1 and <= len(versions).
+// If strict is set to false, entries that match type
+func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
+	if len(versions) < quorum || len(versions) == 0 {
+		return nil
+	}
+	if len(versions) == 1 {
+		return versions[0]
+	}
+	// Our result
+	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
+	tops := make([]xlMetaV2ShallowVersion, len(versions))
+	var emptyVersionID [16]byte
+	for {
+		// Step 1 create slice with all top versions.
+		tops = tops[:0]
+		var topSig [4]byte
+		consistent := true // Are all signatures consistent (shortcut)
+		for _, vers := range versions {
+			if len(vers) == 0 {
+				consistent = false
+				continue
+			}
+			ver := vers[0]
+			if len(tops) == 0 {
+				consistent = true
+				topSig = ver.header.Signature
+			}
+			consistent = consistent && topSig == ver.header.Signature
+			tops = append(tops, vers[0])
+		}
+		// Check if done...
+		if len(tops) < quorum {
+			// We couldn't gather enough for quorum
+			break
+		}
+		if consistent {
+			// All had the same signature, easy.
+			merged = append(merged, tops[0])
+			for i := range versions {
+				versions[i] = versions[i][1:]
+			}
+			continue
+		}
+
+		// Find the latest.
+		var latest xlMetaV2ShallowVersion
+		var latestCount int
+		for i, ver := range tops {
+			if i == 0 || ver.header.ModTime > latest.header.ModTime {
+				latest = ver
+				latestCount = 1
+				continue
+			}
+			if ver.header == latest.header {
+				latestCount++
+				continue
+			}
+			// Mismatch, but older.
+			if strict || ver.header.VersionID == emptyVersionID {
+				// null version id, disregard.
+				continue
+			}
+			if ver.header.VersionID == latest.header.VersionID && ver.header.Type == ver.header.Type {
+				// If non-nil version ID and it matches, assume match, but keep newest.
+				latestCount++
+			}
+		}
+		if latestCount >= quorum {
+			merged = append(merged, latest)
+		}
+
+		// Remove from all streams up until latest modtime or if selected.
+		for i, vers := range versions {
+			for _, ver := range vers {
+				// Truncate later modtimes, not selected.
+				if ver.header.ModTime > ver.header.ModTime {
+					versions[i] = versions[i][1:]
+					continue
+				}
+				// Truncate matches
+				if ver.header == latest.header {
+					versions[i] = versions[i][1:]
+					continue
+				}
+
+				// Truncate non-empty version and type matches
+				if !strict && ver.header.VersionID != emptyVersionID &&
+					ver.header.VersionID == latest.header.VersionID &&
+					ver.header.Type == ver.header.Type {
+					versions[i] = versions[i][1:]
+					continue
+				}
+				// Keep top entry (and remaining)...
+				break
+			}
+		}
+	}
+	return merged
+}
+
 type xlMetaBuf []byte
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
@@ -1710,6 +1835,36 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 		return nil
 	})
 	return dst, err
+}
+
+// VersionSummary represents headers of all versions of an object.
+type VersionSummary struct {
+	Versions []xlMetaV2VersionHeader
+}
+
+type VersionSummaryOpts struct {
+	SkipFreeVersions bool
+}
+
+// ListVersionsSummary will return shallow representation of all versions of objects.
+func (x xlMetaBuf) ListVersionsSummary(o VersionSummaryOpts) (VersionSummary, error) {
+	vers, _, _, buf, err := decodeXLHeaders(x)
+	if err != nil {
+		return VersionSummary{}, err
+	}
+	dst := make([]xlMetaV2VersionHeader, 0, vers)
+	n := 0
+	err = decodeVersions(buf, vers, func(idx int, hdr, _ []byte) error {
+		if _, err := dst[n].UnmarshalMsg(hdr); err != nil {
+			return err
+		}
+		if o.SkipFreeVersions && dst[n].FreeVersion() {
+			return nil
+		}
+		n++
+		return nil
+	})
+	return VersionSummary{Versions: dst[:n]}, err
 }
 
 // IsLatestDeleteMarker returns true if latest version is a deletemarker or there are no versions.

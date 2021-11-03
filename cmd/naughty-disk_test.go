@@ -291,3 +291,10 @@ func (d *naughtyDisk) StatInfoFile(ctx context.Context, volume, path string, glo
 	}
 	return d.disk.StatInfoFile(ctx, volume, path, glob)
 }
+
+func (d *naughtyDisk) VersionSummary(ctx context.Context, volume string, path string, o VersionSummaryOpts) (VersionSummary, error) {
+	if err := d.calcError(); err != nil {
+		return VersionSummary{}, err
+	}
+	return d.disk.VersionSummary(ctx, volume, path, o)
+}

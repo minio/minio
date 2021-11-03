@@ -52,6 +52,7 @@ const (
 	storageRESTMethodVerifyFile     = "/verifyfile"
 	storageRESTMethodWalkDir        = "/walkdir"
 	storageRESTMethodStatInfoFile   = "/statfile"
+	storageRESTMethodVersionSummary = "/versionsummary"
 )
 
 const (
