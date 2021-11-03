@@ -20,7 +20,7 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.40.1
-	@which msgp 1>/dev/null || (echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.3)
+	@which msgp 1>/dev/null || (echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.6)
 	@which stringer 1>/dev/null || (echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer)
 
 crosscompile: ## cross compile minio
