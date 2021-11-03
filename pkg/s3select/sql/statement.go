@@ -301,9 +301,8 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 		// .. WHERE ..`
 
 		// Update count of records output.
-		if e.limitValue > -1 {
-			e.outputCount++
-		}
+		e.outputCount++
+
 		return input.Clone(output), nil
 	}
 
@@ -327,9 +326,7 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 	}
 
 	// Update count of records output.
-	if e.limitValue > -1 {
-		e.outputCount++
-	}
+	e.outputCount++
 
 	return output, nil
 }

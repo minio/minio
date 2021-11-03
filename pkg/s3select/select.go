@@ -526,6 +526,17 @@ OuterLoop:
 				}
 
 				outputQueue[len(outputQueue)-1] = outputRecord
+				if s3Select.statement.LimitReached() {
+					if !sendRecord() {
+						break
+					}
+					if err = writer.Finish(s3Select.getProgress()); err != nil {
+						// FIXME: log this error.
+						err = nil
+					}
+					return
+				}
+
 				if len(outputQueue) < cap(outputQueue) {
 					continue
 				}
