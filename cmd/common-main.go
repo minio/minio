@@ -72,7 +72,8 @@ func init() {
 			fmt.Printf("Don't double-click %s\n", os.Args[0])
 			fmt.Println("You need to open cmd.exe/PowerShell and run it from the command line")
 			fmt.Println("Refer to the docs here on how to run it as a Windows Service https://github.com/minio/minio-service/tree/master/windows")
-			time.Sleep(5 * time.Second)
+			fmt.Println("Press the Enter Key to Exit")
+			fmt.Scanln()
 			os.Exit(1)
 		}
 	}
