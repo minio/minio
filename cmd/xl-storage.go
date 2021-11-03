@@ -850,7 +850,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
-	var xlMeta xlMetaV2
+	var xlMeta xlMetaV2Shallow
 	if err = xlMeta.Load(buf); err != nil {
 		return err
 	}
@@ -977,8 +977,8 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
-	var xlMeta xlMetaV2
-	if err = xlMeta.Load(buf); err != nil {
+	var xlMeta xlMetaV2Shallow
+	if err := xlMeta.Load(buf); err != nil {
 		return err
 	}
 
@@ -1049,7 +1049,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 		return errFileVersionNotFound
 	}
 
-	var xlMeta xlMetaV2
+	var xlMeta xlMetaV2Shallow
 	if err = xlMeta.Load(buf); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -1070,7 +1070,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
 func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
 	if fi.Fresh {
-		var xlMeta xlMetaV2
+		var xlMeta xlMetaV2Shallow
 		if err := xlMeta.AddVersion(fi); err != nil {
 			logger.LogIf(ctx, err)
 			return err
@@ -1094,7 +1094,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	}
 	defer metaDataPoolPut(buf)
 
-	var xlMeta xlMetaV2
+	var xlMeta xlMetaV2Shallow
 	if !isXL2V1Format(buf) {
 		// This is both legacy and without proper version.
 		err = xlMeta.AddVersion(fi)
@@ -1113,7 +1113,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 		if err = xlMeta.Load(buf); err != nil {
 			logger.LogIf(ctx, err)
 			// Corrupted data, reset and write.
-			xlMeta = xlMetaV2{}
+			xlMeta = xlMetaV2Shallow{}
 		}
 
 		if err = xlMeta.AddVersion(fi); err != nil {
@@ -2025,14 +2025,14 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	var xlMeta xlMetaV2
+	var xlMeta xlMetaV2Shallow
 	var legacyPreserved bool
 	if len(dstBuf) > 0 {
 		if isXL2V1Format(dstBuf) {
 			if err = xlMeta.Load(dstBuf); err != nil {
 				logger.LogIf(s.ctx, err)
 				// Data appears corrupt. Drop data.
-				xlMeta = xlMetaV2{}
+				xlMeta = xlMetaV2Shallow{}
 			}
 		} else {
 			// This code-path is to preserve the legacy data.

@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"sort"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -52,18 +53,33 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 		}
 	}
 	fivs.Versions = fivs.Versions[:n]
+	// Update numversions
+	for i := range fivs.Versions {
+		fivs.Versions[i].NumVersions = n
+	}
 	return fivs, nil
 }
 
 func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
-		if err := xlMeta.Load(xlMetaBuf); err != nil {
-			return FileInfoVersions{}, err
+		var versions []FileInfo
+		var err error
+		if buf, _ := isIndexedMetaV2(xlMetaBuf); buf != nil {
+			versions, err = buf.ListVersions(volume, path)
+		} else {
+			var xlMeta xlMetaV2Shallow
+			if err := xlMeta.Load(xlMetaBuf); err != nil {
+				return FileInfoVersions{}, err
+			}
+			versions, err = xlMeta.ListVersions(volume, path)
 		}
-		versions, latestModTime, err := xlMeta.ListVersions(volume, path)
 		if err != nil {
 			return FileInfoVersions{}, err
+		}
+
+		var latestModTime time.Time
+		if len(versions) > 0 {
+			latestModTime = versions[0].ModTime
 		}
 		return FileInfoVersions{
 			Volume:        volume,
@@ -96,11 +112,20 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 
 func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
-		if err := xlMeta.Load(xlMetaBuf); err != nil {
-			return FileInfo{}, err
+		var fi FileInfo
+		var err error
+		var inData xlMetaInlineData
+		if buf, data := isIndexedMetaV2(xlMetaBuf); buf != nil {
+			inData = data
+			fi, err = buf.ToFileInfo(volume, path, versionID)
+		} else {
+			var xlMeta xlMetaV2Shallow
+			if err := xlMeta.Load(xlMetaBuf); err != nil {
+				return FileInfo{}, err
+			}
+			inData = xlMeta.data
+			fi, err = xlMeta.ToFileInfo(volume, path, versionID)
 		}
-		fi, err := xlMeta.ToFileInfo(volume, path, versionID)
 		if !data || err != nil {
 			return fi, err
 		}
@@ -108,12 +133,12 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
-		fi.Data = xlMeta.data.find(versionID)
+		fi.Data = inData.find(versionID)
 		if len(fi.Data) == 0 {
 			// PR #11758 used DataDir, preserve it
 			// for users who might have used master
 			// branch
-			fi.Data = xlMeta.data.find(fi.DataDir)
+			fi.Data = inData.find(fi.DataDir)
 		}
 		return fi, nil
 	}
