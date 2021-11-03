@@ -56,9 +56,6 @@ var defaultEtag = "00000000000000000000000000000000-1"
 type FSObjects struct {
 	GatewayUnsupported
 
-	// The count of concurrent calls on FSObjects API
-	activeIOCount int64
-
 	// Path to be exported over S3 API.
 	fsPath string
 	// meta json filename, varies by fs / cache backend.
@@ -215,11 +212,6 @@ func (fs *FSObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error
 
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	di, err := getDiskInfo(fs.fsPath)
 	if err != nil {
 		return StorageInfo{}, []error{err}
@@ -444,11 +436,6 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 
 	defer NSUpdated(bucket, slashSeparator)
 
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -509,11 +496,6 @@ func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 
 // GetBucketInfo - fetch bucket metadata info.
 func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	st, err := fs.statBucketDir(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -537,11 +519,6 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
 
 	entries, err := readDirWithOpts(fs.fsPath, readDirOpts{count: -1, followDirSymlink: true})
 	if err != nil {
@@ -590,11 +567,6 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 // with the bucket including pending multipart, object metadata.
 func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	defer NSUpdated(bucket, slashSeparator)
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
 
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
@@ -655,11 +627,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		ctx = lkctx.Context()
 		defer objectDWLock.Unlock(lkctx.Cancel)
 	}
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
 
 	if _, err := fs.statBucketDir(ctx, srcBucket); err != nil {
 		return oi, toObjectErr(err, srcBucket)
@@ -733,11 +700,6 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
 
 	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
 		return nil, toObjectErr(err, bucket)
@@ -998,11 +960,6 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		}
 	}
 
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		lk := fs.NewNSLock(bucket, object)
@@ -1048,11 +1005,6 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 	}
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx.Cancel)
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
 
 	return fs.putObject(ctx, bucket, object, r, opts)
 }
@@ -1221,11 +1173,6 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 		return objInfo, err
 	}
 
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
 		return objInfo, toObjectErr(err, bucket)
 	}
@@ -1315,11 +1262,6 @@ func (fs *FSObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
 	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
 		fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
 }
