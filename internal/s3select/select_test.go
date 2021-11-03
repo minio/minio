@@ -404,6 +404,74 @@ func TestJSONQueries(t *testing.T) {
 			query:      `SELECT 3.0 / 2, 5 / 2.0 FROM S3Object LIMIT 1`,
 			wantResult: `{"_1":1.5,"_2":2.5}`,
 		},
+		{
+			name:  "limit-1",
+			query: `SELECT * FROM S3Object[*].elements[*] LIMIT 1`,
+			requestXML: []byte(`
+<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>select * from s3object[*].elements[*] s where s.element_type = '__elem__merfu'</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>DOCUMENT</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`),
+			wantResult: `{"element_type":"__elem__merfu","element_id":"d868aefe-ef9a-4be2-b9b2-c9fd89cc43eb","attributes":{"__attr__image_dpi":300,"__attr__image_size":[2550,3299],"__attr__image_index":2,"__attr__image_format":"JPEG","__attr__file_extension":"jpg","__attr__data":null}}`,
+			withJSON: `
+{
+  "name": "small_pdf1.pdf",
+  "lume_id": "9507193e-572d-4f95-bcf1-e9226d96be65",
+  "elements": [
+    {
+      "element_type": "__elem__image",
+      "element_id": "859d09c4-7cf1-4a37-9674-3a7de8b56abc",
+      "attributes": {
+        "__attr__image_dpi": 300,
+        "__attr__image_size": [
+          2550,
+          3299
+        ],
+        "__attr__image_index": 1,
+        "__attr__image_format": "JPEG",
+        "__attr__file_extension": "jpg",
+        "__attr__data": null
+      }
+    },
+    {
+      "element_type": "__elem__merfu",
+      "element_id": "d868aefe-ef9a-4be2-b9b2-c9fd89cc43eb",
+      "attributes": {
+        "__attr__image_dpi": 300,
+        "__attr__image_size": [
+          2550,
+          3299
+        ],
+        "__attr__image_index": 2,
+        "__attr__image_format": "JPEG",
+        "__attr__file_extension": "jpg",
+        "__attr__data": null
+      }
+    }
+  ],
+  "data": "asdascasdc1234e123erdasdas"
+}`,
+		},
+		{
+			name:       "limit-2",
+			query:      `select * from s3object[*].person[*] limit 1`,
+			wantResult: `{"Id":1,"Name":"Anshu","Address":"Templestowe","Car":"Jeep"}`,
+			withJSON:   `{ "person": [ { "Id": 1, "Name": "Anshu", "Address": "Templestowe", "Car": "Jeep" }, { "Id": 2, "Name": "Ben Mostafa", "Address": "Las Vegas", "Car": "Mustang" }, { "Id": 3, "Name": "Rohan Wood", "Address": "Wooddon", "Car": "VW" } ] }`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
