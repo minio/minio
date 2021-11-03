@@ -37,7 +37,7 @@ func TestXLV2FormatData(t *testing.T) {
 	data := []byte("some object data")
 	data2 := []byte("some other object data")
 
-	xl := xlMetaV2{}
+	xl := xlMetaV2Shallow{}
 	fi := FileInfo{
 		Volume:           "volume",
 		Name:             "object-name",
@@ -81,7 +81,7 @@ func TestXLV2FormatData(t *testing.T) {
 	serialized, err := xl.AppendTo(nil)
 	failOnErr(err)
 	// Roundtrip data
-	var xl2 xlMetaV2
+	var xl2 xlMetaV2Shallow
 	failOnErr(xl2.Load(serialized))
 
 	// We should have one data entry
@@ -139,7 +139,7 @@ func TestXLV2FormatData(t *testing.T) {
 	}
 
 	// Test trimmed
-	xl2 = xlMetaV2{}
+	xl2 = xlMetaV2Shallow{}
 	trimmed := xlMetaV2TrimData(serialized)
 	failOnErr(xl2.Load(trimmed))
 	if len(xl2.data) != 0 {
@@ -234,7 +234,7 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 	data := []byte("some object data")
 	data2 := []byte("some other object data")
 
-	xl := xlMetaV2{}
+	xl := xlMetaV2Shallow{}
 	fi := FileInfo{
 		Volume:           "volume",
 		Name:             "object-name",
@@ -341,15 +341,18 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 			}
 		}
 		fi.TransitionStatus = tc.transitionStatus
+		fi.ModTime = fi.ModTime.Add(time.Duration(i) * time.Second)
 		failOnErr(i+1, xl.AddVersion(fi))
 		fi.ExpireRestored = tc.expireRestored
 		fileInfos = append(fileInfos, fi)
 	}
 
 	for i, tc := range testCases {
-		version := xl.Versions[i]
-		if actual := xl.SharedDataDirCount(version.ObjectV2.VersionID, version.ObjectV2.DataDir); actual != tc.shares {
-			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2, tc.shares, actual)
+		_, version, err := xl.findVersion(uuid.MustParse(tc.versionID))
+		failOnErr(i+1, err)
+		//t.Log("idx:", idx, "modtime:", version.getModTime(), [16]byte(uuid.MustParse(tc.versionID)), version.getVersionID())
+		if got := xl.SharedDataDirCount(version.getVersionID(), version.ObjectV2.DataDir); got != tc.shares {
+			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2.VersionID, tc.shares, got)
 		}
 	}
 
