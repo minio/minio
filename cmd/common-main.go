@@ -38,6 +38,7 @@ import (
 
 	fcolor "github.com/fatih/color"
 	"github.com/go-openapi/loads"
+	"github.com/inconshreveable/mousetrap"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	consoleCerts "github.com/minio/console/pkg/certs"
@@ -66,6 +67,17 @@ var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.
 var defaultAWSCredProvider []credentials.Provider
 
 func init() {
+	if runtime.GOOS == "windows" {
+		if mousetrap.StartedByExplorer() {
+			fmt.Printf("Don't double-click %s\n", os.Args[0])
+			fmt.Println("You need to open cmd.exe/PowerShell and run it from the command line")
+			fmt.Println("Refer to the docs here on how to run it as a Windows Service https://github.com/minio/minio-service/tree/master/windows")
+			fmt.Println("Press the Enter Key to Exit")
+			fmt.Scanln()
+			os.Exit(1)
+		}
+	}
+
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	logger.Init(GOPATH, GOROOT)
