@@ -292,13 +292,14 @@ func isSameType(obj1, obj2 interface{}) bool {
 //   s := StartTestServer(t,"Erasure")
 //   defer s.Stop()
 type TestServer struct {
-	Root      string
-	Disks     EndpointServerPools
-	AccessKey string
-	SecretKey string
-	Server    *httptest.Server
-	Obj       ObjectLayer
-	cancel    context.CancelFunc
+	Root         string
+	Disks        EndpointServerPools
+	AccessKey    string
+	SecretKey    string
+	Server       *httptest.Server
+	Obj          ObjectLayer
+	cancel       context.CancelFunc
+	rawDiskPaths []string
 }
 
 // UnstartedTestServer - Configures a temp FS/Erasure backend,
@@ -314,16 +315,22 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatal(err)
 	}
 
-	// set the server configuration.
+	// set new server configuration.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatalf("%s", err)
 	}
 
+	return initTestServerWithBackend(ctx, t, testServer, objLayer, disks)
+}
+
+// initializes a test server with the given object layer and disks.
+func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer TestServer, objLayer ObjectLayer, disks []string) TestServer {
 	// Test Server needs to start before formatting of disks.
 	// Get credential.
 	credentials := globalActiveCred
 
 	testServer.Obj = objLayer
+	testServer.rawDiskPaths = disks
 	testServer.Disks = mustGetPoolEndpoints(disks...)
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey

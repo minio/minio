@@ -48,9 +48,7 @@ func newTestSuiteIAM(c TestSuiteCommon) *TestSuiteIAM {
 	return &TestSuiteIAM{TestSuiteCommon: c}
 }
 
-func (s *TestSuiteIAM) SetUpSuite(c *check) {
-	s.TestSuiteCommon.SetUpSuite(c)
-
+func (s *TestSuiteIAM) iamSetup(c *check) {
 	var err error
 	// strip url scheme from endpoint
 	s.endpoint = strings.TrimPrefix(s.endPoint, "http://")
@@ -73,6 +71,18 @@ func (s *TestSuiteIAM) SetUpSuite(c *check) {
 	if err != nil {
 		c.Fatalf("error creating minio client: %v", err)
 	}
+}
+
+func (s *TestSuiteIAM) SetUpSuite(c *check) {
+	s.TestSuiteCommon.SetUpSuite(c)
+
+	s.iamSetup(c)
+}
+
+func (s *TestSuiteIAM) RestartIAMSuite(c *check) {
+	s.TestSuiteCommon.RestartTestServer(c)
+
+	s.iamSetup(c)
 }
 
 func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToken string) *minio.Client {
