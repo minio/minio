@@ -287,8 +287,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 		defaultExpiryDuration = time.Unix(expAt, 0).UTC().Sub(time.Now().UTC())
 	} // else honor the specified expiry duration.
 
-	expiry := time.Now().UTC().Add(defaultExpiryDuration).Unix()
-	claims["exp"] = strconv.FormatInt(expiry, 10) // update with new expiry.
+	claims["exp"] = time.Now().UTC().Add(defaultExpiryDuration).Unix() // update with new expiry.
 	return nil
 }
 
