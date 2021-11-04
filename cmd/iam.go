@@ -286,7 +286,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case globalLDAPConfig.EnabledWithLookupBind():
+	case globalLDAPConfig.Enabled:
 		go func() {
 			ticker := time.NewTicker(sys.iamRefreshInterval)
 			defer ticker.Stop()
@@ -843,7 +843,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 		allDistNames = append(allDistNames, parentUser)
 	}
 
-	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(parentUsers)
+	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(allDistNames)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
