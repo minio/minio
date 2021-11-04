@@ -1213,12 +1213,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	storageDisks, errs := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
-	for i, derr := range errs {
-		if derr != nil && derr != errDiskNotFound {
-			return madmin.HealResultItem{}, fmt.Errorf("Disk %s: %w", s.endpoints[i], derr)
-		}
-	}
+	storageDisks, _ := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
@@ -1279,8 +1274,14 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		}
 
 		// Save new formats `format.json` on unformatted disks.
-		if err = saveUnformattedFormat(ctx, storageDisks, tmpNewFormats); err != nil {
-			return madmin.HealResultItem{}, err
+		for index, format := range tmpNewFormats {
+			if storageDisks[index] == nil || format == nil {
+				continue
+			}
+			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Disk %s failed to write updated 'format.json': %v", storageDisks[index], err))
+				tmpNewFormats[index] = nil // this disk failed to write new format
+			}
 		}
 
 		s.erasureDisksMu.Lock()
