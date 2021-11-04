@@ -760,6 +760,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		for _, usage := range certificate.ExtKeyUsage {
 			if usage == x509.ExtKeyUsageAny || usage == x509.ExtKeyUsageClientAuth {
 				validKeyUsage = true
+				break
 			}
 		}
 		if !validKeyUsage {
