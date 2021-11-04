@@ -1322,11 +1322,11 @@ func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
 	}
 
 	// Check if we should replace first.
-	for i, version := range x.versions {
-		if version.header.VersionID != uv {
+	for i := range x.versions {
+		if x.versions[i].header.VersionID != uv {
 			continue
 		}
-		switch version.header.Type {
+		switch x.versions[i].header.Type {
 		case LegacyType:
 			// This would convert legacy type into new ObjectType
 			// this means that we are basically purging the `null`
@@ -1460,6 +1460,40 @@ func (x xlMetaV2Shallow) ToFileInfo(volume, path, versionID string) (fi FileInfo
 	return fi, err
 }
 
+// ListVersions lists current versions, and current deleted
+// versions returns error for unexpected entries.
+// showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
+// but waiting to be replicated
+func (x xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
+	versions := make([]FileInfo, 0, len(x.versions))
+	var err error
+
+	var dst xlMetaV2Version
+	for _, version := range x.versions {
+		_, err = dst.UnmarshalMsg(version.meta)
+		if err != nil {
+			return versions, err
+		}
+		fi, err := dst.ToFileInfo(volume, path)
+		if err != nil {
+			return versions, err
+		}
+		fi.NumVersions = len(x.versions)
+		versions = append(versions, fi)
+	}
+
+	for i := range versions {
+		versions[i].NumVersions = len(versions)
+		if i > 0 {
+			versions[i].SuccessorModTime = versions[i-1].ModTime
+		}
+	}
+	if len(versions) > 0 {
+		versions[0].IsLatest = true
+	}
+	return versions, nil
+}
+
 type xlMetaBuf []byte
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
@@ -1565,40 +1599,6 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 		return nil
 	})
 	return dst, err
-}
-
-// ListVersions lists current versions, and current deleted
-// versions returns error for unexpected entries.
-// showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
-// but waiting to be replicated
-func (x xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
-	versions := make([]FileInfo, 0, len(x.versions))
-	var err error
-
-	var dst xlMetaV2Version
-	for _, version := range x.versions {
-		_, err = dst.UnmarshalMsg(version.meta)
-		if err != nil {
-			return versions, err
-		}
-		fi, err := dst.ToFileInfo(volume, path)
-		if err != nil {
-			return versions, err
-		}
-		fi.NumVersions = len(x.versions)
-		versions = append(versions, fi)
-	}
-
-	for i := range versions {
-		versions[i].NumVersions = len(versions)
-		if i > 0 {
-			versions[i].SuccessorModTime = versions[i-1].ModTime
-		}
-	}
-	if len(versions) > 0 {
-		versions[0].IsLatest = true
-	}
-	return versions, nil
 }
 
 // IsLatestDeleteMarker returns true if latest version is a deletemarker or there are no versions.
