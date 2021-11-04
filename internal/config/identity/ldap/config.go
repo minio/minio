@@ -67,7 +67,6 @@ type Config struct {
 	tlsSkipVerify     bool          // allows skipping TLS verification
 	serverInsecure    bool          // allows plain text connection to LDAP server
 	serverStartTLS    bool          // allows using StartTLS connection to LDAP server
-	isUsingLookupBind bool
 	rootCAs           *x509.CertPool
 }
 
@@ -240,10 +239,6 @@ func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) (
 
 // LookupUserDN searches for the full DN and groups of a given username
 func (l *Config) LookupUserDN(username string) (string, []string, error) {
-	if !l.isUsingLookupBind {
-		return "", nil, errors.New("current lookup mode does not support searching for User DN")
-	}
-
 	conn, err := l.Connect()
 	if err != nil {
 		return "", nil, err
@@ -386,10 +381,6 @@ func (l Config) IsLDAPUserDN(user string) bool {
 // GetNonEligibleUserDistNames - find user accounts (DNs) that are no longer
 // present in the LDAP server or do not meet filter criteria anymore
 func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, error) {
-	if !l.isUsingLookupBind {
-		return nil, errors.New("current LDAP configuration does not permit looking for expired user accounts")
-	}
-
 	conn, err := l.Connect()
 	if err != nil {
 		return nil, err
@@ -410,7 +401,7 @@ func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, 
 			dn,
 			ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
 			filter,
-			[]string{}, // only need DN, so no pass no attributes here
+			[]string{}, // only need DN, so pass no attributes here
 			nil,
 		)
 
@@ -435,10 +426,6 @@ func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, 
 // LookupGroupMemberships - for each DN finds the set of LDAP groups they are a
 // member of.
 func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsernameMap map[string]string) (map[string]set.StringSet, error) {
-	if !l.isUsingLookupBind {
-		return nil, errors.New("current LDAP configuration does not permit this lookup")
-	}
-
 	conn, err := l.Connect()
 	if err != nil {
 		return nil, err
@@ -463,12 +450,7 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	return res, nil
 }
 
-// EnabledWithLookupBind - checks if ldap IDP is enabled in lookup bind mode.
-func (l Config) EnabledWithLookupBind() bool {
-	return l.Enabled && l.isUsingLookupBind
-}
-
-// Enabled returns if jwks is enabled.
+// Enabled returns if LDAP config is enabled.
 func Enabled(kvs config.KVS) bool {
 	return kvs.Get(ServerAddr) != ""
 }
@@ -516,11 +498,13 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 
 	// Lookup bind user configuration
 	lookupBindDN := env.Get(EnvLookupBindDN, kvs.Get(LookupBindDN))
+	if lookupBindDN == "" {
+		return l, errors.New("Lookup Bind DN is required")
+	}
 	lookupBindPassword := env.Get(EnvLookupBindPassword, kvs.Get(LookupBindPassword))
 	if lookupBindDN != "" {
 		l.LookupBindDN = lookupBindDN
 		l.LookupBindPassword = lookupBindPassword
-		l.isUsingLookupBind = true
 
 		// User DN search configuration
 		userDNSearchBaseDN := env.Get(EnvUserDNSearchBaseDN, kvs.Get(UserDNSearchBaseDN))
@@ -530,11 +514,6 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		}
 		l.UserDNSearchBaseDN = userDNSearchBaseDN
 		l.UserDNSearchFilter = userDNSearchFilter
-	}
-
-	// Lookup bind mode is mandatory
-	if !l.isUsingLookupBind {
-		return l, errors.New("Lookup Bind mode is required")
 	}
 
 	// Test connection to LDAP server.
