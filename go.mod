@@ -49,7 +49,8 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.1.16
-	github.com/minio/minio-go/v7 v7.0.16-0.20211108161804-a7a36ee131df
+	github.com/minio/mc v0.0.0-20211118223026-df75eed32e9e // indirect
+	github.com/minio/minio-go/v7 v7.0.16-0.20211117164632-e517704ccb36
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.9
 	github.com/minio/selfupdate v0.3.1
@@ -166,7 +167,6 @@ require (
 	github.com/minio/colorjson v1.0.1 // indirect
 	github.com/minio/direct-csi v1.3.5-0.20210601185811-f7776f7961bf // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20211115052100-7fd441ec6c5b // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/operator v0.0.0-20211011212245-31460bbbc4b7 // indirect
 	github.com/minio/operator/logsearchapi v0.0.0-20211011212245-31460bbbc4b7 // indirect

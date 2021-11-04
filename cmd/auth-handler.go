@@ -245,9 +245,10 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 
 	// Session token must have a policy, reject requests without policy
 	// claim.
-	_, pokOpenID := claims.MapClaims[iamPolicyClaimNameOpenID()]
+	_, pokOpenIDClaimName := claims.MapClaims[iamPolicyClaimNameOpenID()]
+	_, pokOpenIDRoleArn := claims.MapClaims[roleArnClaim]
 	_, pokSA := claims.MapClaims[iamPolicyClaimNameSA()]
-	if !pokOpenID && !pokSA {
+	if !pokOpenIDClaimName && !pokOpenIDRoleArn && !pokSA {
 		return nil, errAuthentication
 	}
 

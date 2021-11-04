@@ -6,6 +6,14 @@ Calling AssumeRoleWithWebIdentity does not require the use of MinIO default cred
 
 By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
 
+## Access Control Policies
+
+MinIO's AssumeRoleWithWebIdentity supports specifying access control policies in two ways: 
+
+1. Role Policy (Recommended): When specified, all users authenticating via this API are authorized to (only) use the specified role policy. The policy to associate with such users is specified when configuring OpenID provider in the server, via the `role_policy` configuration parameter or the `MINIO_IDENTITY_OPENID_ROLE_POLICY` environment variable. The value is a comma-separated list of IAM access policy names already defined in the server. In this situation, the server prints a role ARN at startup that must be specified as a `RoleARN` API request parameter in the STS AssumeRoleWithWebIdentity API call.
+
+2. `id_token` claims: When the role policy is not configured, MinIO looks for a specific claim in the `id_token` (JWT) returned by the OpenID provider. The default claim is `policy` and can be overridden by the `claim_name` configuration parameter or the `MINIO_IDENTITY_OPENID_CLAIM_NAME` environment variable. The claim value can be a string (comma-separated list) or an array of IAM access policy names defined in the server. A `RoleARN` API request parameter *must not* be specified in the STS AssumeRoleWithWebIdentity API call.
+
 ## API Request Parameters
 ### WebIdentityToken
 The OAuth 2.0 id_token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
@@ -18,6 +26,14 @@ The OAuth 2.0 id_token that is provided by the web identity provider. Applicatio
 
 ### WebIdentityAccessToken (MinIO Extension)
 There are situations when identity provider does not provide user claims in `id_token` instead it needs to be retrieved from UserInfo endpoint, this extension is only useful in this scenario. This is rare so use it accordingly depending on your Identity provider implementation. `access_token` is available as part of the OIDC authentication flow similar to `id_token`.
+
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *No*     |
+
+### RoleARN
+The role ARN to use. This must be specified if and only if the web identity provider is configured with a role policy.
 
 | Params     | Value    |
 | :--        | :--      |

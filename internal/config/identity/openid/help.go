@@ -51,6 +51,12 @@ var (
 			Type:        "on|off",
 		},
 		config.HelpKV{
+			Key:         RolePolicy,
+			Description: `Set the IAM access policies applicable to this client application and IDP e.g. "app-bucket-write,app-bucket-list"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         Scopes,
 			Description: `Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"`,
 			Optional:    true,
@@ -97,6 +103,18 @@ var (
 			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
+		},
+		config.HelpKV{
+			Key:         ClaimPrefix,
+			Description: `[DEPRECATED use 'claim_name'] JWT claim namespace prefix e.g. "customer1/"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         RedirectURI,
+			Description: `[DEPRECATED use env 'MINIO_BROWSER_REDIRECT_URL'] Configure custom redirect_uri for OpenID login flow callback`,
+			Optional:    true,
+			Type:        "string",
 		},
 	}
 )
