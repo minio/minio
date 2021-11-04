@@ -373,7 +373,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 		},
 	}
 	for _, size := range []int{1, 10, 1000, 100_000} {
-		b.Run(fmt.Sprint("size-", size), func(b *testing.B) {
+		b.Run(fmt.Sprint(size, "-versions"), func(b *testing.B) {
 			var xl xlMetaV2Shallow
 			ids := make([]string, size)
 			for i := 0; i < size; i++ {
@@ -390,13 +390,13 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 			}
 			rng := rand.New(rand.NewSource(0))
 			var dump = make([]byte, len(enc))
-
 			b.Run("UpdateObjectVersion", func(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
+					xl = xlMetaV2Shallow{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -420,6 +420,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
+					xl = xlMetaV2Shallow{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -441,6 +442,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
+					xl = xlMetaV2Shallow{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -464,6 +466,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
+					xl = xlMetaV2Shallow{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)

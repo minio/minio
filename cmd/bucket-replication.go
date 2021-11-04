@@ -724,7 +724,7 @@ const (
 // matches k1 with all keys, returns 'true' if one of them matches
 func equals(k1 string, keys ...string) bool {
 	for _, k2 := range keys {
-		if strings.EqualFold(strings.ToLower(k1), strings.ToLower(k2)) {
+		if strings.EqualFold(k1, k2) {
 			return true
 		}
 	}
