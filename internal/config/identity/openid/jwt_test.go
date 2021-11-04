@@ -19,12 +19,15 @@ package openid
 
 import (
 	"crypto"
+	"encoding/base64"
 	"encoding/json"
 	"net/url"
 	"sync"
 	"testing"
 	"time"
 
+	jwtg "github.com/golang-jwt/jwt"
+	jwtm "github.com/minio/minio/internal/jwt"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -200,5 +203,30 @@ func TestDefaultExpiryDuration(t *testing.T) {
 		if d != testCase.duration {
 			t.Errorf("Test %d: Expected duration %d, got %d", i+1, testCase.duration, d)
 		}
+	}
+}
+
+func TestExpCorrect(t *testing.T) {
+	signKey, _ := base64.StdEncoding.DecodeString("NTNv7j0TuYARvmNMmWXo6fKvM4o6nv/aUi9ryX38ZH+L1bkrnD1ObOQ8JAUmHCBq7Iy7otZcyAagBLHVKvvYaIpmMuxmARQ97jUVG16Jkpkp1wXOPsrF9zwew6TpczyHkHgX5EuLg2MeBuiT/qJACs1J0apruOOJCg/gOtkjB4c=")
+
+	claimsMap := jwtm.NewMapClaims()
+	claimsMap.SetExpiry(time.Now().Add(time.Minute))
+	claimsMap.SetAccessKey("test-access")
+	if err := updateClaimsExpiry("3600", claimsMap.MapClaims); err != nil {
+		t.Error(err)
+	}
+	// Build simple toke with updated expiration claim
+	token := jwtg.NewWithClaims(jwtg.SigningMethodHS256, claimsMap)
+	tokenString, err := token.SignedString(signKey)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Parse token to be sure it is valid
+	err = jwtm.ParseWithClaims(tokenString, claimsMap, func(*jwtm.MapClaims) ([]byte, error) {
+		return signKey, nil
+	})
+	if err != nil {
+		t.Error(err)
 	}
 }
