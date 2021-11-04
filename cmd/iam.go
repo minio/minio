@@ -275,17 +275,29 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	switch {
 	case globalOpenIDConfig.ProviderEnabled():
 		go func() {
+			ticker := time.NewTicker(sys.iamRefreshInterval)
+			defer ticker.Stop()
 			for {
-				time.Sleep(sys.iamRefreshInterval)
-				sys.purgeExpiredCredentialsForExternalSSO(ctx)
+				select {
+				case <-ticker.C:
+					sys.purgeExpiredCredentialsForExternalSSO(ctx)
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 	case globalLDAPConfig.EnabledWithLookupBind():
 		go func() {
+			ticker := time.NewTicker(sys.iamRefreshInterval)
+			defer ticker.Stop()
 			for {
-				time.Sleep(sys.iamRefreshInterval)
-				sys.purgeExpiredCredentialsForLDAP(ctx)
-				sys.updateGroupMembershipsForLDAP(ctx)
+				select {
+				case <-ticker.C:
+					sys.purgeExpiredCredentialsForLDAP(ctx)
+					sys.updateGroupMembershipsForLDAP(ctx)
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 	}
@@ -308,14 +320,20 @@ func (sys *IAMSys) watch(ctx context.Context) {
 			err := sys.loadWatchedEvent(ctx, event)
 			logger.LogIf(ctx, err)
 		}
+		return
+	}
 
-	} else {
-		// Fall back to loading all items
-		for {
-			time.Sleep(sys.iamRefreshInterval)
+	// Fall back to loading all items periodically
+	ticker := time.NewTicker(sys.iamRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
 			if err := sys.Load(ctx, sys.store); err != nil {
 				logger.LogIf(ctx, err)
 			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
