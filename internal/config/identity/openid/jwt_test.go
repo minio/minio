@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	jwtg "github.com/golang-jwt/jwt"
+	jwtg "github.com/golang-jwt/jwt/v4"
 	jwtm "github.com/minio/minio/internal/jwt"
 	xnet "github.com/minio/pkg/net"
 )

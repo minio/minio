@@ -18,7 +18,7 @@
 package subnet
 
 import (
-	jwtgo "github.com/golang-jwt/jwt"
+	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )

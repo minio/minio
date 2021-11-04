@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	jwtgo "github.com/golang-jwt/jwt"
-	jwtreq "github.com/golang-jwt/jwt/request"
+	jwtgo "github.com/golang-jwt/jwt/v4"
+	jwtreq "github.com/golang-jwt/jwt/v4/request"
 	"github.com/minio/minio/internal/auth"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"

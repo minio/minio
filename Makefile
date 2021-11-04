@@ -20,8 +20,8 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.40.1
-	@which msgp 1>/dev/null || (echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.3)
-	@which stringer 1>/dev/null || (echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer)
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@latest
+	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)
@@ -40,7 +40,7 @@ lint: ## runs golangci-lint suite of linters
 check: test
 test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@GOGC=25 GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
 test-race: verifiers build
 	@echo "Running unit tests under -race"
@@ -50,7 +50,7 @@ test-ldap: build
 	@echo "Running tests for LDAP integration"
 	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAMWithLDAPServerSuite ./cmd
 	@echo "Running tests for LDAP integration with -race"
-	@GOGC=25 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAMWithLDAPServerSuite ./cmd
+	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAMWithLDAPServerSuite ./cmd
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
