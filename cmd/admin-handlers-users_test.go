@@ -91,6 +91,7 @@ func runAllIAMTests(suite *TestSuiteIAM, c *check) {
 	suite.SetUpSuite(c)
 	suite.TestUserCreate(c)
 	suite.TestPolicyCreate(c)
+	suite.TestCannedPolicies(c)
 	suite.TestGroupAddRemove(c)
 	suite.TestServiceAccountOps(c)
 	suite.TearDownSuite(c)
@@ -273,6 +274,70 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 	if err != nil {
 		c.Fatalf("policy del err: %v", err)
 	}
+}
+
+func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	policies, err := s.adm.ListCannedPolicies(ctx)
+	if err != nil {
+		c.Fatalf("unable to list policies: %v", err)
+	}
+
+	defaultPolicies := []string{
+		"readwrite",
+		"readonly",
+		"writeonly",
+		"diagnostics",
+		"consoleAdmin",
+	}
+
+	for _, v := range defaultPolicies {
+		if _, ok := policies[v]; !ok {
+			c.Fatalf("Failed to find %s in policies list", v)
+		}
+	}
+
+	bucket := getRandomBucketName()
+	err = s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+
+	// Check that default policies can be overwritten.
+	err = s.adm.AddCannedPolicy(ctx, "readwrite", policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	info, err := s.adm.InfoCannedPolicy(ctx, "readwrite")
+	if err != nil {
+		c.Fatalf("policy info err: %v", err)
+	}
+
+	infoStr := string(info)
+	if !strings.Contains(infoStr, `"s3:PutObject"`) || !strings.Contains(infoStr, ":"+bucket+"/") {
+		c.Fatalf("policy contains unexpected content!")
+	}
+
 }
 
 func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
