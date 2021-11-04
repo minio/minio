@@ -380,7 +380,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				fi.VersionID = mustGetUUID()
 				fi.DataDir = mustGetUUID()
 				ids[i] = fi.VersionID
-				fi.ModTime = fi.ModTime.Add(time.Second)
+				fi.ModTime = fi.ModTime.Add(-time.Second)
 				xl.AddVersion(fi)
 			}
 			// Encode all. This is used for benchmarking.
@@ -388,6 +388,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.Logf("Serialized size: %d bytes", len(enc))
 			rng := rand.New(rand.NewSource(0))
 			var dump = make([]byte, len(enc))
 			b.Run("UpdateObjectVersion", func(b *testing.B) {
@@ -402,7 +403,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal(err)
 					}
 					// Update modtime for resorting...
-					fi.ModTime = fi.ModTime.Add(time.Second)
+					fi.ModTime = fi.ModTime.Add(-time.Second)
 					// Update a random version.
 					fi.VersionID = ids[rng.Intn(size)]
 					// Update...
@@ -454,7 +455,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal(err)
 					}
 					// Update modtime for resorting...
-					fi.ModTime = fi.ModTime.Add(time.Second)
+					fi.ModTime = fi.ModTime.Add(-time.Second)
 					// Update a random version.
 					fi.VersionID = mustGetUUID()
 					// Add...
@@ -480,13 +481,26 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					if err != nil {
 						b.Fatal(err)
 					}
-					// Update...
+					// List...
 					_, err = xl.ToFileInfo("volume", "path", ids[rng.Intn(size)])
 					if err != nil {
 						b.Fatal(err)
 					}
-					// Save...
-					dump, err = xl.AppendTo(dump[:0])
+				}
+			})
+			b.Run("ListVersions", func(b *testing.B) {
+				b.SetBytes(int64(size))
+				b.ResetTimer()
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					// Load...
+					xl = xlMetaV2Shallow{}
+					err := xl.Load(enc)
+					if err != nil {
+						b.Fatal(err)
+					}
+					// List...
+					_, err = xl.ListVersions("volume", "path")
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -502,6 +516,24 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal("buf == nil")
 					}
 					_, err = buf.ToFileInfo("volume", "path", ids[rng.Intn(size)])
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+			b.Run("ListVersionsNew", func(b *testing.B) {
+				b.SetBytes(int64(size))
+				b.ResetTimer()
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					buf, _ := isIndexedMetaV2(enc)
+					if buf == nil {
+						b.Fatal("buf == nil")
+					}
+					_, err = buf.ListVersions("volume", "path")
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			})
 		})

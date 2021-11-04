@@ -198,7 +198,7 @@ type xlMetaV2Object struct {
 	ErasureDist        []uint8           `json:"EcDist" msg:"EcDist"`                            // Erasure distribution
 	BitrotChecksumAlgo ChecksumAlgo      `json:"CSumAlgo" msg:"CSumAlgo"`                        // Bitrot checksum algo
 	PartNumbers        []int             `json:"PartNums" msg:"PartNums"`                        // Part Numbers
-	PartETags          []string          `json:"PartETags" msg:"PartETags"`                      // Part ETags
+	PartETags          []string          `json:"PartETags" msg:"PartETags,allownil"`             // Part ETags
 	PartSizes          []int64           `json:"PartSizes" msg:"PartSizes"`                      // Part Sizes
 	PartActualSizes    []int64           `json:"PartASizes,omitempty" msg:"PartASizes,allownil"` // Part ActualSizes (compression)
 	Size               int64             `json:"Size" msg:"Size"`                                // Object version size
@@ -308,7 +308,7 @@ func (j xlMetaV2Version) getVersionID() [16]byte {
 	return [16]byte{}
 }
 
-func (j xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
+func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
 	switch j.Type {
 	case ObjectType:
 		return j.ObjectV2.ToFileInfo(volume, path)
@@ -506,7 +506,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	for i := range fi.Parts {
 		fi.Parts[i].Number = j.PartNumbers[i]
 		fi.Parts[i].Size = j.PartSizes[i]
-		fi.Parts[i].ETag = j.PartETags[i]
+		if len(j.PartETags) > 0 {
+			fi.Parts[i].ETag = j.PartETags[i]
+		}
 		fi.Parts[i].ActualSize = j.PartActualSizes[i]
 	}
 	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
@@ -1267,20 +1269,26 @@ func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
 			BitrotChecksumAlgo: HighwayHash,
 			ErasureDist:        make([]uint8, len(fi.Erasure.Distribution)),
 			PartNumbers:        make([]int, len(fi.Parts)),
-			PartETags:          make([]string, len(fi.Parts)),
+			PartETags:          nil,
 			PartSizes:          make([]int64, len(fi.Parts)),
 			PartActualSizes:    make([]int64, len(fi.Parts)),
 			MetaSys:            make(map[string][]byte),
 			MetaUser:           make(map[string]string, len(fi.Metadata)),
 		}
-
+		for i := range fi.Parts {
+			// Only add etags if any.
+			if fi.Parts[i].ETag != "" {
+				ventry.ObjectV2.PartETags = make([]string, len(fi.Parts))
+				break
+			}
+		}
 		for i := range fi.Erasure.Distribution {
 			ventry.ObjectV2.ErasureDist[i] = uint8(fi.Erasure.Distribution[i])
 		}
 
 		for i := range fi.Parts {
 			ventry.ObjectV2.PartSizes[i] = fi.Parts[i].Size
-			if fi.Parts[i].ETag != "" {
+			if len(ventry.ObjectV2.PartETags) > 0 && fi.Parts[i].ETag != "" {
 				ventry.ObjectV2.PartETags[i] = fi.Parts[i].ETag
 			}
 			ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
