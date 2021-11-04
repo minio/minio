@@ -987,7 +987,7 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 
 		throughputHighestGet := uint64(0)
 		throughputHighestPut := uint64(0)
-		var throughputHighestGetResults []SpeedtestResult
+		var throughputHighestResults []SpeedtestResult
 
 		sendResult := func() {
 			var result madmin.SpeedTestResult
@@ -998,21 +998,21 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(throughputSize) / uint64(durationSecs)
 			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
 			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(throughputSize) / uint64(durationSecs)
-			for i := 0; i < len(throughputHighestGetResults); i++ {
+			for i := 0; i < len(throughputHighestResults); i++ {
 				errStr := ""
-				if throughputHighestGetResults[i].Error != "" {
-					errStr = throughputHighestGetResults[i].Error
+				if throughputHighestResults[i].Error != "" {
+					errStr = throughputHighestResults[i].Error
 				}
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
-					Endpoint:         throughputHighestGetResults[i].Endpoint,
-					ThroughputPerSec: throughputHighestGetResults[i].Uploads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestGetResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
+					Endpoint:         throughputHighestResults[i].Endpoint,
+					ThroughputPerSec: throughputHighestResults[i].Uploads / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
-					Endpoint:         throughputHighestGetResults[i].Endpoint,
-					ThroughputPerSec: throughputHighestGetResults[i].Downloads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestGetResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
+					Endpoint:         throughputHighestResults[i].Endpoint,
+					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 			}
@@ -1052,6 +1052,21 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 			}
 
 			if totalGet < throughputHighestGet {
+				// Following check is for situations
+				// when Writes() scale higher than Reads()
+				// - practically speaking this never happens
+				// and should never happen - however it has
+				// been seen recently due to hardware issues
+				// causes Reads() to go slower than Writes().
+				//
+				// Send such results anyways as this shall
+				// expose a problem underneath.
+				if totalPut > throughputHighestPut {
+					throughputHighestResults = results
+					throughputHighestPut = totalPut
+					// let the client see lower value as well
+					throughputHighestGet = totalGet
+				}
 				sendResult()
 				break
 			}
@@ -1062,7 +1077,7 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 			}
 
 			throughputHighestGet = totalGet
-			throughputHighestGetResults = results
+			throughputHighestResults = results
 			throughputHighestPut = totalPut
 
 			if doBreak {

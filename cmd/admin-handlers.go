@@ -951,9 +951,18 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		duration = time.Second * 10
 	}
 
+	deleteBucket := func() {
+		loc := pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix)
+		objectAPI.DeleteBucket(context.Background(), loc, DeleteBucketOptions{
+			Force:      true,
+			NoRecreate: true,
+		})
+	}
+
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
+	enc := json.NewEncoder(w)
 	ch := speedTest(ctx, size, concurrent, duration, autotune)
 	for {
 		select {
@@ -961,19 +970,19 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 			return
 		case <-keepAliveTicker.C:
 			// Write a blank entry to prevent client from disconnecting
-			if err := json.NewEncoder(w).Encode(madmin.SpeedTestResult{}); err != nil {
+			if err := enc.Encode(madmin.SpeedTestResult{}); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
 		case result, ok := <-ch:
 			if !ok {
-				defer objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix), DeleteBucketOptions{Force: true, NoRecreate: true})
+				deleteBucket()
 				return
 			}
-			if err := json.NewEncoder(w).Encode(result); err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			if err := enc.Encode(result); err != nil {
 				return
 			}
+			w.(http.Flusher).Flush()
 		}
 	}
 }
@@ -1920,13 +1929,15 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 			}
 		}
 	}()
+
+	enc := json.NewEncoder(w)
 	for {
 		select {
 		case report, ok := <-reportCh:
 			if !ok {
 				return
 			}
-			if err := json.NewEncoder(w).Encode(report); err != nil {
+			if err := enc.Encode(report); err != nil {
 				writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
