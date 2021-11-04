@@ -258,10 +258,20 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 		c.Fatalf("policy was missing!")
 	}
 
-	// 5. Check that policy can be deleted.
+	// 5. Check that policy cannot be deleted when attached to a user.
+	err = s.adm.RemoveCannedPolicy(ctx, policy)
+	if err == nil {
+		c.Fatalf("policy could be unexpectedly deleted!")
+	}
+
+	// 6. Delete the user and then delete the policy.
+	err = s.adm.RemoveUser(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("user could not be deleted: %v", err)
+	}
 	err = s.adm.RemoveCannedPolicy(ctx, policy)
 	if err != nil {
-		c.Fatalf("policy delete err: %v", err)
+		c.Fatalf("policy del err: %v", err)
 	}
 }
 
@@ -627,7 +637,8 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if ok && v.Err != nil {
-		c.Fatalf("user was unable to list unexpectedly!")
+		msg := fmt.Sprintf("user was unable to list: %v", v.Err)
+		c.Fatalf(msg)
 	}
 }
 

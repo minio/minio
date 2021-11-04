@@ -27,22 +27,37 @@ import (
 
 type iamDummyStore struct {
 	sync.RWMutex
+	*iamCache
+	usersSysType UsersSysType
 }
 
-func (ids *iamDummyStore) lock() {
+func newIAMDummyStore(usersSysType UsersSysType) *iamDummyStore {
+	return &iamDummyStore{
+		iamCache:     newIamCache(),
+		usersSysType: usersSysType,
+	}
+}
+
+func (ids *iamDummyStore) rlock() *iamCache {
+	ids.RLock()
+	return ids.iamCache
+}
+
+func (ids *iamDummyStore) runlock() {
+	ids.RUnlock()
+}
+
+func (ids *iamDummyStore) lock() *iamCache {
 	ids.Lock()
+	return ids.iamCache
 }
 
 func (ids *iamDummyStore) unlock() {
 	ids.Unlock()
 }
 
-func (ids *iamDummyStore) rlock() {
-	ids.RLock()
-}
-
-func (ids *iamDummyStore) runlock() {
-	ids.RUnlock()
+func (ids *iamDummyStore) getUsersSysType() UsersSysType {
+	return ids.usersSysType
 }
 
 func (ids *iamDummyStore) migrateBackendFormat(context.Context) error {
