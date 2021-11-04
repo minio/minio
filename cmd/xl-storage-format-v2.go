@@ -809,7 +809,7 @@ func (x *xlMetaV2Shallow) loadVersions(buf xlMetaBuf, data xlMetaInlineData) err
 		return err
 	}
 	if cap(x.versions) < versions {
-		x.versions = make([]xlmetaV2ShallowVersion, 0, versions)
+		x.versions = make([]xlmetaV2ShallowVersion, 0, versions+1)
 	}
 	x.versions = x.versions[:versions]
 	x.data = data
@@ -1200,7 +1200,7 @@ func (x *xlMetaV2Shallow) UpdateObjectVersion(fi FileInfo) error {
 					return err
 				}
 				for k, v := range fi.Metadata {
-					if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+					if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
 						ver.ObjectV2.MetaSys[k] = []byte(v)
 					} else {
 						ver.ObjectV2.MetaUser[k] = v
@@ -1358,11 +1358,11 @@ func (x *xlMetaV2Shallow) SharedDataDirCount(versionID [16]byte, dataDir [16]byt
 		return 0
 	}
 	var sameDataDirCount int
+	var decoded xlMetaDataDirDecoder
 	for _, version := range x.versions {
 		if version.header.Type != ObjectType || version.header.VersionID == versionID || !version.header.UsesDataDir() {
 			continue
 		}
-		var decoded xlMetaDataDirDecoder
 		_, err := decoded.UnmarshalMsg(version.meta)
 		if err != nil || decoded.ObjectV2 == nil || decoded.ObjectV2.DataDir != dataDir {
 			continue

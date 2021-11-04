@@ -412,6 +412,9 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					}
 					// Save...
 					dump, err = xl.AppendTo(dump[:0])
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			})
 			b.Run("DeleteVersion", func(b *testing.B) {
@@ -434,6 +437,9 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					}
 					// Save...
 					dump, err = xl.AppendTo(dump[:0])
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			})
 			b.Run("AddVersion", func(b *testing.B) {
@@ -458,6 +464,9 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					}
 					// Save...
 					dump, err = xl.AppendTo(dump[:0])
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			})
 			b.Run("ToFileInfo", func(b *testing.B) {
@@ -478,6 +487,9 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					}
 					// Save...
 					dump, err = xl.AppendTo(dump[:0])
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			})
 			b.Run("ToFileInfoNew", func(b *testing.B) {
