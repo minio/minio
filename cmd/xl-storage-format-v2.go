@@ -859,8 +859,14 @@ func (x *xlMetaV2Shallow) addVersion(ver xlMetaV2Version) error {
 
 // AppendTo will marshal the data in z and append it to the provided slice.
 func (x *xlMetaV2Shallow) AppendTo(dst []byte) ([]byte, error) {
-	// TODO: Make more precise
-	sz := len(xlHeader) + len(xlVersionCurrent) + msgp.ArrayHeaderSize + len(dst) + msgp.Uint32Size
+	// Header...
+	sz := len(xlHeader) + len(xlVersionCurrent) + msgp.ArrayHeaderSize + len(dst) + 3*msgp.Uint32Size
+	// Inline data
+	sz += len(x.data)
+	// Versions...
+	for _, ver := range x.versions {
+		sz += 32 + len(ver.meta)
+	}
 	if cap(dst) < sz {
 		buf := make([]byte, len(dst), sz)
 		copy(buf, dst)
@@ -1284,7 +1290,7 @@ func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
 		tierFVIDKey := ReservedMetadataPrefixLower + tierFVID
 		tierFVMarkerKey := ReservedMetadataPrefixLower + tierFVMarker
 		for k, v := range fi.Metadata {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
 				// Skip tierFVID, tierFVMarker keys; it's used
 				// only for creating free-version.
 				switch k {
@@ -1348,7 +1354,7 @@ func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
 
 func (x *xlMetaV2Shallow) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
 	// v2 object is inlined, if it is skip dataDir share check.
-	if x.data.find(uuid.UUID(versionID).String()) != nil {
+	if x.data.entries() > 0 && x.data.find(uuid.UUID(versionID).String()) != nil {
 		return 0
 	}
 	var sameDataDirCount int
