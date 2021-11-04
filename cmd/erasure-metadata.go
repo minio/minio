@@ -476,9 +476,7 @@ func GetInternalReplicationState(m map[string][]byte) ReplicationState {
 
 // getInternalReplicationState fetches internal replication state from the map m
 func getInternalReplicationState(m map[string]string) ReplicationState {
-	d := ReplicationState{
-		ResetStatusesMap: make(map[string]string),
-	}
+	d := ReplicationState{}
 	for k, v := range m {
 		switch {
 		case equals(k, ReservedMetadataPrefixLower+ReplicationTimestamp):
@@ -497,6 +495,9 @@ func getInternalReplicationState(m map[string]string) ReplicationState {
 			d.PurgeTargets = versionPurgeStatusesMap(v)
 		case strings.HasPrefix(k, ReservedMetadataPrefixLower+ReplicationReset):
 			arn := strings.TrimPrefix(k, fmt.Sprintf("%s-", ReservedMetadataPrefixLower+ReplicationReset))
+			if d.ResetStatusesMap == nil {
+				d.ResetStatusesMap = make(map[string]string, 1)
+			}
 			d.ResetStatusesMap[arn] = v
 		}
 	}
