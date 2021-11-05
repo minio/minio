@@ -24,7 +24,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
-func (x xlMetaV2Shallow) listFreeVersions(volume, path string) ([]FileInfo, error) {
+func (x xlMetaV2) listFreeVersions(volume, path string) ([]FileInfo, error) {
 	fivs, err := x.ListVersions(volume, path)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func TestFreeVersion(t *testing.T) {
 	}
 
 	// Add a version with tiered content, one with local content
-	xl := xlMetaV2Shallow{}
+	xl := xlMetaV2{}
 	counter := 1
 	report := func() {
 		t.Helper()

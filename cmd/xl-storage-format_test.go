@@ -374,7 +374,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 	}
 	for _, size := range []int{1, 10, 1000, 100_000} {
 		b.Run(fmt.Sprint(size, "-versions"), func(b *testing.B) {
-			var xl xlMetaV2Shallow
+			var xl xlMetaV2
 			ids := make([]string, size)
 			for i := 0; i < size; i++ {
 				fi.VersionID = mustGetUUID()
@@ -397,7 +397,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
-					xl = xlMetaV2Shallow{}
+					xl = xlMetaV2{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -424,7 +424,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
-					xl = xlMetaV2Shallow{}
+					xl = xlMetaV2{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -449,7 +449,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
-					xl = xlMetaV2Shallow{}
+					xl = xlMetaV2{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -476,7 +476,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
-					xl = xlMetaV2Shallow{}
+					xl = xlMetaV2{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)
@@ -494,7 +494,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					// Load...
-					xl = xlMetaV2Shallow{}
+					xl = xlMetaV2{}
 					err := xl.Load(enc)
 					if err != nil {
 						b.Fatal(err)

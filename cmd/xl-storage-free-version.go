@@ -75,7 +75,7 @@ func (j xlMetaV2Version) FreeVersion() bool {
 
 // AddFreeVersion adds a free-version if needed for fi.VersionID version.
 // Free-version will be added if fi.VersionID has transitioned.
-func (x *xlMetaV2Shallow) AddFreeVersion(fi FileInfo) error {
+func (x *xlMetaV2) AddFreeVersion(fi FileInfo) error {
 	var uv uuid.UUID
 	var err error
 	switch fi.VersionID {

@@ -320,18 +320,6 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
 	return FileInfo{}, errFileNotFound
 }
 
-// xlMetaV2 - object meta structure defines the format and list of
-// the journals for the object.
-//msgp:ignore xlMetaV2
-type xlMetaV2 struct {
-	Versions []xlMetaV2Version `json:"Versions" msg:"Versions"`
-
-	// data will contain raw data if any.
-	// data will be one or more versions indexed by versionID.
-	// To remove all data set to nil.
-	data xlMetaInlineData `msg:"-"`
-}
-
 const (
 	xlHeaderVersion = 1
 	xlMetaVersion   = 1
@@ -661,9 +649,9 @@ type xlMetaV2ShallowVersion struct {
 	meta   []byte
 }
 
-//msgp:ignore xlMetaV2Shallow xlMetaV2ShallowVersion
+//msgp:ignore xlMetaV2 xlMetaV2ShallowVersion
 
-type xlMetaV2Shallow struct {
+type xlMetaV2 struct {
 	versions []xlMetaV2ShallowVersion
 
 	// data will contain raw data if any.
@@ -674,7 +662,7 @@ type xlMetaV2Shallow struct {
 
 // Load all versions of the stored data.
 // Note that references to the incoming buffer will be kept.
-func (x *xlMetaV2Shallow) Load(buf []byte) error {
+func (x *xlMetaV2) Load(buf []byte) error {
 	if meta, data := isIndexedMetaV2(buf); meta != nil {
 		return x.loadIndexed(meta, data)
 	}
@@ -682,7 +670,7 @@ func (x *xlMetaV2Shallow) Load(buf []byte) error {
 	return x.loadLegacy(buf)
 }
 
-func (x *xlMetaV2Shallow) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
+func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 	versions, buf, err := decodeXlHeaders(buf)
 	if err != nil {
 		return err
@@ -694,7 +682,7 @@ func (x *xlMetaV2Shallow) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) erro
 	x.data = data
 	if err = x.data.validate(); err != nil {
 		x.data.repair()
-		logger.Info("xlMetaV2Shallow.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries())
+		logger.Info("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries())
 	}
 
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
@@ -710,7 +698,7 @@ func (x *xlMetaV2Shallow) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) erro
 
 // loadLegacy will load content prior to v1.3
 // Note that references to the incoming buffer will be kept.
-func (x *xlMetaV2Shallow) loadLegacy(buf []byte) error {
+func (x *xlMetaV2) loadLegacy(buf []byte) error {
 	buf, major, minor, err := checkXL2V1(buf)
 	if err != nil {
 		return fmt.Errorf("xlMetaV2.Load %w", err)
@@ -806,7 +794,7 @@ func (x *xlMetaV2Shallow) loadLegacy(buf []byte) error {
 	return nil
 }
 
-func (x *xlMetaV2Shallow) addVersion(ver xlMetaV2Version) error {
+func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 	modTime := ver.getModTime().UnixNano()
 	if !ver.Valid() {
 		return errors.New("attempted to add invalid version")
@@ -835,7 +823,7 @@ func (x *xlMetaV2Shallow) addVersion(ver xlMetaV2Version) error {
 }
 
 // AppendTo will marshal the data in z and append it to the provided slice.
-func (x *xlMetaV2Shallow) AppendTo(dst []byte) ([]byte, error) {
+func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	// Header...
 	sz := len(xlHeader) + len(xlVersionCurrent) + msgp.ArrayHeaderSize + len(dst) + 3*msgp.Uint32Size
 	// Inline data
@@ -888,7 +876,7 @@ func (x *xlMetaV2Shallow) AppendTo(dst []byte) ([]byte, error) {
 	return append(dst, x.data...), nil
 }
 
-func (x *xlMetaV2Shallow) findVersion(key [16]byte) (idx int, ver *xlMetaV2Version, err error) {
+func (x *xlMetaV2) findVersion(key [16]byte) (idx int, ver *xlMetaV2Version, err error) {
 	for i, ver := range x.versions {
 		if key == ver.header.VersionID {
 			obj, err := x.getIdx(i)
@@ -898,7 +886,7 @@ func (x *xlMetaV2Shallow) findVersion(key [16]byte) (idx int, ver *xlMetaV2Versi
 	return -1, nil, errFileVersionNotFound
 }
 
-func (x *xlMetaV2Shallow) getIdx(idx int) (ver *xlMetaV2Version, err error) {
+func (x *xlMetaV2) getIdx(idx int) (ver *xlMetaV2Version, err error) {
 	if idx < 0 || idx >= len(x.versions) {
 		return nil, errFileNotFound
 	}
@@ -914,7 +902,7 @@ func (x *xlMetaV2Shallow) getIdx(idx int) (ver *xlMetaV2Version, err error) {
 
 // setIdx will replace a version at a given index.
 // Note that versions may become re-sorted if modtime changes.
-func (x *xlMetaV2Shallow) setIdx(idx int, ver xlMetaV2Version) (err error) {
+func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 	if idx < 0 || idx >= len(x.versions) {
 		return errFileNotFound
 	}
@@ -934,7 +922,7 @@ func (x *xlMetaV2Shallow) setIdx(idx int, ver xlMetaV2Version) (err error) {
 
 // sortByModTime will sort versions by modtime in descending order,
 // meaning index 0 will be latest version.
-func (x *xlMetaV2Shallow) sortByModTime() {
+func (x *xlMetaV2) sortByModTime() {
 	// Quick check
 	if len(x.versions) <= 1 || sort.SliceIsSorted(x.versions, func(i, j int) bool {
 		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
@@ -951,7 +939,7 @@ func (x *xlMetaV2Shallow) sortByModTime() {
 // DeleteVersion deletes the version specified by version id.
 // returns to the caller which dataDir to delete, also
 // indicates if this is the last version.
-func (x *xlMetaV2Shallow) DeleteVersion(fi FileInfo) (string, bool, error) {
+func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 	// This is a situation where versionId is explicitly
 	// specified as "null", as we do not save "null"
 	// string it is considered empty. But empty also
@@ -1147,7 +1135,7 @@ type xlMetaDataDirDecoder struct {
 // stay as is, if you wish to update all values you should
 // update all metadata freshly before calling this function
 // in-case you wish to clear existing metadata.
-func (x *xlMetaV2Shallow) UpdateObjectVersion(fi FileInfo) error {
+func (x *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
 	if fi.VersionID == "" {
 		// this means versioning is not yet
 		// enabled or suspend i.e all versions
@@ -1195,7 +1183,7 @@ func (x *xlMetaV2Shallow) UpdateObjectVersion(fi FileInfo) error {
 }
 
 // AddVersion adds a new version
-func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
+func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 	if fi.VersionID == "" {
 		// this means versioning is not yet
 		// enabled or suspend i.e all versions
@@ -1335,7 +1323,7 @@ func (x *xlMetaV2Shallow) AddVersion(fi FileInfo) error {
 	return x.addVersion(ventry)
 }
 
-func (x *xlMetaV2Shallow) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
+func (x *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int {
 	// v2 object is inlined, if it is skip dataDir share check.
 	if x.data.entries() > 0 && x.data.find(uuid.UUID(versionID).String()) != nil {
 		return 0
@@ -1355,7 +1343,7 @@ func (x *xlMetaV2Shallow) SharedDataDirCount(versionID [16]byte, dataDir [16]byt
 	return sameDataDirCount
 }
 
-func (x *xlMetaV2Shallow) SharedDataDirCountStr(versionID, dataDir string) int {
+func (x *xlMetaV2) SharedDataDirCountStr(versionID, dataDir string) int {
 	var (
 		uv   uuid.UUID
 		ddir uuid.UUID
@@ -1379,7 +1367,7 @@ func (x *xlMetaV2Shallow) SharedDataDirCountStr(versionID, dataDir string) int {
 
 // AddLegacy adds a legacy version, is only called when no prior
 // versions exist, safe to use it by only one function in xl-storage(RenameData)
-func (x *xlMetaV2Shallow) AddLegacy(m *xlMetaV1Object) error {
+func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 	if !m.valid() {
 		return errFileCorrupt
 	}
@@ -1391,7 +1379,7 @@ func (x *xlMetaV2Shallow) AddLegacy(m *xlMetaV1Object) error {
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
-func (x xlMetaV2Shallow) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
+func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
 	var uv uuid.UUID
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
@@ -1453,7 +1441,7 @@ func (x xlMetaV2Shallow) ToFileInfo(volume, path, versionID string) (fi FileInfo
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (x xlMetaV2Shallow) ListVersions(volume, path string) ([]FileInfo, error) {
+func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 	versions := make([]FileInfo, 0, len(x.versions))
 	var err error
 

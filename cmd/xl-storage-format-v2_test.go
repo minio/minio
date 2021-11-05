@@ -40,7 +40,7 @@ func TestXLV2FormatData(t *testing.T) {
 	data := []byte("some object data")
 	data2 := []byte("some other object data")
 
-	xl := xlMetaV2Shallow{}
+	xl := xlMetaV2{}
 	fi := FileInfo{
 		Volume:           "volume",
 		Name:             "object-name",
@@ -84,7 +84,7 @@ func TestXLV2FormatData(t *testing.T) {
 	serialized, err := xl.AppendTo(nil)
 	failOnErr(err)
 	// Roundtrip data
-	var xl2 xlMetaV2Shallow
+	var xl2 xlMetaV2
 	failOnErr(xl2.Load(serialized))
 
 	// We should have one data entry
@@ -142,7 +142,7 @@ func TestXLV2FormatData(t *testing.T) {
 	}
 
 	// Test trimmed
-	xl2 = xlMetaV2Shallow{}
+	xl2 = xlMetaV2{}
 	trimmed := xlMetaV2TrimData(serialized)
 	failOnErr(xl2.Load(trimmed))
 	if len(xl2.data) != 0 {
@@ -237,7 +237,7 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 	data := []byte("some object data")
 	data2 := []byte("some other object data")
 
-	xl := xlMetaV2Shallow{}
+	xl := xlMetaV2{}
 	fi := FileInfo{
 		Volume:           "volume",
 		Name:             "object-name",
@@ -385,7 +385,7 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 	}
 
 	b.Run("legacy", func(b *testing.B) {
-		var xl xlMetaV2Shallow
+		var xl xlMetaV2
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
@@ -397,7 +397,7 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 		}
 	})
 	b.Run("indexed", func(b *testing.B) {
-		var xl xlMetaV2Shallow
+		var xl xlMetaV2
 		err = xl.Load(data)
 		if err != nil {
 			b.Fatal(err)
@@ -430,7 +430,7 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	test := func(t *testing.T, xl *xlMetaV2Shallow) {
+	test := func(t *testing.T, xl *xlMetaV2) {
 		if len(xl.versions) != 855 {
 			t.Errorf("want %d versions, got %d", 855, len(xl.versions))
 		}
@@ -454,7 +454,7 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 		}
 	}
 	t.Run("load-legacy", func(t *testing.T) {
-		var xl xlMetaV2Shallow
+		var xl xlMetaV2
 		err = xl.Load(data)
 		if err != nil {
 			t.Fatal(err)
@@ -462,7 +462,7 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 		test(t, &xl)
 	})
 	t.Run("roundtrip", func(t *testing.T) {
-		var xl xlMetaV2Shallow
+		var xl xlMetaV2
 		err = xl.Load(data)
 		if err != nil {
 			t.Fatal(err)
@@ -471,7 +471,7 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		xl = xlMetaV2Shallow{}
+		xl = xlMetaV2{}
 		err = xl.Load(data)
 		if err != nil {
 			t.Fatal(err)

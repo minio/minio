@@ -152,7 +152,7 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 		return meta.IsLatestDeleteMarker()
 	}
 	// Fall back...
-	var xlMeta xlMetaV2Shallow
+	var xlMeta xlMetaV2
 	if err := xlMeta.Load(e.metadata); err != nil || len(xlMeta.versions) == 0 {
 		return true
 	}
