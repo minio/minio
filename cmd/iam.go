@@ -351,13 +351,6 @@ func (sys *IAMSys) loadWatchedEvent(outerCtx context.Context, event iamWatchEven
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
 
-	// We need to read from storage and write to in-memory map, so we need
-	// only a read lock on storage, however in some cases we modify storage
-	// too (e.g. when credentials from storage are expired, we delete them),
-	// so we take write locks for both.
-	sys.Lock()
-	defer sys.Unlock()
-
 	if event.isCreated {
 		switch {
 		case usersPrefix:

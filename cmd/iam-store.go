@@ -474,8 +474,8 @@ func (store *IAMStoreSys) GetMappedPolicy(name string, isGroup bool) (MappedPoli
 // change (e.g. peer notification for object storage and etcd watch
 // notification).
 func (store *IAMStoreSys) GroupNotificationHandler(ctx context.Context, group string) error {
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	err := store.loadGroup(ctx, group, cache.iamGroupsMap)
 	if err != nil && err != errNoSuchGroup {
@@ -730,8 +730,8 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 // ListGroups - lists groups. Since this is not going to be a frequent
 // operation, we fetch this info from storage, and refresh the cache as well.
 func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err error) {
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	if store.getUsersSysType() == MinIOUsersSysType {
 		m := map[string]GroupInfo{}
@@ -834,8 +834,8 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 		return errInvalidArgument
 	}
 
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	err := store.loadPolicyDoc(ctx, policy, cache.iamPolicyDocsMap)
 	if err == errNoSuchPolicy {
@@ -1165,8 +1165,8 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 		return errInvalidArgument
 	}
 
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	m := cache.iamGroupPolicyMap
 	if !isGroup {
@@ -1189,8 +1189,8 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		return errInvalidArgument
 	}
 
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	err := store.loadUser(ctx, accessKey, userType, cache.iamUsersMap)
 	if err == errNoSuchUser {
@@ -1678,8 +1678,8 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 
 // LoadUser - attempts to load user info from storage and updates cache.
 func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
-	cache := store.rlock()
-	defer store.runlock()
+	cache := store.lock()
+	defer store.unlock()
 
 	_, found := cache.iamUsersMap[accessKey]
 	if !found {
