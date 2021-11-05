@@ -28,6 +28,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -249,6 +250,7 @@ type hdfsObjects struct {
 	clnt     *hdfs.Client
 	subPath  string
 	listPool *minio.TreeWalkPool
+	mtx      sync.Mutex
 }
 
 func hdfsToObjectErr(ctx context.Context, err error, params ...string) error {
@@ -429,6 +431,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		}, nil
 	}
 
+	n.mtx.Lock()
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
 		filePath := path.Clean(n.hdfsPathJoin(bucket, entry))
 		fi, ok := fileInfos[filePath]
@@ -456,6 +459,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 
 		return objectInfo, nil
 	}
+	n.mtx.Unlock()
 
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
