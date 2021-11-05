@@ -742,6 +742,31 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidClientCertificate, err)
 			return
 		}
+	} else {
+		// Technically, there is no security argument for verifying the key usage
+		// when we don't verify that the certificate has been issued by a trusted CA.
+		// Any client can create a certificate with arbitrary key usage settings.
+		//
+		// However, this check ensures that a certificate with an invalid key usage
+		// gets rejected even when we skip certificate verification. This helps
+		// clients detect malformed certificates during testing instead of e.g.
+		// a self-signed certificate that works while a comparable certificate
+		// issued by a trusted CA fails due to the MinIO server being less strict
+		// w.r.t. key usage verification.
+		//
+		// Basically, MinIO is more consistent (from a client perspective) when
+		// we verify the key usage all the time.
+		var validKeyUsage bool
+		for _, usage := range certificate.ExtKeyUsage {
+			if usage == x509.ExtKeyUsageAny || usage == x509.ExtKeyUsageClientAuth {
+				validKeyUsage = true
+				break
+			}
+		}
+		if !validKeyUsage {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, errors.New("certificate is not valid for client authentication"))
+			return
+		}
 	}
 
 	// We map the X.509 subject common name to the policy. So, a client
