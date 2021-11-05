@@ -47,6 +47,8 @@ var (
 	xlVersionCurrent [4]byte
 )
 
+//go:generate msgp -file=$GOFILE -unexported
+
 const (
 	// Breaking changes.
 	// Newer versions cannot be read by older software.
@@ -63,35 +65,6 @@ const (
 func init() {
 	binary.LittleEndian.PutUint16(xlVersionCurrent[0:2], xlVersionMajor)
 	binary.LittleEndian.PutUint16(xlVersionCurrent[2:4], xlVersionMinor)
-}
-
-// checkXL2V1 will check if the metadata has correct header and is a known major version.
-// The remaining payload and versions are returned.
-func checkXL2V1(buf []byte) (payload []byte, major, minor uint16, err error) {
-	if len(buf) <= 8 {
-		return payload, 0, 0, fmt.Errorf("xlMeta: no data")
-	}
-
-	if !bytes.Equal(buf[:4], xlHeader[:]) {
-		return payload, 0, 0, fmt.Errorf("xlMeta: unknown XLv2 header, expected %v, got %v", xlHeader[:4], buf[:4])
-	}
-
-	if bytes.Equal(buf[4:8], []byte("1   ")) {
-		// Set as 1,0.
-		major, minor = 1, 0
-	} else {
-		major, minor = binary.LittleEndian.Uint16(buf[4:6]), binary.LittleEndian.Uint16(buf[6:8])
-	}
-	if major > xlVersionMajor {
-		return buf[8:], major, minor, fmt.Errorf("xlMeta: unknown major version %d found", major)
-	}
-
-	return buf[8:], major, minor, nil
-}
-
-func isXL2V1Format(buf []byte) bool {
-	_, _, _, err := checkXL2V1(buf)
-	return err == nil
 }
 
 // The []journal contains all the different versions of the object.
@@ -124,8 +97,6 @@ func isXL2V1Format(buf []byte) bool {
 //         ├── legacy
 //         │   └── part.1
 //         └── xl.meta
-
-//go:generate msgp -file=$GOFILE -unexported
 
 // VersionType defines the type of journal type of the current entry.
 type VersionType uint8
@@ -227,6 +198,35 @@ const (
 	xlFlagUsesDataDir
 )
 
+// checkXL2V1 will check if the metadata has correct header and is a known major version.
+// The remaining payload and versions are returned.
+func checkXL2V1(buf []byte) (payload []byte, major, minor uint16, err error) {
+	if len(buf) <= 8 {
+		return payload, 0, 0, fmt.Errorf("xlMeta: no data")
+	}
+
+	if !bytes.Equal(buf[:4], xlHeader[:]) {
+		return payload, 0, 0, fmt.Errorf("xlMeta: unknown XLv2 header, expected %v, got %v", xlHeader[:4], buf[:4])
+	}
+
+	if bytes.Equal(buf[4:8], []byte("1   ")) {
+		// Set as 1,0.
+		major, minor = 1, 0
+	} else {
+		major, minor = binary.LittleEndian.Uint16(buf[4:6]), binary.LittleEndian.Uint16(buf[6:8])
+	}
+	if major > xlVersionMajor {
+		return buf[8:], major, minor, fmt.Errorf("xlMeta: unknown major version %d found", major)
+	}
+
+	return buf[8:], major, minor, nil
+}
+
+func isXL2V1Format(buf []byte) bool {
+	_, _, _, err := checkXL2V1(buf)
+	return err == nil
+}
+
 //msgp:tuple xlMetaV2VersionHeader
 type xlMetaV2VersionHeader struct {
 	VersionID [16]byte
@@ -322,6 +322,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
 
 // xlMetaV2 - object meta structure defines the format and list of
 // the journals for the object.
+//msgp:ignore xlMetaV2
 type xlMetaV2 struct {
 	Versions []xlMetaV2Version `json:"Versions" msg:"Versions"`
 
@@ -331,111 +332,10 @@ type xlMetaV2 struct {
 	data xlMetaInlineData `msg:"-"`
 }
 
-// Load unmarshal and load the entire message pack.
-// Note that references to the incoming buffer may be kept as data.
-func (z *xlMetaV2) Load(buf []byte) error {
-	buf, major, minor, err := checkXL2V1(buf)
-	if err != nil {
-		return fmt.Errorf("xlMetaV2.Load %w", err)
-	}
-	switch major {
-	case 1:
-		switch minor {
-		case 0:
-			_, err = z.UnmarshalMsg(buf)
-			if err != nil {
-				return fmt.Errorf("xlMetaV2.Load %w", err)
-			}
-			return nil
-		case 1, 2, 3:
-			v, buf, err := msgp.ReadBytesZC(buf)
-			if err != nil {
-				return fmt.Errorf("xlMetaV2.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
-			}
-			if minor >= 2 {
-				if crc, nbuf, err := msgp.ReadUint32Bytes(buf); err == nil {
-					// Read metadata CRC (added in v2)
-					buf = nbuf
-					if got := uint32(xxhash.Sum64(v)); got != crc {
-						return fmt.Errorf("xlMetaV2.Load version(%d), CRC mismatch, want 0x%x, got 0x%x", minor, crc, got)
-					}
-				} else {
-					return fmt.Errorf("xlMetaV2.Load version(%d), loading CRC: %w", minor, err)
-				}
-			}
-
-			if minor < 3 {
-				if _, err = z.UnmarshalMsg(v); err != nil {
-					return fmt.Errorf("xlMetaV2.Load version(%d), vLen(%d), %w", minor, len(v), err)
-				}
-				z.sortByModtime()
-			} else {
-				if err = z.loadWithIndex(v); err != nil {
-					return fmt.Errorf("xlMetaV2.Load version(%d), vLen(%d), err: %w", minor, len(v), err)
-				}
-			}
-			// Add remaining data.
-			z.data = buf
-			if err = z.data.validate(); err != nil {
-				z.data.repair()
-				logger.Info("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, z.data.entries())
-			}
-		default:
-			return errors.New("unknown minor metadata version")
-		}
-	default:
-		return errors.New("unknown major metadata version")
-	}
-	return nil
-}
-
 const (
 	xlHeaderVersion = 1
 	xlMetaVersion   = 1
 )
-
-func (z *xlMetaV2) loadWithIndex(buf []byte) error {
-	versions, buf, err := decodeXlHeaders(buf)
-	if err != nil {
-		return err
-	}
-	if cap(z.Versions) < versions {
-		z.Versions = make([]xlMetaV2Version, 0, versions)
-	}
-	z.Versions = z.Versions[:versions]
-	return decodeVersions(buf, versions, func(idx int, hdr, meta []byte) error {
-		// Unmarshal directly.
-		ver := &z.Versions[idx]
-		*ver = xlMetaV2Version{}
-		_, err = ver.UnmarshalMsg(meta)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-}
-
-func (z *xlMetaV2) asShallow() (*xlMetaV2Shallow, error) {
-	res := xlMetaV2Shallow{
-		versions: make([]xlmetaV2ShallowVersion, 0, len(z.Versions)),
-		data:     z.data,
-	}
-	for _, ver := range z.Versions {
-		if !ver.Valid() {
-			return nil, errFileCorrupt
-		}
-		meta, err := ver.MarshalMsg(nil)
-		if err != nil {
-			return nil, err
-		}
-
-		res.versions = append(res.versions, xlmetaV2ShallowVersion{
-			header: ver.header(),
-			meta:   meta,
-		})
-	}
-	return &res, nil
-}
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
 	versionID := ""
@@ -566,22 +466,6 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		fi.TransitionTier = string(sc)
 	}
 	return fi, nil
-}
-
-// sortByModtime will sort versions by modtime in descending order,
-// meaning index 0 will be latest version.
-func (z *xlMetaV2) sortByModtime() {
-	// Quick check
-	if sort.SliceIsSorted(z.Versions, func(i, j int) bool {
-		return z.Versions[i].getModTime().After(z.Versions[j].getModTime())
-	}) {
-		return
-	}
-
-	// We should.
-	sort.Slice(z.Versions, func(i, j int) bool {
-		return z.Versions[i].getModTime().After(z.Versions[j].getModTime())
-	})
 }
 
 // Read at most this much on initial read.
@@ -748,7 +632,7 @@ func isIndexedMetaV2(buf []byte) (meta xlMetaBuf, data xlMetaInlineData) {
 	if err != nil {
 		return nil, nil
 	}
-	if major != 1 && minor < 3 {
+	if major != 1 || minor < 3 {
 		return nil, nil
 	}
 	meta, buf, err = msgp.ReadBytesZC(buf)
@@ -772,15 +656,15 @@ func isIndexedMetaV2(buf []byte) (meta xlMetaBuf, data xlMetaInlineData) {
 	return meta, data
 }
 
-type xlmetaV2ShallowVersion struct {
+type xlMetaV2ShallowVersion struct {
 	header xlMetaV2VersionHeader
 	meta   []byte
 }
 
-//msgp:ignore xlMetaV2Shallow xlmetaV2ShallowVersion
+//msgp:ignore xlMetaV2Shallow xlMetaV2ShallowVersion
 
 type xlMetaV2Shallow struct {
-	versions []xlmetaV2ShallowVersion
+	versions []xlMetaV2ShallowVersion
 
 	// data will contain raw data if any.
 	// data will be one or more versions indexed by versionID.
@@ -788,36 +672,29 @@ type xlMetaV2Shallow struct {
 	data xlMetaInlineData
 }
 
+// Load all versions of the stored data.
+// Note that references to the incoming buffer will be kept.
 func (x *xlMetaV2Shallow) Load(buf []byte) error {
 	if meta, data := isIndexedMetaV2(buf); meta != nil {
-		return x.loadVersions(meta, data)
+		return x.loadIndexed(meta, data)
 	}
 	// Convert older format.
-	var xl xlMetaV2
-	if err := xl.Load(buf); err != nil {
-		return err
-	}
-	shallow, err := xl.asShallow()
-	if err != nil {
-		return err
-	}
-	*x = *shallow
-	return nil
+	return x.loadLegacy(buf)
 }
 
-func (x *xlMetaV2Shallow) loadVersions(buf xlMetaBuf, data xlMetaInlineData) error {
+func (x *xlMetaV2Shallow) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 	versions, buf, err := decodeXlHeaders(buf)
 	if err != nil {
 		return err
 	}
 	if cap(x.versions) < versions {
-		x.versions = make([]xlmetaV2ShallowVersion, 0, versions+1)
+		x.versions = make([]xlMetaV2ShallowVersion, 0, versions+1)
 	}
 	x.versions = x.versions[:versions]
 	x.data = data
 	if err = x.data.validate(); err != nil {
 		x.data.repair()
-		logger.Info("xlMetaV2Shallow.loadVersions: data validation failed: %v. %d entries after repair", err, x.data.entries())
+		logger.Info("xlMetaV2Shallow.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries())
 	}
 
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
@@ -831,6 +708,104 @@ func (x *xlMetaV2Shallow) loadVersions(buf xlMetaBuf, data xlMetaInlineData) err
 	})
 }
 
+// loadLegacy will load content prior to v1.3
+// Note that references to the incoming buffer will be kept.
+func (x *xlMetaV2Shallow) loadLegacy(buf []byte) error {
+	buf, major, minor, err := checkXL2V1(buf)
+	if err != nil {
+		return fmt.Errorf("xlMetaV2.Load %w", err)
+	}
+	var allMeta []byte
+	switch major {
+	case 1:
+		switch minor {
+		case 0:
+			allMeta = buf
+		case 1, 2:
+			v, buf, err := msgp.ReadBytesZC(buf)
+			if err != nil {
+				return fmt.Errorf("xlMetaV2.Load version(%d), bufLen(%d) %w", minor, len(buf), err)
+			}
+			if minor >= 2 {
+				if crc, nbuf, err := msgp.ReadUint32Bytes(buf); err == nil {
+					// Read metadata CRC (added in v2)
+					buf = nbuf
+					if got := uint32(xxhash.Sum64(v)); got != crc {
+						return fmt.Errorf("xlMetaV2.Load version(%d), CRC mismatch, want 0x%x, got 0x%x", minor, crc, got)
+					}
+				} else {
+					return fmt.Errorf("xlMetaV2.Load version(%d), loading CRC: %w", minor, err)
+				}
+			}
+
+			allMeta = v
+			// Add remaining data.
+			x.data = buf
+			if err = x.data.validate(); err != nil {
+				x.data.repair()
+				logger.Info("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, x.data.entries())
+			}
+		default:
+			return errors.New("unknown minor metadata version")
+		}
+	default:
+		return errors.New("unknown major metadata version")
+	}
+	if allMeta == nil {
+		return errCorruptedFormat
+	}
+	// bts will shrink as we decode.
+	bts := allMeta
+	var field []byte
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		return msgp.WrapError(err, "loadLegacy.ReadMapHeader")
+	}
+
+	var tmp xlMetaV2Version
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			return msgp.WrapError(err, "loadLegacy.ReadMapKey")
+		}
+		switch msgp.UnsafeString(field) {
+		case "Versions":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				return msgp.WrapError(err, "Versions")
+			}
+			if cap(x.versions) >= int(zb0002) {
+				x.versions = (x.versions)[:zb0002]
+			} else {
+				x.versions = make([]xlMetaV2ShallowVersion, zb0002, zb0002+1)
+			}
+			for za0001 := range x.versions {
+				start := len(allMeta) - len(bts)
+				bts, err = tmp.UnmarshalMsg(bts)
+				if err != nil {
+					return msgp.WrapError(err, "Versions", za0001)
+				}
+				end := len(allMeta) - len(bts)
+				// We reference the marshaled data, so we don't have to re-marshal.
+				x.versions[za0001] = xlMetaV2ShallowVersion{
+					header: tmp.header(),
+					meta:   allMeta[start:end],
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				return msgp.WrapError(err, "loadLegacy.Skip")
+			}
+		}
+	}
+	x.sortByModTime()
+	return nil
+}
+
 func (x *xlMetaV2Shallow) addVersion(ver xlMetaV2Version) error {
 	modTime := ver.getModTime().UnixNano()
 	if !ver.Valid() {
@@ -842,14 +817,14 @@ func (x *xlMetaV2Shallow) addVersion(ver xlMetaV2Version) error {
 	}
 	// Add space at the end.
 	// Will have -1 modtime, so it will be inserted there.
-	x.versions = append(x.versions, xlmetaV2ShallowVersion{header: xlMetaV2VersionHeader{ModTime: -1}})
+	x.versions = append(x.versions, xlMetaV2ShallowVersion{header: xlMetaV2VersionHeader{ModTime: -1}})
 
 	// Linear search, we likely have to insert at front.
 	for i, existing := range x.versions {
 		if existing.header.ModTime <= modTime {
 			// Insert at current idx. First move current back.
 			copy(x.versions[i+1:], x.versions[i:])
-			x.versions[i] = xlmetaV2ShallowVersion{
+			x.versions[i] = xlMetaV2ShallowVersion{
 				header: ver.header(),
 				meta:   encoded,
 			}
