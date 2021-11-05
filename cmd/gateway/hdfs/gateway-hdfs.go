@@ -431,8 +431,10 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		}, nil
 	}
 
-	mutex.Lock()
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
+	        mutex.Lock()
+	        defer mutex.Unlock()
+
 		filePath := path.Clean(n.hdfsPathJoin(bucket, entry))
 		fi, ok := fileInfos[filePath]
 
@@ -459,7 +461,6 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 
 		return objectInfo, nil
 	}
-	mutex.Unlock()
 
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
