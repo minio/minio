@@ -250,7 +250,6 @@ type hdfsObjects struct {
 	clnt     *hdfs.Client
 	subPath  string
 	listPool *minio.TreeWalkPool
-	mtx      sync.Mutex
 }
 
 func hdfsToObjectErr(ctx context.Context, err error, params ...string) error {
@@ -409,6 +408,7 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
+        var mutex sync.Mutex
 	fileInfos := make(map[string]os.FileInfo)
 	targetPath := n.hdfsPathJoin(bucket, prefix)
 
@@ -431,7 +431,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		}, nil
 	}
 
-	n.mtx.Lock()
+	mutex.Lock()
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
 		filePath := path.Clean(n.hdfsPathJoin(bucket, entry))
 		fi, ok := fileInfos[filePath]
@@ -459,7 +459,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 
 		return objectInfo, nil
 	}
-	n.mtx.Unlock()
+	mutex.Unlock()
 
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
