@@ -180,7 +180,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		// If we resume to the same bucket, forward to last known item.
 		if tracker.Bucket != "" {
 			if tracker.Bucket == bucket.Name {
-				forwardTo = tracker.Bucket
+				forwardTo = tracker.Object
 			} else {
 				// Reset to where last bucket ended if resuming.
 				tracker.resume()
