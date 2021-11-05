@@ -25,6 +25,7 @@ import (
 	"hash/crc32"
 	"math/rand"
 	"net/http"
+	"path"
 	"sort"
 	"sync"
 	"time"
@@ -879,10 +880,19 @@ func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string,
 }
 
 func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	if parent == "." {
-		return false
+	var isParentDirObject func(string) bool
+	isParentDirObject = func(p string) bool {
+		if p == "." || p == SlashSeparator {
+			return false
+		}
+		if s.getHashedSet(p).parentDirIsObject(ctx, bucket, p) {
+			// If there is already a file at prefix "p", return true.
+			return true
+		}
+		// Check if there is a file as one of the parent paths.
+		return isParentDirObject(path.Dir(p))
 	}
-	return s.getHashedSet(parent).parentDirIsObject(ctx, bucket, parent)
+	return isParentDirObject(parent)
 }
 
 // PutObject - writes an object to hashedSet based on the object name.
