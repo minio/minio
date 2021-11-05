@@ -32,6 +32,7 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
+	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.13.6
@@ -42,14 +43,14 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.11.1-0.20211028015028-610c8a46533c
+	github.com/minio/console v0.12.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
 	github.com/minio/madmin-go v1.1.11-0.20211102182201-e51fd3d6b104
 	github.com/minio/minio-go/v7 v7.0.15
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.1.5
+	github.com/minio/pkg v1.1.6-0.20211103212545-951bbd71498c
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1

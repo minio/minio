@@ -698,22 +698,6 @@ func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*fo
 	return nil
 }
 
-// saveUnformattedFormat - populates `format.json` on unformatted disks.
-// also adds `.healing.bin` on the disks which are being actively healed.
-func saveUnformattedFormat(ctx context.Context, storageDisks []StorageAPI, formats []*formatErasureV3) error {
-	for index, format := range formats {
-		if format == nil {
-			continue
-		}
-		if storageDisks[index] != nil {
-			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // saveFormatErasureAll - populates `format.json` on disks in its order.
 func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatErasureV3) error {
 	g := errgroup.WithNErrs(len(storageDisks))

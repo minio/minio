@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -156,6 +157,27 @@ func (s *TestSuiteCommon) SetUpSuite(c *check) {
 	s.endPoint = s.testServer.Server.URL
 	s.accessKey = s.testServer.AccessKey
 	s.secretKey = s.testServer.SecretKey
+}
+
+func (s *TestSuiteCommon) RestartTestServer(c *check) {
+	// Shutdown.
+	s.testServer.cancel()
+	s.testServer.Server.Close()
+	s.testServer.Obj.Shutdown(context.Background())
+
+	// Restart.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s.testServer.cancel = cancel
+	s.testServer = initTestServerWithBackend(ctx, c, s.testServer, s.testServer.Obj, s.testServer.rawDiskPaths)
+	if s.secure {
+		s.testServer.Server.StartTLS()
+	} else {
+		s.testServer.Server.Start()
+	}
+
+	s.client = s.testServer.Server.Client()
+	s.endPoint = s.testServer.Server.URL
 }
 
 func (s *TestSuiteCommon) TearDownSuite(c *check) {

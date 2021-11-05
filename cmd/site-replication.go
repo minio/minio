@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -355,20 +354,12 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, sites []madmin
 
 	// Generate a secret key for the service account.
 	var secretKey string
-	{
-		secretKeyBuf := make([]byte, 40)
-		n, err := rand.Read(secretKeyBuf)
-		if err == nil && n != 40 {
-			err = fmt.Errorf("Unable to read 40 random bytes to generate secret key")
+	_, secretKey, err := auth.GenerateCredentials()
+	if err != nil {
+		return madmin.ReplicateAddStatus{}, SRError{
+			Cause: err,
+			Code:  ErrInternalError,
 		}
-		if err != nil {
-			return madmin.ReplicateAddStatus{}, SRError{
-				Cause: err,
-				Code:  ErrInternalError,
-			}
-		}
-		secretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(secretKeyBuf))[:40]),
-			"/", "+", -1)
 	}
 
 	svcCred, err := globalIAMSys.NewServiceAccount(ctx, sites[selfIdx].AccessKey, nil, newServiceAccountOpts{
@@ -1270,9 +1261,7 @@ func (c *SiteReplicationSys) getAdminClient(ctx context.Context, deploymentID st
 }
 
 func (c *SiteReplicationSys) getPeerCreds() (*auth.Credentials, error) {
-	globalIAMSys.store.rlock()
-	defer globalIAMSys.store.runlock()
-	creds, ok := globalIAMSys.iamUsersMap[c.state.ServiceAccountAccessKey]
+	creds, ok := globalIAMSys.store.GetUser(c.state.ServiceAccountAccessKey)
 	if !ok {
 		return nil, errors.New("site replication service account not found!")
 	}

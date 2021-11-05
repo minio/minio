@@ -37,9 +37,6 @@ const (
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal
 
-// GlobalServiceDoneCh - Global service done channel.
-var GlobalServiceDoneCh <-chan struct{}
-
 // GlobalContext context that is canceled when server is requested to shut down.
 var GlobalContext context.Context
 
@@ -48,7 +45,6 @@ var cancelGlobalContext context.CancelFunc
 
 func initGlobalContext() {
 	GlobalContext, cancelGlobalContext = context.WithCancel(context.Background())
-	GlobalServiceDoneCh = GlobalContext.Done()
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 

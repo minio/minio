@@ -81,6 +81,9 @@ var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove 
 // error returned in IAM subsystem when policy doesn't exist.
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 
+// error returned when policy to be deleted is in use.
+var errPolicyInUse = errors.New("Specified policy is in use and cannot be deleted.")
+
 // error returned in IAM subsystem when an external users systems is configured.
 var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed")
 
