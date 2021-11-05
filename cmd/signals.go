@@ -66,8 +66,8 @@ func handleSignals() {
 			logger.LogIf(context.Background(), oerr)
 		}
 
-		if globalConsoleSrv != nil {
-			logger.LogIf(context.Background(), globalConsoleSrv.Shutdown())
+		if srv := newConsoleServerFn(); srv != nil {
+			logger.LogIf(context.Background(), srv.Shutdown())
 		}
 
 		return (err == nil && oerr == nil)

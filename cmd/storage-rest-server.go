@@ -781,8 +781,10 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
-				w.(http.Flusher).Flush()
+				_, err := w.Write([]byte{32})
+				if err == nil {
+					w.(http.Flusher).Flush()
+				}
 			case err := <-doneCh:
 				if err != nil {
 					w.Write([]byte{1})
@@ -829,8 +831,10 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
-				w.(http.Flusher).Flush()
+				_, err := w.Write([]byte{32})
+				if err == nil {
+					w.(http.Flusher).Flush()
+				}
 			case err := <-doneCh:
 				if err != nil {
 					w.Write([]byte{1})
@@ -937,8 +941,10 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
-				w.(http.Flusher).Flush()
+				_, err := w.Write([]byte{32})
+				if err == nil {
+					w.(http.Flusher).Flush()
+				}
 			case err := <-doneCh:
 				ticker.Stop()
 				defer close(doneCh)
@@ -953,8 +959,14 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				var tmp [5]byte
 				tmp[0] = 2
 				binary.LittleEndian.PutUint32(tmp[1:], uint32(len(block)))
-				w.Write(tmp[:])
-				w.Write(block)
+				_, err := w.Write(tmp[:])
+				if err != nil {
+					return
+				}
+				_, err = w.Write(block)
+				if err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			}
 		}

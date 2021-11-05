@@ -277,9 +277,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
 	}()
 
-	globalObjLayerMutex.Lock()
-	globalHTTPServer = httpServer
-	globalObjLayerMutex.Unlock()
+	setHTTPServer(httpServer)
 
 	newObject, err := gw.NewGatewayLayer(madmin.Credentials{
 		AccessKey: globalActiveCred.AccessKey,
@@ -345,14 +343,26 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	if globalBrowserEnabled {
-		globalConsoleSrv, err = initConsoleServer()
+		srv, err := initConsoleServer()
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize console service")
 		}
 
+		setConsoleSrv(srv)
+
 		go func() {
-			logger.FatalIf(globalConsoleSrv.Serve(), "Unable to initialize console server")
+			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 		}()
 	}
+
+	if serverDebugLog {
+		logger.Info("== DEBUG Mode enabled ==")
+		logger.Info("Currently set environment settings:")
+		for _, v := range os.Environ() {
+			logger.Info(v)
+		}
+		logger.Info("======")
+	}
+
 	<-globalOSSignalCh
 }

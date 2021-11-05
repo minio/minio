@@ -821,7 +821,6 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	signal := serviceSignal(si)
-	defer w.(http.Flusher).Flush()
 	switch signal {
 	case serviceRestart:
 		globalServiceSignalCh <- signal
@@ -902,9 +901,6 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, event.TargetID{ID: mustGetUUID()})
 
-	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -975,9 +971,6 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -1047,7 +1040,6 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Connection", "close")
 	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -1091,8 +1083,6 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucketsString := r.Form.Get("buckets")
-	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -1112,8 +1102,6 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
 	}
-	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
