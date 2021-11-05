@@ -31,7 +31,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 )

@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	jwtgo "github.com/golang-jwt/jwt"
+	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"

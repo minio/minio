@@ -234,12 +234,14 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var err error
-	m := make(map[string]interface{})
-	m[expClaim], err = openid.GetDefaultExpiration(r.Form.Get(stsDurationSeconds))
+	duration, err := openid.GetDefaultExpiration(r.Form.Get(stsDurationSeconds))
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
+	}
+
+	m := map[string]interface{}{
+		expClaim: UTCNow().Add(duration).Unix(),
 	}
 
 	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
@@ -798,7 +800,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	parentUser := "tls:" + certificate.Subject.CommonName
 
 	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim:                   time.Now().UTC().Add(expiry).Unix(),
+		expClaim:                   UTCNow().Add(expiry).Unix(),
 		parentClaim:                parentUser,
 		subClaim:                   certificate.Subject.CommonName,
 		audClaim:                   certificate.Subject.Organization,
