@@ -408,7 +408,7 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-        var mutex sync.Mutex
+	var mutex sync.Mutex
 	fileInfos := make(map[string]os.FileInfo)
 	targetPath := n.hdfsPathJoin(bucket, prefix)
 
@@ -432,8 +432,8 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	}
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
-                mutex.Lock()
-                defer mutex.Unlock()
+		mutex.Lock()
+		defer mutex.Unlock()
 
 		filePath := path.Clean(n.hdfsPathJoin(bucket, entry))
 		fi, ok := fileInfos[filePath]
