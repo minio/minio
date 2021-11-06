@@ -108,6 +108,10 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func nodeHealthMetricsPrometheus(ch chan<- prometheus.Metric) {
+	if globalIsGateway {
+		return
+	}
+
 	nodesUp, nodesDown := GetPeerOnlineCount()
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
