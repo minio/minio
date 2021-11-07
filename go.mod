@@ -41,16 +41,16 @@ require (
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.13
 	github.com/lib/pq v1.9.0
-	github.com/miekg/dns v1.1.35
+	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
 	github.com/minio/console v0.12.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.11-0.20211102182201-e51fd3d6b104
+	github.com/minio/madmin-go v1.1.11
 	github.com/minio/minio-go/v7 v7.0.15
-	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.1.6-0.20211103212545-951bbd71498c
+	github.com/minio/parquet-go v1.1.0
+	github.com/minio/pkg v1.1.6
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
@@ -81,13 +81,14 @@ require (
 	github.com/yargevad/filepathx v1.0.0
 	go.etcd.io/etcd/api/v3 v3.5.0
 	go.etcd.io/etcd/client/v3 v3.5.0
-	go.opencensus.io v0.22.5 // indirect
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.1
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
 	golang.org/x/sys v0.0.0-20211020174200-9d6173849985
-	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
-	google.golang.org/api v0.31.0
+	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
+	google.golang.org/api v0.58.0
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/gomodule/redigo v2.0.0+incompatible => github.com/gomodule/redigo v1.8.5

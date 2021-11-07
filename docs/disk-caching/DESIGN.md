@@ -2,35 +2,41 @@
 
 This document explains some basic assumptions and design approach, limits of the disk caching feature. If you're looking to get started with disk cache, we suggest you go through the [getting started document](https://github.com/minio/minio/blob/master/docs/disk-caching/README.md) first.
 
-## Command-line
+## Supported environment variables
 
-```
-minio gateway <name> -h
-...
-...
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted cache drives or directories delimited by ","
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ","
-     MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
-     MINIO_CACHE_AFTER: Minimum number of access before caching an object.
-     MINIO_CACHE_WATERMARK_LOW: % of cache quota at which cache eviction stops
-     MINIO_CACHE_WATERMARK_HIGH: % of cache quota at which cache eviction starts
-     MINIO_CACHE_RANGE: set to "on" or "off" caching of independent range requests per object, defaults to "on"
-     MINIO_CACHE_COMMIT: set to 'writeback' or 'writethrough' for upload caching
+| Environment                | Description                                                                             |
+| :----------------------    | ------------------------------------------------------------                            |
+| MINIO_CACHE_DRIVES         | list of mounted cache drives or directories separated by ","                            |
+| MINIO_CACHE_EXCLUDE        | list of cache exclusion patterns separated by ","                                       |
+| MINIO_CACHE_QUOTA          | maximum permitted usage of the cache in percentage (0-100)                              |
+| MINIO_CACHE_AFTER          | minimum number of access before caching an object                                       |
+| MINIO_CACHE_WATERMARK_LOW  | % of cache quota at which cache eviction stops                                          |
+| MINIO_CACHE_WATERMARK_HIGH | % of cache quota at which cache eviction starts                                         |
+| MINIO_CACHE_RANGE          | set to "on" or "off" caching of independent range requests per object, defaults to "on" |
+| MINIO_CACHE_COMMIT         | set to 'writeback' or 'writethrough' for upload caching                                 |
 
-...
-...
+## Use-cases
 
-  Start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
-     exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension. Cache only those objects accessed atleast 3 times. Garbage collection triggers in at high water mark (i.e. cache disk usage reaches 90% of cache quota) or at 72% and evicts oldest objects by access time until low watermark is reached ( 70% of cache quota) , i.e. 63% of disk usage.
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/export{1..24}"
-     $ export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
-     $ export MINIO_CACHE_QUOTA=80
-     $ export MINIO_CACHE_AFTER=3
-     $ export MINIO_CACHE_WATERMARK_LOW=70
-     $ export MINIO_CACHE_WATERMARK_HIGH=90
+The edge serves as a gateway cache, creating an intermediary between the application and the public cloud. In this scenario, the gateways are backed by servers with a number of either hard drives or flash drives and are deployed in edge data centers. All access to the public cloud goes through these caches (write-through cache), so data is uploaded to the public cloud with strict consistency guarantee. Subsequent reads are served from the cache based on ETAG match or the cache control headers.
 
-     $ minio gateway s3
+This architecture reduces costs by decreasing the bandwidth needed to transfer data, improves performance by keeping data cached closer to the application and also reduces the operational cost - the data is still kept in the public cloud, just cached at the edge.
+
+Following example shows:
+
+- start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24' drives
+- exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension.
+- cache only those objects accessed atleast 3 times.
+- cache garbage collection triggers in at high water mark (i.e. cache disk usage reaches 90% of cache quota) or at 72% and evicts oldest objects by access time until low watermark is reached ( 70% of cache quota) , i.e. 63% of disk usage.
+
+```sh
+export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/export{1..24}"
+export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
+export MINIO_CACHE_QUOTA=80
+export MINIO_CACHE_AFTER=3
+export MINIO_CACHE_WATERMARK_LOW=70
+export MINIO_CACHE_WATERMARK_HIGH=90
+
+minio gateway s3 https://s3.amazonaws.com
 ```
 
 ### Run MinIO gateway with cache on Docker Container
@@ -89,9 +95,11 @@ master key to automatically encrypt all cached content.
 
 - `MINIO_CACHE_COMMIT` setting of `writethrough` allows caching of multipart uploads synchronously if enabled. By default, single PUT operations are already cached on write without any special setting.
 
-NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. However, for consistency reasons, staging uploads in the cache are not permitted for multipart uploads. Partially cached stale uploads older than 24 hours are automatically cleaned up.
+- Partially cached stale uploads older than 24 hours are automatically cleaned up.
 
-> NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
+- Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
+
+> NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. However, for consistency reasons, `writeback` staging uploads in the cache are not permitted for multipart uploads.
 
 ### Crash Recovery
 
@@ -100,4 +108,4 @@ Upon restart of minio gateway after a running minio process is killed or crashes
 ## Limits
 
 - Bucket policies are not cached, so anonymous operations are not supported when backend is offline.
-- Objects are distributed using deterministic hashing among the list of configured cache drives. If one or more drives go offline, or cache drive configuration is altered in any way, performance may degrade to a linear lookup time depending on the number of disks in cache.
+- Objects are distributed using deterministic hashing among the list of configured cache drives. If one or more drives go offline, or cache drive configuration is altered in any way, performance may degrade to O(n) lookup time depending on the number of disks in cache.
