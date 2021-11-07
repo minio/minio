@@ -5,7 +5,7 @@ on:
     branches:
     - master
 
-# This ensures that previous jobs for the PR are cancelled when the PR is
+# This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
 concurrency: 
   group: ${{ github.workflow }}-${{ github.head_ref }}
