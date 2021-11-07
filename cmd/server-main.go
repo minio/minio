@@ -28,6 +28,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -57,7 +58,7 @@ var ServerFlags = []cli.Flag{
 	},
 	cli.IntFlag{
 		Name:  "listeners",
-		Value: 1,
+		Value: runtime.GOMAXPROCS(0),
 		Usage: "bind N number of listeners per ADDRESS:PORT",
 	},
 	cli.StringFlag{
