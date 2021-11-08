@@ -24,10 +24,28 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.id, err = dc.ReadString()
+		case "end":
+			z.ended, err = dc.ReadTime()
 			if err != nil {
-				err = msgp.WrapError(err, "id")
+				err = msgp.WrapError(err, "ended")
+				return
+			}
+		case "st":
+			z.started, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "started")
+				return
+			}
+		case "lh":
+			z.lastHandout, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "lastHandout")
+				return
+			}
+		case "u":
+			z.lastUpdate, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "lastUpdate")
 				return
 			}
 		case "b":
@@ -36,22 +54,34 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "bucket")
 				return
 			}
+		case "flt":
+			z.filter, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "filter")
+				return
+			}
+		case "id":
+			z.id, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "id")
+				return
+			}
+		case "err":
+			z.error, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "error")
+				return
+			}
 		case "root":
 			z.root, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "root")
 				return
 			}
-		case "rec":
-			z.recursive, err = dc.ReadBool()
+		case "fnf":
+			z.fileNotFound, err = dc.ReadBool()
 			if err != nil {
-				err = msgp.WrapError(err, "recursive")
-				return
-			}
-		case "flt":
-			z.filter, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "filter")
+				err = msgp.WrapError(err, "fileNotFound")
 				return
 			}
 		case "stat":
@@ -64,40 +94,10 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.status = scanStatus(zb0002)
 			}
-		case "fnf":
-			z.fileNotFound, err = dc.ReadBool()
+		case "rec":
+			z.recursive, err = dc.ReadBool()
 			if err != nil {
-				err = msgp.WrapError(err, "fileNotFound")
-				return
-			}
-		case "err":
-			z.error, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "error")
-				return
-			}
-		case "st":
-			z.started, err = dc.ReadTime()
-			if err != nil {
-				err = msgp.WrapError(err, "started")
-				return
-			}
-		case "end":
-			z.ended, err = dc.ReadTime()
-			if err != nil {
-				err = msgp.WrapError(err, "ended")
-				return
-			}
-		case "u":
-			z.lastUpdate, err = dc.ReadTime()
-			if err != nil {
-				err = msgp.WrapError(err, "lastUpdate")
-				return
-			}
-		case "lh":
-			z.lastHandout, err = dc.ReadTime()
-			if err != nil {
-				err = msgp.WrapError(err, "lastHandout")
+				err = msgp.WrapError(err, "recursive")
 				return
 			}
 		case "v":
@@ -120,84 +120,14 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 13
-	// write "id"
-	err = en.Append(0x8d, 0xa2, 0x69, 0x64)
+	// write "end"
+	err = en.Append(0x8d, 0xa3, 0x65, 0x6e, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.id)
+	err = en.WriteTime(z.ended)
 	if err != nil {
-		err = msgp.WrapError(err, "id")
-		return
-	}
-	// write "b"
-	err = en.Append(0xa1, 0x62)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.bucket)
-	if err != nil {
-		err = msgp.WrapError(err, "bucket")
-		return
-	}
-	// write "root"
-	err = en.Append(0xa4, 0x72, 0x6f, 0x6f, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.root)
-	if err != nil {
-		err = msgp.WrapError(err, "root")
-		return
-	}
-	// write "rec"
-	err = en.Append(0xa3, 0x72, 0x65, 0x63)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.recursive)
-	if err != nil {
-		err = msgp.WrapError(err, "recursive")
-		return
-	}
-	// write "flt"
-	err = en.Append(0xa3, 0x66, 0x6c, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.filter)
-	if err != nil {
-		err = msgp.WrapError(err, "filter")
-		return
-	}
-	// write "stat"
-	err = en.Append(0xa4, 0x73, 0x74, 0x61, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint8(uint8(z.status))
-	if err != nil {
-		err = msgp.WrapError(err, "status")
-		return
-	}
-	// write "fnf"
-	err = en.Append(0xa3, 0x66, 0x6e, 0x66)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.fileNotFound)
-	if err != nil {
-		err = msgp.WrapError(err, "fileNotFound")
-		return
-	}
-	// write "err"
-	err = en.Append(0xa3, 0x65, 0x72, 0x72)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.error)
-	if err != nil {
-		err = msgp.WrapError(err, "error")
+		err = msgp.WrapError(err, "ended")
 		return
 	}
 	// write "st"
@@ -210,14 +140,14 @@ func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "started")
 		return
 	}
-	// write "end"
-	err = en.Append(0xa3, 0x65, 0x6e, 0x64)
+	// write "lh"
+	err = en.Append(0xa2, 0x6c, 0x68)
 	if err != nil {
 		return
 	}
-	err = en.WriteTime(z.ended)
+	err = en.WriteTime(z.lastHandout)
 	if err != nil {
-		err = msgp.WrapError(err, "ended")
+		err = msgp.WrapError(err, "lastHandout")
 		return
 	}
 	// write "u"
@@ -230,14 +160,84 @@ func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "lastUpdate")
 		return
 	}
-	// write "lh"
-	err = en.Append(0xa2, 0x6c, 0x68)
+	// write "b"
+	err = en.Append(0xa1, 0x62)
 	if err != nil {
 		return
 	}
-	err = en.WriteTime(z.lastHandout)
+	err = en.WriteString(z.bucket)
 	if err != nil {
-		err = msgp.WrapError(err, "lastHandout")
+		err = msgp.WrapError(err, "bucket")
+		return
+	}
+	// write "flt"
+	err = en.Append(0xa3, 0x66, 0x6c, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.filter)
+	if err != nil {
+		err = msgp.WrapError(err, "filter")
+		return
+	}
+	// write "id"
+	err = en.Append(0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.id)
+	if err != nil {
+		err = msgp.WrapError(err, "id")
+		return
+	}
+	// write "err"
+	err = en.Append(0xa3, 0x65, 0x72, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.error)
+	if err != nil {
+		err = msgp.WrapError(err, "error")
+		return
+	}
+	// write "root"
+	err = en.Append(0xa4, 0x72, 0x6f, 0x6f, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.root)
+	if err != nil {
+		err = msgp.WrapError(err, "root")
+		return
+	}
+	// write "fnf"
+	err = en.Append(0xa3, 0x66, 0x6e, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.fileNotFound)
+	if err != nil {
+		err = msgp.WrapError(err, "fileNotFound")
+		return
+	}
+	// write "stat"
+	err = en.Append(0xa4, 0x73, 0x74, 0x61, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(uint8(z.status))
+	if err != nil {
+		err = msgp.WrapError(err, "status")
+		return
+	}
+	// write "rec"
+	err = en.Append(0xa3, 0x72, 0x65, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.recursive)
+	if err != nil {
+		err = msgp.WrapError(err, "recursive")
 		return
 	}
 	// write "v"
@@ -257,42 +257,42 @@ func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *metacache) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 13
-	// string "id"
-	o = append(o, 0x8d, 0xa2, 0x69, 0x64)
-	o = msgp.AppendString(o, z.id)
-	// string "b"
-	o = append(o, 0xa1, 0x62)
-	o = msgp.AppendString(o, z.bucket)
-	// string "root"
-	o = append(o, 0xa4, 0x72, 0x6f, 0x6f, 0x74)
-	o = msgp.AppendString(o, z.root)
-	// string "rec"
-	o = append(o, 0xa3, 0x72, 0x65, 0x63)
-	o = msgp.AppendBool(o, z.recursive)
-	// string "flt"
-	o = append(o, 0xa3, 0x66, 0x6c, 0x74)
-	o = msgp.AppendString(o, z.filter)
-	// string "stat"
-	o = append(o, 0xa4, 0x73, 0x74, 0x61, 0x74)
-	o = msgp.AppendUint8(o, uint8(z.status))
-	// string "fnf"
-	o = append(o, 0xa3, 0x66, 0x6e, 0x66)
-	o = msgp.AppendBool(o, z.fileNotFound)
-	// string "err"
-	o = append(o, 0xa3, 0x65, 0x72, 0x72)
-	o = msgp.AppendString(o, z.error)
+	// string "end"
+	o = append(o, 0x8d, 0xa3, 0x65, 0x6e, 0x64)
+	o = msgp.AppendTime(o, z.ended)
 	// string "st"
 	o = append(o, 0xa2, 0x73, 0x74)
 	o = msgp.AppendTime(o, z.started)
-	// string "end"
-	o = append(o, 0xa3, 0x65, 0x6e, 0x64)
-	o = msgp.AppendTime(o, z.ended)
-	// string "u"
-	o = append(o, 0xa1, 0x75)
-	o = msgp.AppendTime(o, z.lastUpdate)
 	// string "lh"
 	o = append(o, 0xa2, 0x6c, 0x68)
 	o = msgp.AppendTime(o, z.lastHandout)
+	// string "u"
+	o = append(o, 0xa1, 0x75)
+	o = msgp.AppendTime(o, z.lastUpdate)
+	// string "b"
+	o = append(o, 0xa1, 0x62)
+	o = msgp.AppendString(o, z.bucket)
+	// string "flt"
+	o = append(o, 0xa3, 0x66, 0x6c, 0x74)
+	o = msgp.AppendString(o, z.filter)
+	// string "id"
+	o = append(o, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.id)
+	// string "err"
+	o = append(o, 0xa3, 0x65, 0x72, 0x72)
+	o = msgp.AppendString(o, z.error)
+	// string "root"
+	o = append(o, 0xa4, 0x72, 0x6f, 0x6f, 0x74)
+	o = msgp.AppendString(o, z.root)
+	// string "fnf"
+	o = append(o, 0xa3, 0x66, 0x6e, 0x66)
+	o = msgp.AppendBool(o, z.fileNotFound)
+	// string "stat"
+	o = append(o, 0xa4, 0x73, 0x74, 0x61, 0x74)
+	o = msgp.AppendUint8(o, uint8(z.status))
+	// string "rec"
+	o = append(o, 0xa3, 0x72, 0x65, 0x63)
+	o = msgp.AppendBool(o, z.recursive)
 	// string "v"
 	o = append(o, 0xa1, 0x76)
 	o = msgp.AppendUint8(o, z.dataVersion)
@@ -317,10 +317,28 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.id, bts, err = msgp.ReadStringBytes(bts)
+		case "end":
+			z.ended, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "id")
+				err = msgp.WrapError(err, "ended")
+				return
+			}
+		case "st":
+			z.started, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "started")
+				return
+			}
+		case "lh":
+			z.lastHandout, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "lastHandout")
+				return
+			}
+		case "u":
+			z.lastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "lastUpdate")
 				return
 			}
 		case "b":
@@ -329,22 +347,34 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "bucket")
 				return
 			}
+		case "flt":
+			z.filter, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "filter")
+				return
+			}
+		case "id":
+			z.id, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "id")
+				return
+			}
+		case "err":
+			z.error, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "error")
+				return
+			}
 		case "root":
 			z.root, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "root")
 				return
 			}
-		case "rec":
-			z.recursive, bts, err = msgp.ReadBoolBytes(bts)
+		case "fnf":
+			z.fileNotFound, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "recursive")
-				return
-			}
-		case "flt":
-			z.filter, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "filter")
+				err = msgp.WrapError(err, "fileNotFound")
 				return
 			}
 		case "stat":
@@ -357,40 +387,10 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.status = scanStatus(zb0002)
 			}
-		case "fnf":
-			z.fileNotFound, bts, err = msgp.ReadBoolBytes(bts)
+		case "rec":
+			z.recursive, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "fileNotFound")
-				return
-			}
-		case "err":
-			z.error, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "error")
-				return
-			}
-		case "st":
-			z.started, bts, err = msgp.ReadTimeBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "started")
-				return
-			}
-		case "end":
-			z.ended, bts, err = msgp.ReadTimeBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "ended")
-				return
-			}
-		case "u":
-			z.lastUpdate, bts, err = msgp.ReadTimeBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "lastUpdate")
-				return
-			}
-		case "lh":
-			z.lastHandout, bts, err = msgp.ReadTimeBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "lastHandout")
+				err = msgp.WrapError(err, "recursive")
 				return
 			}
 		case "v":
@@ -413,7 +413,7 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *metacache) Msgsize() (s int) {
-	s = 1 + 3 + msgp.StringPrefixSize + len(z.id) + 2 + msgp.StringPrefixSize + len(z.bucket) + 5 + msgp.StringPrefixSize + len(z.root) + 4 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.filter) + 5 + msgp.Uint8Size + 4 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.error) + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 2 + msgp.TimeSize + 3 + msgp.TimeSize + 2 + msgp.Uint8Size
+	s = 1 + 4 + msgp.TimeSize + 3 + msgp.TimeSize + 3 + msgp.TimeSize + 2 + msgp.TimeSize + 2 + msgp.StringPrefixSize + len(z.bucket) + 4 + msgp.StringPrefixSize + len(z.filter) + 3 + msgp.StringPrefixSize + len(z.id) + 4 + msgp.StringPrefixSize + len(z.error) + 5 + msgp.StringPrefixSize + len(z.root) + 4 + msgp.BoolSize + 5 + msgp.Uint8Size + 4 + msgp.BoolSize + 2 + msgp.Uint8Size
 	return
 }
 

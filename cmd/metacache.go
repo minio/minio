@@ -56,18 +56,21 @@ const (
 
 // metacache contains a tracked cache entry.
 type metacache struct {
-	id           string     `msg:"id"`
-	bucket       string     `msg:"b"`
-	root         string     `msg:"root"`
-	recursive    bool       `msg:"rec"`
-	filter       string     `msg:"flt"`
-	status       scanStatus `msg:"stat"`
-	fileNotFound bool       `msg:"fnf"`
-	error        string     `msg:"err"`
-	started      time.Time  `msg:"st"`
+	// do not re-arrange the struct this struct has been ordered to use less
+	// space - if you do so please run https://github.com/orijtech/structslop
+	// and verify if your changes are optimal.
 	ended        time.Time  `msg:"end"`
-	lastUpdate   time.Time  `msg:"u"`
+	started      time.Time  `msg:"st"`
 	lastHandout  time.Time  `msg:"lh"`
+	lastUpdate   time.Time  `msg:"u"`
+	bucket       string     `msg:"b"`
+	filter       string     `msg:"flt"`
+	id           string     `msg:"id"`
+	error        string     `msg:"err"`
+	root         string     `msg:"root"`
+	fileNotFound bool       `msg:"fnf"`
+	status       scanStatus `msg:"stat"`
+	recursive    bool       `msg:"rec"`
 	dataVersion  uint8      `msg:"v"`
 }
 
