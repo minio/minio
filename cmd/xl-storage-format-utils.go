@@ -18,8 +18,6 @@
 package cmd
 
 import (
-	"time"
-
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -57,19 +55,15 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 			}
 			versions, err = xlMeta.ListVersions(volume, path)
 		}
-		if err != nil {
+		if err != nil || len(versions) == 0 {
 			return FileInfoVersions{}, err
 		}
 
-		var latestModTime time.Time
-		if len(versions) > 0 {
-			latestModTime = versions[0].ModTime
-		}
 		return FileInfoVersions{
 			Volume:        volume,
 			Name:          path,
 			Versions:      versions,
-			LatestModTime: latestModTime,
+			LatestModTime: versions[0].ModTime,
 		}, nil
 	}
 
