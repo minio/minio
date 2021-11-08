@@ -196,6 +196,7 @@ type xlFlags uint8
 const (
 	xlFlagFreeVersion xlFlags = 1 << iota
 	xlFlagUsesDataDir
+	xlFlagInlineData
 )
 
 // checkXL2V1 will check if the metadata has correct header and is a known major version.
@@ -266,6 +267,9 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 	if j.Type == ObjectType && j.ObjectV2.UsesDataDir() {
 		flags |= xlFlagUsesDataDir
 	}
+	if j.Type == ObjectType && j.ObjectV2.InlineData() {
+		flags |= xlFlagInlineData
+	}
 	return xlMetaV2VersionHeader{
 		Type:      j.Type,
 		ModTime:   j.getModTime().UnixNano(),
@@ -274,12 +278,22 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 	}
 }
 
+// FreeVersion returns true if x represents a free-version, false otherwise.
 func (x xlMetaV2VersionHeader) FreeVersion() bool {
 	return x.Flags&xlFlagFreeVersion != 0
 }
 
+// UsesDataDir returns true if this object version uses its data directory for
+// its contents and false otherwise.
 func (x xlMetaV2VersionHeader) UsesDataDir() bool {
 	return x.Flags&xlFlagUsesDataDir != 0
+}
+
+// InlineData returns whether inline data has been set.
+// Note that false does not mean there is no inline data,
+// only that it is unlikely.
+func (x xlMetaV2VersionHeader) InlineData() bool {
+	return x.Flags&xlFlagInlineData != 0
 }
 
 // getModTime will return the ModTime of the underlying version.
@@ -361,6 +375,14 @@ func (j xlMetaV2Object) UsesDataDir() bool {
 
 	// Check if this transitioned object has been restored on disk.
 	return isRestoredObjectOnDisk(j.MetaUser)
+}
+
+// InlineData returns whether inline data has been set.
+// Note that false does not mean there is no inline data,
+// only that it is unlikely.
+func (j xlMetaV2Object) InlineData() bool {
+	_, ok := j.MetaSys[ReservedMetadataPrefixLower+"inline-data"]
+	return ok
 }
 
 func (j *xlMetaV2Object) SetTransition(fi FileInfo) {
