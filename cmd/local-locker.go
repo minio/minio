@@ -190,12 +190,12 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 		if reply = !isWriteLock(lri); reply {
 			// Unless there is a write lock
 			l.lockMap[resource] = append(l.lockMap[resource], lrInfo)
-			l.lockUID[args.UID] = formatUUID(resource, 0)
+			l.lockUID[formatUUID(args.UID, 0)] = resource
 		}
 	} else {
 		// No locks held on the given name, so claim (first) read lock
 		l.lockMap[resource] = []lockRequesterInfo{lrInfo}
-		l.lockUID[args.UID] = formatUUID(resource, 0)
+		l.lockUID[formatUUID(args.UID, 0)] = resource
 		reply = true
 	}
 	return reply, nil
