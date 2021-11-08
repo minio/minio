@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os/user"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,12 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	resp := streamHTTPResponse(w)
+	defer func() {
+		if r := recover(); r != nil {
+			debug.PrintStack()
+			resp.CloseWithError(fmt.Errorf("panic: %v", r))
+		}
+	}()
 	respW := msgp.NewWriter(resp)
 
 	// Collect updates, stream them before the full cache is sent.
