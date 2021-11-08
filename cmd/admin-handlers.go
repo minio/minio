@@ -1879,8 +1879,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 func getTLSInfo() madmin.TLSInfo {
 	tlsInfo := madmin.TLSInfo{
-		TLSEnabled: globalIsTLS,
-		Certs:      []madmin.TLSCert{},
+		TLSInfoAvailable: true,
+		TLSEnabled:       globalIsTLS,
+		Certs:            []madmin.TLSCert{},
 	}
 
 	if globalIsTLS {
