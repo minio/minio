@@ -353,7 +353,6 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 	for i, tc := range testCases {
 		_, version, err := xl.findVersion(uuid.MustParse(tc.versionID))
 		failOnErr(i+1, err)
-		//t.Log("idx:", idx, "modtime:", version.getModTime(), [16]byte(uuid.MustParse(tc.versionID)), version.getVersionID())
 		if got := xl.SharedDataDirCount(version.getVersionID(), version.ObjectV2.DataDir); got != tc.shares {
 			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2.VersionID, tc.shares, got)
 		}
