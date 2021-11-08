@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -324,6 +326,12 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
 	forward := r.URL.Query().Get(storageRESTForwardFilter)
 	writer := streamHTTPResponse(w)
+	defer func() {
+		if r := recover(); r != nil {
+			debug.PrintStack()
+			writer.CloseWithError(fmt.Errorf("panic: %v", r))
+		}
+	}()
 	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
 		Bucket:         volume,
 		BaseDir:        dirPath,

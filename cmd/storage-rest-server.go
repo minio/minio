@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os/user"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -173,6 +174,12 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	resp := streamHTTPResponse(w)
+	defer func() {
+		if r := recover(); r != nil {
+			debug.PrintStack()
+			resp.CloseWithError(fmt.Errorf("panic: %v", r))
+		}
+	}()
 	usageInfo, err := s.storage.NSScanner(r.Context(), cache)
 	if err != nil {
 		resp.CloseWithError(err)
