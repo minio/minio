@@ -36,20 +36,34 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
-	testCases := []*TestSuiteIAM{
+	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4}),
+		{serverType: "FS", signer: signerV4},
 		// Init and run test on FS backend, with tls enabled.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}),
+		{serverType: "FS", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "Erasure", signer: signerV4}),
+		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "ErasureSet", signer: signerV4}),
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
 	}
 	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
-			runAllIAMSTSTests(testCase, &check{t, testCase.serverType})
-		})
+		etcdStr := ""
+		if testCase.withEtcdBackend {
+			etcdStr = " (with etcd backend)"
+		}
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			func(t *testing.T) {
+				runAllIAMSTSTests(testCase, &check{t, testCase.serverType})
+			},
+		)
 	}
 }
 
@@ -135,21 +149,16 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 	}
 }
 
-const (
-	EnvTestLDAPServer = "LDAP_TEST_SERVER"
-)
-
 func (s *TestSuiteIAM) GetLDAPServer(c *check) string {
 	return os.Getenv(EnvTestLDAPServer)
 }
 
 // SetUpLDAP - expects to setup an LDAP test server using the test LDAP
 // container and canned data from https://github.com/minio/minio-ldap-testing
-func (s *TestSuiteIAM) SetUpLDAP(c *check) {
+func (s *TestSuiteIAM) SetUpLDAP(c *check, serverAddr string) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
-	serverAddr := s.GetLDAPServer(c)
 	configCmds := []string{
 		"identity_ldap",
 		fmt.Sprintf("server_addr=%s", serverAddr),
@@ -169,31 +178,50 @@ func (s *TestSuiteIAM) SetUpLDAP(c *check) {
 	s.RestartIAMSuite(c)
 }
 
+const (
+	EnvTestLDAPServer = "LDAP_TEST_SERVER"
+)
+
 func TestIAMWithLDAPServerSuite(t *testing.T) {
-	testCases := []*TestSuiteIAM{
+	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4}),
+		{serverType: "FS", signer: signerV4},
 		// Init and run test on FS backend, with tls enabled.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}),
+		{serverType: "FS", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "Erasure", signer: signerV4}),
+		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "ErasureSet", signer: signerV4}),
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
 	}
 	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
-			c := &check{t, testCase.serverType}
-			suite := testCase
+		etcdStr := ""
+		if testCase.withEtcdBackend {
+			etcdStr = " (with etcd backend)"
+		}
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
 
-			if suite.GetLDAPServer(c) == "" {
-				return
-			}
+				ldapServer := os.Getenv(EnvTestLDAPServer)
+				if ldapServer == "" {
+					c.Skip("Skipping LDAP test as no LDAP server is provided.")
+				}
 
-			suite.SetUpSuite(c)
-			suite.SetUpLDAP(c)
-			suite.TestLDAPSTS(c)
-			suite.TearDownSuite(c)
-		})
+				suite.SetUpSuite(c)
+				suite.SetUpLDAP(c, ldapServer)
+				suite.TestLDAPSTS(c)
+				suite.TearDownSuite(c)
+			},
+		)
 	}
 }
 
