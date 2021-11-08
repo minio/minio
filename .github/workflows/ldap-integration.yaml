@@ -5,7 +5,7 @@ on:
     branches:
     - master
 
-# This ensures that previous jobs for the PR are cancelled when the PR is
+# This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
 concurrency: 
   group: ${{ github.workflow }}-${{ github.head_ref }}
@@ -23,7 +23,7 @@ jobs:
           - 389:389
           - 636:636
         env:
-          LDAP_ORGANISATION: "MinIO Inc"
+          LDAP_ORGANIZATION: "MinIO Inc"
           LDAP_DOMAIN: "min.io"
           LDAP_ADMIN_PASSWORD: "admin"
 
