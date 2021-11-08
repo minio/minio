@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,7 +29,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	xnet "github.com/minio/pkg/net"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
@@ -451,18 +452,24 @@ func addCustomHeaders(h http.Handler) http.Handler {
 	})
 }
 
-// criticalErrorHandler handles critical server failures caused by
+// criticalErrorHandler handles panics and fatal errors by
 // `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
 //
 // It should be always the first / highest HTTP handler.
 func setCriticalErrorHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			if err := recover(); err == logger.ErrCritical { // handle
+			if rec := recover(); rec == logger.ErrCritical { // handle
+				stack := debug.Stack()
+				logger.Error("critical: \"%s %s\": %v\n%s", r.Method, r.URL, rec, string(stack))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
 				return
-			} else if err != nil {
-				panic(err) // forward other panic calls
+			} else if rec != nil {
+				stack := debug.Stack()
+				logger.Error("panic: \"%s %s\": %v\n%s", r.Method, r.URL, rec, string(stack))
+				// Try to write an error response, upstream may not have written header.
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+				return
 			}
 		}()
 		h.ServeHTTP(w, r)
