@@ -117,7 +117,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
 			forward = strings.TrimPrefix(opts.ForwardTo, current)
 			if idx := strings.IndexByte(forward, '/'); idx > 0 {
-				forward = forward[:idx]
+				forward = forward[:idx+1]
 			}
 		}
 		if contextCanceled(ctx) {
@@ -163,8 +163,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					entries[i] = entry
 					continue
 				}
-				// Trim slash, maybe compiler is clever?
-				entries[i] = entries[i][:len(entry)-1]
 				continue
 			}
 			// Do do not retain the file.
@@ -259,12 +257,15 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// It was an object
 				if isDirObj {
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
+				} else {
+					meta.name = strings.TrimSuffix(meta.name, slashSeparator)
 				}
 				out <- meta
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				if err == nil {
 					// It was an object
+					meta.name = strings.TrimSuffix(meta.name, slashSeparator)
 					out <- meta
 					continue
 				}
@@ -272,8 +273,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// NOT an object, append to stack (with slash)
 				// If dirObject, but no metadata (which is unexpected) we skip it.
 				if !isDirObj {
-					if !isDirEmpty(pathJoin(volumeDir, meta.name+slashSeparator)) {
-						dirStack = append(dirStack, meta.name+slashSeparator)
+					if !isDirEmpty(pathJoin(volumeDir, meta.name)) {
+						dirStack = append(dirStack, meta.name)
 					}
 				}
 			case isSysErrNotDir(err):
