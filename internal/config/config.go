@@ -219,9 +219,7 @@ func (kvs KVS) Empty() bool {
 
 // Clone - returns a copy of the KVS
 func (kvs KVS) Clone() KVS {
-	c := make(KVS, len(kvs))
-	copy(c, kvs)
-	return c
+	return append(make(KVS, 0, len(kvs)), kvs...)
 }
 
 // GetWithDefault - returns default value if key not set
