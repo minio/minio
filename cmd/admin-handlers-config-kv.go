@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -78,6 +79,22 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	dynamic := config.SubSystemsDynamic.Contains(string(kvBytes))
+	if dynamic {
+		applyDynamic(ctx, objectAPI, cfg, r, w)
+	}
+}
+
+func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config, r *http.Request, w http.ResponseWriter) {
+	// Apply dynamic values.
+	if err := applyDynamicConfig(GlobalContext, objectAPI, cfg); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	globalNotificationSys.SignalService(serviceReloadDynamic)
+	// Tell the client that dynamic config was applied.
+	w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 }
 
 // SetConfigKVHandler - PUT /minio/admin/v3/set-config-kv
@@ -135,14 +152,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if dynamic {
-		// Apply dynamic values.
-		if err := applyDynamicConfig(GlobalContext, objectAPI, cfg); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		globalNotificationSys.SignalService(serviceReloadDynamic)
-		// If all values were dynamic, tell the client.
-		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
+		applyDynamic(ctx, objectAPI, cfg, r, w)
 	}
 	writeSuccessResponseHeadersOnly(w)
 }
