@@ -70,7 +70,11 @@ type IAMEtcdStore struct {
 }
 
 func newIAMEtcdStore(client *etcd.Client, usersSysType UsersSysType) *IAMEtcdStore {
-	return &IAMEtcdStore{client: client, usersSysType: usersSysType}
+	return &IAMEtcdStore{
+		iamCache:     newIamCache(),
+		client:       client,
+		usersSysType: usersSysType,
+	}
 }
 
 func (ies *IAMEtcdStore) rlock() *iamCache {

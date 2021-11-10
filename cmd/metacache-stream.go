@@ -56,14 +56,13 @@ const metacacheStreamVersion = 2
 
 // metacacheWriter provides a serializer of metacache objects.
 type metacacheWriter struct {
+	streamErr   error
 	mw          *msgp.Writer
 	creator     func() error
 	closer      func() error
 	blockSize   int
+	streamWg    sync.WaitGroup
 	reuseBlocks bool
-
-	streamErr error
-	streamWg  sync.WaitGroup
 }
 
 // newMetacacheWriter will create a serializer that will write objects in given order to the output.

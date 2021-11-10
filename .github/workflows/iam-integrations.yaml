@@ -1,0 +1,125 @@
+name: IAM integration with external systems
+
+on:
+  pull_request:
+    branches:
+    - master
+
+# This ensures that previous jobs for the PR are canceled when the PR is
+# updated.
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  ldap-test:
+    name: LDAP Tests with Go ${{ matrix.go-version }}
+    runs-on: ubuntu-latest
+
+    services:
+      openldap:
+        image: quay.io/minio/openldap
+        ports:
+          - "389:389"
+          - "636:636"
+        env:
+          LDAP_ORGANIZATION: "MinIO Inc"
+          LDAP_DOMAIN: "min.io"
+          LDAP_ADMIN_PASSWORD: "admin"
+
+    strategy:
+      matrix:
+        go-version: [1.16.x, 1.17.x]
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Test LDAP
+        env:
+          LDAP_TEST_SERVER: "localhost:389"
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-iam
+
+  etcd-test:
+    name: Etcd Backend Tests with Go ${{ matrix.go-version }}
+    runs-on: ubuntu-latest
+
+    services:
+      etcd:
+        image: "quay.io/coreos/etcd:v3.5.1"
+        env:
+          ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+          ETCD_ADVERTISE_CLIENT_URLS: "http://0.0.0.0:2379"
+        ports:
+          - "2379:2379"
+        options: >-
+          --health-cmd "etcdctl endpoint health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        go-version: [1.16.x, 1.17.x]
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Test Etcd IAM backend
+        env:
+          ETCD_SERVER: "http://localhost:2379"
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-iam
+
+  iam-etcd-test:
+    name: Etcd Backend + LDAP Tests with Go ${{ matrix.go-version }}
+    runs-on: ubuntu-latest
+
+    services:
+      openldap:
+        image: quay.io/minio/openldap
+        ports:
+          - "389:389"
+          - "636:636"
+        env:
+          LDAP_ORGANIZATION: "MinIO Inc"
+          LDAP_DOMAIN: "min.io"
+          LDAP_ADMIN_PASSWORD: "admin"
+      etcd:
+        image: "quay.io/coreos/etcd:v3.5.1"
+        env:
+          ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+          ETCD_ADVERTISE_CLIENT_URLS: "http://0.0.0.0:2379"
+        ports:
+          - "2379:2379"
+        options: >-
+          --health-cmd "etcdctl endpoint health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        go-version: [1.16.x, 1.17.x]
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Test Etcd IAM backend with LDAP IDP
+        env:
+          ETCD_SERVER: "http://localhost:2379"
+          LDAP_TEST_SERVER: "localhost:389"
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-iam

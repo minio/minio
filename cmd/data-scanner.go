@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io/fs"
 	"math"
 	"math/rand"
 	"net/http"
@@ -816,14 +817,13 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 // scannerItem represents each file while walking.
 type scannerItem struct {
-	Path string
-	Typ  os.FileMode
-
+	Path        string
 	bucket      string // Bucket.
 	prefix      string // Only the prefix if any, does not have final object name.
 	objectName  string // Only the object name without prefixes.
-	lifeCycle   *lifecycle.Lifecycle
 	replication replicationConfig
+	lifeCycle   *lifecycle.Lifecycle
+	Typ         fs.FileMode
 	heal        bool // Has the object been selected for heal check?
 	debug       bool
 }
