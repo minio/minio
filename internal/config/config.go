@@ -217,6 +217,20 @@ func (kvs KVS) Empty() bool {
 	return len(kvs) == 0
 }
 
+// Clone - returns a copy of the KVS
+func (kvs KVS) Clone() KVS {
+	return append(make(KVS, 0, len(kvs)), kvs...)
+}
+
+// GetWithDefault - returns default value if key not set
+func (kvs KVS) GetWithDefault(key string, defaultKVS KVS) string {
+	v := kvs.Get(key)
+	if len(v) == 0 {
+		return defaultKVS.Get(key)
+	}
+	return v
+}
+
 // Keys returns the list of keys for the current KVS
 func (kvs KVS) Keys() []string {
 	var keys = make([]string, len(kvs))
@@ -759,10 +773,12 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 		kvs.Set(Enable, EnableOn)
 	}
 
-	currKVS, ok := c[subSys][tgt]
+	var currKVS KVS
+	ck, ok := c[subSys][tgt]
 	if !ok {
-		currKVS = defaultKVS[subSys]
+		currKVS = defaultKVS[subSys].Clone()
 	} else {
+		currKVS = ck.Clone()
 		for _, kv := range defaultKVS[subSys] {
 			if _, ok = currKVS.Lookup(kv.Key); !ok {
 				currKVS.Set(kv.Key, kv.Value)
