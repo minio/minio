@@ -116,6 +116,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		forward := ""
 		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
 			forward = strings.TrimPrefix(opts.ForwardTo, current)
+			// Trim further directories and trailing slash.
 			if idx := strings.IndexByte(forward, '/'); idx > 0 {
 				forward = forward[:idx]
 			}
@@ -163,7 +164,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					entries[i] = entry
 					continue
 				}
-				// Trim slash, maybe compiler is clever?
+				// Trim slash, since we don't know if this is folder or object.
 				entries[i] = entries[i][:len(entry)-1]
 				continue
 			}
@@ -214,9 +215,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		dirStack := make([]string, 0, 5)
 		prefix = "" // Remove prefix after first level as we have already filtered the list.
 		if len(forward) > 0 {
-			idx := sort.SearchStrings(entries, forward)
-			if idx > 0 {
-				entries = entries[idx:]
+			// Conservative forwarding. Entries may be either objects or prefixes.
+			for i, entry := range entries {
+				if entry >= forward || strings.HasPrefix(forward, entry) {
+					entries = entries[i:]
+					break
+				}
 			}
 		}
 
