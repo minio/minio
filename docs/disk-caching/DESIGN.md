@@ -93,13 +93,13 @@ master key to automatically encrypt all cached content.
   Note that cache KMS master key is not recommended for use in production deployments. If the MinIO server/gateway machine is ever compromised, the cache KMS master key must also be treated as compromised.
   Support for external KMS to manage cache KMS keys is on the roadmap,and would be ideal for production use cases.
 
-- `MINIO_CACHE_COMMIT` setting of `writethrough` allows caching of multipart uploads synchronously if enabled. By default, single PUT operations are already cached on write without any special setting.
+- `MINIO_CACHE_COMMIT` setting of `writethrough` allows caching of single and multipart uploads synchronously if enabled. By default, however single PUT operations are cached asynchronously on write without any special setting.
 
 - Partially cached stale uploads older than 24 hours are automatically cleaned up.
 
 - Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
 
-> NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. However, for consistency reasons, `writeback` staging uploads in the cache are not permitted for multipart uploads.
+> NOTE: `MINIO_CACHE_COMMIT` also has a value of `writeback` which allows staging single uploads in cache before committing to remote. It is not possible to stage multipart uploads in the cache for consistency reasons - hence, multipart uploads will be cached synchronously even if `writeback` is set.
 
 ### Crash Recovery
 
