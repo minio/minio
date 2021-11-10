@@ -46,7 +46,8 @@ func (sses3) String() string { return "SSE-S3" }
 
 func (sses3) IsRequested(h http.Header) bool {
 	_, ok := h[xhttp.AmzServerSideEncryption]
-	return ok && strings.ToLower(h.Get(xhttp.AmzServerSideEncryption)) != xhttp.AmzEncryptionKMS // Return only true if the SSE header is specified and does not contain the SSE-KMS value
+	// Return only true if the SSE header is specified and does not contain the SSE-KMS value
+	return ok && !strings.EqualFold(h.Get(xhttp.AmzServerSideEncryption), xhttp.AmzEncryptionKMS)
 }
 
 // ParseHTTP parses the SSE-S3 related HTTP headers and checks
