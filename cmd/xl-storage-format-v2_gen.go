@@ -2070,8 +2070,8 @@ func (z *xlMetaV2VersionHeader) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
 		return
 	}
 	err = dc.ReadExactBytes((z.VersionID)[:])
@@ -2082,6 +2082,11 @@ func (z *xlMetaV2VersionHeader) DecodeMsg(dc *msgp.Reader) (err error) {
 	z.ModTime, err = dc.ReadInt64()
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	err = dc.ReadExactBytes((z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
 		return
 	}
 	{
@@ -2107,8 +2112,8 @@ func (z *xlMetaV2VersionHeader) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2VersionHeader) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 4
-	err = en.Append(0x94)
+	// array header, size 5
+	err = en.Append(0x95)
 	if err != nil {
 		return
 	}
@@ -2120,6 +2125,11 @@ func (z *xlMetaV2VersionHeader) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteInt64(z.ModTime)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	err = en.WriteBytes((z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
 		return
 	}
 	err = en.WriteUint8(uint8(z.Type))
@@ -2138,10 +2148,11 @@ func (z *xlMetaV2VersionHeader) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2VersionHeader) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 4
-	o = append(o, 0x94)
+	// array header, size 5
+	o = append(o, 0x95)
 	o = msgp.AppendBytes(o, (z.VersionID)[:])
 	o = msgp.AppendInt64(o, z.ModTime)
+	o = msgp.AppendBytes(o, (z.Signature)[:])
 	o = msgp.AppendUint8(o, uint8(z.Type))
 	o = msgp.AppendUint8(o, uint8(z.Flags))
 	return
@@ -2155,8 +2166,8 @@ func (z *xlMetaV2VersionHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
 		return
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
@@ -2167,6 +2178,11 @@ func (z *xlMetaV2VersionHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
 		return
 	}
 	{
@@ -2193,6 +2209,6 @@ func (z *xlMetaV2VersionHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *xlMetaV2VersionHeader) Msgsize() (s int) {
-	s = 1 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + msgp.Int64Size + msgp.Uint8Size + msgp.Uint8Size
+	s = 1 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + msgp.Int64Size + msgp.ArrayHeaderSize + (4 * (msgp.ByteSize)) + msgp.Uint8Size + msgp.Uint8Size
 	return
 }
