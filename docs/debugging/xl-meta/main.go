@@ -455,7 +455,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 }
 
 const (
-	xlHeaderVersion = 1
+	xlHeaderVersion = 2
 	xlMetaVersion   = 1
 )
 
