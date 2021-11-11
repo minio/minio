@@ -44,7 +44,7 @@ func (e *JSONPath) StripTableAlias(tableAlias string) []*JSONPathElement {
 		return e.strippedPathExpr
 	}
 
-	hasTableAlias := e.BaseKey.String() == tableAlias || strings.ToLower(e.BaseKey.String()) == baseTableName
+	hasTableAlias := e.BaseKey.String() == tableAlias || strings.EqualFold(e.BaseKey.String(), baseTableName)
 	var pathExpr []*JSONPathElement
 	if hasTableAlias {
 		pathExpr = e.PathExpr

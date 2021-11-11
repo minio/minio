@@ -47,7 +47,7 @@ func (az *warmBackendAzure) getDest(object string) string {
 }
 func (az *warmBackendAzure) tier() azblob.AccessTierType {
 	for _, t := range azblob.PossibleAccessTierTypeValues() {
-		if strings.ToLower(az.StorageClass) == strings.ToLower(string(t)) {
+		if strings.EqualFold(az.StorageClass, string(t)) {
 			return t
 		}
 	}

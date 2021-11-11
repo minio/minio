@@ -150,15 +150,15 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.HealSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	cfg.Bitrot, err = config.ParseBool(env.Get(EnvBitrot, kvs.Get(Bitrot)))
+	cfg.Bitrot, err = config.ParseBool(env.Get(EnvBitrot, kvs.GetWithDefault(Bitrot, DefaultKVS)))
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:bitrotscan' value invalid: %w", err)
 	}
-	cfg.Sleep, err = time.ParseDuration(env.Get(EnvSleep, kvs.Get(Sleep)))
+	cfg.Sleep, err = time.ParseDuration(env.Get(EnvSleep, kvs.GetWithDefault(Sleep, DefaultKVS)))
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_sleep' value invalid: %w", err)
 	}
-	cfg.IOCount, err = strconv.Atoi(env.Get(EnvIOCount, kvs.Get(IOCount)))
+	cfg.IOCount, err = strconv.Atoi(env.Get(EnvIOCount, kvs.GetWithDefault(IOCount, DefaultKVS)))
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_io' value invalid: %w", err)
 	}

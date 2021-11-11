@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,13 +40,16 @@ const (
 type TestSuiteIAM struct {
 	TestSuiteCommon
 
+	// Flag to turn on tests for etcd backend IAM
+	withEtcdBackend bool
+
 	endpoint string
 	adm      *madmin.AdminClient
 	client   *minio.Client
 }
 
-func newTestSuiteIAM(c TestSuiteCommon) *TestSuiteIAM {
-	return &TestSuiteIAM{TestSuiteCommon: c}
+func newTestSuiteIAM(c TestSuiteCommon, withEtcdBackend bool) *TestSuiteIAM {
+	return &TestSuiteIAM{TestSuiteCommon: c, withEtcdBackend: withEtcdBackend}
 }
 
 func (s *TestSuiteIAM) iamSetup(c *check) {
@@ -73,10 +77,42 @@ func (s *TestSuiteIAM) iamSetup(c *check) {
 	}
 }
 
+const (
+	EnvTestEtcdBackend = "ETCD_SERVER"
+)
+
+func (s *TestSuiteIAM) setUpEtcd(c *check, etcdServer string) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	configCmds := []string{
+		"etcd",
+		"endpoints=" + etcdServer,
+		"path_prefix=" + mustGetUUID(),
+	}
+	_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
+	if err != nil {
+		c.Fatalf("unable to setup Etcd for tests: %v", err)
+	}
+
+	s.RestartIAMSuite(c)
+}
+
 func (s *TestSuiteIAM) SetUpSuite(c *check) {
+	// If etcd backend is specified and etcd server is not present, the test
+	// is skipped.
+	etcdServer := os.Getenv(EnvTestEtcdBackend)
+	if s.withEtcdBackend && etcdServer == "" {
+		c.Skip("Skipping etcd backend IAM test as no etcd server is configured.")
+	}
+
 	s.TestSuiteCommon.SetUpSuite(c)
 
 	s.iamSetup(c)
+
+	if s.withEtcdBackend {
+		s.setUpEtcd(c, etcdServer)
+	}
 }
 
 func (s *TestSuiteIAM) RestartIAMSuite(c *check) {
@@ -108,20 +144,34 @@ func runAllIAMTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPServerSuite(t *testing.T) {
-	testCases := []*TestSuiteIAM{
+	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4}),
+		{serverType: "FS", signer: signerV4},
 		// Init and run test on FS backend, with tls enabled.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}),
+		{serverType: "FS", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "Erasure", signer: signerV4}),
+		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "ErasureSet", signer: signerV4}),
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
 	}
 	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
-			runAllIAMTests(testCase, &check{t, testCase.serverType})
-		})
+		etcdStr := ""
+		if testCase.withEtcdBackend {
+			etcdStr = " (with etcd backend)"
+		}
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			func(t *testing.T) {
+				runAllIAMTests(testCase, &check{t, testCase.serverType})
+			},
+		)
 	}
 }
 

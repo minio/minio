@@ -118,7 +118,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 }
 
 func validateTableName(from *TableExpression) error {
-	if strings.ToLower(from.Table.BaseKey.String()) != baseTableName {
+	if !strings.EqualFold(from.Table.BaseKey.String(), baseTableName) {
 		return errBadTableName(errors.New("table name must be `s3object`"))
 	}
 

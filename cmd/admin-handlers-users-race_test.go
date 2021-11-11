@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !race
 // +build !race
 
 // Tests in this file are not run under the `-race` flag as they are too slow
@@ -40,20 +41,34 @@ func runAllIAMConcurrencyTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPConcurrencyServerSuite(t *testing.T) {
-	testCases := []*TestSuiteIAM{
+	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4}),
+		{serverType: "FS", signer: signerV4},
 		// Init and run test on FS backend, with tls enabled.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}),
+		{serverType: "FS", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "Erasure", signer: signerV4}),
+		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.
-		newTestSuiteIAM(TestSuiteCommon{serverType: "ErasureSet", signer: signerV4}),
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
 	}
 	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
-			runAllIAMConcurrencyTests(testCase, &check{t, testCase.serverType})
-		})
+		etcdStr := ""
+		if testCase.withEtcdBackend {
+			etcdStr = " (with etcd backend)"
+		}
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			func(t *testing.T) {
+				runAllIAMConcurrencyTests(testCase, &check{t, testCase.serverType})
+			},
+		)
 	}
 }
 
