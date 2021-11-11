@@ -437,9 +437,9 @@ func (j *xlMetaV2Object) RemoveRestoreHdrs() {
 }
 
 // Signature will return a signature that is expected to be the same across all disks.
-func (m *xlMetaV2Object) Signature() [4]byte {
+func (j *xlMetaV2Object) Signature() [4]byte {
 	// Shallow copy
-	c := *m
+	c := *j
 	// Zero fields that will vary across disks
 	c.ErasureIndex = 0
 	x := xxhash.New()

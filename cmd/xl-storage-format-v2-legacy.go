@@ -24,18 +24,18 @@ import (
 )
 
 // unmarshalV unmarshals with a specific header version.
-func (z *xlMetaV2VersionHeader) unmarshalV(v uint8, bts []byte) (o []byte, err error) {
+func (x *xlMetaV2VersionHeader) unmarshalV(v uint8, bts []byte) (o []byte, err error) {
 	switch v {
 	case 1:
-		return z.unmarshalV1(bts)
+		return x.unmarshalV1(bts)
 	case xlHeaderVersion:
-		return z.UnmarshalMsg(bts)
+		return x.UnmarshalMsg(bts)
 	}
 	return bts, fmt.Errorf("unknown xlHeaderVersion: %d", v)
 }
 
 // unmarshalV1 decodes version 1, never released.
-func (z *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
+func (x *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 	var zb0001 uint32
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
@@ -46,12 +46,12 @@ func (z *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
 		return
 	}
-	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
+	bts, err = msgp.ReadExactBytes(bts, (x.VersionID)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "VersionID")
 		return
 	}
-	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
+	x.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
 		return
@@ -63,7 +63,7 @@ func (z *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Type")
 			return
 		}
-		z.Type = VersionType(zb0002)
+		x.Type = VersionType(zb0002)
 	}
 	{
 		var zb0003 uint8
@@ -72,18 +72,18 @@ func (z *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Flags")
 			return
 		}
-		z.Flags = xlFlags(zb0003)
+		x.Flags = xlFlags(zb0003)
 	}
 	o = bts
 	return
 }
 
 // unmarshalV unmarshals with a specific metadata version.
-func (z *xlMetaV2Version) unmarshalV(v uint8, bts []byte) (o []byte, err error) {
+func (j *xlMetaV2Version) unmarshalV(v uint8, bts []byte) (o []byte, err error) {
 	switch v {
 	// We accept un-set as latest version.
 	case 0, xlMetaVersion:
-		return z.UnmarshalMsg(bts)
+		return j.UnmarshalMsg(bts)
 	}
 	return bts, fmt.Errorf("unknown xlMetaVersion: %d", v)
 }
