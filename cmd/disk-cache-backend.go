@@ -654,6 +654,50 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	return jsonSave(f, m)
 }
 
+// updates the ETag and ModTime on cache with ETag from backend
+func (c *diskCache) updateMetadata(ctx context.Context, bucket, object, etag string, modTime time.Time, size int64) error {
+	cachedPath := getCacheSHADir(c.dir, bucket, object)
+	metaPath := pathJoin(cachedPath, cacheMetaJSONFile)
+	// Create cache directory if needed
+	if err := os.MkdirAll(cachedPath, 0777); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(metaPath, os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	m := &cacheMeta{
+		Version: cacheMetaVersion,
+		Bucket:  bucket,
+		Object:  object,
+	}
+	if err := jsonLoad(f, m); err != nil && err != io.EOF {
+		return err
+	}
+	if m.Meta == nil {
+		m.Meta = make(map[string]string)
+	}
+	var key []byte
+	var objectEncryptionKey crypto.ObjectKey
+
+	if globalCacheKMS != nil {
+		// Calculating object encryption key
+		key, err = decryptObjectInfo(key, bucket, object, m.Meta)
+		if err != nil {
+			return err
+		}
+		copy(objectEncryptionKey[:], key)
+		m.Meta["etag"] = hex.EncodeToString(objectEncryptionKey.SealETag([]byte(etag)))
+	} else {
+		m.Meta["etag"] = etag
+	}
+	m.Meta["last-modified"] = modTime.UTC().Format(http.TimeFormat)
+	m.Meta["Content-Length"] = strconv.Itoa(int(size))
+	return jsonSave(f, m)
+}
+
 func getCacheSHADir(dir, bucket, object string) string {
 	return pathJoin(dir, getSHA256Hash([]byte(pathJoin(bucket, object))))
 }
@@ -755,22 +799,36 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	metadata[SSECacheEncrypted] = ""
 	return objectKey[:], nil
 }
+func (c *diskCache) GetLockContext(ctx context.Context, bucket, object string) (RWLocker, LockContext, error) {
+	cachePath := getCacheSHADir(c.dir, bucket, object)
+	cLock := c.NewNSLockFn(cachePath)
+	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
+	return cLock, lkctx, err
+}
 
 // Caches the object to disk
-func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly bool) (oi ObjectInfo, err error) {
+func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly, writeback bool) (oi ObjectInfo, err error) {
 	if !c.diskSpaceAvailable(size) {
 		io.Copy(ioutil.Discard, data)
 		return oi, errDiskFull
 	}
-	cachePath := getCacheSHADir(c.dir, bucket, object)
-	cLock := c.NewNSLockFn(cachePath)
-	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
+	cLock, lkctx, err := c.GetLockContext(ctx, bucket, object)
 	if err != nil {
 		return oi, err
 	}
 	ctx = lkctx.Context()
 	defer cLock.Unlock(lkctx.Cancel)
 
+	return c.put(ctx, bucket, object, data, size, rs, opts, incHitsOnly, writeback)
+}
+
+// Caches the object to disk
+func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly, writeback bool) (oi ObjectInfo, err error) {
+	if !c.diskSpaceAvailable(size) {
+		io.Copy(ioutil.Discard, data)
+		return oi, errDiskFull
+	}
+	cachePath := getCacheSHADir(c.dir, bucket, object)
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
 	if osIsNotExist(err) && c.after >= 1 {
@@ -819,7 +877,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		removeAll(cachePath)
 		return oi, IncompleteBody{Bucket: bucket, Object: object}
 	}
-	if c.commitWriteback {
+	if writeback {
 		metadata["content-md5"] = md5sum
 		if md5bytes, err := base64.StdEncoding.DecodeString(md5sum); err == nil {
 			metadata["etag"] = hex.EncodeToString(md5bytes)
@@ -1073,7 +1131,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 				// the remaining parts.
 				partOffset = 0
 			} // End of read all parts loop.
-			pr.CloseWithError(err)
+			pw.CloseWithError(err)
 		}()
 	} else {
 		go func() {
@@ -1105,8 +1163,15 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	return gr, numHits, nil
 }
 
+// deletes the cached object - caller should have taken write lock
+func (c *diskCache) delete(bucket, object string) (err error) {
+	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
+	return removeAll(cacheObjPath)
+}
+
 // Deletes the cached object
-func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
+func (c *diskCache) Delete(ctx context.Context, bucket, object string) (err error) {
+	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cacheObjPath)
 	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
@@ -1114,12 +1179,6 @@ func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error)
 	}
 	defer cLock.Unlock(lkctx.Cancel)
 	return removeAll(cacheObjPath)
-}
-
-// Deletes the cached object
-func (c *diskCache) Delete(ctx context.Context, bucket, object string) (err error) {
-	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
-	return c.delete(ctx, cacheObjPath)
 }
 
 // convenience function to check if object is cached on this diskCache
@@ -1199,14 +1258,11 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 	}
 
 	m.Meta = opts.UserDefined
-	m.Meta[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
 
 	m.Checksum = CacheChecksumInfoV1{Algorithm: HighwayHash256S.String(), Blocksize: cacheBlkSize}
-	if c.commitWriteback {
-		m.Meta[writeBackStatusHeader] = CommitPending.String()
-	}
 	m.Stat.ModTime = UTCNow()
 	if globalCacheKMS != nil {
+		m.Meta[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
 		if _, err := newCacheEncryptMetadata(bucket, object, m.Meta); err != nil {
 			return uploadID, err
 		}

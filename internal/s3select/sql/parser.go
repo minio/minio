@@ -31,7 +31,7 @@ type Boolean bool
 
 // Capture interface used by participle
 func (b *Boolean) Capture(values []string) error {
-	*b = strings.ToLower(values[0]) == "true"
+	*b = Boolean(strings.EqualFold(values[0], "true"))
 	return nil
 }
 

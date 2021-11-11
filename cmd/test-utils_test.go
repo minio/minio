@@ -355,6 +355,8 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	newAllSubsystems()
 
+	globalEtcdClient = nil
+
 	initAllSubsystems(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)

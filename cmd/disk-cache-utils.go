@@ -110,7 +110,7 @@ func cacheControlOpts(o ObjectInfo) *cacheControl {
 
 	var headerVal string
 	for k, v := range m {
-		if strings.ToLower(k) == "cache-control" {
+		if strings.EqualFold(k, "cache-control") {
 			headerVal = v
 		}
 
