@@ -659,7 +659,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 	}
 }
 
-func decodeXlHeaders(buf []byte) (versions int, headerV, metaV uint8, b []byte, err error) {
+func decodeXLHeaders(buf []byte) (versions int, headerV, metaV uint8, b []byte, err error) {
 	hdrVer, buf, err := msgp.ReadUint8Bytes(buf)
 	if err != nil {
 		return 0, 0, 0, buf, err
@@ -669,17 +669,17 @@ func decodeXlHeaders(buf []byte) (versions int, headerV, metaV uint8, b []byte, 
 		return 0, 0, 0, buf, err
 	}
 	if hdrVer > xlHeaderVersion {
-		return 0, 0, 0, buf, fmt.Errorf("decodeXlHeaders: Unknown xl header version %d", metaVer)
+		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", metaVer)
 	}
 	if metaVer > xlMetaVersion {
-		return 0, 0, 0, buf, fmt.Errorf("decodeXlHeaders: Unknown xl meta version %d", metaVer)
+		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl meta version %d", metaVer)
 	}
 	versions, buf, err = msgp.ReadIntBytes(buf)
 	if err != nil {
 		return 0, 0, 0, buf, err
 	}
 	if versions < 0 {
-		return 0, 0, 0, buf, fmt.Errorf("decodeXlHeaders: Negative version count %d", versions)
+		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Negative version count %d", versions)
 	}
 	return versions, hdrVer, metaVer, buf, nil
 }
@@ -770,7 +770,7 @@ func (x *xlMetaV2) Load(buf []byte) error {
 }
 
 func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
-	versions, headerV, metaV, buf, err := decodeXlHeaders(buf)
+	versions, headerV, metaV, buf, err := decodeXLHeaders(buf)
 	if err != nil {
 		return err
 	}
@@ -1585,7 +1585,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 			return fi, errFileVersionNotFound
 		}
 	}
-	versions, headerV, metaV, buf, err := decodeXlHeaders(x)
+	versions, headerV, metaV, buf, err := decodeXLHeaders(x)
 	if err != nil {
 		return fi, err
 	}
@@ -1648,7 +1648,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
 func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
-	vers, _, metaV, buf, err := decodeXlHeaders(x)
+	vers, _, metaV, buf, err := decodeXLHeaders(x)
 	if err != nil {
 		return nil, err
 	}
@@ -1682,7 +1682,7 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 // IsLatestDeleteMarker returns true if latest version is a deletemarker or there are no versions.
 // If any error occurs false is returned.
 func (x xlMetaBuf) IsLatestDeleteMarker() bool {
-	vers, headerV, _, buf, err := decodeXlHeaders(x)
+	vers, headerV, _, buf, err := decodeXLHeaders(x)
 	if err != nil {
 		return false
 	}

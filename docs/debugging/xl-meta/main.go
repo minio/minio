@@ -119,7 +119,7 @@ GLOBAL FLAGS:
 					b = nbuf
 				}
 
-				nVers, v, err := decodeXlHeaders(v)
+				nVers, v, err := decodeXLHeaders(v)
 				if err != nil {
 					return nil, err
 				}
@@ -459,7 +459,7 @@ const (
 	xlMetaVersion   = 1
 )
 
-func decodeXlHeaders(buf []byte) (versions int, b []byte, err error) {
+func decodeXLHeaders(buf []byte) (versions int, b []byte, err error) {
 	hdrVer, buf, err := msgp.ReadUintBytes(buf)
 	if err != nil {
 		return 0, buf, err
@@ -469,17 +469,17 @@ func decodeXlHeaders(buf []byte) (versions int, b []byte, err error) {
 		return 0, buf, err
 	}
 	if hdrVer > xlHeaderVersion {
-		return 0, buf, fmt.Errorf("decodeXlHeaders: Unknown xl header version %d", metaVer)
+		return 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", metaVer)
 	}
 	if metaVer > xlMetaVersion {
-		return 0, buf, fmt.Errorf("decodeXlHeaders: Unknown xl meta version %d", metaVer)
+		return 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl meta version %d", metaVer)
 	}
 	versions, buf, err = msgp.ReadIntBytes(buf)
 	if err != nil {
 		return 0, buf, err
 	}
 	if versions < 0 {
-		return 0, buf, fmt.Errorf("decodeXlHeaders: Negative version count %d", versions)
+		return 0, buf, fmt.Errorf("decodeXLHeaders: Negative version count %d", versions)
 	}
 	return versions, buf, nil
 }
