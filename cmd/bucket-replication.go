@@ -177,10 +177,14 @@ func isStandardHeader(matchHeaderKey string) bool {
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (replicate, sync bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, delOpts ObjectOptions, oi ObjectInfo, gerr error) (replicate, sync bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
 		return false, sync
+	}
+	// If incoming request is a replication request, it does not need to be re-replicated.
+	if delOpts.ReplicationRequest {
+		return
 	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,

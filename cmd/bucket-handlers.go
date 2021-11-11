@@ -497,10 +497,15 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			object.PurgeTransitioned = goi.TransitionStatus
 		}
 		if replicateDeletes {
+			opts := ObjectOptions{
+				VersionID:        object.VersionID,
+				Versioned:        globalBucketVersioningSys.Enabled(bucket),
+				VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+			}
 			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
-			}, goi, gerr)
+			}, opts, goi, gerr)
 			replicateSync = repsync
 			if replicate {
 				if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object.ObjectName); apiErrCode != ErrNone {

@@ -770,7 +770,7 @@ next:
 				if replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{
 					ObjectName: objectName,
 					VersionID:  goi.VersionID,
-				}, goi, gerr); replicateDel {
+				}, opts, goi, gerr); replicateDel {
 					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 					opts.DeleteMarker = true
 				}
@@ -903,7 +903,7 @@ next:
 						}
 					}
 				}
-				replicateDel, _ := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
+				replicateDel, _ := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, opts, obj, nil)
 				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
 				objToDel := ObjectToDelete{ObjectName: obj.Name}
 				if replicateDel {

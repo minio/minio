@@ -58,7 +58,8 @@ type ObjectOptions struct {
 
 	// Use the maximum parity (N/2), used when
 	// saving server configuration files
-	MaxParity bool
+	MaxParity          bool
+	ReplicationRequest bool
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations

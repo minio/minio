@@ -1038,6 +1038,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			return objInfo, gerr
 		}
 	}
+
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(bucket, object)
 	ctx, err = lk.GetLock(ctx, globalDeleteOperationTimeout)
