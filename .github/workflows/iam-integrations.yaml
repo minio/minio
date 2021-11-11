@@ -18,7 +18,7 @@ jobs:
 
     services:
       openldap:
-        image:  quay.io/minio/openldap
+        image: quay.io/minio/openldap
         ports:
           - "389:389"
           - "636:636"
