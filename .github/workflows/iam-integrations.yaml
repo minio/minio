@@ -18,7 +18,7 @@ jobs:
 
     services:
       openldap:
-        image: donatello/openldap
+        image:  quay.io/minio/openldap
         ports:
           - "389:389"
           - "636:636"
@@ -39,7 +39,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       openid:
-        image: donatello/dex
+        image: quay.io/minio/dex
         ports:
           - "5556:5556"
         env:
