@@ -19,6 +19,7 @@ package cmd
 
 import (
 	jsoniter "github.com/json-iterator/go"
+	"github.com/zeebo/xxh3"
 )
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
@@ -147,4 +148,22 @@ func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 		}
 	}
 	return -1, -1, -1
+}
+
+// hashDeterministicString will return a deterministic (weak) hash for the map values.
+func hashDeterministicString(m map[string]string) uint64 {
+	var crc = uint64(0xc2b40bbac11a7295)
+	for k, v := range m {
+		crc = crc ^ xxh3.HashString(k) + xxh3.HashString(v)
+	}
+	return crc
+}
+
+// hashDeterministicBytes will return a deterministic (weak) hash for the map values.
+func hashDeterministicBytes(m map[string][]byte) uint64 {
+	var crc = uint64(0x1bbc7e1dde654743)
+	for k, v := range m {
+		crc = crc ^ xxh3.HashString(k) + xxh3.Hash(v)
+	}
+	return crc
 }
