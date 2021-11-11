@@ -645,10 +645,12 @@ func (e UnsupportedMetadata) Error() string {
 }
 
 // BackendDown is returned for network errors or if the gateway's backend is down.
-type BackendDown struct{}
+type BackendDown struct {
+	Err string
+}
 
 func (e BackendDown) Error() string {
-	return "Backend down"
+	return e.Err
 }
 
 // isErrBucketNotFound - Check if error type is BucketNotFound.

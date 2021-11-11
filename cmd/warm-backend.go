@@ -50,6 +50,10 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	var empty bytes.Reader
 	rv, err := w.Put(ctx, probeObject, &empty, 0)
 	if err != nil {
+		switch err.(type) {
+		case BackendDown:
+			return err
+		}
 		return tierPermErr{
 			Op:  tierPut,
 			Err: err,
@@ -58,6 +62,10 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 
 	_, err = w.Get(ctx, probeObject, rv, WarmBackendGetOpts{})
 	if err != nil {
+		switch err.(type) {
+		case BackendDown:
+			return err
+		}
 		switch {
 		case isErrBucketNotFound(err):
 			return errTierBucketNotFound
@@ -72,6 +80,10 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	}
 
 	if err = w.Remove(ctx, probeObject, rv); err != nil {
+		switch err.(type) {
+		case BackendDown:
+			return err
+		}
 		return tierPermErr{
 			Op:  tierDelete,
 			Err: err,
