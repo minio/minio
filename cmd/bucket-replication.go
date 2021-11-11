@@ -785,7 +785,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	if replicationStatus == replication.Failed && ri.RetryCount < 1 {
 		ri.OpType = replication.HealReplicationType
 		ri.RetryCount++
-		globalReplicationPool.queueReplicaTask(ctx, ri)
+		globalReplicationPool.queueReplicaTask(GlobalContext, ri)
 	}
 }
 
@@ -883,7 +883,6 @@ type ReplicationPool struct {
 	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
 	killCh             chan struct{}
 	wg                 sync.WaitGroup
-	ctx                context.Context
 	objLayer           ObjectLayer
 }
 
@@ -894,7 +893,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *Replication
 		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
 		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
 		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
-		ctx:                ctx,
 		objLayer:           o,
 	}
 	pool.Resize(sz)
@@ -908,18 +906,18 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *Replication
 func (p *ReplicationPool) AddMRFWorker() {
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-GlobalContext.Done():
 			return
 		case oi, ok := <-p.mrfReplicaCh:
 			if !ok {
 				return
 			}
-			replicateObject(p.ctx, oi, p.objLayer)
+			replicateObject(GlobalContext, oi, p.objLayer)
 		case doi, ok := <-p.mrfReplicaDeleteCh:
 			if !ok {
 				return
 			}
-			replicateDelete(p.ctx, doi, p.objLayer)
+			replicateDelete(GlobalContext, doi, p.objLayer)
 		}
 	}
 }
@@ -929,18 +927,18 @@ func (p *ReplicationPool) AddWorker() {
 	defer p.wg.Done()
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-GlobalContext.Done():
 			return
 		case oi, ok := <-p.replicaCh:
 			if !ok {
 				return
 			}
-			replicateObject(p.ctx, oi, p.objLayer)
+			replicateObject(GlobalContext, oi, p.objLayer)
 		case doi, ok := <-p.replicaDeleteCh:
 			if !ok {
 				return
 			}
-			replicateDelete(p.ctx, doi, p.objLayer)
+			replicateDelete(GlobalContext, doi, p.objLayer)
 		case <-p.killCh:
 			return
 		}
@@ -974,6 +972,7 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObje
 			close(p.replicaCh)
 			close(p.mrfReplicaCh)
 		})
+		return
 	case p.replicaCh <- ri:
 	case p.mrfReplicaCh <- ri:
 		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
@@ -991,6 +990,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi Delete
 			close(p.replicaDeleteCh)
 			close(p.mrfReplicaDeleteCh)
 		})
+		return
 	case p.replicaDeleteCh <- doi:
 	case p.mrfReplicaDeleteCh <- doi:
 		// queue all overflows into the mrfReplicaDeleteCh to handle incoming pending/failed operations
