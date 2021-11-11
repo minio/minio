@@ -1362,8 +1362,8 @@ var errorCodes = errorCodeMap{
 	},
 	ErrBackendDown: {
 		Code:           "XMinioBackendDown",
-		Description:    "Object storage backend is unreachable",
-		HTTPStatusCode: http.StatusServiceUnavailable,
+		Description:    "Remote backend is unreachable",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrIncorrectContinuationToken: {
 		Code:           "InvalidArgument",
@@ -2127,6 +2127,11 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 			return apiErr
 		}
+	}
+
+	if apiErr.Code == "XMinioBackendDown" {
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
+		return apiErr
 	}
 
 	if apiErr.Code == "InternalError" {
