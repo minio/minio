@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -214,11 +215,11 @@ func (m *xlMetaV1Object) Signature() [4]byte {
 	c.Minio.Release = ""
 	x := xxhash.New()
 
-	// Use JSON for maps, since it sorts keys.
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	enc := json.NewEncoder(x)
-	enc.Encode(c.Meta)
+	crc := hashDeterministicString(c.Meta)
 	c.Meta = nil
+	var tmp64 [8]byte
+	binary.LittleEndian.PutUint64(tmp64[:], crc)
+	x.Write(tmp64[:])
 
 	if err := msgp.Encode(x, &c); err != nil {
 		return signatureErr

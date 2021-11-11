@@ -451,18 +451,13 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	if len(c.PartActualSizes) == 0 {
 		c.PartActualSizes = nil
 	}
-	if len(c.MetaSys) == 0 {
-		c.MetaSys = nil
-	}
-	if len(c.MetaUser) == 0 {
-		c.MetaUser = nil
-	}
 
-	// Use JSON for maps, since it sorts keys.
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	enc := json.NewEncoder(x)
-	logger.LogIf(context.Background(), enc.Encode(c.MetaUser))
-	logger.LogIf(context.Background(), enc.Encode(c.MetaSys))
+	// Get a 64 bit CRC
+	crc := hashDeterministicString(j.MetaUser)
+	crc ^= hashDeterministicBytes(j.MetaSys)
+	var tmp64 [8]byte
+	binary.LittleEndian.PutUint64(tmp64[:], crc)
+	x.Write(tmp64[:])
 
 	// Nil fields.
 	c.MetaSys = nil
