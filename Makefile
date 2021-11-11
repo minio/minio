@@ -42,15 +42,19 @@ test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
-test-race: verifiers build
+test-race: verifiers build ## builds minio, runs linters, tests (race)
 	@echo "Running unit tests under -race"
 	@(env bash $(PWD)/buildscripts/race.sh)
 
-test-iam: build
+test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
 	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
+
+test-replication: install ## verify multi site replication
+	@echo "Running tests for Replication three sites"
+	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
