@@ -79,6 +79,15 @@ func Test_hashDeterministicString(t *testing.T) {
 			if got := hashDeterministicString(m); got == want {
 				t.Errorf("hashDeterministicString() = %v, does not want %v", got, want)
 			}
+
+			// Flip key/value
+			want = hashDeterministicString(m)
+			delete(m, "another")
+			m["hashDeterministicStringhashDeterministicStringhashDeterministicStringhashDeterministicStringhashDeterministicStringhashDeterministicStringhashDeterministicString"] = "another"
+			if got := hashDeterministicString(m); got == want {
+				t.Errorf("hashDeterministicString() = %v, does not want %v", got, want)
+			}
+
 		})
 	}
 }
