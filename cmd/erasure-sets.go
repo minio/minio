@@ -26,6 +26,7 @@ import (
 	"hash/crc32"
 	"math/rand"
 	"net/http"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -233,11 +234,20 @@ func (s *erasureSets) connectDisks() {
 			s.erasureDisksMu.RUnlock()
 			if err != nil {
 				printEndpointError(endpoint, err, false)
+				disk.Close()
 				return
 			}
 
 			s.erasureDisksMu.Lock()
-			if s.erasureDisks[setIndex][diskIndex] != nil {
+			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
+				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
+					err = fmt.Errorf("Detected unexpected disk ordering refusing to use the disk: expecting %s, found %s, refusing to use the disk",
+						currentDisk.Endpoint(), disk.Endpoint())
+					printEndpointError(endpoint, err, false)
+					disk.Close()
+					s.erasureDisksMu.Unlock()
+					return
+				}
 				s.erasureDisks[setIndex][diskIndex].Close()
 			}
 			if disk.IsLocal() {
@@ -248,6 +258,7 @@ func (s *erasureSets) connectDisks() {
 				disk, err = newStorageAPI(endpoint)
 				if err != nil {
 					printEndpointError(endpoint, err, false)
+					s.erasureDisksMu.Unlock()
 					return
 				}
 				disk.SetDiskID(format.Erasure.This)
@@ -398,7 +409,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		var lockerEpSet = set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
 			endpoint := endpoints[i*setDriveCount+j]
-			// Only add lockers only one per endpoint and per erasure set.
+			// Only add lockers per endpoint.
 			if locker, ok := erasureLockers[endpoint.Host]; ok && !lockerEpSet.Contains(endpoint.Host) {
 				lockerEpSet.Add(endpoint.Host)
 				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
@@ -416,7 +427,9 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 				continue
 			}
 			if m != i || n != j {
-				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d): %s(%s)", poolIdx, m, n, i, j, disk, diskID)
+				logger.LogIf(GlobalContext, fmt.Errorf("Detected unexpected disk ordering refusing to use the disk - poolID: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
+				s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
+				continue
 			}
 			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
@@ -855,7 +868,7 @@ func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, er
 	var healBuckets = map[string]VolInfo{}
 	for _, set := range s.sets {
 		// lists all unique buckets across drives.
-		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
+		if err := listAllBuckets(ctx, set.getDisks(), healBuckets, s.defaultParityCount); err != nil {
 			return nil, err
 		}
 	}
@@ -1326,19 +1339,12 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin
 	}
 
 	for _, set := range s.sets {
-		var healResult madmin.HealResultItem
-		healResult, err = set.HealBucket(ctx, bucket, opts)
+		healResult, err := set.HealBucket(ctx, bucket, opts)
 		if err != nil {
 			return result, toObjectErr(err, bucket)
 		}
 		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
 		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
-	}
-
-	// Check if we had quorum to write, if not return an appropriate error.
-	_, afterDriveOnline := result.GetOnlineCounts()
-	if afterDriveOnline < ((s.setCount*s.setDriveCount)/2)+1 {
-		return result, toObjectErr(errErasureWriteQuorum, bucket)
 	}
 
 	return result, nil

@@ -32,8 +32,6 @@ import (
 
 func concurrentDecryptETag(ctx context.Context, objects []ObjectInfo) {
 	g := errgroup.WithNErrs(len(objects)).WithConcurrency(500)
-	_, cancel := g.WithCancelOnError(ctx)
-	defer cancel()
 	for index := range objects {
 		index := index
 		g.Go(func() error {
@@ -45,7 +43,7 @@ func concurrentDecryptETag(ctx context.Context, objects []ObjectInfo) {
 			return nil
 		}, index)
 	}
-	g.WaitErr()
+	g.Wait()
 }
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode

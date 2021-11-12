@@ -42,19 +42,17 @@ func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts mad
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
+	// Heal bucket.
+	return er.healBucket(ctx, storageDisks, storageEndpoints, bucket, opts)
+}
+
+// Heal bucket - create buckets on disks where it does not exist.
+func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []Endpoint, bucket string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 	// get write quorum for an object
 	writeQuorum := len(storageDisks) - er.defaultParityCount
 	if writeQuorum == er.defaultParityCount {
 		writeQuorum++
 	}
-
-	// Heal bucket.
-	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, opts)
-}
-
-// Heal bucket - create buckets on disks where it does not exist.
-func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []Endpoint, bucket string, writeQuorum int,
-	opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -72,6 +70,14 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 				afterState[index] = madmin.DriveStateOffline
 				return errDiskNotFound
 			}
+
+			beforeState[index] = madmin.DriveStateOk
+			afterState[index] = madmin.DriveStateOk
+
+			if bucket == minioReservedBucket {
+				return nil
+			}
+
 			if _, serr := storageDisks[index].StatVol(ctx, bucket); serr != nil {
 				if serr == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
@@ -94,8 +100,6 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 
 				return serr
 			}
-			beforeState[index] = madmin.DriveStateOk
-			afterState[index] = madmin.DriveStateOk
 			return nil
 		}, index)
 	}
@@ -107,8 +111,8 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 		Type:         madmin.HealItemBucket,
 		Bucket:       bucket,
 		DiskCount:    len(storageDisks),
-		ParityBlocks: len(storageDisks) / 2,
-		DataBlocks:   len(storageDisks) / 2,
+		ParityBlocks: er.defaultParityCount,
+		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
 
 	for i := range beforeState {
@@ -119,7 +123,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 		})
 	}
 
-	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum-1)
+	reducedErr := reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, res.DataBlocks)
 	if errors.Is(reducedErr, errVolumeNotFound) && !opts.Recreate {
 		for i := range beforeState {
 			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
@@ -153,7 +157,16 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
 	if reducedErr != nil {
-		return res, reducedErr
+		// If we have exactly half the drives not available,
+		// we should still allow HealBucket to not return error.
+		// this is necessary for starting the server.
+		readQuorum := res.DataBlocks
+		switch reduceReadQuorumErrs(ctx, errs, nil, readQuorum) {
+		case nil:
+		case errDiskNotFound:
+		default:
+			return res, reducedErr
+		}
 	}
 
 	for i := range afterState {
@@ -168,7 +181,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 
 // listAllBuckets lists all buckets from all disks. It also
 // returns the occurrence of each buckets in all disks
-func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets map[string]VolInfo) error {
+func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets map[string]VolInfo, readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
 	var mu sync.Mutex
 	for index := range storageDisks {
@@ -198,7 +211,7 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 			return nil
 		}, index)
 	}
-	return reduceReadQuorumErrs(ctx, g.Wait(), bucketMetadataOpIgnoredErrs, len(storageDisks)/2)
+	return reduceReadQuorumErrs(ctx, g.Wait(), bucketMetadataOpIgnoredErrs, readQuorum)
 }
 
 // Only heal on disks where we are sure that healing is needed. We can expand
