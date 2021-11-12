@@ -27,7 +27,6 @@ import (
 	"github.com/cespare/xxhash/v2"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/logger"
-	"github.com/tinylib/msgp/msgp"
 )
 
 // XL constants.
@@ -213,20 +212,17 @@ func (m *xlMetaV1Object) Signature() [4]byte {
 	// Zero unimportant fields
 	c.Erasure.Index = 0
 	c.Minio.Release = ""
-	x := xxhash.New()
-
 	crc := hashDeterministicString(c.Meta)
 	c.Meta = nil
-	var tmp64 [8]byte
-	binary.LittleEndian.PutUint64(tmp64[:], crc)
-	x.Write(tmp64[:])
 
-	if err := msgp.Encode(x, &c); err != nil {
-		return signatureErr
+	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
+		crc = crc ^ xxhash.Sum64(bts)
+		metaDataPoolPut(bts)
 	}
+
+	// Combine upper and lower part
 	var tmp [4]byte
-	// Signature is lower 32 bits
-	copy(tmp[:], x.Sum(nil))
+	binary.LittleEndian.PutUint32(tmp[:], uint32(crc^(crc>>32)))
 	return tmp
 }
 
