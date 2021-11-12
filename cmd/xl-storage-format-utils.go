@@ -154,7 +154,7 @@ func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 func hashDeterministicString(m map[string]string) uint64 {
 	var crc = uint64(0xc2b40bbac11a7295)
 	for k, v := range m {
-		crc = crc ^ xxh3.HashString(k) + xxh3.HashString(v)
+		crc = crc ^ (xxh3.HashString(k) + xxh3.HashString(v))
 	}
 	return crc
 }
@@ -163,7 +163,7 @@ func hashDeterministicString(m map[string]string) uint64 {
 func hashDeterministicBytes(m map[string][]byte) uint64 {
 	var crc = uint64(0x1bbc7e1dde654743)
 	for k, v := range m {
-		crc = crc ^ xxh3.HashString(k) + xxh3.Hash(v)
+		crc = crc ^ (xxh3.HashString(k) + xxh3.Hash(v))
 	}
 	return crc
 }
