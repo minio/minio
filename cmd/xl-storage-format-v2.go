@@ -260,13 +260,13 @@ type xlMetaV2VersionHeader struct {
 	Flags     xlFlags
 }
 
-func (h xlMetaV2VersionHeader) String() string {
+func (x xlMetaV2VersionHeader) String() string {
 	return fmt.Sprintf("Type: %s, VersionID: %s, Signature: %s, ModTime: %s, Flags: %s",
-		h.Type.String(),
-		hex.EncodeToString(h.VersionID[:]),
-		hex.EncodeToString(h.Signature[:]),
-		time.Unix(0, h.ModTime),
-		h.Flags.String(),
+		x.Type.String(),
+		hex.EncodeToString(x.VersionID[:]),
+		hex.EncodeToString(x.Signature[:]),
+		time.Unix(0, x.ModTime),
+		x.Flags.String(),
 	)
 }
 
@@ -959,8 +959,8 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	// Header...
 	sz := len(xlHeader) + len(xlVersionCurrent) + msgp.ArrayHeaderSize + len(dst) + 3*msgp.Uint32Size
-	// Inline data
-	sz += len(x.data)
+	// Existing + Inline data
+	sz += len(dst) + len(x.data)
 	// Versions...
 	for _, ver := range x.versions {
 		sz += 32 + len(ver.meta)
@@ -1004,8 +1004,12 @@ func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	// Update size...
 	binary.BigEndian.PutUint32(dst[dataOffset-4:dataOffset], uint32(len(dst)-dataOffset))
 
-	// Add CRC of metadata.
-	dst = msgp.AppendUint32(dst, uint32(xxhash.Sum64(dst[dataOffset:])))
+	// Add CRC of metadata as fixed size (5 bytes)
+	// Prior to v1.3 this was variable sized.
+	tmp = tmp[:5]
+	tmp[0] = 0xce // muint32
+	binary.BigEndian.PutUint32(tmp[1:], uint32(xxhash.Sum64(dst[dataOffset:])))
+	dst = append(dst, tmp[:5]...)
 	return append(dst, x.data...), nil
 }
 
