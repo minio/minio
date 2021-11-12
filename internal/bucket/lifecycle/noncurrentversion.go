@@ -23,14 +23,15 @@ import (
 
 // NoncurrentVersionExpiration - an action for lifecycle configuration rule.
 type NoncurrentVersionExpiration struct {
-	XMLName        xml.Name       `xml:"NoncurrentVersionExpiration"`
-	NoncurrentDays ExpirationDays `xml:"NoncurrentDays,omitempty"`
-	set            bool
+	XMLName               xml.Name       `xml:"NoncurrentVersionExpiration"`
+	NoncurrentDays        ExpirationDays `xml:"NoncurrentDays,omitempty"`
+	MaxNoncurrentVersions int            `xml:"MaxNoncurrentVersions,omitempty"`
+	set                   bool
 }
 
 // MarshalXML if non-current days not set to non zero value
 func (n NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if n.IsDaysNull() {
+	if n.IsNull() {
 		return nil
 	}
 	type noncurrentVersionExpirationWrapper NoncurrentVersionExpiration
@@ -50,6 +51,11 @@ func (n *NoncurrentVersionExpiration) UnmarshalXML(d *xml.Decoder, startElement 
 	return nil
 }
 
+// IsNull returns if both NoncurrentDays and NoncurrentVersions are empty
+func (n NoncurrentVersionExpiration) IsNull() bool {
+	return n.IsDaysNull() && n.MaxNoncurrentVersions == 0
+}
+
 // IsDaysNull returns true if days field is null
 func (n NoncurrentVersionExpiration) IsDaysNull() bool {
 	return n.NoncurrentDays == ExpirationDays(0)
@@ -61,7 +67,18 @@ func (n NoncurrentVersionExpiration) Validate() error {
 		return nil
 	}
 	val := int(n.NoncurrentDays)
-	if val <= 0 {
+	switch {
+	case val == 0 && n.MaxNoncurrentVersions == 0:
+		// both fields can't be zero
+		return errXMLNotWellFormed
+
+	case val > 0 && n.MaxNoncurrentVersions > 0:
+		// both tags can't be non-zero simultaneously
+		return errLifecycleInvalidNoncurrentExpiration
+
+	case val < 0, n.MaxNoncurrentVersions < 0:
+		// negative values are not supported
+
 		return errXMLNotWellFormed
 	}
 	return nil

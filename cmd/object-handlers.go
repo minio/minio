@@ -1443,6 +1443,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+
+	ilmLimitNoncurrentVersions(objectAPI, dstBucket, dstObject)
 }
 
 // PutObjectHandler - PUT Object
@@ -1778,6 +1780,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+	ilmLimitNoncurrentVersions(objectAPI, bucket, object)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -3182,6 +3185,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+	ilmLimitNoncurrentVersions(objectAPI, bucket, object)
 }
 
 /// Delete objectAPIHandlers

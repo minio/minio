@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -96,6 +97,12 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		// Lifecycle with empty Filter tag
 		{
 			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with max noncurrent versions
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><MaxNoncurrentVersions>5</MaxNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
@@ -427,5 +434,26 @@ func TestHasActiveRules(t *testing.T) {
 
 		})
 
+	}
+}
+
+func TestNoncurrentVersionsLimit(t *testing.T) {
+	// test that the lowest max noncurrent versions limit is returned among
+	// matching rules
+	var rules []Rule
+	for i := 1; i <= 10; i++ {
+		rules = append(rules, Rule{
+			ID:     strconv.Itoa(i),
+			Status: "Enabled",
+			NoncurrentVersionExpiration: NoncurrentVersionExpiration{
+				MaxNoncurrentVersions: i,
+			},
+		})
+	}
+	lc := Lifecycle{
+		Rules: rules,
+	}
+	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 1 {
+		t.Fatalf("Expected max noncurrent versions limit to be 1 but got %d", lim)
 	}
 }
