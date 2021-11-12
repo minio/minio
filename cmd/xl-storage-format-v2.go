@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -49,6 +50,7 @@ var (
 )
 
 //go:generate msgp -file=$GOFILE -unexported
+//go:generate stringer -type VersionType -output=xl-storage-format-v2_string.go $GOFILE
 
 const (
 	// Breaking changes.
@@ -200,6 +202,26 @@ const (
 	xlFlagInlineData
 )
 
+func (x xlFlags) String() string {
+	var s strings.Builder
+	if x&xlFlagFreeVersion != 0 {
+		s.WriteString("FreeVersion")
+	}
+	if x&xlFlagUsesDataDir != 0 {
+		if s.Len() > 0 {
+			s.WriteByte(',')
+		}
+		s.WriteString("UsesDD")
+	}
+	if x&xlFlagInlineData != 0 {
+		if s.Len() > 0 {
+			s.WriteByte(',')
+		}
+		s.WriteString("Inline")
+	}
+	return s.String()
+}
+
 // checkXL2V1 will check if the metadata has correct header and is a known major version.
 // The remaining payload and versions are returned.
 func checkXL2V1(buf []byte) (payload []byte, major, minor uint16, err error) {
@@ -236,6 +258,16 @@ type xlMetaV2VersionHeader struct {
 	Signature [4]byte
 	Type      VersionType
 	Flags     xlFlags
+}
+
+func (h xlMetaV2VersionHeader) String() string {
+	return fmt.Sprintf("Type: %s, VersionID: %s, Signature: %s, ModTime: %s, Flags: %s",
+		h.Type.String(),
+		hex.EncodeToString(h.VersionID[:]),
+		hex.EncodeToString(h.Signature[:]),
+		time.Unix(0, h.ModTime),
+		h.Flags.String(),
+	)
 }
 
 // Valid xl meta xlMetaV2Version is valid
