@@ -287,7 +287,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	if xnet.IsNetworkOrHostDown(err, false) {
-		return BackendDown{}
+		return BackendDown{Err: err.Error()}
 	}
 
 	minioErr, ok := err.(minio.ErrorResponse)
