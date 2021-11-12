@@ -33,7 +33,6 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
@@ -420,18 +419,18 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 func (j *xlMetaV2DeleteMarker) Signature() [4]byte {
 	// Shallow copy
 	c := *j
-	x := xxhash.New()
 
-	// Just use JSON...
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	enc := json.NewEncoder(x)
-	if err := enc.Encode(c); err != nil {
-		return signatureErr
+	// Marshal metadata
+	crc := hashDeterministicBytes(c.MetaSys)
+	c.MetaSys = nil
+	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
+		crc = crc ^ xxhash.Sum64(bts)
+		metaDataPoolPut(bts)
 	}
 
+	// Combine upper and lower part
 	var tmp [4]byte
-	// Signature is lower 32 bits
-	copy(tmp[:], x.Sum(nil))
+	binary.LittleEndian.PutUint32(tmp[:], uint32(crc^(crc>>32)))
 	return tmp
 }
 
@@ -474,7 +473,6 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	c := *j
 	// Zero fields that will vary across disks
 	c.ErasureIndex = 0
-	x := xxhash.New()
 
 	// Nil 0 size allownil, so we don't differentiate between nil and 0 len.
 	if len(c.PartETags) == 0 {
@@ -485,22 +483,21 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	}
 
 	// Get a 64 bit CRC
-	crc := hashDeterministicString(j.MetaUser)
-	crc ^= hashDeterministicBytes(j.MetaSys)
-	var tmp64 [8]byte
-	binary.LittleEndian.PutUint64(tmp64[:], crc)
-	x.Write(tmp64[:])
+	crc := hashDeterministicString(c.MetaUser)
+	crc ^= hashDeterministicBytes(c.MetaSys)
 
 	// Nil fields.
 	c.MetaSys = nil
 	c.MetaUser = nil
 
-	if err := msgp.Encode(x, &c); err != nil {
-		return signatureErr
+	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
+		crc = crc ^ xxhash.Sum64(bts)
+		metaDataPoolPut(bts)
 	}
+
+	// Combine upper and lower part
 	var tmp [4]byte
-	// Signature is lower 32 bits
-	copy(tmp[:], x.Sum(nil))
+	binary.LittleEndian.PutUint32(tmp[:], uint32(crc^(crc>>32)))
 	return tmp
 }
 
