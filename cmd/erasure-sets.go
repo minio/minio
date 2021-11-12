@@ -394,11 +394,12 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		}
 	}
 
+	var errMsg string
 	for i := 0; i < setCount; i++ {
 		var lockerEpSet = set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
 			endpoint := endpoints[i*setDriveCount+j]
-			// Only add lockers only one per endpoint and per erasure set.
+			// Only add lockers per endpoint.
 			if locker, ok := erasureLockers[endpoint.Host]; ok && !lockerEpSet.Contains(endpoint.Host) {
 				lockerEpSet.Add(endpoint.Host)
 				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
@@ -416,11 +417,20 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 				continue
 			}
 			if m != i || n != j {
-				return nil, fmt.Errorf("found a disk in an unexpected location, pool: %d, found (set=%d, disk=%d) expected (set=%d, disk=%d): %s(%s)", poolIdx, m, n, i, j, disk, diskID)
+				if errMsg == "" {
+					errMsg = fmt.Sprintf("Detected unexpected disk ordering at pool: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID)
+				} else {
+					errMsg += fmt.Sprintf("\nDetected unexpected disk ordering at pool: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID)
+				}
+				continue
 			}
 			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
 			s.erasureDisks[m][n] = disk
+		}
+
+		if len(errMsg) != 0 {
+			continue
 		}
 
 		// Initialize erasure objects for a given set.
@@ -437,6 +447,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			bp:                    bp,
 			bpOld:                 bpOld,
 		}
+	}
+
+	if len(errMsg) != 0 {
+		return nil, errors.New(errMsg)
 	}
 
 	// start cleanup stale uploads go-routine.
