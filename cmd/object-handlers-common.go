@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -26,7 +27,12 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 var (
@@ -275,6 +281,103 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 					fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
 				}
 			}
+		}
+	}
+}
+
+// ilmLimitNoncurrentVersions limits the number of noncurrent versions of an
+// object based on lifecycle rules configured on the bucket.
+func ilmLimitNoncurrentVersions(objectAPI ObjectLayer, bucket, object string) {
+	ctx := GlobalContext
+	if enable := env.Get(api.EnvAPIILMInline, config.EnableOff); enable == config.EnableOff {
+		return
+	}
+	var lc *lifecycle.Lifecycle
+	var err error
+	if lc, err = globalLifecycleSys.Get(bucket); err != nil {
+		if errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
+			return
+		}
+		logger.LogIf(ctx, fmt.Errorf("failed to fetch bucket lifecycle: %w", err))
+		return
+	}
+
+	objOpts := lifecycle.ObjectOpts{Name: object}
+	lim := lc.NoncurrentVersionsExpirationLimit(objOpts)
+	if lim == 0 { // no limit set
+		return
+	}
+
+	var (
+		noncurrentVersions []ObjectToDelete
+		keep               int
+	)
+	versioned := globalBucketVersioningSys.Enabled(bucket)
+	results := make(chan ObjectInfo)
+	err = objectAPI.Walk(ctx, bucket, object, results, ObjectOptions{WalkVersions: versioned})
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to walk %s/%s: %w", bucket, object, err))
+		return
+
+	}
+
+	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	for oi := range results {
+		if oi.IsLatest {
+			continue
+		}
+
+		keep++
+		if keep <= lim {
+			continue
+		}
+		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, oi) {
+			continue
+		}
+		noncurrentVersions = append(noncurrentVersions, ObjectToDelete{
+			ObjectName: oi.Name,
+			VersionID:  oi.VersionID,
+		})
+	}
+
+	deleteObjectVersions(ctx, objectAPI, bucket, noncurrentVersions)
+}
+
+func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {
+	versioned := globalBucketVersioningSys.Enabled(bucket)
+	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
+	for remaining := toDel; len(remaining) > 0; toDel = remaining {
+		if len(toDel) > maxDeleteList {
+			remaining = toDel[maxDeleteList:]
+			toDel = toDel[:maxDeleteList]
+		} else {
+			remaining = nil
+		}
+		deletedObjs, errs := o.DeleteObjects(ctx, bucket, toDel, ObjectOptions{
+			Versioned:        versioned,
+			VersionSuspended: versionSuspended,
+		})
+		for i, err := range errs {
+			if err != nil {
+				continue
+			}
+			dobj := deletedObjs[i]
+			sendEvent(eventArgs{
+				EventName:  event.ObjectRemovedDelete,
+				BucketName: bucket,
+				Object: ObjectInfo{
+					Name:      dobj.ObjectName,
+					VersionID: dobj.VersionID,
+				},
+				Host: "Internal: [ILM-EXPIRY]",
+			})
+		}
+		for _, err := range errs {
+			if err == nil {
+				continue
+			}
+			// log the first error
+			logger.LogIf(ctx, err)
 		}
 	}
 }

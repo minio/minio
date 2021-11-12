@@ -476,6 +476,13 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 		sizeS := sizeSummary{}
+		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions, &sizeS)
+		if err != nil {
+			if intDataUpdateTracker.debug {
+				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
+		}
 		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			sz := item.applyActions(ctx, objAPI, actionMeta{

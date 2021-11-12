@@ -50,6 +50,7 @@ const (
 	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS"
 	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
 	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
+	EnvAPIILMInline                = "MINIO_API_ILM_INLINE"
 )
 
 // Deprecated key and ENVs

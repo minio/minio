@@ -137,6 +137,9 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.NoncurrentVersionTransition.NoncurrentDays > 0 {
 			return true
 		}
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+			return true
+		}
 		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
 			continue
 		}
@@ -223,6 +226,11 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 			rules = append(rules, rule)
 			continue
 		}
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+			rules = append(rules, rule)
+			continue
+		}
+
 		// The NoncurrentVersionTransition action requests MinIO to transition
 		// noncurrent versions of objects x days after the objects become
 		// noncurrent.
@@ -459,4 +467,19 @@ func (lc Lifecycle) PredictTransitionTime(obj ObjectOpts) (string, time.Time) {
 		}
 	}
 	return finalTransitionRuleID, finalTransitionDate
+}
+
+// NoncurrentVersionsExpirationLimit returns the minimum limit on number of
+// noncurrent versions across rules.
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) int {
+	var lim int
+	for _, rule := range lc.FilterActionableRules(obj) {
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions == 0 {
+			continue
+		}
+		if lim == 0 || lim > rule.NoncurrentVersionExpiration.MaxNoncurrentVersions {
+			lim = rule.NoncurrentVersionExpiration.MaxNoncurrentVersions
+		}
+	}
+	return lim
 }
