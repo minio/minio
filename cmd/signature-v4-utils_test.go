@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
@@ -29,6 +30,9 @@ import (
 )
 
 func TestCheckValid(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
@@ -40,9 +44,9 @@ func TestCheckValid(t *testing.T) {
 
 	newAllSubsystems()
 
-	initAllSubsystems(context.Background(), objLayer)
+	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.InitStore(objLayer, globalEtcdClient)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	req, err := newTestRequest(http.MethodGet, "http://example.com:9000/bucket/object", 0, nil)
 	if err != nil {
