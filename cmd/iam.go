@@ -143,11 +143,8 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
 }
 
-// InitStore initializes IAM stores
-func (sys *IAMSys) InitStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	sys.Lock()
-	defer sys.Unlock()
-
+// initStore initializes IAM stores
+func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	if globalLDAPConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
@@ -175,7 +172,7 @@ func (sys *IAMSys) Initialized() bool {
 }
 
 // Load - loads all credentials, policies and policy mappings.
-func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
+func (sys *IAMSys) Load(ctx context.Context) error {
 	err := sys.store.LoadIAMCache(ctx)
 	if err != nil {
 		return err
@@ -191,10 +188,13 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	sys.Lock()
+	defer sys.Unlock()
+
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
-	sys.InitStore(objAPI, etcdClient)
+	sys.initStore(objAPI, etcdClient)
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -258,7 +258,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	for {
-		if err := sys.Load(retryCtx, sys.store); err != nil {
+		if err := sys.Load(retryCtx); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -329,7 +329,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := sys.Load(ctx, sys.store); err != nil {
+			if err := sys.Load(ctx); err != nil {
 				logger.LogIf(ctx, err)
 			}
 		case <-ctx.Done():
