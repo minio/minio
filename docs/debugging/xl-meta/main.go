@@ -46,35 +46,40 @@ func main() {
 USAGE:
   {{.Name}} {{if .VisibleFlags}}[FLAGS]{{end}} METAFILES...
 
-Multiple files can be added. Files ending in ".zip" will be searched for 'xl.meta' files.  
-Wildcards are accepted: testdir/*.txt will compress all files in testdir ending with .txt
-Directories can be wildcards as well. testdir/*/*.txt will match testdir/subdir/b.txt
-Double stars means full recursive. testdir/**/xl.meta will search for all xl.meta recursively.
+Multiple files can be added. Files ending in '.zip' will be searched
+for 'xl.meta' files. Wildcards are accepted: 'testdir/*.txt' will compress
+all files in testdir ending with '.txt', directories can be wildcards
+as well. 'testdir/*/*.txt' will match 'testdir/subdir/b.txt', double stars
+means full recursive. 'testdir/**/xl.meta' will search for all xl.meta
+recursively.
 
-{{if .VisibleFlags}}
-GLOBAL FLAGS:
+FLAGS:
   {{range .VisibleFlags}}{{.}}
-  {{end}}{{end}}
+  {{end}}
 `
 
 	app.HideHelpCommand = true
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
-			Usage: "Print each file as a separate line without formatting",
+			Usage: "print each file as a separate line without formatting",
 			Name:  "ndjson",
 		},
 		cli.BoolFlag{
-			Usage: "Display inline data keys and sizes",
+			Usage: "display inline data keys and sizes",
 			Name:  "data",
 		},
 		cli.BoolFlag{
-			Usage: "Export inline data",
+			Usage: "export inline data",
 			Name:  "export",
 		},
 	}
 
 	app.Action = func(c *cli.Context) error {
+		if !c.Args().Present() {
+			cli.ShowAppHelpAndExit(c, 1) // last argument is exit code
+		}
+
 		ndjson := c.Bool("ndjson")
 		decode := func(r io.Reader, file string) ([]byte, error) {
 			b, err := ioutil.ReadAll(r)
@@ -90,7 +95,7 @@ GLOBAL FLAGS:
 			var data xlMetaInlineData
 			switch minor {
 			case 0:
-				_, err = msgp.CopyToJSON(buf, bytes.NewBuffer(b))
+				_, err = msgp.CopyToJSON(buf, bytes.NewReader(b))
 				if err != nil {
 					return nil, err
 				}
@@ -104,7 +109,7 @@ GLOBAL FLAGS:
 					b = nbuf
 				}
 
-				_, err = msgp.CopyToJSON(buf, bytes.NewBuffer(v))
+				_, err = msgp.CopyToJSON(buf, bytes.NewReader(v))
 				if err != nil {
 					return nil, err
 				}
