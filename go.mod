@@ -44,11 +44,11 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.12.2
+	github.com/minio/console v0.12.3
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.11
+	github.com/minio/madmin-go v1.1.12
 	github.com/minio/minio-go/v7 v7.0.15
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.6
