@@ -276,7 +276,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	if err != nil {
 		return p, err
 	}
-	if _, err = w.Write(alignedBuf[:]); err != nil {
+	if _, err = w.Write(alignedBuf); err != nil {
 		w.Close()
 		return p, err
 	}
@@ -2394,10 +2394,13 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		if err != nil {
 			name = filePath
 		}
-		if os.PathSeparator != '/' {
-			name = strings.Replace(name, string(os.PathSeparator), "/", -1)
-		}
-		stat = append(stat, StatInfo{ModTime: st.ModTime(), Size: st.Size(), Name: name, Dir: st.IsDir(), Mode: uint32(st.Mode())})
+		stat = append(stat, StatInfo{
+			Name:    filepath.ToSlash(name),
+			Size:    st.Size(),
+			Dir:     st.IsDir(),
+			Mode:    uint32(st.Mode()),
+			ModTime: st.ModTime(),
+		})
 	}
 	return stat, nil
 }

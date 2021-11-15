@@ -526,6 +526,7 @@ func handleCommonEnvVars() {
 	// Warn user if deprecated environment variables,
 	// "MINIO_ACCESS_KEY" and "MINIO_SECRET_KEY", are defined
 	// Check all error conditions first
+	//nolint:gocritic
 	if !env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
 		logger.Fatal(config.ErrMissingEnvCredentialRootUser(nil), "Unable to start MinIO")
 	} else if env.IsSet(config.EnvRootUser) && !env.IsSet(config.EnvRootPassword) {
@@ -544,6 +545,7 @@ func handleCommonEnvVars() {
 	var user, password string
 	haveRootCredentials := false
 	haveAccessCredentials := false
+	//nolint:gocritic
 	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
 		user = env.Get(config.EnvRootUser, "")
 		password = env.Get(config.EnvRootPassword, "")

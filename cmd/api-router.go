@@ -301,7 +301,8 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("restoreobject", maxClients(gz(httpTraceAll(api.PostRestoreObjectHandler))))).Queries("restore", "")
 
-		/// Bucket operations
+		// Bucket operations
+
 		// GetBucketLocation
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketlocation", maxClients(gz(httpTraceAll(api.GetBucketLocationHandler))))).Queries("location", "")
@@ -355,7 +356,7 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketTaggingHandler
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbuckettagging", maxClients(gz(httpTraceAll(api.GetBucketTaggingHandler))))).Queries("tagging", "")
-		//DeleteBucketWebsiteHandler
+		// DeleteBucketWebsiteHandler
 		router.Methods(http.MethodDelete).HandlerFunc(
 			collectAPIStats("deletebucketwebsite", maxClients(gz(httpTraceAll(api.DeleteBucketWebsiteHandler))))).Queries("website", "")
 		// DeleteBucketTaggingHandler
@@ -452,7 +453,7 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("listobjectsv1", maxClients(gz(httpTraceAll(api.ListObjectsV1Handler)))))
 	}
 
-	/// Root operation
+	// Root operation
 
 	// ListenNotification
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(

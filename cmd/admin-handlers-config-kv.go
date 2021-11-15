@@ -215,11 +215,9 @@ func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *
 				return
 			}
 		}
-	} else {
-		if err := delServerConfigHistory(ctx, objectAPI, restoreID); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+	} else if err := delServerConfigHistory(ctx, objectAPI, restoreID); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 }
 

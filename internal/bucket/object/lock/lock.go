@@ -193,6 +193,7 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 		return fmt.Errorf("either Days or Years must be specified, not both")
 	}
 
+	//nolint:gocritic
 	if retention.Days != nil {
 		if *retention.Days == 0 {
 			return fmt.Errorf("Default retention period must be a positive integer value for 'Days'")

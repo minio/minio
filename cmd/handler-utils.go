@@ -289,7 +289,7 @@ func validateFormFieldSize(ctx context.Context, formValues http.Header) error {
 
 // Extract form fields and file data from a HTTP POST Policy
 func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues http.Header, err error) {
-	/// HTML Form values
+	// HTML Form values
 	fileName = ""
 
 	// Canonicalize the form values into http.Header.

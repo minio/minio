@@ -312,7 +312,7 @@ func (e ObjectExistsAsDirectory) Error() string {
 	return "Object exists on : " + e.Bucket + " as directory " + e.Object
 }
 
-//PrefixAccessDenied object access is denied.
+// PrefixAccessDenied object access is denied.
 type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
@@ -484,7 +484,7 @@ func (e InvalidObjectState) Error() string {
 	return "The operation is not valid for the current state of the object " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
 }
 
-/// Bucket related errors.
+// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.
 type BucketNameInvalid GenericError
@@ -494,7 +494,7 @@ func (e BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + e.Bucket
 }
 
-/// Object related errors.
+// Object related errors.
 
 // ObjectNameInvalid - object name provided is invalid.
 type ObjectNameInvalid GenericError
@@ -569,7 +569,7 @@ func (e OperationTimedOut) Error() string {
 	return "Operation timed out"
 }
 
-/// Multipart related errors.
+// Multipart related errors.
 
 // MalformedUploadID malformed upload id.
 type MalformedUploadID struct {

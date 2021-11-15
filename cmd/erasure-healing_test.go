@@ -163,7 +163,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//defer removeRoots(fsDirs)
+	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
 	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))

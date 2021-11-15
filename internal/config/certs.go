@@ -117,9 +117,9 @@ func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 }
 
 // EnsureCertAndKey checks if both client certificate and key paths are provided
-func EnsureCertAndKey(ClientCert, ClientKey string) error {
-	if (ClientCert != "" && ClientKey == "") ||
-		(ClientCert == "" && ClientKey != "") {
+func EnsureCertAndKey(clientCert, clientKey string) error {
+	if (clientCert != "" && clientKey == "") ||
+		(clientCert == "" && clientKey != "") {
 		return errors.New("cert and key must be specified as a pair")
 	}
 	return nil

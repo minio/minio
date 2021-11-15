@@ -775,7 +775,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		if flat.Objects < dataScannerCompactLeastObject {
 			if f.dataUsageScannerDebug && flat.Objects > 1 {
 				// Disabled, rather chatty:
-				//console.Debugf(scannerLogPrefix+" Only %d objects, compacting %s -> %+v\n", flat.Objects, folder.name, flat)
+				// console.Debugf(scannerLogPrefix+" Only %d objects, compacting %s -> %+v\n", flat.Objects, folder.name, flat)
 			}
 			compact = true
 		} else {
@@ -791,7 +791,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 			if f.dataUsageScannerDebug && compact {
 				// Disabled, rather chatty:
-				//console.Debugf(scannerLogPrefix+" Only objects (%d), compacting %s -> %+v\n", flat.Objects, folder.name, flat)
+				// console.Debugf(scannerLogPrefix+" Only objects (%d), compacting %s -> %+v\n", flat.Objects, folder.name, flat)
 			}
 		}
 		if compact {

@@ -341,21 +341,17 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 	if host1 == "" {
 		// If empty host means it is localhost
 		addr1Local = true
-	} else {
+	} else if addr1Local, err = isLocalHost(host1, port1, port1); err != nil {
 		// Host not empty, check if it is local
-		if addr1Local, err = isLocalHost(host1, port1, port1); err != nil {
-			return false, err
-		}
+		return false, err
 	}
 
 	if host2 == "" {
 		// If empty host means it is localhost
 		addr2Local = true
-	} else {
+	} else if addr2Local, err = isLocalHost(host2, port2, port2); err != nil {
 		// Host not empty, check if it is local
-		if addr2Local, err = isLocalHost(host2, port2, port2); err != nil {
-			return false, err
-		}
+		return false, err
 	}
 
 	// If both of addresses point to the same machine, check if

@@ -61,8 +61,8 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
-	retStr = retStr + conditionStr
-	retStr = retStr + "}"
+	retStr += conditionStr
+	retStr += "}"
 
 	return []byte(retStr)
 }
@@ -89,8 +89,8 @@ func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration t
 	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
-	retStr = retStr + conditionStr
-	retStr = retStr + "}"
+	retStr += conditionStr
+	retStr += "}"
 
 	return []byte(retStr)
 }
@@ -108,8 +108,8 @@ func newPostPolicyBytesV2(bucketName, objectKey string, expiration time.Time) []
 	conditionStr := fmt.Sprintf(`"conditions":[%s, %s]`, bucketConditionStr, keyConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
-	retStr = retStr + conditionStr
-	retStr = retStr + "}"
+	retStr += conditionStr
+	retStr += "}"
 
 	return []byte(retStr)
 }

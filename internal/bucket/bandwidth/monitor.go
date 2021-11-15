@@ -42,7 +42,7 @@ type Monitor struct {
 	NodeCount             uint64
 }
 
-//NewMonitor returns a monitor with defaults.
+// NewMonitor returns a monitor with defaults.
 func NewMonitor(ctx context.Context, numNodes uint64) *Monitor {
 	m := &Monitor{
 		activeBuckets:         make(map[string]*bucketMeasurement),
@@ -63,7 +63,7 @@ func (m *Monitor) updateMeasurement(bucket string, bytes uint64) {
 	}
 }
 
-//SelectionFunction for buckets
+// SelectionFunction for buckets
 type SelectionFunction func(bucket string) bool
 
 // SelectBuckets will select all the buckets passed in.

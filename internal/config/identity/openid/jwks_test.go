@@ -85,6 +85,7 @@ func TestPublicKey(t *testing.T) {
 		}
 	}
 
+	//nolint:gocritic
 	if key0, ok := keys[0].(*ecdsa.PublicKey); !ok {
 		t.Fatalf("Expected ECDSA key[0], got %T", keys[0])
 	} else if key1, ok := keys[1].(*rsa.PublicKey); !ok {

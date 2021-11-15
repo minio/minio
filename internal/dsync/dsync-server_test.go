@@ -94,10 +94,8 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	if locksHeld, *reply = l.lockMap[args.Resources[0]]; !*reply {
 		l.lockMap[args.Resources[0]] = ReadLock // No locks held on the given name, so claim (first) read lock
 		*reply = true
-	} else {
-		if *reply = locksHeld != WriteLock; *reply { // Unless there is a write lock
-			l.lockMap[args.Resources[0]] = locksHeld + ReadLock // Grant another read lock
-		}
+	} else if *reply = locksHeld != WriteLock; *reply { // Unless there is a write lock
+		l.lockMap[args.Resources[0]] = locksHeld + ReadLock // Grant another read lock
 	}
 	return nil
 }

@@ -973,7 +973,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusNotFound,
 	},
 
-	/// Bucket notification related errors.
+	// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",
 		Description:    "A specified event is not supported for notifications.",
@@ -1120,14 +1120,14 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusForbidden,
 	},
 
-	/// S3 extensions.
+	// S3 extensions.
 	ErrContentSHA256Mismatch: {
 		Code:           "XAmzContentSHA256Mismatch",
 		Description:    "The provided 'x-amz-content-sha256' header does not match what was computed.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
-	/// MinIO extensions.
+	// MinIO extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
@@ -1370,7 +1370,7 @@ var errorCodes = errorCodeMap{
 		Description:    "The continuation token provided is incorrect",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	//S3 Select API Errors
+	// S3 Select API Errors
 	ErrEmptyRequestBody: {
 		Code:           "EmptyRequestBody",
 		Description:    "Request body cannot be empty.",
@@ -2074,6 +2074,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	default:
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
+		//nolint:gocritic
 		if _, ferr := fmt.Fscanf(strings.NewReader(err.Error()),
 			"request declared a Content-Length of %d but only wrote %d bytes",
 			&ie, &iw); ferr != nil {
@@ -2229,6 +2230,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 			// Add more Gateway SDKs here if any in future.
 		default:
+			//nolint:gocritic
 			if errors.Is(err, errMalformedEncoding) {
 				apiErr = APIError{
 					Code:           "BadRequest",

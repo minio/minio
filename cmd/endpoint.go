@@ -497,6 +497,7 @@ func NewEndpoints(args ...string) (endpoints Endpoints, err error) {
 		}
 
 		// All endpoints have to be same type and scheme if applicable.
+		//nolint:gocritic
 		if i == 0 {
 			endpointType = endpoint.Type()
 			scheme = endpoint.Scheme

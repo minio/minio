@@ -365,7 +365,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 	// assert the http response status code.
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	/// Put a new bucket policy.
+	// Put a new bucket policy.
 	request, err = newTestSignedRequest(http.MethodPut, getPutPolicyURL(s.endPoint, bucketName),
 		int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
@@ -980,7 +980,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *check) {
 	wg.Wait()
 
 	bucketName = getRandomBucketName()
-	//Block 2: testing for correctness of the functionality
+	// Block 2: testing for correctness of the functionality
 	// HTTP request to create the bucket.
 	request, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
@@ -1273,7 +1273,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	//make long object name.
+	// make long object name.
 	longObjName = fmt.Sprintf("%0255d/%0255d/%0255d/%0255d/%0255d", 1, 1, 1, 1, 1)
 	if IsDocker() || IsKubernetes() {
 		longObjName = fmt.Sprintf("%0242d/%0242d/%0242d/%0242d/%0242d", 1, 1, 1, 1, 1)

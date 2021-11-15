@@ -186,7 +186,7 @@ func (l *Config) lookupBind(conn *ldap.Conn) error {
 // assumed to be using the lookup bind service account. It is required that the
 // search result in at most one result.
 func (l *Config) lookupUserDN(conn *ldap.Conn, username string) (string, error) {
-	filter := strings.Replace(l.UserDNSearchFilter, "%s", ldap.EscapeFilter(username), -1)
+	filter := strings.ReplaceAll(l.UserDNSearchFilter, "%s", ldap.EscapeFilter(username))
 	searchRequest := ldap.NewSearchRequest(
 		l.UserDNSearchBaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -213,8 +213,8 @@ func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) (
 	var groups []string
 	if l.GroupSearchFilter != "" {
 		for _, groupSearchBase := range l.GroupSearchBaseDistNames {
-			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(username), -1)
-			filter = strings.Replace(filter, "%d", ldap.EscapeFilter(bindDN), -1)
+			filter := strings.ReplaceAll(l.GroupSearchFilter, "%s", ldap.EscapeFilter(username))
+			filter = strings.ReplaceAll(filter, "%d", ldap.EscapeFilter(bindDN))
 			searchRequest := ldap.NewSearchRequest(
 				groupSearchBase,
 				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -393,7 +393,7 @@ func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, 
 	}
 
 	// Evaluate the filter again with generic wildcard instead of  specific values
-	filter := strings.Replace(l.UserDNSearchFilter, "%s", "*", -1)
+	filter := strings.ReplaceAll(l.UserDNSearchFilter, "%s", "*")
 
 	nonExistentUsers := []string{}
 	for _, dn := range userDistNames {

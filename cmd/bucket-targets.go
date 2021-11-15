@@ -444,6 +444,6 @@ type TargetClient struct {
 	StorageClass        string // storage class on remote
 	disableProxy        bool
 	healthCancelFn      context.CancelFunc // cancellation function for client healthcheck
-	ARN                 string             //ARN to uniquely identify remote target
+	ARN                 string             // ARN to uniquely identify remote target
 	ResetID             string
 }

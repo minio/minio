@@ -175,7 +175,7 @@ func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
 			rules = append(rules, rule)
 		}
 	}
-	sort.Slice(rules[:], func(i, j int) bool {
+	sort.Slice(rules, func(i, j int) bool {
 		return rules[i].Priority > rules[j].Priority && rules[i].Destination.String() == rules[j].Destination.String()
 	})
 

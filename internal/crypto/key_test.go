@@ -164,7 +164,7 @@ func TestDerivePartKey(t *testing.T) {
 			t.Fatalf("Test %d failed to decode expected part-key: %v", i, err)
 		}
 		partKey := key.DerivePartKey(test.PartID)
-		if !bytes.Equal(partKey[:], expectedPartKey[:]) {
+		if !bytes.Equal(partKey[:], expectedPartKey) {
 			t.Errorf("Test %d derives wrong part-key: got '%s' want: '%s'", i, hex.EncodeToString(partKey[:]), test.PartKey)
 		}
 	}
