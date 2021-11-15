@@ -564,6 +564,22 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	// that targetUser is a real user (i.e. not derived
 	// credentials).
 	if isSvcAccForRequestor {
+		// Check if adding service account is explicitly denied.
+		//
+		// This allows turning off service accounts for request sender,
+		// if there is no deny statement this call is implicitly enabled.
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     requestorUser,
+			Action:          iampolicy.CreateServiceAccountAdminAction,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			IsOwner:         owner,
+			Claims:          claims,
+			DenyOnly:        true,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+
 		if requestorIsDerivedCredential {
 			if requestorParentUser == "" {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
