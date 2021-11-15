@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"sync"
 	"time"
 )
 
@@ -99,7 +98,6 @@ func (a *AccElem) avg() uint64 {
 
 // LastMinuteLatencies keeps track of last minute latencies.
 type LastMinuteLatencies struct {
-	mu      sync.Mutex
 	Totals  [60][sizeLastElemMarker]AccElem
 	LastSec int64
 }
@@ -107,8 +105,6 @@ type LastMinuteLatencies struct {
 // Clone safely returns a copy for a LastMinuteLatencies structure
 func (l *LastMinuteLatencies) Clone() LastMinuteLatencies {
 	n := LastMinuteLatencies{}
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	n.LastSec = l.LastSec
 	for i := range l.Totals {
 		for j := range l.Totals[i] {
@@ -150,7 +146,6 @@ func (l *LastMinuteLatencies) Add(size int64, t time.Duration) {
 	tag := sizeToTag(size)
 
 	// Update...
-	l.mu.Lock()
 	sec := time.Now().Unix()
 	l.forwardTo(sec)
 
@@ -158,14 +153,12 @@ func (l *LastMinuteLatencies) Add(size int64, t time.Duration) {
 	l.Totals[winIdx][tag].add(t)
 
 	l.LastSec = sec
-	l.mu.Unlock()
 }
 
 // GetAvg will return the average for each bucket from the last time minute.
 // The number of objects is also included.
 func (l *LastMinuteLatencies) GetAvg() [sizeLastElemMarker]AccElem {
 	var res [sizeLastElemMarker]AccElem
-	l.mu.Lock()
 	sec := time.Now().Unix()
 	l.forwardTo(sec)
 	for _, elems := range l.Totals[:] {
@@ -173,7 +166,6 @@ func (l *LastMinuteLatencies) GetAvg() [sizeLastElemMarker]AccElem {
 			res[j].merge(elems[j])
 		}
 	}
-	l.mu.Unlock()
 	return res
 }
 
