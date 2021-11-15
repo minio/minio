@@ -152,7 +152,7 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 	cred := globalActiveCred
 	if cred.AccessKey != accessKey {
 		// Check if the access key is part of users credentials.
-		ucred, ok := globalIAMSys.GetUser(accessKey)
+		ucred, ok := globalIAMSys.GetUser(r.Context(), accessKey)
 		if !ok {
 			return cred, false, ErrInvalidAccessKeyID
 		}

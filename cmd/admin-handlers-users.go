@@ -58,7 +58,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
+	if err := globalIAMSys.DeleteUser(ctx, accessKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -191,7 +191,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userInfo, err := globalIAMSys.GetUserInfo(name)
+	userInfo, err := globalIAMSys.GetUserInfo(ctx, name)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -231,9 +231,9 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	}
 
 	if updReq.IsRemove {
-		err = globalIAMSys.RemoveUsersFromGroup(updReq.Group, updReq.Members)
+		err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
 	} else {
-		err = globalIAMSys.AddUsersToGroup(updReq.Group, updReq.Members)
+		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
 
 	if err != nil {
@@ -292,7 +292,7 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := globalIAMSys.ListGroups()
+	groups, err := globalIAMSys.ListGroups(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -324,9 +324,9 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 
 	var err error
 	if status == statusEnabled {
-		err = globalIAMSys.SetGroupStatus(group, true)
+		err = globalIAMSys.SetGroupStatus(ctx, group, true)
 	} else if status == statusDisabled {
-		err = globalIAMSys.SetGroupStatus(group, false)
+		err = globalIAMSys.SetGroupStatus(ctx, group, false)
 	} else {
 		err = errInvalidArgument
 	}
@@ -367,7 +367,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.SetUserStatus(accessKey, madmin.AccountStatus(status)); err != nil {
+	if err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -477,7 +477,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = globalIAMSys.CreateUser(accessKey, uinfo); err != nil {
+	if err = globalIAMSys.CreateUser(ctx, accessKey, uinfo); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1304,7 +1304,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 	}
 
 	bucket := mux.Vars(r)["bucket"]
-	policies, err := globalIAMSys.ListPolicies(bucket)
+	policies, err := globalIAMSys.ListPolicies(ctx, bucket)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1336,7 +1336,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	policies, err := globalIAMSys.ListPolicies("")
+	policies, err := globalIAMSys.ListPolicies(ctx, "")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1371,7 +1371,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	policyName := vars["name"]
 
-	if err := globalIAMSys.DeletePolicy(policyName); err != nil {
+	if err := globalIAMSys.DeletePolicy(ctx, policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1439,7 +1439,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = globalIAMSys.SetPolicy(policyName, *iamPolicy); err != nil {
+	if err = globalIAMSys.SetPolicy(ctx, policyName, *iamPolicy); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1494,7 +1494,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := globalIAMSys.PolicyDBSet(entityName, policyName, isGroup); err != nil {
+	if err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, isGroup); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
