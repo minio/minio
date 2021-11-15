@@ -913,20 +913,14 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 
 	var mu sync.Mutex
 	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(10)
-	cctx, cancel := eg.WithCancelOnError(ctx)
-	defer cancel()
 	for j, obj := range objects {
 		j := j
 		obj := obj
 		eg.Go(func() error {
-			idx, err := z.getPoolIdxExistingNoLock(cctx, bucket, obj.ObjectName)
-			if isErrObjectNotFound(err) {
+			idx, err := z.getPoolIdxExistingNoLock(ctx, bucket, obj.ObjectName)
+			if err != nil {
 				derrs[j] = err
 				return nil
-			}
-			if err != nil {
-				// unhandled errors return right here.
-				return err
 			}
 			mu.Lock()
 			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
@@ -936,12 +930,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		}, j)
 	}
 
-	if err := eg.WaitErr(); err != nil {
-		for i := range derrs {
-			derrs[i] = err
-		}
-		return dobjects, derrs
-	}
+	eg.Wait() // wait to check all the pools.
 
 	// Delete concurrently in all server pools.
 	var wg sync.WaitGroup
@@ -1571,7 +1560,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 	}
 
 	// Attempt heal on the bucket metadata, ignore any failures
-	_, _ = z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket, bucketMetadataFile), "", opts)
+	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket, bucketMetadataFile), "", opts)
 
 	for _, pool := range z.serverPools {
 		result, err := pool.HealBucket(ctx, bucket, opts)

@@ -335,7 +335,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		if err = handleEncryptedConfigBackend(newObject); err == nil {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
-			if err = initAllSubsystems(ctx, newObject); err == nil {
+			if err = initAllSubsystems(lkctx.Context(), newObject); err == nil {
 				txnLk.Unlock(lkctx.Cancel)
 				// All successful return.
 				if globalIsDistErasure {
@@ -384,17 +384,17 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 		// Limit to no more than 50 concurrent buckets.
 		g := errgroup.WithNErrs(len(buckets)).WithConcurrency(50)
-		ctx, cancel := g.WithCancelOnError(ctx)
-		defer cancel()
 		for index := range buckets {
 			index := index
 			g.Go(func() error {
-				_, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
-				return berr
+				_, herr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
+				return herr
 			}, index)
 		}
-		if err := g.WaitErr(); err != nil {
-			return fmt.Errorf("Unable to list buckets to heal: %w", err)
+		for _, err := range g.Wait() {
+			if err != nil {
+				return fmt.Errorf("Unable to list buckets to heal: %w", err)
+			}
 		}
 	}
 

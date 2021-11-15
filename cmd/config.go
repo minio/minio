@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -222,18 +223,18 @@ func initConfig(objAPI ObjectLayer) error {
 	// If etcd is set then migrates /config/config.json
 	// to '<export_path>/.minio.sys/config/config.json'
 	if err := migrateConfigToMinioSys(objAPI); err != nil {
-		return err
+		return fmt.Errorf("migrateConfigToMinioSys: %w", err)
 	}
 
 	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
 	if err := migrateMinioSysConfig(objAPI); err != nil {
-		return err
+		return fmt.Errorf("migrateMinioSysConfig: %w", err)
 	}
 
 	// Migrates backend '<export_path>/.minio.sys/config/config.json' to
 	// latest config format.
 	if err := migrateMinioSysConfigToKV(objAPI); err != nil {
-		return err
+		return fmt.Errorf("migrateMinioSysConfigToKV: %w", err)
 	}
 
 	return loadConfig(objAPI)

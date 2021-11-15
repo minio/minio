@@ -30,7 +30,6 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 	var maxima int // Counter for remembering max occurrence of elements.
 
 	timeOccurenceMap := make(map[int64]int, len(modTimes))
-	dataDirOccurenceMap := make(map[string]int, len(dataDirs))
 	// Ignore the uuid sentinel and count the rest.
 	for _, time := range modTimes {
 		if time.Equal(timeSentinel) {
@@ -39,34 +38,21 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 		timeOccurenceMap[time.UnixNano()]++
 	}
 
-	for _, dataDir := range dataDirs {
-		if dataDir == errorDir {
-			continue
-		}
-		if dataDir == delMarkerDir {
-			dataDirOccurenceMap[delMarkerDir]++
-			continue
-		}
-		dataDirOccurenceMap[dataDir]++
-	}
-
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
 	for nano, count := range timeOccurenceMap {
-		t := time.Unix(0, nano)
+		t := time.Unix(0, nano).UTC()
 		if count > maxima || (count == maxima && t.After(modTime)) {
 			maxima = count
 			modTime = t
 		}
 	}
 
-	// Find the common cardinality from the previously collected
-	// occurrences of elements.
-	var dmaxima int
-	for ddataDir, count := range dataDirOccurenceMap {
-		if count > dmaxima {
-			dmaxima = count
+	for i, ddataDir := range dataDirs {
+		if modTimes[i].Equal(modTime) {
+			// Return the data-dir that matches modTime.
 			dataDir = ddataDir
+			break
 		}
 	}
 
@@ -136,14 +122,7 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	dataDirs := make([]string, len(partsMetadata))
-	for idx, fi := range partsMetadata {
-		if errs[idx] != nil {
-			dataDirs[idx] = errorDir
-			continue
-		}
-		dataDirs[idx] = fi.DataDir
-	}
+	dataDirs := getDataDirs(partsMetadata, errs)
 
 	// Reduce list of UUIDs to a single common value.
 	modTime, dataDir = commonTime(modTimes, dataDirs)
@@ -160,23 +139,34 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 	return onlineDisks, modTime, dataDir
 }
 
+func getDataDirs(partsMetadata []FileInfo, errs []error) []string {
+	dataDirs := make([]string, len(partsMetadata))
+	for idx, fi := range partsMetadata {
+		if errs[idx] != nil {
+			dataDirs[idx] = errorDir
+			continue
+		}
+		if fi.Deleted {
+			dataDirs[idx] = delMarkerDir
+		} else {
+			dataDirs[idx] = fi.DataDir
+		}
+	}
+	return dataDirs
+}
+
 // Returns the latest updated FileInfo files and error in case of failure.
 func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error, quorum int) (FileInfo, error) {
 	// There should be atleast half correct entries, if not return failure
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum); reducedErr != nil {
+	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum)
+	if reducedErr != nil {
 		return FileInfo{}, reducedErr
 	}
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	dataDirs := make([]string, len(partsMetadata))
-	for idx, fi := range partsMetadata {
-		if errs[idx] != nil {
-			continue
-		}
-		dataDirs[idx] = fi.DataDir
-	}
+	dataDirs := getDataDirs(partsMetadata, errs)
 
 	// Count all latest updated FileInfo values
 	var count int

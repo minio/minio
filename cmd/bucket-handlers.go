@@ -133,8 +133,6 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	// Add/update buckets that are not registered with the DNS
 	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
 	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
-	ctx, cancel := g.WithCancelOnError(GlobalContext)
-	defer cancel()
 
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
@@ -143,9 +141,12 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}, index)
 	}
 
-	if err := g.WaitErr(); err != nil {
-		logger.LogIf(ctx, err)
-		return
+	ctx := GlobalContext
+	for _, err := range g.Wait() {
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return
+		}
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
