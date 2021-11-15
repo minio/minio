@@ -76,7 +76,7 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
-	globalIAMSys.CreateUser(ucreds.AccessKey, madmin.UserInfo{
+	globalIAMSys.CreateUser(ctx, ucreds.AccessKey, madmin.UserInfo{
 		SecretKey: ucreds.SecretKey,
 		Status:    madmin.AccountEnabled,
 	})

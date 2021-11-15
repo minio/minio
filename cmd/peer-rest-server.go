@@ -77,7 +77,7 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := globalIAMSys.DeletePolicy(policyName); err != nil {
+	if err := globalIAMSys.DeletePolicy(r.Context(), policyName); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -103,7 +103,7 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := globalIAMSys.LoadPolicy(objAPI, policyName); err != nil {
+	if err := globalIAMSys.LoadPolicy(r.Context(), objAPI, policyName); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -130,7 +130,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 	}
 
 	_, isGroup := r.Form[peerRESTIsGroup]
-	if err := globalIAMSys.LoadPolicyMapping(objAPI, userOrGroup, isGroup); err != nil {
+	if err := globalIAMSys.LoadPolicyMapping(r.Context(), objAPI, userOrGroup, isGroup); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -182,7 +182,7 @@ func (s *peerRESTServer) LoadServiceAccountHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := globalIAMSys.LoadServiceAccount(accessKey); err != nil {
+	if err := globalIAMSys.LoadServiceAccount(r.Context(), accessKey); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -208,7 +208,7 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
+	if err := globalIAMSys.DeleteUser(r.Context(), accessKey); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -245,7 +245,7 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		userType = stsUser
 	}
 
-	if err = globalIAMSys.LoadUser(objAPI, accessKey, userType); err != nil {
+	if err = globalIAMSys.LoadUser(r.Context(), objAPI, accessKey, userType); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -266,7 +266,7 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	group := vars[peerRESTGroup]
-	err := globalIAMSys.LoadGroup(objAPI, group)
+	err := globalIAMSys.LoadGroup(r.Context(), objAPI, group)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

@@ -1353,7 +1353,7 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 	}
 
 	u := newUserIdentity(cred)
-	err := store.saveUserIdentity(context.Background(), accessKey, stsUser, u, options{ttl: ttl})
+	err := store.saveUserIdentity(ctx, accessKey, stsUser, u, options{ttl: ttl})
 	if err != nil {
 		return err
 	}

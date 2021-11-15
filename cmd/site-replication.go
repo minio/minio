@@ -947,9 +947,9 @@ func (c *SiteReplicationSys) IAMChangeHook(ctx context.Context, item madmin.SRIA
 func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyName string, p *iampolicy.Policy) error {
 	var err error
 	if p == nil {
-		err = globalIAMSys.DeletePolicy(policyName)
+		err = globalIAMSys.DeletePolicy(ctx, policyName)
 	} else {
-		err = globalIAMSys.SetPolicy(policyName, *p)
+		err = globalIAMSys.SetPolicy(ctx, policyName, *p)
 	}
 	if err != nil {
 		return wrapSRErr(err)
@@ -1061,7 +1061,7 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 
 // PeerPolicyMappingHandler - copies policy mapping to local.
 func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mapping madmin.SRPolicyMapping) error {
-	err := globalIAMSys.PolicyDBSet(mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
+	err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1116,7 +1116,7 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 	}
 
 	// Set these credentials to IAM.
-	if err := globalIAMSys.SetTempUser(cred.AccessKey, cred, ""); err != nil {
+	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
 		return fmt.Errorf("unable to save STS credential: %v", err)
 	}
 
@@ -1404,7 +1404,7 @@ func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) SRError {
 
 	{
 		// Replicate IAM policies on local to all peers.
-		allPolicies, err := globalIAMSys.ListPolicies("")
+		allPolicies, err := globalIAMSys.ListPolicies(ctx, "")
 		if err != nil {
 			return errSRBackendIssue(err)
 		}
