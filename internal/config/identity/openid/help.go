@@ -51,18 +51,6 @@ var (
 			Type:        "on|off",
 		},
 		config.HelpKV{
-			Key:         ClaimPrefix,
-			Description: `[DEPRECATED use 'claim_name'] JWT claim namespace prefix e.g. "customer1/"`,
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         RedirectURI,
-			Description: `[DEPRECATED use env 'MINIO_BROWSER_REDIRECT_URL'] Configure custom redirect_uri for OpenID login flow callback`,
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
 			Key:         Scopes,
 			Description: `Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"`,
 			Optional:    true,
@@ -83,6 +71,24 @@ var (
 		config.HelpKV{
 			Key:         KeyCloakAdminURL,
 			Description: `Specify Keycloak 'admin' REST API endpoint e.g. http://localhost:8080/auth/admin/`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         RedirectURIDynamic,
+			Description: `Enable 'Host' header based dynamic redirect URI`,
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         ClaimPrefix,
+			Description: `[DEPRECATED use 'claim_name'] JWT claim namespace prefix e.g. "customer1/"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         RedirectURI,
+			Description: `[DEPRECATED use env 'MINIO_BROWSER_REDIRECT_URL'] Configure custom redirect_uri for OpenID login flow callback`,
 			Optional:    true,
 			Type:        "string",
 		},
