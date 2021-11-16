@@ -38,4 +38,4 @@ issues:
       - "elseif:"
 
 service:
-  golangci-lint-version: 1.40.1 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.43.0 # use the fixed version to not introduce new linters unexpectedly
