@@ -424,7 +424,7 @@ func (j *xlMetaV2DeleteMarker) Signature() [4]byte {
 	crc := hashDeterministicBytes(c.MetaSys)
 	c.MetaSys = nil
 	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
-		crc = crc ^ xxhash.Sum64(bts)
+		crc ^= xxhash.Sum64(bts)
 		metaDataPoolPut(bts)
 	}
 
@@ -491,7 +491,7 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	c.MetaUser = nil
 
 	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
-		crc = crc ^ xxhash.Sum64(bts)
+		crc ^= xxhash.Sum64(bts)
 		metaDataPoolPut(bts)
 	}
 
