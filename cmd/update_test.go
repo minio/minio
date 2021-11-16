@@ -161,7 +161,7 @@ func TestUserAgent(t *testing.T) {
 		str := getUserAgent(testCase.mode)
 		expectedStr := testCase.expectedStr
 		if IsDocker() {
-			expectedStr = strings.Replace(expectedStr, "; source", "; docker; source", -1)
+			expectedStr = strings.ReplaceAll(expectedStr, "; source", "; docker; source")
 		}
 		if str != expectedStr {
 			t.Errorf("Test %d: expected: %s, got: %s", i+1, expectedStr, str)
@@ -216,7 +216,7 @@ func TestGetHelmVersion(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unable to create temporary file. %s", err)
 		}
-		if _, err = tmpfile.Write([]byte(content)); err != nil {
+		if _, err = tmpfile.WriteString(content); err != nil {
 			t.Fatalf("Unable to create temporary file. %s", err)
 		}
 		if err = tmpfile.Close(); err != nil {

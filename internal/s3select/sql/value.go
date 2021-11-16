@@ -231,6 +231,7 @@ func (v Value) ToArray() (val []Value, ok bool) {
 
 // IsNull - checks if value is missing.
 func (v Value) IsNull() bool {
+	//nolint:gocritic
 	switch v.value.(type) {
 	case nil:
 		return true
@@ -245,6 +246,7 @@ func (v Value) IsArray() (ok bool) {
 }
 
 func (v Value) isNumeric() bool {
+	//nolint:gocritic
 	switch v.value.(type) {
 	case int64, float64:
 		return true

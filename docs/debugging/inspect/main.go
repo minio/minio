@@ -56,12 +56,13 @@ func main() {
 		fatalErr(json.Unmarshal(got, &input))
 		r, err := os.Open(input.File)
 		fatalErr(err)
-		defer r.Close()
 		dstName := strings.TrimSuffix(input.File, ".enc") + ".zip"
 		w, err := os.Create(dstName)
 		fatalErr(err)
-		defer w.Close()
+
 		decrypt(input.Key, r, w)
+		r.Close()
+		w.Close()
 		fmt.Println("Output decrypted to", dstName)
 		return
 	}
@@ -78,14 +79,13 @@ func main() {
 	case 1:
 		r, err := os.Open(args[0])
 		fatalErr(err)
-		defer r.Close()
 		if len(*key) == 0 {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("Enter Decryption Key: ")
 
 			text, _ := reader.ReadString('\n')
 			// convert CRLF to LF
-			*key = strings.Replace(text, "\n", "", -1)
+			*key = strings.ReplaceAll(text, "\n", "")
 		}
 		*key = strings.TrimSpace(*key)
 		fatalIf(len(*key) != 72, "Unexpected key length: %d, want 72", len(*key))
@@ -93,9 +93,11 @@ func main() {
 		dstName := strings.TrimSuffix(args[0], ".enc") + ".zip"
 		w, err := os.Create(dstName)
 		fatalErr(err)
-		defer w.Close()
 
 		decrypt(*key, r, w)
+		r.Close()
+		w.Close()
+
 		fmt.Println("Output decrypted to", dstName)
 		return
 	default:

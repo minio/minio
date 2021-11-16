@@ -55,25 +55,25 @@ var replicationConfigTests = []struct {
 	tgtStatuses  map[string]replication.StatusType
 	expectedSync bool
 }{
-	{ //1. no replication config
+	{ // 1. no replication config
 		name:         "no replication config",
 		info:         ObjectInfo{Size: 100},
 		rcfg:         replicationConfig{Config: nil},
 		expectedSync: false,
 	},
-	{ //2. existing object replication config enabled, no versioning
+	{ // 2. existing object replication config enabled, no versioning
 		name:         "existing object replication config enabled, no versioning",
 		info:         ObjectInfo{Size: 100},
 		rcfg:         replicationConfig{Config: &configs[0]},
 		expectedSync: false,
 	},
-	{ //3. existing object replication config enabled, versioning suspended
+	{ // 3. existing object replication config enabled, versioning suspended
 		name:         "existing object replication config enabled, versioning suspended",
 		info:         ObjectInfo{Size: 100, VersionID: nullVersionID},
 		rcfg:         replicationConfig{Config: &configs[0]},
 		expectedSync: false,
 	},
-	{ //4. existing object replication enabled, versioning enabled; no reset in progress
+	{ // 4. existing object replication enabled, versioning enabled; no reset in progress
 		name: "existing object replication enabled, versioning enabled; no reset in progress",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.Completed,
@@ -130,7 +130,7 @@ var replicationConfigTests2 = []struct {
 		}}}},
 		expectedSync: true,
 	},
-	{ //3. replication status unset
+	{ // 3. replication status unset
 		name: "existing object replication on pre-existing unreplicated object",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.StatusType(""),
@@ -142,7 +142,7 @@ var replicationConfigTests2 = []struct {
 		dsc:          ReplicateDecision{targetsMap: map[string]replicateTargetDecision{"arn1": newReplicateTargetDecision("arn1", true, false)}},
 		expectedSync: true,
 	},
-	{ //4. replication status Complete
+	{ // 4. replication status Complete
 		name: "existing object replication on object in Completed replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:COMPLETED",
@@ -155,7 +155,7 @@ var replicationConfigTests2 = []struct {
 		}}}},
 		expectedSync: false,
 	},
-	{ //5. existing object replication enabled, versioning enabled, replication status Pending & reset ID present
+	{ // 5. existing object replication enabled, versioning enabled, replication status Pending & reset ID present
 		name: "existing object replication with reset in progress and object in Pending status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:PENDING;",
@@ -172,7 +172,7 @@ var replicationConfigTests2 = []struct {
 		}}},
 		},
 	},
-	{ //6. existing object replication enabled, versioning enabled, replication status Failed & reset ID present
+	{ // 6. existing object replication enabled, versioning enabled, replication status Failed & reset ID present
 		name: "existing object replication with reset in progress and object in Failed status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:FAILED;",
@@ -189,7 +189,7 @@ var replicationConfigTests2 = []struct {
 		},
 		expectedSync: true,
 	},
-	{ //7. existing object replication enabled, versioning enabled, replication status unset & reset ID present
+	{ // 7. existing object replication enabled, versioning enabled, replication status unset & reset ID present
 		name: "existing object replication with reset in progress and object never replicated before",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatus: replication.StatusType(""),
@@ -207,7 +207,7 @@ var replicationConfigTests2 = []struct {
 		expectedSync: true,
 	},
 
-	{ //8. existing object replication enabled, versioning enabled, replication status Complete & reset ID present
+	{ // 8. existing object replication enabled, versioning enabled, replication status Complete & reset ID present
 		name: "existing object replication enabled - reset in progress for an object in Completed status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:COMPLETED;",
@@ -224,7 +224,7 @@ var replicationConfigTests2 = []struct {
 		}}},
 		},
 	},
-	{ //9. existing object replication enabled, versioning enabled, replication status Pending & reset ID different
+	{ // 9. existing object replication enabled, versioning enabled, replication status Pending & reset ID different
 		name: "existing object replication enabled, newer reset in progress on object in Pending replication status",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:PENDING;",
@@ -243,7 +243,7 @@ var replicationConfigTests2 = []struct {
 		}}},
 		},
 	},
-	{ //10. existing object replication enabled, versioning enabled, replication status Complete & reset done
+	{ // 10. existing object replication enabled, versioning enabled, replication status Complete & reset done
 		name: "reset done on object in Completed Status - ineligbile for re-replication",
 		info: ObjectInfo{Size: 100,
 			ReplicationStatusInternal: "arn1:COMPLETED;",

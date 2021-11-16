@@ -26,13 +26,14 @@ import (
 )
 
 func initScramClient(cfg Config, config *sarama.Config) {
-	if cfg.SASL.Mechanism == "sha512" {
+	switch cfg.SASL.Mechanism {
+	case "sha512":
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA512} }
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
-	} else if cfg.SASL.Mechanism == "sha256" {
+	case "sha256":
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA256} }
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
-	} else {
+	default:
 		// default to PLAIN
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypePlaintext)
 	}

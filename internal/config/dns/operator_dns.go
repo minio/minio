@@ -201,9 +201,9 @@ func Authentication(username, password string) OperatorOption {
 }
 
 // RootCAs - add custom trust certs pool
-func RootCAs(CAs *x509.CertPool) OperatorOption {
+func RootCAs(certPool *x509.CertPool) OperatorOption {
 	return func(args *OperatorDNS) {
-		args.rootCAs = CAs
+		args.rootCAs = certPool
 	}
 }
 

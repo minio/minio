@@ -136,7 +136,7 @@ func (w *LimitWriter) Write(p []byte) (n int, err error) {
 	var n1 int
 	if w.skipBytes > 0 {
 		if w.skipBytes >= int64(len(p)) {
-			w.skipBytes = w.skipBytes - int64(len(p))
+			w.skipBytes -= int64(len(p))
 			return n, nil
 		}
 		p = p[w.skipBytes:]
@@ -147,11 +147,11 @@ func (w *LimitWriter) Write(p []byte) (n int, err error) {
 	}
 	if w.wLimit < int64(len(p)) {
 		n1, err = w.Writer.Write(p[:w.wLimit])
-		w.wLimit = w.wLimit - int64(n1)
+		w.wLimit -= int64(n1)
 		return n, err
 	}
 	n1, err = w.Writer.Write(p)
-	w.wLimit = w.wLimit - int64(n1)
+	w.wLimit -= int64(n1)
 	return n, err
 }
 

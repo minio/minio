@@ -54,6 +54,7 @@ func TestNetworkError_Unwrap(t *testing.T) {
 			n := &NetworkError{
 				Err: tt.err,
 			}
+			//nolint:gocritic
 			if tt.target == nil {
 				var netErrInterface net.Error
 				if errors.As(n, &netErrInterface) != tt.want {

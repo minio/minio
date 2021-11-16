@@ -1623,20 +1623,18 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 					continue
 				}
 				for k, v := range metric.Histogram {
-					l := append(labels, metric.HistogramBucketLabel)
-					lv := append(values, k)
 					out <- prometheus.MustNewConstMetric(
 						prometheus.NewDesc(
 							prometheus.BuildFQName(string(metric.Description.Namespace),
 								string(metric.Description.Subsystem),
 								string(metric.Description.Name)),
 							metric.Description.Help,
-							l,
+							append(labels, metric.HistogramBucketLabel),
 							metric.StaticLabels,
 						),
 						prometheus.GaugeValue,
 						float64(v),
-						lv...)
+						append(values, k)...)
 				}
 				continue
 			}

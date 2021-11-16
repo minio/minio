@@ -1574,7 +1574,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	/// if Content-Length is unknown/missing, deny the request
+	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
 	if rAuthType == authTypeStreamingSigned {
@@ -1595,7 +1595,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	/// maximum Upload size for objects in a single operation
+	// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
@@ -1924,7 +1924,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	/// if Content-Length is unknown/missing, deny the request
+	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
 	if rAuthType == authTypeStreamingSigned {
@@ -1946,7 +1946,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	/// maximum Upload size for objects in a single operation
+	// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
@@ -2155,7 +2155,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	writeSuccessResponseHeadersOnly(w)
 }
 
-/// Multipart objectAPIHandlers
+// Multipart objectAPIHandlers
 
 // NewMultipartUploadHandler - New multipart upload.
 // Notice: The S3 client can send secret keys in headers for encryption related jobs,
@@ -2478,7 +2478,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	/// maximum copy size for multipart objects in a single operation
+	// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
@@ -2670,7 +2670,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	/// if Content-Length is unknown/missing, throw away
+	// if Content-Length is unknown/missing, throw away
 	size := r.ContentLength
 
 	rAuthType := getRequestAuthType(r)
@@ -2693,7 +2693,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	/// maximum Upload size for multipart objects in a single operation
+	// maximum Upload size for multipart objects in a single operation
 	if isMaxAllowedPartSize(size) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
@@ -3319,7 +3319,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 }
 
-/// Delete objectAPIHandlers
+// Delete objectAPIHandlers
 
 // DeleteObjectHandler - delete an object
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {

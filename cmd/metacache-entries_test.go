@@ -81,6 +81,7 @@ func Test_metaCacheEntries_merge(t *testing.T) {
 	}
 	// Merge b into a
 	a.merge(b, -1)
+	//nolint:gocritic
 	want := append(loadMetacacheSampleNames, loadMetacacheSampleNames...)
 	sort.Strings(want)
 	got := a.entries().names()

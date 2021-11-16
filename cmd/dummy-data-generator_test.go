@@ -61,7 +61,7 @@ func NewDummyDataGen(totalLength, skipOffset int64) io.ReadSeeker {
 		panic("Negative rotations are not allowed")
 	}
 
-	skipOffset = skipOffset % int64(len(alphabets))
+	skipOffset %= int64(len(alphabets))
 	as := make([]byte, 2*len(alphabets))
 	copy(as, alphabets)
 	copy(as[len(alphabets):], alphabets)

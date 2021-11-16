@@ -491,7 +491,7 @@ func (h *healSequence) getScannedItemsCount() int64 {
 	defer h.mutex.RUnlock()
 
 	for _, v := range h.scannedItemsMap {
-		count = count + v
+		count += v
 	}
 	return count
 }

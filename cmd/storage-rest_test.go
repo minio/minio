@@ -29,13 +29,8 @@ import (
 	xnet "github.com/minio/pkg/net"
 )
 
-///////////////////////////////////////////////////////////////////////////////
-//
 // Storage REST server, storageRESTReceiver and StorageRESTClient are
 // inter-dependent, below test functions are sufficient to test all of them.
-//
-///////////////////////////////////////////////////////////////////////////////
-
 func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 	testCases := []struct {
 		expectErr bool

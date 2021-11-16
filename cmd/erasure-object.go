@@ -46,7 +46,7 @@ import (
 // list all errors which can be ignored in object operations.
 var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
-/// Object Operations
+// Object Operations
 
 func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
 	for _, onlineDisk := range onlineDisks {

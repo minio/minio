@@ -42,11 +42,9 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, 
 	if prevErr == nil {
 		l.IDMap[id] = err
 		shouldLog = true
-	} else {
-		if prevErr.Error() != err.Error() {
-			l.IDMap[id] = err
-			shouldLog = true
-		}
+	} else if prevErr.Error() != err.Error() {
+		l.IDMap[id] = err
+		shouldLog = true
 	}
 	l.Unlock()
 

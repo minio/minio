@@ -32,7 +32,7 @@ import (
 // number of log messages to buffer
 const defaultLogBufferCount = 10000
 
-//HTTPConsoleLoggerSys holds global console logger state
+// HTTPConsoleLoggerSys holds global console logger state
 type HTTPConsoleLoggerSys struct {
 	sync.RWMutex
 	pubsub   *pubsub.PubSub

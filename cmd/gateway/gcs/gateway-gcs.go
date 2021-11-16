@@ -531,7 +531,7 @@ func toGCSPageToken(name string) string {
 		byte(length & 0xFF),
 	}
 
-	length = length >> 7
+	length >>= 7
 	if length > 0 {
 		b = append(b, byte(length&0xFF))
 	}

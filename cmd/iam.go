@@ -351,67 +351,34 @@ func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (e
 	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
-	if event.isCreated {
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
-		case svcPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
-			err = sys.store.GroupNotificationHandler(ctx, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
-			err = sys.store.PolicyNotificationHandler(ctx, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
-		}
-	} else {
-		// delete event
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
-		case svcPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
-			err = sys.store.GroupNotificationHandler(ctx, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
-			err = sys.store.PolicyNotificationHandler(ctx, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
-		}
+	switch {
+	case usersPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
+	case stsPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
+	case svcPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
+	case groupsPrefix:
+		group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
+		err = sys.store.GroupNotificationHandler(ctx, group)
+	case policyPrefix:
+		policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
+		err = sys.store.PolicyNotificationHandler(ctx, policyName)
+	case policyDBUsersPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
+	case policyDBSTSUsersPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
+	case policyDBGroupsPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
 	}
 	return err
 }

@@ -222,8 +222,8 @@ func GenerateCredentials() (accessKey, secretKey string, err error) {
 		return "", "", err
 	}
 
-	secretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
-		"/", "+", -1)
+	secretKey = strings.ReplaceAll(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
+		"/", "+")
 
 	return accessKey, secretKey, nil
 }

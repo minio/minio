@@ -86,7 +86,7 @@ func (opts Config) Wait(currentIO func() int, systemIO func() int) {
 				} else {
 					time.Sleep(waitTick)
 				}
-				tmpMaxWait = tmpMaxWait - waitTick
+				tmpMaxWait -= waitTick
 			}
 			if tmpMaxWait <= 0 {
 				return

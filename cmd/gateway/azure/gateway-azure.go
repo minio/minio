@@ -274,7 +274,7 @@ func s3MetaToAzureProperties(ctx context.Context, s3Metadata map[string]string) 
 	encodeKey := func(key string) string {
 		tokens := strings.Split(key, "_")
 		for i := range tokens {
-			tokens[i] = strings.Replace(tokens[i], "-", "_", -1)
+			tokens[i] = strings.ReplaceAll(tokens[i], "-", "_")
 		}
 		return strings.Join(tokens, "__")
 	}
@@ -367,7 +367,7 @@ func azurePropertiesToS3Meta(meta azblob.Metadata, props azblob.BlobHTTPHeaders,
 	decodeKey := func(key string) string {
 		tokens := strings.Split(key, "__")
 		for i := range tokens {
-			tokens[i] = strings.Replace(tokens[i], "_", "-", -1)
+			tokens[i] = strings.ReplaceAll(tokens[i], "_", "-")
 		}
 		return strings.Join(tokens, "_")
 	}

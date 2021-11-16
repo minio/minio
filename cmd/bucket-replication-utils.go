@@ -172,7 +172,7 @@ func (o *ObjectInfo) TargetReplicationStatus(arn string) (status replication.Sta
 type replicateTargetDecision struct {
 	Replicate   bool   // Replicate to this target
 	Synchronous bool   // Synchronous replication configured.
-	Arn         string //ARN of replication target
+	Arn         string // ARN of replication target
 	ID          string
 }
 

@@ -57,7 +57,7 @@ const (
 	DeleteVersionAction
 	// TransitionAction transitions a particular object after evaluating lifecycle transition rules
 	TransitionAction
-	//TransitionVersionAction transitions a particular object version after evaluating lifecycle transition rules
+	// TransitionVersionAction transitions a particular object version after evaluating lifecycle transition rules
 	TransitionVersionAction
 	// DeleteRestoredAction means the temporarily restored object needs to be removed after evaluating lifecycle rules
 	DeleteRestoredAction

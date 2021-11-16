@@ -323,11 +323,12 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 	status := vars["status"]
 
 	var err error
-	if status == statusEnabled {
+	switch status {
+	case statusEnabled:
 		err = globalIAMSys.SetGroupStatus(ctx, group, true)
-	} else if status == statusDisabled {
+	case statusDisabled:
 		err = globalIAMSys.SetGroupStatus(ctx, group, false)
-	} else {
+	default:
 		err = errInvalidArgument
 	}
 	if err != nil {

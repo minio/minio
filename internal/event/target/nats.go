@@ -172,6 +172,7 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 	}
 
 	var addressURL string
+	//nolint:gocritic
 	if n.Username != "" && n.Password != "" {
 		addressURL = scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
 	} else if n.Token != "" {
@@ -219,18 +220,14 @@ func (target *NATSTarget) IsActive() (bool, error) {
 	if target.args.Streaming.Enable {
 		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
 			target.stanConn, connErr = target.args.connectStan()
-		} else {
-			if !target.stanConn.NatsConn().IsConnected() {
-				return false, errNotConnected
-			}
+		} else if !target.stanConn.NatsConn().IsConnected() {
+			return false, errNotConnected
 		}
 	} else {
 		if target.natsConn == nil {
 			target.natsConn, connErr = target.args.connectNats()
-		} else {
-			if !target.natsConn.IsConnected() {
-				return false, errNotConnected
-			}
+		} else if !target.natsConn.IsConnected() {
+			return false, errNotConnected
 		}
 	}
 

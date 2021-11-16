@@ -191,7 +191,7 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 		mac.Write(encryptedKey.IV)
 		sealingKey := mac.Sum(nil)
 
-		block, err := aes.NewCipher(sealingKey[:])
+		block, err := aes.NewCipher(sealingKey)
 		if err != nil {
 			return nil, err
 		}

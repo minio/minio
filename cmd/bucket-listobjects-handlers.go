@@ -59,8 +59,8 @@ func validateListObjectsArgs(marker, delimiter, encodingType string, maxKeys int
 	}
 
 	if encodingType != "" {
-		// Only url encoding type is supported
-		if strings.ToLower(encodingType) != "url" {
+		// AWS S3 spec only supports 'url' encoding type
+		if !strings.EqualFold(encodingType, "url") {
 			return ErrInvalidEncodingMethod
 		}
 	}

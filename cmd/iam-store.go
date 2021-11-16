@@ -171,7 +171,7 @@ func newMappedPolicy(policy string) MappedPolicy {
 
 // key options
 type options struct {
-	ttl int64 //expiry in seconds
+	ttl int64 // expiry in seconds
 }
 
 type iamWatchEvent struct {
@@ -558,9 +558,7 @@ func (store *IAMStoreSys) AddUsersToGroup(ctx context.Context, group string, mem
 		// exist.
 		gi = newGroupInfo(members)
 	} else {
-		mergedMembers := append(gi.Members, members...)
-		uniqMembers := set.CreateStringSet(mergedMembers...).ToSlice()
-		gi.Members = uniqMembers
+		gi.Members = set.CreateStringSet(append(gi.Members, members...)...).ToSlice()
 	}
 
 	if err := store.saveGroupInfo(ctx, group, gi); err != nil {

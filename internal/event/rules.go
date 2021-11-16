@@ -41,7 +41,7 @@ func NewPattern(prefix, suffix string) (pattern string) {
 		pattern += suffix
 	}
 
-	pattern = strings.Replace(pattern, "**", "*", -1)
+	pattern = strings.ReplaceAll(pattern, "**", "*")
 
 	return pattern
 }

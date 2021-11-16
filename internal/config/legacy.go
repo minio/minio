@@ -19,7 +19,7 @@ package config
 
 import "github.com/minio/minio/internal/auth"
 
-//// One time migration code section
+// One time migration code section
 
 // SetCredentials - One time migration code needed, for migrating from older config to new for server credentials.
 func SetCredentials(c Config, cred auth.Credentials) {

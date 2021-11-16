@@ -1356,6 +1356,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	ldap := madmin.LDAP{}
 	if globalLDAPConfig.Enabled {
 		ldapConn, err := globalLDAPConfig.Connect()
+		//nolint:gocritic
 		if err != nil {
 			ldap.Status = string(madmin.ItemOffline)
 		} else if ldapConn == nil {
@@ -1636,8 +1637,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	anonymizeCmdLine := func(cmdLine string) string {
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
-			anonCmdLine := strings.Replace(cmdLine, globalLocalNodeName, "server1", -1)
-			return strings.Replace(anonCmdLine, globalMinioConsoleHost, "server1", -1)
+			anonCmdLine := strings.ReplaceAll(cmdLine, globalLocalNodeName, "server1")
+			return strings.ReplaceAll(anonCmdLine, globalMinioConsoleHost, "server1")
 		}
 
 		// Server start command regex groups:

@@ -235,7 +235,7 @@ func TestListOnlineDisks(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to open %s: %s\n", filePath, err)
 					}
-					f.Write([]byte("oops")) // Will cause bitrot error
+					f.WriteString("oops") // Will cause bitrot error
 					f.Close()
 					break
 				}
@@ -414,7 +414,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to open %s: %s\n", filePath, err)
 					}
-					f.Write([]byte("oops")) // Will cause bitrot error
+					f.WriteString("oops") // Will cause bitrot error
 					f.Close()
 					break
 				}
@@ -563,7 +563,7 @@ func TestDisksWithAllParts(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to open %s: %s\n", filePath, err)
 				}
-				f.Write([]byte("oops")) // Will cause bitrot error
+				f.WriteString("oops") // Will cause bitrot error
 				f.Close()
 			}
 		}
