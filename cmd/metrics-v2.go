@@ -99,18 +99,18 @@ const (
 	total          MetricName = "total"
 	freeInodes     MetricName = "free_inodes"
 
-	failedCount    MetricName = "failed_count"
-	failedBytes    MetricName = "failed_bytes"
-	freeBytes      MetricName = "free_bytes"
-	readBytes      MetricName = "read_bytes"
-	rcharBytes     MetricName = "rchar_bytes"
-	receivedBytes  MetricName = "received_bytes"
-	latencyNanoSec MetricName = "latency_ns"
-	sentBytes      MetricName = "sent_bytes"
-	totalBytes     MetricName = "total_bytes"
-	usedBytes      MetricName = "used_bytes"
-	writeBytes     MetricName = "write_bytes"
-	wcharBytes     MetricName = "wchar_bytes"
+	failedCount     MetricName = "failed_count"
+	failedBytes     MetricName = "failed_bytes"
+	freeBytes       MetricName = "free_bytes"
+	readBytes       MetricName = "read_bytes"
+	rcharBytes      MetricName = "rchar_bytes"
+	receivedBytes   MetricName = "received_bytes"
+	latencyMilliSec MetricName = "latency_ms"
+	sentBytes       MetricName = "sent_bytes"
+	totalBytes      MetricName = "total_bytes"
+	usedBytes       MetricName = "used_bytes"
+	writeBytes      MetricName = "write_bytes"
+	wcharBytes      MetricName = "wchar_bytes"
 
 	usagePercent MetricName = "update_percent"
 
@@ -414,8 +414,8 @@ func getBucketRepLatencyMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
 		Subsystem: replicationSubsystem,
-		Name:      latencyNanoSec,
-		Help:      "Replication latency.",
+		Name:      latencyMilliSec,
+		Help:      "Replication latency in milliseconds.",
 		Type:      histogramMetric,
 	}
 }

@@ -30,18 +30,19 @@ type ReplicationLatency struct {
 	UploadHistogram LastMinuteLatencies
 }
 
-// Merge two replication latency into a new one, thread-unsafe
+// Merge two replication latency into a new one
 func (rl ReplicationLatency) merge(other ReplicationLatency) (newReplLatency ReplicationLatency) {
 	newReplLatency.UploadHistogram = rl.UploadHistogram.Merge(other.UploadHistogram)
 	return
 }
 
-// Get upload latency, thread-unsafe
+// Get upload latency of each object size range
 func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
 	ret = make(map[string]uint64)
 	avg := rl.UploadHistogram.GetAvg()
 	for k, v := range avg {
-		ret[sizeTagToString(k)] = v.avg()
+		// Convert nanoseconds to milliseconds
+		ret[sizeTagToString(k)] = v.avg() / (1000 * 1000)
 	}
 	return
 }
@@ -51,7 +52,7 @@ func (rl *ReplicationLatency) update(size int64, duration time.Duration) {
 	rl.UploadHistogram.Add(size, duration)
 }
 
-// Safe clone replication latency
+// Clone replication latency
 func (rl ReplicationLatency) clone() ReplicationLatency {
 	return ReplicationLatency{
 		UploadHistogram: rl.UploadHistogram.Clone(),
