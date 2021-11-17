@@ -38,7 +38,7 @@ type SrvRecord struct {
 	TTL      uint32      `json:"ttl,omitempty"`
 
 	// Holds info about when the entry was created first.
-	CreationDate time.Time `json:"creationDate"`
+	CreationDate time.Time `json:"creationDate,omitempty"`
 
 	// When a SRV record with a "Host: IP-address" is added, we synthesize
 	// a srv.Target domain name.  Normally we convert the full Key where

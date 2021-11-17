@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/auth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -879,12 +880,11 @@ var (
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
-var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	cred := getReqAccessCred(r, globalSite.Region)
+var getRemoteInstanceClient = func(cred auth.Credentials, host string) (*miniogo.Core, error) {
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
 	return miniogo.NewCore(host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
+		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:    globalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
@@ -908,11 +908,8 @@ func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer
 	if globalDNSConfig == nil {
 		return false
 	}
-	if globalBucketFederation {
-		_, err := objAPI.GetBucketInfo(ctx, bucket)
-		return err == toObjectErr(errVolumeNotFound, bucket)
-	}
-	return false
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	return errors.Is(err, toObjectErr(errVolumeNotFound, bucket))
 }
 
 // CopyObjectHandler - Copy Object
@@ -957,8 +954,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+	cred, _, s3Err := checkRequestAuthTypeCredential(ctx, r, policy.PutObjectAction, dstBucket, dstObject)
+	if s3Err != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
 
@@ -1438,16 +1436,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(cred, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL)
 			return
 		}
+
 		tag, err := tags.ParseObjectTags(objTags)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+
 		// Remove the metadata for remote calls.
 		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"compression")
 		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"actual-size")
@@ -2353,7 +2353,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
+	cred, _, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.PutObjectAction, dstBucket, dstObject)
+	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
@@ -2523,7 +2524,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(cred, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL)
 			return
@@ -3376,14 +3377,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
-	}
-
-	if globalDNSConfig != nil {
-		_, err := globalDNSConfig.Get(bucket)
-		if err != nil && err != dns.ErrNotImplemented {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
 	}
 
 	opts, err := delOpts(ctx, r, bucket, object)

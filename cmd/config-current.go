@@ -405,8 +405,9 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		}
 	}
 	if err == nil && dnsURL != "" {
-		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
+		globalDNSConfig, err = dns.NewWebhookDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
+			dns.PublicDomainNames(globalDomainNames...),
 			dns.RootCAs(globalRootCAs))
 		if err != nil {
 			if globalIsGateway {
@@ -461,13 +462,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			}
 		}
 	}
-
-	// Bucket federation is 'true' only when IAM assets are not namespaced
-	// per tenant and all tenants interested in globally available users
-	// if namespace was requested such as specifying etcdPathPrefix then
-	// we assume that users are interested in global bucket support
-	// but not federation.
-	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
 
 	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {

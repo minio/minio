@@ -1,6 +1,5 @@
-# Federation Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) *Federation feature is deprecated and should be avoided for future deployments*
-
-This document explains how to configure MinIO with `Bucket lookup from DNS` style federation.
+# Bucket DNS Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+This document explains how to configure MinIO with `Bucket lookup from DNS`.
 
 ## Get started
 
@@ -8,16 +7,15 @@ This document explains how to configure MinIO with `Bucket lookup from DNS` styl
 
 Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
 
-### 2. Run MinIO in federated mode
+### 2. Run MinIO in Bucket DNS mode
+Bucket lookup from DNS requires
 
-Bucket lookup from DNS federation requires two dependencies
-
-- etcd (for bucket DNS service records)
-- CoreDNS (for DNS management based on populated bucket DNS service records, optional)
+- Centralized Bucket DNS lookup endpoint, can be etcd or a webhook service.
+- Centralized credentials management, must be etcd.
 
 ## Architecture
 
-![bucket-lookup](https://github.com/minio/minio/blob/master/docs/federation/lookup/bucket-lookup.png?raw=true)
+![bucket-lookup](https://github.com/minio/minio/blob/master/docs/bucket/dns/bucket-lookup.png?raw=true)
 
 ### Environment variables
 

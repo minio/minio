@@ -202,21 +202,6 @@ func (c *CoreDNS) Delete(bucket string) error {
 	return nil
 }
 
-// DeleteRecord - Removes a specific DNS entry
-func (c *CoreDNS) DeleteRecord(record SrvRecord) error {
-	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), c.prefixPath)
-
-		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-		_, err := c.etcdClient.Delete(ctx, key+etcdPathSeparator+record.Host)
-		cancel()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // String stringer name for this implementation of dns.Store
 func (c *CoreDNS) String() string {
 	return "etcdDNS"

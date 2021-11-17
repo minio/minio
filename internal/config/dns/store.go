@@ -47,7 +47,6 @@ type Store interface {
 	Get(bucket string) ([]SrvRecord, error)
 	Delete(bucket string) error
 	List() (map[string][]SrvRecord, error)
-	DeleteRecord(record SrvRecord) error
 	Close() error
 	String() string
 }

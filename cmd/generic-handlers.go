@@ -30,7 +30,6 @@ import (
 	xnet "github.com/minio/pkg/net"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/http/stats"
@@ -371,8 +370,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalDNSConfig == nil || !globalBucketFederation ||
-			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+		if globalDNSConfig == nil || guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 			h.ServeHTTP(w, r)
 			return
@@ -406,15 +404,14 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 				return
 			}
 		}
+
 		sr, err := globalDNSConfig.Get(bucket)
 		if err != nil {
-			if err == dns.ErrNoEntriesFound {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL)
-			} else {
-				writeErrorResponse(r.Context(), w, toAPIError(r.Context(), err), r.URL)
-			}
+			// No DNS records return, send the request locally to fail.
+			h.ServeHTTP(w, r)
 			return
 		}
+
 		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
 			r.URL.Scheme = "http"
 			if globalIsTLS {

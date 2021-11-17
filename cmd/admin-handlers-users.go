@@ -24,12 +24,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sort"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -1095,36 +1093,15 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	var dataUsageInfo DataUsageInfo
 	var err error
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
 	if !globalIsGateway {
 		// Load the latest calculated data usage
 		dataUsageInfo, _ = loadDataUsageFromBackend(ctx, objectAPI)
-	}
-
-	// If etcd, dns federation configured list buckets from etcd.
-	var buckets []BucketInfo
-	if globalDNSConfig != nil && globalBucketFederation {
-		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && !IsErrIgnored(err,
-			dns.ErrNoEntriesFound,
-			dns.ErrDomainMissing) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		for _, dnsRecords := range dnsBuckets {
-			buckets = append(buckets, BucketInfo{
-				Name:    dnsRecords[0].Key,
-				Created: dnsRecords[0].CreationDate,
-			})
-		}
-		sort.Slice(buckets, func(i, j int) bool {
-			return buckets[i].Name < buckets[j].Name
-		})
-	} else {
-		buckets, err = objectAPI.ListBuckets(ctx)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
 	}
 
 	accountName := cred.AccessKey
@@ -1165,7 +1142,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			}
 			// Fetch the prefix usage of the current bucket
 			var prefixUsage map[string]uint64
-			if enablePrefixUsage {
+
+			if enablePrefixUsage && !globalIsGateway {
 				prefixUsage, _ = loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name)
 			}
 

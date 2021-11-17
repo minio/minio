@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -81,7 +82,14 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	// Get buckets in the DNS
 	dnsBuckets, err := globalDNSConfig.List()
-	if err != nil && !IsErrIgnored(err, dns.ErrNoEntriesFound, dns.ErrNotImplemented, dns.ErrDomainMissing) {
+	if errors.Is(err, dns.ErrNoEntriesFound) {
+		return
+	}
+
+	// This means that domain is updated, we should update
+	// all bucket entries with new domain name.
+	domainMissing := errors.Is(err, dns.ErrDomainMissing)
+	if err != nil && !domainMissing {
 		logger.LogIf(GlobalContext, err)
 		return
 	}
@@ -90,9 +98,6 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	bucketsToBeUpdated := set.NewStringSet()
 	bucketsInConflict := set.NewStringSet()
 
-	// This means that domain is updated, we should update
-	// all bucket entries with new domain name.
-	domainMissing := err == dns.ErrDomainMissing
 	if dnsBuckets != nil {
 		for _, bucket := range buckets {
 			bucketsSet.Add(bucket.Name)
@@ -312,7 +317,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil && globalBucketFederation {
+	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
 			dns.ErrNoEntriesFound,
@@ -330,8 +335,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		sort.Slice(bucketsInfo, func(i, j int) bool {
 			return bucketsInfo[i].Name < bucketsInfo[j].Name
 		})
+	}
 
-	} else {
+	if len(bucketsInfo) == 0 {
 		// Invoke the list buckets.
 		var err error
 		bucketsInfo, err = listBuckets(ctx)
@@ -741,45 +747,44 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if globalDNSConfig != nil {
 		sr, err := globalDNSConfig.Get(bucket)
-		if err != nil {
-			// ErrNotImplemented indicates a DNS backend that doesn't need to check if bucket already
-			// exists elsewhere
-			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
-				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-
-				if err = globalDNSConfig.Put(bucket); err != nil {
-					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: false, NoRecreate: true})
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-
-				// Load updated bucket metadata into memory.
-				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
-
-				// Make sure to add Location information here only for bucket
-				w.Header().Set(xhttp.Location,
-					getObjectLocation(r, globalDomainNames, bucket, ""))
-
-				writeSuccessResponseHeadersOnly(w)
-
-				sendEvent(eventArgs{
-					EventName:    event.BucketCreated,
-					BucketName:   bucket,
-					ReqParams:    extractReqParams(r),
-					RespElements: extractRespElements(w),
-					UserAgent:    r.UserAgent(),
-					Host:         handlers.GetSourceIP(r),
-				})
-
-				return
-			}
+		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
+		}
+		if err == dns.ErrNoEntriesFound {
+			// Proceed to creating a bucket locally.
+			if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 
+			if err = globalDNSConfig.Put(bucket); err != nil {
+				objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
+					Force:      true,
+					NoRecreate: true,
+				})
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+
+			// Load updated bucket metadata into memory.
+			globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
+
+			// Make sure to add Location information here only for bucket
+			w.Header().Set(xhttp.Location,
+				getObjectLocation(r, globalDomainNames, bucket, ""))
+
+			writeSuccessResponseHeadersOnly(w)
+
+			sendEvent(eventArgs{
+				EventName:    event.BucketCreated,
+				BucketName:   bucket,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
+			})
+			return
 		}
 		apiErr := ErrBucketAlreadyExists
 		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {

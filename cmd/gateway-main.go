@@ -253,7 +253,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerAPIRouter(router)
 
 	// Enable bucket forwarding handler only if bucket federation is enabled.
-	if globalDNSConfig != nil && globalBucketFederation {
+	if globalDNSConfig != nil {
 		globalHandlers = append(globalHandlers, setBucketForwardingHandler)
 	}
 
