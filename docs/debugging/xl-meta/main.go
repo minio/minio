@@ -156,48 +156,6 @@ FLAGS:
 					return nil, err
 				}
 				data = b
-			case 3:
-				v, b, err := msgp.ReadBytesZC(b)
-				if err != nil {
-					return nil, err
-				}
-				if _, nbuf, err := msgp.ReadUint32Bytes(b); err == nil {
-					// Read metadata CRC (added in v2, ignore if not found)
-					b = nbuf
-				}
-
-				nVers, v, err := decodeXLHeaders(v)
-				if err != nil {
-					return nil, err
-				}
-				var versions = struct {
-					Versions []json.RawMessage
-					Headers  []json.RawMessage
-				}{
-					Versions: make([]json.RawMessage, nVers),
-					Headers:  make([]json.RawMessage, nVers),
-				}
-				err = decodeVersions(v, nVers, func(idx int, hdr, meta []byte) error {
-					var buf bytes.Buffer
-					if _, err := msgp.UnmarshalAsJSON(&buf, hdr); err != nil {
-						return err
-					}
-					versions.Headers[idx] = buf.Bytes()
-					buf = bytes.Buffer{}
-					if _, err := msgp.UnmarshalAsJSON(&buf, meta); err != nil {
-						return err
-					}
-					versions.Versions[idx] = buf.Bytes()
-					return nil
-				})
-				if err != nil {
-					return nil, err
-				}
-				enc := json.NewEncoder(buf)
-				if err := enc.Encode(versions); err != nil {
-					return nil, err
-				}
-				data = b
 			default:
 				return nil, fmt.Errorf("unknown metadata version %d", minor)
 			}
