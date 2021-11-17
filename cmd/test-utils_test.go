@@ -357,7 +357,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	globalEtcdClient = nil
 
-	initAllSubsystems(ctx, objLayer)
+	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
@@ -1521,7 +1521,7 @@ func removeDiskN(disks []string, n int) {
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	newAllSubsystems()
 
-	initAllSubsystems(ctx, obj)
+	initConfigSubsystem(ctx, obj)
 
 	globalIAMSys.Init(ctx, obj, globalEtcdClient, 2*time.Second)
 
@@ -1808,7 +1808,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 			t.Fatal("Unexpected error", err)
 		}
-		initAllSubsystems(ctx, objLayer)
+		initConfigSubsystem(ctx, objLayer)
 		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 		// Executing the object layer tests for single node setup.
@@ -1833,7 +1833,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 		}
 		setObjectLayer(objLayer)
-		initAllSubsystems(ctx, objLayer)
+		initConfigSubsystem(ctx, objLayer)
 		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 		// Executing the object layer tests for Erasure.
