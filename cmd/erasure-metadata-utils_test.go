@@ -54,6 +54,10 @@ func TestDiskCount(t *testing.T) {
 // Test for reduceErrs, reduceErr reduces collection
 // of errors into a single maximal error with in the list.
 func TestReduceErrs(t *testing.T) {
+	canceledErrs := make([]error, 0, 5)
+	for i := 0; i < 5; i++ {
+		canceledErrs = append(canceledErrs, fmt.Errorf("error %d: %w", i, context.Canceled))
+	}
 	// List all of all test cases to validate various cases of reduce errors.
 	testCases := []struct {
 		errs        []error
@@ -86,6 +90,8 @@ func TestReduceErrs(t *testing.T) {
 		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
 			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
 			nil, nil},
+		// Checks if wrapped context cancelation errors are grouped as one.
+		{canceledErrs, nil, context.Canceled},
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
