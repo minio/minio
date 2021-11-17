@@ -19,6 +19,7 @@ package ioutil
 
 import (
 	"io"
+	"os"
 
 	"github.com/minio/minio/internal/disk"
 )
@@ -32,7 +33,12 @@ import (
 func ReadFile(name string) ([]byte, error) {
 	f, err := disk.OpenFileDirectIO(name, readMode, 0666)
 	if err != nil {
-		return nil, err
+		// fallback if there is an error to read
+		// 'name' with O_DIRECT
+		f, err = os.OpenFile(name, readMode, 0666)
+		if err != nil {
+			return nil, err
+		}
 	}
 	r := &ODirectReader{
 		File:      f,
