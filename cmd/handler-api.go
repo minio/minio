@@ -18,7 +18,10 @@
 package cmd
 
 import (
+	"io/ioutil"
 	"net/http"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -48,6 +51,46 @@ type apiConfig struct {
 	deleteCleanupInterval       time.Duration
 }
 
+const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+
+func cgroupLimit(limitFile string) (limit uint64) {
+	buf, err := ioutil.ReadFile(limitFile)
+	if err != nil {
+		return 9223372036854771712
+	}
+	limit, err = strconv.ParseUint(string(buf), 10, 64)
+	if err != nil {
+		return 9223372036854771712
+	}
+	return limit
+}
+
+func availableMemory() (available uint64) {
+	available = 8 << 30 // Default to 8 GiB when we can't find the limits.
+
+	if runtime.GOOS == "linux" {
+		available = cgroupLimit(cgroupLimitFile)
+
+		// No limit set, It's the highest positive signed 64-bit
+		// integer (2^63-1), rounded down to multiples of 4096 (2^12),
+		// the most common page size on x86 systems - for cgroup_limits.
+		if available != 9223372036854771712 {
+			// This means cgroup memory limit is configured.
+			return
+
+		} // no-limit set proceed to set the limits based on virtual memory.
+
+	} // for all other platforms limits are based on virtual memory.
+
+	memStats, err := mem.VirtualMemory()
+	if err != nil {
+		return
+	}
+
+	available = memStats.Available / 2
+	return
+}
+
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -64,14 +107,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
-		var maxMem uint64
-		memStats, err := mem.VirtualMemory()
-		if err != nil {
-			// Default to 8 GiB, not critical.
-			maxMem = 8 << 30
-		} else {
-			maxMem = memStats.Available / 2
-		}
+		maxMem := availableMemory()
 
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
