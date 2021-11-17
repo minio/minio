@@ -454,6 +454,7 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 				FailedCount:    stat.FailedCount + oldst.FailedCount,
 				FailedSize:     stat.FailedSize + oldst.FailedSize,
 				ReplicatedSize: stat.ReplicatedSize + oldst.ReplicatedSize,
+				Latency:        stat.Latency.merge(oldst.Latency),
 			}
 		}
 	}
@@ -502,6 +503,8 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 		// happen since data usage picture can lag behind actual usage state at the time of cluster start
 		st.FailedSize = int64(math.Max(float64(tgtstat.FailedSize), 0))
 		st.FailedCount = int64(math.Max(float64(tgtstat.FailedCount), 0))
+		st.Latency = tgtstat.Latency
+
 		s.Stats[arn] = &st
 		s.FailedSize += st.FailedSize
 		s.FailedCount += st.FailedCount
