@@ -47,14 +47,15 @@ type Config struct {
 	JWKS    struct {
 		URL *xnet.URL `json:"url"`
 	} `json:"jwks"`
-	URL           *xnet.URL `json:"url,omitempty"`
-	ClaimPrefix   string    `json:"claimPrefix,omitempty"`
-	ClaimName     string    `json:"claimName,omitempty"`
-	ClaimUserinfo bool      `json:"claimUserInfo,omitempty"`
-	RedirectURI   string    `json:"redirectURI,omitempty"`
-	DiscoveryDoc  DiscoveryDoc
-	ClientID      string
-	ClientSecret  string
+	URL                *xnet.URL `json:"url,omitempty"`
+	ClaimPrefix        string    `json:"claimPrefix,omitempty"`
+	ClaimName          string    `json:"claimName,omitempty"`
+	ClaimUserinfo      bool      `json:"claimUserInfo,omitempty"`
+	RedirectURI        string    `json:"redirectURI,omitempty"`
+	RedirectURIDynamic bool      `json:"redirectURIDynamic"`
+	DiscoveryDoc       DiscoveryDoc
+	ClientID           string
+	ClientSecret       string
 
 	provider    provider.Provider
 	publicKeys  map[string]crypto.PublicKey
@@ -366,23 +367,25 @@ const (
 	ClientID      = "client_id"
 	ClientSecret  = "client_secret"
 
-	Vendor      = "vendor"
-	Scopes      = "scopes"
-	RedirectURI = "redirect_uri"
+	Vendor             = "vendor"
+	Scopes             = "scopes"
+	RedirectURI        = "redirect_uri"
+	RedirectURIDynamic = "redirect_uri_dynamic"
 
 	// Vendor specific ENV only enabled if the Vendor matches == "vendor"
 	KeyCloakRealm    = "keycloak_realm"
 	KeyCloakAdminURL = "keycloak_admin_url"
 
-	EnvIdentityOpenIDVendor        = "MINIO_IDENTITY_OPENID_VENDOR"
-	EnvIdentityOpenIDClientID      = "MINIO_IDENTITY_OPENID_CLIENT_ID"
-	EnvIdentityOpenIDClientSecret  = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
-	EnvIdentityOpenIDURL           = "MINIO_IDENTITY_OPENID_CONFIG_URL"
-	EnvIdentityOpenIDClaimName     = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
-	EnvIdentityOpenIDClaimUserInfo = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
-	EnvIdentityOpenIDClaimPrefix   = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
-	EnvIdentityOpenIDRedirectURI   = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
-	EnvIdentityOpenIDScopes        = "MINIO_IDENTITY_OPENID_SCOPES"
+	EnvIdentityOpenIDVendor             = "MINIO_IDENTITY_OPENID_VENDOR"
+	EnvIdentityOpenIDClientID           = "MINIO_IDENTITY_OPENID_CLIENT_ID"
+	EnvIdentityOpenIDClientSecret       = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
+	EnvIdentityOpenIDURL                = "MINIO_IDENTITY_OPENID_CONFIG_URL"
+	EnvIdentityOpenIDClaimName          = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
+	EnvIdentityOpenIDClaimUserInfo      = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
+	EnvIdentityOpenIDClaimPrefix        = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDRedirectURI        = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
+	EnvIdentityOpenIDRedirectURIDynamic = "MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC"
+	EnvIdentityOpenIDScopes             = "MINIO_IDENTITY_OPENID_SCOPES"
 
 	// Vendor specific ENVs only enabled if the Vendor matches == "vendor"
 	EnvIdentityOpenIDKeyCloakRealm    = "MINIO_IDENTITY_OPENID_KEYCLOAK_REALM"
@@ -464,6 +467,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   RedirectURIDynamic,
+			Value: "off",
+		},
+		config.KV{
 			Key:   Scopes,
 			Value: "",
 		},
@@ -485,16 +492,17 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	}
 
 	c = Config{
-		RWMutex:       &sync.RWMutex{},
-		ClaimName:     env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
-		ClaimUserinfo: env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == config.EnableOn,
-		ClaimPrefix:   env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
-		RedirectURI:   env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
-		publicKeys:    make(map[string]crypto.PublicKey),
-		ClientID:      env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
-		ClientSecret:  env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
-		transport:     transport,
-		closeRespFn:   closeRespFn,
+		RWMutex:            &sync.RWMutex{},
+		ClaimName:          env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
+		ClaimUserinfo:      env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == config.EnableOn,
+		ClaimPrefix:        env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
+		RedirectURI:        env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
+		RedirectURIDynamic: env.Get(EnvIdentityOpenIDRedirectURIDynamic, kvs.Get(RedirectURIDynamic)) == config.EnableOn,
+		publicKeys:         make(map[string]crypto.PublicKey),
+		ClientID:           env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
+		ClientSecret:       env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
+		transport:          transport,
+		closeRespFn:        closeRespFn,
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
