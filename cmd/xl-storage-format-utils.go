@@ -18,9 +18,11 @@
 package cmd
 
 import (
+	"fmt"
 	"sort"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/logger"
 )
 
 // versionsSorter sorts FileInfo slices by version.
@@ -121,15 +123,17 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	xlMeta := &xlMetaV1Object{}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaBuf, xlMeta); err != nil {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to unmarshal json object: %v", err))
 		return FileInfo{}, errFileCorrupt
 	}
 
 	fi, err := xlMeta.ToFileInfo(volume, path)
-	if err == errFileNotFound && versionID != "" {
-		return fi, errFileVersionNotFound
+	if err != nil {
+		return FileInfo{}, err
 	}
-	fi.IsLatest = true // No versions so current version is latest.
+
 	fi.XLV1 = true     // indicates older version
+	fi.IsLatest = true // No versions so current version is latest.
 	return fi, err
 }
 
