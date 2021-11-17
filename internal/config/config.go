@@ -60,7 +60,7 @@ const (
 	RegionName = "name"
 	AccessKey  = "access_key"
 	SecretKey  = "secret_key"
-	License    = "license"
+	APIKey     = "api_key"
 )
 
 // Top level config constants.
