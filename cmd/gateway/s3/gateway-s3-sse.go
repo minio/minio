@@ -668,7 +668,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 		return oi, e
 	}
 
-	//delete any unencrypted version of object that might be on the backend
+	// delete any unencrypted version of object that might be on the backend
 	defer l.s3Objects.DeleteObject(ctx, bucket, object, opts)
 
 	// Save the final object size and modtime.

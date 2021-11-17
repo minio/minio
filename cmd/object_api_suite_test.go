@@ -150,7 +150,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 		randomPerm := rand.Perm(10)
 		randomString := ""
 		for _, num := range randomPerm {
-			randomString = randomString + strconv.Itoa(num)
+			randomString += strconv.Itoa(num)
 		}
 
 		expectedETaghex := getMD5Hash([]byte(randomString))
@@ -189,7 +189,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 		randomPerm := rand.Perm(100)
 		randomString := ""
 		for _, num := range randomPerm {
-			randomString = randomString + strconv.Itoa(num)
+			randomString += strconv.Itoa(num)
 		}
 
 		expectedETaghex := getMD5Hash([]byte(randomString))

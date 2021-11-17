@@ -137,6 +137,7 @@ func TestUnmarshalDefaultRetention(t *testing.T) {
 		}
 		var dr DefaultRetention
 		err = xml.Unmarshal(d, &dr)
+		//nolint:gocritic
 		if tt.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
@@ -173,6 +174,7 @@ func TestParseObjectLockConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		_, err := ParseObjectLockConfig(strings.NewReader(tt.value))
+		//nolint:gocritic
 		if tt.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
@@ -209,6 +211,7 @@ func TestParseObjectRetention(t *testing.T) {
 	}
 	for _, tt := range tests {
 		_, err := ParseObjectRetention(strings.NewReader(tt.value))
+		//nolint:gocritic
 		if tt.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
@@ -367,6 +370,7 @@ func TestParseObjectLockRetentionHeaders(t *testing.T) {
 
 	for i, tt := range tests {
 		_, _, err := ParseObjectLockRetentionHeaders(tt.header)
+		//nolint:gocritic
 		if tt.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("Case %d error: expected = <nil>, got = %v", i, err)
@@ -494,6 +498,7 @@ func TestParseObjectLegalHold(t *testing.T) {
 	}
 	for i, tt := range tests {
 		_, err := ParseObjectLegalHold(strings.NewReader(tt.value))
+		//nolint:gocritic
 		if tt.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("Case %d error: expected = <nil>, got = %v", i, err)

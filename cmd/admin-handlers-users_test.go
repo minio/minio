@@ -121,6 +121,18 @@ func (s *TestSuiteIAM) RestartIAMSuite(c *check) {
 	s.iamSetup(c)
 }
 
+func (s *TestSuiteIAM) getAdminClient(c *check, accessKey, secretKey, sessionToken string) *madmin.AdminClient {
+	madmClnt, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, sessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("error creating user admin client: %s", err)
+	}
+	madmClnt.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+	return madmClnt
+}
+
 func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToken string) *minio.Client {
 	client, err := minio.New(s.endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(accessKey, secretKey, sessionToken),
@@ -140,6 +152,7 @@ func runAllIAMTests(suite *TestSuiteIAM, c *check) {
 	suite.TestCannedPolicies(c)
 	suite.TestGroupAddRemove(c)
 	suite.TestServiceAccountOps(c)
+	suite.TestAddServiceAccountPerms(c)
 	suite.TearDownSuite(c)
 }
 
@@ -243,6 +256,118 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
 	if err == nil {
 		c.Fatalf("user account was not deleted!")
+	}
+}
+
+func (s *TestSuiteIAM) TestAddServiceAccountPerms(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	// 1. Create a policy
+	policy1 := "deny-svc"
+	policy2 := "allow-svc"
+	policyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Deny",
+   "Action": [
+    "admin:CreateServiceAccount"
+   ]
+  }
+ ]
+}`)
+
+	newPolicyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::testbucket/*"
+   ]
+  }
+ ]
+}`)
+
+	err := s.adm.AddCannedPolicy(ctx, policy1, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	err = s.adm.AddCannedPolicy(ctx, policy2, newPolicyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	// 2. Verify that policy json is validated by server
+	invalidPolicyBytes := policyBytes[:len(policyBytes)-1]
+	err = s.adm.AddCannedPolicy(ctx, policy1+"invalid", invalidPolicyBytes)
+	if err == nil {
+		c.Fatalf("invalid policy creation success")
+	}
+
+	// 3. Create a user, associate policy and verify access
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+	// 3.1 check that user does not have any access to the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	c.mustNotListObjects(ctx, uClient, "testbucket")
+
+	// 3.2 associate policy to user
+	err = s.adm.SetPolicy(ctx, policy1, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	admClnt := s.getAdminClient(c, accessKey, secretKey, "")
+
+	// 3.3 check user does not have explicit permissions to create service account.
+	c.mustNotCreateSvcAccount(ctx, accessKey, admClnt)
+
+	// 4. Verify the policy appears in listing
+	ps, err := s.adm.ListCannedPolicies(ctx)
+	if err != nil {
+		c.Fatalf("policy list err: %v", err)
+	}
+	_, ok := ps[policy1]
+	if !ok {
+		c.Fatalf("policy was missing!")
+	}
+
+	// 3.2 associate policy to user
+	err = s.adm.SetPolicy(ctx, policy2, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// 3.3 check user can create service account implicitly.
+	c.mustCreateSvcAccount(ctx, accessKey, admClnt)
+
+	_, ok = ps[policy2]
+	if !ok {
+		c.Fatalf("policy was missing!")
+	}
+
+	err = s.adm.RemoveUser(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("user could not be deleted: %v", err)
+	}
+
+	err = s.adm.RemoveCannedPolicy(ctx, policy1)
+	if err != nil {
+		c.Fatalf("policy del err: %v", err)
+	}
+
+	err = s.adm.RemoveCannedPolicy(ctx, policy2)
+	if err != nil {
+		c.Fatalf("policy del err: %v", err)
 	}
 }
 
@@ -747,6 +872,24 @@ func (s *TestSuiteIAM) TestServiceAccountOps(c *check) {
 			c.Fatalf("unable to delete svc acc: %v", err)
 		}
 		c.mustNotListObjects(ctx, svcClient, bucket)
+	}
+}
+
+func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) {
+	_, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: tgtUser,
+	})
+	if err != nil {
+		c.Fatalf("user should be able to create service accounts %s", err)
+	}
+}
+
+func (c *check) mustNotCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) {
+	_, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: tgtUser,
+	})
+	if err == nil {
+		c.Fatalf("user was able to add service accounts unexpectedly!")
 	}
 }
 

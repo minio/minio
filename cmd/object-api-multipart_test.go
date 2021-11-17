@@ -1065,7 +1065,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{bucketNames[0], "Asia", "", "", "", 2, listMultipartResults[13], nil, true},
 		// setting delimiter (Test number 27).
 		{bucketNames[0], "", "", "", SlashSeparator, 2, listMultipartResults[14], nil, true},
-		//Test case with multiple uploadID listing for given object (Test number 28).
+		// Test case with multiple uploadID listing for given object (Test number 28).
 		{bucketNames[1], "", "", "", "", 100, listMultipartResults[15], nil, true},
 		// Test case with multiple uploadID listing for given object, but uploadID marker set.
 		// Testing whether the marker entry is skipped (Test number 29-30).
@@ -1088,29 +1088,29 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Test case with `Prefix` and `UploadIDMarker` (Test number 37).
 		{bucketNames[1], "min", "minio-object-1.txt", uploadIDs[1], "", 10, listMultipartResults[24], nil, true},
 		// Test case for bucket with multiple objects in it.
-		//	Bucket used : `bucketNames[2]`.
-		//	Objects used: `objectNames[1-5]`.
+		// Bucket used : `bucketNames[2]`.
+		// Objects used: `objectNames[1-5]`.
 		// UploadId's used: uploadIds[4-8].
 		// (Test number 39).
 		{bucketNames[2], "", "", "", "", 100, listMultipartResults[25], nil, true},
-		//Test cases with prefixes.
-		//Testing listing with prefix set to "min" (Test number 40)	.
+		// Test cases with prefixes.
+		// Testing listing with prefix set to "min" (Test number 40)	.
 		{bucketNames[2], "min", "", "", "", 100, listMultipartResults[26], nil, true},
-		//Testing listing with prefix set to "ney" (Test number 41).
+		// Testing listing with prefix set to "ney" (Test number 41).
 		{bucketNames[2], "ney", "", "", "", 100, listMultipartResults[27], nil, true},
-		//Testing listing with prefix set to "par" (Test number 42).
+		// Testing listing with prefix set to "par" (Test number 42).
 		{bucketNames[2], "parrot", "", "", "", 100, listMultipartResults[28], nil, true},
-		//Testing listing with prefix set to object name "neymar.jpeg" (Test number 43).
+		// Testing listing with prefix set to object name "neymar.jpeg" (Test number 43).
 		{bucketNames[2], "neymar.jpeg", "", "", "", 100, listMultipartResults[29], nil, true},
-		//	Testing listing with `MaxUploads` set to 3 (Test number 44).
+		// Testing listing with `MaxUploads` set to 3 (Test number 44).
 		{bucketNames[2], "", "", "", "", 3, listMultipartResults[30], nil, true},
 		// In case of bucketNames[2], there are 6 entries (Test number 45).
 		// Since all available entries are listed, IsTruncated is expected to be false
 		// and NextMarkers are expected to empty.
 		{bucketNames[2], "", "", "", "", 6, listMultipartResults[31], nil, true},
-		//	Test case with `KeyMarker` (Test number 47).
+		// Test case with `KeyMarker` (Test number 47).
 		{bucketNames[2], "", objectNames[3], "", "", 10, listMultipartResults[33], nil, true},
-		//	Test case with `prefix` and `KeyMarker` (Test number 48).
+		// Test case with `prefix` and `KeyMarker` (Test number 48).
 		{bucketNames[2], "minio-object", objectNames[1], "", "", 10, listMultipartResults[34], nil, true},
 	}
 
@@ -1694,9 +1694,9 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
 		// Part with size larger than 5Mb.
-		{bucketNames[0], objectNames[0], uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 7, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(validPart))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(validPart))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 7, string(validPart), validPartMD5, int64(len(validPart))},
 	}
 	sha256sum := ""
 	var opts ObjectOptions

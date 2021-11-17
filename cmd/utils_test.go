@@ -238,9 +238,8 @@ func TestDumpRequest(t *testing.T) {
 		RequestURI string      `json:"reqURI"`
 		Header     http.Header `json:"header"`
 	}
-	jsonReq = strings.Replace(jsonReq, "%%", "%", -1)
 	res := jsonResult{}
-	if err = json.Unmarshal([]byte(jsonReq), &res); err != nil {
+	if err = json.Unmarshal([]byte(strings.ReplaceAll(jsonReq, "%%", "%")), &res); err != nil {
 		t.Fatal(err)
 	}
 
@@ -399,7 +398,6 @@ func TestCeilFrac(t *testing.T) {
 // Test if isErrIgnored works correctly.
 func TestIsErrIgnored(t *testing.T) {
 	var errIgnored = fmt.Errorf("ignored error")
-	ignoredErrs := append(baseIgnoredErrs, errIgnored)
 	var testCases = []struct {
 		err     error
 		ignored bool
@@ -418,7 +416,7 @@ func TestIsErrIgnored(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		if ok := IsErrIgnored(testCase.err, ignoredErrs...); ok != testCase.ignored {
+		if ok := IsErrIgnored(testCase.err, append(baseIgnoredErrs, errIgnored)...); ok != testCase.ignored {
 			t.Errorf("Test: %d, Expected %t, got %t", i+1, testCase.ignored, ok)
 		}
 	}

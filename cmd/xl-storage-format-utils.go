@@ -159,7 +159,7 @@ func hashDeterministicString(m map[string]string) uint64 {
 	for k, v := range m {
 		// Separate key and value with an individual xor with a random number.
 		// Add values of each, so they cannot be trivially collided.
-		crc = crc ^ ((xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.HashString(v) ^ 0x8da4c8da66194257))
+		crc ^= (xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.HashString(v) ^ 0x8da4c8da66194257)
 	}
 	return crc
 }
@@ -169,7 +169,7 @@ func hashDeterministicString(m map[string]string) uint64 {
 func hashDeterministicBytes(m map[string][]byte) uint64 {
 	var crc = uint64(0x1bbc7e1dde654743)
 	for k, v := range m {
-		crc = crc ^ ((xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.Hash(v) ^ 0x8da4c8da66194257))
+		crc ^= (xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.Hash(v) ^ 0x8da4c8da66194257)
 	}
 	return crc
 }

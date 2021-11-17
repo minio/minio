@@ -87,7 +87,7 @@ func TestNDJSON(t *testing.T) {
 			if false {
 				t.Log(string(b))
 			}
-			//_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".json"), b, os.ModePerm)
+			// _ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".json"), b, os.ModePerm)
 
 		parser:
 			for {

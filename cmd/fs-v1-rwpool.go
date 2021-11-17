@@ -109,7 +109,7 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 			}
 		}
 
-		/// Save new reader on the map.
+		// Save new reader on the map.
 
 		// It is possible by this time due to concurrent
 		// i/o we might have another lock present. Lookup

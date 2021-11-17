@@ -23,12 +23,19 @@ linters:
     - structcheck
     - unconvert
     - varcheck
+    - gocritic
 
 issues:
   exclude-use-default: false
   exclude:
       - should have a package comment
       - error strings should not be capitalized or end with punctuation or a newline
+      # todo fix these when we get enough time.
+      - "singleCaseSwitch: should rewrite switch statement to if statement"
+      - "unlambda: replace"
+      - "captLocal:"
+      - "ifElseChain:"
+      - "elseif:"
 
 service:
-  golangci-lint-version: 1.20.0 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.43.0 # use the fixed version to not introduce new linters unexpectedly

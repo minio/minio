@@ -44,7 +44,7 @@ func GetInfo(device string) (madmin.SmartInfo, error) {
 	}
 
 	var db drivedb.DriveDb
-	dec := yaml.NewDecoder(bytes.NewBuffer(MustAsset("drivedb.yaml")))
+	dec := yaml.NewDecoder(bytes.NewReader(MustAsset("drivedb.yaml")))
 
 	err := dec.Decode(&db)
 	if err != nil {
@@ -108,7 +108,7 @@ func getNvmeInfo(d *NVMeDevice) (*madmin.SmartNvmeInfo, error) {
 	}
 
 	var controller nvmeIdentController
-	binary.Read(bytes.NewBuffer(buf[:]), utils.NativeEndian, &controller)
+	binary.Read(bytes.NewReader(buf), utils.NativeEndian, &controller)
 
 	nvmeInfo.VendorID = strings.TrimSpace(fmt.Sprintf("%#04x", controller.VendorID))
 	nvmeInfo.ModelNum = strings.TrimSpace(fmt.Sprintf("%s", controller.ModelNumber))
@@ -124,7 +124,7 @@ func getNvmeInfo(d *NVMeDevice) (*madmin.SmartNvmeInfo, error) {
 	}
 
 	var sl nvmeSMARTLog
-	binary.Read(bytes.NewBuffer(buf2[:]), utils.NativeEndian, &sl)
+	binary.Read(bytes.NewReader(buf2), utils.NativeEndian, &sl)
 
 	unitsRead := le128ToBigInt(sl.DataUnitsRead)
 	unitsWritten := le128ToBigInt(sl.DataUnitsWritten)

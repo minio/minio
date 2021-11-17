@@ -205,7 +205,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		},
 		// ListObjectsResult-9.
 		// Used for asserting the case with marker, but without prefix.
-		//marker is set to "newPrefix0" in the testCase, (testCase 33).
+		// marker is set to "newPrefix0" in the testCase, (testCase 33).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -217,7 +217,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 			},
 		},
 		// ListObjectsResult-10.
-		//marker is set to "newPrefix1" in the testCase, (testCase 34).
+		// marker is set to "newPrefix1" in the testCase, (testCase 34).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -228,7 +228,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 			},
 		},
 		// ListObjectsResult-11.
-		//marker is set to "obj0" in the testCase, (testCase 35).
+		// marker is set to "obj0" in the testCase, (testCase 35).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -548,7 +548,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
 		// Testing for all 10 objects in the bucket (18).
 		{"test-bucket-list-object", "", "", "", 10, resultCases[0], nil, true},
-		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (19).
+		// Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (19).
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
@@ -905,7 +905,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-9.
 		// Used for asserting the case with marker, but without prefix.
-		//marker is set to "newPrefix0" in the testCase, (testCase 33).
+		// marker is set to "newPrefix0" in the testCase, (testCase 33).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -917,7 +917,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			},
 		},
 		// ListObjectsResult-10.
-		//marker is set to "newPrefix1" in the testCase, (testCase 34).
+		// marker is set to "newPrefix1" in the testCase, (testCase 34).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -928,7 +928,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			},
 		},
 		// ListObjectsResult-11.
-		//marker is set to "obj0" in the testCase, (testCase 35).
+		// marker is set to "obj0" in the testCase, (testCase 35).
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
@@ -1223,7 +1223,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
 		// Testing for all 10 objects in the bucket (16).
 		{"test-bucket-list-object", "", "", "", 10, resultCases[0], nil, true},
-		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (17).
+		// Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (17).
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (18).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},

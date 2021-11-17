@@ -43,8 +43,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 	// Admin router
 	adminRouter := router.PathPrefix(adminPathPrefix).Subrouter()
 
-	/// Service operations
-
 	adminVersions := []string{
 		adminAPIVersionPrefix,
 	}
@@ -71,7 +69,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.DataUsageInfoHandler)))
 
 		if globalIsDistErasure || globalIsErasure {
-			/// Heal operations
+			// Heal operations
 
 			// Heal processing endpoint.
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/heal/").HandlerFunc(gz(httpTraceAll(adminAPI.HealHandler)))
@@ -79,9 +77,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/heal/{bucket}/{prefix:.*}").HandlerFunc(gz(httpTraceAll(adminAPI.HealHandler)))
 
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/background-heal/status").HandlerFunc(gz(httpTraceAll(adminAPI.BackgroundHealStatusHandler)))
-
-			/// Health operations
-
 		}
 
 		// Profiling operations
@@ -106,7 +101,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/restore-config-history-kv").HandlerFunc(gz(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler))).Queries("restoreId", "{restoreId:.*}")
 		}
 
-		/// Config import/export bulk operations
+		// Config import/export bulk operations
 		if enableConfigOps {
 			// Get config
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/config").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetConfigHandler)))

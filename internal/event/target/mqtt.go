@@ -272,10 +272,8 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 			// Start replaying events from the store.
 			go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 		}
-	} else {
-		if token.Wait() && token.Error() != nil {
-			return target, token.Error()
-		}
+	} else if token.Wait() && token.Error() != nil {
+		return target, token.Error()
 	}
 	return target, nil
 }

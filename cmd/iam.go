@@ -87,26 +87,26 @@ const (
 // storage, it is removed from in-memory maps as well - this
 // simplifies the implementation for group removal. This is called
 // only via IAM notifications.
-func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
+func (sys *IAMSys) LoadGroup(ctx context.Context, objAPI ObjectLayer, group string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.GroupNotificationHandler(context.Background(), group)
+	return sys.store.GroupNotificationHandler(ctx, group)
 }
 
 // LoadPolicy - reloads a specific canned policy from backend disks or etcd.
-func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
+func (sys *IAMSys) LoadPolicy(ctx context.Context, objAPI ObjectLayer, policyName string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.PolicyNotificationHandler(context.Background(), policyName)
+	return sys.store.PolicyNotificationHandler(ctx, policyName)
 }
 
 // LoadPolicyMapping - loads the mapped policy for a user or group
 // from storage into server memory.
-func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
+func (sys *IAMSys) LoadPolicyMapping(ctx context.Context, objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -117,25 +117,25 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 		userType = stsUser
 	}
 
-	return sys.store.PolicyMappingNotificationHandler(context.Background(), userOrGroup, isGroup, userType)
+	return sys.store.PolicyMappingNotificationHandler(ctx, userOrGroup, isGroup, userType)
 }
 
 // LoadUser - reloads a specific user from backend disks or etcd.
-func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUserType) error {
+func (sys *IAMSys) LoadUser(ctx context.Context, objAPI ObjectLayer, accessKey string, userType IAMUserType) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.UserNotificationHandler(context.Background(), accessKey, userType)
+	return sys.store.UserNotificationHandler(ctx, accessKey, userType)
 }
 
 // LoadServiceAccount - reloads a specific service account from backend disks or etcd.
-func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
+func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.UserNotificationHandler(context.Background(), accessKey, svcUser)
+	return sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
 }
 
 // Perform IAM configuration migration.
@@ -143,11 +143,8 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
 }
 
-// InitStore initializes IAM stores
-func (sys *IAMSys) InitStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	sys.Lock()
-	defer sys.Unlock()
-
+// initStore initializes IAM stores
+func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	if globalLDAPConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
@@ -175,7 +172,7 @@ func (sys *IAMSys) Initialized() bool {
 }
 
 // Load - loads all credentials, policies and policy mappings.
-func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
+func (sys *IAMSys) Load(ctx context.Context) error {
 	err := sys.store.LoadIAMCache(ctx)
 	if err != nil {
 		return err
@@ -191,10 +188,13 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	sys.Lock()
+	defer sys.Unlock()
+
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
-	sys.InitStore(objAPI, etcdClient)
+	sys.initStore(objAPI, etcdClient)
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -258,7 +258,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	for {
-		if err := sys.Load(retryCtx, sys.store); err != nil {
+		if err := sys.Load(retryCtx); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -329,7 +329,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := sys.Load(ctx, sys.store); err != nil {
+			if err := sys.Load(ctx); err != nil {
 				logger.LogIf(ctx, err)
 			}
 		case <-ctx.Done():
@@ -338,7 +338,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	}
 }
 
-func (sys *IAMSys) loadWatchedEvent(outerCtx context.Context, event iamWatchEvent) (err error) {
+func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (err error) {
 	usersPrefix := strings.HasPrefix(event.keyPath, iamConfigUsersPrefix)
 	groupsPrefix := strings.HasPrefix(event.keyPath, iamConfigGroupsPrefix)
 	stsPrefix := strings.HasPrefix(event.keyPath, iamConfigSTSPrefix)
@@ -348,81 +348,48 @@ func (sys *IAMSys) loadWatchedEvent(outerCtx context.Context, event iamWatchEven
 	policyDBSTSUsersPrefix := strings.HasPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
 	policyDBGroupsPrefix := strings.HasPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
-	if event.isCreated {
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
-		case svcPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
-			err = sys.store.GroupNotificationHandler(ctx, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
-			err = sys.store.PolicyNotificationHandler(ctx, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
-		}
-	} else {
-		// delete event
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
-		case svcPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
-			err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
-			err = sys.store.GroupNotificationHandler(ctx, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
-			err = sys.store.PolicyNotificationHandler(ctx, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
-		case policyDBGroupsPrefix:
-			policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
-		}
+	switch {
+	case usersPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigUsersPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, regUser)
+	case stsPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigSTSPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, stsUser)
+	case svcPrefix:
+		accessKey := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigServiceAccountsPrefix))
+		err = sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
+	case groupsPrefix:
+		group := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigGroupsPrefix))
+		err = sys.store.GroupNotificationHandler(ctx, group)
+	case policyPrefix:
+		policyName := path.Dir(strings.TrimPrefix(event.keyPath, iamConfigPoliciesPrefix))
+		err = sys.store.PolicyNotificationHandler(ctx, policyName)
+	case policyDBUsersPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBUsersPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, regUser)
+	case policyDBSTSUsersPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBSTSUsersPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, false, stsUser)
+	case policyDBGroupsPrefix:
+		policyMapFile := strings.TrimPrefix(event.keyPath, iamConfigPolicyDBGroupsPrefix)
+		user := strings.TrimSuffix(policyMapFile, ".json")
+		err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
 	}
 	return err
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
-func (sys *IAMSys) DeletePolicy(policyName string) error {
+func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeletePolicy(context.Background(), policyName)
+	return sys.store.DeletePolicy(ctx, policyName)
 }
 
 // InfoPolicy - expands the canned policy into its JSON structure.
@@ -435,32 +402,32 @@ func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
 }
 
 // ListPolicies - lists all canned policies.
-func (sys *IAMSys) ListPolicies(bucketName string) (map[string]iampolicy.Policy, error) {
+func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[string]iampolicy.Policy, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
 	<-sys.configLoaded
 
-	return sys.store.ListPolicies(context.Background(), bucketName)
+	return sys.store.ListPolicies(ctx, bucketName)
 }
 
 // SetPolicy - sets a new named policy.
-func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
+func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy.Policy) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.SetPolicy(context.Background(), policyName, p)
+	return sys.store.SetPolicy(ctx, policyName, p)
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
-func (sys *IAMSys) DeleteUser(accessKey string) error {
+func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeleteUser(context.Background(), accessKey, regUser)
+	return sys.store.DeleteUser(ctx, accessKey, regUser)
 }
 
 // CurrentPolicies - returns comma separated policy string, from
@@ -476,7 +443,7 @@ func (sys *IAMSys) CurrentPolicies(policyName string) string {
 }
 
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
-func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyName string) error {
+func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -486,7 +453,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		policyName = ""
 	}
 
-	return sys.store.SetTempUser(context.Background(), accessKey, cred, policyName)
+	return sys.store.SetTempUser(ctx, accessKey, cred, policyName)
 }
 
 // ListBucketUsers - list all users who can access this 'bucket'
@@ -548,7 +515,7 @@ func (sys *IAMSys) IsServiceAccount(name string) (bool, string, error) {
 }
 
 // GetUserInfo - get info on a user.
-func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
+func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserInfo, err error) {
 	if !sys.Initialized() {
 		return u, errServerNotInitialized
 	}
@@ -556,14 +523,14 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	select {
 	case <-sys.configLoaded:
 	default:
-		sys.store.LoadUser(context.Background(), name)
+		sys.store.LoadUser(ctx, name)
 	}
 
 	return sys.store.GetUserInfo(name)
 }
 
 // SetUserStatus - sets current user status, supports disabled or enabled.
-func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) error {
+func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status madmin.AccountStatus) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -572,7 +539,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.SetUserStatus(context.Background(), accessKey, status)
+	return sys.store.SetUserStatus(ctx, accessKey, status)
 }
 
 type newServiceAccountOpts struct {
@@ -756,7 +723,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 
 // CreateUser - create new user credentials and policy, if user already exists
 // they shall be rewritten with new inputs.
-func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
+func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmin.UserInfo) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -773,11 +740,11 @@ func (sys *IAMSys) CreateUser(accessKey string, uinfo madmin.UserInfo) error {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	return sys.store.AddUser(context.Background(), accessKey, uinfo)
+	return sys.store.AddUser(ctx, accessKey, uinfo)
 }
 
 // SetUserSecretKey - sets user secret key
-func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
+func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secretKey string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -794,7 +761,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	return sys.store.UpdateUserSecretKey(context.Background(), accessKey, secretKey)
+	return sys.store.UpdateUserSecretKey(ctx, accessKey, secretKey)
 }
 
 // purgeExpiredCredentialsForExternalSSO - validates if local credentials are still valid
@@ -919,7 +886,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 }
 
 // GetUser - get user credentials
-func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
+func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (cred auth.Credentials, ok bool) {
 	if !sys.Initialized() {
 		return cred, false
 	}
@@ -928,7 +895,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	select {
 	case <-sys.configLoaded:
 	default:
-		sys.store.LoadUser(context.Background(), accessKey)
+		sys.store.LoadUser(ctx, accessKey)
 		fallback = true
 	}
 
@@ -940,7 +907,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		// the IAM store and see if credential
 		// exists now. If it doesn't proceed to
 		// fail.
-		sys.store.LoadUser(context.Background(), accessKey)
+		sys.store.LoadUser(ctx, accessKey)
 		cred, ok = sys.store.GetUser(accessKey)
 	}
 
@@ -949,14 +916,14 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 			policies, err := sys.store.PolicyDBGet(cred.AccessKey, false)
 			if err != nil {
 				// Reject if the policy map for user doesn't exist anymore.
-				logger.LogIf(context.Background(), fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
+				logger.LogIf(ctx, fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
 				return auth.Credentials{}, false
 			}
 			for _, group := range cred.Groups {
 				ps, err := sys.store.PolicyDBGet(group, true)
 				if err != nil {
 					// Reject if the policy map for group doesn't exist anymore.
-					logger.LogIf(context.Background(), fmt.Errorf("'%s' group does not have a policy present", group))
+					logger.LogIf(ctx, fmt.Errorf("'%s' group does not have a policy present", group))
 					return auth.Credentials{}, false
 				}
 				policies = append(policies, ps...)
@@ -969,7 +936,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 
 // AddUsersToGroup - adds users to a group, creating the group if
 // needed. No error if user(s) already are in the group.
-func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
+func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -978,12 +945,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.AddUsersToGroup(context.Background(), group, members)
+	return sys.store.AddUsersToGroup(ctx, group, members)
 }
 
 // RemoveUsersFromGroup - remove users from group. If no users are
 // given, and the group is empty, deletes the group as well.
-func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
+func (sys *IAMSys) RemoveUsersFromGroup(ctx context.Context, group string, members []string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -992,11 +959,11 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.RemoveUsersFromGroup(context.Background(), group, members)
+	return sys.store.RemoveUsersFromGroup(ctx, group, members)
 }
 
 // SetGroupStatus - enable/disabled a group
-func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
+func (sys *IAMSys) SetGroupStatus(ctx context.Context, group string, enabled bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -1005,7 +972,7 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.SetGroupStatus(context.Background(), group, enabled)
+	return sys.store.SetGroupStatus(ctx, group, enabled)
 }
 
 // GetGroupDescription - builds up group description
@@ -1018,18 +985,18 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 }
 
 // ListGroups - lists groups.
-func (sys *IAMSys) ListGroups() (r []string, err error) {
+func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	if !sys.Initialized() {
 		return r, errServerNotInitialized
 	}
 
 	<-sys.configLoaded
 
-	return sys.store.ListGroups(context.Background())
+	return sys.store.ListGroups(ctx)
 }
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.
-func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
+func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -1040,7 +1007,7 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 		userType = stsUser
 	}
 
-	return sys.store.PolicyDBSet(context.Background(), name, policy, userType, isGroup)
+	return sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is

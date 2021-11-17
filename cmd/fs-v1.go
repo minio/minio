@@ -398,7 +398,7 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 	return cache, err
 }
 
-/// Bucket operations
+// Bucket operations
 
 // getBucketDir - will convert incoming bucket names to
 // corresponding valid bucket names on the backend in a platform
@@ -601,7 +601,7 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, opts Delet
 	return nil
 }
 
-/// Object Operations
+// Object Operations
 
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only

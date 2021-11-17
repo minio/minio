@@ -133,8 +133,6 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	// Add/update buckets that are not registered with the DNS
 	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
 	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
-	ctx, cancel := g.WithCancelOnError(GlobalContext)
-	defer cancel()
 
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
@@ -143,9 +141,12 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}, index)
 	}
 
-	if err := g.WaitErr(); err != nil {
-		logger.LogIf(ctx, err)
-		return
+	ctx := GlobalContext
+	for _, err := range g.Wait() {
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return
+		}
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
@@ -902,7 +903,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
 		// S3 feature to replace ${filename} found in Key form field
 		// by the filename attribute passed in multipart
-		formValues.Set("Key", strings.Replace(formValues.Get("Key"), "${filename}", fileName, -1))
+		formValues.Set("Key", strings.ReplaceAll(formValues.Get("Key"), "${filename}", fileName))
 	}
 	object := trimLeadingSlash(formValues.Get("Key"))
 

@@ -80,7 +80,7 @@ func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket,
 	if err != nil {
 		return key, err
 	}
-	err = key.Unseal(unsealKey[:], sealedKey, s3.String(), bucket, object)
+	err = key.Unseal(unsealKey, sealedKey, s3.String(), bucket, object)
 	return key, err
 }
 

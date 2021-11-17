@@ -203,7 +203,7 @@ func (d *dataUpdateTracker) latestWithDir(dir string) uint64 {
 // start a saver goroutine.
 // All of these will exit when the context is canceled.
 func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
-	if len(drives) <= 0 {
+	if len(drives) == 0 {
 		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No drives specified"))
 		return
 	}
@@ -220,7 +220,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 // If no valid data usage tracker can be found d will remain unchanged.
 // If object is shared the caller should lock it.
 func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
-	if len(drives) <= 0 {
+	if len(drives) == 0 {
 		logger.LogIf(ctx, errors.New("dataUpdateTracker.load: No drives specified"))
 		return
 	}

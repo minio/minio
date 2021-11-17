@@ -95,7 +95,7 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 // It returns an error if the decoding failed.
 func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	var isZero = 0
-	for _, b := range data[:] {
+	for _, b := range data {
 		if len(b) == 0 {
 			isZero++
 			break

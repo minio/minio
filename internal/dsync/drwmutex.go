@@ -199,9 +199,9 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 
 				// If success, copy array to object
 				if isReadLock {
-					copy(dm.readLocks, locks[:])
+					copy(dm.readLocks, locks)
 				} else {
-					copy(dm.writeLocks, locks[:])
+					copy(dm.writeLocks, locks)
 				}
 
 				dm.m.Unlock()
@@ -579,7 +579,7 @@ func (dm *DRWMutex) Unlock() {
 		}
 
 		// Copy write locks to stack array
-		copy(locks, dm.writeLocks[:])
+		copy(locks, dm.writeLocks)
 	}
 
 	// Tolerance is not set, defaults to half of the locker clients.
@@ -620,7 +620,7 @@ func (dm *DRWMutex) RUnlock() {
 		}
 
 		// Copy write locks to stack array
-		copy(locks, dm.readLocks[:])
+		copy(locks, dm.readLocks)
 	}
 
 	// Tolerance is not set, defaults to half of the locker clients.

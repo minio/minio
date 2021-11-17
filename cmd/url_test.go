@@ -23,7 +23,7 @@ import (
 )
 
 func BenchmarkURLQueryForm(b *testing.B) {
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:9000/bucket/name?uploadId=upload&partNumber=1", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:9000/bucket/name?uploadId=upload&partNumber=1", http.NoBody)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func BenchmarkURLQueryForm(b *testing.B) {
 
 // BenchmarkURLQuery - benchmark URL memory allocations
 func BenchmarkURLQuery(b *testing.B) {
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:9000/bucket/name?uploadId=upload&partNumber=1", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:9000/bucket/name?uploadId=upload&partNumber=1", http.NoBody)
 	if err != nil {
 		b.Fatal(err)
 	}

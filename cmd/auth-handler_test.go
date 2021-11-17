@@ -364,9 +364,12 @@ func TestIsReqAuthenticated(t *testing.T) {
 
 	newAllSubsystems()
 
-	initAllSubsystems(context.Background(), objLayer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	globalIAMSys.InitStore(objLayer, globalEtcdClient)
+	initAllSubsystems(ctx, objLayer)
+
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
@@ -392,7 +395,6 @@ func TestIsReqAuthenticated(t *testing.T) {
 		{mustNewSignedRequest(http.MethodGet, "http://127.0.0.1:9000", 0, nil, t), ErrNone},
 	}
 
-	ctx := context.Background()
 	// Validates all testcases.
 	for i, testCase := range testCases {
 		s3Error := isReqAuthenticated(ctx, testCase.req, globalServerRegion, serviceS3)
@@ -440,8 +442,8 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 }
 
 func TestValidateAdminSignature(t *testing.T) {
-
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
@@ -455,9 +457,9 @@ func TestValidateAdminSignature(t *testing.T) {
 
 	newAllSubsystems()
 
-	initAllSubsystems(context.Background(), objLayer)
+	initAllSubsystems(ctx, objLayer)
 
-	globalIAMSys.InitStore(objLayer, globalEtcdClient)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	creds, err := auth.CreateCredentials("admin", "mypassword")
 	if err != nil {

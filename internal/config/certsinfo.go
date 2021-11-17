@@ -38,6 +38,7 @@ func printName(names []pkix.AttributeTypeAndValue, buf *strings.Builder) []strin
 	values := []string{}
 	for _, name := range names {
 		oid := name.Type
+		//nolint:gocritic
 		if len(oid) == 4 && oid[0] == 2 && oid[1] == 5 && oid[2] == 4 {
 			switch oid[3] {
 			case 3:

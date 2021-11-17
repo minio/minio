@@ -216,7 +216,7 @@ func (m *xlMetaV1Object) Signature() [4]byte {
 	c.Meta = nil
 
 	if bts, err := c.MarshalMsg(metaDataPoolGet()); err == nil {
-		crc = crc ^ xxhash.Sum64(bts)
+		crc ^= xxhash.Sum64(bts)
 		metaDataPoolPut(bts)
 	}
 

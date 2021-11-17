@@ -242,7 +242,7 @@ func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
 	for _, argPattern := range argPatterns {
 		var totalSize uint64 = 1
 		for _, p := range argPattern {
-			totalSize = totalSize * uint64(len(p.Seq))
+			totalSize *= uint64(len(p.Seq))
 		}
 		totalSizes = append(totalSizes, totalSize)
 	}

@@ -1740,7 +1740,7 @@ func resyncTarget(oi ObjectInfo, arn string, resetID string, resetBeforeDate tim
 	}
 	rs, ok := oi.UserDefined[targetResetHeader(arn)]
 	if !ok {
-		rs, ok = oi.UserDefined[xhttp.MinIOReplicationResetStatus] //for backward compatibility
+		rs, ok = oi.UserDefined[xhttp.MinIOReplicationResetStatus] // for backward compatibility
 	}
 	if !ok { // existing object replication is enabled and object version is unreplicated so far.
 		if resetID != "" && oi.ModTime.Before(resetBeforeDate) { // trigger replication if `mc replicate reset` requested

@@ -44,7 +44,7 @@ func (ls *LiteralString) Capture(values []string) error {
 	n := len(values[0])
 	r := values[0][1 : n-1]
 	// Translate doubled quotes
-	*ls = LiteralString(strings.Replace(r, "''", "'", -1))
+	*ls = LiteralString(strings.ReplaceAll(r, "''", "'"))
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (qi *QuotedIdentifier) Capture(values []string) error {
 	r := values[0][1 : n-1]
 
 	// Translate doubled quotes
-	*qi = QuotedIdentifier(strings.Replace(r, `""`, `"`, -1))
+	*qi = QuotedIdentifier(strings.ReplaceAll(r, `""`, `"`))
 	return nil
 }
 

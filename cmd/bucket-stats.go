@@ -56,7 +56,7 @@ func (brs BucketReplicationStats) Clone() BucketReplicationStats {
 	c := BucketReplicationStats{
 		Stats: make(map[string]*BucketReplicationStat, len(brs.Stats)),
 	}
-	//this is called only by replicationStats cache and already holds a read lock before calling Clone()
+	// This is called only by replicationStats cache and already holds a read lock before calling Clone()
 	for arn, st := range brs.Stats {
 		c.Stats[arn] = &BucketReplicationStat{
 			FailedSize:     atomic.LoadInt64(&st.FailedSize),

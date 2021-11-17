@@ -32,7 +32,7 @@ var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnform
 // list all errors that can be ignored in a bucket metadata operation.
 var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
-/// Bucket operations
+// Bucket operations
 
 // MakeBucket - make a bucket.
 func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {

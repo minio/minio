@@ -160,7 +160,7 @@ func hasContentMD5(h http.Header) bool {
 	return ok
 }
 
-/// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
 const (
 	// Maximum object size per PUT request is 5TB.
 	// This is a divergence from S3 limit on purpose to support
@@ -409,7 +409,7 @@ func dumpRequest(r *http.Request) string {
 	header.Set("Host", r.Host)
 	// Replace all '%' to '%%' so that printer format parser
 	// to ignore URL encoded values.
-	rawURI := strings.Replace(r.RequestURI, "%", "%%", -1)
+	rawURI := strings.ReplaceAll(r.RequestURI, "%", "%%")
 	req := struct {
 		Method     string      `json:"method"`
 		RequestURI string      `json:"reqURI"`

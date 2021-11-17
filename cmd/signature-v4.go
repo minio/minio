@@ -103,7 +103,7 @@ func getSignedHeaders(signedHeaders http.Header) string {
 //  <HashedPayload>
 //
 func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method string) string {
-	rawQuery := strings.Replace(queryStr, "+", "%20", -1)
+	rawQuery := strings.ReplaceAll(queryStr, "+", "%20")
 	encodedPath := s3utils.EncodePath(urlPath)
 	canonicalRequest := strings.Join([]string{
 		method,
@@ -130,9 +130,9 @@ func getScope(t time.Time, region string) string {
 // getStringToSign a string based on selected query values.
 func getStringToSign(canonicalRequest string, t time.Time, scope string) string {
 	stringToSign := signV4Algorithm + "\n" + t.Format(iso8601Format) + "\n"
-	stringToSign = stringToSign + scope + "\n"
+	stringToSign += scope + "\n"
 	canonicalRequestBytes := sha256.Sum256([]byte(canonicalRequest))
-	stringToSign = stringToSign + hex.EncodeToString(canonicalRequestBytes[:])
+	stringToSign += hex.EncodeToString(canonicalRequestBytes[:])
 	return stringToSign
 }
 
@@ -306,7 +306,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return ErrInvalidToken
 	}
 
-	/// Verify finally if signature is same.
+	// Verify finally if signature is same.
 
 	// Get canonical request.
 	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method)

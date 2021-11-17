@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -62,7 +63,7 @@ func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt
 	serverCred := globalActiveCred
 	if serverCred.AccessKey != credentials.AccessKey {
 		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(credentials.AccessKey)
+		serverCred, ok = globalIAMSys.GetUser(context.TODO(), credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
@@ -114,7 +115,7 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 		if claims.AccessKey == globalActiveCred.AccessKey {
 			return []byte(globalActiveCred.SecretKey), nil
 		}
-		cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+		cred, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
 		if !ok {
 			return nil, errInvalidAccessKeyID
 		}
@@ -125,7 +126,7 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 	owner := true
 	if globalActiveCred.AccessKey != claims.AccessKey {
 		// Check if the access key is part of users credentials.
-		ucred, ok := globalIAMSys.GetUser(claims.AccessKey)
+		ucred, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
 		if !ok {
 			return nil, false, errInvalidAccessKeyID
 		}

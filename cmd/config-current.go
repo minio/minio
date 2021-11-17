@@ -696,9 +696,7 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 		// to list the ENV, for regular k/v EnableKey is
 		// implicit, for ENVs we cannot make it implicit.
 		if subSysHelp.MultipleTargets {
-			envK := config.EnvPrefix + strings.Join([]string{
-				strings.ToTitle(subSys), strings.ToTitle(madmin.EnableKey),
-			}, config.EnvWordDelimiter)
+			envK := config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(madmin.EnableKey)
 			envHelp = append(envHelp, config.HelpKV{
 				Key:         envK,
 				Description: fmt.Sprintf("enable %s target, default is 'off'", subSys),
@@ -707,9 +705,7 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 			})
 		}
 		for _, hkv := range h {
-			envK := config.EnvPrefix + strings.Join([]string{
-				strings.ToTitle(subSys), strings.ToTitle(hkv.Key),
-			}, config.EnvWordDelimiter)
+			envK := config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(hkv.Key)
 			envHelp = append(envHelp, config.HelpKV{
 				Key:         envK,
 				Description: hkv.Description,

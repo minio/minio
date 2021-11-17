@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -89,7 +88,7 @@ type tester interface {
 }
 
 func openTestFile(t tester, file string) []byte {
-	f, err := ioutil.ReadFile(filepath.Join("testdata/testdata.zip"))
+	f, err := ioutil.ReadFile("testdata/testdata.zip")
 	if err != nil {
 		t.Fatal(err)
 	}
