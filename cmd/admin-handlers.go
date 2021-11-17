@@ -1835,6 +1835,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				})
 			}
 
+			tls := getTLSInfo()
 			healthInfo.Minio.Info = madmin.MinioInfo{
 				Mode:         infoMessage.Mode,
 				Domain:       infoMessage.Domain,
@@ -1847,7 +1848,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				Services:     infoMessage.Services,
 				Backend:      infoMessage.Backend,
 				Servers:      servers,
-				TLS:          getTLSInfo(),
+				TLS:          &tls,
 			}
 			partialWrite(healthInfo)
 		}
@@ -1879,9 +1880,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 func getTLSInfo() madmin.TLSInfo {
 	tlsInfo := madmin.TLSInfo{
-		TLSInfoAvailable: true,
-		TLSEnabled:       globalIsTLS,
-		Certs:            []madmin.TLSCert{},
+		TLSEnabled: globalIsTLS,
+		Certs:      []madmin.TLSCert{},
 	}
 
 	if globalIsTLS {
