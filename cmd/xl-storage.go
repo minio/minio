@@ -2133,6 +2133,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		xlMeta.AddFreeVersion(fi)
 	}
 
+	// indicates if RenameData() is called by healing.
+	// healing doesn't preserve the dataDir as 'legacy'
+	healing := fi.XLV1 && fi.DataDir != legacyDataDir
+
 	if err = xlMeta.AddVersion(fi); err != nil {
 		if legacyPreserved {
 			// Any failed rename calls un-roll previous transaction.
@@ -2164,6 +2168,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
 			s.moveToTrash(dstDataPath, true)
+			if healing {
+				// If we are healing we should purge any legacyDataPath content,
+				// that was previously preserved during PutObject() call
+				// on a versioned bucket.
+				s.moveToTrash(legacyDataPath, true)
+			}
 			if err = renameAll(srcDataPath, dstDataPath); err != nil {
 				if legacyPreserved {
 					// Any failed rename calls un-roll previous transaction.
