@@ -42,7 +42,7 @@ func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
 	avg := rl.UploadHistogram.GetAvg()
 	for k, v := range avg {
 		// Convert nanoseconds to milliseconds
-		ret[sizeTagToString(k)] = v.avg() / (1000 * 1000)
+		ret[sizeTagToString(k)] = v.avg() / uint64(time.Millisecond)
 	}
 	return
 }
