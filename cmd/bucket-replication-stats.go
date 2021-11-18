@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -68,16 +67,18 @@ func (r *ReplicationStats) UpdateReplicaStat(bucket string, n int64) {
 	if !ok {
 		bs = &BucketReplicationStats{Stats: make(map[string]*BucketReplicationStat)}
 	}
-	atomic.AddInt64(&bs.ReplicaSize, n)
+	bs.ReplicaSize += n
 	r.Cache[bucket] = bs
 }
 
 // Update updates in-memory replication statistics with new values.
-func (r *ReplicationStats) Update(bucket string, arn string, n int64, status, prevStatus replication.StatusType, opType replication.Type) {
+func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration time.Duration, status, prevStatus replication.StatusType, opType replication.Type) {
 	if r == nil {
 		return
 	}
-	r.RLock()
+	r.Lock()
+	defer r.Unlock()
+
 	bs, ok := r.Cache[bucket]
 	if !ok {
 		bs = &BucketReplicationStats{Stats: make(map[string]*BucketReplicationStat)}
@@ -86,36 +87,37 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, status, pr
 	if !ok {
 		b = &BucketReplicationStat{}
 	}
-	r.RUnlock()
 	switch status {
 	case replication.Completed:
 		switch prevStatus { // adjust counters based on previous state
 		case replication.Failed:
-			atomic.AddInt64(&b.FailedCount, -1)
+			b.FailedCount--
 		}
 		if opType == replication.ObjectReplicationType {
-			atomic.AddInt64(&b.ReplicatedSize, n)
+			b.ReplicatedSize += n
 			switch prevStatus {
 			case replication.Failed:
-				atomic.AddInt64(&b.FailedSize, -1*n)
+				b.FailedSize -= n
+			}
+			if duration > 0 {
+				b.Latency.update(n, duration)
 			}
 		}
 	case replication.Failed:
 		if opType == replication.ObjectReplicationType {
 			if prevStatus == replication.Pending {
-				atomic.AddInt64(&b.FailedSize, n)
-				atomic.AddInt64(&b.FailedCount, 1)
+				b.FailedSize += n
+				b.FailedCount++
 			}
 		}
 	case replication.Replica:
 		if opType == replication.ObjectReplicationType {
-			atomic.AddInt64(&b.ReplicaSize, n)
+			b.ReplicaSize += n
 		}
 	}
-	r.Lock()
+
 	bs.Stats[arn] = b
 	r.Cache[bucket] = bs
-	r.Unlock()
 }
 
 // GetInitialUsage get replication metrics available at the time of cluster initialization

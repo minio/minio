@@ -367,7 +367,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	initAllSubsystems(ctx, objLayer)
+	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
@@ -457,7 +457,7 @@ func TestValidateAdminSignature(t *testing.T) {
 
 	newAllSubsystems()
 
-	initAllSubsystems(ctx, objLayer)
+	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
