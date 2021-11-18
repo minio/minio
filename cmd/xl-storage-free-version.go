@@ -75,7 +75,7 @@ func (j xlMetaV2Version) FreeVersion() bool {
 
 // AddFreeVersion adds a free-version if needed for fi.VersionID version.
 // Free-version will be added if fi.VersionID has transitioned.
-func (z *xlMetaV2) AddFreeVersion(fi FileInfo) error {
+func (x *xlMetaV2) AddFreeVersion(fi FileInfo) error {
 	var uv uuid.UUID
 	var err error
 	switch fi.VersionID {
@@ -87,19 +87,22 @@ func (z *xlMetaV2) AddFreeVersion(fi FileInfo) error {
 		}
 	}
 
-	for _, version := range z.Versions {
-		switch version.Type {
-		case ObjectType:
-			if version.ObjectV2.VersionID == uv {
-				// if uv has tiered content we add a
-				// free-version to track it for asynchronous
-				// deletion via scanner.
-				if freeVersion, toFree := version.ObjectV2.InitFreeVersion(fi); toFree {
-					z.Versions = append(z.Versions, freeVersion)
-				}
-				return nil
-			}
+	for i, version := range x.versions {
+		if version.header.VersionID != uv || version.header.Type != ObjectType {
+			continue
 		}
+		// if uv has tiered content we add a
+		// free-version to track it for asynchronous
+		// deletion via scanner.
+		ver, err := x.getIdx(i)
+		if err != nil {
+			return err
+		}
+
+		if freeVersion, toFree := ver.ObjectV2.InitFreeVersion(fi); toFree {
+			return x.addVersion(freeVersion)
+		}
+		return nil
 	}
 	return nil
 }

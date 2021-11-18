@@ -19,26 +19,11 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/logger"
+	"github.com/zeebo/xxh3"
 )
-
-// versionsSorter sorts FileInfo slices by version.
-type versionsSorter []FileInfo
-
-func (v versionsSorter) sort() {
-	sort.Slice(v, func(i, j int) bool {
-		if v[i].IsLatest {
-			return true
-		}
-		if v[j].IsLatest {
-			return false
-		}
-		return v[i].ModTime.After(v[j].ModTime)
-	})
-}
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path)
@@ -54,24 +39,35 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 		}
 	}
 	fivs.Versions = fivs.Versions[:n]
+	// Update numversions
+	for i := range fivs.Versions {
+		fivs.Versions[i].NumVersions = n
+	}
 	return fivs, nil
 }
 
 func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
-		if err := xlMeta.Load(xlMetaBuf); err != nil {
+		var versions []FileInfo
+		var err error
+		if buf, _ := isIndexedMetaV2(xlMetaBuf); buf != nil {
+			versions, err = buf.ListVersions(volume, path)
+		} else {
+			var xlMeta xlMetaV2
+			if err := xlMeta.Load(xlMetaBuf); err != nil {
+				return FileInfoVersions{}, err
+			}
+			versions, err = xlMeta.ListVersions(volume, path)
+		}
+		if err != nil || len(versions) == 0 {
 			return FileInfoVersions{}, err
 		}
-		versions, latestModTime, err := xlMeta.ListVersions(volume, path)
-		if err != nil {
-			return FileInfoVersions{}, err
-		}
+
 		return FileInfoVersions{
 			Volume:        volume,
 			Name:          path,
 			Versions:      versions,
-			LatestModTime: latestModTime,
+			LatestModTime: versions[0].ModTime,
 		}, nil
 	}
 
@@ -98,11 +94,20 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 
 func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
 	if isXL2V1Format(xlMetaBuf) {
-		var xlMeta xlMetaV2
-		if err := xlMeta.Load(xlMetaBuf); err != nil {
-			return FileInfo{}, err
+		var fi FileInfo
+		var err error
+		var inData xlMetaInlineData
+		if buf, data := isIndexedMetaV2(xlMetaBuf); buf != nil {
+			inData = data
+			fi, err = buf.ToFileInfo(volume, path, versionID)
+		} else {
+			var xlMeta xlMetaV2
+			if err := xlMeta.Load(xlMetaBuf); err != nil {
+				return FileInfo{}, err
+			}
+			inData = xlMeta.data
+			fi, err = xlMeta.ToFileInfo(volume, path, versionID)
 		}
-		fi, err := xlMeta.ToFileInfo(volume, path, versionID)
 		if !data || err != nil {
 			return fi, err
 		}
@@ -110,12 +115,12 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 		if versionID == "" {
 			versionID = nullVersionID
 		}
-		fi.Data = xlMeta.data.find(versionID)
+		fi.Data = inData.find(versionID)
 		if len(fi.Data) == 0 {
 			// PR #11758 used DataDir, preserve it
 			// for users who might have used master
 			// branch
-			fi.Data = xlMeta.data.find(fi.DataDir)
+			fi.Data = inData.find(fi.DataDir)
 		}
 		return fi, nil
 	}
@@ -148,4 +153,28 @@ func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 		}
 	}
 	return -1, -1, -1
+}
+
+// hashDeterministicString will return a deterministic hash for the map values.
+// Trivial collisions are avoided, but this is by no means a strong hash.
+func hashDeterministicString(m map[string]string) uint64 {
+	// Seed (random)
+	var crc = uint64(0xc2b40bbac11a7295)
+	// Xor each value to make order independent
+	for k, v := range m {
+		// Separate key and value with an individual xor with a random number.
+		// Add values of each, so they cannot be trivially collided.
+		crc ^= (xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.HashString(v) ^ 0x8da4c8da66194257)
+	}
+	return crc
+}
+
+// hashDeterministicBytes will return a deterministic (weak) hash for the map values.
+// Trivial collisions are avoided, but this is by no means a strong hash.
+func hashDeterministicBytes(m map[string][]byte) uint64 {
+	var crc = uint64(0x1bbc7e1dde654743)
+	for k, v := range m {
+		crc ^= (xxh3.HashString(k) ^ 0x4ee3bbaf7ab2506b) + (xxh3.Hash(v) ^ 0x8da4c8da66194257)
+	}
+	return crc
 }

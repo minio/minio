@@ -163,7 +163,111 @@ func (z VersionType) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
-func (z *xlMetaV2) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *xlFlags) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 uint8
+		zb0001, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = xlFlags(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z xlFlags) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteUint8(uint8(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z xlFlags) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *xlFlags) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = xlFlags(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z xlFlags) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *xlMetaBuf) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 []byte
+		zb0001, err = dc.ReadBytes([]byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = xlMetaBuf(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z xlMetaBuf) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteBytes([]byte(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z xlMetaBuf) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *xlMetaBuf) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = xlMetaBuf(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z xlMetaBuf) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *xlMetaDataDirDecoder) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -180,23 +284,47 @@ func (z *xlMetaV2) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Versions":
-			var zb0002 uint32
-			zb0002, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "Versions")
-				return
-			}
-			if cap(z.Versions) >= int(zb0002) {
-				z.Versions = (z.Versions)[:zb0002]
-			} else {
-				z.Versions = make([]xlMetaV2Version, zb0002)
-			}
-			for za0001 := range z.Versions {
-				err = z.Versions[za0001].DecodeMsg(dc)
+		case "V2Obj":
+			if dc.IsNil() {
+				err = dc.ReadNil()
 				if err != nil {
-					err = msgp.WrapError(err, "Versions", za0001)
+					err = msgp.WrapError(err, "ObjectV2")
 					return
+				}
+				z.ObjectV2 = nil
+			} else {
+				if z.ObjectV2 == nil {
+					z.ObjectV2 = new(struct {
+						DataDir [16]byte `msg:"DDir"`
+					})
+				}
+				var zb0002 uint32
+				zb0002, err = dc.ReadMapHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "ObjectV2")
+					return
+				}
+				for zb0002 > 0 {
+					zb0002--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "ObjectV2")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "DDir":
+						err = dc.ReadExactBytes((z.ObjectV2.DataDir)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "ObjectV2", "DataDir")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "ObjectV2")
+							return
+						}
+					}
 				}
 			}
 		default:
@@ -211,47 +339,82 @@ func (z *xlMetaV2) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *xlMetaV2) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 1
-	// write "Versions"
-	err = en.Append(0x81, 0xa8, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x73)
+func (z *xlMetaDataDirDecoder) EncodeMsg(en *msgp.Writer) (err error) {
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 1 bits */
+	if z.ObjectV2 == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
 	if err != nil {
 		return
 	}
-	err = en.WriteArrayHeader(uint32(len(z.Versions)))
-	if err != nil {
-		err = msgp.WrapError(err, "Versions")
+	if zb0001Len == 0 {
 		return
 	}
-	for za0001 := range z.Versions {
-		err = z.Versions[za0001].EncodeMsg(en)
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// write "V2Obj"
+		err = en.Append(0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
 		if err != nil {
-			err = msgp.WrapError(err, "Versions", za0001)
 			return
+		}
+		if z.ObjectV2 == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			// map header, size 1
+			// write "DDir"
+			err = en.Append(0x81, 0xa4, 0x44, 0x44, 0x69, 0x72)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes((z.ObjectV2.DataDir)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "ObjectV2", "DataDir")
+				return
+			}
 		}
 	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *xlMetaV2) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *xlMetaDataDirDecoder) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
-	// string "Versions"
-	o = append(o, 0x81, 0xa8, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Versions)))
-	for za0001 := range z.Versions {
-		o, err = z.Versions[za0001].MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Versions", za0001)
-			return
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 1 bits */
+	if z.ObjectV2 == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len == 0 {
+		return
+	}
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// string "V2Obj"
+		o = append(o, 0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
+		if z.ObjectV2 == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			// map header, size 1
+			// string "DDir"
+			o = append(o, 0x81, 0xa4, 0x44, 0x44, 0x69, 0x72)
+			o = msgp.AppendBytes(o, (z.ObjectV2.DataDir)[:])
 		}
 	}
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *xlMetaV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *xlMetaDataDirDecoder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -268,23 +431,46 @@ func (z *xlMetaV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Versions":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Versions")
-				return
-			}
-			if cap(z.Versions) >= int(zb0002) {
-				z.Versions = (z.Versions)[:zb0002]
-			} else {
-				z.Versions = make([]xlMetaV2Version, zb0002)
-			}
-			for za0001 := range z.Versions {
-				bts, err = z.Versions[za0001].UnmarshalMsg(bts)
+		case "V2Obj":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Versions", za0001)
 					return
+				}
+				z.ObjectV2 = nil
+			} else {
+				if z.ObjectV2 == nil {
+					z.ObjectV2 = new(struct {
+						DataDir [16]byte `msg:"DDir"`
+					})
+				}
+				var zb0002 uint32
+				zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ObjectV2")
+					return
+				}
+				for zb0002 > 0 {
+					zb0002--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ObjectV2")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "DDir":
+						bts, err = msgp.ReadExactBytes(bts, (z.ObjectV2.DataDir)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "ObjectV2", "DataDir")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "ObjectV2")
+							return
+						}
+					}
 				}
 			}
 		default:
@@ -300,10 +486,12 @@ func (z *xlMetaV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *xlMetaV2) Msgsize() (s int) {
-	s = 1 + 9 + msgp.ArrayHeaderSize
-	for za0001 := range z.Versions {
-		s += z.Versions[za0001].Msgsize()
+func (z *xlMetaDataDirDecoder) Msgsize() (s int) {
+	s = 1 + 6
+	if z.ObjectV2 == nil {
+		s += msgp.NilSize
+	} else {
+		s += 1 + 5 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize))
 	}
 	return
 }
@@ -673,22 +861,31 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "PartETags":
-			var zb0006 uint32
-			zb0006, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "PartETags")
-				return
-			}
-			if cap(z.PartETags) >= int(zb0006) {
-				z.PartETags = (z.PartETags)[:zb0006]
-			} else {
-				z.PartETags = make([]string, zb0006)
-			}
-			for za0005 := range z.PartETags {
-				z.PartETags[za0005], err = dc.ReadString()
+			if dc.IsNil() {
+				err = dc.ReadNil()
 				if err != nil {
-					err = msgp.WrapError(err, "PartETags", za0005)
+					err = msgp.WrapError(err, "PartETags")
 					return
+				}
+				z.PartETags = nil
+			} else {
+				var zb0006 uint32
+				zb0006, err = dc.ReadArrayHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "PartETags")
+					return
+				}
+				if cap(z.PartETags) >= int(zb0006) {
+					z.PartETags = (z.PartETags)[:zb0006]
+				} else {
+					z.PartETags = make([]string, zb0006)
+				}
+				for za0005 := range z.PartETags {
+					z.PartETags[za0005], err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "PartETags", za0005)
+						return
+					}
 				}
 			}
 		case "PartSizes":
@@ -711,22 +908,31 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "PartASizes":
-			var zb0008 uint32
-			zb0008, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "PartActualSizes")
-				return
-			}
-			if cap(z.PartActualSizes) >= int(zb0008) {
-				z.PartActualSizes = (z.PartActualSizes)[:zb0008]
-			} else {
-				z.PartActualSizes = make([]int64, zb0008)
-			}
-			for za0007 := range z.PartActualSizes {
-				z.PartActualSizes[za0007], err = dc.ReadInt64()
+			if dc.IsNil() {
+				err = dc.ReadNil()
 				if err != nil {
-					err = msgp.WrapError(err, "PartActualSizes", za0007)
+					err = msgp.WrapError(err, "PartActualSizes")
 					return
+				}
+				z.PartActualSizes = nil
+			} else {
+				var zb0008 uint32
+				zb0008, err = dc.ReadArrayHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "PartActualSizes")
+					return
+				}
+				if cap(z.PartActualSizes) >= int(zb0008) {
+					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
+				} else {
+					z.PartActualSizes = make([]int64, zb0008)
+				}
+				for za0007 := range z.PartActualSizes {
+					z.PartActualSizes[za0007], err = dc.ReadInt64()
+					if err != nil {
+						err = msgp.WrapError(err, "PartActualSizes", za0007)
+						return
+					}
 				}
 			}
 		case "Size":
@@ -742,64 +948,82 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "MetaSys":
-			var zb0009 uint32
-			zb0009, err = dc.ReadMapHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			if z.MetaSys == nil {
-				z.MetaSys = make(map[string][]byte, zb0009)
-			} else if len(z.MetaSys) > 0 {
-				for key := range z.MetaSys {
-					delete(z.MetaSys, key)
-				}
-			}
-			for zb0009 > 0 {
-				zb0009--
-				var za0008 string
-				var za0009 []byte
-				za0008, err = dc.ReadString()
+			if dc.IsNil() {
+				err = dc.ReadNil()
 				if err != nil {
 					err = msgp.WrapError(err, "MetaSys")
 					return
 				}
-				za0009, err = dc.ReadBytes(za0009)
+				z.MetaSys = nil
+			} else {
+				var zb0009 uint32
+				zb0009, err = dc.ReadMapHeader()
 				if err != nil {
-					err = msgp.WrapError(err, "MetaSys", za0008)
+					err = msgp.WrapError(err, "MetaSys")
 					return
 				}
-				z.MetaSys[za0008] = za0009
-			}
-		case "MetaUsr":
-			var zb0010 uint32
-			zb0010, err = dc.ReadMapHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "MetaUser")
-				return
-			}
-			if z.MetaUser == nil {
-				z.MetaUser = make(map[string]string, zb0010)
-			} else if len(z.MetaUser) > 0 {
-				for key := range z.MetaUser {
-					delete(z.MetaUser, key)
+				if z.MetaSys == nil {
+					z.MetaSys = make(map[string][]byte, zb0009)
+				} else if len(z.MetaSys) > 0 {
+					for key := range z.MetaSys {
+						delete(z.MetaSys, key)
+					}
+				}
+				for zb0009 > 0 {
+					zb0009--
+					var za0008 string
+					var za0009 []byte
+					za0008, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "MetaSys")
+						return
+					}
+					za0009, err = dc.ReadBytes(za0009)
+					if err != nil {
+						err = msgp.WrapError(err, "MetaSys", za0008)
+						return
+					}
+					z.MetaSys[za0008] = za0009
 				}
 			}
-			for zb0010 > 0 {
-				zb0010--
-				var za0010 string
-				var za0011 string
-				za0010, err = dc.ReadString()
+		case "MetaUsr":
+			if dc.IsNil() {
+				err = dc.ReadNil()
 				if err != nil {
 					err = msgp.WrapError(err, "MetaUser")
 					return
 				}
-				za0011, err = dc.ReadString()
+				z.MetaUser = nil
+			} else {
+				var zb0010 uint32
+				zb0010, err = dc.ReadMapHeader()
 				if err != nil {
-					err = msgp.WrapError(err, "MetaUser", za0010)
+					err = msgp.WrapError(err, "MetaUser")
 					return
 				}
-				z.MetaUser[za0010] = za0011
+				if z.MetaUser == nil {
+					z.MetaUser = make(map[string]string, zb0010)
+				} else if len(z.MetaUser) > 0 {
+					for key := range z.MetaUser {
+						delete(z.MetaUser, key)
+					}
+				}
+				for zb0010 > 0 {
+					zb0010--
+					var za0010 string
+					var za0011 string
+					za0010, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "MetaUser")
+						return
+					}
+					za0011, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "MetaUser", za0010)
+						return
+					}
+					z.MetaUser[za0010] = za0011
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -814,31 +1038,9 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
-	zb0001Len := uint32(17)
-	var zb0001Mask uint32 /* 17 bits */
-	if z.PartActualSizes == nil {
-		zb0001Len--
-		zb0001Mask |= 0x1000
-	}
-	if z.MetaSys == nil {
-		zb0001Len--
-		zb0001Mask |= 0x8000
-	}
-	if z.MetaUser == nil {
-		zb0001Len--
-		zb0001Mask |= 0x10000
-	}
-	// variable map header, size zb0001Len
-	err = en.WriteMapHeader(zb0001Len)
-	if err != nil {
-		return
-	}
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 17
 	// write "ID"
-	err = en.Append(0xa2, 0x49, 0x44)
+	err = en.Append(0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -956,16 +1158,23 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteArrayHeader(uint32(len(z.PartETags)))
-	if err != nil {
-		err = msgp.WrapError(err, "PartETags")
-		return
-	}
-	for za0005 := range z.PartETags {
-		err = en.WriteString(z.PartETags[za0005])
+	if z.PartETags == nil { // allownil: if nil
+		err = en.WriteNil()
 		if err != nil {
-			err = msgp.WrapError(err, "PartETags", za0005)
 			return
+		}
+	} else {
+		err = en.WriteArrayHeader(uint32(len(z.PartETags)))
+		if err != nil {
+			err = msgp.WrapError(err, "PartETags")
+			return
+		}
+		for za0005 := range z.PartETags {
+			err = en.WriteString(z.PartETags[za0005])
+			if err != nil {
+				err = msgp.WrapError(err, "PartETags", za0005)
+				return
+			}
 		}
 	}
 	// write "PartSizes"
@@ -985,12 +1194,17 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x1000) == 0 { // if not empty
-		// write "PartASizes"
-		err = en.Append(0xaa, 0x50, 0x61, 0x72, 0x74, 0x41, 0x53, 0x69, 0x7a, 0x65, 0x73)
+	// write "PartASizes"
+	err = en.Append(0xaa, 0x50, 0x61, 0x72, 0x74, 0x41, 0x53, 0x69, 0x7a, 0x65, 0x73)
+	if err != nil {
+		return
+	}
+	if z.PartActualSizes == nil { // allownil: if nil
+		err = en.WriteNil()
 		if err != nil {
 			return
 		}
+	} else {
 		err = en.WriteArrayHeader(uint32(len(z.PartActualSizes)))
 		if err != nil {
 			err = msgp.WrapError(err, "PartActualSizes")
@@ -1024,12 +1238,17 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ModTime")
 		return
 	}
-	if (zb0001Mask & 0x8000) == 0 { // if not empty
-		// write "MetaSys"
-		err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
+	// write "MetaSys"
+	err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
+	if err != nil {
+		return
+	}
+	if z.MetaSys == nil { // allownil: if nil
+		err = en.WriteNil()
 		if err != nil {
 			return
 		}
+	} else {
 		err = en.WriteMapHeader(uint32(len(z.MetaSys)))
 		if err != nil {
 			err = msgp.WrapError(err, "MetaSys")
@@ -1048,12 +1267,17 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x10000) == 0 { // if not empty
-		// write "MetaUsr"
-		err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x55, 0x73, 0x72)
+	// write "MetaUsr"
+	err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x55, 0x73, 0x72)
+	if err != nil {
+		return
+	}
+	if z.MetaUser == nil { // allownil: if nil
+		err = en.WriteNil()
 		if err != nil {
 			return
 		}
+	} else {
 		err = en.WriteMapHeader(uint32(len(z.MetaUser)))
 		if err != nil {
 			err = msgp.WrapError(err, "MetaUser")
@@ -1078,28 +1302,9 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(17)
-	var zb0001Mask uint32 /* 17 bits */
-	if z.PartActualSizes == nil {
-		zb0001Len--
-		zb0001Mask |= 0x1000
-	}
-	if z.MetaSys == nil {
-		zb0001Len--
-		zb0001Mask |= 0x8000
-	}
-	if z.MetaUser == nil {
-		zb0001Len--
-		zb0001Mask |= 0x10000
-	}
-	// variable map header, size zb0001Len
-	o = msgp.AppendMapHeader(o, zb0001Len)
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 17
 	// string "ID"
-	o = append(o, 0xa2, 0x49, 0x44)
+	o = append(o, 0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
 	o = msgp.AppendBytes(o, (z.VersionID)[:])
 	// string "DDir"
 	o = append(o, 0xa4, 0x44, 0x44, 0x69, 0x72)
@@ -1136,9 +1341,13 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "PartETags"
 	o = append(o, 0xa9, 0x50, 0x61, 0x72, 0x74, 0x45, 0x54, 0x61, 0x67, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.PartETags)))
-	for za0005 := range z.PartETags {
-		o = msgp.AppendString(o, z.PartETags[za0005])
+	if z.PartETags == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z.PartETags)))
+		for za0005 := range z.PartETags {
+			o = msgp.AppendString(o, z.PartETags[za0005])
+		}
 	}
 	// string "PartSizes"
 	o = append(o, 0xa9, 0x50, 0x61, 0x72, 0x74, 0x53, 0x69, 0x7a, 0x65, 0x73)
@@ -1146,9 +1355,11 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0006 := range z.PartSizes {
 		o = msgp.AppendInt64(o, z.PartSizes[za0006])
 	}
-	if (zb0001Mask & 0x1000) == 0 { // if not empty
-		// string "PartASizes"
-		o = append(o, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x41, 0x53, 0x69, 0x7a, 0x65, 0x73)
+	// string "PartASizes"
+	o = append(o, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x41, 0x53, 0x69, 0x7a, 0x65, 0x73)
+	if z.PartActualSizes == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z.PartActualSizes)))
 		for za0007 := range z.PartActualSizes {
 			o = msgp.AppendInt64(o, z.PartActualSizes[za0007])
@@ -1160,18 +1371,22 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "MTime"
 	o = append(o, 0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.ModTime)
-	if (zb0001Mask & 0x8000) == 0 { // if not empty
-		// string "MetaSys"
-		o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
+	// string "MetaSys"
+	o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
+	if z.MetaSys == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
 		o = msgp.AppendMapHeader(o, uint32(len(z.MetaSys)))
 		for za0008, za0009 := range z.MetaSys {
 			o = msgp.AppendString(o, za0008)
 			o = msgp.AppendBytes(o, za0009)
 		}
 	}
-	if (zb0001Mask & 0x10000) == 0 { // if not empty
-		// string "MetaUsr"
-		o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x55, 0x73, 0x72)
+	// string "MetaUsr"
+	o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x55, 0x73, 0x72)
+	if z.MetaUser == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
 		o = msgp.AppendMapHeader(o, uint32(len(z.MetaUser)))
 		for za0010, za0011 := range z.MetaUser {
 			o = msgp.AppendString(o, za0010)
@@ -1294,22 +1509,27 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "PartETags":
-			var zb0006 uint32
-			zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "PartETags")
-				return
-			}
-			if cap(z.PartETags) >= int(zb0006) {
-				z.PartETags = (z.PartETags)[:zb0006]
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.PartETags = nil
 			} else {
-				z.PartETags = make([]string, zb0006)
-			}
-			for za0005 := range z.PartETags {
-				z.PartETags[za0005], bts, err = msgp.ReadStringBytes(bts)
+				var zb0006 uint32
+				zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PartETags", za0005)
+					err = msgp.WrapError(err, "PartETags")
 					return
+				}
+				if cap(z.PartETags) >= int(zb0006) {
+					z.PartETags = (z.PartETags)[:zb0006]
+				} else {
+					z.PartETags = make([]string, zb0006)
+				}
+				for za0005 := range z.PartETags {
+					z.PartETags[za0005], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "PartETags", za0005)
+						return
+					}
 				}
 			}
 		case "PartSizes":
@@ -1332,22 +1552,27 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "PartASizes":
-			var zb0008 uint32
-			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "PartActualSizes")
-				return
-			}
-			if cap(z.PartActualSizes) >= int(zb0008) {
-				z.PartActualSizes = (z.PartActualSizes)[:zb0008]
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.PartActualSizes = nil
 			} else {
-				z.PartActualSizes = make([]int64, zb0008)
-			}
-			for za0007 := range z.PartActualSizes {
-				z.PartActualSizes[za0007], bts, err = msgp.ReadInt64Bytes(bts)
+				var zb0008 uint32
+				zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PartActualSizes", za0007)
+					err = msgp.WrapError(err, "PartActualSizes")
 					return
+				}
+				if cap(z.PartActualSizes) >= int(zb0008) {
+					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
+				} else {
+					z.PartActualSizes = make([]int64, zb0008)
+				}
+				for za0007 := range z.PartActualSizes {
+					z.PartActualSizes[za0007], bts, err = msgp.ReadInt64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "PartActualSizes", za0007)
+						return
+					}
 				}
 			}
 		case "Size":
@@ -1363,64 +1588,74 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "MetaSys":
-			var zb0009 uint32
-			zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			if z.MetaSys == nil {
-				z.MetaSys = make(map[string][]byte, zb0009)
-			} else if len(z.MetaSys) > 0 {
-				for key := range z.MetaSys {
-					delete(z.MetaSys, key)
-				}
-			}
-			for zb0009 > 0 {
-				var za0008 string
-				var za0009 []byte
-				zb0009--
-				za0008, bts, err = msgp.ReadStringBytes(bts)
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.MetaSys = nil
+			} else {
+				var zb0009 uint32
+				zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MetaSys")
 					return
 				}
-				za0009, bts, err = msgp.ReadBytesBytes(bts, za0009)
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys", za0008)
-					return
+				if z.MetaSys == nil {
+					z.MetaSys = make(map[string][]byte, zb0009)
+				} else if len(z.MetaSys) > 0 {
+					for key := range z.MetaSys {
+						delete(z.MetaSys, key)
+					}
 				}
-				z.MetaSys[za0008] = za0009
+				for zb0009 > 0 {
+					var za0008 string
+					var za0009 []byte
+					zb0009--
+					za0008, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "MetaSys")
+						return
+					}
+					za0009, bts, err = msgp.ReadBytesBytes(bts, za0009)
+					if err != nil {
+						err = msgp.WrapError(err, "MetaSys", za0008)
+						return
+					}
+					z.MetaSys[za0008] = za0009
+				}
 			}
 		case "MetaUsr":
-			var zb0010 uint32
-			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaUser")
-				return
-			}
-			if z.MetaUser == nil {
-				z.MetaUser = make(map[string]string, zb0010)
-			} else if len(z.MetaUser) > 0 {
-				for key := range z.MetaUser {
-					delete(z.MetaUser, key)
-				}
-			}
-			for zb0010 > 0 {
-				var za0010 string
-				var za0011 string
-				zb0010--
-				za0010, bts, err = msgp.ReadStringBytes(bts)
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.MetaUser = nil
+			} else {
+				var zb0010 uint32
+				zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MetaUser")
 					return
 				}
-				za0011, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "MetaUser", za0010)
-					return
+				if z.MetaUser == nil {
+					z.MetaUser = make(map[string]string, zb0010)
+				} else if len(z.MetaUser) > 0 {
+					for key := range z.MetaUser {
+						delete(z.MetaUser, key)
+					}
 				}
-				z.MetaUser[za0010] = za0011
+				for zb0010 > 0 {
+					var za0010 string
+					var za0011 string
+					zb0010--
+					za0010, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "MetaUser")
+						return
+					}
+					za0011, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "MetaUser", za0010)
+						return
+					}
+					z.MetaUser[za0010] = za0011
+				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -1824,5 +2059,156 @@ func (z *xlMetaV2Version) Msgsize() (s int) {
 	} else {
 		s += z.DeleteMarker.Msgsize()
 	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *xlMetaV2VersionHeader) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+		return
+	}
+	err = dc.ReadExactBytes((z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	z.ModTime, err = dc.ReadInt64()
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	err = dc.ReadExactBytes((z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	{
+		var zb0002 uint8
+		zb0002, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err, "Type")
+			return
+		}
+		z.Type = VersionType(zb0002)
+	}
+	{
+		var zb0003 uint8
+		zb0003, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = xlFlags(zb0003)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *xlMetaV2VersionHeader) EncodeMsg(en *msgp.Writer) (err error) {
+	// array header, size 5
+	err = en.Append(0x95)
+	if err != nil {
+		return
+	}
+	err = en.WriteBytes((z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	err = en.WriteInt64(z.ModTime)
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	err = en.WriteBytes((z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	err = en.WriteUint8(uint8(z.Type))
+	if err != nil {
+		err = msgp.WrapError(err, "Type")
+		return
+	}
+	err = en.WriteUint8(uint8(z.Flags))
+	if err != nil {
+		err = msgp.WrapError(err, "Flags")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *xlMetaV2VersionHeader) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// array header, size 5
+	o = append(o, 0x95)
+	o = msgp.AppendBytes(o, (z.VersionID)[:])
+	o = msgp.AppendInt64(o, z.ModTime)
+	o = msgp.AppendBytes(o, (z.Signature)[:])
+	o = msgp.AppendUint8(o, uint8(z.Type))
+	o = msgp.AppendUint8(o, uint8(z.Flags))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *xlMetaV2VersionHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	{
+		var zb0002 uint8
+		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Type")
+			return
+		}
+		z.Type = VersionType(zb0002)
+	}
+	{
+		var zb0003 uint8
+		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = xlFlags(zb0003)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *xlMetaV2VersionHeader) Msgsize() (s int) {
+	s = 1 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + msgp.Int64Size + msgp.ArrayHeaderSize + (4 * (msgp.ByteSize)) + msgp.Uint8Size + msgp.Uint8Size
 	return
 }

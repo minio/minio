@@ -19,12 +19,15 @@ package cmd
 
 import (
 	"bytes"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 )
 
 func TestXLV2FormatData(t *testing.T) {
@@ -341,15 +344,17 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 			}
 		}
 		fi.TransitionStatus = tc.transitionStatus
+		fi.ModTime = fi.ModTime.Add(time.Duration(i) * time.Second)
 		failOnErr(i+1, xl.AddVersion(fi))
 		fi.ExpireRestored = tc.expireRestored
 		fileInfos = append(fileInfos, fi)
 	}
 
 	for i, tc := range testCases {
-		version := xl.Versions[i]
-		if actual := xl.SharedDataDirCount(version.ObjectV2.VersionID, version.ObjectV2.DataDir); actual != tc.shares {
-			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2, tc.shares, actual)
+		_, version, err := xl.findVersion(uuid.MustParse(tc.versionID))
+		failOnErr(i+1, err)
+		if got := xl.SharedDataDirCount(version.getVersionID(), version.ObjectV2.DataDir); got != tc.shares {
+			t.Fatalf("Test %d: For %#v, expected sharers of data directory %d got %d", i+1, version.ObjectV2.VersionID, tc.shares, got)
 		}
 	}
 
@@ -365,4 +370,111 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 		}
 		count++
 	}
+}
+
+func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
+	data, err := ioutil.ReadFile("testdata/xl.meta-v1.2.zst")
+	if err != nil {
+		b.Fatal(err)
+	}
+	dec, _ := zstd.NewReader(nil)
+	data, err = dec.DecodeAll(data, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("legacy", func(b *testing.B) {
+		var xl xlMetaV2
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.SetBytes(855) // number of versions...
+		for i := 0; i < b.N; i++ {
+			err = xl.Load(data)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("indexed", func(b *testing.B) {
+		var xl xlMetaV2
+		err = xl.Load(data)
+		if err != nil {
+			b.Fatal(err)
+		}
+		data, err := xl.AppendTo(nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.SetBytes(855) // number of versions...
+		for i := 0; i < b.N; i++ {
+			err = xl.Load(data)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+}
+
+func Test_xlMetaV2Shallow_Load(t *testing.T) {
+	// Load Legacy
+	data, err := ioutil.ReadFile("testdata/xl.meta-v1.2.zst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec, _ := zstd.NewReader(nil)
+	data, err = dec.DecodeAll(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	test := func(t *testing.T, xl *xlMetaV2) {
+		if len(xl.versions) != 855 {
+			t.Errorf("want %d versions, got %d", 855, len(xl.versions))
+		}
+		xl.sortByModTime()
+		if !sort.SliceIsSorted(xl.versions, func(i, j int) bool {
+			return xl.versions[i].header.ModTime > xl.versions[j].header.ModTime
+		}) {
+			t.Errorf("Contents not sorted")
+		}
+		for i := range xl.versions {
+			hdr := xl.versions[i].header
+			ver, err := xl.getIdx(i)
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			gotHdr := ver.header()
+			if hdr != gotHdr {
+				t.Errorf("Header does not match, index: %+v != meta: %+v", hdr, gotHdr)
+			}
+		}
+	}
+	t.Run("load-legacy", func(t *testing.T) {
+		var xl xlMetaV2
+		err = xl.Load(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		test(t, &xl)
+	})
+	t.Run("roundtrip", func(t *testing.T) {
+		var xl xlMetaV2
+		err = xl.Load(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err = xl.AppendTo(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		xl = xlMetaV2{}
+		err = xl.Load(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		test(t, &xl)
+	})
 }

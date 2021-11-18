@@ -978,7 +978,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	}
 
 	var xlMeta xlMetaV2
-	if err = xlMeta.Load(buf); err != nil {
+	if err := xlMeta.Load(buf); err != nil {
 		return err
 	}
 
@@ -1044,6 +1044,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 		}
 		return err
 	}
+	defer metaDataPoolPut(buf)
 
 	if !isXL2V1Format(buf) {
 		return errFileVersionNotFound
@@ -1059,12 +1060,13 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 		return err
 	}
 
-	buf, err = xlMeta.AppendTo(nil)
+	wbuf, err := xlMeta.AppendTo(metaDataPoolGet())
 	if err != nil {
 		return err
 	}
+	defer metaDataPoolPut(wbuf)
 
-	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), wbuf)
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`

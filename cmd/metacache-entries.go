@@ -148,11 +148,15 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	if !isXL2V1Format(e.metadata) {
 		return false
 	}
+	if meta, _ := isIndexedMetaV2(e.metadata); meta != nil {
+		return meta.IsLatestDeleteMarker()
+	}
+	// Fall back...
 	var xlMeta xlMetaV2
-	if err := xlMeta.Load(e.metadata); err != nil || len(xlMeta.Versions) == 0 {
+	if err := xlMeta.Load(e.metadata); err != nil || len(xlMeta.versions) == 0 {
 		return true
 	}
-	return xlMeta.Versions[len(xlMeta.Versions)-1].Type == DeleteType
+	return xlMeta.versions[0].header.Type == DeleteType
 }
 
 // fileInfo returns the decoded metadata.

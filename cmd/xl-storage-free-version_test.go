@@ -24,8 +24,8 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
-func (z xlMetaV2) listFreeVersions(volume, path string) ([]FileInfo, error) {
-	fivs, _, err := z.ListVersions(volume, path)
+func (x xlMetaV2) listFreeVersions(volume, path string) ([]FileInfo, error) {
+	fivs, err := x.ListVersions(volume, path)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +41,21 @@ func (z xlMetaV2) listFreeVersions(volume, path string) ([]FileInfo, error) {
 }
 
 func TestFreeVersion(t *testing.T) {
+	fatalErr := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// Add a version with tiered content, one with local content
 	xl := xlMetaV2{}
+	counter := 1
+	report := func() {
+		t.Helper()
+		// t.Logf("versions (%d): len = %d", counter, len(xl.versions))
+		counter++
+	}
 	fi := FileInfo{
 		Volume:           "volume",
 		Name:             "object-name",
@@ -77,16 +90,21 @@ func TestFreeVersion(t *testing.T) {
 		SuccessorModTime: time.Time{},
 	}
 	// Add a version with local content
-	xl.AddVersion(fi)
+	fatalErr(xl.AddVersion(fi))
+	report()
 
 	// Add null version with tiered content
 	tierfi := fi
 	tierfi.VersionID = ""
-	xl.AddVersion(tierfi)
+	fatalErr(xl.AddVersion(tierfi))
+	report()
 	tierfi.TransitionStatus = lifecycle.TransitionComplete
 	tierfi.TransitionedObjName = mustGetUUID()
 	tierfi.TransitionTier = "MINIOTIER-1"
-	xl.DeleteVersion(tierfi)
+	var err error
+	_, _, err = xl.DeleteVersion(tierfi)
+	fatalErr(err)
+	report()
 
 	fvIDs := []string{
 		"00000000-0000-0000-0000-0000000000f1",
@@ -95,15 +113,20 @@ func TestFreeVersion(t *testing.T) {
 	// Simulate overwrite of null version
 	newtierfi := tierfi
 	newtierfi.SetTierFreeVersionID(fvIDs[0])
-	xl.AddFreeVersion(newtierfi)
-	xl.AddVersion(newtierfi)
+	fatalErr(xl.AddFreeVersion(newtierfi))
+	report()
+	fatalErr(xl.AddVersion(newtierfi))
+	report()
 
 	// Simulate removal of null version
 	newtierfi.TransitionTier = ""
 	newtierfi.TransitionedObjName = ""
 	newtierfi.TransitionStatus = ""
 	newtierfi.SetTierFreeVersionID(fvIDs[1])
-	xl.DeleteVersion(newtierfi)
+	report()
+	_, _, err = xl.DeleteVersion(newtierfi)
+	report()
+	fatalErr(err)
 
 	// Check number of free-versions
 	freeVersions, err := xl.listFreeVersions(newtierfi.Volume, newtierfi.Name)
@@ -118,8 +141,10 @@ func TestFreeVersion(t *testing.T) {
 	freefi := newtierfi
 	for _, fvID := range fvIDs {
 		freefi.VersionID = fvID
-		xl.DeleteVersion(freefi)
+		_, _, err = xl.DeleteVersion(freefi)
+		fatalErr(err)
 	}
+	report()
 
 	// Check number of free-versions
 	freeVersions, err = xl.listFreeVersions(newtierfi.Volume, newtierfi.Name)
@@ -129,11 +154,13 @@ func TestFreeVersion(t *testing.T) {
 	if len(freeVersions) != 0 {
 		t.Fatalf("Expected zero free version but got %d", len(freeVersions))
 	}
+	report()
 
 	// Adding a free version to a version with no tiered content.
 	newfi := fi
 	newfi.SetTierFreeVersionID("00000000-0000-0000-0000-0000000000f3")
-	xl.AddFreeVersion(newfi) // this shouldn't add a free-version
+	fatalErr(xl.AddFreeVersion(newfi)) // this shouldn't add a free-version
+	report()
 
 	// Check number of free-versions
 	freeVersions, err = xl.listFreeVersions(newtierfi.Volume, newtierfi.Name)
