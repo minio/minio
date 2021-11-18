@@ -47,7 +47,6 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 #### List of Amazon S3 Object API's not supported on MinIO
 
 - ObjectACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
-- ObjectTorrent
 
 ### Object name restrictions on MinIO
 
