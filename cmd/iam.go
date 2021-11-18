@@ -911,26 +911,6 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (cred auth.Cre
 		cred, ok = sys.store.GetUser(accessKey)
 	}
 
-	if ok && cred.IsValid() {
-		if cred.IsServiceAccount() || cred.IsTemp() {
-			policies, err := sys.store.PolicyDBGet(cred.AccessKey, false)
-			if err != nil {
-				// Reject if the policy map for user doesn't exist anymore.
-				logger.LogIf(ctx, fmt.Errorf("'%s' user does not have a policy present", cred.ParentUser))
-				return auth.Credentials{}, false
-			}
-			for _, group := range cred.Groups {
-				ps, err := sys.store.PolicyDBGet(group, true)
-				if err != nil {
-					// Reject if the policy map for group doesn't exist anymore.
-					logger.LogIf(ctx, fmt.Errorf("'%s' group does not have a policy present", group))
-					return auth.Credentials{}, false
-				}
-				policies = append(policies, ps...)
-			}
-			ok = len(policies) > 0 || globalPolicyOPA != nil
-		}
-	}
 	return cred, ok && cred.IsValid()
 }
 
@@ -1051,7 +1031,14 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	}
 
 	if len(svcPolicies) == 0 {
-		return false
+		// If parent user has no policies, look in OpenID claims in case it exists.
+		policySet, ok := iampolicy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
+		if ok {
+			svcPolicies = policySet.ToSlice()
+		}
+		if len(svcPolicies) == 0 {
+			return false
+		}
 	}
 
 	// Policies were found, evaluate all of them.
