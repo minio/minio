@@ -179,7 +179,7 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -254,7 +254,7 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -370,7 +370,7 @@
       "yaxes": [
         {
           "$$hashKey": "object:419",
-          "format": "decbytes",
+          "format": "bytes",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -379,7 +379,7 @@
         },
         {
           "$$hashKey": "object:420",
-          "format": "decbytes",
+          "format": "bytes",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -559,7 +559,7 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "bytes"
         },
         "overrides": []
       },
