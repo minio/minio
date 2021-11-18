@@ -52,7 +52,7 @@ require (
 	github.com/minio/mc v0.0.0-20211115052100-7fd441ec6c5b // indirect
 	github.com/minio/minio-go/v7 v7.0.16-0.20211108161804-a7a36ee131df
 	github.com/minio/parquet-go v1.1.0
-	github.com/minio/pkg v1.1.7
+	github.com/minio/pkg v1.1.8
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
