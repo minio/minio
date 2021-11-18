@@ -359,7 +359,7 @@ func (j xlMetaV2Version) getModTime() time.Time {
 	return time.Time{}
 }
 
-// getModTime will return the ModTime of the underlying version.
+// getVersionID will return the versionID of the underlying version.
 func (j xlMetaV2Version) getVersionID() [16]byte {
 	switch j.Type {
 	case ObjectType:
