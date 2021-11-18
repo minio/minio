@@ -26,27 +26,6 @@ import (
 )
 
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
-	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path)
-	if err != nil {
-		return fivs, err
-	}
-	n := 0
-	for _, fi := range fivs.Versions {
-		// Filter our tier object delete marker
-		if !fi.TierFreeVersion() {
-			fivs.Versions[n] = fi
-			n++
-		}
-	}
-	fivs.Versions = fivs.Versions[:n]
-	// Update numversions
-	for i := range fivs.Versions {
-		fivs.Versions[i].NumVersions = n
-	}
-	return fivs, nil
-}
-
-func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var versions []FileInfo
 		var err error
@@ -63,10 +42,25 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 			return FileInfoVersions{}, err
 		}
 
+		var freeVersions []FileInfo
+		n := 0
+		for _, fi := range versions {
+			if fi.TierFreeVersion() {
+				freeVersions = append(freeVersions, fi)
+				continue
+			}
+			versions[n] = fi
+			n++
+		}
+		versions = versions[:n]
+		for _, ver := range versions {
+			ver.NumVersions = n
+		}
 		return FileInfoVersions{
 			Volume:        volume,
 			Name:          path,
 			Versions:      versions,
+			FreeVersions:  freeVersions,
 			LatestModTime: versions[0].ModTime,
 		}, nil
 	}

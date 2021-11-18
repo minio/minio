@@ -24,6 +24,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -76,6 +77,17 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	// Validate the received bucket policy document
 	if err = bucketLifecycle.Validate(); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Disallow MaxNoncurrentVersions if bucket has object locking enabled
+	var rCfg lock.Retention
+	if rCfg, err = globalBucketObjectLockSys.Get(bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if rCfg.LockEnabled && bucketLifecycle.HasMaxNoncurrentVersions() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidLifecycleWithObjectLock), r.URL)
 		return
 	}
 

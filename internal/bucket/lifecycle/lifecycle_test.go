@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -108,6 +109,12 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		// Lifecycle with zero Transition Days
 		{
 			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Filter></Filter><Status>Enabled</Status><Transition><Days>0</Days><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with max noncurrent versions
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><MaxNoncurrentVersions>5</MaxNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
@@ -617,5 +624,26 @@ func TestTransitionTier(t *testing.T) {
 	}
 	if got := lc.TransitionTier(obj2); got != "TIER-2" {
 		t.Fatalf("Expected TIER-2 but got %s", got)
+	}
+}
+
+func TestNoncurrentVersionsLimit(t *testing.T) {
+	// test that the lowest max noncurrent versions limit is returned among
+	// matching rules
+	var rules []Rule
+	for i := 1; i <= 10; i++ {
+		rules = append(rules, Rule{
+			ID:     strconv.Itoa(i),
+			Status: "Enabled",
+			NoncurrentVersionExpiration: NoncurrentVersionExpiration{
+				MaxNoncurrentVersions: i,
+			},
+		})
+	}
+	lc := Lifecycle{
+		Rules: rules,
+	}
+	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 1 {
+		t.Fatalf("Expected max noncurrent versions limit to be 1 but got %d", lim)
 	}
 }

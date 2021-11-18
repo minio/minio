@@ -102,7 +102,8 @@ func (es *expiryState) queueExpiryTask(oi ObjectInfo, restoredObject bool, rmVer
 }
 
 var (
-	globalExpiryState *expiryState
+	globalExpiryState      *expiryState
+	globalNoncurrentExpiry *noncurrentExpiry
 )
 
 func newExpiryState() *expiryState {
@@ -120,6 +121,43 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 			} else {
 				applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
 			}
+		}
+	}()
+	initBackgroundNoncurrentExpiry(ctx, objectAPI)
+}
+
+type noncurrentExpiryTask struct {
+	bucket   string
+	versions []ObjectToDelete
+}
+
+type noncurrentExpiry struct {
+	once sync.Once
+	ch   chan noncurrentExpiryTask
+}
+
+func (nc *noncurrentExpiry) enqueue(bucket string, toDel []ObjectToDelete) {
+	select {
+	case <-GlobalContext.Done():
+		nc.once.Do(func() {
+			close(nc.ch)
+		})
+	case nc.ch <- noncurrentExpiryTask{bucket: bucket, versions: toDel}:
+	default:
+	}
+}
+
+func newNoncurrentExpiryState() *noncurrentExpiry {
+	return &noncurrentExpiry{
+		ch: make(chan noncurrentExpiryTask, 10000),
+	}
+}
+
+func initBackgroundNoncurrentExpiry(ctx context.Context, objectAPI ObjectLayer) {
+	globalNoncurrentExpiry = newNoncurrentExpiryState()
+	go func() {
+		for t := range globalNoncurrentExpiry.ch {
+			deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
 		}
 	}()
 }
