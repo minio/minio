@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/logger"
