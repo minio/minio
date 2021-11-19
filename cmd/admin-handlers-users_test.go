@@ -28,6 +28,7 @@ import (
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 )
@@ -145,17 +146,6 @@ func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToke
 	return client
 }
 
-func runAllIAMTests(suite *TestSuiteIAM, c *check) {
-	suite.SetUpSuite(c)
-	suite.TestUserCreate(c)
-	suite.TestPolicyCreate(c)
-	suite.TestCannedPolicies(c)
-	suite.TestGroupAddRemove(c)
-	suite.TestServiceAccountOps(c)
-	suite.TestAddServiceAccountPerms(c)
-	suite.TearDownSuite(c)
-}
-
 func TestIAMInternalIDPServerSuite(t *testing.T) {
 	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
@@ -182,7 +172,18 @@ func TestIAMInternalIDPServerSuite(t *testing.T) {
 		t.Run(
 			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
 			func(t *testing.T) {
-				runAllIAMTests(testCase, &check{t, testCase.serverType})
+				suite := testCase
+				c := &check{t, testCase.serverType}
+
+				suite.SetUpSuite(c)
+				suite.TestUserCreate(c)
+				suite.TestPolicyCreate(c)
+				suite.TestCannedPolicies(c)
+				suite.TestGroupAddRemove(c)
+				suite.TestServiceAccountOpsByAdmin(c)
+				suite.TestServiceAccountOpsByUser(c)
+				suite.TestAddServiceAccountPerms(c)
+				suite.TearDownSuite(c)
 			},
 		)
 	}
@@ -684,7 +685,202 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	}
 }
 
-func (s *TestSuiteIAM) TestServiceAccountOps(c *check) {
+func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+	})
+	if err != nil {
+		c.Fatalf("Err creating svc acc: %v", err)
+	}
+
+	// 1. Check that svc account appears in listing
+	listResp, err := userAdmClient.ListServiceAccounts(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("unable to list svc accounts: %v", err)
+	}
+	if !set.CreateStringSet(listResp.Accounts...).Contains(cr.AccessKey) {
+		c.Fatalf("created service account did not appear in listing!")
+	}
+
+	// 2. Check that svc account info can be queried
+	infoResp, err := userAdmClient.InfoServiceAccount(ctx, cr.AccessKey)
+	if err != nil {
+		c.Fatalf("unable to get svc acc info: %v", err)
+	}
+	c.Assert(infoResp.ParentUser, accessKey)
+	c.Assert(infoResp.AccountStatus, "on")
+	c.Assert(infoResp.ImpliedPolicy, true)
+
+	// 4. Check that svc account can restrict the policy, and that the
+	// session policy can be updated.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:     policyBytes,
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustNotListObjects(ctx, svcClient, bucket)
+
+		newPolicyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewPolicy: newPolicyBytes,
+		})
+		if err != nil {
+			c.Fatalf("unable to update session policy for svc acc: %v", err)
+		}
+		c.mustListObjects(ctx, svcClient, bucket)
+	}
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustListObjects(ctx, svcClient, bucket)
+
+		_, svcSK2 := mustGenerateCredentials(c)
+		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewSecretKey: svcSK2,
+		})
+		if err != nil {
+			c.Fatalf("unable to update secret key for svc acc: %v", err)
+		}
+		// old creds should not work:
+		c.mustNotListObjects(ctx, svcClient, bucket)
+		// new creds work:
+		svcClient2 := s.getUserClient(c, cr.AccessKey, svcSK2, "")
+		c.mustListObjects(ctx, svcClient2, bucket)
+
+		// update status to disabled
+		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+			NewStatus: "off",
+		})
+		if err != nil {
+			c.Fatalf("unable to update secret key for svc acc: %v", err)
+		}
+		c.mustNotListObjects(ctx, svcClient2, bucket)
+	}
+
+	// 5. Check that service account can be deleted.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		c.mustListObjects(ctx, svcClient, bucket)
+
+		err = userAdmClient.DeleteServiceAccount(ctx, svcAK)
+		if err != nil {
+			c.Fatalf("unable to delete svc acc: %v", err)
+		}
+		c.mustNotListObjects(ctx, svcClient, bucket)
+	}
+
+}
+
+func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
