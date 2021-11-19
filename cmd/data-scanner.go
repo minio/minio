@@ -903,7 +903,7 @@ func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o Obje
 
 	overflowVersions := fivs[lim+1:]
 	// current version + most recent lim noncurrent versions
-	fivs = append(fivs[0:1], fivs[:lim+1]...)
+	fivs = fivs[:lim+1]
 
 	rcfg, _ := globalBucketObjectLockSys.Get(i.bucket)
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
