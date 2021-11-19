@@ -1096,11 +1096,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	// This can only happen if policy was set but with an empty JSON.
-	if subPolicy.Version == "" && len(subPolicy.Statements) == 0 {
-		return combinedPolicy.IsAllowed(parentArgs)
-	}
-
 	if subPolicy.Version == "" {
 		return false
 	}
