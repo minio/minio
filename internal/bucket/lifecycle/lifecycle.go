@@ -492,7 +492,7 @@ func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) int {
 	return lim
 }
 
-// HasNoncurrentVersions returns true if there exists a rule with
+// HasMaxNoncurrentVersions returns true if there exists a rule with
 // MaxNoncurrentVersions limit set.
 func (lc Lifecycle) HasMaxNoncurrentVersions() bool {
 	for _, rule := range lc.Rules {
