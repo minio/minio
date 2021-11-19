@@ -229,18 +229,16 @@ func (g *S3) new(creds madmin.Credentials, transport http.RoundTripper) (*miniog
 
 	if _, err = clntStatic.BucketExists(context.Background(), probeBucketName); err != nil {
 		switch miniogo.ToErrorResponse(err).Code {
-		case "InvalidAccessKeyId":
-			// Check if the provided keys are valid for chain.
-			if _, err = clntChain.BucketExists(context.Background(), probeBucketName); err != nil {
-				if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
-					return nil, err
+		case "InvalidAccessKeyId", "AccessDenied":
+			if s3utils.IsAmazonEndpoint(*u) {
+				// Check if the provided keys are valid for chain.
+				if _, err = clntChain.BucketExists(context.Background(), probeBucketName); err != nil {
+					if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
+						return nil, err
+					}
 				}
+				return &miniogo.Core{Client: clntChain}, nil
 			}
-			return &miniogo.Core{Client: clntChain}, nil
-		case "AccessDenied":
-			// this is a good error means backend is reachable
-			// and credentials are valid but credentials don't
-			// have access to 'probeBucketName' which is harmless.
 			return &miniogo.Core{Client: clntStatic}, nil
 		default:
 			return nil, err
