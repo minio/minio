@@ -939,8 +939,10 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 
 	var targetAccount string
 
+	// If listing is requested for a specific user (who is not the request
+	// sender), check that the user has permissions.
 	user := r.Form.Get("user")
-	if user != "" {
+	if user != "" && user != cred.AccessKey {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
 			Action:          iampolicy.ListServiceAccountsAdminAction,
