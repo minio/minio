@@ -77,7 +77,7 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	}
 
 	fi.IsLatest = true // No versions so current version is latest.
-	fi.XLV1 = true     // indicates older version
+	fi.NumVersions = 1 // just this version
 	return FileInfoVersions{
 		Volume:        volume,
 		Name:          path,
