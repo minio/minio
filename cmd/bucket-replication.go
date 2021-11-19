@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -1769,4 +1770,82 @@ func resyncTarget(oi ObjectInfo, arn string, resetID string, resetBeforeDate tim
 	}
 	rd.Replicate = newReset && oi.ModTime.Before(resetBeforeDate)
 	return
+}
+
+// get the most current of in-memory replication stats  and data usage info from crawler.
+func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+	// accumulate cluster bucket stats
+	stats := make(map[string]*BucketReplicationStat)
+	var totReplicaSize int64
+	for _, bucketStat := range bucketStats {
+		totReplicaSize += bucketStat.ReplicationStats.ReplicaSize
+		for arn, stat := range bucketStat.ReplicationStats.Stats {
+			oldst := stats[arn]
+			if oldst == nil {
+				oldst = &BucketReplicationStat{}
+			}
+			stats[arn] = &BucketReplicationStat{
+				FailedCount:    stat.FailedCount + oldst.FailedCount,
+				FailedSize:     stat.FailedSize + oldst.FailedSize,
+				ReplicatedSize: stat.ReplicatedSize + oldst.ReplicatedSize,
+				Latency:        stat.Latency.merge(oldst.Latency),
+			}
+		}
+	}
+
+	// add initial usage stat to cluster stats
+	usageStat := globalReplicationStats.GetInitialUsage(bucket)
+	totReplicaSize += usageStat.ReplicaSize
+	if usageStat.Stats != nil {
+		for arn, stat := range usageStat.Stats {
+			st := stats[arn]
+			if st == nil {
+				st = &BucketReplicationStat{
+					ReplicatedSize: stat.ReplicatedSize,
+					FailedSize:     stat.FailedSize,
+					FailedCount:    stat.FailedCount,
+				}
+			} else {
+				st.ReplicatedSize += stat.ReplicatedSize
+				st.FailedSize += stat.FailedSize
+				st.FailedCount += stat.FailedCount
+			}
+			stats[arn] = st
+		}
+	}
+	s = BucketReplicationStats{
+		Stats: make(map[string]*BucketReplicationStat, len(stats)),
+	}
+	var latestTotReplicatedSize int64
+	for _, st := range u.ReplicationInfo {
+		latestTotReplicatedSize += int64(st.ReplicatedSize)
+	}
+	// normalize computed real time stats with latest usage stat
+	for arn, tgtstat := range stats {
+		st := BucketReplicationStat{}
+		bu, ok := u.ReplicationInfo[arn]
+		if !ok {
+			bu = BucketTargetUsageInfo{}
+		}
+		// use in memory replication stats if it is ahead of usage info.
+		st.ReplicatedSize = int64(bu.ReplicatedSize)
+		if tgtstat.ReplicatedSize >= int64(bu.ReplicatedSize) {
+			st.ReplicatedSize = tgtstat.ReplicatedSize
+		}
+		s.ReplicatedSize += st.ReplicatedSize
+		// Reset FailedSize and FailedCount to 0 for negative overflows which can
+		// happen since data usage picture can lag behind actual usage state at the time of cluster start
+		st.FailedSize = int64(math.Max(float64(tgtstat.FailedSize), 0))
+		st.FailedCount = int64(math.Max(float64(tgtstat.FailedCount), 0))
+		st.Latency = tgtstat.Latency
+
+		s.Stats[arn] = &st
+		s.FailedSize += st.FailedSize
+		s.FailedCount += st.FailedCount
+	}
+	// normalize overall stats
+	s.ReplicaSize = int64(math.Max(float64(totReplicaSize), float64(u.ReplicaSize)))
+	s.ReplicatedSize = int64(math.Max(float64(s.ReplicatedSize), float64(latestTotReplicatedSize)))
+	return s
 }

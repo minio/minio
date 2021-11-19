@@ -1721,13 +1721,13 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		usageInfo = dataUsageInfo.BucketsUsage[bucket]
 	}
 
-	bucketReplStats := getLatestReplicationStats(bucket, usageInfo)
-	jsonData, err := json.Marshal(bucketReplStats)
-	if err != nil {
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+
+	enc := json.NewEncoder(w)
+	if err = enc.Encode(getLatestReplicationStats(bucket, usageInfo)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	writeSuccessResponseJSON(w, jsonData)
 }
 
 // ResetBucketReplicationStateHandler - starts a replication reset for all objects in a bucket which

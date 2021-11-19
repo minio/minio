@@ -1071,19 +1071,17 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				Children: v.Children,
 			}
 			if v.ReplicatedSize > 0 || v.ReplicaSize > 0 || v.ReplicationFailedSize > 0 || v.ReplicationPendingSize > 0 {
-				due.ReplicationStats = &replicationAllStats{
-					Targets: make(map[string]replicationStats),
-				}
-				cfg, err := getReplicationConfig(GlobalContext, d.Info.Name)
-				if err != nil {
-					return err
-				}
-				due.ReplicationStats.ReplicaSize = v.ReplicaSize
-
-				due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
-					ReplicatedSize: v.ReplicatedSize,
-					FailedSize:     v.ReplicationFailedSize,
-					PendingSize:    v.ReplicationPendingSize,
+				cfg, _ := getReplicationConfig(GlobalContext, d.Info.Name)
+				if cfg != nil && cfg.RoleArn != "" {
+					due.ReplicationStats = &replicationAllStats{
+						Targets: make(map[string]replicationStats),
+					}
+					due.ReplicationStats.ReplicaSize = v.ReplicaSize
+					due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
+						ReplicatedSize: v.ReplicatedSize,
+						FailedSize:     v.ReplicationFailedSize,
+						PendingSize:    v.ReplicationPendingSize,
+					}
 				}
 			}
 			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
@@ -1115,21 +1113,20 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			empty := replicationStatsV1{}
 
 			if v.ReplicationStats != empty {
-				due.ReplicationStats = &replicationAllStats{
-					Targets: make(map[string]replicationStats),
+				cfg, _ := getReplicationConfig(GlobalContext, d.Info.Name)
+				if cfg != nil && cfg.RoleArn != "" {
+					due.ReplicationStats = &replicationAllStats{
+						Targets: make(map[string]replicationStats),
+					}
+					due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
+						ReplicatedSize: v.ReplicationStats.ReplicatedSize,
+						FailedSize:     v.ReplicationStats.FailedSize,
+						FailedCount:    v.ReplicationStats.FailedCount,
+						PendingSize:    v.ReplicationStats.PendingSize,
+						PendingCount:   v.ReplicationStats.PendingCount,
+					}
+					due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 				}
-				cfg, err := getReplicationConfig(GlobalContext, d.Info.Name)
-				if err != nil {
-					return err
-				}
-				due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
-					ReplicatedSize: v.ReplicationStats.ReplicatedSize,
-					FailedSize:     v.ReplicationStats.FailedSize,
-					FailedCount:    v.ReplicationStats.FailedCount,
-					PendingSize:    v.ReplicationStats.PendingSize,
-					PendingCount:   v.ReplicationStats.PendingCount,
-				}
-				due.ReplicationStats.ReplicaSize = v.ReplicationStats.ReplicaSize
 			}
 			due.Compacted = len(due.Children) == 0 && k != d.Info.Name
 
@@ -1158,7 +1155,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		d.Info = dold.Info
 		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
-		var arn string
 		for k, v := range dold.Cache {
 			due := dataUsageEntry{
 				Size:     v.Size,
@@ -1167,21 +1163,14 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				Children: v.Children,
 			}
 			if v.ReplicationStats != nil && !v.ReplicationStats.Empty() {
-				if arn == "" {
-					cfg, err := getReplicationConfig(GlobalContext, d.Info.Name)
-					if err != nil {
-						return err
+				cfg, _ := getReplicationConfig(GlobalContext, d.Info.Name)
+				if cfg != nil && cfg.RoleArn != "" {
+					due.ReplicationStats = &replicationAllStats{
+						Targets: make(map[string]replicationStats),
 					}
 					d.Info.replication = replicationConfig{Config: cfg}
-					arn = d.Info.replication.Config.RoleArn
-				}
 
-				due.ReplicationStats = &replicationAllStats{
-					Targets: make(map[string]replicationStats),
-				}
-
-				if arn != "" {
-					due.ReplicationStats.Targets[arn] = replicationStats{
+					due.ReplicationStats.Targets[cfg.RoleArn] = replicationStats{
 						ReplicatedSize: v.ReplicationStats.ReplicatedSize,
 						FailedSize:     v.ReplicationStats.FailedSize,
 						FailedCount:    v.ReplicationStats.FailedCount,
