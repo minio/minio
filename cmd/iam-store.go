@@ -1464,24 +1464,8 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 		return errIAMActionNotAllowed
 	}
 
-	// Check that at least one policy is available.
-	policies, err := cache.policyDBGet(store.getUsersSysType(), parentUser, false)
-	if err != nil {
-		return err
-	}
-	for _, group := range cred.Groups {
-		gp, err := cache.policyDBGet(store.getUsersSysType(), group, true)
-		if err != nil && err != errNoSuchGroup {
-			return err
-		}
-		policies = append(policies, gp...)
-	}
-	if len(policies) == 0 {
-		return errNoSuchUser
-	}
-
 	u := newUserIdentity(cred)
-	err = store.saveUserIdentity(ctx, u.Credentials.AccessKey, svcUser, u)
+	err := store.saveUserIdentity(ctx, u.Credentials.AccessKey, svcUser, u)
 	if err != nil {
 		return err
 	}
@@ -1519,8 +1503,12 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 	}
 
 	if opts.sessionPolicy != nil {
-		m := make(map[string]interface{})
-		err := opts.sessionPolicy.Validate()
+		m, err := getClaimsFromToken(cr.SessionToken)
+		if err != nil {
+			return fmt.Errorf("unable to get svc acc claims: %v", err)
+		}
+
+		err = opts.sessionPolicy.Validate()
 		if err != nil {
 			return err
 		}
@@ -1532,9 +1520,9 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 			return fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
 
+		// Overwrite session policy claims.
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = "embedded-policy"
-		m[parentClaim] = cr.ParentUser
 		cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, globalActiveCred.SecretKey)
 		if err != nil {
 			return err
