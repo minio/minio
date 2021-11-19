@@ -973,7 +973,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 
 // applyMaxNoncurrentVersionLimit removes noncurrent versions older than the most recent MaxNoncurrentVersions configured.
 // Note: This function doesn't update sizeSummary since it always removes versions that it doesn't return.
-func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o ObjectLayer, fivs []FileInfo, _ *sizeSummary) ([]FileInfo, error) {
+func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
 	if i.lifeCycle == nil {
 		return fivs, nil
 	}
@@ -1013,8 +1013,8 @@ func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o Obje
 
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
-func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo, sizeS *sizeSummary) ([]FileInfo, error) {
-	return i.applyMaxNoncurrentVersionLimit(ctx, o, fivs, sizeS)
+func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+	return i.applyMaxNoncurrentVersionLimit(ctx, o, fivs)
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.

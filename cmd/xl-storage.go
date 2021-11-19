@@ -468,7 +468,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.tiers = make(map[string]tierStats)
 		}
 		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
-		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions, &sizeS)
+		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)

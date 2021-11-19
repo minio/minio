@@ -580,7 +580,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrInvalidLifecycleWithObjectLock: {
 		Code:           "InvalidLifecycleWithObjectLock",
-		Description:    "The lifecycle configuration is not supported with object locking",
+		Description:    "The lifecycle configuration containing MaxNoncurrentVersions is not supported with object locking",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNoSuchBucketSSEConfig: {
