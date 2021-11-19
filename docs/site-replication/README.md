@@ -19,7 +19,7 @@ This feature is built on top of multi-site bucket replication feature. It enable
 1. Initially, only **one** of the sites being added for replication may have data. After site-replication is successfully configured, this data is replicated to the other (initially empty) sites. Subsequently, objects may be written to any of the sites, and they will be replicated to all other sites.
 2. Only the **LDAP IDP** is currently supported.
 3. At present, all sites are **required** to have the same root credentials.
-4. At present it is not possible to **remove a site** from a set of replicated sites.
+4.  **removing a site** is not allowed from a set of replicated sites once configured. 
 5. If using [SSE-S3 or SSE-KMS encryption via KMS](https://docs.min.io/docs/minio-kms-quickstart-guide.html "MinIO KMS Guide"), all sites are required to have access to the same KES keys. This can be achieved via a central KES server or multiple KES servers (say one per site) connected to a central KMS server.
 
 ## Configuring Site Replication ##
