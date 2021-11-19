@@ -128,17 +128,16 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 	for bucket, bui := range dataUsageInfo.BucketsUsage {
 		if bui.ReplicatedSizeV1 > 0 || bui.ReplicationFailedCountV1 > 0 ||
 			bui.ReplicationFailedSizeV1 > 0 || bui.ReplicationPendingCountV1 > 0 {
-			dataUsageInfo.ReplicationInfo = make(map[string]BucketTargetUsageInfo)
-			cfg, err := getReplicationConfig(GlobalContext, bucket)
-			if err != nil {
-				return DataUsageInfo{}, err
-			}
-			dataUsageInfo.ReplicationInfo[cfg.RoleArn] = BucketTargetUsageInfo{
-				ReplicationFailedSize:   bui.ReplicationFailedSizeV1,
-				ReplicationFailedCount:  bui.ReplicationFailedCountV1,
-				ReplicatedSize:          bui.ReplicatedSizeV1,
-				ReplicationPendingCount: bui.ReplicationPendingCountV1,
-				ReplicationPendingSize:  bui.ReplicationPendingSizeV1,
+			cfg, _ := getReplicationConfig(GlobalContext, bucket)
+			if cfg != nil && cfg.RoleArn != "" {
+				dataUsageInfo.ReplicationInfo = make(map[string]BucketTargetUsageInfo)
+				dataUsageInfo.ReplicationInfo[cfg.RoleArn] = BucketTargetUsageInfo{
+					ReplicationFailedSize:   bui.ReplicationFailedSizeV1,
+					ReplicationFailedCount:  bui.ReplicationFailedCountV1,
+					ReplicatedSize:          bui.ReplicatedSizeV1,
+					ReplicationPendingCount: bui.ReplicationPendingCountV1,
+					ReplicationPendingSize:  bui.ReplicationPendingSizeV1,
+				}
 			}
 		}
 	}
