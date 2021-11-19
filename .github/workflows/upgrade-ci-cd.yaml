@@ -26,44 +26,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Start containers MinIO from 2019
+      - name: Start upgrade tests
         run: |
-          sudo apt install curl -y
-          export MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z
-          docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
-          export GOPATH=/tmp/gopath
-          export PATH=${PATH}:${GOPATH}/bin
-          go install -v github.com/minio/mc@latest
-          until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin) do echo '...waiting...' && sleep 1; done;
-          mc mb minio/minio-test/;
-          mc mirror /usr/sbin minio/minio-test/to-read/;
-          mc cp /etc/hosts minio/minio-test/to-read/hosts;
-          mc policy set download minio/minio-test;
-          curl -s http://127.0.0.1:9000/minio-test/to-read/hosts | sha256sum;
-
-      - name: Build on ${{ matrix.os }}
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          CGO_ENABLED: 0
-          GO111MODULE: on
-        run: |
-          TAG=minio/minio:dev make docker
-
-      - name: Start containers MinIO current
-        run: |
-          sudo apt install curl -y
-          export MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z
-          docker-compose -f "buildscripts/upgrade-tests/compose.yml" stop
-          export MINIO_VERSION=dev
-          export GOPATH=/tmp/gopath
-          export PATH=${PATH}:${GOPATH}/bin
-          docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
-          until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin) do echo '...waiting...' && sleep 1; done;
-          sha256sum1=$(curl -s http://127.0.0.1:9000/minio-test/to-read/hosts | sha256sum);
-          mc mirror /usr/sbin minio/minio-test/to-read/;
-          mc admin heal -r minio/minio-test; # test after healing
-          mc mirror /usr/sbin minio/minio-test/to-read/;
-          sha256sum2=$(curl -s http://127.0.0.1:9000/minio-test/to-read/hosts | sha256sum);
-          if [ "${sha256sum1}" != "$${sha256sum2}" ]; then
-             exit 1;
-          fi
+          make test-upgrade
