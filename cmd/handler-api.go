@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	mem "github.com/shirou/gopsutil/v3/mem"
@@ -227,6 +228,15 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if atomic.LoadInt32(&globalServiceFreeze) != 0 {
+			// To indicate disable keep-alives
+			w.Header().Set("Connection", "close")
+			writeErrorResponse(r.Context(), w,
+				errorCodes.ToAPIErr(ErrServerNotInitialized),
+				r.URL)
+			return
+		}
+
 		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
 			f.ServeHTTP(w, r)

@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -1499,6 +1500,37 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 		close(ch)
 	}(&wg, ch)
 	return ch
+}
+
+// ServiceFreeze freezes all S3 API calls when 'freeze' is true,
+// 'freeze' is 'false' would resume all S3 API calls again.
+// NOTE: once a tenant is frozen either two things needs to
+// happen before resuming normal operations.
+// - Server needs to be restarted 'mc admin service restart'
+// - 'freeze' should be set to 'false' for this call
+//   to resume normal operations.
+func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []NotificationPeerErr {
+	serviceSig := serviceUnFreeze
+	if freeze {
+		serviceSig = serviceFreeze
+	}
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.SignalService(serviceSig)
+		}, idx, *client.host)
+	}
+	nerrs := ng.Wait()
+	if freeze {
+		atomic.CompareAndSwapInt32(&globalServiceFreeze, 0, 1)
+	} else {
+		atomic.CompareAndSwapInt32(&globalServiceFreeze, 1, 0)
+	}
+	return nerrs
 }
 
 // Speedtest run GET/PUT tests at input concurrency for requested object size,

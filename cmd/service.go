@@ -31,6 +31,8 @@ const (
 	serviceRestart       serviceSignal = iota // Restarts the server.
 	serviceStop                               // Stops the server.
 	serviceReloadDynamic                      // Reload dynamic config values.
+	serviceFreeze                             // Freeze all S3 API calls.
+	serviceUnFreeze                           // Un-Freeze previously frozen S3 API calls.
 	// Add new service requests here.
 )
 

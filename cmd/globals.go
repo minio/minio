@@ -325,6 +325,8 @@ var (
 
 	globalConsoleSrv *restapi.Server
 
+	globalServiceFreeze int32 // toggles service freeze or un-freeze S3 API calls.
+
 	// Add new variable global values here.
 )
 
