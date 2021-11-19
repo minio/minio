@@ -1007,7 +1007,7 @@ func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o Obje
 		})
 	}
 
-	globalNoncurrentExpiry.enqueue(i.bucket, toDel)
+	globalExpiryState.enqueueByMaxNoncurrent(i.bucket, toDel)
 	return fivs, nil
 }
 
@@ -1138,7 +1138,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 // Apply object, object version, restored object or restored object version action on the given object
 func applyExpiryRule(obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
-	globalExpiryState.queueExpiryTask(obj, restoredObject, applyOnVersion)
+	globalExpiryState.enqueueByDays(obj, restoredObject, applyOnVersion)
 	return true
 }
 
