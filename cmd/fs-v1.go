@@ -580,7 +580,7 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, opts Delet
 		}
 	} else {
 		tmpBucketPath := pathJoin(fs.fsPath, minioMetaTmpBucket, bucket+"."+mustGetUUID())
-		if err = fsSimpleRenameFile(ctx, bucketDir, tmpBucketPath); err != nil {
+		if err = Rename(bucketDir, tmpBucketPath); err != nil {
 			return toObjectErr(err, bucket)
 		}
 

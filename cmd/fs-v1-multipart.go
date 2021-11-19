@@ -340,7 +340,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
 
 	// Make sure not to create parent directories if they don't exist - the upload might have been aborted.
-	if err = fsSimpleRenameFile(ctx, tmpPartPath, partPath); err != nil {
+	if err = Rename(tmpPartPath, partPath); err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
 			return pi, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
@@ -776,7 +776,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
 		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
-		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+		Rename(uploadIDDir, fsTmpObjPath)
 
 		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
 		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
@@ -835,7 +835,7 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
 		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
-		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+		Rename(uploadIDDir, fsTmpObjPath)
 
 		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
 		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
