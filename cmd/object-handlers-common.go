@@ -281,8 +281,14 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 			Versioned:        versioned,
 			VersionSuspended: versionSuspended,
 		})
+		var logged bool
 		for i, err := range errs {
 			if err != nil {
+				if !logged {
+					// log the first error
+					logger.LogIf(ctx, err)
+					logged = true
+				}
 				continue
 			}
 			dobj := deletedObjs[i]
@@ -295,14 +301,6 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				},
 				Host: "Internal: [ILM-EXPIRY]",
 			})
-		}
-		for _, err := range errs {
-			if err == nil {
-				continue
-			}
-			// log the first error
-			logger.LogIf(ctx, err)
-			break
 		}
 	}
 }
