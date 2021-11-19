@@ -92,7 +92,6 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 			w.Header().Set("Connection", "close")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(http.ErrServerClosed.Error()))
-			w.(http.Flusher).Flush()
 			return
 		}
 

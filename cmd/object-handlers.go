@@ -3060,14 +3060,17 @@ func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
 			case <-ticker.C:
 				// Write header if not written yet.
 				if !headerWritten {
-					w.Write([]byte(xml.Header))
-					headerWritten = true
+					_, err := w.Write([]byte(xml.Header))
+					headerWritten = err == nil
 				}
 
 				// Once header is written keep writing empty spaces
 				// which are ignored by client SDK XML parsers.
 				// This occurs when server takes long time to completeMultiPartUpload()
-				w.Write([]byte(" "))
+				_, err := w.Write([]byte(" "))
+				if err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			case doneCh <- headerWritten:
 				ticker.Stop()

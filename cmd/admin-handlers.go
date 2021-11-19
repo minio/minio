@@ -756,13 +756,17 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(200)
 				}
 				// Send whitespace and keep connection open
-				w.Write([]byte(" "))
+				if _, err := w.Write([]byte(" ")); err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			case hr := <-respCh:
 				switch hr.apiErr {
 				case noError:
 					if started {
-						w.Write(hr.respBytes)
+						if _, err := w.Write(hr.respBytes); err != nil {
+							return
+						}
 						w.(http.Flusher).Flush()
 					} else {
 						writeSuccessResponseJSON(w, hr.respBytes)
@@ -787,7 +791,9 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 						w.Header().Set(xhttp.ContentType, string(mimeJSON))
 						w.WriteHeader(hr.apiErr.HTTPStatusCode)
 					}
-					w.Write(errorRespJSON)
+					if _, err := w.Write(errorRespJSON); err != nil {
+						return
+					}
 					w.(http.Flusher).Flush()
 				}
 				break forLoop
@@ -1194,10 +1200,10 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 				if err := enc.Encode(log); err != nil {
 					return
 				}
-			}
-			if len(logCh) == 0 {
-				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				if len(logCh) == 0 {
+					// Flush if nothing is queued
+					w.(http.Flusher).Flush()
+				}
 			}
 		case <-keepAliveTicker.C:
 			if len(logCh) > 0 {
@@ -1863,15 +1869,19 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			if !ok {
 				return
 			}
-			logger.LogIf(ctx, enc.Encode(oinfo))
-			w.(http.Flusher).Flush()
+			if err := enc.Encode(oinfo); err != nil {
+				return
+			}
+			if len(healthInfoCh) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
 		case <-ticker.C:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
 		case <-deadlinedCtx.Done():
-			w.(http.Flusher).Flush()
 			return
 		}
 	}
@@ -1940,10 +1950,12 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 				return
 			}
 			if err := enc.Encode(report); err != nil {
-				writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
-			w.(http.Flusher).Flush()
+			if len(reportCh) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
 		case <-keepAliveTicker.C:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return

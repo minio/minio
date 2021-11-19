@@ -760,37 +760,51 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 	doneCh := make(chan error)
 	ctx := r.Context()
 	go func() {
+		defer close(doneCh)
 		// Wait for body to be read.
 		select {
 		case <-ctx.Done():
+			return
 		case <-bodyDoneCh:
-		case err := <-doneCh:
+		case err, ok := <-doneCh:
+			if !ok {
+				return
+			}
 			if err != nil {
-				w.Write([]byte{1})
+				_, werr := w.Write([]byte{1})
+				if werr != nil {
+					return
+				}
 				w.Write([]byte(err.Error()))
 			} else {
 				w.Write([]byte{0})
 			}
-			close(doneCh)
 			return
 		}
-		defer close(doneCh)
 		// Initiate ticker after body has been read.
 		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
+				if _, err := w.Write([]byte{32}); err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
-			case err := <-doneCh:
+			case err, ok := <-doneCh:
+				if !ok {
+					return
+				}
 				if err != nil {
-					w.Write([]byte{1})
+					_, werr := w.Write([]byte{1})
+					if werr != nil {
+						return
+					}
 					w.Write([]byte(err.Error()))
 				} else {
 					w.Write([]byte{0})
 				}
-				ticker.Stop()
 				return
 			}
 		}
@@ -825,20 +839,25 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 	go func() {
 		defer close(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
+				if _, err := w.Write([]byte{32}); err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			case err := <-doneCh:
 				if err != nil {
-					w.Write([]byte{1})
+					_, werr := w.Write([]byte{1})
+					if werr != nil {
+						return
+					}
 					w.Write([]byte(err.Error()))
 				} else {
 					w.Write([]byte{0})
 				}
-				ticker.Stop()
 				return
 			}
 		}
@@ -932,18 +951,24 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 	blockCh := make(chan []byte)
 	h := httpStreamResponse{done: doneCh, block: blockCh}
 	go func() {
+		defer close(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				w.Write([]byte{32})
+				_, err := w.Write([]byte{32})
+				if err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			case err := <-doneCh:
-				ticker.Stop()
-				defer close(doneCh)
 				if err != nil {
-					w.Write([]byte{1})
+					_, werr := w.Write([]byte{1})
+					if werr != nil {
+						return
+					}
 					w.Write([]byte(err.Error()))
 				} else {
 					w.Write([]byte{0})
@@ -953,8 +978,14 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				var tmp [5]byte
 				tmp[0] = 2
 				binary.LittleEndian.PutUint32(tmp[1:], uint32(len(block)))
-				w.Write(tmp[:])
-				w.Write(block)
+				_, err := w.Write(tmp[:])
+				if err != nil {
+					return
+				}
+				_, err = w.Write(block)
+				if err != nil {
+					return
+				}
 				w.(http.Flusher).Flush()
 			}
 		}

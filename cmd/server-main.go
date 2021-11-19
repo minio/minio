@@ -609,13 +609,15 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if globalBrowserEnabled {
-		globalConsoleSrv, err = initConsoleServer()
+		srv, err := initConsoleServer()
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize console service")
 		}
 
+		setConsoleSrv(srv)
+
 		go func() {
-			logger.FatalIf(globalConsoleSrv.Serve(), "Unable to initialize console server")
+			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 		}()
 	}
 
