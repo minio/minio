@@ -1076,6 +1076,10 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 				}
 				cfg, err := getReplicationConfig(GlobalContext, d.Info.Name)
 				if err != nil {
+					// avoid logging replication config not found error
+					if _, ok := err.(BucketReplicationConfigNotFound); ok {
+						return nil
+					}
 					return err
 				}
 				due.ReplicationStats.ReplicaSize = v.ReplicaSize
