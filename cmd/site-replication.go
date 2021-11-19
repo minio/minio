@@ -302,10 +302,7 @@ func (c *SiteReplicationSys) getSiteStatuses(ctx context.Context, sites []madmin
 			if err != nil {
 				return psi, errSRPeerResp(fmt.Errorf("unable to list buckets for %s: %v", v.Name, err))
 			}
-
-			if len(buckets) > 0 {
-				pi.Empty = false
-			}
+			pi.Empty = len(buckets) == 0
 		}
 		psi = append(psi, pi)
 	}
@@ -358,14 +355,8 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errSRCannotJoin)
 		}
 		if len(currDeploymentIDsSet.Intersection(deploymentIDsSet)) != len(currDeploymentIDsSet) {
-			diff := currDeploymentIDsSet.Difference(deploymentIDsSet)
-			var diffSlc []string
-			for _, v := range currSites.Sites {
-				if diff.Contains(v.DeploymentID) {
-					diffSlc = append(diffSlc, v.Name)
-				}
-			}
-			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("All cluster sites must be specified - missing %s", strings.Join(diffSlc, " ")))
+			diffSlc := getMissingSiteNames(currDeploymentIDsSet, deploymentIDsSet, currSites.Sites)
+			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("All existing replicated sites must be specified - missing %s", strings.Join(diffSlc, " ")))
 		}
 	}
 	// For this `add` API, either all clusters must be empty or the local
@@ -404,10 +395,8 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	// Generate a secret key for the service account if not created already.
 	var secretKey string
 	svcCred, _, err := globalIAMSys.getServiceAccount(ctx, siteReplicatorSvcAcc)
-	if err == nil {
-		secretKey = svcCred.SecretKey
-	}
-	if err != nil {
+	switch {
+	case err == errNoSuchServiceAccount:
 		_, secretKey, err = auth.GenerateCredentials()
 		if err != nil {
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
@@ -419,22 +408,16 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		if err != nil {
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
 		}
+	case err == nil:
+		secretKey = svcCred.SecretKey
+	default:
+		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
 	}
 
 	joinReq := madmin.SRInternalJoinReq{
 		SvcAcctAccessKey: svcCred.AccessKey,
 		SvcAcctSecretKey: secretKey,
 		Peers:            make(map[string]madmin.PeerInfo),
-	}
-
-	if c.enabled {
-		for _, v := range currSites.Sites {
-			joinReq.Peers[v.DeploymentID] = madmin.PeerInfo{
-				Endpoint:     v.Endpoint,
-				Name:         v.Name,
-				DeploymentID: v.DeploymentID,
-			}
-		}
 	}
 
 	for _, v := range sites {
@@ -1659,4 +1642,17 @@ func getPriorityHelper(replicationConfig replication.Config) int {
 
 	// leave some gaps in priority numbers for flexibility
 	return maxPrio + 10
+}
+
+// returns a slice with site names participating in site replciation but unspecified while adding
+// a new site.
+func getMissingSiteNames(oldDeps, newDeps set.StringSet, currSites []madmin.PeerInfo) []string {
+	diff := oldDeps.Difference(newDeps)
+	var diffSlc []string
+	for _, v := range currSites {
+		if diff.Contains(v.DeploymentID) {
+			diffSlc = append(diffSlc, v.Name)
+		}
+	}
+	return diffSlc
 }
