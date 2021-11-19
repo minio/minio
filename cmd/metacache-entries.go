@@ -262,7 +262,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 			e *metaCacheEntry
 		}, 0, len(m))
 	}
-	r.candidates = r.candidates[0:]
+	r.candidates = r.candidates[:0]
 	for i := range m {
 		entry := &m[i]
 		if entry.name == "" {
