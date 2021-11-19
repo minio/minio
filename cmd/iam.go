@@ -151,7 +151,13 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 
 	if etcdClient == nil {
 		if globalIsGateway {
-			sys.store = &IAMStoreSys{newIAMDummyStore(sys.usersSysType)}
+			if globalGatewayName == NASBackendGateway {
+				sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
+			} else {
+				sys.store = &IAMStoreSys{newIAMDummyStore(sys.usersSysType)}
+				logger.Info("WARNING: %s gateway is running in-memory IAM store, for persistence please configure etcd",
+					globalGatewayName)
+			}
 		} else {
 			sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
 		}
