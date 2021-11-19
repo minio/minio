@@ -18,12 +18,12 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -412,7 +412,8 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 							// So someone changed the drives underneath, healing tracker missing.
 							tracker, err := loadHealingTracker(ctx, disk)
 							if err != nil {
-								logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
+								logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool",
+									disk, humanize.Ordinal(i+1))
 								tracker = newHealingTracker(disk)
 							}
 
@@ -434,16 +435,15 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								return
 							}
 
-							err = z.serverPools[i].sets[setIndex].healErasureSet(ctx, buckets, tracker)
+							err = z.serverPools[i].sets[setIndex].healErasureSet(ctx, tracker.QueuedBuckets, tracker)
 							if err != nil {
 								logger.LogIf(ctx, err)
 								continue
 							}
 
 							logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
-							var buf bytes.Buffer
-							tracker.printTo(&buf)
-							logger.Info("Summary:\n%s", buf.String())
+							logger.Info("Summary:\n")
+							tracker.printTo(os.Stdout)
 							logger.LogIf(ctx, tracker.delete(ctx))
 
 							// Only upon success pop the healed disk.
