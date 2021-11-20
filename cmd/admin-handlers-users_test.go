@@ -740,144 +740,27 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-		TargetUser: accessKey,
-	})
-	if err != nil {
-		c.Fatalf("Err creating svc acc: %v", err)
-	}
+	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient)
 
 	// 1. Check that svc account appears in listing
-	listResp, err := userAdmClient.ListServiceAccounts(ctx, accessKey)
-	if err != nil {
-		c.Fatalf("unable to list svc accounts: %v", err)
-	}
-	if !set.CreateStringSet(listResp.Accounts...).Contains(cr.AccessKey) {
-		c.Fatalf("created service account did not appear in listing!")
-	}
+	c.assertSvcAccAppearsInListing(ctx, userAdmClient, accessKey, cr.AccessKey)
 
 	// 2. Check that svc account info can be queried
-	infoResp, err := userAdmClient.InfoServiceAccount(ctx, cr.AccessKey)
-	if err != nil {
-		c.Fatalf("unable to get svc acc info: %v", err)
-	}
-	c.Assert(infoResp.ParentUser, accessKey)
-	c.Assert(infoResp.AccountStatus, "on")
-	c.Assert(infoResp.ImpliedPolicy, true)
+	c.assertSvcAccInfoQueryable(ctx, userAdmClient, accessKey, cr.AccessKey, false)
+
+	// 3. Check S3 access
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 4. Check that svc account can restrict the policy, and that the
 	// session policy can be updated.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		policyBytes := []byte(fmt.Sprintf(`{
- "Version": "2012-10-17",
- "Statement": [
-  {
-   "Effect": "Allow",
-   "Action": [
-    "s3:PutObject",
-    "s3:GetObject"
-   ],
-   "Resource": [
-    "arn:aws:s3:::%s/*"
-   ]
-  }
- ]
-}`, bucket))
-		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			Policy:     policyBytes,
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustNotListObjects(ctx, svcClient, bucket)
-
-		newPolicyBytes := []byte(fmt.Sprintf(`{
- "Version": "2012-10-17",
- "Statement": [
-  {
-   "Effect": "Allow",
-   "Action": [
-    "s3:ListBucket"
-   ],
-   "Resource": [
-    "arn:aws:s3:::%s/*"
-   ]
-  }
- ]
-}`, bucket))
-		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewPolicy: newPolicyBytes,
-		})
-		if err != nil {
-			c.Fatalf("unable to update session policy for svc acc: %v", err)
-		}
-		c.mustListObjects(ctx, svcClient, bucket)
-	}
+	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, accessKey, bucket)
 
 	// 4. Check that service account's secret key and account status can be
 	// updated.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustListObjects(ctx, svcClient, bucket)
-
-		_, svcSK2 := mustGenerateCredentials(c)
-		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewSecretKey: svcSK2,
-		})
-		if err != nil {
-			c.Fatalf("unable to update secret key for svc acc: %v", err)
-		}
-		// old creds should not work:
-		c.mustNotListObjects(ctx, svcClient, bucket)
-		// new creds work:
-		svcClient2 := s.getUserClient(c, cr.AccessKey, svcSK2, "")
-		c.mustListObjects(ctx, svcClient2, bucket)
-
-		// update status to disabled
-		err = userAdmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewStatus: "off",
-		})
-		if err != nil {
-			c.Fatalf("unable to update secret key for svc acc: %v", err)
-		}
-		c.mustNotListObjects(ctx, svcClient2, bucket)
-	}
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, accessKey, bucket)
 
 	// 5. Check that service account can be deleted.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustListObjects(ctx, svcClient, bucket)
-
-		err = userAdmClient.DeleteServiceAccount(ctx, svcAK)
-		if err != nil {
-			c.Fatalf("unable to delete svc acc: %v", err)
-		}
-		c.mustNotListObjects(ctx, svcClient, bucket)
-	}
-
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
 }
 
 func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
@@ -925,159 +808,37 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	}
 
 	// 1. Create a service account for the user
-	svcAK, svcSK := mustGenerateCredentials(c)
-	cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-		TargetUser: accessKey,
-		AccessKey:  svcAK,
-		SecretKey:  svcSK,
-	})
-	if err != nil {
-		c.Fatalf("Unable to create svc acc: %v", err)
-	}
+	cr := c.mustCreateSvcAccount(ctx, accessKey, s.adm)
+
 	// 1.2 Check that svc account appears in listing
-	listResp, err := s.adm.ListServiceAccounts(ctx, accessKey)
-	if err != nil {
-		c.Fatalf("unable to list svc accounts: %v", err)
-	}
-	if !set.CreateStringSet(listResp.Accounts...).Contains(svcAK) {
-		c.Fatalf("created service account did not appear in listing!")
-	}
+	c.assertSvcAccAppearsInListing(ctx, s.adm, accessKey, cr.AccessKey)
+
 	// 1.3 Check that svc account info can be queried
-	infoResp, err := s.adm.InfoServiceAccount(ctx, svcAK)
-	if err != nil {
-		c.Fatalf("unable to get svc acc info: %v", err)
-	}
-	c.Assert(infoResp.ParentUser, accessKey)
-	c.Assert(infoResp.AccountStatus, "on")
-	c.Assert(infoResp.ImpliedPolicy, true)
+	c.assertSvcAccInfoQueryable(ctx, s.adm, accessKey, cr.AccessKey, false)
 
 	// 2. Check that svc account can access the bucket
-	{
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustListObjects(ctx, svcClient, bucket)
-	}
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 3. Check that svc account can restrict the policy, and that the
 	// session policy can be updated.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		policyBytes := []byte(fmt.Sprintf(`{
- "Version": "2012-10-17",
- "Statement": [
-  {
-   "Effect": "Allow",
-   "Action": [
-    "s3:PutObject",
-    "s3:GetObject"
-   ],
-   "Resource": [
-    "arn:aws:s3:::%s/*"
-   ]
-  }
- ]
-}`, bucket))
-		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			Policy:     policyBytes,
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustNotListObjects(ctx, svcClient, bucket)
-
-		newPolicyBytes := []byte(fmt.Sprintf(`{
- "Version": "2012-10-17",
- "Statement": [
-  {
-   "Effect": "Allow",
-   "Action": [
-    "s3:ListBucket"
-   ],
-   "Resource": [
-    "arn:aws:s3:::%s/*"
-   ]
-  }
- ]
-}`, bucket))
-		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewPolicy: newPolicyBytes,
-		})
-		if err != nil {
-			c.Fatalf("unable to update session policy for svc acc: %v", err)
-		}
-		c.mustListObjects(ctx, svcClient, bucket)
-	}
+	c.assertSvcAccSessionPolicyUpdate(ctx, s, s.adm, accessKey, bucket)
 
 	// 4. Check that service account's secret key and account status can be
 	// updated.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustListObjects(ctx, svcClient, bucket)
-
-		_, svcSK2 := mustGenerateCredentials(c)
-		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewSecretKey: svcSK2,
-		})
-		if err != nil {
-			c.Fatalf("unable to update secret key for svc acc: %v", err)
-		}
-		// old creds should not work:
-		c.mustNotListObjects(ctx, svcClient, bucket)
-		// new creds work:
-		svcClient2 := s.getUserClient(c, cr.AccessKey, svcSK2, "")
-		c.mustListObjects(ctx, svcClient2, bucket)
-
-		// update status to disabled
-		err = s.adm.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
-			NewStatus: "off",
-		})
-		if err != nil {
-			c.Fatalf("unable to update secret key for svc acc: %v", err)
-		}
-		c.mustNotListObjects(ctx, svcClient2, bucket)
-	}
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, s.adm, accessKey, bucket)
 
 	// 5. Check that service account can be deleted.
-	{
-		svcAK, svcSK := mustGenerateCredentials(c)
-		cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-			TargetUser: accessKey,
-			AccessKey:  svcAK,
-			SecretKey:  svcSK,
-		})
-		if err != nil {
-			c.Fatalf("Unable to create svc acc: %v", err)
-		}
-		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
-		c.mustListObjects(ctx, svcClient, bucket)
-
-		err = s.adm.DeleteServiceAccount(ctx, svcAK)
-		if err != nil {
-			c.Fatalf("unable to delete svc acc: %v", err)
-		}
-		c.mustNotListObjects(ctx, svcClient, bucket)
-	}
+	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
 }
 
-func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) {
-	_, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) madmin.Credentials {
+	cr, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: tgtUser,
 	})
 	if err != nil {
 		c.Fatalf("user should be able to create service accounts %s", err)
 	}
+	return cr
 }
 
 func (c *check) mustNotCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) {
@@ -1104,6 +865,147 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 		msg := fmt.Sprintf("user was unable to list: %v", v.Err)
 		c.Fatalf(msg)
 	}
+}
+
+func (c *check) assertSvcAccS3Access(ctx context.Context, s *TestSuiteIAM, cr madmin.Credentials, bucket string) {
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+	c.mustListObjects(ctx, svcClient, bucket)
+}
+
+func (c *check) assertSvcAccAppearsInListing(ctx context.Context, madmClient *madmin.AdminClient, parentAK, svcAK string) {
+	listResp, err := madmClient.ListServiceAccounts(ctx, parentAK)
+	if err != nil {
+		c.Fatalf("unable to list svc accounts: %v", err)
+	}
+	if !set.CreateStringSet(listResp.Accounts...).Contains(svcAK) {
+		c.Fatalf("service account did not appear in listing!")
+	}
+}
+
+func (c *check) assertSvcAccInfoQueryable(ctx context.Context, madmClient *madmin.AdminClient, parentAK, svcAK string, skipParentUserCheck bool) {
+	infoResp, err := madmClient.InfoServiceAccount(ctx, svcAK)
+	if err != nil {
+		c.Fatalf("unable to get svc acc info: %v", err)
+	}
+	if !skipParentUserCheck {
+		c.Assert(infoResp.ParentUser, parentAK)
+	}
+	c.Assert(infoResp.AccountStatus, "on")
+	c.Assert(infoResp.ImpliedPolicy, true)
+}
+
+// This test assumes that the policy for `accessKey` allows listing on the given
+// bucket. It creates a session policy that restricts listing on the bucket and
+// then enables it again in a session policy update call.
+func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	svcAK, svcSK := mustGenerateCredentials(c)
+
+	// This policy does not allow listing objects.
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		Policy:     policyBytes,
+		TargetUser: accessKey,
+		AccessKey:  svcAK,
+		SecretKey:  svcSK,
+	})
+	if err != nil {
+		c.Fatalf("Unable to create svc acc: %v", err)
+	}
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+	c.mustNotListObjects(ctx, svcClient, bucket)
+
+	// This policy allows listing objects.
+	newPolicyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = madmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+		NewPolicy: newPolicyBytes,
+	})
+	if err != nil {
+		c.Fatalf("unable to update session policy for svc acc: %v", err)
+	}
+	c.mustListObjects(ctx, svcClient, bucket)
+}
+
+func (c *check) assertSvcAccSecretKeyAndStatusUpdate(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	svcAK, svcSK := mustGenerateCredentials(c)
+	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+		AccessKey:  svcAK,
+		SecretKey:  svcSK,
+	})
+	if err != nil {
+		c.Fatalf("Unable to create svc acc: %v", err)
+	}
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+	c.mustListObjects(ctx, svcClient, bucket)
+
+	_, svcSK2 := mustGenerateCredentials(c)
+	err = madmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+		NewSecretKey: svcSK2,
+	})
+	if err != nil {
+		c.Fatalf("unable to update secret key for svc acc: %v", err)
+	}
+	// old creds should not work:
+	c.mustNotListObjects(ctx, svcClient, bucket)
+	// new creds work:
+	svcClient2 := s.getUserClient(c, cr.AccessKey, svcSK2, "")
+	c.mustListObjects(ctx, svcClient2, bucket)
+
+	// update status to disabled
+	err = madmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
+		NewStatus: "off",
+	})
+	if err != nil {
+		c.Fatalf("unable to update secret key for svc acc: %v", err)
+	}
+	c.mustNotListObjects(ctx, svcClient2, bucket)
+}
+
+func (c *check) assertSvcAccDeletion(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	svcAK, svcSK := mustGenerateCredentials(c)
+	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+		AccessKey:  svcAK,
+		SecretKey:  svcSK,
+	})
+	if err != nil {
+		c.Fatalf("Unable to create svc acc: %v", err)
+	}
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+	c.mustListObjects(ctx, svcClient, bucket)
+
+	err = madmClient.DeleteServiceAccount(ctx, svcAK)
+	if err != nil {
+		c.Fatalf("unable to delete svc acc: %v", err)
+	}
+	c.mustNotListObjects(ctx, svcClient, bucket)
 }
 
 func mustGenerateCredentials(c *check) (string, string) {
