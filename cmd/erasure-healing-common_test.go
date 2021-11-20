@@ -34,8 +34,10 @@ import (
 func TestCommonTime(t *testing.T) {
 	// List of test cases for common modTime.
 	testCases := []struct {
-		times []time.Time
-		time  time.Time
+		times    []time.Time
+		dataDirs []string
+		time     time.Time
+		dataDir  string
 	}{
 		{
 			// 1. Tests common times when slice has varying time elements.
@@ -47,7 +49,17 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 2).UTC(),
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 1).UTC(),
-			}, time.Unix(0, 3).UTC(),
+			}, []string{
+				errorDir,
+				delMarkerDir,
+				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
+				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
+				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
+				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
+				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
+			},
+			time.Unix(0, 3).UTC(),
+			"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
 		},
 		{
 			// 2. Tests common time obtained when all elements are equal.
@@ -59,7 +71,17 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 3).UTC(),
-			}, time.Unix(0, 3).UTC(),
+			}, []string{
+				errorDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+			},
+			time.Unix(0, 3).UTC(),
+			delMarkerDir,
 		},
 		{
 			// 3. Tests common time obtained when elements have a mixture
@@ -75,7 +97,17 @@ func TestCommonTime(t *testing.T) {
 				timeSentinel,
 				timeSentinel,
 				timeSentinel,
-			}, time.Unix(0, 3).UTC(),
+			}, []string{
+				errorDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+				delMarkerDir,
+			},
+			time.Unix(0, 3).UTC(),
+			delMarkerDir,
 		},
 	}
 
@@ -83,9 +115,13 @@ func TestCommonTime(t *testing.T) {
 	// common modtime. Tests fail if modtime does not match.
 	for i, testCase := range testCases {
 		// Obtain a common mod time from modTimes slice.
-		ctime, _ := commonTime(testCase.times, nil)
+		ctime, dataDir := commonTime(testCase.times, testCase.dataDirs)
 		if !testCase.time.Equal(ctime) {
-			t.Fatalf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
+			t.Errorf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
+			continue
+		}
+		if dataDir != testCase.dataDir {
+			t.Errorf("Test case %d, expect to pass but failed. Wanted dataDir: %s, got dataDir: %s\n", i+1, testCase.dataDir, dataDir)
 		}
 	}
 }

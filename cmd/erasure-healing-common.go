@@ -30,12 +30,14 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 	var maxima int // Counter for remembering max occurrence of elements.
 
 	timeOccurenceMap := make(map[int64]int, len(modTimes))
+	dataDirMap := make(map[int64]string, len(modTimes))
 	// Ignore the uuid sentinel and count the rest.
-	for _, time := range modTimes {
-		if time.Equal(timeSentinel) {
+	for i, t := range modTimes {
+		if t.Equal(timeSentinel) {
 			continue
 		}
-		timeOccurenceMap[time.UnixNano()]++
+		dataDirMap[t.UnixNano()] = dataDirs[i]
+		timeOccurenceMap[t.UnixNano()]++
 	}
 
 	// Find the common cardinality from previously collected
@@ -44,15 +46,8 @@ func commonTime(modTimes []time.Time, dataDirs []string) (modTime time.Time, dat
 		t := time.Unix(0, nano).UTC()
 		if count > maxima || (count == maxima && t.After(modTime)) {
 			maxima = count
+			dataDir = dataDirMap[nano]
 			modTime = t
-		}
-	}
-
-	for i, ddataDir := range dataDirs {
-		if modTimes[i].Equal(modTime) {
-			// Return the data-dir that matches modTime.
-			dataDir = ddataDir
-			break
 		}
 	}
 
