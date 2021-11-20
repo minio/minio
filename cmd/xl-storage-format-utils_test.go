@@ -18,8 +18,11 @@
 package cmd
 
 import (
+	"sort"
 	"testing"
+	"time"
 
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -106,5 +109,97 @@ func Test_hashDeterministicString(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestGetFileInfoVersions(t *testing.T) {
+	basefi := FileInfo{
+		Volume:           "volume",
+		Name:             "object-name",
+		VersionID:        "756100c6-b393-4981-928a-d49bbc164741",
+		IsLatest:         true,
+		Deleted:          false,
+		TransitionStatus: "",
+		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",
+		XLV1:             false,
+		ModTime:          time.Now().UTC(),
+		Size:             0,
+		Mode:             0,
+		Metadata:         nil,
+		Parts:            nil,
+		Erasure: ErasureInfo{
+			Algorithm:    ReedSolomon.String(),
+			DataBlocks:   4,
+			ParityBlocks: 2,
+			BlockSize:    10000,
+			Index:        1,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8},
+			Checksums: []ChecksumInfo{{
+				PartNumber: 1,
+				Algorithm:  HighwayHash256S,
+				Hash:       nil,
+			}},
+		},
+		MarkDeleted:      false,
+		NumVersions:      1,
+		SuccessorModTime: time.Time{},
+	}
+	xl := xlMetaV2{}
+	var versions []FileInfo
+	var freeVersionIDs []string
+	for i := 0; i < 5; i++ {
+		fi := basefi
+		fi.VersionID = mustGetUUID()
+		fi.DataDir = mustGetUUID()
+		fi.ModTime = basefi.ModTime.Add(time.Duration(i) * time.Second)
+		if err := xl.AddVersion(fi); err != nil {
+			t.Fatalf("%d: Failed to add version %v", i+1, err)
+		}
+
+		if i > 3 {
+			// Simulate transition of a version
+			transfi := fi
+			transfi.TransitionStatus = lifecycle.TransitionComplete
+			transfi.TransitionTier = "MINIO-TIER"
+			transfi.TransitionedObjName = mustGetUUID()
+			xl.DeleteVersion(transfi)
+
+			fi.SetTierFreeVersionID(mustGetUUID())
+			// delete this version leading to a free version
+			xl.DeleteVersion(fi)
+			freeVersionIDs = append(freeVersionIDs, fi.TierFreeVersionID())
+		} else {
+			versions = append(versions, fi)
+		}
+	}
+	buf, err := xl.AppendTo(nil)
+	if err != nil {
+		t.Fatalf("Failed to serialize xlmeta %v", err)
+	}
+	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name)
+	if err != nil {
+		t.Fatalf("getFileInfoVersions failed: %v", err)
+	}
+
+	sort.Slice(versions, func(i, j int) bool {
+		if versions[i].IsLatest {
+			return true
+		}
+		if versions[j].IsLatest {
+			return false
+		}
+		return versions[i].ModTime.After(versions[j].ModTime)
+	})
+
+	for i, fi := range fivs.Versions {
+		if fi.VersionID != versions[i].VersionID {
+			t.Fatalf("getFileInfoVersions: versions don't match at %d, version id expected %s but got %s", i, fi.VersionID, versions[i].VersionID)
+		}
+	}
+
+	for i, free := range fivs.FreeVersions {
+		if free.VersionID != freeVersionIDs[i] {
+			t.Fatalf("getFileInfoVersions: free versions don't match at %d, version id expected %s but got %s", i, free.VersionID, freeVersionIDs[i])
+		}
 	}
 }

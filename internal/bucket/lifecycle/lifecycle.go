@@ -29,10 +29,11 @@ import (
 )
 
 var (
-	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
-	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
-	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
+	errLifecycleTooManyRules                = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule                      = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleDuplicateID                 = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
+	errXMLNotWellFormed                     = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
+	errLifecycleInvalidNoncurrentExpiration = Errorf("Exactly one of NoncurrentDays (positive integer) or MaxNoncurrentVersions should be specified in a NoncurrentExpiration rule.")
 )
 
 const (
@@ -140,6 +141,9 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.NoncurrentVersionExpiration.NoncurrentDays > 0 {
 			return true
 		}
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+			return true
+		}
 		if !rule.NoncurrentVersionTransition.IsNull() {
 			return true
 		}
@@ -231,6 +235,10 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 		// noncurrent versions of objects x days after the objects become
 		// noncurrent.
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
+			rules = append(rules, rule)
+			continue
+		}
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
 			rules = append(rules, rule)
 			continue
 		}
@@ -467,4 +475,33 @@ func (lc Lifecycle) TransitionTier(obj ObjectOpts) string {
 		}
 	}
 	return ""
+}
+
+// NoncurrentVersionsExpirationLimit returns the minimum limit on number of
+// noncurrent versions across rules.
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) int {
+	var lim int
+	for _, rule := range lc.FilterActionableRules(obj) {
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions == 0 {
+			continue
+		}
+		if lim == 0 || lim > rule.NoncurrentVersionExpiration.MaxNoncurrentVersions {
+			lim = rule.NoncurrentVersionExpiration.MaxNoncurrentVersions
+		}
+	}
+	return lim
+}
+
+// HasMaxNoncurrentVersions returns true if there exists a rule with
+// MaxNoncurrentVersions limit set.
+func (lc Lifecycle) HasMaxNoncurrentVersions() bool {
+	for _, rule := range lc.Rules {
+		if rule.Status == Disabled {
+			continue
+		}
+		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+			return true
+		}
+	}
+	return false
 }

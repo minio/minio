@@ -109,6 +109,7 @@ const (
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
 	ErrNoSuchLifecycleConfiguration
+	ErrInvalidLifecycleWithObjectLock
 	ErrNoSuchBucketSSEConfig
 	ErrNoSuchCORSConfiguration
 	ErrNoSuchWebsiteConfiguration
@@ -576,6 +577,11 @@ var errorCodes = errorCodeMap{
 		Code:           "NoSuchLifecycleConfiguration",
 		Description:    "The lifecycle configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrInvalidLifecycleWithObjectLock: {
+		Code:           "InvalidLifecycleWithObjectLock",
+		Description:    "The lifecycle configuration containing MaxNoncurrentVersions is not supported with object locking",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNoSuchBucketSSEConfig: {
 		Code:           "ServerSideEncryptionConfigurationNotFoundError",

@@ -1128,8 +1128,8 @@ func (z *FileInfoVersions) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
 		return
 	}
 	z.Volume, err = dc.ReadString()
@@ -1165,13 +1165,31 @@ func (z *FileInfoVersions) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 	}
+	var zb0003 uint32
+	zb0003, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "FreeVersions")
+		return
+	}
+	if cap(z.FreeVersions) >= int(zb0003) {
+		z.FreeVersions = (z.FreeVersions)[:zb0003]
+	} else {
+		z.FreeVersions = make([]FileInfo, zb0003)
+	}
+	for za0002 := range z.FreeVersions {
+		err = z.FreeVersions[za0002].DecodeMsg(dc)
+		if err != nil {
+			err = msgp.WrapError(err, "FreeVersions", za0002)
+			return
+		}
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfoVersions) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 4
-	err = en.Append(0x94)
+	// array header, size 5
+	err = en.Append(0x95)
 	if err != nil {
 		return
 	}
@@ -1202,14 +1220,26 @@ func (z *FileInfoVersions) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	err = en.WriteArrayHeader(uint32(len(z.FreeVersions)))
+	if err != nil {
+		err = msgp.WrapError(err, "FreeVersions")
+		return
+	}
+	for za0002 := range z.FreeVersions {
+		err = z.FreeVersions[za0002].EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "FreeVersions", za0002)
+			return
+		}
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfoVersions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 4
-	o = append(o, 0x94)
+	// array header, size 5
+	o = append(o, 0x95)
 	o = msgp.AppendString(o, z.Volume)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendTime(o, z.LatestModTime)
@@ -1218,6 +1248,14 @@ func (z *FileInfoVersions) MarshalMsg(b []byte) (o []byte, err error) {
 		o, err = z.Versions[za0001].MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Versions", za0001)
+			return
+		}
+	}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.FreeVersions)))
+	for za0002 := range z.FreeVersions {
+		o, err = z.FreeVersions[za0002].MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "FreeVersions", za0002)
 			return
 		}
 	}
@@ -1232,8 +1270,8 @@ func (z *FileInfoVersions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
 		return
 	}
 	z.Volume, bts, err = msgp.ReadStringBytes(bts)
@@ -1269,6 +1307,24 @@ func (z *FileInfoVersions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 	}
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "FreeVersions")
+		return
+	}
+	if cap(z.FreeVersions) >= int(zb0003) {
+		z.FreeVersions = (z.FreeVersions)[:zb0003]
+	} else {
+		z.FreeVersions = make([]FileInfo, zb0003)
+	}
+	for za0002 := range z.FreeVersions {
+		bts, err = z.FreeVersions[za0002].UnmarshalMsg(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "FreeVersions", za0002)
+			return
+		}
+	}
 	o = bts
 	return
 }
@@ -1278,6 +1334,10 @@ func (z *FileInfoVersions) Msgsize() (s int) {
 	s = 1 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.TimeSize + msgp.ArrayHeaderSize
 	for za0001 := range z.Versions {
 		s += z.Versions[za0001].Msgsize()
+	}
+	s += msgp.ArrayHeaderSize
+	for za0002 := range z.FreeVersions {
+		s += z.FreeVersions[za0002].Msgsize()
 	}
 	return
 }

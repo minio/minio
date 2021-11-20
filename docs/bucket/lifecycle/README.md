@@ -81,7 +81,29 @@ e.g., To scan objects stored under `user-uploads/` prefix and remove versions ol
 }
 ```
 
-### 3.2 Automatic removal of delete markers with no other versions
+
+### 3.2 Automatic removal of noncurrent versions older than most recent 
+
+It is possible to configure automatic removal of noncurrent versions older than the most recent `N` using MinIO specific lifecycle policy extension `MaxNoncurrentVersions`.
+
+e.g, To remove noncurrent versions of all objects older than most recent 5 noncurrent versions under the prefix `user-uploads/`,
+```
+{
+    "Rules": [
+        {
+            "ID": "Remove noncurrent versions older than",
+            "Status": "Enabled",
+            "Filter": {
+                "Prefix": "users-uploads/"
+            },
+            "NoncurrentVersionExpiration": {
+                "MaxNoncurrentVersions": 5
+            }
+        }
+    ]
+}
+```
+### 3.3 Automatic removal of delete markers with no other versions
 
 When an object has only one version as a delete marker, the latter can be automatically removed after a certain number of days using the following configuration:
 

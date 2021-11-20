@@ -865,6 +865,7 @@ func (i *scannerItem) transformMetaDir() {
 }
 
 var applyActionsLogPrefix = color.Green("applyActions:")
+var applyVersionActionsLogPrefix = color.Green("applyVersionActions:")
 
 func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi ObjectInfo) (size int64) {
 	if i.debug {
@@ -970,13 +971,57 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 
 }
 
+// applyMaxNoncurrentVersionLimit removes noncurrent versions older than the most recent MaxNoncurrentVersions configured.
+// Note: This function doesn't update sizeSummary since it always removes versions that it doesn't return.
+func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+	if i.lifeCycle == nil {
+		return fivs, nil
+	}
+
+	lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
+	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
+		return fivs, nil
+	}
+
+	overflowVersions := fivs[lim+1:]
+	// current version + most recent lim noncurrent versions
+	fivs = fivs[:lim+1]
+
+	rcfg, _ := globalBucketObjectLockSys.Get(i.bucket)
+	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
+	for _, fi := range overflowVersions {
+		obj := fi.ToObjectInfo(i.bucket, i.objectPath())
+		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
+			if i.debug {
+				if obj.VersionID != "" {
+					console.Debugf(applyVersionActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", obj.Name, obj.VersionID)
+				} else {
+					console.Debugf(applyVersionActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
+				}
+			}
+			continue
+		}
+		toDel = append(toDel, ObjectToDelete{
+			ObjectName: fi.Name,
+			VersionID:  fi.VersionID,
+		})
+	}
+
+	globalExpiryState.enqueueByMaxNoncurrent(i.bucket, toDel)
+	return fivs, nil
+}
+
+// applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
+// after applying lifecycle checks configured.
+func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+	return i.applyMaxNoncurrentVersionLimit(ctx, o, fivs)
+}
+
 // applyActions will apply lifecycle checks on to a scanned item.
 // The resulting size on disk will always be returned.
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
 func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) int64 {
-	i.applyTierObjSweep(ctx, o, oi)
-
 	applied, size := i.applyLifecycle(ctx, o, oi)
 	// For instance, an applied lifecycle means we remove/transitioned an object
 	// from the current deployment, which means we don't have to call healing
@@ -1093,7 +1138,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 // Apply object, object version, restored object or restored object version action on the given object
 func applyExpiryRule(obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
-	globalExpiryState.queueExpiryTask(obj, restoredObject, applyOnVersion)
+	globalExpiryState.enqueueByDays(obj, restoredObject, applyOnVersion)
 	return true
 }
 

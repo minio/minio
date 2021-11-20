@@ -24,7 +24,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 var (
@@ -261,6 +263,44 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 	if objInfo.Bucket != "" && objInfo.Name != "" {
 		if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
+		}
+	}
+}
+
+func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {
+	versioned := globalBucketVersioningSys.Enabled(bucket)
+	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
+	for remaining := toDel; len(remaining) > 0; toDel = remaining {
+		if len(toDel) > maxDeleteList {
+			remaining = toDel[maxDeleteList:]
+			toDel = toDel[:maxDeleteList]
+		} else {
+			remaining = nil
+		}
+		deletedObjs, errs := o.DeleteObjects(ctx, bucket, toDel, ObjectOptions{
+			Versioned:        versioned,
+			VersionSuspended: versionSuspended,
+		})
+		var logged bool
+		for i, err := range errs {
+			if err != nil {
+				if !logged {
+					// log the first error
+					logger.LogIf(ctx, err)
+					logged = true
+				}
+				continue
+			}
+			dobj := deletedObjs[i]
+			sendEvent(eventArgs{
+				EventName:  event.ObjectRemovedDelete,
+				BucketName: bucket,
+				Object: ObjectInfo{
+					Name:      dobj.ObjectName,
+					VersionID: dobj.VersionID,
+				},
+				Host: "Internal: [ILM-EXPIRY]",
+			})
 		}
 	}
 }

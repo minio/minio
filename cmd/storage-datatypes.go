@@ -93,7 +93,8 @@ type FileInfoVersions struct {
 	// latest version.
 	LatestModTime time.Time `msg:"lm"`
 
-	Versions []FileInfo `msg:"vs"`
+	Versions     []FileInfo `msg:"vs"`
+	FreeVersions []FileInfo `msg:"fvs"`
 }
 
 // findVersionIndex will return the version index where the version

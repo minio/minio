@@ -455,7 +455,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getAllFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
@@ -468,6 +468,13 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.tiers = make(map[string]tierStats)
 		}
 		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
+		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		if err != nil {
+			if intDataUpdateTracker.debug {
+				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
+		}
 		for _, version := range fivs.Versions {
 			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
@@ -491,6 +498,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				tier = oi.TransitionedObject.Tier
 			}
 			sizeS.tiers[tier] = sizeS.tiers[tier].add(oi.tierStats())
+		}
+
+		// apply tier sweep action on free versions
+		for _, freeVersion := range fivs.FreeVersions {
+			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath())
+			item.applyTierObjSweep(ctx, objAPI, oi)
 		}
 		return sizeS, nil
 	})
