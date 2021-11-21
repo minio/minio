@@ -134,9 +134,9 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 }
 
 // Returns the latest updated FileInfo files and error in case of failure.
-func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error, quorum int) (FileInfo, error) {
+func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error) (FileInfo, error) {
 	// There should be atleast half correct entries, if not return failure
-	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum)
+	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(partsMetadata)/2)
 	if reducedErr != nil {
 		return FileInfo{}, reducedErr
 	}
@@ -151,6 +151,10 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
 	modTime := commonTime(modTimes)
 
+	if modTime.IsZero() || modTime.Equal(timeSentinel) {
+		return FileInfo{}, errErasureReadQuorum
+	}
+
 	// Interate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
 		if partsMetadata[index].IsValid() && t.Equal(modTime) {
@@ -159,7 +163,11 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 		}
 	}
 
-	if count < quorum {
+	if !latestFileInfo.IsValid() {
+		return FileInfo{}, errErasureReadQuorum
+	}
+
+	if count < latestFileInfo.Erasure.DataBlocks {
 		return FileInfo{}, errErasureReadQuorum
 	}
 
@@ -174,10 +182,8 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 // - slice of errors about the state of data files on disk - can have
 //   a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
-	errs []error, bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
-
-	// List of disks having latest version of the object xl.meta (by modtime)
-	_, modTime := listOnlineDisks(onlineDisks, partsMetadata, errs)
+	errs []error, latestMeta FileInfo,
+	bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
 
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
@@ -214,13 +220,13 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			dataErrs[i] = errs[i]
 			continue
 		}
-		if onlineDisk == nil {
+		if onlineDisk == OfflineDisk {
 			dataErrs[i] = errDiskNotFound
 			continue
 		}
 
 		meta := partsMetadata[i]
-		if !meta.ModTime.Equal(modTime) {
+		if !meta.ModTime.Equal(latestMeta.ModTime) || meta.DataDir != latestMeta.DataDir {
 			dataErrs[i] = errFileCorrupt
 			partsMetadata[i] = FileInfo{}
 			continue
@@ -268,17 +274,18 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			continue
 		}
 
+		meta.DataDir = latestMeta.DataDir
 		switch scanMode {
 		case madmin.HealDeepScan:
 			// disk has a valid xl.meta but may not have all the
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
-			if !partsMetadata[i].Deleted && !partsMetadata[i].IsRemote() {
-				dataErrs[i] = onlineDisk.VerifyFile(ctx, bucket, object, partsMetadata[i])
+			if !meta.Deleted && !meta.IsRemote() {
+				dataErrs[i] = onlineDisk.VerifyFile(ctx, bucket, object, meta)
 			}
 		case madmin.HealNormalScan:
-			if !partsMetadata[i].Deleted && !partsMetadata[i].IsRemote() {
-				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, partsMetadata[i])
+			if !meta.Deleted && !meta.IsRemote() {
+				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, meta)
 			}
 		}
 
