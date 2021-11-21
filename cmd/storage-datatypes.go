@@ -186,6 +186,21 @@ type FileInfo struct {
 	Idx int `msg:"i"`
 }
 
+// GetDataDir returns an expected dataDir given FileInfo
+// - deleteMarker returns "delete-marker"
+// - returns "legacy" if FileInfo is XLV1 and DataDir is
+//   empty, returns DataDir otherwise
+// - returns "dataDir"
+func (fi FileInfo) GetDataDir() string {
+	if fi.Deleted {
+		return "delete-marker"
+	}
+	if fi.XLV1 && fi.DataDir == "" {
+		return "legacy"
+	}
+	return fi.DataDir
+}
+
 // InlineData returns true if object contents are inlined alongside its metadata.
 func (fi FileInfo) InlineData() bool {
 	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]

@@ -1,5 +1,15 @@
 #!/bin/bash
 
+trap 'cleanup $LINENO' ERR
+
+# shellcheck disable=SC2120
+cleanup() {
+    MINIO_VERSION=dev docker-compose \
+                 -f "buildscripts/upgrade-tests/compose.yml" \
+                 rm -s -f
+    docker volume prune -f
+}
+
 __init__() {
     sudo apt install curl -y
     export GOPATH=/tmp/gopath
@@ -9,8 +19,9 @@ __init__() {
 
     TAG=minio/minio:dev make docker
 
-    export MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z
-    docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
+    MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z docker-compose \
+                 -f "buildscripts/upgrade-tests/compose.yml" \
+                 up -d --build
     until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin); do
         echo "...waiting..." && sleep 5;
     done
@@ -22,6 +33,8 @@ __init__() {
     mc cat minio/minio-test/to-read/minio | sha256sum
     mc cat ./minio | sha256sum
     curl -s http://127.0.0.1:9000/minio-test/to-read/hosts | sha256sum
+
+    MINIO_VERSION=dev docker-compose -f "buildscripts/upgrade-tests/compose.yml" stop
 }
 
 verify_checksum_after_heal() {
@@ -46,11 +59,7 @@ verify_checksum_mc() {
 }
 
 main() {
-    export MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z
-    docker-compose -f "buildscripts/upgrade-tests/compose.yml" stop
-
-    export MINIO_VERSION=dev
-    docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
+    MINIO_VERSION=dev docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
 
     until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin); do
         echo "...waiting..." && sleep 5
@@ -61,6 +70,8 @@ main() {
     verify_checksum_mc ./minio minio/minio-test/to-read/minio
 
     verify_checksum_mc /etc/hosts minio/minio-test/to-read/hosts
+
+    cleanup
 }
 
 ( __init__ "$@" && main "$@" )
