@@ -88,10 +88,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	// List all online disks.
-	onlineDisks, modTime, dataDir := listOnlineDisks(storageDisks, metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -101,6 +101,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		}
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
+
+	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	versionID := srcInfo.VersionID
 	if srcInfo.versionOnly {
@@ -404,13 +406,15 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	onlineDisks, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err = pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
+	fi, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return fi, nil, nil, err
 	}
+
+	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	// if one of the disk is offline, return right here no need
 	// to attempt a heal on the object.
@@ -424,7 +428,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			missingBlocks++
 			continue
 		}
-		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) && metaArr[i].DataDir == fi.DataDir {
+		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) {
 			continue
 		}
 		missingBlocks++
@@ -1455,16 +1459,19 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
 	if fi.Deleted {
 		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
+
+	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	// if version-id is not specified retention is supposed to be set on the latest object.
 	if opts.VersionID == "" {
@@ -1483,7 +1490,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	fi.ModTime = opts.MTime
 	fi.VersionID = opts.VersionID
 
-	if err = er.updateObjectMeta(ctx, bucket, object, fi); err != nil {
+	if err = er.updateObjectMeta(ctx, bucket, object, fi, onlineDisks); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1512,10 +1519,10 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	// List all online disks.
-	_, modTime, dataDir := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, dataDir, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -1526,12 +1533,14 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
+	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
+
 	fi.Metadata[xhttp.AmzObjectTagging] = tags
 	for k, v := range opts.UserDefined {
 		fi.Metadata[k] = v
 	}
 
-	if err = er.updateObjectMeta(ctx, bucket, object, fi); err != nil {
+	if err = er.updateObjectMeta(ctx, bucket, object, fi, onlineDisks); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1539,30 +1548,28 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 }
 
 // updateObjectMeta will update the metadata of a file.
-func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo) error {
+func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI) error {
 	if len(fi.Metadata) == 0 {
 		return nil
 	}
 
-	disks := er.getDisks()
-
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.WithNErrs(len(onlineDisks))
 
 	// Start writing `xl.meta` to all disks in parallel.
-	for index := range disks {
+	for index := range onlineDisks {
 		index := index
 		g.Go(func() error {
-			if disks[index] == nil {
+			if onlineDisks[index] == nil {
 				return errDiskNotFound
 			}
-			return disks[index].UpdateMetadata(ctx, bucket, object, fi)
+			return onlineDisks[index].UpdateMetadata(ctx, bucket, object, fi)
 		}, index)
 	}
 
 	// Wait for all the routines.
 	mErrs := g.Wait()
 
-	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, getWriteQuorum(len(disks)))
+	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, getWriteQuorum(len(onlineDisks)))
 }
 
 // DeleteObjectTags - delete object tags from an existing object

@@ -178,28 +178,24 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	tests := []struct {
 		fis            []FileInfo
 		modTime        time.Time
-		dataDir        string
 		expectedErr    error
 		expectedQuorum int
 	}{
 		{
 			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
 			modTime:        time.Unix(1603863445, 0),
-			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
 			expectedErr:    nil,
 			expectedQuorum: 8,
 		},
 		{
 			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
 			modTime:        time.Unix(1603863445, 0),
-			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
 			expectedErr:    errErasureReadQuorum,
 			expectedQuorum: 8,
 		},
 		{
 			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
 			modTime:        time.Unix(1603863445, 0),
-			dataDir:        "36a21454-a2ca-11eb-bbaa-93a81c686f21",
 			expectedErr:    errErasureReadQuorum,
 			expectedQuorum: 0,
 		},
@@ -208,7 +204,7 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run("", func(t *testing.T) {
-			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, test.dataDir, test.expectedQuorum)
+			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, test.expectedQuorum)
 			if err != test.expectedErr {
 				t.Errorf("Expected %s, got %s", test.expectedErr, err)
 			}

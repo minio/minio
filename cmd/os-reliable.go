@@ -136,7 +136,7 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 		switch {
 		case isSysErrNotDir(err) && !osIsNotExist(err):
 			// Windows can have both isSysErrNotDir(err) and osIsNotExist(err) returning
-			// true if the source file path contains an inexistant directory. In that case,
+			// true if the source file path contains an non-existent directory. In that case,
 			// we want to return errFileNotFound instead, which will honored in subsequent
 			// switch cases
 			return errFileAccessDenied

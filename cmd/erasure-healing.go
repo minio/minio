@@ -294,15 +294,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
-	_, modTime, dataDir := listOnlineDisks(storageDisks, partsMetadata, errs)
-
-	// make sure all parts metadata dataDir is same as returned by listOnlineDisks()
-	// the reason is its possible that some of the disks might have stale data, for those
-	// we simply override them with maximally occurring 'dataDir' - this ensures that
-	// disksWithAllParts() verifies same dataDir across all drives.
-	for i := range partsMetadata {
-		partsMetadata[i].DataDir = dataDir
-	}
+	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// List of disks having all parts as per latest metadata.
 	// NOTE: do not pass in latestDisks to diskWithAllParts since
@@ -318,7 +310,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, dataDir, result.DataBlocks)
+	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, result.DataBlocks)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, versionID)
 	}
@@ -551,6 +543,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		if disk == OfflineDisk {
 			continue
 		}
+
 		// record the index of the updated disks
 		partsMetadata[i].Erasure.Index = i + 1
 

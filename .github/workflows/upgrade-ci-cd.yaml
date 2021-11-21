@@ -1,4 +1,4 @@
-name: Crosscompile
+name: Upgrade old version tests
 
 on:
   pull_request:
@@ -7,29 +7,25 @@ on:
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Tests with Go ${{ matrix.go-version }} on ${{ matrix.os }}
+    name: Go ${{ matrix.go-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         go-version: [1.17.x]
         os: [ubuntu-latest]
+
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v1
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Build on ${{ matrix.os }}
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          CGO_ENABLED: 0
-          GO111MODULE: on
+
+      - name: Start upgrade tests
         run: |
-          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
-          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
-          make crosscompile
+          make test-upgrade

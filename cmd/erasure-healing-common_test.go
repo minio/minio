@@ -34,10 +34,8 @@ import (
 func TestCommonTime(t *testing.T) {
 	// List of test cases for common modTime.
 	testCases := []struct {
-		times    []time.Time
-		dataDirs []string
-		time     time.Time
-		dataDir  string
+		times []time.Time
+		time  time.Time
 	}{
 		{
 			// 1. Tests common times when slice has varying time elements.
@@ -49,17 +47,8 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 2).UTC(),
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 1).UTC(),
-			}, []string{
-				errorDir,
-				delMarkerDir,
-				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
-				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
-				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
-				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
-				"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
 			},
 			time.Unix(0, 3).UTC(),
-			"cd3b36c0-49e6-11ec-8087-73a2b2fd4016",
 		},
 		{
 			// 2. Tests common time obtained when all elements are equal.
@@ -71,17 +60,8 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 3).UTC(),
-			}, []string{
-				errorDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
 			},
 			time.Unix(0, 3).UTC(),
-			delMarkerDir,
 		},
 		{
 			// 3. Tests common time obtained when elements have a mixture
@@ -97,17 +77,8 @@ func TestCommonTime(t *testing.T) {
 				timeSentinel,
 				timeSentinel,
 				timeSentinel,
-			}, []string{
-				errorDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
-				delMarkerDir,
 			},
 			time.Unix(0, 3).UTC(),
-			delMarkerDir,
 		},
 	}
 
@@ -115,13 +86,9 @@ func TestCommonTime(t *testing.T) {
 	// common modtime. Tests fail if modtime does not match.
 	for i, testCase := range testCases {
 		// Obtain a common mod time from modTimes slice.
-		ctime, dataDir := commonTime(testCase.times, testCase.dataDirs)
+		ctime := commonTime(testCase.times)
 		if !testCase.time.Equal(ctime) {
 			t.Errorf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
-			continue
-		}
-		if dataDir != testCase.dataDir {
-			t.Errorf("Test case %d, expect to pass but failed. Wanted dataDir: %s, got dataDir: %s\n", i+1, testCase.dataDir, dataDir)
 		}
 	}
 }
@@ -278,14 +245,10 @@ func TestListOnlineDisks(t *testing.T) {
 
 			}
 
-			onlineDisks, modTime, dataDir := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
-			}
-			if fi.DataDir != dataDir {
-				t.Fatalf("Expected dataDir to be equal to %v but was found to be %v",
-					fi.DataDir, dataDir)
 			}
 			availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
 			test.errs = newErrs
@@ -395,13 +358,14 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	for i, test := range testCases {
 		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
-			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
+			_, err := obj.PutObject(ctx, bucket, object,
+				mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 			if err != nil {
 				t.Fatalf("Failed to putObject %v", err)
 			}
 
 			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			fi, err := getLatestFileInfo(ctx, partsMetadata, errs, getReadQuorum(len(disks)))
+			_, err = getLatestFileInfo(ctx, partsMetadata, errs, getReadQuorum(len(disks)))
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
@@ -462,15 +426,10 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
 
-			onlineDisks, modTime, dataDir := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
-			}
-
-			if fi.DataDir != dataDir {
-				t.Fatalf("Expected dataDir to be equal to %v but was found to be %v",
-					fi.DataDir, dataDir)
 			}
 
 			availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
@@ -527,7 +486,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs)
+	erasureDisks, _ = listOnlineDisks(erasureDisks, partsMetadata, errs)
 
 	filteredDisks, errs := disksWithAllParts(ctx, erasureDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
 

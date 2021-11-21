@@ -42,6 +42,10 @@ test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
+test-upgrade: build
+	@echo "Running minio upgrade tests"
+	@(env bash $(PWD)/buildscripts/minio-upgrade.sh)
+
 test-race: verifiers build ## builds minio, runs linters, tests (race)
 	@echo "Running unit tests under -race"
 	@(env bash $(PWD)/buildscripts/race.sh)
