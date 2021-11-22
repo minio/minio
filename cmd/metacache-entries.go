@@ -58,7 +58,8 @@ func (e metaCacheEntry) hasPrefix(s string) bool {
 	return strings.HasPrefix(e.name, s)
 }
 
-// matches returns if the entries match by comparing their latest version fileinfo.
+// matches returns if the entries have the same versions.
+// If strict is false we allow signatures to mismatch.
 func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
 	if e == nil && other == nil {
 		return true
@@ -266,43 +267,52 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 			continue
 		}
 
-		// Get new entry metadata
+		// Get new entry metadata,
+		// shallow decode.
 		xl, err := entry.xlmeta()
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 			continue
 		}
 		objsValid++
+
+		// Add all valid to candidates.
+		r.candidates = append(r.candidates, xl.versions)
+
+		// We select the first object we find as a candidate and see if all match that.
+		// This is to quickly identify if all agree.
 		if selected == nil {
-			if selected != nil {
-				r.candidates = r.candidates[:0]
-			}
-			r.candidates = append(r.candidates, xl.versions)
 			selected = entry
 			objsAgree = 1
 			continue
 		}
 		// Names match, check meta...
-		r.candidates = append(r.candidates, xl.versions)
 		if entry.matches(selected, r.strict) {
 			objsAgree++
 			continue
 		}
 	}
+
+	// Return dir entries, if enough...
 	if selected != nil && selected.isDir() && dirExists >= r.dirQuorum {
 		return selected, true
 	}
 
+	// If we would never be able to reach read quorum.
 	if objsValid < r.objQuorum {
 		return nil, false
 	}
+	// If all objects agree.
 	if selected != nil && objsAgree == objsValid {
 		return selected, true
 	}
 
-	// merge
-	if selected.cached == nil {
-		selected.cached = &xlMetaV2{} // Just be sure...
+	// Merge if we have disagreement.
+	// Create a new merged result.
+	selected = &metaCacheEntry{
+		name:     selected.name,
+		reusable: true,
+		cached:   &xlMetaV2{metaV: selected.cached.metaV},
 	}
 	selected.cached.versions = mergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
 	// Reserialize
@@ -312,7 +322,6 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		logger.LogIf(context.Background(), err)
 		return nil, false
 	}
-	selected.cached = nil // Defensive, so we don't use buffers from other entries.
 	return selected, true
 }
 
