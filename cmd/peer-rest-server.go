@@ -827,9 +827,9 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	case serviceStop:
 		globalServiceSignalCh <- signal
 	case serviceFreeze:
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 0, 1)
+		freezeServices()
 	case serviceUnFreeze:
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 1, 0)
+		unfreezeServices()
 	case serviceReloadDynamic:
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {

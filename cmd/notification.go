@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -1526,9 +1525,9 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 	}
 	nerrs := ng.Wait()
 	if freeze {
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 0, 1)
+		freezeServices()
 	} else {
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 1, 0)
+		unfreezeServices()
 	}
 	return nerrs
 }

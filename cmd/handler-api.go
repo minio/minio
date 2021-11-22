@@ -23,10 +23,9 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	mem "github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/mem"
 
 	"github.com/minio/minio/internal/config/api"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -228,13 +227,11 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadInt32(&globalServiceFreeze) != 0 {
-			// To indicate disable keep-alives
-			w.Header().Set("Connection", "close")
-			writeErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrServerNotInitialized),
-				r.URL)
-			return
+		if val := globalServiceFreeze.Load(); val != nil {
+			if unlock, ok := val.(chan struct{}); ok {
+				// Wait until unfrozen.
+				<-unlock
+			}
 		}
 
 		pool, deadline := globalAPIConfig.getRequestsPool()

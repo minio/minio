@@ -36,7 +36,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -246,9 +245,9 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 
 	switch serviceSig {
 	case serviceFreeze:
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 0, 1)
+		freezeServices()
 	case serviceUnFreeze:
-		atomic.CompareAndSwapInt32(&globalServiceFreeze, 1, 0)
+		unfreezeServices()
 	case serviceRestart, serviceStop:
 		globalServiceSignalCh <- serviceSig
 	}

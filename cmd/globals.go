@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/console/restapi"
@@ -325,7 +326,12 @@ var (
 
 	globalConsoleSrv *restapi.Server
 
-	globalServiceFreeze int32 // toggles service freeze or un-freeze S3 API calls.
+	// handles service freeze or un-freeze S3 API calls.
+	globalServiceFreeze atomic.Value
+
+	// Only needed for tracking
+	globalServiceFreezeCnt int32
+	globalServiceFreezeMu  sync.Mutex // Updates.
 
 	// Add new variable global values here.
 )
