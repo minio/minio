@@ -415,16 +415,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	const maxBodySize = 2 * 100000 * 1024
 
 	// Unmarshal list of keys to be deleted.
-	deleteObjects := &DeleteObjectsRequest{}
-	if err := xmlDecoder(r.Body, deleteObjects, maxBodySize); err != nil {
+	deleteObjectsReq := &DeleteObjectsRequest{}
+	if err := xmlDecoder(r.Body, deleteObjectsReq, maxBodySize); err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// Convert object name delete objects if it has `/` in the beginning.
-	for i := range deleteObjects.Objects {
-		deleteObjects.Objects[i].ObjectName = trimLeadingSlash(deleteObjects.Objects[i].ObjectName)
+	for i := range deleteObjectsReq.Objects {
+		deleteObjectsReq.Objects[i].ObjectName = trimLeadingSlash(deleteObjectsReq.Objects[i].ObjectName)
 	}
 
 	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
@@ -444,7 +444,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	// Return Malformed XML as S3 spec if the number of objects is empty
-	if len(deleteObjects.Objects) == 0 || len(deleteObjects.Objects) > maxDeleteList {
+	if len(deleteObjectsReq.Objects) == 0 || len(deleteObjectsReq.Objects) > maxDeleteList {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL)
 		return
 	}
@@ -461,7 +461,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		goi            ObjectInfo
 		gerr           error
 	)
-	replicateDeletes := hasReplicationRules(ctx, bucket, deleteObjects.Objects)
+	replicateDeletes := hasReplicationRules(ctx, bucket, deleteObjectsReq.Objects)
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
 		hasLockEnabled = true
 	}
@@ -469,16 +469,23 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	versioned := globalBucketVersioningSys.Enabled(bucket)
 	suspended := globalBucketVersioningSys.Suspended(bucket)
 
-	dErrs := make([]DeleteError, len(deleteObjects.Objects))
-	oss := make([]*objSweeper, len(deleteObjects.Objects))
-	for index, object := range deleteObjects.Objects {
+	type deleteResult struct {
+		delInfo DeletedObject
+		errInfo DeleteError
+	}
+
+	deleteResults := make([]deleteResult, len(deleteObjectsReq.Objects))
+
+	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
+
+	for index, object := range deleteObjectsReq.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
 				return
 			}
 			apiErr := errorCodes.ToAPIErr(apiErrCode)
-			dErrs[index] = DeleteError{
+			deleteResults[index].errInfo = DeleteError{
 				Code:      apiErr.Code,
 				Message:   apiErr.Description,
 				Key:       object.ObjectName,
@@ -490,7 +497,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			if _, err := uuid.Parse(object.VersionID); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("invalid version-id specified %w", err))
 				apiErr := errorCodes.ToAPIErr(ErrNoSuchVersion)
-				dErrs[index] = DeleteError{
+				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
 					Message:   apiErr.Description,
 					Key:       object.ObjectName,
@@ -536,7 +543,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		if object.VersionID != "" && hasLockEnabled {
 			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
 				apiErr := errorCodes.ToAPIErr(apiErrCode)
-				dErrs[index] = DeleteError{
+				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
 					Message:   apiErr.Description,
 					Key:       object.ObjectName,
@@ -567,7 +574,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		Versioned:        versioned,
 		VersionSuspended: suspended,
 	})
-	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
+
 	for i := range errs {
 		// DeleteMarkerVersionID is not used specifically to avoid
 		// lookup errors, since DeleteMarkerVersionID is only
@@ -586,11 +593,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			if replicateDeletes {
 				dObjects[i].ReplicationState = deleteList[i].ReplicationState()
 			}
-			deletedObjects[dindex] = dObjects[i]
+			deleteResults[dindex].delInfo = dObjects[i]
 			continue
 		}
 		apiErr := toAPIError(ctx, errs[i])
-		dErrs[dindex] = DeleteError{
+		deleteResults[dindex].errInfo = DeleteError{
 			Code:      apiErr.Code,
 			Message:   apiErr.Description,
 			Key:       deleteList[i].ObjectName,
@@ -598,15 +605,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 	}
 
-	var deleteErrors []DeleteError
-	for _, dErr := range dErrs {
-		if dErr.Code != "" {
-			deleteErrors = append(deleteErrors, dErr)
+	// Generate response
+	var deleteErrors = make([]DeleteError, 0, len(deleteObjectsReq.Objects))
+	var deletedObjects = make([]DeletedObject, 0, len(deleteObjectsReq.Objects))
+	for _, deleteResult := range deleteResults {
+		if deleteResult.errInfo.Code != "" {
+			deleteErrors = append(deleteErrors, deleteResult.errInfo)
+		} else {
+			deletedObjects = append(deletedObjects, deleteResult.delInfo)
 		}
 	}
 
-	// Generate response
-	response := generateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
+	response := generateMultiDeleteResponse(deleteObjectsReq.Quiet, deletedObjects, deleteErrors)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write success response.
