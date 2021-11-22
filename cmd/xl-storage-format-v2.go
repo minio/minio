@@ -1626,12 +1626,12 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 	return versions, nil
 }
 
-// MergeXLV2Versions will merge all versions that have at least quorum
+// mergeXLV2Versions will merge all versions that have at least quorum
 // entries in all metas.
 // Quorum must be the minimum number of matching metadata files.
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type
-func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
+func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
 	if len(versions) < quorum || len(versions) == 0 {
 		return nil
 	}
@@ -1641,7 +1641,6 @@ func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 	// Our result
 	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
 	tops := make([]xlMetaV2ShallowVersion, len(versions))
-	var emptyVersionID [16]byte
 	for {
 		// Step 1 create slice with all top versions.
 		tops = tops[:0]
@@ -1688,11 +1687,7 @@ func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 				continue
 			}
 			// Mismatch, but older.
-			if strict || ver.header.VersionID == emptyVersionID {
-				// null version id, disregard.
-				continue
-			}
-			if ver.header.VersionID == latest.header.VersionID && ver.header.Type == ver.header.Type {
+			if !strict && ver.header.matchesNotStrict(latest.header) {
 				// If non-nil version ID and it matches, assume match, but keep newest.
 				latestCount++
 			}
@@ -1705,7 +1700,7 @@ func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 		for i, vers := range versions {
 			for _, ver := range vers {
 				// Truncate later modtimes, not selected.
-				if ver.header.ModTime > ver.header.ModTime {
+				if ver.header.ModTime > latest.header.ModTime {
 					versions[i] = versions[i][1:]
 					continue
 				}
@@ -1716,9 +1711,7 @@ func MergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 				}
 
 				// Truncate non-empty version and type matches
-				if !strict && ver.header.VersionID != emptyVersionID &&
-					ver.header.VersionID == latest.header.VersionID &&
-					ver.header.Type == ver.header.Type {
+				if !strict && ver.header.matchesNotStrict(latest.header) {
 					versions[i] = versions[i][1:]
 					continue
 				}
@@ -1842,6 +1835,7 @@ type VersionSummary struct {
 	Versions []xlMetaV2VersionHeader
 }
 
+// VersionSummaryOpts provides options to VersionSummary calls.
 type VersionSummaryOpts struct {
 	SkipFreeVersions bool
 }

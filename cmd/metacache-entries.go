@@ -97,56 +97,6 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
 	return true
 }
 
-// resolveEntries returns if the entries match by comparing their latest version fileinfo.
-func resolveEntries(a, b *metaCacheEntry) *metaCacheEntry {
-	if b == nil {
-		return a
-	}
-	if a == nil {
-		return b
-	}
-
-	if a.name != b.name {
-		if a.name < b.name {
-			return a
-		}
-		return b
-	}
-
-	// Names match...
-	aVers, err := a.xlmeta()
-	if err != nil {
-		return b
-	}
-	bVers, err := b.xlmeta()
-	if err != nil {
-		return a
-	}
-	if len(bVers.versions) == 0 {
-		return a
-	}
-	if len(aVers.versions) == 0 {
-		return b
-	}
-	// Select the one with latest modtime.
-	for i, aVer := range aVers.versions {
-		// If there are no versions left in b, return a
-		if len(bVers.versions) <= i {
-			return a
-		}
-		bVer := bVers.versions[i]
-		if aVer.header.ModTime != bVer.header.ModTime {
-			// ModTime mismatch, return latest
-			if aVer.header.ModTime > bVer.header.ModTime {
-				return a
-			}
-			return b
-		}
-	}
-
-	return a
-}
-
 // isInDir returns whether the entry is in the dir when considering the separator.
 func (e metaCacheEntry) isInDir(dir, separator string) bool {
 	if len(dir) == 0 {
@@ -354,7 +304,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	if selected.cached == nil {
 		selected.cached = &xlMetaV2{} // Just be sure...
 	}
-	selected.cached.versions = MergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
+	selected.cached.versions = mergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
 	// Reserialize
 	var err error
 	selected.metadata, err = selected.cached.AppendTo(metaDataPoolGet())
