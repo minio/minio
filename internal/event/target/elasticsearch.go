@@ -179,6 +179,7 @@ func (target *ElasticsearchTarget) IsActive() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return target.client.ping(ctx, target.args)
 }
 
@@ -187,7 +188,16 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	err := target.send(eventData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := target.checkAndInitClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = target.send(eventData)
 	if xnet.IsNetworkOrHostDown(err, false) {
 		return errNotConnected
 	}
