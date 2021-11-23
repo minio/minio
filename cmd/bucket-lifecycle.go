@@ -165,6 +165,7 @@ type transitionState struct {
 	killCh     chan struct{}
 
 	activeTasks int32
+	lastDay     lastDayTierStats
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
@@ -217,6 +218,15 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
 			}
 			atomic.AddInt32(&t.activeTasks, -1)
+
+			ts := tierStats{
+				TotalSize:   uint64(oi.Size),
+				NumVersions: 1,
+			}
+			if oi.IsLatest {
+				ts.NumObjects = 1
+			}
+			t.lastDay.addStats(ts)
 		}
 	}
 }
