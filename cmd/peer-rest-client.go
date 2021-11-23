@@ -958,9 +958,9 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		Path:   peerRESTPath,
 	}
 
-	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	// Use a separate client to avoid recursive calls.
-	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	healthClient.ExpectTimeouts = true
 	healthClient.NoMetrics = true
 
