@@ -68,6 +68,7 @@ const (
 	peerRESTMethodSpeedtest                   = "/speedtest"
 	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
 	peerRESTMethodReloadPoolMeta              = "/reloadpoolmeta"
+	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
 )
 
 const (

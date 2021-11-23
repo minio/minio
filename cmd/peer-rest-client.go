@@ -1075,3 +1075,18 @@ func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) e
 	defer http.DrainBody(respBody)
 	return nil
 }
+
+func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (dailyAllTierStats, error) {
+	var result map[string]lastDayTierStats
+	respBody, err := client.callWithContext(context.Background(), peerRESTMethodGetLastDayTierStats, nil, nil, -1)
+	if err != nil {
+		return result, err
+	}
+	defer http.DrainBody(respBody)
+
+	err = gob.NewDecoder(respBody).Decode(&result)
+	if err != nil {
+		return dailyAllTierStats{}, err
+	}
+	return dailyAllTierStats(result), nil
+}

@@ -165,7 +165,9 @@ type transitionState struct {
 	killCh     chan struct{}
 
 	activeTasks int32
-	lastDay     lastDayTierStats
+
+	lastDayMu    sync.RWMutex
+	lastDayStats map[string]*lastDayTierStats
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
@@ -187,6 +189,7 @@ func newTransitionState(ctx context.Context, objAPI ObjectLayer) *transitionStat
 		ctx:          ctx,
 		objAPI:       objAPI,
 		killCh:       make(chan struct{}),
+		lastDayStats: make(map[string]*lastDayTierStats),
 	}
 }
 
@@ -214,7 +217,9 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 				return
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
-			if err := transitionObject(ctx, objectAPI, oi); err != nil {
+			var tier string
+			var err error
+			if tier, err = transitionObject(ctx, objectAPI, oi); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
 			}
 			atomic.AddInt32(&t.activeTasks, -1)
@@ -226,9 +231,30 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 			if oi.IsLatest {
 				ts.NumObjects = 1
 			}
-			t.lastDay.addStats(ts)
+			t.addLastDayStats(tier, ts)
 		}
 	}
+}
+
+func (t *transitionState) addLastDayStats(tier string, ts tierStats) {
+	t.lastDayMu.Lock()
+	defer t.lastDayMu.Unlock()
+
+	if _, ok := t.lastDayStats[tier]; !ok {
+		t.lastDayStats[tier] = &lastDayTierStats{}
+	}
+	t.lastDayStats[tier].addStats(ts)
+}
+
+func (t *transitionState) getDailyAllTierStats() dailyAllTierStats {
+	t.lastDayMu.RLock()
+	defer t.lastDayMu.RUnlock()
+
+	res := make(map[string]lastDayTierStats, len(t.lastDayStats))
+	for tier, st := range t.lastDayStats {
+		res[tier] = st.clone()
+	}
+	return dailyAllTierStats(res)
 }
 
 // UpdateWorkers at the end of this function leaves n goroutines waiting for
@@ -375,15 +401,16 @@ func genTransitionObjName(bucket string) (string, error) {
 // storage specified by the transition ARN, the metadata is left behind on source cluster and original content
 // is moved to the transition tier. Note that in the case of encrypted objects, entire encrypted stream is moved
 // to the transition tier without decrypting or re-encrypting.
-func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo) error {
+func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo) (string, error) {
 	lc, err := globalLifecycleSys.Get(oi.Bucket)
 	if err != nil {
-		return err
+		return "", err
 	}
+	tier := lc.TransitionTier(oi.ToLifecycleOpts())
 	opts := ObjectOptions{
 		Transition: TransitionOptions{
 			Status: lifecycle.TransitionPending,
-			Tier:   lc.TransitionTier(oi.ToLifecycleOpts()),
+			Tier:   tier,
 			ETag:   oi.ETag,
 		},
 		VersionID:        oi.VersionID,
@@ -391,7 +418,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 		VersionSuspended: globalBucketVersioningSys.Suspended(oi.Bucket),
 		MTime:            oi.ModTime,
 	}
-	return objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
+	return tier, objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
 }
 
 // getTransitionedObjectReader returns a reader from the transitioned tier.

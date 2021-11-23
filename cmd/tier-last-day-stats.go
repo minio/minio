@@ -1,47 +1,50 @@
 package cmd
 
-import "time"
+import (
+	"time"
+
+	"github.com/minio/madmin-go"
+)
 
 type lastDayTierStats struct {
-	bins      [24]tierStats
-	updatedAt time.Time
+	Bins      [24]tierStats
+	UpdatedAt time.Time
 }
 
 func (l *lastDayTierStats) addStats(ts tierStats) {
 	now := time.Now()
 	l.forwardTo(now)
 
-	nowIdx := now.Hour() % 24
-	l.bins[nowIdx] = l.bins[nowIdx].add(ts)
+	nowIdx := now.Hour()
+	l.Bins[nowIdx] = l.Bins[nowIdx].add(ts)
 }
 
+// forwardTo moves time to t, clearing entries between last update and t.
 func (l *lastDayTierStats) forwardTo(t time.Time) {
-	since := t.Sub(l.updatedAt)
-	if since <= 0 {
+	since := t.Sub(l.UpdatedAt).Hours()
+	// within the hour since l.UpdatedAt
+	if since < 1 {
 		return
 	}
 
-	idx, lastIdx := t.Hour(), l.updatedAt.Hour()
-	l.updatedAt = t
+	idx, lastIdx := t.Hour(), l.UpdatedAt.Hour()
+	l.UpdatedAt = t
 
-	if since.Hours() >= 24 {
-		l.bins = [24]tierStats{}
+	if since >= 24 {
+		l.Bins = [24]tierStats{}
 		return
 	}
 
-	// clear out entries between lastIdx and now
 	for ; lastIdx != idx; lastIdx++ {
-		l.bins[(lastIdx+1)%24] = tierStats{}
+		l.Bins[(lastIdx+1)%24] = tierStats{}
 	}
 }
 
 func (l *lastDayTierStats) clone() lastDayTierStats {
 	clone := lastDayTierStats{
-		updatedAt: l.updatedAt,
+		UpdatedAt: l.UpdatedAt,
 	}
-	for i := range l.bins {
-		clone.bins[i] = l.bins[i]
-	}
+	copy(clone.Bins[:], l.Bins[:])
 	return clone
 }
 
@@ -49,17 +52,45 @@ func (l lastDayTierStats) merge(m lastDayTierStats) (merged lastDayTierStats) {
 	cl := l.clone()
 	cm := m.clone()
 
-	if cl.updatedAt.Sub(cm.updatedAt) >= 0 {
-		cm.forwardTo(cl.updatedAt)
-		merged.updatedAt = cl.updatedAt
+	if cl.UpdatedAt.After(cm.UpdatedAt) {
+		cm.forwardTo(cl.UpdatedAt)
+		merged.UpdatedAt = cl.UpdatedAt
 	} else {
-		cl.forwardTo(cm.updatedAt)
-		merged.updatedAt = cm.updatedAt
+		cl.forwardTo(cm.UpdatedAt)
+		merged.UpdatedAt = cm.UpdatedAt
 	}
 
-	for i := range cl.bins {
-		merged.bins[i] = cl.bins[i].add(cm.bins[i])
+	for i := range cl.Bins {
+		merged.Bins[i] = cl.Bins[i].add(cm.Bins[i])
 	}
 
 	return merged
+}
+
+// dailyAllTierStats is used to aggregate last day tier stats across MinIO servers
+type dailyAllTierStats map[string]lastDayTierStats
+
+func (l dailyAllTierStats) merge(m dailyAllTierStats) {
+	for tier, st := range m {
+		l[tier] = l[tier].merge(st)
+	}
+}
+
+func (l dailyAllTierStats) addToTierInfo(tierInfos []madmin.TierInfo) []madmin.TierInfo {
+	for i := range tierInfos {
+		var lst lastDayTierStats
+		var ok bool
+		if lst, ok = l[tierInfos[i].Name]; !ok {
+			continue
+		}
+		for hr, st := range lst.Bins {
+			tierInfos[i].DailyStats.Bins[hr] = madmin.TierStats{
+				TotalSize:   st.TotalSize,
+				NumVersions: st.NumVersions,
+				NumObjects:  st.NumObjects,
+			}
+		}
+		tierInfos[i].DailyStats.UpdatedAt = lst.UpdatedAt
+	}
+	return tierInfos
 }
