@@ -725,11 +725,11 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		Path:   path.Join(storageRESTPrefix, endpoint.Path, storageRESTVersion),
 	}
 
-	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 
 	if healthcheck {
 		// Use a separate client to avoid recursive calls.
-		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 		healthClient.ExpectTimeouts = true
 		healthClient.NoMetrics = true
 		restClient.HealthCheckFn = func() bool {

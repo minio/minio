@@ -247,7 +247,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		Path:   bootstrapRESTPath,
 	}
 
-	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	restClient.HealthCheckFn = nil
 
 	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}
