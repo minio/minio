@@ -3455,6 +3455,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Notify object deleted event.
+	objInfo.Size = goi.Size
 	sendEvent(eventArgs{
 		EventName:    eventName,
 		BucketName:   bucket,

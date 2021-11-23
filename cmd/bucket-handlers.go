@@ -471,6 +471,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	dErrs := make([]DeleteError, len(deleteObjects.Objects))
 	oss := make([]*objSweeper, len(deleteObjects.Objects))
+	sizes := make([]int64, len(deleteObjects.Objects))
 	for index, object := range deleteObjects.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
@@ -506,12 +507,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			VersionSuspended: suspended,
 		}
 
-		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
-			if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
-				opts.VersionID = nullVersionID
-			}
-			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
+		if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
+			opts.VersionID = nullVersionID
 		}
+		goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
+		sizes[index] = goi.Size
 
 		if !globalTierConfigMgr.Empty() {
 			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, suspended)
@@ -629,7 +629,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	// Notify deleted event for objects.
-	for _, dobj := range deletedObjects {
+	for i, dobj := range deletedObjects {
 		if dobj.ObjectName == "" {
 			continue
 		}
@@ -639,6 +639,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			Name:         dobj.ObjectName,
 			VersionID:    dobj.VersionID,
 			DeleteMarker: dobj.DeleteMarker,
+			Size:         sizes[i],
 		}
 
 		if objInfo.DeleteMarker {
