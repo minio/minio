@@ -1,11 +1,14 @@
-FROM minio/minio:edge
+FROM minio/minio
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
-COPY minio /usr/bin/
+ENV PATH=/opt/bin:$PATH
+
+COPY minio /opt/bin
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
-RUN chmod +x /usr/bin/minio && \
+RUN mkdir -p /opt/bin && chmod -R 777 /opt/bin && \
+    chmod +x /opt/bin/minio && \
     chmod +x /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000

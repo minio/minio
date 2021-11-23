@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo sysctl net.ipv6.conf.wlp59s0.disable_ipv6=1
+sudo sysctl net.ipv6.conf.all.disable_ipv6=0
 
 release=$(git describe --abbrev=0 --tags)
 
@@ -44,4 +44,4 @@ docker buildx build --push --no-cache \
 
 docker buildx prune -f
 
-sudo sysctl net.ipv6.conf.wlp59s0.disable_ipv6=0
+sudo sysctl net.ipv6.conf.all.disable_ipv6=0
