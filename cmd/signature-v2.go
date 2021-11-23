@@ -181,6 +181,8 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrSignatureDoesNotMatch
 	}
 
+	r.Form.Del(xhttp.Expires)
+
 	return ErrNone
 }
 
