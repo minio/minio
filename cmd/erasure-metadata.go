@@ -390,13 +390,9 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
-	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs, defaultParityCount)
+	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {
 		return 0, 0, err
-	}
-
-	if !latestFileInfo.IsValid() {
-		return 0, 0, errErasureReadQuorum
 	}
 
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
