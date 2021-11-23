@@ -68,56 +68,37 @@ func restartProcess() error {
 	return syscall.Exec(argv0, os.Args, os.Environ())
 }
 
-// Keep track of number of freeze/unfreeze calls.
-const trackFreezeCount = true
-
 // freezeServices will freeze all incoming S3 API calls.
 // For each call, unfreezeServices must be called once.
 func freezeServices() {
 	// Use atomics for globalServiceFreeze, so we can read without locking.
-	if trackFreezeCount {
-		// We need a lock since we are need the 2 atomic values to remain in sync.
-		globalServiceFreezeMu.Lock()
-		// If multiple calls, first one creates channel.
-		globalServiceFreezeCnt++
-		if globalServiceFreezeCnt == 1 {
-			globalServiceFreeze.Store(make(chan struct{}))
-		}
-		globalServiceFreezeMu.Unlock()
-	} else {
-		// If multiple calls, first one creates channel.
-		globalServiceFreeze.CompareAndSwap(nil, make(chan struct{}))
+	// We need a lock since we are need the 2 atomic values to remain in sync.
+	globalServiceFreezeMu.Lock()
+	// If multiple calls, first one creates channel.
+	globalServiceFreezeCnt++
+	if globalServiceFreezeCnt == 1 {
+		globalServiceFreeze.Store(make(chan struct{}))
 	}
+	globalServiceFreezeMu.Unlock()
 }
 
 // unfreezeServices will unfreeze all incoming S3 API calls.
 // For each call, unfreezeServices must be called once.
 func unfreezeServices() {
-	if trackFreezeCount {
-		// We need a lock since we need the 2 atomic values to remain in sync.
-		globalServiceFreezeMu.Lock()
-		// Close when we reach 0
-		globalServiceFreezeCnt--
-		if globalServiceFreezeCnt <= 0 {
-			// Ensure we only close once.
-			if val := globalServiceFreeze.Load(); val != nil {
-				if ch, ok := val.(chan struct{}); ok {
-					globalServiceFreeze.Store(nil)
-					close(ch)
-				}
-			}
-			globalServiceFreezeCnt = 0 // Don't risk going negative.
-		}
-		globalServiceFreezeMu.Unlock()
-	} else {
-		// If multiple calls, first one closes channel.
+	// We need a lock since we need the 2 atomic values to remain in sync.
+	globalServiceFreezeMu.Lock()
+	// Close when we reach 0
+	globalServiceFreezeCnt--
+	if globalServiceFreezeCnt <= 0 {
+		// Ensure we only close once.
 		if val := globalServiceFreeze.Load(); val != nil {
+			var _ch chan struct{}
 			if ch, ok := val.(chan struct{}); ok {
-				// Ensure we only close once.
-				if globalServiceFreeze.CompareAndSwap(val, nil) {
-					close(ch)
-				}
+				globalServiceFreeze.Store(_ch)
+				close(ch)
 			}
 		}
+		globalServiceFreezeCnt = 0 // Don't risk going negative.
 	}
+	globalServiceFreezeMu.Unlock()
 }

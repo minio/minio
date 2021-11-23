@@ -228,7 +228,7 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if val := globalServiceFreeze.Load(); val != nil {
-			if unlock, ok := val.(chan struct{}); ok {
+			if unlock, ok := val.(chan struct{}); ok && unlock != nil {
 				// Wait until unfrozen.
 				<-unlock
 			}
