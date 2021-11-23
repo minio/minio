@@ -190,7 +190,11 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 // ServiceHandler - POST /minio/admin/v3/service?action={action}
 // ----------
-// restarts/stops minio server gracefully. In a distributed setup,
+// Supports following actions:
+// - restart (restarts all the MinIO instances in a setup)
+// - stop (stops all the MinIO instances in a setup)
+// - freeze (freezes all incoming S3 API calls)
+// - unfreeze (unfreezes previously frozen S3 API calls)
 func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "Service")
 
@@ -205,6 +209,10 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 		serviceSig = serviceRestart
 	case madmin.ServiceActionStop:
 		serviceSig = serviceStop
+	case madmin.ServiceActionFreeze:
+		serviceSig = serviceFreeze
+	case madmin.ServiceActionUnfreeze:
+		serviceSig = serviceUnFreeze
 	default:
 		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
@@ -217,6 +225,8 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceRestartAdminAction)
 	case serviceStop:
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceStopAdminAction)
+	case serviceFreeze, serviceUnFreeze:
+		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceFreezeAdminAction)
 	}
 	if objectAPI == nil {
 		return
@@ -233,7 +243,14 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	// Reply to the client before restarting, stopping MinIO server.
 	writeSuccessResponseHeadersOnly(w)
 
-	globalServiceSignalCh <- serviceSig
+	switch serviceSig {
+	case serviceFreeze:
+		freezeServices()
+	case serviceUnFreeze:
+		unfreezeServices()
+	case serviceRestart, serviceStop:
+		globalServiceSignalCh <- serviceSig
+	}
 }
 
 // ServerProperties holds some server information such as, version, region
@@ -917,12 +934,16 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 }
 
+// SpeedtestHandler - reports maximum speed of a cluster by performing PUT and
+// GET operations on the server, supports auto tuning by default by automatically
+// increasing concurrency and stopping when we have reached the limits on the
+// system.
 func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SpeedtestHandler")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -935,12 +956,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
-	autotuneStr := r.Form.Get("autotune")
-
-	var autotune bool
-	if autotuneStr != "" {
-		autotune = true
-	}
+	autotune := r.Form.Get("autotune") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -964,6 +980,12 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 			NoRecreate: true,
 		})
 	}
+
+	// Freeze all incoming S3 API calls before running speedtest.
+	globalNotificationSys.ServiceFreeze(ctx, true)
+
+	// unfreeze all incoming S3 API calls after speedtest.
+	defer globalNotificationSys.ServiceFreeze(ctx, false)
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()

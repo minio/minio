@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	mem "github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/mem"
 
 	"github.com/minio/minio/internal/config/api"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -227,6 +227,13 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if val := globalServiceFreeze.Load(); val != nil {
+			if unlock, ok := val.(chan struct{}); ok {
+				// Wait until unfrozen.
+				<-unlock
+			}
+		}
+
 		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
 			f.ServeHTTP(w, r)
