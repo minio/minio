@@ -24,7 +24,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -147,10 +146,6 @@ func TestHealing(t *testing.T) {
 }
 
 func TestHealingDanglingObject(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -180,6 +175,9 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
+	disks = objLayer.(*erasureServerPools).serverPools[0].erasureDisks[0]
+	orgDisks := append([]StorageAPI{}, disks...)
+
 	// Enable versioning.
 	globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
 
@@ -190,10 +188,9 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
+	// Remove 4 disks.
+	for i := range disks[:4] {
+		disks[i] = nil
 	}
 
 	// Create delete marker under quorum.
@@ -202,10 +199,9 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
+	// Restore...
+	for i := range disks[:4] {
+		disks[i] = orgDisks[i]
 	}
 
 	fileInfoPreHeal, err := disks[0].ReadVersion(context.Background(), bucket, object, "", false)
@@ -243,10 +239,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		}
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
+	for i := range disks[:4] {
+		disks[i] = nil
 	}
 
 	rd := mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
@@ -257,10 +251,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
+	for i := range disks[:4] {
+		disks[i] = orgDisks[i]
 	}
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
@@ -297,10 +289,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
+	for i := range disks[:4] {
+		disks[i] = nil
 	}
 
 	// Create delete marker under quorum.
@@ -312,10 +302,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
+	for i := range disks[:4] {
+		disks[i] = orgDisks[i]
 	}
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)

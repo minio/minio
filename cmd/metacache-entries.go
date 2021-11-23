@@ -74,7 +74,7 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
 	}
 
 	eVers, eErr := e.xlmeta()
-	oVers, oErr := e.xlmeta()
+	oVers, oErr := other.xlmeta()
 	if eErr != nil || oErr != nil {
 		return eErr == oErr
 	}
