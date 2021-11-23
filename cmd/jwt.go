@@ -94,6 +94,7 @@ func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audien
 	}
 	cache, err := lru.NewARC(100)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return authenticateNode
 	}
 	return func(accessKey, secretKey, audience string) (string, error) {
@@ -101,7 +102,7 @@ func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audien
 		v, ok := cache.Get(k)
 		if ok {
 			if val, ok := v.(*value); ok && time.Since(val.created) < ttl {
-				return val.res, err
+				return val.res, val.err
 			}
 		}
 		s, err := authenticateNode(accessKey, secretKey, audience)
