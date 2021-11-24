@@ -978,6 +978,7 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				} else {
 					write([]byte{0})
 				}
+				close(doneCh)
 				return
 			case block := <-blockCh:
 				var tmp [5]byte
