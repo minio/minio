@@ -224,6 +224,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TearDownSuite(c)
 			},
 		)
@@ -342,6 +343,104 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	// Validate that the client cannot remove any objects
 	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
 	c.Assert(err.Error(), "Access Denied.")
+}
+
+func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+	err = s.adm.SetPolicy(ctx, policy, userDN, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	ldapID := cr.LDAPIdentity{
+		Client:       s.TestSuiteCommon.client,
+		STSEndpoint:  s.endPoint,
+		LDAPUsername: "dillon",
+		LDAPPassword: "dillon",
+	}
+
+	value, err := ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Check that the LDAP sts cred is actually working.
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	// 1. Check that svc account appears in listing
+	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
+
+	// 2. Check that svc account info can be queried
+	c.assertSvcAccInfoQueryable(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey, true)
+
+	// 3. Check S3 access
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
+
+	// 4. Check that svc account can restrict the policy, and that the
+	// session policy can be updated.
+	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 5. Check that service account can be deleted.
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }
 
 func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
