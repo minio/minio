@@ -724,9 +724,6 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 	if !quiet {
 		deleteResp.DeletedObjects = deletedObjects
 	}
-	if len(errs) == len(deletedObjects) {
-		deleteResp.DeletedObjects = nil
-	}
 	deleteResp.Errors = errs
 	return deleteResp
 }
