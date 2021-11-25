@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -142,8 +143,15 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	var zipInfo []byte
 
 	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
-		zipInfo = []byte(z)
-	} else {
+		if globalIsErasure {
+			zipInfo = []byte(z)
+		} else {
+			zipInfo, err = base64.StdEncoding.DecodeString(z)
+			logger.LogIf(ctx, err)
+			// Will attempt to re-read...
+		}
+	}
+	if len(zipInfo) == 0 {
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 
@@ -151,7 +159,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
 	file, err := zipindex.FindSerialized(zipInfo, object)
 	if err != nil {
 		if err == io.EOF {
@@ -491,7 +498,11 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	}
 
 	srcInfo.UserDefined[archiveTypeMetadataKey] = archiveType
-	srcInfo.UserDefined[archiveInfoMetadataKey] = string(zipInfo)
+	if globalIsErasure {
+		srcInfo.UserDefined[archiveInfoMetadataKey] = string(zipInfo)
+	} else {
+		srcInfo.UserDefined[archiveInfoMetadataKey] = base64.StdEncoding.EncodeToString(zipInfo)
+	}
 	srcInfo.metadataOnly = true
 
 	// Always update the same version id & modtime
