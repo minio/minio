@@ -40,30 +40,33 @@ export MINIO_ROOT_PASSWORD=minio13
 minio server /data
 ```
 
-#### Region
+#### Site
 ```
 KEY:
-region  label the location of the server
+site  label the server and its location
 
 ARGS:
-name     (string)    name of the location of the server e.g. "us-west-rack2"
+name     (string)    name for the site e.g. "cal-rack0"
+region   (string)    name of the location of the server e.g. "us-west-1"
 comment  (sentence)  optionally add a comment to this setting
 ```
 
 or environment variables
 ```
 KEY:
-region  label the location of the server
+site  label the server and its location
 
 ARGS:
-MINIO_REGION_NAME     (string)    name of the location of the server e.g. "us-west-rack2"
-MINIO_REGION_COMMENT  (sentence)  optionally add a comment to this setting
+MINIO_SITE_NAME     (string)    name for the site e.g. "cal-rack0"
+MINIO_SITE_REGION   (string)    name of the location of the server e.g. "us-west-1"
+MINIO_SITE_COMMENT  (sentence)  optionally add a comment to this setting
 ```
 
 Example:
 
 ```sh
-export MINIO_REGION_NAME="my_region"
+export MINIO_SITE_REGION="us-west-0"
+export MINIO_SITE_NAME="sfo-rack-1"
 minio server /data
 ```
 
