@@ -58,6 +58,7 @@ func initHelp() {
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
 		config.IdentityTLSSubSys:    xtls.DefaultKVS,
 		config.PolicyOPASubSys:      opa.DefaultKVS,
+		config.SiteSubSys:           config.DefaultSiteKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
@@ -79,8 +80,8 @@ func initHelp() {
 	// Captures help for each sub-system
 	var helpSubSys = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.RegionSubSys,
-			Description: "label the location of the server",
+			Key:         config.SiteSubSys,
+			Description: "label the server and its location",
 		},
 		config.HelpKV{
 			Key:         config.CacheSubSys,
@@ -206,6 +207,7 @@ func initHelp() {
 
 	var helpMap = map[string]config.HelpKVS{
 		"":                          helpSubSys, // Help for all sub-systems.
+		config.SiteSubSys:           config.SiteHelp,
 		config.RegionSubSys:         config.RegionHelp,
 		config.APISubSys:            api.Help,
 		config.StorageClassSubSys:   storageclass.Help,
@@ -235,6 +237,16 @@ func initHelp() {
 	}
 
 	config.RegisterHelpSubSys(helpMap)
+
+	// save top-level help for deprecated sub-systems in a separate map.
+	deprecatedHelpKVMap := map[string]config.HelpKV{
+		config.RegionSubSys: {
+			Key:         config.RegionSubSys,
+			Description: "[DEPRECATED - use `site` instead] label the location of the server",
+		},
+	}
+
+	config.RegisterHelpDeprecatedSubSys(deprecatedHelpKVMap)
 }
 
 var (
@@ -259,7 +271,7 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	if _, err := config.LookupRegion(s[config.RegionSubSys][config.Default]); err != nil {
+	if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -437,9 +449,9 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	// but not federation.
 	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
 
-	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
+	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid region configuration: %w", err))
+		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
 
 	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
@@ -674,7 +686,10 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 
 	subSysHelp, ok := config.HelpSubSysMap[""].Lookup(subSys)
 	if !ok {
-		return Help{}, config.Errorf("unknown sub-system %s", subSys)
+		subSysHelp, ok = config.HelpDeprecatedSubSysMap[subSys]
+		if !ok {
+			return Help{}, config.Errorf("unknown sub-system %s", subSys)
+		}
 	}
 
 	h, ok := config.HelpSubSysMap[subSys]
