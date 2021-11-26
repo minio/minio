@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -656,7 +657,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 
 // Wrapper for calling DeleteMultipleObjects HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestAPIDeleteMultipleObjectsHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIDeleteMultipleObjectsHandler, []string{"DeleteMultipleObjects"})
+	ExecObjectLayerAPITest(t, testAPIDeleteMultipleObjectsHandler, []string{"DeleteMultipleObjects", "PutBucketPolicy"})
 }
 
 func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -678,6 +679,29 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// object used for the test.
 		objectNames = append(objectNames, objectName)
+	}
+
+	for _, name := range []string{"private/object", "public/object"} {
+		// Uploading the object with retention enabled
+		_, err = obj.PutObject(GlobalContext, bucketName, name, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object %s:  Error uploading object: <ERROR> %v", name, err)
+		}
+	}
+
+	// The following block will create a bucket policy with delete object to 'public/*'. This is
+	// to test a mixed response of a successful & failure while deleting objects in a single request
+	policyBytes := []byte(fmt.Sprintf(`{"Id": "Policy1637752602639", "Version": "2012-10-17", "Statement": [{"Sid": "Stmt1637752600730", "Action": "s3:DeleteObject", "Effect": "Allow", "Resource": "arn:aws:s3:::%s/public/*", "Principal": "*"}]}`, bucketName))
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequestV4(http.MethodPut, getPutPolicyURL("", bucketName), int64(len(policyBytes)), bytes.NewReader(policyBytes),
+		credentials.AccessKey, credentials.SecretKey, nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("Expected the response status to be `%d`, but instead found `%d`", 200, rec.Code)
 	}
 
 	getObjectToDeleteList := func(objectNames []string) (objectList []ObjectToDelete) {
@@ -705,6 +729,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	requestList := []DeleteObjectsRequest{
 		{Quiet: false, Objects: getObjectToDeleteList(objectNames[:5])},
 		{Quiet: true, Objects: getObjectToDeleteList(objectNames[5:])},
+		{Quiet: false, Objects: []ObjectToDelete{{ObjectName: "private/object"}, {ObjectName: "public/object"}}},
 	}
 
 	// generate multi objects delete response.
@@ -740,6 +765,20 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	anonRequest := encodeResponse(requestList[0])
 	anonResponse := generateMultiDeleteResponse(requestList[0].Quiet, nil, getDeleteErrorList(requestList[0].Objects))
 	encodedAnonResponse := encodeResponse(anonResponse)
+
+	anonRequestWithPartialPublicAccess := encodeResponse(requestList[2])
+	anonResponseWithPartialPublicAccess := generateMultiDeleteResponse(requestList[2].Quiet,
+		[]DeletedObject{
+			{ObjectName: "public/object"},
+		},
+		[]DeleteError{
+			{
+				Code:    errorCodes[ErrAccessDenied].Code,
+				Message: errorCodes[ErrAccessDenied].Description,
+				Key:     "private/object",
+			},
+		})
+	encodedAnonResponseWithPartialPublicAccess := encodeResponse(anonResponseWithPartialPublicAccess)
 
 	testCases := []struct {
 		bucket             string
@@ -798,6 +837,17 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 			accessKey:          "",
 			secretKey:          "",
 			expectedContent:    encodedAnonResponse,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 6.
+		// Anonymous user has access to some public folder, issue removing with
+		// another private object as well
+		{
+			bucket:             bucketName,
+			objects:            anonRequestWithPartialPublicAccess,
+			accessKey:          "",
+			secretKey:          "",
+			expectedContent:    encodedAnonResponseWithPartialPublicAccess,
 			expectedRespStatus: http.StatusOK,
 		},
 	}

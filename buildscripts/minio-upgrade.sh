@@ -37,8 +37,11 @@ verify_checksum_mc() {
 }
 
 add_alias() {
-    until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin); do
-        echo "...waiting... for 5secs" && sleep 5
+    for i in $(seq 1 4); do
+        echo "... attempting to add alias $i"
+        until (mc alias set minio http://127.0.0.1:9000 minioadmin minioadmin); do
+            echo "...waiting... for 5secs" && sleep 5
+        done
     done
 }
 

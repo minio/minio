@@ -1045,12 +1045,18 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	// Save svc acc claims before deletion (for site replication hook).
+	svcAccClaims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, serviceAccount)
+	if err != nil && err != errNoSuchServiceAccount {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
 	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1060,11 +1066,6 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Call site replication hook. Only LDAP accounts are supported for
 	// replication operations.
-	svcAccClaims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, serviceAccount)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
 	if _, isLDAPAccount := svcAccClaims[ldapUserN]; isLDAPAccount {
 		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,

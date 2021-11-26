@@ -1968,7 +1968,7 @@
         "bars": false,
         "dashLength": 10,
         "dashes": false,
-        "datasource": null,
+        "datasource": "${DS_PROMETHEUS}",
         "fill": 1,
         "fillGradient": 0,
         "gridPos": {

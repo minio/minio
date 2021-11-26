@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2021-10-13T00-23-17Z
+  tag: RELEASE.2021-11-24T23-19-33Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2021-10-07T04-19-58Z
+  tag: RELEASE.2021-11-16T20-37-36Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed or gateway (nas)
