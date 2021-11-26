@@ -270,6 +270,37 @@ func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
 		x.Type == o.Type
 }
 
+// sortsBefore can be used as a tiebreaker for stable sorting/selecting.
+// Returns false on ties.
+func (x xlMetaV2VersionHeader) sortsBefore(o xlMetaV2VersionHeader) bool {
+	if x == o {
+		return false
+	}
+	// Prefer newest modtime.
+	if x.ModTime != o.ModTime {
+		return x.ModTime > o.ModTime
+	}
+
+	// The following doesn't make too much sense, but we want sort to be consistent nonetheless.
+	// Prefer lower types
+	if x.Type != o.Type {
+		return x.Type < o.Type
+	}
+	// Consistent sort on signature
+	if v := bytes.Compare(x.Signature[:], o.Signature[:]); v != 0 {
+		return v > 0
+	}
+	// On ID mismatch
+	if v := bytes.Compare(x.VersionID[:], o.VersionID[:]); v != 0 {
+		return v > 0
+	}
+	// Flags
+	if x.Flags != o.Flags {
+		return x.Flags > o.Flags
+	}
+	return false
+}
+
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
 	if !j.Type.valid() {
@@ -943,6 +974,14 @@ func (x *xlMetaV2) loadLegacy(buf []byte) error {
 	x.metaV = 1 // Fixed for legacy conversions.
 	x.sortByModTime()
 	return nil
+}
+
+// latestModtime returns the modtime of the latest version.
+func (x *xlMetaV2) latestModtime() time.Time {
+	if x == nil || len(x.versions) == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, x.versions[0].header.ModTime)
 }
 
 func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
@@ -1645,6 +1684,7 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 		// Step 1 create slice with all top versions.
 		tops = tops[:0]
 		var topSig [4]byte
+		var topID [16]byte
 		consistent := true // Are all signatures consistent (shortcut)
 		for _, vers := range versions {
 			if len(vers) == 0 {
@@ -1655,45 +1695,51 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			if len(tops) == 0 {
 				consistent = true
 				topSig = ver.header.Signature
+				topID = ver.header.VersionID
+			} else {
+				consistent = consistent && topSig == ver.header.Signature && topID == ver.header.VersionID
 			}
-			consistent = consistent && topSig == ver.header.Signature
 			tops = append(tops, vers[0])
 		}
+
 		// Check if done...
 		if len(tops) < quorum {
 			// We couldn't gather enough for quorum
 			break
 		}
-		if consistent {
-			// All had the same signature, easy.
-			merged = append(merged, tops[0])
-			for i := range versions {
-				versions[i] = versions[i][1:]
-			}
-			continue
-		}
 
-		// Find the latest.
 		var latest xlMetaV2ShallowVersion
 		var latestCount int
-		for i, ver := range tops {
-			if i == 0 || ver.header.ModTime > latest.header.ModTime {
-				latest = ver
-				latestCount = 1
-				continue
-			}
-			if ver.header == latest.header {
-				latestCount++
-				continue
-			}
-			// Mismatch, but older.
-			if !strict && ver.header.matchesNotStrict(latest.header) {
-				// If non-nil version ID and it matches, assume match, but keep newest.
-				latestCount++
-			}
-		}
-		if latestCount >= quorum {
+		if consistent {
+			// All had the same signature, easy.
+			latest = tops[0]
+			latestCount = len(tops)
 			merged = append(merged, latest)
+		} else {
+			// Find latest.
+			// Find the latest.
+			for i, ver := range tops {
+				if i == 0 || ver.header.ModTime > latest.header.ModTime {
+					latest = ver
+					latestCount = 1
+					continue
+				}
+				if ver.header == latest.header {
+					latestCount++
+					continue
+				}
+				// Mismatch, but older.
+				if !strict && ver.header.matchesNotStrict(latest.header) {
+					// If non-nil version ID and it matches, assume match, but keep newest.
+					if ver.header.sortsBefore(latest.header) {
+						latest = ver
+					}
+					latestCount++
+				}
+			}
+			if latestCount >= quorum {
+				merged = append(merged, latest)
+			}
 		}
 
 		// Remove from all streams up until latest modtime or if selected.
@@ -1715,9 +1761,26 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 					versions[i] = versions[i][1:]
 					continue
 				}
+				// Skip versions with version id we already emitted.
+				for _, mergedV := range merged {
+					if ver.header.VersionID == mergedV.header.VersionID {
+						versions[i] = versions[i][1:]
+						continue
+					}
+				}
 				// Keep top entry (and remaining)...
 				break
 			}
+		}
+	}
+	// Sanity check...
+	if false {
+		var found = make(map[[16]byte]struct{})
+		for _, ver := range merged {
+			if _, ok := found[ver.header.VersionID]; ok {
+				panic("found dupe")
+			}
+			found[ver.header.VersionID] = struct{}{}
 		}
 	}
 	return merged

@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -60,29 +61,47 @@ func (e metaCacheEntry) hasPrefix(s string) bool {
 
 // matches returns if the entries have the same versions.
 // If strict is false we allow signatures to mismatch.
-func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
+func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) (prefer *metaCacheEntry, matches bool) {
 	if e == nil && other == nil {
-		return true
+		return nil, true
 	}
-	if e == nil || other == nil {
-		return false
+	if e == nil {
+		return other, false
+	}
+	if other == nil {
+		return e, false
 	}
 
 	// Name should match...
 	if e.name != other.name {
-		return false
+		if e.name < other.name {
+			return e, false
+		}
+		return other, false
 	}
 
 	eVers, eErr := e.xlmeta()
 	oVers, oErr := other.xlmeta()
 	if eErr != nil || oErr != nil {
-		return eErr == oErr
+		return nil, false
 	}
 
 	// check both fileInfo's have same number of versions, if not skip
 	// the `other` entry.
-	if len(eVers.versions) != len(eVers.versions) {
-		return false
+	if len(eVers.versions) != len(oVers.versions) {
+		eTime := eVers.latestModtime()
+		oTime := oVers.latestModtime()
+		if !eTime.Equal(oTime) {
+			if eTime.After(oTime) {
+				return e, false
+			}
+			return other, false
+		}
+		// Tiebreak on version count.
+		if len(eVers.versions) > len(oVers.versions) {
+			return e, false
+		}
+		return other, false
 	}
 
 	// Check if each version matches...
@@ -90,12 +109,26 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) bool {
 		oVer := oVers.versions[i]
 		if eVer.header != oVer.header {
 			if !strict && eVer.header.matchesNotStrict(oVer.header) {
+				if prefer == nil {
+					if eVer.header.sortsBefore(oVer.header) {
+						prefer = e
+					} else {
+						prefer = other
+					}
+				}
 				continue
 			}
-			return false
+			if eVer.header.sortsBefore(oVer.header) {
+				return e, false
+			}
+			return other, false
 		}
 	}
-	return true
+	// If we match, return e
+	if prefer == nil {
+		prefer = e
+	}
+	return prefer, true
 }
 
 // isInDir returns whether the entry is in the dir when considering the separator.
@@ -287,7 +320,8 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 			continue
 		}
 		// Names match, check meta...
-		if entry.matches(selected, r.strict) {
+		if prefer, ok := entry.matches(selected, r.strict); ok {
+			selected = prefer
 			objsAgree++
 			continue
 		}
@@ -299,6 +333,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	}
 
 	// If we would never be able to reach read quorum.
+	fmt.Println("objsAgree:", objsAgree)
 	if objsValid < r.objQuorum {
 		return nil, false
 	}
@@ -315,6 +350,10 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		cached:   &xlMetaV2{metaV: selected.cached.metaV},
 	}
 	selected.cached.versions = mergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
+	if len(selected.cached.versions) == 0 {
+		return nil, false
+	}
+	fmt.Println("merged:", selected.cached.versions)
 	// Reserialize
 	var err error
 	selected.metadata, err = selected.cached.AppendTo(metaDataPoolGet())
