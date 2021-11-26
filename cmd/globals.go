@@ -23,11 +23,13 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/console/restapi"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
 	"github.com/rs/dnscache"
@@ -147,8 +149,9 @@ var (
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
-	// This flag is set to 'us-east-1' by default
-	globalServerRegion = globalMinioDefaultRegion
+	globalSite = config.Site{
+		Region: globalMinioDefaultRegion,
+	}
 
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
@@ -324,6 +327,13 @@ var (
 	globalTierJournal *tierJournal
 
 	globalConsoleSrv *restapi.Server
+
+	// handles service freeze or un-freeze S3 API calls.
+	globalServiceFreeze atomic.Value
+
+	// Only needed for tracking
+	globalServiceFreezeCnt int32
+	globalServiceFreezeMu  sync.Mutex // Updates.
 
 	// Add new variable global values here.
 )

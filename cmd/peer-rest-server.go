@@ -800,7 +800,7 @@ func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
+var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
 // SignalServiceHandler - signal service handler.
 func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Request) {
@@ -826,6 +826,10 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 		globalServiceSignalCh <- signal
 	case serviceStop:
 		globalServiceSignalCh <- signal
+	case serviceFreeze:
+		freezeServices()
+	case serviceUnFreeze:
+		unfreezeServices()
 	case serviceReloadDynamic:
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
@@ -1241,6 +1245,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
 	}
 
 	objAPI := newObjectLayerFn()

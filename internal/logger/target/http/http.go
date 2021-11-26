@@ -157,7 +157,7 @@ func (h *Target) startHTTPLogger() {
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
 
-			if resp.StatusCode != http.StatusOK {
+			if !acceptedResponseStatusCode(resp.StatusCode) {
 				switch resp.StatusCode {
 				case http.StatusForbidden:
 					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)

@@ -30,7 +30,6 @@ import (
 var errConfigNotFound = errors.New("config file not found")
 
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
-	// Read entire content by setting size to -1
 	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		// Treat object not found as config not found.

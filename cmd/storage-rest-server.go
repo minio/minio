@@ -951,42 +951,44 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 	blockCh := make(chan []byte)
 	h := httpStreamResponse{done: doneCh, block: blockCh}
 	go func() {
-		defer close(doneCh)
+		var canWrite = true
+		write := func(b []byte) {
+			if canWrite {
+				n, err := w.Write(b)
+				if err != nil || n != len(b) {
+					canWrite = false
+				}
+			}
+		}
+
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
-				_, err := w.Write([]byte{32})
-				if err != nil {
-					return
+				write([]byte{32})
+				if canWrite {
+					w.(http.Flusher).Flush()
 				}
-				w.(http.Flusher).Flush()
 			case err := <-doneCh:
 				if err != nil {
-					_, werr := w.Write([]byte{1})
-					if werr != nil {
-						return
-					}
-					w.Write([]byte(err.Error()))
+					write([]byte{1})
+					write([]byte(err.Error()))
 				} else {
-					w.Write([]byte{0})
+					write([]byte{0})
 				}
+				close(doneCh)
 				return
 			case block := <-blockCh:
 				var tmp [5]byte
 				tmp[0] = 2
 				binary.LittleEndian.PutUint32(tmp[1:], uint32(len(block)))
-				_, err := w.Write(tmp[:])
-				if err != nil {
-					return
+				write(tmp[:])
+				write(block)
+				if canWrite {
+					w.(http.Flusher).Flush()
 				}
-				_, err = w.Write(block)
-				if err != nil {
-					return
-				}
-				w.(http.Flusher).Flush()
 			}
 		}
 	}()

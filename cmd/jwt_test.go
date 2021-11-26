@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/auth"
@@ -224,11 +225,22 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 	}
 
 	creds := globalActiveCred
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		authenticateNode(creds.AccessKey, creds.SecretKey, "")
-	}
+	b.Run("uncached", func(b *testing.B) {
+		fn := authenticateNode
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fn(creds.AccessKey, creds.SecretKey, "aud")
+		}
+	})
+	b.Run("cached", func(b *testing.B) {
+		fn := cachedAuthenticateNode(time.Second)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fn(creds.AccessKey, creds.SecretKey, "aud")
+		}
+	})
 }
 
 func BenchmarkAuthenticateWeb(b *testing.B) {

@@ -805,7 +805,7 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 	// Handle policy mapping set/update
 	mp := newMappedPolicy(policy)
 	for _, p := range mp.toSlice() {
-		if _, found := cache.iamPolicyDocsMap[policy]; !found {
+		if _, found := cache.iamPolicyDocsMap[p]; !found {
 			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, p))
 			return errNoSuchPolicy
 		}

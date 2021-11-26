@@ -725,7 +725,7 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
 	secretKey, signature string, currTime time.Time) (*http.Request, error) {
 
-	regionStr := globalServerRegion
+	regionStr := globalSite.Region
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -833,7 +833,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
 
-	region := globalServerRegion
+	region := globalSite.Region
 	date := UTCNow()
 	scope := getScope(date, region)
 	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
@@ -961,7 +961,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
-	region := globalServerRegion
+	region := globalSite.Region
 
 	// Get canonical headers.
 	var buf bytes.Buffer

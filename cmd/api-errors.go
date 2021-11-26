@@ -396,10 +396,10 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 	if err != nil {
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
-	if globalServerRegion != "" {
+	if globalSite.Region != "" {
 		switch errCode {
 		case ErrAuthorizationHeaderMalformed:
-			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
+			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
 			return apiErr
 		}
 	}
@@ -2286,7 +2286,7 @@ func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		Resource:   resource,
-		Region:     globalServerRegion,
+		Region:     globalSite.Region,
 		RequestID:  requestID,
 		HostID:     hostID,
 	}

@@ -724,9 +724,6 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 	if !quiet {
 		deleteResp.DeletedObjects = deletedObjects
 	}
-	if len(errs) == len(deletedObjects) {
-		deleteResp.DeletedObjects = nil
-	}
 	deleteResp.Errors = errs
 	return deleteResp
 }
@@ -790,9 +787,9 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set(xhttp.RetryAfter, "120")
 	case "InvalidRegion":
-		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalServerRegion)
+		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
 	case "AuthorizationHeaderMalformed":
-		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
+		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
 	}
 
 	// Generate error response.

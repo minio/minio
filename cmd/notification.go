@@ -63,7 +63,7 @@ func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
 	if sys == nil {
 		return arns
 	}
-	region := globalServerRegion
+	region := globalSite.Region
 	for targetID, target := range sys.targetList.TargetMap() {
 		// httpclient target is part of ListenNotification
 		// which doesn't need to be listed as part of the ARN list
@@ -643,8 +643,8 @@ func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
 	if config == nil {
 		return
 	}
-	config.SetRegion(globalServerRegion)
-	if err := config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+	config.SetRegion(globalSite.Region)
+	if err := config.Validate(globalSite.Region, globalNotificationSys.targetList); err != nil {
 		if _, ok := err.(*event.ErrARNNotFound); !ok {
 			logger.LogIf(GlobalContext, err)
 		}
@@ -1499,6 +1499,37 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 		close(ch)
 	}(&wg, ch)
 	return ch
+}
+
+// ServiceFreeze freezes all S3 API calls when 'freeze' is true,
+// 'freeze' is 'false' would resume all S3 API calls again.
+// NOTE: once a tenant is frozen either two things needs to
+// happen before resuming normal operations.
+// - Server needs to be restarted 'mc admin service restart'
+// - 'freeze' should be set to 'false' for this call
+//   to resume normal operations.
+func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []NotificationPeerErr {
+	serviceSig := serviceUnFreeze
+	if freeze {
+		serviceSig = serviceFreeze
+	}
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.SignalService(serviceSig)
+		}, idx, *client.host)
+	}
+	nerrs := ng.Wait()
+	if freeze {
+		freezeServices()
+	} else {
+		unfreezeServices()
+	}
+	return nerrs
 }
 
 // Speedtest run GET/PUT tests at input concurrency for requested object size,

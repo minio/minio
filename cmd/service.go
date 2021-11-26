@@ -31,6 +31,8 @@ const (
 	serviceRestart       serviceSignal = iota // Restarts the server.
 	serviceStop                               // Stops the server.
 	serviceReloadDynamic                      // Reload dynamic config values.
+	serviceFreeze                             // Freeze all S3 API calls.
+	serviceUnFreeze                           // Un-Freeze previously frozen S3 API calls.
 	// Add new service requests here.
 )
 
@@ -64,4 +66,39 @@ func restartProcess() error {
 	// Invokes the execve system call.
 	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
 	return syscall.Exec(argv0, os.Args, os.Environ())
+}
+
+// freezeServices will freeze all incoming S3 API calls.
+// For each call, unfreezeServices must be called once.
+func freezeServices() {
+	// Use atomics for globalServiceFreeze, so we can read without locking.
+	// We need a lock since we are need the 2 atomic values to remain in sync.
+	globalServiceFreezeMu.Lock()
+	// If multiple calls, first one creates channel.
+	globalServiceFreezeCnt++
+	if globalServiceFreezeCnt == 1 {
+		globalServiceFreeze.Store(make(chan struct{}))
+	}
+	globalServiceFreezeMu.Unlock()
+}
+
+// unfreezeServices will unfreeze all incoming S3 API calls.
+// For each call, unfreezeServices must be called once.
+func unfreezeServices() {
+	// We need a lock since we need the 2 atomic values to remain in sync.
+	globalServiceFreezeMu.Lock()
+	// Close when we reach 0
+	globalServiceFreezeCnt--
+	if globalServiceFreezeCnt <= 0 {
+		// Ensure we only close once.
+		if val := globalServiceFreeze.Load(); val != nil {
+			var _ch chan struct{}
+			if ch, ok := val.(chan struct{}); ok {
+				globalServiceFreeze.Store(_ch)
+				close(ch)
+			}
+		}
+		globalServiceFreezeCnt = 0 // Don't risk going negative.
+	}
+	globalServiceFreezeMu.Unlock()
 }
