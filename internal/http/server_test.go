@@ -18,6 +18,7 @@
 package http
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -46,7 +47,15 @@ func TestNewServer(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		server := NewServer(testCase.addrs, testCase.handler, testCase.certFn)
+		server := NewServer(testCase.addrs).
+			UseHandler(testCase.handler).
+			UseShutdownTimeout(DefaultShutdownTimeout)
+		if testCase.certFn != nil {
+			server = server.UseTLSConfig(&tls.Config{
+				PreferServerCipherSuites: true,
+				GetCertificate:           testCase.certFn,
+			})
+		}
 		if server == nil {
 			t.Fatalf("Case %v: server: expected: <non-nil>, got: <nil>", (i + 1))
 		}
