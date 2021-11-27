@@ -38,6 +38,7 @@ import (
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/randreader"
 	"github.com/tinylib/msgp/msgp"
@@ -1134,7 +1135,7 @@ func newRandomReader(size int) io.Reader {
 }
 
 // Runs the speedtest on local MinIO process.
-func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Duration) (SpeedtestResult, error) {
+func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Duration, storageClass string) (SpeedtestResult, error) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return SpeedtestResult{}, errServerNotInitialized
@@ -1173,7 +1174,11 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				}
 				reader := NewPutObjReader(hashReader)
 				objInfo, err := objAPI.PutObject(uploadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
-					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{})
+					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{
+					UserDefined: map[string]string{
+						xhttp.AmzStorageClass: storageClass,
+					},
+				})
 				if err != nil && !uploadsStopped {
 					retError = err.Error()
 					logger.LogIf(ctx, err)
@@ -1257,6 +1262,7 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
+	storageClass := r.Form.Get(peerRESTStorageClass)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1275,7 +1281,7 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 
 	done := keepHTTPResponseAlive(w)
 
-	result, err := selfSpeedtest(r.Context(), size, concurrent, duration)
+	result, err := selfSpeedtest(r.Context(), size, concurrent, duration, storageClass)
 	if err != nil {
 		result.Error = err.Error()
 	}

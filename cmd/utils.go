@@ -972,18 +972,21 @@ func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogO
 	logger.AuditLog(ctx, nil, nil, nil)
 }
 
+type speedTestOpts struct {
+	throughputSize   int
+	concurrencyStart int
+	duration         time.Duration
+	autotune         bool
+	storageClass     string
+}
+
 // Get the max throughput and iops numbers.
-func speedTest(ctx context.Context, throughputSize, concurrencyStart int, duration time.Duration, autotune bool) chan madmin.SpeedTestResult {
+func speedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestResult {
 	ch := make(chan madmin.SpeedTestResult, 1)
 	go func() {
 		defer close(ch)
 
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return
-		}
-
-		concurrency := concurrencyStart
+		concurrency := opts.concurrencyStart
 
 		throughputHighestGet := uint64(0)
 		throughputHighestPut := uint64(0)
@@ -992,12 +995,12 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 		sendResult := func() {
 			var result madmin.SpeedTestResult
 
-			durationSecs := duration.Seconds()
+			durationSecs := opts.duration.Seconds()
 
 			result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
-			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(throughputSize) / uint64(durationSecs)
+			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.throughputSize) / uint64(durationSecs)
 			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
-			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(throughputSize) / uint64(durationSecs)
+			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.throughputSize) / uint64(durationSecs)
 			for i := 0; i < len(throughputHighestResults); i++ {
 				errStr := ""
 				if throughputHighestResults[i].Error != "" {
@@ -1006,27 +1009,21 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Uploads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(throughputSize) / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.throughputSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(throughputSize) / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.throughputSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 			}
 
-			numDisks := 0
-			if pools, ok := objAPI.(*erasureServerPools); ok {
-				for _, set := range pools.serverPools {
-					numDisks = set.setCount * set.setDriveCount
-				}
-			}
-			result.Disks = numDisks
+			result.Size = opts.throughputSize
+			result.Disks = globalEndpoints.NEndpoints()
 			result.Servers = len(globalNotificationSys.peerClients) + 1
 			result.Version = Version
-			result.Size = throughputSize
 			result.Concurrent = concurrency
 
 			ch <- result
@@ -1040,10 +1037,13 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 			default:
 			}
 
-			results := globalNotificationSys.Speedtest(ctx, throughputSize, concurrency, duration)
+			results := globalNotificationSys.Speedtest(ctx,
+				opts.throughputSize, concurrency,
+				opts.duration, opts.storageClass)
 			sort.Slice(results, func(i, j int) bool {
 				return results[i].Endpoint < results[j].Endpoint
 			})
+
 			totalPut := uint64(0)
 			totalGet := uint64(0)
 			for _, result := range results {
@@ -1085,10 +1085,11 @@ func speedTest(ctx context.Context, throughputSize, concurrencyStart int, durati
 				break
 			}
 
-			if !autotune {
+			if !opts.autotune {
 				sendResult()
 				break
 			}
+
 			sendResult()
 			// Try with a higher concurrency to see if we get better throughput
 			concurrency += (concurrency + 1) / 2
