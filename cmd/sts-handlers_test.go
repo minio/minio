@@ -741,7 +741,7 @@ const (
 
 // SetUpOpenID - expects to setup an OpenID test server using the test OpenID
 // container and canned data from https://github.com/minio/minio-ldap-testing
-func (s *TestSuiteIAM) SetUpOpenID(c *check, serverAddr string) {
+func (s *TestSuiteIAM) SetUpOpenID(c *check, serverAddr string, rolePolicy string) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
@@ -750,9 +750,13 @@ func (s *TestSuiteIAM) SetUpOpenID(c *check, serverAddr string) {
 		fmt.Sprintf("config_url=%s/.well-known/openid-configuration", serverAddr),
 		"client_id=minio-client-app",
 		"client_secret=minio-client-app-secret",
-		"claim_name=groups",
 		"scopes=openid,groups",
 		"redirect_uri=http://127.0.0.1:10000/oauth_callback",
+	}
+	if rolePolicy != "" {
+		configCmds = append(configCmds, fmt.Sprintf("role_policy=%s", rolePolicy))
+	} else {
+		configCmds = append(configCmds, "claim_name=groups")
 	}
 	_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
 	if err != nil {
@@ -797,11 +801,171 @@ func TestIAMWithOpenIDServerSuite(t *testing.T) {
 				}
 
 				suite.SetUpSuite(c)
-				suite.SetUpOpenID(c, openIDServer)
+				suite.SetUpOpenID(c, openIDServer, "")
 				suite.TestOpenIDSTS(c)
 				suite.TestOpenIDServiceAcc(c)
 				suite.TearDownSuite(c)
 			},
 		)
 	}
+}
+
+func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
+	baseTestCases := []TestSuiteCommon{
+		// Init and run test on FS backend with signature v4.
+		{serverType: "FS", signer: signerV4},
+		// Init and run test on FS backend, with tls enabled.
+		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on Erasure backend.
+		{serverType: "Erasure", signer: signerV4},
+		// Init and run test on ErasureSet backend.
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
+	}
+	for i, testCase := range testCases {
+		etcdStr := ""
+		if testCase.withEtcdBackend {
+			etcdStr = " (with etcd backend)"
+		}
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				openIDServer := os.Getenv(EnvTestOpenIDServer)
+				if openIDServer == "" {
+					c.Skip("Skipping OpenID test as no OpenID server is provided.")
+				}
+
+				suite.SetUpSuite(c)
+				suite.SetUpOpenID(c, openIDServer, "readwrite")
+				suite.TestOpenIDSTSWithRolePolicy(c)
+				suite.TestOpenIDServiceAccWithRolePolicy(c)
+				suite.TearDownSuite(c)
+			},
+		)
+	}
+}
+
+const (
+	testRoleARN = "arn:minio:iam:::role/127.0.0.1_minio-cl"
+)
+
+func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token: token,
+			}, nil
+		},
+		RoleARN: testRoleARN,
+	}
+
+	value, err := webID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+	// fmt.Printf("value: %#v\n", value)
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+}
+
+func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token: token,
+			}, nil
+		},
+		RoleARN: testRoleARN,
+	}
+
+	value, err := webID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	// 1. Check that svc account appears in listing
+	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
+
+	// 2. Check that svc account info can be queried
+	c.assertSvcAccInfoQueryable(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey, true)
+
+	// 3. Check S3 access
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
+
+	// 4. Check that svc account can restrict the policy, and that the
+	// session policy can be updated.
+	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 5. Check that service account can be deleted.
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }

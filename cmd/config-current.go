@@ -327,7 +327,7 @@ func validateConfig(s config.Config) error {
 		}
 	}
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
+		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 		return err
 	}
 
@@ -513,7 +513,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody)
+		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}

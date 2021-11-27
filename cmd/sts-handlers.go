@@ -45,6 +45,7 @@ const (
 	stsAction                 = "Action"
 	stsPolicy                 = "Policy"
 	stsToken                  = "Token"
+	stsRoleArn                = "RoleArn"
 	stsWebIdentityToken       = "WebIdentityToken"
 	stsWebIdentityAccessToken = "WebIdentityAccessToken" // only valid if UserInfo is enabled.
 	stsDurationSeconds        = "DurationSeconds"
@@ -73,6 +74,9 @@ const (
 	// LDAP claim keys
 	ldapUser  = "ldapUser"
 	ldapUserN = "ldapUsername"
+
+	// Role Claim key
+	roleArnClaim = "roleArn"
 )
 
 func parseOpenIDParentUser(parentUser string) (userID string, err error) {
@@ -399,45 +403,42 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	var subFromToken string
-	if v, ok := m[subClaim]; ok {
-		subFromToken, _ = v.(string)
-	}
-
-	if subFromToken == "" {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-			errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
-		return
-	}
-
-	var issFromToken string
-	if v, ok := m[issClaim]; ok {
-		issFromToken, _ = v.(string)
-	}
-
-	// JWT has requested a custom claim with policy value set.
-	// This is a MinIO STS API specific value, this value should
-	// be set and configured on your identity provider as part of
-	// JWT custom claims.
 	var policyName string
-	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
-	policies := strings.Join(policySet.ToSlice(), ",")
-	if ok {
-		policyName = globalIAMSys.CurrentPolicies(policies)
-	}
-
-	if globalPolicyOPA == nil {
-		if !ok {
+	roleArn := r.Form.Get(stsRoleArn)
+	if roleArn != "" {
+		_, err := globalIAMSys.GetRolePolicy(roleArn)
+		if err != nil {
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-				fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
-			return
-		} else if policyName == "" {
-			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-				fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", policies))
+				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
 			return
 		}
+		// If roleArn is used, we set it as a claim, and use the
+		// associated policy when credentials are used.
+		m[roleArnClaim] = roleArn
+	} else {
+		// JWT has requested a custom claim with policy value set.
+		// This is a MinIO STS API specific value, this value should
+		// be set and configured on your identity provider as part of
+		// JWT custom claims.
+		policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
+		policies := strings.Join(policySet.ToSlice(), ",")
+		if ok {
+			policyName = globalIAMSys.CurrentPolicies(policies)
+		}
+
+		if globalPolicyOPA == nil {
+			if !ok {
+				writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+					fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
+				return
+			} else if policyName == "" {
+				writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+					fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", policies))
+				return
+			}
+		}
+		m[iamPolicyClaimNameOpenID()] = policyName
 	}
-	m[iamPolicyClaimNameOpenID()] = policyName
 
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html
@@ -476,6 +477,22 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// this is to ensure that ParentUser doesn't change and we get to use
 	// parentUser as per the requirements for service accounts for OpenID
 	// based logins.
+	var subFromToken string
+	if v, ok := m[subClaim]; ok {
+		subFromToken, _ = v.(string)
+	}
+
+	if subFromToken == "" {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+			errors.New("STS JWT Token has `sub` claim missing, `sub` claim is mandatory"))
+		return
+	}
+
+	var issFromToken string
+	if v, ok := m[issClaim]; ok {
+		issFromToken, _ = v.(string)
+	}
+
 	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
 
 	// Set the newly generated credentials.

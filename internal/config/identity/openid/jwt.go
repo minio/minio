@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
+	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
@@ -56,7 +58,9 @@ type Config struct {
 	DiscoveryDoc       DiscoveryDoc
 	ClientID           string
 	ClientSecret       string
+	RolePolicy         string
 
+	roleArn     arn.ARN
 	provider    provider.Provider
 	publicKeys  map[string]crypto.PublicKey
 	transport   *http.Transport
@@ -165,6 +169,12 @@ func (r Config) InitializeProvider(kvs config.KVS) error {
 // ProviderEnabled returns true if any vendor specific provider is enabled.
 func (r Config) ProviderEnabled() bool {
 	return r.Enabled && r.provider != nil
+}
+
+// GetRoleInfo - returns role ARN and policy if present, otherwise returns false
+// boolean.
+func (r Config) GetRoleInfo() (arn.ARN, string, bool) {
+	return r.roleArn, r.RolePolicy, r.RolePolicy != ""
 }
 
 // InitializeKeycloakProvider - initializes keycloak provider
@@ -366,6 +376,7 @@ const (
 	ClaimPrefix   = "claim_prefix"
 	ClientID      = "client_id"
 	ClientSecret  = "client_secret"
+	RolePolicy    = "role_policy"
 
 	Vendor             = "vendor"
 	Scopes             = "scopes"
@@ -383,6 +394,7 @@ const (
 	EnvIdentityOpenIDClaimName          = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
 	EnvIdentityOpenIDClaimUserInfo      = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
 	EnvIdentityOpenIDClaimPrefix        = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
+	EnvIdentityOpenIDRolePolicy         = "MINIO_IDENTITY_OPENID_ROLE_POLICY"
 	EnvIdentityOpenIDRedirectURI        = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
 	EnvIdentityOpenIDRedirectURIDynamic = "MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC"
 	EnvIdentityOpenIDScopes             = "MINIO_IDENTITY_OPENID_SCOPES"
@@ -459,6 +471,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   RolePolicy,
+			Value: "",
+		},
+		config.KV{
 			Key:   ClaimPrefix,
 			Value: "",
 		},
@@ -483,7 +499,7 @@ func Enabled(kvs config.KVS) bool {
 }
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
+func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser), serverRegion string) (c Config, err error) {
 	// remove this since we have removed this already.
 	kvs.Delete(JwksURL)
 
@@ -501,16 +517,19 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		publicKeys:         make(map[string]crypto.PublicKey),
 		ClientID:           env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
 		ClientSecret:       env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
+		RolePolicy:         env.Get(EnvIdentityOpenIDRolePolicy, kvs.Get(RolePolicy)),
 		transport:          transport,
 		closeRespFn:        closeRespFn,
 	}
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
+	var configURLDomain string
 	if configURL != "" {
 		c.URL, err = xnet.ParseHTTPURL(configURL)
 		if err != nil {
 			return c, err
 		}
+		configURLDomain, _, _ = net.SplitHostPort(c.URL.Host)
 		c.DiscoveryDoc, err = parseDiscoveryDoc(c.URL, transport, closeRespFn)
 		if err != nil {
 			return c, err
@@ -534,8 +553,38 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		c.DiscoveryDoc.ScopesSupported = scopes
 	}
 
-	if c.ClaimName == "" {
-		c.ClaimName = iampolicy.PolicyName
+	// Check if claim name is the non-default value and role policy is set.
+	if c.ClaimName != iampolicy.PolicyName && c.RolePolicy != "" {
+		// In the unlikely event that the user specifies
+		// `iampolicy.PolicyName` as the claim name explicitly and sets
+		// a role policy, this check is thwarted, but we will be using
+		// the role policy anyway.
+		return c, config.Errorf("Role Policy and Claim Name cannot both be set.")
+	}
+
+	if c.RolePolicy != "" {
+		// RolePolicy is valided by IAM System during its
+		// initialization.
+
+		// Generate role ARN as combination of provider domain and
+		// prefix of client ID.
+		domain := configURLDomain
+		if domain == "" {
+			// Attempt to parse the JWKs URI.
+			domain, _, _ = net.SplitHostPort(c.JWKS.URL.Host)
+			if domain == "" {
+				return c, config.Errorf("unable to generate a domain from the OpenID config.")
+			}
+		}
+		clientIDFragment := c.ClientID[:8]
+		if clientIDFragment == "" {
+			return c, config.Errorf("unable to get a non-empty clientID fragment from the OpenID config.")
+		}
+		resourceID := domain + "_" + clientIDFragment
+		c.roleArn, err = arn.NewIAMRoleARN(resourceID, serverRegion)
+		if err != nil {
+			return c, config.Errorf("unable to generate ARN from the OpenID config: %v", err)
+		}
 	}
 
 	jwksURL := c.DiscoveryDoc.JwksURI
