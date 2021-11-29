@@ -33,7 +33,9 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	etcd "go.etcd.io/etcd/client/v3"
@@ -65,6 +67,8 @@ type IAMSys struct {
 	iamRefreshInterval time.Duration
 
 	usersSysType UsersSysType
+
+	rolesMap map[arn.ARN]string
 
 	// Persistence layer for IAM subsystem
 	store *IAMStoreSys
@@ -215,6 +219,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	// Migrate storage format if needed.
 	for {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
@@ -263,6 +268,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx); err != nil {
 			if configRetriableErrors(err) {
@@ -308,7 +314,40 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		}()
 	}
 
+	// Start watching changes to storage.
 	go sys.watch(ctx)
+
+	// Load RoleARN
+	if roleARN, rolePolicy, enabled := globalOpenIDConfig.GetRoleInfo(); enabled {
+		numPolicies := len(strings.Split(rolePolicy, ","))
+		validPolicies, _ := sys.store.FilterPolicies(rolePolicy, "")
+		numValidPolicies := len(strings.Split(validPolicies, ","))
+		if numPolicies != numValidPolicies {
+			logger.LogIf(ctx, fmt.Errorf("Some specified role policies (%s) were not defined - role based policies will not be enabled.", rolePolicy))
+			return
+		}
+		sys.rolesMap = map[arn.ARN]string{
+			roleARN: rolePolicy,
+		}
+	}
+
+	sys.printIAMRoles()
+}
+
+// Prints IAM role ARNs.
+func (sys *IAMSys) printIAMRoles() {
+	arns := sys.GetRoleARNs()
+
+	if len(arns) == 0 {
+		return
+	}
+
+	msgs := make([]string, 0, len(arns))
+	for _, arn := range arns {
+		msgs = append(msgs, color.Bold(arn))
+	}
+
+	logStartupMessage(fmt.Sprintf("%s %s", color.Blue("IAM Roles:"), strings.Join(msgs, " ")))
 }
 
 // HasWatcher - returns if the IAM system has a watcher to be notified of
@@ -387,6 +426,28 @@ func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (e
 		err = sys.store.PolicyMappingNotificationHandler(ctx, user, true, regUser)
 	}
 	return err
+}
+
+// GetRoleARNs - returns a list of enabled role ARNs.
+func (sys *IAMSys) GetRoleARNs() []string {
+	var res []string
+	for arn := range sys.rolesMap {
+		res = append(res, arn.String())
+	}
+	return res
+}
+
+// GetRolePolicy - returns policies associated with a role ARN.
+func (sys *IAMSys) GetRolePolicy(arnStr string) (string, error) {
+	arn, err := arn.Parse(arnStr)
+	if err != nil {
+		return "", fmt.Errorf("RoleARN parse err: %v", err)
+	}
+	rolePolicy, ok := sys.rolesMap[arn]
+	if !ok {
+		return "", fmt.Errorf("RoleARN %s is not defined.", arnStr)
+	}
+	return rolePolicy, nil
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -1029,7 +1090,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	// Check policy for this service account.
+	// Check policy for parent user of service account.
 	svcPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
 	if err != nil {
 		logger.LogIf(GlobalContext, err)
@@ -1037,9 +1098,20 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	}
 
 	if len(svcPolicies) == 0 {
-		// If parent user has no policies, look in OpenID claims in case it exists.
-		policySet, ok := iampolicy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
-		if ok {
+		// If parent user has no policies, check for OpenID
+		// claims/RoleARN in case it exists.
+		roleArn := args.GetRoleArn()
+		if roleArn != "" {
+			arn, err := arn.Parse(roleArn)
+			if err != nil {
+				logger.LogIf(GlobalContext, fmt.Errorf("error parsing role ARN %s: %v", roleArn, err))
+				return false
+			}
+			svcPolicies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
+		} else {
+			// If there is no roleArn claim, check the OpenID
+			// provider's policy claim.
+			policySet, _ := iampolicy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
 			svcPolicies = policySet.ToSlice()
 		}
 		if len(svcPolicies) == 0 {
@@ -1156,35 +1228,49 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 		return sys.IsAllowedLDAPSTS(args, parentUser)
 	}
 
-	policies, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
-	if !ok {
-		// When claims are set, it should have a policy claim field.
-		return false
+	var policies []string
+	roleArn := args.GetRoleArn()
+	if roleArn != "" {
+		arn, err := arn.Parse(roleArn)
+		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("error parsing role ARN %s: %v", roleArn, err))
+			return false
+		}
+		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
+	} else {
+		// If roleArn is not used, we fall back to using policy claim
+		// from JWT.
+		policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
+		if !ok {
+			// When claims are set, it should have a policy claim field.
+			return false
+		}
+		// When claims are set, it should have policies as claim.
+		if policySet.IsEmpty() {
+			// No policy, no access!
+			return false
+		}
+
+		// If policy is available for given user, check the policy.
+		mp, ok := sys.store.GetMappedPolicy(args.AccountName, false)
+		if !ok {
+			// No policy set for the user that we can find, no access!
+			return false
+		}
+
+		if !policySet.Equals(mp.policySet()) {
+			// When claims has a policy, it should match the
+			// policy of args.AccountName which server remembers.
+			// if not reject such requests.
+			return false
+		}
+
+		policies = policySet.ToSlice()
 	}
 
-	// When claims are set, it should have policies as claim.
-	if policies.IsEmpty() {
-		// No policy, no access!
-		return false
-	}
-
-	// If policy is available for given user, check the policy.
-	mp, ok := sys.store.GetMappedPolicy(args.AccountName, false)
-	if !ok {
-		// No policy set for the user that we can find, no access!
-		return false
-	}
-
-	if !policies.Equals(mp.policySet()) {
-		// When claims has a policy, it should match the
-		// policy of args.AccountName which server remembers.
-		// if not reject such requests.
-		return false
-	}
-
-	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies.ToSlice(), ","))
+	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
 	if err == errNoSuchPolicy {
-		for pname := range policies {
+		for _, pname := range policies {
 			_, err := sys.store.GetPolicy(pname)
 			if err == errNoSuchPolicy {
 				// all policies presented in the claim should exist

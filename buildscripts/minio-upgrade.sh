@@ -43,6 +43,9 @@ add_alias() {
             echo "...waiting... for 5secs" && sleep 5
         done
     done
+
+    echo "Sleeping for nginx"
+    sleep 20
 }
 
 __init__() {
