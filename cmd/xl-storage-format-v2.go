@@ -1724,7 +1724,6 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			// Find the latest.
 			for i, ver := range tops {
 				if ver.header == latest.header {
-					//fmt.Println("exact:", ver.header.VersionID, "==", latest.header.VersionID)
 					latestCount++
 					continue
 				}
@@ -1732,11 +1731,9 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 					if i == 0 {
 						latestCount = 1
 					} else if !strict && ver.header.matchesNotStrict(latest.header) {
-						//fmt.Println("nonstrict:", ver.header, "==", latest.header)
 						latestCount++
 					} else {
 						latestCount = 1
-						//fmt.Println("mismatch:", ver.header, "!=", latest.header)
 					}
 					latest = ver
 					continue
@@ -1744,20 +1741,16 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 
 				// Mismatch, but older.
 				if !strict && ver.header.matchesNotStrict(latest.header) {
-					//fmt.Println("second nons:", ver.header, "==", latest.header)
 					// If non-nil version ID and it matches, assume match, but keep newest.
 					if ver.header.sortsBefore(latest.header) {
 						latest = ver
 					}
 					latestCount++
-				} else {
-					//fmt.Println("mismatch:", ver.header, "!=", latest.header)
 				}
 			}
 			if latestCount >= quorum {
 				merged = append(merged, latest)
 			}
-			//fmt.Println("latest", latest.header.VersionID, "count:", latestCount, "of", len(tops))
 		}
 
 		// Remove from all streams up until latest modtime or if selected.
@@ -1765,27 +1758,23 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			for _, ver := range vers {
 				// Truncate later modtimes, not selected.
 				if ver.header.ModTime > latest.header.ModTime {
-					// fmt.Println(i, "truncating modtime", ver.header.VersionID)
 					versions[i] = versions[i][1:]
 					continue
 				}
 				// Truncate matches
 				if ver.header == latest.header {
-					// fmt.Println(i, "truncating match", ver.header.VersionID)
 					versions[i] = versions[i][1:]
 					continue
 				}
 
 				// Truncate non-empty version and type matches
 				if latest.header.VersionID == ver.header.VersionID {
-					// fmt.Println(i, "truncating version id", ver.header.VersionID)
 					versions[i] = versions[i][1:]
 					continue
 				}
 				// Skip versions with version id we already emitted.
 				for _, mergedV := range merged {
 					if ver.header.VersionID == mergedV.header.VersionID {
-						// fmt.Println(i, "truncating emitted", ver.header.VersionID)
 						versions[i] = versions[i][1:]
 						continue
 					}

@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -352,7 +351,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	if len(selected.cached.versions) == 0 {
 		return nil, false
 	}
-	fmt.Println("merged:", selected.cached.versions)
+
 	// Reserialize
 	var err error
 	selected.metadata, err = selected.cached.AppendTo(metaDataPoolGet())
