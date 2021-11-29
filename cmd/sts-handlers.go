@@ -282,16 +282,6 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all other MinIO peers to reload temp users
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
-
 	assumeRoleResponse := &AssumeRoleResponse{
 		Result: AssumeRoleResult{
 			Credentials: cred,
@@ -501,16 +491,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Notify all other MinIO peers to reload temp users
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
-
 	var encodedSuccessResponse []byte
 	switch action {
 	case clientGrants:
@@ -665,16 +645,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
-	}
-
-	// Notify all other MinIO peers to reload temp users
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 
 	// Call hook for cluster-replication.

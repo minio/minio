@@ -78,7 +78,7 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := globalIAMSys.DeletePolicy(r.Context(), policyName); err != nil {
+	if err := globalIAMSys.DeletePolicy(r.Context(), policyName, false); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
