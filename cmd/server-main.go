@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
-	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -63,6 +63,12 @@ var ServerFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "console-address",
 		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
+	},
+	cli.DurationFlag{
+		Name:   "shutdown-timeout",
+		Value:  xhttp.DefaultShutdownTimeout,
+		Usage:  "shutdown timeout to gracefully shutdown server",
+		Hidden: true,
 	},
 }
 
@@ -412,12 +418,6 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) ([]BucketIn
 	return buckets, nil
 }
 
-type nullWriter struct{}
-
-func (lw nullWriter) Write(b []byte) (int, error) {
-	return len(b), nil
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
@@ -492,12 +492,13 @@ func serverMain(ctx *cli.Context) {
 		addrs = append(addrs, globalMinioAddr)
 	}
 
-	httpServer := xhttp.NewServer(addrs, setCriticalErrorHandler(corsHandler(handler)), getCert)
-	httpServer.BaseContext = func(listener net.Listener) context.Context {
-		return GlobalContext
-	}
-	// Turn-off random logging by Go internally
-	httpServer.ErrorLog = log.New(&nullWriter{}, "", 0)
+	httpServer := xhttp.NewServer(addrs).
+		UseHandler(setCriticalErrorHandler(corsHandler(handler))).
+		UseTLSConfig(newTLSConfig(getCert)).
+		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
+		UseBaseContext(GlobalContext).
+		UseCustomLogger(log.New(ioutil.Discard, "", 0)) // Turn-off random logging by Go stdlib
+
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
 	}()

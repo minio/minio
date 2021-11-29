@@ -1013,11 +1013,13 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	return ch, nil
 }
 
-func (client *peerRESTClient) Speedtest(ctx context.Context, size, concurrent int, duration time.Duration) (SpeedtestResult, error) {
+func (client *peerRESTClient) Speedtest(ctx context.Context, size,
+	concurrent int, duration time.Duration, storageClass string) (SpeedtestResult, error) {
 	values := make(url.Values)
 	values.Set(peerRESTSize, strconv.Itoa(size))
 	values.Set(peerRESTConcurrent, strconv.Itoa(concurrent))
 	values.Set(peerRESTDuration, duration.String())
+	values.Set(peerRESTStorageClass, storageClass)
 
 	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedtest, values, nil, -1)
 	if err != nil {
