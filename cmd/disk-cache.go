@@ -276,6 +276,10 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			bReader.ObjInfo.CacheStatus = CacheMiss
 			return bReader, err
 		}
+		// serve cached content without ETag verification if writeback commit is not yet complete
+		if skipETagVerification(cacheReader.ObjInfo.UserDefined) {
+			return cacheReader, nil
+		}
 	}
 
 	objInfo, err := c.InnerGetObjectInfoFn(ctx, bucket, object, opts)
@@ -420,6 +424,10 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		if cc == nil || (cc != nil && !cc.isStale(cachedObjInfo.ModTime)) {
 			// This is a cache hit, mark it so
 			c.cacheStats.incHit()
+			return cachedObjInfo, nil
+		}
+		// serve cache metadata without ETag verification if writeback commit is not yet complete
+		if skipETagVerification(cachedObjInfo.UserDefined) {
 			return cachedObjInfo, nil
 		}
 	}
@@ -811,6 +819,8 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 
 func (c *cacheObjects) queueWritebackRetry(oi ObjectInfo) {
 	select {
+	case <-GlobalContext.Done():
+		return
 	case c.wbRetryCh <- oi:
 		c.uploadObject(GlobalContext, oi)
 	default:
