@@ -65,6 +65,7 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
+	notificationSys    *NotificationSys
 
 	usersSysType UsersSysType
 
@@ -197,11 +198,12 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 }
 
 // Init - initializes config system by reading entries from config/iam
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, nSys *NotificationSys, iamRefreshInterval time.Duration) {
 	sys.Lock()
 	defer sys.Unlock()
 
 	sys.iamRefreshInterval = iamRefreshInterval
+	sys.notificationSys = nSys
 
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
@@ -451,12 +453,29 @@ func (sys *IAMSys) GetRolePolicy(arnStr string) (string, error) {
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
-func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string) error {
+func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeletePolicy(ctx, policyName)
+	err := sys.store.DeletePolicy(ctx, policyName)
+	if err != nil {
+		return err
+	}
+
+	if !notifyPeers || sys.HasWatcher() {
+		return nil
+	}
+
+	// Notify all other MinIO peers to delete policy
+	for _, nerr := range sys.notificationSys.DeletePolicy(policyName) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	return nil
 }
 
 // InfoPolicy - expands the canned policy into its JSON structure.
@@ -485,7 +504,21 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy
 		return errServerNotInitialized
 	}
 
-	return sys.store.SetPolicy(ctx, policyName, p)
+	err := sys.store.SetPolicy(ctx, policyName, p)
+	if err != nil {
+		return err
+	}
+
+	if !sys.HasWatcher() {
+		// Notify all other MinIO peers to reload policy
+		for _, nerr := range sys.notificationSys.LoadPolicy(policyName) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+	return nil
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
@@ -509,6 +542,18 @@ func (sys *IAMSys) CurrentPolicies(policyName string) string {
 	return policies
 }
 
+func (sys *IAMSys) notifyForUser(ctx context.Context, accessKey string, isTemp bool) {
+	// Notify all other MinIO peers to reload user.
+	if !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.LoadUser(accessKey, isTemp) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+}
+
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
 func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) error {
 	if !sys.Initialized() {
@@ -520,7 +565,13 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 		policyName = ""
 	}
 
-	return sys.store.SetTempUser(ctx, accessKey, cred, policyName)
+	err := sys.store.SetTempUser(ctx, accessKey, cred, policyName)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForUser(ctx, cred.AccessKey, true)
+	return nil
 }
 
 // ListBucketUsers - list all users who can access this 'bucket'
@@ -606,7 +657,25 @@ func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status m
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.SetUserStatus(ctx, accessKey, status)
+	err := sys.store.SetUserStatus(ctx, accessKey, status)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForUser(ctx, accessKey, false)
+	return nil
+}
+
+func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string) {
+	// Notify all other Minio peers to reload the service account
+	if !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.LoadServiceAccount(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
 }
 
 type newServiceAccountOpts struct {
@@ -687,6 +756,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if err != nil {
 		return auth.Credentials{}, err
 	}
+
+	sys.notifyForServiceAccount(ctx, cred.AccessKey)
 	return cred, nil
 }
 
@@ -702,7 +773,13 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 		return errServerNotInitialized
 	}
 
-	return sys.store.UpdateServiceAccount(ctx, accessKey, opts)
+	err := sys.store.UpdateServiceAccount(ctx, accessKey, opts)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForServiceAccount(ctx, accessKey)
+	return nil
 }
 
 // ListServiceAccounts - lists all services accounts associated to a specific user
@@ -807,7 +884,13 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmi
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	return sys.store.AddUser(ctx, accessKey, uinfo)
+	err := sys.store.AddUser(ctx, accessKey, uinfo)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForUser(ctx, accessKey, false)
+	return nil
 }
 
 // SetUserSecretKey - sets user secret key
@@ -981,6 +1064,18 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (cred auth.Cre
 	return cred, ok && cred.IsValid()
 }
 
+// Notify all other MinIO peers to load group.
+func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
+	if !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.LoadGroup(group) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+}
+
 // AddUsersToGroup - adds users to a group, creating the group if
 // needed. No error if user(s) already are in the group.
 func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []string) error {
@@ -992,7 +1087,13 @@ func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.AddUsersToGroup(ctx, group, members)
+	err := sys.store.AddUsersToGroup(ctx, group, members)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForGroup(ctx, group)
+	return nil
 }
 
 // RemoveUsersFromGroup - remove users from group. If no users are
@@ -1006,7 +1107,13 @@ func (sys *IAMSys) RemoveUsersFromGroup(ctx context.Context, group string, membe
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.RemoveUsersFromGroup(ctx, group, members)
+	err := sys.store.RemoveUsersFromGroup(ctx, group, members)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForGroup(ctx, group)
+	return nil
 }
 
 // SetGroupStatus - enable/disabled a group
@@ -1019,7 +1126,13 @@ func (sys *IAMSys) SetGroupStatus(ctx context.Context, group string, enabled boo
 		return errIAMActionNotAllowed
 	}
 
-	return sys.store.SetGroupStatus(ctx, group, enabled)
+	err := sys.store.SetGroupStatus(ctx, group, enabled)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForGroup(ctx, group)
+	return nil
 }
 
 // GetGroupDescription - builds up group description
@@ -1054,7 +1167,22 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup
 		userType = stsUser
 	}
 
-	return sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
+	err := sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
+	if err != nil {
+		return nil
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.LoadPolicyMapping(name, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is
