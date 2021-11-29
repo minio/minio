@@ -46,12 +46,17 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -1096,4 +1101,35 @@ func speedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestRes
 		}
 	}()
 	return ch
+}
+
+func newTLSConfig(getCert certs.GetCertificateFunc) *tls.Config {
+	if getCert == nil {
+		return nil
+	}
+
+	tlsConfig := &tls.Config{
+		PreferServerCipherSuites: true,
+		MinVersion:               tls.VersionTLS12,
+		NextProtos:               []string{"http/1.1", "h2"},
+		GetCertificate:           getCert,
+	}
+
+	tlsClientIdentity := env.Get(xtls.EnvIdentityTLSEnabled, "") == config.EnableOn
+	if tlsClientIdentity {
+		tlsConfig.ClientAuth = tls.RequestClientCert
+	}
+
+	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
+	if secureCiphers || fips.Enabled {
+		// Hardened ciphers
+		tlsConfig.CipherSuites = fips.CipherSuitesTLS()
+		tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+	} else {
+		// Default ciphers while excluding those with security issues
+		for _, cipher := range tls.CipherSuites() {
+			tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
+		}
+	}
+	return tlsConfig
 }

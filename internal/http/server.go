@@ -22,6 +22,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"io/ioutil"
+	"log"
+	"net"
 	"net/http"
 	"runtime/pprof"
 	"sync"
@@ -29,19 +31,12 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-
-	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/api"
-	xtls "github.com/minio/minio/internal/config/identity/tls"
-	"github.com/minio/minio/internal/fips"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/env"
 )
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
 
-	// DefaultShutdownTimeout - default shutdown timeout used for graceful http server shutdown.
+	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
 	DefaultShutdownTimeout = 5 * time.Second
 
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
@@ -160,42 +155,44 @@ func (srv *Server) Shutdown() error {
 	}
 }
 
+// UseShutdownTimeout configure server shutdown timeout
+func (srv *Server) UseShutdownTimeout(d time.Duration) *Server {
+	srv.ShutdownTimeout = d
+	return srv
+}
+
+// UseHandler configure final handler for this HTTP *Server
+func (srv *Server) UseHandler(h http.Handler) *Server {
+	srv.Handler = h
+	return srv
+}
+
+// UseTLSConfig pass configured TLSConfig for this HTTP *Server
+func (srv *Server) UseTLSConfig(cfg *tls.Config) *Server {
+	srv.TLSConfig = cfg
+	return srv
+}
+
+// UseBaseContext use custom base context for this HTTP *Server
+func (srv *Server) UseBaseContext(ctx context.Context) *Server {
+	srv.BaseContext = func(listener net.Listener) context.Context {
+		return ctx
+	}
+	return srv
+}
+
+// UseCustomLogger use customized logger for this HTTP *Server
+func (srv *Server) UseCustomLogger(l *log.Logger) *Server {
+	srv.ErrorLog = l
+	return srv
+}
+
 // NewServer - creates new HTTP server using given arguments.
-func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
-	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
-	var tlsConfig *tls.Config
-	if getCert != nil {
-		tlsConfig = &tls.Config{
-			PreferServerCipherSuites: true,
-			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"http/1.1", "h2"},
-			GetCertificate:           getCert,
-		}
-
-		tlsClientIdentity := env.Get(xtls.EnvIdentityTLSEnabled, "") == config.EnableOn
-		if tlsClientIdentity {
-			tlsConfig.ClientAuth = tls.RequestClientCert
-		}
-
-		if secureCiphers || fips.Enabled {
-			// Hardened ciphers
-			tlsConfig.CipherSuites = fips.CipherSuitesTLS()
-			tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
-		} else {
-			// Default ciphers while excluding those with security issues
-			for _, cipher := range tls.CipherSuites() {
-				tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
-			}
-		}
-	}
-
+func NewServer(addrs []string) *Server {
 	httpServer := &Server{
-		Addrs:           addrs,
-		ShutdownTimeout: DefaultShutdownTimeout,
+		Addrs: addrs,
 	}
-	httpServer.Handler = handler
-	httpServer.TLSConfig = tlsConfig
+	// This is not configurable for now.
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
-
 	return httpServer
 }
