@@ -1177,35 +1177,6 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// VersionSummary returns object Version summary.
-func (s *storageRESTServer) VersionSummary(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	filePath := vars[storageRESTFilePath]
-	var o VersionSummaryOpts
-	err := o.DecodeMsg(msgpNewReader(r.Body))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	sum, err := s.storage.VersionSummary(r.Context(), volume, filePath, o)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	b, err := sum.MarshalMsg(nil)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	w.Header().Set("ContentLength", strconv.Itoa(len(b)))
-	w.WriteHeader(200)
-	w.Write(b)
-}
-
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
 	storageDisks := make([][]*xlStorage, len(endpointServerPools))
@@ -1297,8 +1268,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTGlob)...)
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVersionSummary).HandlerFunc(httpTraceHdrs(server.VersionSummary)).
-				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		}
 	}
 }

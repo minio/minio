@@ -1904,37 +1904,6 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 	return dst, err
 }
 
-// VersionSummary represents headers of all versions of an object.
-type VersionSummary struct {
-	Versions []xlMetaV2VersionHeader
-}
-
-// VersionSummaryOpts provides options to VersionSummary calls.
-type VersionSummaryOpts struct {
-	SkipFreeVersions bool
-}
-
-// ListVersionsSummary will return shallow representation of all versions of objects.
-func (x xlMetaBuf) ListVersionsSummary(o VersionSummaryOpts) (VersionSummary, error) {
-	vers, _, _, buf, err := decodeXLHeaders(x)
-	if err != nil {
-		return VersionSummary{}, err
-	}
-	dst := make([]xlMetaV2VersionHeader, 0, vers)
-	n := 0
-	err = decodeVersions(buf, vers, func(idx int, hdr, _ []byte) error {
-		if _, err := dst[n].UnmarshalMsg(hdr); err != nil {
-			return err
-		}
-		if o.SkipFreeVersions && dst[n].FreeVersion() {
-			return nil
-		}
-		n++
-		return nil
-	})
-	return VersionSummary{Versions: dst[:n]}, err
-}
-
 // IsLatestDeleteMarker returns true if latest version is a deletemarker or there are no versions.
 // If any error occurs false is returned.
 func (x xlMetaBuf) IsLatestDeleteMarker() bool {

@@ -1773,28 +1773,6 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 	return nil
 }
 
-func (s *xlStorage) VersionSummary(ctx context.Context, volume string, path string, o VersionSummaryOpts) (VersionSummary, error) {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return VersionSummary{}, err
-	}
-
-	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
-		return VersionSummary{}, err
-	}
-	meta, err := s.readMetadata(ctx, filePath)
-	if err != nil {
-		if osIsNotExist(err) {
-			if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
-				return VersionSummary{}, errVolumeNotFound
-			}
-		}
-		return VersionSummary{}, osErrToFileErr(err)
-	}
-	return getVersionSummary(meta, o)
-}
-
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
 	return s.writeAll(ctx, volume, path, b, true)
 }

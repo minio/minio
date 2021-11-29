@@ -58,7 +58,6 @@ const (
 	storageMetricReadVersion
 	storageMetricReadAll
 	storageMetricStatInfoFile
-	storageMetricVersionSummary
 
 	// .... add more
 
@@ -560,20 +559,6 @@ func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path st
 	}
 
 	return p.storage.StatInfoFile(ctx, volume, path, glob)
-}
-
-func (p *xlStorageDiskIDCheck) VersionSummary(ctx context.Context, volume string, path string, o VersionSummaryOpts) (VersionSummary, error) {
-	defer p.updateStorageMetrics(storageMetricVersionSummary, volume, path)()
-
-	if contextCanceled(ctx) {
-		return VersionSummary{}, ctx.Err()
-	}
-
-	if err := p.checkDiskStale(); err != nil {
-		return VersionSummary{}, err
-	}
-
-	return p.storage.VersionSummary(ctx, volume, path, o)
 }
 
 func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {

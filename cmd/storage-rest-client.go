@@ -680,24 +680,6 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 
 	return toStorageErr(verifyResp.Err)
 }
-func (client *storageRESTClient) VersionSummary(ctx context.Context, volume string, path string, o VersionSummaryOpts) (VersionSummary, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTFilePath, path)
-	body, err := o.MarshalMsg(nil)
-	if err != nil {
-		return VersionSummary{}, err
-	}
-	respBody, err := client.call(ctx, storageRESTMethodVersionSummary, values, bytes.NewReader(body), int64(len(body)))
-	if err != nil {
-		return VersionSummary{}, err
-	}
-	defer xhttp.DrainBody(respBody)
-
-	var res VersionSummary
-	err = res.DecodeMsg(msgpNewReader(respBody))
-	return res, err
-}
 
 func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	values := make(url.Values)

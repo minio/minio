@@ -69,34 +69,6 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 	}, nil
 }
 
-func getVersionSummary(xlMetaBuf []byte, o VersionSummaryOpts) (VersionSummary, error) {
-	var versions VersionSummary
-	var err error
-	if buf, _ := isIndexedMetaV2(xlMetaBuf); buf != nil {
-		versions, err = buf.ListVersionsSummary(o)
-	} else {
-		var xlMeta xlMetaV2
-		if err := xlMeta.LoadOrConvert(xlMetaBuf); err != nil {
-			return VersionSummary{}, err
-		}
-		versions = VersionSummary{Versions: make([]xlMetaV2VersionHeader, len(xlMeta.versions))}
-		n := 0
-		for _, ver := range xlMeta.versions {
-			versions.Versions[n] = ver.header
-			if o.SkipFreeVersions && ver.header.FreeVersion() {
-				continue
-			}
-			n++
-		}
-		versions.Versions = versions.Versions[:n]
-	}
-	if err != nil || len(versions.Versions) == 0 {
-		return VersionSummary{}, err
-	}
-
-	return versions, nil
-}
-
 func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
 	var fi FileInfo
 	var err error
