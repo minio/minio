@@ -1534,7 +1534,8 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
-func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent int, duration time.Duration) []SpeedtestResult {
+func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
+	concurrent int, duration time.Duration, storageClass string) []SpeedtestResult {
 	length := len(sys.allPeerClients)
 	if length == 0 {
 		// For single node erasure setup.
@@ -1555,7 +1556,8 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			r, err := sys.peerClients[index].Speedtest(ctx, size, concurrent, duration)
+			r, err := sys.peerClients[index].Speedtest(ctx, size,
+				concurrent, duration, storageClass)
 			u := &url.URL{
 				Scheme: scheme,
 				Host:   sys.peerClients[index].host.String(),
@@ -1572,7 +1574,7 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int, concurrent 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		r, err := selfSpeedtest(ctx, size, concurrent, duration)
+		r, err := selfSpeedtest(ctx, size, concurrent, duration, storageClass)
 		u := &url.URL{
 			Scheme: scheme,
 			Host:   globalLocalNodeName,

@@ -957,6 +957,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
 	autotune := r.Form.Get("autotune") == "true"
+	storageClass := r.Form.Get("storage-class")
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -991,7 +992,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
-	ch := speedTest(ctx, size, concurrent, duration, autotune)
+	ch := speedTest(ctx, speedTestOpts{size, concurrent, duration, autotune, storageClass})
 	for {
 		select {
 		case <-ctx.Done():

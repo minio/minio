@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v16" // Add new ServiceSignals.
+	peerRESTVersion       = "v17" // Add "storage-class" option for SpeedTest
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -89,6 +89,7 @@ const (
 	peerRESTSize           = "size"
 	peerRESTConcurrent     = "concurrent"
 	peerRESTDuration       = "duration"
+	peerRESTStorageClass   = "storage-class"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"
