@@ -370,16 +370,6 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, sites []madmin
 		return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
 	}
 
-	// Notify all other Minio peers to reload user the service account
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
-
 	joinReq := madmin.SRInternalJoinReq{
 		SvcAcctAccessKey: svcCred.AccessKey,
 		SvcAcctSecretKey: svcCred.SecretKey,
@@ -473,22 +463,12 @@ func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRI
 		return errSRInvalidRequest(errSRSelfNotFound)
 	}
 
-	svcCred, err := globalIAMSys.NewServiceAccount(ctx, arg.SvcAcctParent, nil, newServiceAccountOpts{
+	_, err := globalIAMSys.NewServiceAccount(ctx, arg.SvcAcctParent, nil, newServiceAccountOpts{
 		accessKey: arg.SvcAcctAccessKey,
 		secretKey: arg.SvcAcctSecretKey,
 	})
 	if err != nil {
 		return errSRServiceAccount(fmt.Errorf("unable to create service account on %s: %v", ourName, err))
-	}
-
-	// Notify all other Minio peers to reload the service account
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(svcCred.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 
 	state := srState{
@@ -947,33 +927,12 @@ func (c *SiteReplicationSys) IAMChangeHook(ctx context.Context, item madmin.SRIA
 func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyName string, p *iampolicy.Policy) error {
 	var err error
 	if p == nil {
-		err = globalIAMSys.DeletePolicy(ctx, policyName)
+		err = globalIAMSys.DeletePolicy(ctx, policyName, true)
 	} else {
 		err = globalIAMSys.SetPolicy(ctx, policyName, *p)
 	}
 	if err != nil {
 		return wrapSRErr(err)
-	}
-
-	if p != nil {
-		if !globalIAMSys.HasWatcher() {
-			// Notify all other MinIO peers to reload policy
-			for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
-				if nerr.Err != nil {
-					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-					logger.LogIf(ctx, nerr.Err)
-				}
-			}
-		}
-		return nil
-	}
-
-	// Notify all other MinIO peers to delete policy
-	for _, nerr := range globalNotificationSys.DeletePolicy(policyName) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 	return nil
 }
@@ -997,20 +956,11 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			sessionPolicy: sp,
 			claims:        change.Create.Claims,
 		}
-		newCred, err := globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
+		_, err = globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
 		if err != nil {
 			return wrapSRErr(err)
 		}
 
-		// Notify all other Minio peers to reload the service account
-		if !globalIAMSys.HasWatcher() {
-			for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
-				if nerr.Err != nil {
-					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-					logger.LogIf(ctx, nerr.Err)
-				}
-			}
-		}
 	case change.Update != nil:
 		var sp *iampolicy.Policy
 		var err error
@@ -1029,16 +979,6 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		err = globalIAMSys.UpdateServiceAccount(ctx, change.Update.AccessKey, opts)
 		if err != nil {
 			return wrapSRErr(err)
-		}
-
-		// Notify all other Minio peers to reload the service account
-		if !globalIAMSys.HasWatcher() {
-			for _, nerr := range globalNotificationSys.LoadServiceAccount(change.Update.AccessKey) {
-				if nerr.Err != nil {
-					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-					logger.LogIf(ctx, nerr.Err)
-				}
-			}
 		}
 
 	case change.Delete != nil:
@@ -1064,16 +1004,6 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 	err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
 	if err != nil {
 		return wrapSRErr(err)
-	}
-
-	// Notify all other MinIO peers to reload policy
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadPolicyMapping(mapping.UserOrGroup, mapping.IsGroup) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 	return nil
 }
@@ -1118,16 +1048,6 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 	// Set these credentials to IAM.
 	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
 		return fmt.Errorf("unable to save STS credential: %v", err)
-	}
-
-	// Notify in-cluster peers to reload temp users.
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 
 	return nil
