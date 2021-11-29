@@ -188,10 +188,15 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Remove 4 disks.
-	for i := range disks[:4] {
-		disks[i] = nil
+	setDisks := func(newDisks ...StorageAPI) {
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Lock()
+		for i := range newDisks[:4] {
+			disks[i] = newDisks[i]
+		}
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Unlock()
 	}
+	// Remove 4 disks.
+	setDisks(nil, nil, nil, nil)
 
 	// Create delete marker under quorum.
 	objInfo, err := objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{Versioned: true})
@@ -200,9 +205,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	}
 
 	// Restore...
-	for i := range disks[:4] {
-		disks[i] = orgDisks[i]
-	}
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err := disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
@@ -239,9 +242,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		}
 	}
 
-	for i := range disks[:4] {
-		disks[i] = nil
-	}
+	setDisks(nil, nil, nil, nil)
 
 	rd := mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
 	_, err = objLayer.PutObject(ctx, bucket, object, rd, ObjectOptions{
@@ -251,9 +252,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := range disks[:4] {
-		disks[i] = orgDisks[i]
-	}
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
@@ -289,9 +288,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := range disks[:4] {
-		disks[i] = nil
-	}
+	setDisks(nil, nil, nil, nil)
 
 	// Create delete marker under quorum.
 	_, err = objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{
@@ -302,9 +299,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := range disks[:4] {
-		disks[i] = orgDisks[i]
-	}
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
