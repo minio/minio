@@ -224,23 +224,28 @@ func Test_metaCacheEntry_isInDir(t *testing.T) {
 }
 
 func Test_metaCacheEntries_resolve(t *testing.T) {
+	baseTime, err := time.Parse("2006/01/02", "2015/02/25")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var inputs = []xlMetaV2{
 		0: {
 			versions: []xlMetaV2ShallowVersion{
 				{header: xlMetaV2VersionHeader{
 					VersionID: [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-					ModTime:   time.Time{}.Add(30 * time.Minute).UnixNano(),
+					ModTime:   baseTime.Add(30 * time.Minute).UnixNano(),
 					Signature: [4]byte{1, 1, 1, 1},
 					Type:      ObjectType,
 					Flags:     0,
-				}}},
+				}},
+			},
 		},
 		// Mismatches Modtime+Signature and older...
 		1: {
 			versions: []xlMetaV2ShallowVersion{
 				{header: xlMetaV2VersionHeader{
 					VersionID: [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-					ModTime:   time.Time{}.Add(15 * time.Minute).UnixNano(),
+					ModTime:   baseTime.Add(15 * time.Minute).UnixNano(),
 					Signature: [4]byte{2, 1, 1, 1},
 					Type:      ObjectType,
 					Flags:     0,
@@ -252,14 +257,14 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 			versions: []xlMetaV2ShallowVersion{
 				{header: xlMetaV2VersionHeader{
 					VersionID: [16]byte{2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-					ModTime:   time.Time{}.Add(60 * time.Minute).UnixNano(),
+					ModTime:   baseTime.Add(60 * time.Minute).UnixNano(),
 					Signature: [4]byte{2, 1, 1, 1},
 					Type:      ObjectType,
 					Flags:     0,
 				}},
 				{header: xlMetaV2VersionHeader{
 					VersionID: [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-					ModTime:   time.Time{}.Add(30 * time.Minute).UnixNano(),
+					ModTime:   baseTime.Add(30 * time.Minute).UnixNano(),
 					Signature: [4]byte{1, 1, 1, 1},
 					Type:      ObjectType,
 					Flags:     0,
@@ -271,8 +276,99 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 			versions: []xlMetaV2ShallowVersion{
 				{header: xlMetaV2VersionHeader{
 					VersionID: [16]byte{3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-					ModTime:   time.Time{}.Add(60 * time.Minute).UnixNano(),
+					ModTime:   baseTime.Add(60 * time.Minute).UnixNano(),
 					Signature: [4]byte{1, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+			},
+		},
+		4: {
+			versions: []xlMetaV2ShallowVersion{},
+		},
+		// Has a zero version id
+		5: {
+			versions: []xlMetaV2ShallowVersion{
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{},
+					ModTime:   baseTime.Add(60 * time.Minute).UnixNano(),
+					Signature: [4]byte{5, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+			},
+		},
+		// Zero version, modtime newer..
+		6: {
+			versions: []xlMetaV2ShallowVersion{
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{},
+					ModTime:   baseTime.Add(90 * time.Minute).UnixNano(),
+					Signature: [4]byte{6, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+			},
+		},
+		7: {
+			versions: []xlMetaV2ShallowVersion{
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{},
+					ModTime:   baseTime.Add(90 * time.Minute).UnixNano(),
+					Signature: [4]byte{6, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+					ModTime:   baseTime.Add(60 * time.Minute).UnixNano(),
+					Signature: [4]byte{2, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+					ModTime:   baseTime.Add(60 * time.Minute).UnixNano(),
+					Signature: [4]byte{1, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+					ModTime:   baseTime.Add(30 * time.Minute).UnixNano(),
+					Signature: [4]byte{1, 1, 1, 1},
+					Type:      ObjectType,
+					Flags:     0,
+				}},
+			},
+		},
+		// Delete marker.
+		8: {
+			versions: []xlMetaV2ShallowVersion{
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+					ModTime:   baseTime.Add(90 * time.Minute).UnixNano(),
+					Signature: [4]byte{6, 1, 1, 1},
+					Type:      DeleteType,
+					Flags:     0,
+				}},
+			},
+		},
+		// Delete marker and version from 1
+		9: {
+			versions: []xlMetaV2ShallowVersion{
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+					ModTime:   baseTime.Add(90 * time.Minute).UnixNano(),
+					Signature: [4]byte{6, 1, 1, 1},
+					Type:      DeleteType,
+					Flags:     0,
+				}},
+				{header: xlMetaV2VersionHeader{
+					VersionID: [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+					ModTime:   baseTime.Add(15 * time.Minute).UnixNano(),
+					Signature: [4]byte{2, 1, 1, 1},
 					Type:      ObjectType,
 					Flags:     0,
 				}},
@@ -433,6 +529,105 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 			wantSelected: &inputSerialized[0],
 			wantOk:       true,
 		},
+		{
+			name:         "one-q1",
+			m:            metaCacheEntries{inputSerialized[0], inputSerialized[4], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 1, objQuorum: 1, strict: false},
+			wantSelected: &inputSerialized[0],
+			wantOk:       true,
+		},
+		{
+			name:         "one-q1-strict",
+			m:            metaCacheEntries{inputSerialized[0], inputSerialized[4], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 1, objQuorum: 1, strict: true},
+			wantSelected: &inputSerialized[0],
+			wantOk:       true,
+		},
+		{
+			name:         "one-q2",
+			m:            metaCacheEntries{inputSerialized[0], inputSerialized[4], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 2, objQuorum: 2, strict: false},
+			wantSelected: nil,
+			wantOk:       false,
+		},
+		{
+			name:         "one-q2-strict",
+			m:            metaCacheEntries{inputSerialized[0], inputSerialized[4], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 2, objQuorum: 2, strict: true},
+			wantSelected: nil,
+			wantOk:       false,
+		},
+		{
+			name:         "two-diff-q2",
+			m:            metaCacheEntries{inputSerialized[0], inputSerialized[3], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 2, objQuorum: 2, strict: false},
+			wantSelected: nil,
+			wantOk:       false,
+		},
+		{
+			name:         "zeroid",
+			m:            metaCacheEntries{inputSerialized[5], inputSerialized[5], inputSerialized[6], inputSerialized[6]},
+			r:            metadataResolutionParams{dirQuorum: 2, objQuorum: 2, strict: false},
+			wantSelected: &inputSerialized[6],
+			wantOk:       true,
+		},
+		{
+			// When ID is zero, do not allow non-strict matches to reach quorum.
+			name:         "zeroid-belowq",
+			m:            metaCacheEntries{inputSerialized[5], inputSerialized[5], inputSerialized[6], inputSerialized[6]},
+			r:            metadataResolutionParams{dirQuorum: 3, objQuorum: 3, strict: false},
+			wantSelected: nil,
+			wantOk:       false,
+		},
+		{
+			name:         "merge4",
+			m:            metaCacheEntries{inputSerialized[2], inputSerialized[3], inputSerialized[5], inputSerialized[6]},
+			r:            metadataResolutionParams{dirQuorum: 1, objQuorum: 1, strict: false},
+			wantSelected: &inputSerialized[7],
+			wantOk:       true,
+		},
+		{
+			name:         "deletemarker",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[4], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 1, objQuorum: 1, strict: false},
+			wantSelected: &inputSerialized[8],
+			wantOk:       true,
+		},
+		{
+			name:         "deletemarker-nonq",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[8], inputSerialized[4], inputSerialized[4]},
+			r:            metadataResolutionParams{dirQuorum: 3, objQuorum: 3, strict: false},
+			wantSelected: nil,
+			wantOk:       false,
+		},
+		{
+			name:         "deletemarker-nonq",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[8], inputSerialized[8], inputSerialized[1]},
+			r:            metadataResolutionParams{dirQuorum: 3, objQuorum: 3, strict: false},
+			wantSelected: &inputSerialized[8],
+			wantOk:       true,
+		},
+		{
+			name:         "deletemarker-mixed",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[8], inputSerialized[1], inputSerialized[1]},
+			r:            metadataResolutionParams{dirQuorum: 2, objQuorum: 2, strict: false},
+			wantSelected: &inputSerialized[9],
+			wantOk:       true,
+		},
+		{
+			name:         "deletemarker-q3",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[9], inputSerialized[9], inputSerialized[1]},
+			r:            metadataResolutionParams{dirQuorum: 3, objQuorum: 3, strict: false},
+			wantSelected: &inputSerialized[9],
+			wantOk:       true,
+		},
+		{
+			name:         "deletemarker-q3-strict",
+			m:            metaCacheEntries{inputSerialized[8], inputSerialized[9], inputSerialized[9], inputSerialized[1]},
+			r:            metadataResolutionParams{dirQuorum: 3, objQuorum: 3, strict: true},
+			wantSelected: &inputSerialized[9],
+			wantOk:       true,
+		},
 	}
 
 	for testId, tt := range tests {
@@ -454,7 +649,9 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 					gotSelected.reusable = false
 				}
 				if !reflect.DeepEqual(gotSelected, tt.wantSelected) {
-					t.Errorf("resolve() gotSelected = \n%v, want \n%v", gotSelected, tt.wantSelected)
+					wantM, _ := tt.wantSelected.xlmeta()
+					gotM, _ := gotSelected.xlmeta()
+					t.Errorf("resolve() gotSelected = \n%#v, want \n%#v", *gotM, *wantM)
 				}
 			})
 		}

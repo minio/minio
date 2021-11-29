@@ -1119,14 +1119,14 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 func (x *xlMetaV2) sortByModTime() {
 	// Quick check
 	if len(x.versions) <= 1 || sort.SliceIsSorted(x.versions, func(i, j int) bool {
-		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
+		return x.versions[i].header.sortsBefore(x.versions[j].header)
 	}) {
 		return
 	}
 
 	// We should sort.
 	sort.Slice(x.versions, func(i, j int) bool {
-		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
+		return x.versions[i].header.sortsBefore(x.versions[j].header)
 	})
 }
 
@@ -1677,6 +1677,10 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 	if len(versions) == 1 {
 		return versions[0]
 	}
+	if quorum == 1 {
+		// No need for non-strict checks if quorum is 1.
+		strict = true
+	}
 	// Our result
 	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
 	tops := make([]xlMetaV2ShallowVersion, len(versions))
@@ -1724,7 +1728,7 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 					latestCount++
 					continue
 				}
-				if i == 0 || ver.header.ModTime > latest.header.ModTime {
+				if i == 0 || ver.header.sortsBefore(latest.header) {
 					if i == 0 {
 						latestCount = 1
 					} else if !strict && ver.header.matchesNotStrict(latest.header) {

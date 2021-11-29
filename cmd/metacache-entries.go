@@ -333,7 +333,6 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	}
 
 	// If we would never be able to reach read quorum.
-	fmt.Println("objsAgree:", objsAgree)
 	if objsValid < r.objQuorum {
 		return nil, false
 	}
