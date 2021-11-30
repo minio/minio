@@ -2057,6 +2057,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				logger.LogIf(ctx, err)
 				// Data appears corrupt. Drop data.
 			} else {
+				xlMetaLegacy.DataDir = legacyDataDir
 				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
 					logger.LogIf(ctx, err)
 				}

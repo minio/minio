@@ -1566,7 +1566,6 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 		return errFileCorrupt
 	}
 	m.VersionID = nullVersionID
-	m.DataDir = legacyDataDir
 
 	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
 }
