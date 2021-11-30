@@ -3,9 +3,7 @@ name: IAM integration
 on:
   pull_request:
     branches:
-      - master
-    types: [opened, synchronize, reopened, ready_for_review]
-
+    - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -15,7 +13,6 @@ concurrency:
 
 jobs:
   iam-matrix-test:
-    if: github.event.pull_request.draft == false
     name: "[Go=${{ matrix.go-version }}|ldap=${{ matrix.ldap }}|etcd=${{ matrix.etcd }}|openid=${{ matrix.openid }}]"
     runs-on: ubuntu-latest
 
