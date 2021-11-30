@@ -793,8 +793,20 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	return sys.store.ListServiceAccounts(ctx, accessKey)
 }
 
-// GetServiceAccount - gets information about a service account
+// GetServiceAccount - wrapper method to get information about a service account
 func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
+	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
+	if err != nil {
+		return sa, embeddedPolicy, err
+	}
+	// Hide secret & session keys
+	sa.SecretKey = ""
+	sa.SessionToken = ""
+	return sa, embeddedPolicy, nil
+}
+
+// getServiceAccount - gets information about a service account
+func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
 	if !sys.Initialized() {
 		return auth.Credentials{}, nil, errServerNotInitialized
 	}
@@ -821,10 +833,6 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 			}
 		}
 	}
-
-	// Hide secret & session keys
-	sa.SecretKey = ""
-	sa.SessionToken = ""
 
 	return sa, embeddedPolicy, nil
 }
