@@ -27,6 +27,12 @@ var (
 
 	Help = config.HelpKVS{
 		config.HelpKV{
+			Key:         DisplayName,
+			Description: "Friendly display name for this Provider/App" + defaultHelpPostfix(DisplayName),
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         ConfigURL,
 			Description: `openid discovery document e.g. "https://accounts.google.com/.well-known/openid-configuration"` + defaultHelpPostfix(ConfigURL),
 			Type:        "url",
@@ -40,23 +46,16 @@ var (
 			Key:         ClientSecret,
 			Description: `secret for the unique public identifier for apps` + defaultHelpPostfix(ClientSecret),
 			Type:        "string",
-			Optional:    true,
-		},
-		config.HelpKV{
-			Key:         ClaimName,
-			Description: `JWT canned policy claim name` + defaultHelpPostfix(ClaimName),
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         ClaimUserinfo,
-			Description: `Enable fetching claims from UserInfo Endpoint for authenticated user` + defaultHelpPostfix(ClaimUserinfo),
-			Optional:    true,
-			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         RolePolicy,
 			Description: `Set the IAM access policies applicable to this client application and IDP e.g. "app-bucket-write,app-bucket-list"` + defaultHelpPostfix(RolePolicy),
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         ClaimName,
+			Description: `JWT canned policy claim name` + defaultHelpPostfix(ClaimName),
 			Optional:    true,
 			Type:        "string",
 		},
@@ -71,6 +70,12 @@ var (
 			Description: `Specify vendor type for vendor specific behavior to checking validity of temporary credentials and service accounts on MinIO` + defaultHelpPostfix(Vendor),
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         ClaimUserinfo,
+			Description: `Enable fetching claims from UserInfo Endpoint for authenticated user` + defaultHelpPostfix(ClaimUserinfo),
+			Optional:    true,
+			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         KeyCloakRealm,

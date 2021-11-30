@@ -2,15 +2,90 @@
 
 ## Introduction
 
-Calling AssumeRoleWithWebIdentity does not require the use of MinIO default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including MinIO default credentials in the application. Instead, the identity of the caller is validated by using a JWT id_token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
+MinIO supports the standard AssumeRoleWithWebIdentity STS API to enable integration with OIDC/OpenID based identity provider environments. This allows the generation of temporary credentials with pre-defined access policies for applications/users to interact with MinIO object storage.
 
-By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
+Calling AssumeRoleWithWebIdentity does not require the use of MinIO root or IAM credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including MinIO long lasting credentials in the application. Instead, the identity of the caller is validated by using a JWT id_token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
+
+By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, the optional DurationSeconds parameter can be used to specify the validity duration of the generated credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
+
+## Configuring OpenID identity provider on MinIO
+
+
+Configuration can be performed via MinIO's standard configuration API (i.e. using `mc admin config set/get` commands) or equivalently via environment variables. For brevity we show only environment variables here:
+
+```
+$ mc admin config set myminio identity_openid --env
+KEY:
+identity_openid[:name]  enable OpenID SSO support
+
+ARGS:
+MINIO_IDENTITY_OPENID_ENABLE*               (on|off)    enable identity_openid target, default is 'off'
+MINIO_IDENTITY_OPENID_CONFIG_URL*           (url)       openid discovery document e.g. "https://accounts.google.com/.well-known/openid-configuration"
+MINIO_IDENTITY_OPENID_CLIENT_ID*            (string)    unique public identifier for apps e.g. "292085223830.apps.googleusercontent.com"
+MINIO_IDENTITY_OPENID_CLIENT_SECRET*        (string)    secret for the unique public identifier for apps e.g.
+MINIO_IDENTITY_OPENID_ROLE_POLICY           (string)    Set the IAM access policies applicable to this client application and IDP e.g. "app-bucket-write,app-bucket-list"
+MINIO_IDENTITY_OPENID_CLAIM_NAME            (string)    JWT canned policy claim name, defaults to "policy"
+MINIO_IDENTITY_OPENID_SCOPES                (csv)       Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"
+MINIO_IDENTITY_OPENID_VENDOR                (string)    Specify vendor type for vendor specific behavior to checking validity of temporary credentials and service accounts on MinIO
+MINIO_IDENTITY_OPENID_CLAIM_USERINFO        (on|off)    Enable fetching claims from UserInfo Endpoint for authenticated user
+MINIO_IDENTITY_OPENID_KEYCLOAK_REALM        (string)    Specify Keycloak 'realm' name, only honored if vendor was set to 'keycloak' as value, if no realm is specified 'master' is default
+MINIO_IDENTITY_OPENID_KEYCLOAK_ADMIN_URL    (string)    Specify Keycloak 'admin' REST API endpoint e.g. http://localhost:8080/auth/admin/
+MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC  (on|off)    Enable 'Host' header based dynamic redirect URI
+MINIO_IDENTITY_OPENID_COMMENT               (sentence)  optionally add a comment to this setting
+MINIO_IDENTITY_OPENID_CLAIM_PREFIX          (string)    [DEPRECATED use 'claim_name'] JWT claim namespace prefix e.g. "customer1/"
+MINIO_IDENTITY_OPENID_REDIRECT_URI          (string)    [DEPRECATED use env 'MINIO_BROWSER_REDIRECT_URL'] Configure custom redirect_uri for OpenID login flow callback
+```
+
+Either `MINIO_IDENTITY_OPENID_ROLE_POLICY` (recommended) or `MINIO_IDENTITY_OPENID_CLAIM_NAME` must be specified but not both. See the section Access Control Policies to understand the differences between the two.
+
+With role policies, it is possible to specify multiple OpenID provider configurations - this is useful to integrate multiple OpenID client applications to interact with object storage.
+
+<details><summary>Example 1: Two role policy providers</summary>
+
+Sample environment variables:
+
+```
+MINIO_IDENTITY_OPENID_DISPLAY_NAME="my first openid"
+MINIO_IDENTITY_OPENID_CONFIG_URL=http://myopenid.com/.well-known/openid-configuration
+MINIO_IDENTITY_OPENID_CLIENT_ID="minio-client-app"
+MINIO_IDENTITY_OPENID_CLIENT_SECRET="minio-client-app-secret"
+MINIO_IDENTITY_OPENID_SCOPES="openid,groups"
+MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:10000/oauth_callback"
+MINIO_IDENTITY_OPENID_ROLE_POLICY="consoleAdmin"
+
+MINIO_IDENTITY_OPENID_DISPLAY_NAME_APP2="another oidc"
+MINIO_IDENTITY_OPENID_CONFIG_URL_APP2="http://anotheroidc.com/.well-known/openid-configuration"
+MINIO_IDENTITY_OPENID_CLIENT_ID_APP2="minio-client-app-2"
+MINIO_IDENTITY_OPENID_CLIENT_SECRET_APP2="minio-client-app-secret-2"
+MINIO_IDENTITY_OPENID_SCOPES_APP2="openid,groups"
+MINIO_IDENTITY_OPENID_REDIRECT_URI_APP2="http://127.0.0.1:10000/oauth_callback"
+MINIO_IDENTITY_OPENID_ROLE_POLICY_APP2="readwrite"
+
+```
+
+</details>
+
+<details><summary>Example 2: Single claim based provider</summary>
+
+Sample environment variables:
+
+```
+MINIO_IDENTITY_OPENID_DISPLAY_NAME="my openid"
+MINIO_IDENTITY_OPENID_CONFIG_URL=http://myopenid.com/.well-known/openid-configuration
+MINIO_IDENTITY_OPENID_CLIENT_ID="minio-client-app"
+MINIO_IDENTITY_OPENID_CLIENT_SECRET="minio-client-app-secret"
+MINIO_IDENTITY_OPENID_SCOPES="openid,groups"
+MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:10000/oauth_callback"
+MINIO_IDENTITY_OPENID_CLAIM_NAME="groups"
+```
+
+</details>
 
 ## Access Control Policies
 
 MinIO's AssumeRoleWithWebIdentity supports specifying access control policies in two ways:
 
-1. Role Policy (Recommended): When specified, all users authenticating via this API are authorized to (only) use the specified role policy. The policy to associate with such users is specified when configuring OpenID provider in the server, via the `role_policy` configuration parameter or the `MINIO_IDENTITY_OPENID_ROLE_POLICY` environment variable. The value is a comma-separated list of IAM access policy names already defined in the server. In this situation, the server prints a role ARN at startup that must be specified as a `RoleARN` API request parameter in the STS AssumeRoleWithWebIdentity API call.
+1. Role Policy (Recommended): When specified, all users authenticating via this API are authorized to (only) use the specified role policy. The policy to associate with such users is specified when configuring OpenID provider in the server, via the `role_policy` configuration parameter or the `MINIO_IDENTITY_OPENID_ROLE_POLICY` environment variable. The value is a comma-separated list of IAM access policy names already defined in the server. In this situation, the server prints a role ARN at startup that must be specified as a `RoleARN` API request parameter in the STS AssumeRoleWithWebIdentity API call. When using Role Policies, multiple OpenID providers and/or client applications (with unique client IDs) may be configured with independent role policies. Each configuration is assigned a unique RoleARN by the MinIO server and this is used to select the policies to apply to temporary credentials generated in the AssumeRoleWithWebIdentity call.
 
 2. `id_token` claims: When the role policy is not configured, MinIO looks for a specific claim in the `id_token` (JWT) returned by the OpenID provider. The default claim is `policy` and can be overridden by the `claim_name` configuration parameter or the `MINIO_IDENTITY_OPENID_CLAIM_NAME` environment variable. The claim value can be a string (comma-separated list) or an array of IAM access policy names defined in the server. A `RoleARN` API request parameter *must not* be specified in the STS AssumeRoleWithWebIdentity API call.
 

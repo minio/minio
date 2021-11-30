@@ -197,23 +197,23 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
 	// if IDP is enabled, set IDP environment variables
-	if globalOpenIDConfig.URL != nil {
-		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.URL.String())
-		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ClientID)
-		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ClientSecret)
+	if globalOpenIDConfig.ProviderCfgs[config.Default] != nil {
+		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.ProviderCfgs[config.Default].URL.String())
+		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ProviderCfgs[config.Default].ClientID)
+		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ProviderCfgs[config.Default].ClientSecret)
 		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)
-		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ClientID)
-		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.DiscoveryDoc.ScopesSupported, ","))
-		if globalOpenIDConfig.ClaimUserinfo {
+		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ProviderCfgs[config.Default].ClientID)
+		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.ProviderCfgs[config.Default].DiscoveryDoc.ScopesSupported, ","))
+		if globalOpenIDConfig.ProviderCfgs[config.Default].ClaimUserinfo {
 			os.Setenv("CONSOLE_IDP_USERINFO", config.EnableOn)
 		}
-		if globalOpenIDConfig.RedirectURIDynamic {
+		if globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURIDynamic {
 			// Enable dynamic redirect-uri's based on incoming 'host' header,
 			// Overrides any other callback URL.
 			os.Setenv("CONSOLE_IDP_CALLBACK_DYNAMIC", config.EnableOn)
 		}
-		if globalOpenIDConfig.RedirectURI != "" {
-			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.RedirectURI)
+		if globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURI != "" {
+			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURI)
 		} else {
 			os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
 		}

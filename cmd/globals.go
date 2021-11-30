@@ -290,9 +290,6 @@ var (
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
-	// Authorization validators list.
-	globalOpenIDValidators *openid.Validators
-
 	// OPA policy system.
 	globalPolicyOPA *opa.Opa
 

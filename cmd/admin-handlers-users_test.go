@@ -50,6 +50,8 @@ const (
 type TestSuiteIAM struct {
 	TestSuiteCommon
 
+	ServerTypeDescription string
+
 	// Flag to turn on tests for etcd backend IAM
 	withEtcdBackend bool
 
@@ -59,7 +61,15 @@ type TestSuiteIAM struct {
 }
 
 func newTestSuiteIAM(c TestSuiteCommon, withEtcdBackend bool) *TestSuiteIAM {
-	return &TestSuiteIAM{TestSuiteCommon: c, withEtcdBackend: withEtcdBackend}
+	etcdStr := ""
+	if withEtcdBackend {
+		etcdStr = " (with etcd backend)"
+	}
+	return &TestSuiteIAM{
+		TestSuiteCommon:       c,
+		ServerTypeDescription: fmt.Sprintf("%s%s", c.serverType, etcdStr),
+		withEtcdBackend:       withEtcdBackend,
+	}
 }
 
 func (s *TestSuiteIAM) iamSetup(c *check) {

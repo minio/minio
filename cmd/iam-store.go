@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -1503,50 +1504,71 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	return nil
 }
 
-// GetAllParentUsers - returns all distinct "parent-users" associated with STS or service
-// credentials.
-func (store *IAMStoreSys) GetAllParentUsers() map[string]string {
+// ParentUserInfo contains extra info about a the parent user.
+type ParentUserInfo struct {
+	subClaimValue string
+	roleArns      set.StringSet
+}
+
+// GetAllParentUsers - returns all distinct "parent-users" associated with STS
+// or service credentials, mapped to all distinct roleARNs associated with the
+// parent user. The dummy role ARN is associated with parent users from
+// policy-claim based OpenID providers.
+func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	cache := store.rlock()
 	defer store.runlock()
 
-	res := map[string]string{}
+	res := map[string]ParentUserInfo{}
 	for _, cred := range cache.iamUsersMap {
-		if (cred.IsServiceAccount() || cred.IsTemp()) && cred.SessionToken != "" {
-			parentUser := cred.ParentUser
+		// Only consider service account or STS credentials with
+		// non-empty session tokens.
+		if !(cred.IsServiceAccount() || cred.IsTemp()) ||
+			cred.SessionToken == "" {
+			continue
+		}
 
-			var (
-				err    error
-				claims map[string]interface{}
-			)
+		var (
+			err    error
+			claims map[string]interface{} = cred.Claims
+		)
 
-			if cred.IsServiceAccount() {
-				claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, cred.SecretKey)
-				if err != nil {
-					claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
-				}
-			} else if cred.IsTemp() {
-				claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
+		if cred.IsServiceAccount() {
+			claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, cred.SecretKey)
+		} else if cred.IsTemp() {
+			claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
+		}
+
+		if err != nil {
+			continue
+		}
+		if cred.ParentUser == "" {
+			continue
+		}
+
+		subClaimValue := cred.ParentUser
+		if v, ok := claims[subClaim]; ok {
+			subFromToken, ok := v.(string)
+			if ok {
+				subClaimValue = subFromToken
 			}
+		}
 
-			if err != nil {
-				continue
+		roleArn := openid.DummyRoleARN.String()
+		s, ok := claims[roleArnClaim]
+		val, ok2 := s.(string)
+		if ok && ok2 {
+			roleArn = val
+		}
+		v, ok := res[cred.ParentUser]
+		if ok {
+			res[cred.ParentUser] = ParentUserInfo{
+				subClaimValue: subClaimValue,
+				roleArns:      v.roleArns.Union(set.CreateStringSet(roleArn)),
 			}
-
-			if len(claims) > 0 {
-				if v, ok := claims[subClaim]; ok {
-					subFromToken, ok := v.(string)
-					if ok {
-						parentUser = subFromToken
-					}
-				}
-			}
-
-			if parentUser == "" {
-				continue
-			}
-
-			if _, ok := res[parentUser]; !ok {
-				res[parentUser] = cred.ParentUser
+		} else {
+			res[cred.ParentUser] = ParentUserInfo{
+				subClaimValue: subClaimValue,
+				roleArns:      set.CreateStringSet(roleArn),
 			}
 		}
 	}

@@ -94,8 +94,9 @@ func initHelp() {
 			Description: "federate multiple clusters for IAM and Bucket DNS",
 		},
 		config.HelpKV{
-			Key:         config.IdentityOpenIDSubSys,
-			Description: "enable OpenID SSO support",
+			Key:             config.IdentityOpenIDSubSys,
+			Description:     "enable OpenID SSO support",
+			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:         config.IdentityLDAPSubSys,
@@ -314,7 +315,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			etcdClnt.Close()
 		}
 	case config.IdentityOpenIDSubSys:
-		if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+		if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys],
 			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 			return err
 		}
@@ -516,7 +517,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
-	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys],
 		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
@@ -527,8 +528,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OPA: %w", err))
 	}
-
-	globalOpenIDValidators = getOpenIDValidators(globalOpenIDConfig)
 	globalPolicyOPA = opa.New(opaCfg)
 
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
@@ -806,18 +805,4 @@ func loadConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	return nil
-}
-
-// getOpenIDValidators - returns ValidatorList which contains
-// enabled providers in server config.
-// A new authentication provider is added like below
-// * Add a new provider in pkg/iam/openid package.
-func getOpenIDValidators(cfg openid.Config) *openid.Validators {
-	validators := openid.NewValidators()
-
-	if cfg.Enabled {
-		validators.Add(&cfg)
-	}
-
-	return validators
 }

@@ -47,6 +47,14 @@ jobs:
           - "5556:5556"
         env:
           DEX_LDAP_SERVER: "openldap:389"
+      openid2:
+        image: quay.io/minio/dex
+        ports:
+          - "5557:5557"
+        env:
+          DEX_LDAP_SERVER: "openldap:389"
+          DEX_ISSUER: "http://127.0.0.1:5557/dex"
+          DEX_WEB_HTTP: "0.0.0.0:5557"
 
     strategy:
       # When ldap, etcd or openid vars are empty below, those external servers
@@ -85,6 +93,17 @@ jobs:
           LDAP_TEST_SERVER: ${{ matrix.ldap }}
           ETCD_SERVER: ${{ matrix.etcd }}
           OPENID_TEST_SERVER: ${{ matrix.openid }}
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-iam
+      - name: Test with multiple OpenID providers
+        if: matrix.openid == 'http://127.0.0.1:5556/dex'
+        env:
+          LDAP_TEST_SERVER: ${{ matrix.ldap }}
+          ETCD_SERVER: ${{ matrix.etcd }}
+          OPENID_TEST_SERVER: ${{ matrix.openid }}
+          OPENID_TEST_SERVER_2: "http://127.0.0.1:5557/dex"
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
