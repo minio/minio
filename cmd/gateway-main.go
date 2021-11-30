@@ -20,7 +20,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net"
+	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"os/signal"
@@ -269,10 +270,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		addrs = append(addrs, globalMinioAddr)
 	}
 
-	httpServer := xhttp.NewServer(addrs, setCriticalErrorHandler(corsHandler(router)), getCert)
-	httpServer.BaseContext = func(listener net.Listener) context.Context {
-		return GlobalContext
-	}
+	httpServer := xhttp.NewServer(addrs).
+		UseHandler(setCriticalErrorHandler(corsHandler(router))).
+		UseTLSConfig(newTLSConfig(getCert)).
+		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
+		UseBaseContext(GlobalContext).
+		UseCustomLogger(log.New(ioutil.Discard, "", 0)) // Turn-off random logging by Go stdlib
+
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
 	}()
