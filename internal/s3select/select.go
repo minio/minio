@@ -369,7 +369,7 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		return err
 	}
 
-	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
+	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
 }
 
 func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
@@ -577,6 +577,9 @@ OuterLoop:
 
 // Close - closes opened S3 object.
 func (s3Select *S3Select) Close() error {
+	if s3Select.recordReader == nil {
+		return nil
+	}
 	return s3Select.recordReader.Close()
 }
 
