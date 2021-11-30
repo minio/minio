@@ -3,7 +3,9 @@ name: Linters and Tests
 on:
   pull_request:
     branches:
-    - master
+      - master
+    types: [opened, synchronize, reopened, ready_for_review]
+
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -13,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.pull_request.draft == false
     name: Go ${{ matrix.go-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
