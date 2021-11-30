@@ -1365,6 +1365,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	fvID := mustGetUUID()
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
+			if !deleteMarker {
+				// versioning suspended means we add `null` version as
+				// delete marker, if its not decided already.
+				deleteMarker = opts.VersionSuspended && opts.VersionID == ""
+			}
 			fi := FileInfo{
 				Name:             object,
 				Deleted:          deleteMarker,
@@ -1381,10 +1386,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
-			// versioning suspended means we add `null`
-			// version as delete marker
-			// Add delete marker, since we don't have any version specified explicitly.
-			// Or if a particular version id needs to be replicated.
+			// versioning suspended means we add `null` version as
+			// delete marker. Add delete marker, since we don't have
+			// any version specified explicitly. Or if a particular
+			// version id needs to be replicated.
 			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
