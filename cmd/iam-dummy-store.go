@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/auth"
-	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 type iamDummyStore struct {
@@ -64,7 +63,7 @@ func (ids *iamDummyStore) migrateBackendFormat(context.Context) error {
 	return nil
 }
 
-func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]iampolicy.Policy) error {
+func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
 	v, ok := ids.iamPolicyDocsMap[policy]
 	if !ok {
 		return errNoSuchPolicy
@@ -73,7 +72,7 @@ func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m ma
 	return nil
 }
 
-func (ids *iamDummyStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
+func (ids *iamDummyStore) loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error {
 	for k, v := range ids.iamPolicyDocsMap {
 		m[k] = v
 	}
@@ -154,7 +153,7 @@ func (ids *iamDummyStore) deleteIAMConfig(ctx context.Context, path string) erro
 	return nil
 }
 
-func (ids *iamDummyStore) savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error {
+func (ids *iamDummyStore) savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error {
 	return nil
 }
 

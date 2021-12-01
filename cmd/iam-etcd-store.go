@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
 )
@@ -115,7 +114,7 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
 }
 
-func getIAMConfig(item interface{}, data []byte, itemPath string) error {
+func decryptData(data []byte, itemPath string) ([]byte, error) {
 	var err error
 	if !utf8.Valid(data) && GlobalKMS != nil {
 		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
@@ -128,9 +127,17 @@ func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 				minioMetaBucket: itemPath,
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
+	}
+	return data, nil
+}
+
+func getIAMConfig(item interface{}, data []byte, itemPath string) error {
+	data, err := decryptData(data, itemPath)
+	if err != nil {
+		return err
 	}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Unmarshal(data, item)
@@ -142,6 +149,14 @@ func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item interface{}, pa
 		return err
 	}
 	return getIAMConfig(item, data, path)
+}
+
+func (ies *IAMEtcdStore) loadIAMConfigBytes(ctx context.Context, path string) ([]byte, error) {
+	data, err := readKeyEtcd(ctx, ies.client, path)
+	if err != nil {
+		return nil, err
+	}
+	return decryptData(data, path)
 }
 
 func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error {
@@ -263,34 +278,46 @@ func (ies *IAMEtcdStore) migrateBackendFormat(ctx context.Context) error {
 	return ies.migrateToV1(ctx)
 }
 
-func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]iampolicy.Policy) error {
-	var p iampolicy.Policy
-	err := ies.loadIAMConfig(ctx, &p, getPolicyDocPath(policy))
+func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
+	data, err := ies.loadIAMConfigBytes(ctx, getPolicyDocPath(policy))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy
 		}
 		return err
 	}
+
+	var p PolicyDoc
+	err = p.parseJSON(data)
+	if err != nil {
+		return err
+	}
+
 	m[policy] = p
 	return nil
 }
 
-func (ies *IAMEtcdStore) getPolicyDocKV(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]iampolicy.Policy) error {
-	var p iampolicy.Policy
-	err := getIAMConfig(&p, kvs.Value, string(kvs.Key))
+func (ies *IAMEtcdStore) getPolicyDocKV(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]PolicyDoc) error {
+	data, err := decryptData(kvs.Value, string(kvs.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy
 		}
 		return err
 	}
+
+	var p PolicyDoc
+	err = p.parseJSON(data)
+	if err != nil {
+		return err
+	}
+
 	policy := extractPathPrefixAndSuffix(string(kvs.Key), iamConfigPoliciesPrefix, path.Base(string(kvs.Key)))
 	m[policy] = p
 	return nil
 }
 
-func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
+func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 	//  Retrieve all keys and values to avoid too many calls to etcd in case of
@@ -473,7 +500,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 
 }
 
-func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error {
+func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error {
 	return ies.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }
 
