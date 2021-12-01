@@ -391,7 +391,7 @@ func (j xlMetaV2Version) getModTime() time.Time {
 	return time.Time{}
 }
 
-// getModTime will return the ModTime of the underlying version.
+// getVersionID will return the versionID of the underlying version.
 func (j xlMetaV2Version) getVersionID() [16]byte {
 	switch j.Type {
 	case ObjectType:
@@ -404,6 +404,7 @@ func (j xlMetaV2Version) getVersionID() [16]byte {
 	return [16]byte{}
 }
 
+// ToFileInfo returns FileInfo of the underlying type.
 func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
 	switch j.Type {
 	case ObjectType:
