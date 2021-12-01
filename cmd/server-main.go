@@ -568,7 +568,7 @@ func serverMain(ctx *cli.Context) {
 	globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalNotificationSys, globalRefreshIAMInterval)
 
 	// Initialize transition tier configuration manager
 	if globalIsErasure {

@@ -647,6 +647,10 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 	}
 
+	if opts.VersioningEnabled {
+		meta.VersioningConfigXML = enabledBucketVersioningConfig
+	}
+
 	if err := meta.Save(context.Background(), z); err != nil {
 		return toObjectErr(err, bucket)
 	}

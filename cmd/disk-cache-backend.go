@@ -808,10 +808,6 @@ func (c *diskCache) GetLockContext(ctx context.Context, bucket, object string) (
 
 // Caches the object to disk
 func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly, writeback bool) (oi ObjectInfo, err error) {
-	if !c.diskSpaceAvailable(size) {
-		io.Copy(ioutil.Discard, data)
-		return oi, errDiskFull
-	}
 	cLock, lkctx, err := c.GetLockContext(ctx, bucket, object)
 	if err != nil {
 		return oi, err

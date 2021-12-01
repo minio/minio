@@ -581,3 +581,14 @@ func (t *multiWriter) Write(p []byte) (n int, err error) {
 func cacheMultiWriter(w1 io.Writer, w2 *io.PipeWriter) io.Writer {
 	return &multiWriter{backendWriter: w1, cacheWriter: w2}
 }
+
+// skipETagVerification returns true if writeback commit is not complete
+func skipETagVerification(m map[string]string) bool {
+	if v, ok := m[writeBackStatusHeader]; ok {
+		switch cacheCommitStatus(v) {
+		case CommitPending, CommitFailed:
+			return true
+		}
+	}
+	return false
+}

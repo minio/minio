@@ -240,16 +240,6 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	// Notify all other MinIO peers to load group.
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadGroup(updReq.Group) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
 }
 
 // GetGroup - /minio/admin/v3/group?group=mygroup1
@@ -335,16 +325,6 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	// Notify all other MinIO peers to reload user.
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadGroup(group) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
 }
 
 // SetUserStatus - PUT /minio/admin/v3/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
@@ -371,16 +351,6 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	if err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other MinIO peers to reload user.
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 }
 
@@ -481,16 +451,6 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if err = globalIAMSys.CreateUser(ctx, accessKey, uinfo); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other Minio peers to reload user
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 }
 
@@ -647,16 +607,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Notify all other Minio peers to reload user the service account
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
-
 	// Call hook for cluster-replication.
 	//
 	// FIXME: This wont work in an OpenID situation as the parent credential
@@ -786,16 +736,6 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other Minio peers to reload user the service account
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadServiceAccount(accessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 
 	// Call site replication hook. Only LDAP accounts are supported for
@@ -1375,17 +1315,9 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	policyName := vars["name"]
 
-	if err := globalIAMSys.DeletePolicy(ctx, policyName); err != nil {
+	if err := globalIAMSys.DeletePolicy(ctx, policyName, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other MinIO peers to delete policy
-	for _, nerr := range globalNotificationSys.DeletePolicy(policyName) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// Call cluster-replication policy creation hook to replicate policy deletion to
@@ -1448,16 +1380,6 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Notify all other MinIO peers to reload policy
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-	}
-
 	// Call cluster-replication policy creation hook to replicate policy to
 	// other minio clusters.
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
@@ -1501,16 +1423,6 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	if err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, isGroup); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other MinIO peers to reload policy
-	if !globalIAMSys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
 	}
 
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
