@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	fcolor "github.com/fatih/color"
@@ -718,6 +719,10 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		}
 	}
 	secureConn = true
+
+	// syscall.SIGHUP to reload the certs.
+	manager.ReloadOnSignal(syscall.SIGHUP)
+
 	return x509Certs, manager, secureConn, nil
 }
 
