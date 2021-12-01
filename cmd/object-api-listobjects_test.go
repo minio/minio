@@ -726,6 +726,85 @@ func objInfoNames(o []ObjectInfo) []string {
 	return res
 }
 
+func TestDeleteObjectVersionMarker(t *testing.T) {
+	ExecObjectLayerTest(t, testDeleteObjectVersion)
+}
+
+func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
+	if instanceType == FSTestStr {
+		return
+	}
+
+	t, _ := t1.(*testing.T)
+
+	testBuckets := []string{
+		"bucket-suspended-version",
+		"bucket-suspended-version-id",
+	}
+	for _, bucket := range testBuckets {
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{
+			VersioningEnabled: true,
+		})
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+		meta, err := loadBucketMetadata(context.Background(), obj, bucket)
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+		meta.VersioningConfigXML = []byte(`<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Suspended</Status></VersioningConfiguration>`)
+		if err := meta.Save(context.Background(), obj); err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+		globalBucketMetadataSys.Set(bucket, meta)
+		globalNotificationSys.LoadBucketMetadata(context.Background(), bucket)
+	}
+
+	testObjects := []struct {
+		parentBucket    string
+		name            string
+		content         string
+		meta            map[string]string
+		versionID       string
+		expectDelMarker bool
+	}{
+		{testBuckets[0], "delete-file", "contentstring", nil, "", true},
+		{testBuckets[1], "delete-file", "contentstring", nil, "null", false},
+	}
+	for _, object := range testObjects {
+		md5Bytes := md5.Sum([]byte(object.content))
+		_, err := obj.PutObject(context.Background(), object.parentBucket, object.name,
+			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
+				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
+				Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
+				VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+				UserDefined:      object.meta,
+			})
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+		obj, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
+			Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
+			VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+			VersionID:        object.versionID,
+		})
+		if err != nil {
+			if object.versionID != "" {
+				if !isErrVersionNotFound(err) {
+					t.Fatalf("%s : %s", instanceType, err)
+				}
+			} else {
+				if !isErrObjectNotFound(err) {
+					t.Fatalf("%s : %s", instanceType, err)
+				}
+			}
+		}
+		if obj.DeleteMarker != object.expectDelMarker {
+			t.Fatalf("%s : expected deleted marker %t, found %t", instanceType, object.expectDelMarker, obj.DeleteMarker)
+		}
+	}
+}
+
 // Wrapper for calling ListObjectVersions tests for both Erasure multiple disks and single node setup.
 func TestListObjectVersions(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjectVersions)
@@ -733,6 +812,10 @@ func TestListObjectVersions(t *testing.T) {
 
 // Unit test for ListObjectVersions
 func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
+	if instanceType == FSTestStr {
+		return
+	}
+
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -752,10 +835,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 	for _, bucket := range testBuckets {
 		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{VersioningEnabled: true})
 		if err != nil {
-			if _, ok := err.(NotImplemented); ok {
-				// Skip test for FS mode.
-				continue
-			}
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
@@ -791,10 +870,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name, mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{UserDefined: object.meta})
 		if err != nil {
-			if _, ok := err.(BucketNotFound); ok {
-				// Skip test failure for FS mode.
-				continue
-			}
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 
@@ -1313,10 +1388,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			result, err := obj.ListObjectVersions(context.Background(), testCase.bucketName,
 				testCase.prefix, testCase.marker, "", testCase.delimiter, int(testCase.maxKeys))
-			if _, ok := err.(NotImplemented); ok {
-				// Not implemented should be skipped
-				t.Skip()
-			}
 			if err != nil && testCase.shouldPass {
 				t.Errorf("%s:  Expected to pass, but failed with: <ERROR> %s", instanceType, err.Error())
 			}

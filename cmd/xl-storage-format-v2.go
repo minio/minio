@@ -1190,7 +1190,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 			return "", len(x.versions) == 0, err
 		case ObjectType:
-			if updateVersion {
+			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
 				if err != nil {
 					return "", false, err
