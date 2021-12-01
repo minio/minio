@@ -233,7 +233,7 @@ func initHelp() {
 		config.NotifyRedisSubSys:    notify.HelpRedis,
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
-		config.SubnetSubSys:         subnet.HelpAPIKey,
+		config.SubnetSubSys:         subnet.HelpSubnet,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
