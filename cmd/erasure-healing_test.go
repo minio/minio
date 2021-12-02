@@ -190,7 +190,7 @@ func TestHealingDanglingObject(t *testing.T) {
 
 	setDisks := func(newDisks ...StorageAPI) {
 		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Lock()
-		for i := range newDisks[:4] {
+		for i := range newDisks {
 			disks[i] = newDisks[i]
 		}
 		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Unlock()

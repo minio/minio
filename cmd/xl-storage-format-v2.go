@@ -1665,8 +1665,8 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 	return versions, nil
 }
 
-// mergeXLV2Versions will merge all versions that have at least quorum
-// entries in all metas.
+// mergeXLV2Versions will merge all versions, typically from different disks
+// that have at least quorum entries in all metas.
 // Quorum must be the minimum number of matching metadata files.
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type
@@ -1721,7 +1721,6 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			merged = append(merged, latest)
 		} else {
 			// Find latest.
-			// Find the latest.
 			for i, ver := range tops {
 				if ver.header == latest.header {
 					latestCount++
@@ -1784,7 +1783,7 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			}
 		}
 	}
-	// Sanity check...
+	// Sanity check. Enable if duplicates show up.
 	if false {
 		var found = make(map[[16]byte]struct{})
 		for _, ver := range merged {

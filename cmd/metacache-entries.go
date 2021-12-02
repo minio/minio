@@ -117,9 +117,10 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) (prefer *me
 				}
 				continue
 			}
-                        if prefer != nil {
-                           return prefer, false
-                        }
+			if prefer != nil {
+				return prefer, false
+			}
+
 			if eVer.header.sortsBefore(oVer.header) {
 				return e, false
 			}
