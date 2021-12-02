@@ -80,13 +80,13 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	// Disallow MaxNoncurrentVersions if bucket has object locking enabled
+	// Disallow NewerNoncurrentVersions if bucket has object locking enabled
 	var rCfg lock.Retention
 	if rCfg, err = globalBucketObjectLockSys.Get(bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if rCfg.LockEnabled && bucketLifecycle.HasMaxNoncurrentVersions() {
+	if rCfg.LockEnabled && bucketLifecycle.HasNewerNoncurrentVersions() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidLifecycleWithObjectLock), r.URL)
 		return
 	}

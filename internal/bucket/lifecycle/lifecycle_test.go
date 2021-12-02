@@ -114,7 +114,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 		// Lifecycle with max noncurrent versions
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><MaxNoncurrentVersions>5</MaxNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
@@ -636,14 +636,14 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 			ID:     strconv.Itoa(i),
 			Status: "Enabled",
 			NoncurrentVersionExpiration: NoncurrentVersionExpiration{
-				MaxNoncurrentVersions: i,
+				NewerNoncurrentVersions: i,
 			},
 		})
 	}
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 1 {
+	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 10 {
 		t.Fatalf("Expected max noncurrent versions limit to be 1 but got %d", lim)
 	}
 }

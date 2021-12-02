@@ -81,21 +81,21 @@ type expiryTask struct {
 }
 
 type expiryState struct {
-	once              sync.Once
-	byDaysCh          chan expiryTask
-	byMaxNoncurrentCh chan maxNoncurrentTask
+	once                sync.Once
+	byDaysCh            chan expiryTask
+	byNewerNoncurrentCh chan newerNoncurrentTask
 }
 
 // PendingTasks returns the number of pending ILM expiry tasks.
 func (es *expiryState) PendingTasks() int {
-	return len(es.byDaysCh) + len(es.byMaxNoncurrentCh)
+	return len(es.byDaysCh) + len(es.byNewerNoncurrentCh)
 }
 
 // close closes work channels exactly once.
 func (es *expiryState) close() {
 	es.once.Do(func() {
 		close(es.byDaysCh)
-		close(es.byMaxNoncurrentCh)
+		close(es.byNewerNoncurrentCh)
 	})
 }
 
@@ -109,13 +109,13 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, restoredObject bool, rmVersi
 	}
 }
 
-// enqueueByMaxNoncurrent enqueues object versions expired by
-// MaxNoncurrentVersions limit for expiry.
-func (es *expiryState) enqueueByMaxNoncurrent(bucket string, versions []ObjectToDelete) {
+// enqueueByNewerNoncurrent enqueues object versions expired by
+// NewerNoncurrentVersions limit for expiry.
+func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete) {
 	select {
 	case <-GlobalContext.Done():
 		es.close()
-	case es.byMaxNoncurrentCh <- maxNoncurrentTask{bucket: bucket, versions: versions}:
+	case es.byNewerNoncurrentCh <- newerNoncurrentTask{bucket: bucket, versions: versions}:
 	default:
 	}
 }
@@ -124,8 +124,8 @@ var globalExpiryState *expiryState
 
 func newExpiryState() *expiryState {
 	return &expiryState{
-		byDaysCh:          make(chan expiryTask, 10000),
-		byMaxNoncurrentCh: make(chan maxNoncurrentTask, 10000),
+		byDaysCh:            make(chan expiryTask, 10000),
+		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 10000),
 	}
 }
 
@@ -141,15 +141,15 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 		}
 	}()
 	go func() {
-		for t := range globalExpiryState.byMaxNoncurrentCh {
+		for t := range globalExpiryState.byNewerNoncurrentCh {
 			deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
 		}
 	}()
 }
 
-// maxNoncurrentTask encapsulates arguments required by worker to expire objects
-// by MaxNoncurrentVersions
-type maxNoncurrentTask struct {
+// newerNoncurrentTask encapsulates arguments required by worker to expire objects
+// by NewerNoncurrentVersions
+type newerNoncurrentTask struct {
 	bucket   string
 	versions []ObjectToDelete
 }
