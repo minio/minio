@@ -478,17 +478,28 @@ func (lc Lifecycle) TransitionTier(obj ObjectOpts) string {
 
 // NoncurrentVersionsExpirationLimit returns the maximum limit on number of
 // noncurrent versions across rules.
-func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) int {
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, int, int) {
 	var lim int
+	var days int
+	var ruleID string
 	for _, rule := range lc.FilterActionableRules(obj) {
 		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 {
 			continue
 		}
+		// Pick the highest number of NewerNoncurrentVersions value
+		// among overlapping rules.
 		if lim == 0 || lim < rule.NoncurrentVersionExpiration.NewerNoncurrentVersions {
 			lim = rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
 		}
+		// Pick the earliest applicable NoncurrentDays among overlapping
+		// rules. Note: ruleID is that of the rule which determines the
+		// time of expiry.
+		if ndays := int(rule.NoncurrentVersionExpiration.NoncurrentDays); days == 0 || days > ndays {
+			days = ndays
+			ruleID = rule.ID
+		}
 	}
-	return lim
+	return ruleID, days, lim
 }
 
 // HasNewerNoncurrentVersions returns true if there exists a rule with

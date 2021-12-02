@@ -637,13 +637,16 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 			Status: "Enabled",
 			NoncurrentVersionExpiration: NoncurrentVersionExpiration{
 				NewerNoncurrentVersions: i,
+				NoncurrentDays:          ExpirationDays(i),
 			},
 		})
 	}
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 10 {
-		t.Fatalf("Expected max noncurrent versions limit to be 1 but got %d", lim)
+	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
+		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
+	} else {
+		fmt.Println(ruleID, days, lim)
 	}
 }

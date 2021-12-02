@@ -979,7 +979,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, o Ob
 		return fivs, nil
 	}
 
-	lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
+	_, days, lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
 	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
 		return fivs, nil
 	}
@@ -1002,6 +1002,11 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, o Ob
 			}
 			continue
 		}
+
+		if time.Now().UTC().Before(obj.SuccessorModTime.AddDate(0, 0, days)) {
+			continue
+		}
+
 		toDel = append(toDel, ObjectToDelete{
 			ObjectName: fi.Name,
 			VersionID:  fi.VersionID,
