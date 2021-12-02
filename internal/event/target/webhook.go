@@ -31,6 +31,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/minio/minio/internal/event"
@@ -238,6 +239,7 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 		if err != nil {
 			return target, err
 		}
+		manager.ReloadOnSignal(syscall.SIGHUP) // allow reloads upon SIGHUP
 		transport.TLSClientConfig.GetClientCertificate = manager.GetClientCertificate
 	}
 	target.httpClient = &http.Client{Transport: transport}

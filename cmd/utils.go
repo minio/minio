@@ -40,6 +40,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -597,6 +598,7 @@ func NewGatewayHTTPTransportWithClientCerts(clientCert, clientKey string) *http.
 				err.Error()))
 		}
 		if c != nil {
+			c.ReloadOnSignal(syscall.SIGHUP) // allow reloads upon SIGHUP
 			transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
 		}
 	}
