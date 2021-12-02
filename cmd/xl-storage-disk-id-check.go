@@ -57,7 +57,7 @@ const (
 	storageMetricUpdateMetadata
 	storageMetricReadVersion
 	storageMetricReadAll
-	storageStatInfoFile
+	storageMetricStatInfoFile
 
 	// .... add more
 
@@ -548,7 +548,7 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 }
 
 func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
-	defer p.updateStorageMetrics(storageStatInfoFile, volume, path)()
+	defer p.updateStorageMetrics(storageMetricStatInfoFile, volume, path)()
 
 	if contextCanceled(ctx) {
 		return nil, ctx.Err()

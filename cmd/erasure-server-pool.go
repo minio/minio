@@ -1751,6 +1751,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						dirQuorum: 1,
 						objQuorum: 1,
 						bucket:    bucket,
+						strict:    false, // Allow less strict matching.
 					}
 
 					path := baseDirFromPrefix(prefix)

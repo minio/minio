@@ -33,6 +33,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
@@ -49,7 +50,7 @@ var (
 )
 
 //go:generate msgp -file=$GOFILE -unexported
-//go:generate stringer -type VersionType -output=xl-storage-format-v2_string.go $GOFILE
+//go:generate stringer -type VersionType,ErasureAlgo -output=xl-storage-format-v2_string.go $GOFILE
 
 const (
 	// Breaking changes.
@@ -128,14 +129,6 @@ const (
 
 func (e ErasureAlgo) valid() bool {
 	return e > invalidErasureAlgo && e < lastErasureAlgo
-}
-
-func (e ErasureAlgo) String() string {
-	switch e {
-	case ReedSolomon:
-		return "reedsolomon"
-	}
-	return ""
 }
 
 // ChecksumAlgo defines common type of different checksum algorithms
@@ -269,6 +262,45 @@ func (x xlMetaV2VersionHeader) String() string {
 	)
 }
 
+// matchesNotStrict returns whether x and o have both have non-zero version,
+// their versions match and their type match.
+func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
+	return x.VersionID != [16]byte{} &&
+		x.VersionID == o.VersionID &&
+		x.Type == o.Type
+}
+
+// sortsBefore can be used as a tiebreaker for stable sorting/selecting.
+// Returns false on ties.
+func (x xlMetaV2VersionHeader) sortsBefore(o xlMetaV2VersionHeader) bool {
+	if x == o {
+		return false
+	}
+	// Prefer newest modtime.
+	if x.ModTime != o.ModTime {
+		return x.ModTime > o.ModTime
+	}
+
+	// The following doesn't make too much sense, but we want sort to be consistent nonetheless.
+	// Prefer lower types
+	if x.Type != o.Type {
+		return x.Type < o.Type
+	}
+	// Consistent sort on signature
+	if v := bytes.Compare(x.Signature[:], o.Signature[:]); v != 0 {
+		return v > 0
+	}
+	// On ID mismatch
+	if v := bytes.Compare(x.VersionID[:], o.VersionID[:]); v != 0 {
+		return v > 0
+	}
+	// Flags
+	if x.Flags != o.Flags {
+		return x.Flags > o.Flags
+	}
+	return false
+}
+
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
 	if !j.Type.valid() {
@@ -372,6 +404,7 @@ func (j xlMetaV2Version) getVersionID() [16]byte {
 	return [16]byte{}
 }
 
+// ToFileInfo returns FileInfo of the underlying type.
 func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
 	switch j.Type {
 	case ObjectType:
@@ -788,6 +821,26 @@ type xlMetaV2 struct {
 	metaV uint8
 }
 
+// LoadOrConvert will load the metadata in the buffer.
+// If this is a legacy format, it will automatically be converted to XLV2.
+func (x *xlMetaV2) LoadOrConvert(buf []byte) error {
+	if isXL2V1Format(buf) {
+		return x.Load(buf)
+	}
+
+	xlMeta := &xlMetaV1Object{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(buf, xlMeta); err != nil {
+		return errFileCorrupt
+	}
+	if len(x.versions) > 0 {
+		x.versions = x.versions[:0]
+	}
+	x.data = nil
+	x.metaV = xlMetaVersion
+	return x.AddLegacy(xlMeta)
+}
+
 // Load all versions of the stored data.
 // Note that references to the incoming buffer will be kept.
 func (x *xlMetaV2) Load(buf []byte) error {
@@ -922,6 +975,14 @@ func (x *xlMetaV2) loadLegacy(buf []byte) error {
 	x.metaV = 1 // Fixed for legacy conversions.
 	x.sortByModTime()
 	return nil
+}
+
+// latestModtime returns the modtime of the latest version.
+func (x *xlMetaV2) latestModtime() time.Time {
+	if x == nil || len(x.versions) == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, x.versions[0].header.ModTime)
 }
 
 func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
@@ -1059,14 +1120,14 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 func (x *xlMetaV2) sortByModTime() {
 	// Quick check
 	if len(x.versions) <= 1 || sort.SliceIsSorted(x.versions, func(i, j int) bool {
-		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
+		return x.versions[i].header.sortsBefore(x.versions[j].header)
 	}) {
 		return
 	}
 
 	// We should sort.
 	sort.Slice(x.versions, func(i, j int) bool {
-		return x.versions[i].header.ModTime > x.versions[j].header.ModTime
+		return x.versions[i].header.sortsBefore(x.versions[j].header)
 	})
 }
 
@@ -1506,7 +1567,6 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 		return errFileCorrupt
 	}
 	m.VersionID = nullVersionID
-	m.DataDir = legacyDataDir
 
 	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
 }
@@ -1603,6 +1663,137 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 		versions[0].IsLatest = true
 	}
 	return versions, nil
+}
+
+// mergeXLV2Versions will merge all versions, typically from different disks
+// that have at least quorum entries in all metas.
+// Quorum must be the minimum number of matching metadata files.
+// Quorum should be > 1 and <= len(versions).
+// If strict is set to false, entries that match type
+func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
+	if len(versions) < quorum || len(versions) == 0 {
+		return nil
+	}
+	if len(versions) == 1 {
+		return versions[0]
+	}
+	if quorum == 1 {
+		// No need for non-strict checks if quorum is 1.
+		strict = true
+	}
+	// Our result
+	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
+	tops := make([]xlMetaV2ShallowVersion, len(versions))
+	for {
+		// Step 1 create slice with all top versions.
+		tops = tops[:0]
+		var topSig [4]byte
+		var topID [16]byte
+		consistent := true // Are all signatures consistent (shortcut)
+		for _, vers := range versions {
+			if len(vers) == 0 {
+				consistent = false
+				continue
+			}
+			ver := vers[0]
+			if len(tops) == 0 {
+				consistent = true
+				topSig = ver.header.Signature
+				topID = ver.header.VersionID
+			} else {
+				consistent = consistent && topSig == ver.header.Signature && topID == ver.header.VersionID
+			}
+			tops = append(tops, vers[0])
+		}
+
+		// Check if done...
+		if len(tops) < quorum {
+			// We couldn't gather enough for quorum
+			break
+		}
+
+		var latest xlMetaV2ShallowVersion
+		var latestCount int
+		if consistent {
+			// All had the same signature, easy.
+			latest = tops[0]
+			latestCount = len(tops)
+			merged = append(merged, latest)
+		} else {
+			// Find latest.
+			for i, ver := range tops {
+				if ver.header == latest.header {
+					latestCount++
+					continue
+				}
+				if i == 0 || ver.header.sortsBefore(latest.header) {
+					if i == 0 {
+						latestCount = 1
+					} else if !strict && ver.header.matchesNotStrict(latest.header) {
+						latestCount++
+					} else {
+						latestCount = 1
+					}
+					latest = ver
+					continue
+				}
+
+				// Mismatch, but older.
+				if !strict && ver.header.matchesNotStrict(latest.header) {
+					// If non-nil version ID and it matches, assume match, but keep newest.
+					if ver.header.sortsBefore(latest.header) {
+						latest = ver
+					}
+					latestCount++
+				}
+			}
+			if latestCount >= quorum {
+				merged = append(merged, latest)
+			}
+		}
+
+		// Remove from all streams up until latest modtime or if selected.
+		for i, vers := range versions {
+			for _, ver := range vers {
+				// Truncate later modtimes, not selected.
+				if ver.header.ModTime > latest.header.ModTime {
+					versions[i] = versions[i][1:]
+					continue
+				}
+				// Truncate matches
+				if ver.header == latest.header {
+					versions[i] = versions[i][1:]
+					continue
+				}
+
+				// Truncate non-empty version and type matches
+				if latest.header.VersionID == ver.header.VersionID {
+					versions[i] = versions[i][1:]
+					continue
+				}
+				// Skip versions with version id we already emitted.
+				for _, mergedV := range merged {
+					if ver.header.VersionID == mergedV.header.VersionID {
+						versions[i] = versions[i][1:]
+						continue
+					}
+				}
+				// Keep top entry (and remaining)...
+				break
+			}
+		}
+	}
+	// Sanity check. Enable if duplicates show up.
+	if false {
+		var found = make(map[[16]byte]struct{})
+		for _, ver := range merged {
+			if _, ok := found[ver.header.VersionID]; ok {
+				panic("found dupe")
+			}
+			found[ver.header.VersionID] = struct{}{}
+		}
+	}
+	return merged
 }
 
 type xlMetaBuf []byte

@@ -40,7 +40,7 @@ lint: ## runs golangci-lint suite of linters
 check: test
 test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./...
 
 test-upgrade: build
 	@echo "Running minio upgrade tests"

@@ -656,6 +656,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			dirQuorum: getReadQuorum(len(f.disks)),
 			objQuorum: getReadQuorum(len(f.disks)),
 			bucket:    "",
+			strict:    false,
 		}
 
 		healObjectsPrefix := color.Green("healObjects:")
