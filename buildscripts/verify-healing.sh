@@ -18,7 +18,7 @@ function start_minio_3_node() {
     export MINIO_ROOT_PASSWORD=minio123
     export MINIO_ERASURE_SET_DRIVE_COUNT=6
 
-    start_port=$(shuf -i 10000-65000 -n 1)
+    start_port=$2
     args=""
     for i in $(seq 1 3); do
         args="$args http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/6/"
@@ -85,14 +85,14 @@ function __init__()
 }
 
 function perform_test() {
-    start_minio_3_node 120
+    start_minio_3_node 120 $2
 
     echo "Testing Distributed Erasure setup healing of drives"
     echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
     rm -rf ${WORK_DIR}/${1}/*/
 
-    start_minio_3_node 120
+    start_minio_3_node 120 $2
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then
@@ -109,9 +109,12 @@ function perform_test() {
 
 function main()
 {
-    perform_test "2"
-    perform_test "1"
-    perform_test "3"
+    # use same ports for all tests
+    start_port=$(shuf -i 10000-65000 -n 1)
+
+    perform_test "2" ${start_port}
+    perform_test "1" ${start_port}
+    perform_test "3" ${start_port}
 }
 
 ( __init__ "$@" && main "$@" )
