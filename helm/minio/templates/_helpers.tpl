@@ -109,7 +109,7 @@ Determine name for scc role and rolebinding
 {{- end -}}
 
 {{/*
-Properly format optional additional arguments to Minio binary
+Properly format optional additional arguments to MinIO binary
 */}}
 {{- define "minio.extraArgs" -}}
 {{- range .Values.extraArgs -}}
@@ -143,7 +143,7 @@ imagePullSecrets:
 {{- end -}}
 
 {{/*
-Formats volumeMount for Minio tls keys and trusted certs
+Formats volumeMount for MinIO TLS keys and trusted certs
 */}}
 {{- define "minio.tlsKeysVolumeMount" -}}
 {{- if .Values.tls.enabled }}
@@ -158,7 +158,7 @@ Formats volumeMount for Minio tls keys and trusted certs
 {{- end -}}
 
 {{/*
-Formats volume for Minio tls keys and trusted certs
+Formats volume for MinIO TLS keys and trusted certs
 */}}
 {{- define "minio.tlsKeysVolume" -}}
 {{- if .Values.tls.enabled }}

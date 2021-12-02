@@ -327,7 +327,7 @@ podDisruptionBudget:
   enabled: false
   maxUnavailable: 1
 
-## Specify the service account to use for the Minio pods. If 'create' is set to 'false'
+## Specify the service account to use for the MinIO pods. If 'create' is set to 'false'
 ## and 'name' is left unspecified, the account 'default' will be used.
 serviceAccount:
   create: true
