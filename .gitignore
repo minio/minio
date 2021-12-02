@@ -22,3 +22,5 @@ stage/
 .sia_temp/
 config.json
 node_modules/
+*.log
+.gititnore
