@@ -28,12 +28,13 @@ mcImage:
   tag: RELEASE.2021-11-16T20-37-36Z
   pullPolicy: IfNotPresent
 
-## minio mode, i.e. standalone or distributed or gateway (nas)
+## minio mode, i.e. standalone or distributed or gateway (nas,gcs)
 ## Distributed MinIO ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
 ## NAS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-nas.html
+## GCS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-gcs.html
 mode: distributed
 
-## NOTE: currently only "nas" gateway is supported.
+## NOTE: currently only "nas,gcs" gateways are supported.
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: []
@@ -105,8 +106,11 @@ pools: 1
 
 # Deploy if 'mode == gateway' - 4 replicas.
 gateway:
-  type: "nas" # currently only "nas" is supported.
+  type: "nas" # currently only "nas,gcs" are supported.
   replicas: 4
+  gcs:
+    gcsKeyJson: "" # credential json file of service account key (not required if using existingSecret)
+    projectId: "" # Google cloud project id required
 
 ## TLS Settings for MinIO
 tls:
