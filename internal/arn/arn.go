@@ -59,9 +59,9 @@ type ARN struct {
 }
 
 var (
-	// Allows lower-case chars, numbers, '.', '-', '_' and '/'. Starts with
-	// a letter or digit. At least 1 character long.
-	validResourceIDRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_/\.-]*$`)
+	// Allows english letters, numbers, '.', '-', '_' and '/'. Starts with a
+	// letter or digit. At least 1 character long.
+	validResourceIDRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_/\.-]*$`)
 )
 
 // NewIAMRoleARN - returns an ARN for a role in MinIO.

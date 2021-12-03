@@ -855,7 +855,7 @@ func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
 }
 
 const (
-	testRoleARN = "arn:minio:iam:::role/127.0.0.1_minio-cl"
+	testRoleARN = "arn:minio:iam:::role/nOybJqMNzNmroqEKq5D0EUsRZw0"
 )
 
 func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
