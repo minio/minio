@@ -1092,6 +1092,33 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	encoder.Encode(vresp)
 }
 
+func checkDiskFatalErrs(errs []error) error {
+	// This returns a common error if all errors are
+	// same errors, then there is no point starting
+	// the server.
+	if countErrs(errs, errUnsupportedDisk) == len(errs) {
+		return errUnsupportedDisk
+	}
+
+	if countErrs(errs, errDiskAccessDenied) == len(errs) {
+		return errDiskAccessDenied
+	}
+
+	if countErrs(errs, errFileAccessDenied) == len(errs) {
+		return errDiskAccessDenied
+	}
+
+	if countErrs(errs, errDiskNotDir) == len(errs) {
+		return errDiskNotDir
+	}
+
+	if countErrs(errs, errFaultyDisk) == len(errs) {
+		return errFaultyDisk
+	}
+
+	return nil
+}
+
 // A single function to write certain errors to be fatal
 // or informative based on the `exit` flag, please look
 // at each implementation of error for added hints.
@@ -1101,8 +1128,6 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 // Do not like it :-(
 func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	switch {
-	case errors.Is(err, errMinDiskSize):
-		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
 	case errors.Is(err, errUnsupportedDisk):
 		var hint string
 		if endpoint.URL != nil {
@@ -1119,7 +1144,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 			hint = "Disks are not directories, MinIO erasure coding needs directories"
 		}
 		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
-	case errors.Is(err, errFileAccessDenied):
+	case errors.Is(err, errDiskAccessDenied):
 		// Show a descriptive error with a hint about how to fix it.
 		var username string
 		if u, err := user.Current(); err == nil {
