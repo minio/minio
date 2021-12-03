@@ -19,6 +19,8 @@ package openid
 
 import (
 	"crypto"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -576,11 +578,21 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 				return c, config.Errorf("unable to generate a domain from the OpenID config.")
 			}
 		}
-		clientIDFragment := c.ClientID[:8]
-		if clientIDFragment == "" {
-			return c, config.Errorf("unable to get a non-empty clientID fragment from the OpenID config.")
+
+		if c.ClientID == "" {
+			return c, config.Errorf("client ID must not be empty")
 		}
-		resourceID := domain + "_" + clientIDFragment
+
+		// We set the resource ID of the role arn as a hash of client
+		// ID, so we can get a short roleARN that stays the same on
+		// restart.
+		var resourceID string
+		{
+			h := sha1.New()
+			h.Write([]byte(c.ClientID))
+			bs := h.Sum(nil)
+			resourceID = base64.RawURLEncoding.EncodeToString(bs)
+		}
 		c.roleArn, err = arn.NewIAMRoleARN(resourceID, serverRegion)
 		if err != nil {
 			return c, config.Errorf("unable to generate ARN from the OpenID config: %v", err)
