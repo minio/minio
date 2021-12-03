@@ -64,16 +64,28 @@ build: checks
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#')))
-	$(eval TAG := "minio/minio:$(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD)")
-hotfix: hotfix-vars install
+	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
+	$(eval TAG := "minio/minio:$(VERSION)")
 
-docker-hotfix: hotfix checks
+hotfix: hotfix-vars install ## builds minio binary with hotfix tags
+	@mv -f ./minio ./minio.$(VERSION)
+	@minisign -qQSm ./minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
+	@sha256sum < ./minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio.$(VERSION).sha256sum
+
+hotfix-push: hotfix
+	@scp -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+
+docker-hotfix-push: docker-hotfix
+	@docker push $(TAG)
+
+docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix tags
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) . -f Dockerfile.dev
+	@docker build -t $(TAG) --build-arg RELEASE=$(VERSION) . -f Dockerfile.hotfix
 
 docker: build checks
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) . -f Dockerfile.dev
+	@docker build -t $(TAG) . -f Dockerfile
 
 # Builds minio and installs it to $GOPATH/bin.
 install: build

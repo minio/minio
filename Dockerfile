@@ -34,6 +34,8 @@ RUN  \
      microdnf clean all && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
 
+COPY ./minio /opt/bin/minio
+
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
