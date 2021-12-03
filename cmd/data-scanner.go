@@ -974,7 +974,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 
 // applyNewerNoncurrentVersionLimit removes noncurrent versions older than the most recent NewerNoncurrentVersions configured.
 // Note: This function doesn't update sizeSummary since it always removes versions that it doesn't return.
-func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
 	if i.lifeCycle == nil {
 		return fivs, nil
 	}
@@ -992,6 +992,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, o Ob
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
 		obj := fi.ToObjectInfo(i.bucket, i.objectPath())
+		// skip versions with object locking enabled
 		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			if i.debug {
 				if obj.VersionID != "" {
@@ -1000,10 +1001,17 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, o Ob
 					console.Debugf(applyVersionActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 				}
 			}
+			// add this version back to remaining versions for
+			// subsequent lifecycle policy applications
+			fivs = append(fivs, fi)
 			continue
 		}
 
+		// NoncurrentDays not passed yet.
 		if time.Now().UTC().Before(obj.SuccessorModTime.AddDate(0, 0, days)) {
+			// add this version back to remaining versions for
+			// subsequent lifecycle policy applications
+			fivs = append(fivs, fi)
 			continue
 		}
 

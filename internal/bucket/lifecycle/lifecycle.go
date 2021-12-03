@@ -501,17 +501,3 @@ func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, i
 	}
 	return ruleID, days, lim
 }
-
-// HasNewerNoncurrentVersions returns true if there exists a rule with
-// NewerNoncurrentVersions limit set.
-func (lc Lifecycle) HasNewerNoncurrentVersions() bool {
-	for _, rule := range lc.Rules {
-		if rule.Status == Disabled {
-			continue
-		}
-		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
-			return true
-		}
-	}
-	return false
-}
