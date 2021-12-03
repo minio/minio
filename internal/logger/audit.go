@@ -227,6 +227,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets() {
-		_ = t.Send(entry, string(All))
+		if err := t.Send(entry, string(All)); err != nil {
+			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), All)
+		}
 	}
 }

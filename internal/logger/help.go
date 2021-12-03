@@ -38,6 +38,26 @@ var (
 			Sensitive:   true,
 		},
 		config.HelpKV{
+			Key:         ClientCert,
+			Description: "mTLS certificate for Logger Webhook authentication",
+			Optional:    true,
+			Type:        "string",
+			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         ClientKey,
+			Description: "mTLS certificate key for Logger Webhook authentication",
+			Optional:    true,
+			Type:        "string",
+			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         QueueSize,
+			Description: "configure channel queue size for Logger Webhook targets",
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
@@ -72,6 +92,12 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         QueueSize,
+			Description: "configure channel queue size for Audit Webhook targets",
+			Optional:    true,
+			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         config.Comment,

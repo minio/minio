@@ -19,6 +19,7 @@ package logger
 
 import (
 	"crypto/tls"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,7 @@ const (
 	AuthToken  = "auth_token"
 	ClientCert = "client_cert"
 	ClientKey  = "client_key"
+	QueueSize  = "queue_size"
 
 	KafkaBrokers       = "brokers"
 	KafkaTopic         = "topic"
@@ -55,15 +57,19 @@ const (
 	KafkaClientTLSKey  = "client_tls_key"
 	KafkaVersion       = "version"
 
-	EnvLoggerWebhookEnable    = "MINIO_LOGGER_WEBHOOK_ENABLE"
-	EnvLoggerWebhookEndpoint  = "MINIO_LOGGER_WEBHOOK_ENDPOINT"
-	EnvLoggerWebhookAuthToken = "MINIO_LOGGER_WEBHOOK_AUTH_TOKEN"
+	EnvLoggerWebhookEnable     = "MINIO_LOGGER_WEBHOOK_ENABLE"
+	EnvLoggerWebhookEndpoint   = "MINIO_LOGGER_WEBHOOK_ENDPOINT"
+	EnvLoggerWebhookAuthToken  = "MINIO_LOGGER_WEBHOOK_AUTH_TOKEN"
+	EnvLoggerWebhookClientCert = "MINIO_LOGGER_WEBHOOK_CLIENT_CERT"
+	EnvLoggerWebhookClientKey  = "MINIO_LOGGER_WEBHOOK_CLIENT_KEY"
+	EnvLoggerWebhookQueueSize  = "MINIO_LOGGER_WEBHOOK_QUEUE_SIZE"
 
 	EnvAuditWebhookEnable     = "MINIO_AUDIT_WEBHOOK_ENABLE"
 	EnvAuditWebhookEndpoint   = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
 	EnvAuditWebhookAuthToken  = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
 	EnvAuditWebhookClientCert = "MINIO_AUDIT_WEBHOOK_CLIENT_CERT"
 	EnvAuditWebhookClientKey  = "MINIO_AUDIT_WEBHOOK_CLIENT_KEY"
+	EnvAuditWebhookQueueSize  = "MINIO_AUDIT_WEBHOOK_QUEUE_SIZE"
 
 	EnvKafkaEnable        = "MINIO_AUDIT_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_AUDIT_KAFKA_BROKERS"
@@ -82,7 +88,7 @@ const (
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
 var (
-	DefaultKVS = config.KVS{
+	DefaultLoggerWebhookKVS = config.KVS{
 		config.KV{
 			Key:   config.Enable,
 			Value: config.EnableOff,
@@ -94,6 +100,18 @@ var (
 		config.KV{
 			Key:   AuthToken,
 			Value: "",
+		},
+		config.KV{
+			Key:   ClientCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClientKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   QueueSize,
+			Value: "100000",
 		},
 	}
 
@@ -117,6 +135,10 @@ var (
 		config.KV{
 			Key:   ClientKey,
 			Value: "",
+		},
+		config.KV{
+			Key:   QueueSize,
+			Value: "100000",
 		},
 	}
 
@@ -424,10 +446,36 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if target != config.Default {
 			authTokenEnv = EnvLoggerWebhookAuthToken + config.Default + target
 		}
+		clientCertEnv := EnvLoggerWebhookClientCert
+		if target != config.Default {
+			clientCertEnv = EnvLoggerWebhookClientCert + config.Default + target
+		}
+		clientKeyEnv := EnvLoggerWebhookClientKey
+		if target != config.Default {
+			clientKeyEnv = EnvLoggerWebhookClientKey + config.Default + target
+		}
+		err = config.EnsureCertAndKey(env.Get(clientCertEnv, ""), env.Get(clientKeyEnv, ""))
+		if err != nil {
+			return cfg, err
+		}
+		queueSizeEnv := EnvAuditWebhookQueueSize
+		if target != config.Default {
+			queueSizeEnv = EnvAuditWebhookQueueSize + config.Default + target
+		}
+		queueSize, err := strconv.Atoi(env.Get(queueSizeEnv, "100000"))
+		if err != nil {
+			return cfg, err
+		}
+		if queueSize <= 0 {
+			return cfg, errors.New("invalid queue_size value")
+		}
 		cfg.HTTP[target] = http.Config{
-			Enabled:   true,
-			Endpoint:  env.Get(endpointEnv, ""),
-			AuthToken: env.Get(authTokenEnv, ""),
+			Enabled:    true,
+			Endpoint:   env.Get(endpointEnv, ""),
+			AuthToken:  env.Get(authTokenEnv, ""),
+			ClientCert: env.Get(clientCertEnv, ""),
+			ClientKey:  env.Get(clientKeyEnv, ""),
+			QueueSize:  queueSize,
 		}
 	}
 
@@ -465,12 +513,24 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
+		queueSizeEnv := EnvAuditWebhookQueueSize
+		if target != config.Default {
+			queueSizeEnv = EnvAuditWebhookQueueSize + config.Default + target
+		}
+		queueSize, err := strconv.Atoi(env.Get(queueSizeEnv, "100000"))
+		if err != nil {
+			return cfg, err
+		}
+		if queueSize <= 0 {
+			return cfg, errors.New("invalid queue_size value")
+		}
 		cfg.AuditWebhook[target] = http.Config{
 			Enabled:    true,
 			Endpoint:   env.Get(endpointEnv, ""),
 			AuthToken:  env.Get(authTokenEnv, ""),
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
+			QueueSize:  queueSize,
 		}
 	}
 
@@ -485,7 +545,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if starget != config.Default {
 			subSysTarget = config.LoggerWebhookSubSys + config.SubSystemSeparator + starget
 		}
-		if err := config.CheckValidKeys(subSysTarget, kv, DefaultKVS); err != nil {
+		if err := config.CheckValidKeys(subSysTarget, kv, DefaultLoggerWebhookKVS); err != nil {
 			return cfg, err
 		}
 		enabled, err := config.ParseBool(kv.Get(config.Enable))
@@ -495,10 +555,24 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if !enabled {
 			continue
 		}
+		err = config.EnsureCertAndKey(kv.Get(ClientCert), kv.Get(ClientKey))
+		if err != nil {
+			return cfg, err
+		}
+		queueSize, err := strconv.Atoi(kv.Get(QueueSize))
+		if err != nil {
+			return cfg, err
+		}
+		if queueSize <= 0 {
+			return cfg, errors.New("invalid queue_size value")
+		}
 		cfg.HTTP[starget] = http.Config{
-			Enabled:   true,
-			Endpoint:  kv.Get(Endpoint),
-			AuthToken: kv.Get(AuthToken),
+			Enabled:    true,
+			Endpoint:   kv.Get(Endpoint),
+			AuthToken:  kv.Get(AuthToken),
+			ClientCert: kv.Get(ClientCert),
+			ClientKey:  kv.Get(ClientKey),
+			QueueSize:  queueSize,
 		}
 	}
 
@@ -527,12 +601,20 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
+		queueSize, err := strconv.Atoi(kv.Get(QueueSize))
+		if err != nil {
+			return cfg, err
+		}
+		if queueSize <= 0 {
+			return cfg, errors.New("invalid queue_size value")
+		}
 		cfg.AuditWebhook[starget] = http.Config{
 			Enabled:    true,
 			Endpoint:   kv.Get(Endpoint),
 			AuthToken:  kv.Get(AuthToken),
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
+			QueueSize:  queueSize,
 		}
 	}
 

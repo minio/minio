@@ -62,7 +62,7 @@ func initHelp() {
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
-		config.LoggerWebhookSubSys:  logger.DefaultKVS,
+		config.LoggerWebhookSubSys:  logger.DefaultLoggerWebhookKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
 		config.HealSubSys:           heal.DefaultKVS,
@@ -543,7 +543,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	loggerCfg, err := logger.LookupConfig(s)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger: %w", err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger/audit targets: %w", err))
 	}
 
 	for _, l := range loggerCfg.HTTP {
@@ -553,7 +553,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http logging
 			if err = logger.AddTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize console HTTP target: %w", err))
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server logger HTTP target: %w", err))
 			}
 		}
 	}
@@ -565,7 +565,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http audit logging
 			if err = logger.AddAuditTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit HTTP target: %w", err))
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit HTTP target: %w", err))
 			}
 		}
 	}
@@ -575,7 +575,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			l.LogOnce = logger.LogOnceIf
 			// Enable Kafka audit logging
 			if err = logger.AddAuditTarget(kafka.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit Kafka target: %w", err))
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit Kafka target: %w", err))
 			}
 		}
 	}
