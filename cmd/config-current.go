@@ -191,7 +191,7 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.SubnetSubSys,
 			Type:        "string",
-			Description: "set subnet config for the cluster e.g. license token",
+			Description: "set subnet config for the cluster e.g. api key",
 			Optional:    true,
 		},
 	}
@@ -233,7 +233,7 @@ func initHelp() {
 		config.NotifyRedisSubSys:    notify.HelpRedis,
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
-		config.SubnetSubSys:         subnet.HelpLicense,
+		config.SubnetSubSys:         subnet.HelpSubnet,
 	}
 
 	config.RegisterHelpSubSys(helpMap)

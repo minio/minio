@@ -60,7 +60,8 @@ const (
 	RegionName = "name"
 	AccessKey  = "access_key"
 	SecretKey  = "secret_key"
-	License    = "license"
+	License    = "license" // Deprecated Dec 2021
+	APIKey     = "api_key"
 )
 
 // Top level config constants.
