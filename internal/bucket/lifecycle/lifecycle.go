@@ -394,6 +394,11 @@ func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 	// Iterate over all actionable rules and find the earliest
 	// expiration date and its associated rule ID.
 	for _, rule := range lc.FilterActionableRules(obj) {
+		// We don't know the index of this version and hence can't
+		// reliably compute expected expiry time.
+		if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
+			continue
+		}
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() && !obj.IsLatest && obj.VersionID != "" {
 			return rule.ID, ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))
 		}
