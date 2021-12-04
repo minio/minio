@@ -307,7 +307,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		// shallow decode.
 		xl, err := entry.xlmeta()
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			continue
 		}
 		objsValid++
@@ -339,9 +339,15 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	if objsValid < r.objQuorum {
 		return nil, false
 	}
+
 	// If all objects agree.
 	if selected != nil && objsAgree == objsValid {
 		return selected, true
+	}
+
+	// If cached is nil we shall skip the entry.
+	if selected.cached == nil {
+		return nil, false
 	}
 
 	// Merge if we have disagreement.
