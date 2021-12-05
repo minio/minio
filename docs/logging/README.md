@@ -108,7 +108,7 @@ NOTE:
     "Vary": "Origin,Accept-Encoding",
     "X-Amz-Request-Id": "16ABE7A785E7AC2C",
     "X-Amz-Server-Side-Encryption": "aws:kms",
-    "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": "my-minio-key",
+    "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": "arn:aws:kms:my-minio-key",
     "X-Content-Type-Options": "nosniff",
     "X-Xss-Protection": "1; mode=block",
     "x-amz-version-id": "ac4639f6-c544-4f3f-af1e-b4c0736f67f9"

@@ -282,7 +282,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -481,7 +481,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -729,7 +729,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}
@@ -1817,7 +1817,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
 		case crypto.S3KMS:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.UserDefined[crypto.MetaKeyID])
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
 			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
 				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
 			}

@@ -68,6 +68,21 @@ const (
 
 )
 
+// KMSKeyID returns in AWS compatible KMS KeyID() format.
+func (o ObjectInfo) KMSKeyID() string {
+	if len(o.UserDefined) == 0 {
+		return ""
+	}
+	kmsID, ok := o.UserDefined[crypto.MetaKeyID]
+	if !ok {
+		return ""
+	}
+	if strings.HasPrefix(kmsID, "arn:aws:kms:") {
+		return kmsID
+	}
+	return "arn:aws:kms:" + kmsID
+}
+
 // isMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
