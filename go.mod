@@ -94,8 +94,12 @@ require (
 )
 
 require (
+	github.com/0chain/errors v1.0.3
 	github.com/0chain/gosdk v1.3.4
 	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
 )
 
-replace github.com/gomodule/redigo v2.0.0+incompatible => github.com/gomodule/redigo v1.8.5
+replace (
+	github.com/0chain/gosdk v1.3.4 => ../gosdk
+	github.com/gomodule/redigo v2.0.0+incompatible => github.com/gomodule/redigo v1.8.5
+)
