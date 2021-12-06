@@ -325,7 +325,11 @@ func (c *diskCache) purge(ctx context.Context) {
 	expiry := UTCNow().Add(-cacheExpiryDays)
 	// defaulting max hits count to 100
 	// ignore error we know what value we are passing.
-	scorer, _ := newFileScorer(toFree, time.Now().Unix(), 100)
+	scorer, err := newFileScorer(toFree, time.Now().Unix(), 100)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
 
 	// this function returns FileInfo for cached range files.
 	fiStatRangesFn := func(ranges map[string]string, pathPrefix string) map[string]os.FileInfo {
@@ -388,9 +392,7 @@ func (c *diskCache) purge(ctx context.Context) {
 		switch {
 		case cc != nil:
 			if cc.isStale(objInfo.ModTime) {
-				if err = removeAll(cacheDir); err != nil {
-					logger.LogIf(ctx, err)
-				}
+				removeAll(cacheDir)
 				scorer.adjustSaveBytes(-objInfo.Size)
 				// break early if sufficient disk space reclaimed.
 				if c.diskUsageLow() {
@@ -408,9 +410,7 @@ func (c *diskCache) purge(ctx context.Context) {
 		for fname, fi := range cachedRngFiles {
 			if cc != nil {
 				if cc.isStale(objInfo.ModTime) {
-					if err = removeAll(fname); err != nil {
-						logger.LogIf(ctx, err)
-					}
+					removeAll(fname)
 					scorer.adjustSaveBytes(-fi.Size())
 
 					// break early if sufficient disk space reclaimed.
