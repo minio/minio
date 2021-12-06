@@ -41,13 +41,28 @@ func (n NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartE
 
 // UnmarshalXML decodes NoncurrentVersionExpiration
 func (n *NoncurrentVersionExpiration) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	type noncurrentVersionExpirationWrapper NoncurrentVersionExpiration
-	var val noncurrentVersionExpirationWrapper
+	// To handle xml with MaxNoncurrentVersions from older MinIO releases.
+	// note: only one of MaxNoncurrentVersions or NewerNoncurrentVersions would be present.
+	type noncurrentExpiration struct {
+		XMLName                 xml.Name       `xml:"NoncurrentVersionExpiration"`
+		NoncurrentDays          ExpirationDays `xml:"NoncurrentDays,omitempty"`
+		NewerNoncurrentVersions int            `xml:"NewerNoncurrentVersions,omitempty"`
+		MaxNoncurrentVersions   int            `xml:"MaxNoncurrentVersions,omitempty"`
+	}
+
+	var val noncurrentExpiration
 	err := d.DecodeElement(&val, &startElement)
 	if err != nil {
 		return err
 	}
-	*n = NoncurrentVersionExpiration(val)
+	if val.MaxNoncurrentVersions > 0 {
+		val.NewerNoncurrentVersions = val.MaxNoncurrentVersions
+	}
+	*n = NoncurrentVersionExpiration{
+		XMLName:                 val.XMLName,
+		NoncurrentDays:          val.NoncurrentDays,
+		NewerNoncurrentVersions: val.NewerNoncurrentVersions,
+	}
 	n.set = true
 	return nil
 }

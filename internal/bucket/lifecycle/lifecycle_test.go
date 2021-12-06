@@ -666,3 +666,43 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
 	}
 }
+
+func TestMaxNoncurrentBackwardCompat(t *testing.T) {
+	testCases := []struct {
+		xml      string
+		expected NoncurrentVersionExpiration
+	}{
+		{
+			xml: `<NoncurrentVersionExpiration><NoncurrentDays>1</NoncurrentDays><NewerNoncurrentVersions>3</NewerNoncurrentVersions></NoncurrentVersionExpiration>`,
+			expected: NoncurrentVersionExpiration{
+				XMLName: xml.Name{
+					Local: "NoncurrentVersionExpiration",
+				},
+				NoncurrentDays:          1,
+				NewerNoncurrentVersions: 3,
+				set:                     true,
+			},
+		},
+		{
+			xml: `<NoncurrentVersionExpiration><NoncurrentDays>2</NoncurrentDays><MaxNoncurrentVersions>4</MaxNoncurrentVersions></NoncurrentVersionExpiration>`,
+			expected: NoncurrentVersionExpiration{
+				XMLName: xml.Name{
+					Local: "NoncurrentVersionExpiration",
+				},
+				NoncurrentDays:          2,
+				NewerNoncurrentVersions: 4,
+				set:                     true,
+			},
+		},
+	}
+	for i, tc := range testCases {
+		var got NoncurrentVersionExpiration
+		dec := xml.NewDecoder(strings.NewReader(tc.xml))
+		if err := dec.Decode(&got); err != nil || got != tc.expected {
+			if err != nil {
+				t.Fatalf("%d: Failed to unmarshal xml %v", i+1, err)
+			}
+			t.Fatalf("%d: Expected %v but got %v", i+1, tc.expected, got)
+		}
+	}
+}
