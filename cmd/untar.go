@@ -144,7 +144,7 @@ func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name 
 		case err != nil:
 			extra := ""
 			if n > 0 {
-				extra = fmt.Sprintf(" after %d successful object(s)")
+				extra = fmt.Sprintf(" after %d successful object(s)", n)
 			}
 			return fmt.Errorf("tar file error: %w%s", err, extra)
 
