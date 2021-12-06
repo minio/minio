@@ -419,6 +419,9 @@ func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 // Returns true if there still is a need to delete files (n+saveBytes >0),
 // false if no more bytes needs to be saved.
 func (f *fileScorer) adjustSaveBytes(n int64) bool {
+	if f == nil {
+		return false
+	}
 	if int64(f.saveBytes)+n <= 0 {
 		f.saveBytes = 0
 		f.trimQueue()
