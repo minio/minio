@@ -1210,7 +1210,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	writeSuccessResponseHeadersOnly(w)
+	writeResponse(w, http.StatusOK, nil, mimeXML)
 }
 
 // DeleteBucketHandler - Delete bucket
