@@ -429,6 +429,18 @@ func extractAPIVersion(r *http.Request) string {
 	return "unknown"
 }
 
+func generateUnexpectedRPCMsg(rpcPath, subsystem string, expectedVersion, gotVersion string) string {
+	var reason string
+	switch {
+	case expectedVersion != gotVersion:
+		reason = fmt.Sprintf("Server expects '%s' API version '%s', instead found '%s'", subsystem, expectedVersion, gotVersion)
+	default:
+		reason = fmt.Sprintf("Unexpected RPC call at this path '%s'", rpcPath)
+	}
+
+	return fmt.Sprintf("%s - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", reason, ReleaseTag)
+}
+
 func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
@@ -437,21 +449,21 @@ func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Req
 		version := extractAPIVersion(r)
 		switch {
 		case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'peer' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", peerRESTVersion, version, ReleaseTag)
+			desc := generateUnexpectedRPCMsg(r.URL.Path, "peer", peerRESTVersion, version)
 			writeErrorResponseString(r.Context(), w, APIError{
 				Code:           "XMinioPeerVersionMismatch",
 				Description:    desc,
 				HTTPStatusCode: http.StatusUpgradeRequired,
 			}, r.URL)
 		case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'storage' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", storageRESTVersion, version, ReleaseTag)
+			desc := generateUnexpectedRPCMsg(r.URL.Path, "storage", storageRESTVersion, version)
 			writeErrorResponseString(r.Context(), w, APIError{
 				Code:           "XMinioStorageVersionMismatch",
 				Description:    desc,
 				HTTPStatusCode: http.StatusUpgradeRequired,
 			}, r.URL)
 		case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'lock' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", lockRESTVersion, version, ReleaseTag)
+			desc := generateUnexpectedRPCMsg(r.URL.Path, "lock", lockRESTVersion, version)
 			writeErrorResponseString(r.Context(), w, APIError{
 				Code:           "XMinioLockVersionMismatch",
 				Description:    desc,
