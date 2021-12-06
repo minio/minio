@@ -531,6 +531,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// if there is no deny statement this call is implicitly enabled.
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     requestorUser,
+			Groups:          requestorGroups,
 			Action:          iampolicy.CreateServiceAccountAdminAction,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
@@ -564,10 +565,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// user <> to the request sender
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     requestorUser,
+			Groups:          requestorGroups,
 			Action:          iampolicy.CreateServiceAccountAdminAction,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			Claims:          claims,
+			DenyOnly:        true,
 		}) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
