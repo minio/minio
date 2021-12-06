@@ -1078,10 +1078,7 @@ func speedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestRes
 				break
 			}
 
-			doBreak := false
-			if float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025 {
-				doBreak = true
-			}
+			doBreak := float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025
 
 			throughputHighestGet = totalGet
 			throughputHighestResults = results
@@ -1092,12 +1089,19 @@ func speedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestRes
 				break
 			}
 
-			if !opts.autotune {
-				sendResult()
-				break
+			for _, result := range results {
+				if result.Error != "" {
+					// Break out on errors.
+					sendResult()
+					return
+				}
 			}
 
 			sendResult()
+			if !opts.autotune {
+				break
+			}
+
 			// Try with a higher concurrency to see if we get better throughput
 			concurrency += (concurrency + 1) / 2
 		}

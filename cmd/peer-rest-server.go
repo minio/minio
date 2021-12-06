@@ -1141,20 +1141,19 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		return SpeedtestResult{}, errServerNotInitialized
 	}
 
+	var errOnce sync.Once
 	var retError string
+	var wg sync.WaitGroup
+	var totalBytesWritten uint64
+	var totalBytesRead uint64
 
 	bucket := minioMetaSpeedTestBucket
 	objCountPerThread := make([]uint64, concurrent)
-
-	uploadsStopped := false
-	var totalBytesWritten uint64
 	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
-
-	var wg sync.WaitGroup
+	defer uploadsCancel()
 
 	go func() {
 		time.Sleep(duration)
-		uploadsStopped = true
 		uploadsCancel()
 	}()
 
@@ -1168,9 +1167,14 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				hashReader, err := hash.NewReader(newRandomReader(size),
 					int64(size), "", "", int64(size))
 				if err != nil {
-					retError = err.Error()
-					logger.LogIf(ctx, err)
-					break
+					if !contextCanceled(uploadsCtx) {
+						errOnce.Do(func() {
+							retError = err.Error()
+							logger.LogIf(ctx, err)
+						})
+					}
+					uploadsCancel()
+					return
 				}
 				reader := NewPutObjReader(hashReader)
 				objInfo, err := objAPI.PutObject(uploadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
@@ -1179,12 +1183,15 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 						xhttp.AmzStorageClass: storageClass,
 					},
 				})
-				if err != nil && !uploadsStopped {
-					retError = err.Error()
-					logger.LogIf(ctx, err)
-				}
 				if err != nil {
-					break
+					if !contextCanceled(uploadsCtx) {
+						errOnce.Do(func() {
+							retError = err.Error()
+							logger.LogIf(ctx, err)
+						})
+					}
+					uploadsCancel()
+					return
 				}
 				atomic.AddUint64(&totalBytesWritten, uint64(objInfo.Size))
 				objCountPerThread[i]++
@@ -1193,13 +1200,15 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	}
 	wg.Wait()
 
-	downloadsStopped := false
-	var totalBytesRead uint64
-	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
+	// We already saw write failures, no need to proceed into read's
+	if retError != "" {
+		return SpeedtestResult{Uploads: totalBytesWritten, Downloads: totalBytesRead, Error: retError}, nil
+	}
 
+	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
+	defer downloadsCancel()
 	go func() {
 		time.Sleep(duration)
-		downloadsStopped = true
 		downloadsCancel()
 	}()
 
@@ -1217,12 +1226,15 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				}
 				r, err := objAPI.GetObjectNInfo(downloadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
-				if err != nil && !downloadsStopped {
-					retError = err.Error()
-					logger.LogIf(ctx, err)
-				}
 				if err != nil {
-					break
+					if !contextCanceled(downloadsCtx) {
+						errOnce.Do(func() {
+							retError = err.Error()
+							logger.LogIf(ctx, err)
+						})
+					}
+					downloadsCancel()
+					return
 				}
 				n, err := io.Copy(ioutil.Discard, r)
 				r.Close()
@@ -1232,18 +1244,22 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 					// reads etc.
 					atomic.AddUint64(&totalBytesRead, uint64(n))
 				}
-				if err != nil && !downloadsStopped {
-					retError = err.Error()
-					logger.LogIf(ctx, err)
-				}
 				if err != nil {
-					break
+					if !contextCanceled(downloadsCtx) {
+						errOnce.Do(func() {
+							retError = err.Error()
+							logger.LogIf(ctx, err)
+						})
+					}
+					downloadsCancel()
+					return
 				}
 				j++
 			}
 		}(i)
 	}
 	wg.Wait()
+
 	return SpeedtestResult{Uploads: totalBytesWritten, Downloads: totalBytesRead, Error: retError}, nil
 }
 
