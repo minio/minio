@@ -91,15 +91,18 @@ func (o *ObjectInfo) isMultipart() bool {
 		return false
 	}
 	_, encrypted := crypto.IsEncrypted(o.UserDefined)
-	if encrypted && !crypto.IsMultiPart(o.UserDefined) {
-		return false
-	}
-	for _, part := range o.Parts {
-		_, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
+	if encrypted {
+		if !crypto.IsMultiPart(o.UserDefined) {
 			return false
 		}
+		for _, part := range o.Parts {
+			_, err := sio.DecryptedSize(uint64(part.Size))
+			if err != nil {
+				return false
+			}
+		}
 	}
+
 	// Further check if this object is uploaded using multipart mechanism
 	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
