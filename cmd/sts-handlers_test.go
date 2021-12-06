@@ -225,7 +225,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
 				suite.TestLDAPSTSServiceAccounts(c)
-				suite.TestLDAPSTSServiceAccounts2(c)
+				suite.TestLDAPSTSServiceAccountsWithGroups(c)
 				suite.TearDownSuite(c)
 			},
 		)
@@ -446,7 +446,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 
 // In this test, the parent users gets their permissions from a group, rather
 // than having a policy set directly on them.
-func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts2(c *check) {
+func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
