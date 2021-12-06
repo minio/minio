@@ -310,6 +310,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 		}
 
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
+			// Skip rules with newer noncurrent versions specified.
+			// These are not handled at an individual version.
+			// ComputeAction applies to a specific version.
 			if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
 				continue
 			}

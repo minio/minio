@@ -414,6 +414,24 @@ func TestComputeActions(t *testing.T) {
 			objectSuccessorModTime: time.Now().Add(-1 * time.Nanosecond).UTC(),
 			versionID:              uuid.New().String(),
 		},
+		// Lifecycle rules with NewerNoncurrentVersions specified must return NoneAction.
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			versionID:      uuid.NewString(),
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: NoneAction,
+		},
+		// Disabled rules with NewerNoncurrentVersions shouldn't affect outcome.
+		{
+			inputConfig:            `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NoncurrentDays>5</NoncurrentDays></NoncurrentVersionExpiration></Rule><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Disabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:             "foodir/fooobject",
+			versionID:              uuid.NewString(),
+			objectModTime:          time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			objectSuccessorModTime: time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isNoncurrent:           true,
+			expectedAction:         DeleteVersionAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -646,7 +664,5 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 	}
 	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
 		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
-	} else {
-		fmt.Println(ruleID, days, lim)
 	}
 }
