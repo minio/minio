@@ -34,7 +34,7 @@ import (
 // lockRESTClient is authenticable lock REST client
 type lockRESTClient struct {
 	restClient *rest.Client
-	endpoint   Endpoint
+	u          *url.URL
 }
 
 func toLockError(err error) error {
@@ -53,7 +53,7 @@ func toLockError(err error) error {
 
 // String stringer *dsync.NetLocker* interface compatible method.
 func (client *lockRESTClient) String() string {
-	return client.endpoint.String()
+	return client.u.String()
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -144,7 +144,7 @@ func (client *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockAr
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {
 	if endpoint.IsLocal {
-		return globalLockServers[endpoint]
+		return globalLockServer
 	}
 	return newlockRESTClient(endpoint)
 }
@@ -154,7 +154,7 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
-		Path:   pathJoin(lockRESTPrefix, endpoint.Path, lockRESTVersion),
+		Path:   pathJoin(lockRESTPrefix, lockRESTVersion),
 	}
 
 	var tlsConfig *tls.Config
@@ -182,5 +182,11 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
 	}
 
-	return &lockRESTClient{endpoint: endpoint, restClient: restClient}
+	return &lockRESTClient{
+		u: &url.URL{
+			Scheme: endpoint.Scheme,
+			Host:   endpoint.Host,
+		},
+		restClient: restClient,
+	}
 }

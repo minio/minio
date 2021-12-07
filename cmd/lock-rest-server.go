@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"path"
 	"sort"
 	"strconv"
 	"time"
@@ -264,37 +263,27 @@ func lockMaintenance(ctx context.Context) {
 			// Reset the timer for next cycle.
 			lkTimer.Reset(lockMaintenanceInterval)
 
-			for _, lockServer := range globalLockServers {
-				lockServer.expireOldLocks(lockValidityDuration)
-			}
+			globalLockServer.expireOldLocks(lockValidityDuration)
 		}
 	}
 }
 
 // registerLockRESTHandlers - register lock rest router.
-func registerLockRESTHandlers(router *mux.Router, endpointServerSets EndpointServerSets) {
-	for _, ep := range endpointServerSets {
-		for _, endpoint := range ep.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-
-			lockServer := &lockRESTServer{
-				ll: newLocker(endpoint),
-			}
-
-			subrouter := router.PathPrefix(path.Join(lockRESTPrefix, endpoint.Path)).Subrouter()
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodHealth).HandlerFunc(httpTraceHdrs(lockServer.HealthHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRefresh).HandlerFunc(httpTraceHdrs(lockServer.RefreshHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler))
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(lockServer.ForceUnlockHandler))
-
-			globalLockServers[endpoint] = lockServer.ll
-		}
+func registerLockRESTHandlers(router *mux.Router) {
+	lockServer := &lockRESTServer{
+		ll: newLocker(),
 	}
+
+	subrouter := router.PathPrefix(lockRESTPrefix).Subrouter()
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodHealth).HandlerFunc(httpTraceHdrs(lockServer.HealthHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRefresh).HandlerFunc(httpTraceHdrs(lockServer.RefreshHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(lockServer.ForceUnlockHandler))
+
+	globalLockServer = lockServer.ll
 
 	go lockMaintenance(GlobalContext)
 }

@@ -30,6 +30,7 @@ import (
 
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -313,10 +314,20 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 
 // GetAllLockers return a list of all lockers for all sets.
 func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
-	allLockers := make([]dsync.NetLocker, s.setDriveCount*s.setCount)
-	for i, lockers := range s.erasureLockers {
-		for j, locker := range lockers {
-			allLockers[i*s.setDriveCount+j] = locker
+	var allLockers []dsync.NetLocker
+	lockEpSet := set.NewStringSet()
+	for _, lockers := range s.erasureLockers {
+		for _, locker := range lockers {
+			if locker == nil || !locker.IsOnline() {
+				// Skip any offline lockers.
+				continue
+			}
+			if lockEpSet.Contains(locker.String()) {
+				// Skip duplicate lockers.
+				continue
+			}
+			lockEpSet.Add(locker.String())
+			allLockers = append(allLockers, locker)
 		}
 	}
 	return allLockers
@@ -324,15 +335,8 @@ func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
 
 func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
 	return func() ([]dsync.NetLocker, string) {
-		lockers := make([]dsync.NetLocker, s.setDriveCount)
+		lockers := make([]dsync.NetLocker, len(s.erasureLockers[setIndex]))
 		copy(lockers, s.erasureLockers[setIndex])
-		sort.Slice(lockers, func(i, j int) bool {
-			// re-order lockers with affinity for
-			// - non-local lockers
-			// - online lockers
-			// are used first
-			return !lockers[i].IsLocal() && lockers[i].IsOnline()
-		})
 		return lockers, s.erasureLockOwner
 	}
 }
@@ -407,14 +411,24 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
-		s.erasureLockers[i] = make([]dsync.NetLocker, setDriveCount)
+	}
+
+	var erasureLockers = map[string]dsync.NetLocker{}
+	for _, endpoint := range endpoints {
+		if _, ok := erasureLockers[endpoint.Host]; !ok {
+			erasureLockers[endpoint.Host] = newLockAPI(endpoint)
+		}
 	}
 
 	for i := 0; i < setCount; i++ {
+		var lockerEpSet = set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
 			endpoint := endpoints[i*setDriveCount+j]
 			// Rely on endpoints list to initialize, init lockers and available disks.
-			s.erasureLockers[i][j] = newLockAPI(endpoint)
+			if locker, ok := erasureLockers[endpoint.Host]; ok && !lockerEpSet.Contains(endpoint.Host) {
+				lockerEpSet.Add(endpoint.Host)
+				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
+			}
 			disk := storageDisks[i*setDriveCount+j]
 			if disk == nil {
 				continue

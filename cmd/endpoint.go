@@ -207,6 +207,22 @@ type ZoneEndpoints struct {
 // EndpointServerSets - list of list of endpoints
 type EndpointServerSets []ZoneEndpoints
 
+// Localhost - returns the local hostname from list of endpoints
+func (l EndpointServerSets) Localhost() string {
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				u := &url.URL{
+					Scheme: endpoint.Scheme,
+					Host:   endpoint.Host,
+				}
+				return u.String()
+			}
+		}
+	}
+	return ""
+}
+
 // GetLocalZoneIdx returns the zone which endpoint belongs to locally.
 // if ep is remote this code will return -1 zoneIndex
 func (l EndpointServerSets) GetLocalZoneIdx(ep Endpoint) int {

@@ -46,13 +46,12 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 
 // localLocker implements Dsync.NetLocker
 type localLocker struct {
-	mutex    sync.Mutex
-	endpoint Endpoint
-	lockMap  map[string][]lockRequesterInfo
+	mutex   sync.Mutex
+	lockMap map[string][]lockRequesterInfo
 }
 
 func (l *localLocker) String() string {
-	return l.endpoint.String()
+	return globalEndpoints.Localhost()
 }
 
 func (l *localLocker) canTakeUnlock(resources ...string) bool {
@@ -287,9 +286,8 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 	}
 }
 
-func newLocker(endpoint Endpoint) *localLocker {
+func newLocker() *localLocker {
 	return &localLocker{
-		endpoint: endpoint,
-		lockMap:  make(map[string][]lockRequesterInfo),
+		lockMap: make(map[string][]lockRequesterInfo),
 	}
 }
