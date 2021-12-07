@@ -22,3 +22,9 @@ stage/
 .sia_temp/
 config.json
 node_modules/
+mc.*
+s3-check-md5*
+xl-meta*
+healing-bin*
+inspect*
+200M*
