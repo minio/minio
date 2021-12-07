@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -312,18 +313,24 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 	}
 
 	testCases := []struct {
-		volumeName string
-		objectName string
-		data       []byte
-		expectErr  bool
+		volumeName      string
+		objectName      string
+		data            []byte
+		expectErr       bool
+		ignoreIfWindows bool
 	}{
-		{"foo", "myobject", []byte("foo"), false},
-		{"foo", "myobject", []byte{}, false},
+		{"foo", "myobject", []byte("foo"), false, false},
+		{"foo", "myobject", []byte{}, false, false},
 		// volume not found error.
-		{"bar", "myobject", []byte{}, true},
+		{"bar", "myobject", []byte{}, true, false},
+		// Weird '\n' in object name
+		{"foo", "newline\n", []byte{}, false, true},
 	}
 
 	for i, testCase := range testCases {
+		if testCase.ignoreIfWindows && runtime.GOOS == "windows" {
+			continue
+		}
 		err := storage.AppendFile(context.Background(), testCase.volumeName, testCase.objectName, testCase.data)
 		expectErr := (err != nil)
 
