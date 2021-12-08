@@ -132,7 +132,7 @@ type cacheObjects struct {
 
 func (c *cacheObjects) incHitsToMeta(ctx context.Context, dcache *diskCache, bucket, object string, size int64, eTag string, rs *HTTPRangeSpec) error {
 	metadata := map[string]string{"etag": eTag}
-	return dcache.SaveMetadata(ctx, bucket, object, metadata, size, rs, "", true)
+	return dcache.SaveMetadata(ctx, bucket, object, metadata, size, rs, "", true, false)
 }
 
 // Backend metadata could have changed through server side copy - reset cache metadata if that is the case
@@ -159,7 +159,7 @@ func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *disk
 		bkObjectInfo.ETag != cacheObjInfo.ETag ||
 		bkObjectInfo.ContentType != cacheObjInfo.ContentType ||
 		!bkObjectInfo.Expires.Equal(cacheObjInfo.Expires) {
-		return dcache.SaveMetadata(ctx, bucket, object, getMetadata(bkObjectInfo), bkObjectInfo.Size, nil, "", false)
+		return dcache.SaveMetadata(ctx, bucket, object, getMetadata(bkObjectInfo), bkObjectInfo.Size, nil, "", false, false)
 	}
 	return c.incHitsToMeta(ctx, dcache, bucket, object, cacheObjInfo.Size, cacheObjInfo.ETag, rs)
 }
@@ -277,7 +277,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			return bReader, err
 		}
 		// serve cached content without ETag verification if writeback commit is not yet complete
-		if skipETagVerification(cacheReader.ObjInfo.UserDefined) {
+		if writebackInProgress(cacheReader.ObjInfo.UserDefined) {
 			return cacheReader, nil
 		}
 	}
@@ -427,7 +427,7 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 			return cachedObjInfo, nil
 		}
 		// serve cache metadata without ETag verification if writeback commit is not yet complete
-		if skipETagVerification(cachedObjInfo.UserDefined) {
+		if writebackInProgress(cachedObjInfo.UserDefined) {
 			return cachedObjInfo, nil
 		}
 	}
@@ -794,6 +794,7 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 	opts.UserDefined[xhttp.ContentMD5] = oi.UserDefined["content-md5"]
 	objInfo, err := c.InnerPutObjectFn(ctx, oi.Bucket, oi.Name, NewPutObjReader(hashReader), opts)
 	wbCommitStatus := CommitComplete
+	size := objInfo.Size
 	if err != nil {
 		wbCommitStatus = CommitFailed
 	}
@@ -804,12 +805,13 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 		retryCnt, _ = strconv.Atoi(meta[writeBackRetryHeader])
 		retryCnt++
 		meta[writeBackRetryHeader] = strconv.Itoa(retryCnt)
+		size = cReader.ObjInfo.Size
 	} else {
 		delete(meta, writeBackRetryHeader)
 	}
 	meta[writeBackStatusHeader] = wbCommitStatus.String()
 	meta["etag"] = oi.ETag
-	dcache.SaveMetadata(ctx, oi.Bucket, oi.Name, meta, objInfo.Size, nil, "", false)
+	dcache.SaveMetadata(ctx, oi.Bucket, oi.Name, meta, size, nil, "", false, wbCommitStatus == CommitComplete)
 	if retryCnt > 0 {
 		// slow down retries
 		time.Sleep(time.Second * time.Duration(retryCnt%10+1))
