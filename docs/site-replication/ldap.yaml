@@ -1,0 +1,14 @@
+# To run locally an OpenLDAP instance using Docker
+# $ docker-compose -f ldap.yaml up -d
+version: '3.7'
+
+services:
+  openldap:
+    image: quay.io/minio/openldap
+    ports:
+      - "389:389"
+      - "636:636"
+    environment:
+      LDAP_ORGANIZATION: "MinIO Inc"
+      LDAP_DOMAIN: "min.io"
+      LDAP_ADMIN_PASSWORD: "admin"

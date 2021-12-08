@@ -53,6 +53,11 @@ func (e metaCacheEntry) isObject() bool {
 	return len(e.metadata) > 0
 }
 
+// isObjectDir returns if the entry is representing an object__XL_DIR__
+func (e metaCacheEntry) isObjectDir() bool {
+	return len(e.metadata) > 0 && strings.HasSuffix(e.name, slashSeparator)
+}
+
 // hasPrefix returns whether an entry has a specific prefix
 func (e metaCacheEntry) hasPrefix(s string) bool {
 	return strings.HasPrefix(e.name, s)

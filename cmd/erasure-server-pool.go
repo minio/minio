@@ -1118,15 +1118,12 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 
 	opts := listPathOptions{
-		Bucket:    bucket,
-		Prefix:    prefix,
-		Separator: delimiter,
-		Limit:     maxKeysPlusOne(maxKeys, marker != ""),
-		Marker:    marker,
-		// When delimiter is set make sure to include delete markers
-		// necessary to capture proper CommonPrefixes as expected
-		// in the response as per AWS S3.
-		InclDeleted: delimiter != "",
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
+		Marker:      marker,
+		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
 	merged, err := z.listPath(ctx, &opts)

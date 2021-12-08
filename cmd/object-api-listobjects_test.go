@@ -42,6 +42,8 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
 		"test-bucket-folders",
+		// This bucket has file delete marker.
+		"test-bucket-files",
 	}
 	for _, bucket := range testBuckets {
 		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{
@@ -62,6 +64,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 	}{
 		{testBuckets[0], "unique/folder/", "", nil, true},
 		{testBuckets[0], "unique/folder/1.txt", "content", nil, false},
+		{testBuckets[1], "unique/folder/1.txt", "content", nil, true},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -102,6 +105,10 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 				{Name: "unique/folder/1.txt"},
 			},
 		},
+		{
+			IsTruncated: false,
+			Objects:     []ObjectInfo{},
+		},
 	}
 
 	testCases := []struct {
@@ -120,6 +127,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		{testBuckets[0], "unique/", "", "/", 1000, resultCases[0], nil, true},
 		{testBuckets[0], "unique/folder", "", "/", 1000, resultCases[0], nil, true},
 		{testBuckets[0], "unique/", "", "", 1000, resultCases[1], nil, true},
+		{testBuckets[1], "unique/folder/", "", "/", 1000, resultCases[2], nil, true},
 	}
 
 	for i, testCase := range testCases {
