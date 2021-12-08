@@ -411,6 +411,9 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 
 		for fname, fi := range cachedRngFiles {
+			if fi == nil {
+				continue
+			}
 			if cc != nil {
 				if cc.isStale(objInfo.ModTime) {
 					removeAll(fname)
@@ -428,9 +431,11 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 		// clean up stale cache.json files for objects that never got cached but access count was maintained in cache.json
 		fi, err := os.Stat(pathJoin(cacheDir, cacheMetaJSONFile))
-		if err != nil || (fi.ModTime().Before(expiry) && len(cachedRngFiles) == 0) {
+		if err != nil || (fi != nil && fi.ModTime().Before(expiry) && len(cachedRngFiles) == 0) {
 			removeAll(cacheDir)
-			scorer.adjustSaveBytes(-fi.Size())
+			if fi != nil {
+				scorer.adjustSaveBytes(-fi.Size())
+			}
 			// Proceed to next file.
 			return nil
 		}
