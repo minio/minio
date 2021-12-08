@@ -48,6 +48,21 @@ func Test_NoncurrentVersionsExpiration_Validation(t *testing.T) {
 			},
 			err: nil,
 		},
+		{
+			n: NoncurrentVersionExpiration{
+				NoncurrentDays: -1,
+				set:            true,
+			},
+			err: errXMLNotWellFormed,
+		},
+		{
+			n: NoncurrentVersionExpiration{
+				NoncurrentDays:          90,
+				NewerNoncurrentVersions: -2,
+				set:                     true,
+			},
+			err: errXMLNotWellFormed,
+		},
 		// MinIO extension: supports zero NoncurrentDays when NewerNoncurrentVersions > 0
 		{
 			n: NoncurrentVersionExpiration{

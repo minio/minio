@@ -90,6 +90,7 @@ func (n NoncurrentVersionExpiration) Validate() error {
 
 	case val < 0, n.NewerNoncurrentVersions < 0:
 		// negative values are not supported
+		return errXMLNotWellFormed
 	}
 	return nil
 }
