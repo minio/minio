@@ -48,8 +48,7 @@ import (
 
 const (
 	srStatePrefix = minioConfigPrefix + "/site-replication"
-
-	srStateFile = "state.json"
+	srStateFile   = "state.json"
 )
 
 const (
@@ -1007,7 +1006,10 @@ func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyNam
 }
 
 // PeerSvcAccChangeHandler - copies service-account change to local.
-func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change madmin.SRSvcAccChange) error {
+func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change *madmin.SRSvcAccChange) error {
+	if change == nil {
+		return errInvalidArgument
+	}
 	switch {
 	case change.Create != nil:
 		var sp *iampolicy.Policy
@@ -1069,7 +1071,10 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 }
 
 // PeerPolicyMappingHandler - copies policy mapping to local.
-func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mapping madmin.SRPolicyMapping) error {
+func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mapping *madmin.SRPolicyMapping) error {
+	if mapping == nil {
+		return errInvalidArgument
+	}
 	err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
 	if err != nil {
 		return wrapSRErr(err)
@@ -1078,7 +1083,11 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 }
 
 // PeerSTSAccHandler - replicates STS credential locally.
-func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madmin.SRSTSCredential) error {
+func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *madmin.SRSTSCredential) error {
+	if stsCred == nil {
+		return errInvalidArgument
+	}
+
 	// Verify the session token of the stsCred
 	claims, err := auth.ExtractClaims(stsCred.SessionToken, globalActiveCred.SecretKey)
 	if err != nil {
@@ -1089,13 +1098,13 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 	mapClaims := claims.Map()
 	expiry, err := auth.ExpToInt64(mapClaims["exp"])
 	if err != nil {
-		return fmt.Errorf("Expiry claim was not found")
+		return fmt.Errorf("Expiry claim was not found: %v", mapClaims)
 	}
 
 	// Extract the username and lookup DN and groups in LDAP.
 	ldapUser, ok := claims.Lookup(ldapUserN)
 	if !ok {
-		return fmt.Errorf("Could not find LDAP username in claims")
+		return fmt.Errorf("Could not find LDAP username in claims: %v", mapClaims)
 	}
 
 	// Need to lookup the groups from LDAP.

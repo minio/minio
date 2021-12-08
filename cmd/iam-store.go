@@ -846,12 +846,14 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 			if !pset.Contains(policy) {
 				continue
 			}
-			_, ok := cache.iamUsersMap[u]
-			if !ok {
-				// happens when account is deleted or
-				// expired.
-				delete(cache.iamUserPolicyMap, u)
-				continue
+			if store.getUsersSysType() == MinIOUsersSysType {
+				_, ok := cache.iamUsersMap[u]
+				if !ok {
+					// happens when account is deleted or
+					// expired.
+					delete(cache.iamUserPolicyMap, u)
+					continue
+				}
 			}
 			pset.Remove(policy)
 			cache.iamUserPolicyMap[u] = newMappedPolicy(strings.Join(pset.ToSlice(), ","))
@@ -886,11 +888,13 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 	groups := []string{}
 	for u, mp := range cache.iamUserPolicyMap {
 		pset := mp.policySet()
-		if _, ok := cache.iamUsersMap[u]; !ok {
-			// This case can happen when a temporary account is
-			// deleted or expired - remove it from userPolicyMap.
-			delete(cache.iamUserPolicyMap, u)
-			continue
+		if store.getUsersSysType() == MinIOUsersSysType {
+			if _, ok := cache.iamUsersMap[u]; !ok {
+				// This case can happen when a temporary account is
+				// deleted or expired - remove it from userPolicyMap.
+				delete(cache.iamUserPolicyMap, u)
+				continue
+			}
 		}
 		if pset.Contains(policy) {
 			users = append(users, u)

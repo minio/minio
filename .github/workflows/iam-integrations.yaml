@@ -85,3 +85,7 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-iam
+      - name: Test LDAP for automatic site replication
+        if: matrix.ldap == 'localhost:389'
+        run: |
+          make test-site-replication
