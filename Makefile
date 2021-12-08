@@ -57,8 +57,12 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
 test-replication: install ## verify multi site replication
-	@echo "Running tests for Replication three sites"
+	@echo "Running tests for replicating three sites"
 	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
+
+test-site-replication: install ## verify automatic site replication
+	@echo "Running tests for automatic site replication of IAM"
+	@(env bash $(PWD)/docs/site-replication/run-multi-site.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"

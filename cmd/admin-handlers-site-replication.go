@@ -113,6 +113,8 @@ func (a adminAPIHandlers) SRInternalBucketOps(w http.ResponseWriter, r *http.Req
 
 	var err error
 	switch operation {
+	default:
+		err = errInvalidArgument
 	case madmin.MakeWithVersioningBktOp:
 		_, isLockEnabled := r.Form["lockEnabled"]
 		_, isVersioningEnabled := r.Form["versioningEnabled"]
@@ -128,13 +130,10 @@ func (a adminAPIHandlers) SRInternalBucketOps(w http.ResponseWriter, r *http.Req
 		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, false)
 	case madmin.ForceDeleteBucketBktOp:
 		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, true)
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
-		return
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -160,37 +159,40 @@ func (a adminAPIHandlers) SRInternalReplicateIAMItem(w http.ResponseWriter, r *h
 
 	var err error
 	switch item.Type {
+	default:
+		err = errInvalidArgument
 	case madmin.SRIAMItemPolicy:
-		var policy *iampolicy.Policy
-		if len(item.Policy) > 0 {
-			policy, err = iampolicy.ParseConfig(bytes.NewReader(item.Policy))
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		if item.Policy == nil {
+			err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil)
+		} else {
+			policy, perr := iampolicy.ParseConfig(bytes.NewReader(item.Policy))
+			if perr != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, perr), r.URL)
 				return
 			}
+			if policy.IsEmpty() {
+				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil)
+			} else {
+				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, policy)
+			}
 		}
-		err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, policy)
 	case madmin.SRIAMItemSvcAcc:
-		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, *item.SvcAccChange)
+		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, item.SvcAccChange)
 	case madmin.SRIAMItemPolicyMapping:
-		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, *item.PolicyMapping)
+		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, item.PolicyMapping)
 	case madmin.SRIAMItemSTSAcc:
-		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, *item.STSCredential)
-
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
-		return
+		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, item.STSCredential)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 }
 
 // SRInternalReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
 func (a adminAPIHandlers) SRInternalReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRInternalReplicateIAMItem")
+	ctx := newContext(r, w, "SRInternalReplicateBucketItem")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -208,30 +210,33 @@ func (a adminAPIHandlers) SRInternalReplicateBucketItem(w http.ResponseWriter, r
 
 	var err error
 	switch item.Type {
+	default:
+		err = errInvalidArgument
 	case madmin.SRBucketMetaTypePolicy:
-		var bktPolicy *policy.Policy
-		if len(item.Policy) > 0 {
-			bktPolicy, err = policy.ParseConfig(bytes.NewReader(item.Policy), item.Bucket)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		if item.Policy == nil {
+			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
+		} else {
+			bktPolicy, berr := policy.ParseConfig(bytes.NewReader(item.Policy), item.Bucket)
+			if berr != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, berr), r.URL)
 				return
 			}
+			if bktPolicy.IsEmpty() {
+				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
+			} else {
+				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, bktPolicy)
+			}
 		}
-		err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, bktPolicy)
 	case madmin.SRBucketMetaTypeTags:
 		err = globalSiteReplicationSys.PeerBucketTaggingHandler(ctx, item.Bucket, item.Tags)
 	case madmin.SRBucketMetaTypeObjectLockConfig:
 		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig)
 	case madmin.SRBucketMetaTypeSSEConfig:
 		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig)
-
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
-		return
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 }
