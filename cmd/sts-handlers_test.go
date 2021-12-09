@@ -297,6 +297,15 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 		c.Fatalf("Error initializing client: %v", err)
 	}
 
+	// Validate that user listing does not return any entries
+	usersList, err := s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("list users should not fail: %v", err)
+	}
+	if len(usersList) > 0 {
+		c.Fatalf("expected listing to be empty: %v", usersList)
+	}
+
 	// Validate that the client from sts creds can access the bucket.
 	c.mustListObjects(ctx, minioClient, bucket)
 
