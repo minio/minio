@@ -127,6 +127,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		{testBuckets[0], "unique/", "", "/", 1000, resultCases[0], nil, true},
 		{testBuckets[0], "unique/folder", "", "/", 1000, resultCases[0], nil, true},
 		{testBuckets[0], "unique/", "", "", 1000, resultCases[1], nil, true},
+		{testBuckets[1], "unique/", "", "/", 1000, resultCases[0], nil, true},
 		{testBuckets[1], "unique/folder/", "", "/", 1000, resultCases[2], nil, true},
 	}
 
