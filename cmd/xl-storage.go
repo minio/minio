@@ -679,10 +679,8 @@ func (s *xlStorage) SetDiskID(id string) {
 
 func (s *xlStorage) MakeVolBulk(ctx context.Context, volumes ...string) error {
 	for _, volume := range volumes {
-		if err := s.MakeVol(ctx, volume); err != nil {
-			if errors.Is(err, errDiskAccessDenied) {
-				return errDiskAccessDenied
-			}
+		if err := s.MakeVol(ctx, volume); err != nil && !errors.Is(err, errVolumeExists) {
+			return err
 		}
 	}
 	return nil
