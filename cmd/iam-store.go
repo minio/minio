@@ -1099,15 +1099,6 @@ func (store *IAMStoreSys) GetUsers() map[string]madmin.UserInfo {
 		}
 	}
 
-	if store.getUsersSysType() == LDAPUsersSysType {
-		for k, v := range cache.iamUserPolicyMap {
-			result[k] = madmin.UserInfo{
-				PolicyName: v.Policies,
-				Status:     madmin.AccountEnabled,
-			}
-		}
-	}
-
 	return result
 }
 
