@@ -93,8 +93,6 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
 
 	resultCases := []ListObjectsInfo{
-		// ListObjectsResult-0.
-		// Testing list only the top-level folder.
 		{
 			IsTruncated: false,
 			Prefixes:    []string{"unique/folder/"},
@@ -111,32 +109,70 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		},
 	}
 
+	resultCasesV := []ListObjectVersionsInfo{
+		{
+			IsTruncated: false,
+			Prefixes:    []string{"unique/folder/"},
+		},
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{
+					Name:         "unique/folder/",
+					DeleteMarker: true,
+				},
+				{
+					Name:         "unique/folder/",
+					DeleteMarker: false,
+				},
+				{
+					Name:         "unique/folder/1.txt",
+					DeleteMarker: false,
+				},
+			},
+		},
+	}
+
 	testCases := []struct {
 		// Inputs to ListObjects.
 		bucketName string
 		prefix     string
 		marker     string
 		delimiter  string
-		maxKeys    int32
+		maxKeys    int
+		versioned  bool
 		// Expected output of ListObjects.
-		result ListObjectsInfo
-		err    error
+		resultL ListObjectsInfo
+		resultV ListObjectVersionsInfo
+		err     error
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		{testBuckets[0], "unique/", "", "/", 1000, resultCases[0], nil, true},
-		{testBuckets[0], "unique/folder", "", "/", 1000, resultCases[0], nil, true},
-		{testBuckets[0], "unique/", "", "", 1000, resultCases[1], nil, true},
-		{testBuckets[1], "unique/", "", "/", 1000, resultCases[0], nil, true},
-		{testBuckets[1], "unique/folder/", "", "/", 1000, resultCases[2], nil, true},
+		{testBuckets[0], "unique/", "", "/", 1000, false, resultCases[0], ListObjectVersionsInfo{}, nil, true},
+		{testBuckets[0], "unique/folder", "", "/", 1000, false, resultCases[0], ListObjectVersionsInfo{}, nil, true},
+		{testBuckets[0], "unique/", "", "", 1000, false, resultCases[1], ListObjectVersionsInfo{}, nil, true},
+		{testBuckets[1], "unique/", "", "/", 1000, false, resultCases[0], ListObjectVersionsInfo{}, nil, true},
+		{testBuckets[1], "unique/folder/", "", "/", 1000, false, resultCases[2], ListObjectVersionsInfo{}, nil, true},
+		{testBuckets[0], "unique/", "", "/", 1000, true, ListObjectsInfo{}, resultCasesV[0], nil, true},
+		{testBuckets[0], "unique/", "", "", 1000, true, ListObjectsInfo{}, resultCasesV[1], nil, true},
 	}
 
 	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
-			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
-			result, err := obj.ListObjects(context.Background(), testCase.bucketName,
-				testCase.prefix, testCase.marker, testCase.delimiter, int(testCase.maxKeys))
+			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:",
+				testCase.prefix, "marker:", testCase.marker, "delimiter:",
+				testCase.delimiter, "maxkeys:", testCase.maxKeys)
+			var err error
+			var resultL ListObjectsInfo
+			var resultV ListObjectVersionsInfo
+			if testCase.versioned {
+				resultV, err = obj.ListObjectVersions(context.Background(), testCase.bucketName,
+					testCase.prefix, testCase.marker, "", testCase.delimiter, testCase.maxKeys)
+			} else {
+				resultL, err = obj.ListObjects(context.Background(), testCase.bucketName,
+					testCase.prefix, testCase.marker, testCase.delimiter, testCase.maxKeys)
+			}
 			if err != nil && testCase.shouldPass {
 				t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 			}
@@ -158,53 +194,101 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 				// and in the output. On failure calling t.Fatalf,
 				// otherwise it may lead to index out of range error in
 				// assertion following this.
-				if len(testCase.result.Objects) != len(result.Objects) {
-					t.Logf("want: %v", objInfoNames(testCase.result.Objects))
-					t.Logf("got: %v", objInfoNames(result.Objects))
-					t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
-				}
-				for j := 0; j < len(testCase.result.Objects); j++ {
-					if j >= len(result.Objects) {
-						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i+1, instanceType, testCase.result.Objects[j].Name)
-						continue
+				if !testCase.versioned {
+					if len(testCase.resultL.Objects) != len(resultL.Objects) {
+						t.Logf("want: %v", objInfoNames(testCase.resultL.Objects))
+						t.Logf("got: %v", objInfoNames(resultL.Objects))
+						t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.resultL.Objects), len(resultL.Objects))
 					}
-					if testCase.result.Objects[j].Name != result.Objects[j].Name {
-						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
+					for j := 0; j < len(testCase.resultL.Objects); j++ {
+						if j >= len(resultL.Objects) {
+							t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i+1, instanceType, testCase.resultL.Objects[j].Name)
+							continue
+						}
+						if testCase.resultL.Objects[j].Name != resultL.Objects[j].Name {
+							t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.resultL.Objects[j].Name, resultL.Objects[j].Name)
+						}
 					}
-				}
 
-				if len(testCase.result.Prefixes) != len(result.Prefixes) {
-					t.Logf("want: %v", testCase.result.Prefixes)
-					t.Logf("got: %v", result.Prefixes)
-					t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
-				}
-				for j := 0; j < len(testCase.result.Prefixes); j++ {
-					if j >= len(result.Prefixes) {
-						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i+1, instanceType, testCase.result.Prefixes[j])
-						continue
+					if len(testCase.resultL.Prefixes) != len(resultL.Prefixes) {
+						t.Logf("want: %v", testCase.resultL.Prefixes)
+						t.Logf("got: %v", resultL.Prefixes)
+						t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.resultL.Prefixes), len(resultL.Prefixes))
 					}
-					if testCase.result.Prefixes[j] != result.Prefixes[j] {
-						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Prefixes[j], result.Prefixes[j])
+					for j := 0; j < len(testCase.resultL.Prefixes); j++ {
+						if j >= len(resultL.Prefixes) {
+							t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i+1, instanceType, testCase.resultL.Prefixes[j])
+							continue
+						}
+						if testCase.resultL.Prefixes[j] != resultL.Prefixes[j] {
+							t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.resultL.Prefixes[j], resultL.Prefixes[j])
+						}
+					}
+
+					if testCase.resultL.IsTruncated != resultL.IsTruncated {
+						// Allow an extra continuation token.
+						if !resultL.IsTruncated || len(resultL.Objects) == 0 {
+							t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.resultL.IsTruncated, resultL.IsTruncated)
+						}
+					}
+
+					if testCase.resultL.IsTruncated && resultL.NextMarker == "" {
+						t.Errorf("Test %d: %s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
+					}
+
+					if !testCase.resultL.IsTruncated && resultL.NextMarker != "" {
+						if !resultL.IsTruncated || len(resultL.Objects) == 0 {
+							t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, resultL.NextMarker)
+						}
+					}
+				} else {
+					if len(testCase.resultV.Objects) != len(resultV.Objects) {
+						t.Logf("want: %v", objInfoNames(testCase.resultV.Objects))
+						t.Logf("got: %v", objInfoNames(resultV.Objects))
+						t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.resultV.Objects), len(resultV.Objects))
+					}
+					for j := 0; j < len(testCase.resultV.Objects); j++ {
+						if j >= len(resultV.Objects) {
+							t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i+1, instanceType, testCase.resultV.Objects[j].Name)
+							continue
+						}
+						if testCase.resultV.Objects[j].Name != resultV.Objects[j].Name {
+							t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.resultV.Objects[j].Name, resultV.Objects[j].Name)
+						}
+					}
+
+					if len(testCase.resultV.Prefixes) != len(resultV.Prefixes) {
+						t.Logf("want: %v", testCase.resultV.Prefixes)
+						t.Logf("got: %v", resultV.Prefixes)
+						t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.resultV.Prefixes), len(resultV.Prefixes))
+					}
+					for j := 0; j < len(testCase.resultV.Prefixes); j++ {
+						if j >= len(resultV.Prefixes) {
+							t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i+1, instanceType, testCase.resultV.Prefixes[j])
+							continue
+						}
+						if testCase.resultV.Prefixes[j] != resultV.Prefixes[j] {
+							t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.resultV.Prefixes[j], resultV.Prefixes[j])
+						}
+					}
+
+					if testCase.resultV.IsTruncated != resultV.IsTruncated {
+						// Allow an extra continuation token.
+						if !resultV.IsTruncated || len(resultV.Objects) == 0 {
+							t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.resultV.IsTruncated, resultV.IsTruncated)
+						}
+					}
+
+					if testCase.resultV.IsTruncated && resultV.NextMarker == "" {
+						t.Errorf("Test %d: %s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
+					}
+
+					if !testCase.resultV.IsTruncated && resultV.NextMarker != "" {
+						if !resultV.IsTruncated || len(resultV.Objects) == 0 {
+							t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, resultV.NextMarker)
+						}
 					}
 				}
-
-				if testCase.result.IsTruncated != result.IsTruncated {
-					// Allow an extra continuation token.
-					if !result.IsTruncated || len(result.Objects) == 0 {
-						t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
-					}
-				}
-
-				if testCase.result.IsTruncated && result.NextMarker == "" {
-					t.Errorf("Test %d: %s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
-				}
-
-				if !testCase.result.IsTruncated && result.NextMarker != "" {
-					if !result.IsTruncated || len(result.Objects) == 0 {
-						t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
-					}
-				}
-
 			}
 		})
 	}

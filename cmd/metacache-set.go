@@ -91,6 +91,9 @@ type listPathOptions struct {
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
 
+	// Versioned is this a ListObjectVersions call.
+	Versioned bool
+
 	// pool and set of where the cache is located.
 	pool, set int
 }
@@ -156,7 +159,7 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 				resCh = nil
 				continue
 			}
-			if !o.IncludeDirectories && (entry.isDir() || (entry.isObjectDir() && entry.isLatestDeletemarker())) {
+			if !o.IncludeDirectories && (entry.isDir() || (!o.Versioned && entry.isObjectDir() && entry.isLatestDeletemarker())) {
 				continue
 			}
 			if o.Marker != "" && entry.name < o.Marker {
@@ -324,7 +327,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 				pastPrefix = true
 				return false
 			}
-			if !o.IncludeDirectories && (entry.isDir() || (entry.isObjectDir() && entry.isLatestDeletemarker())) {
+			if !o.IncludeDirectories && (entry.isDir() || (!o.Versioned && entry.isObjectDir() && entry.isLatestDeletemarker())) {
 				return true
 			}
 			if !entry.isInDir(o.Prefix, o.Separator) {
@@ -343,7 +346,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 	}
 
 	// We should not need to filter more.
-	return r.readN(o.Limit, o.InclDeleted, o.IncludeDirectories, o.Prefix)
+	return r.readN(o.Limit, o.InclDeleted, o.IncludeDirectories, o.Versioned, o.Prefix)
 }
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
