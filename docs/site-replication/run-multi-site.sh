@@ -136,4 +136,47 @@ if [ $? -eq 0 ]; then
     exit_1;
 fi
 
-cleanup
+./mc mb minio1/newbucket
+
+sleep 5
+./mc stat minio2/newbucket
+if [ $? -eq 1 ]; then
+    echo "expecting bucket to be present. exiting.."
+    exit_1;
+fi
+
+./mc stat minio3/newbucket
+if [ $? -eq 1 ]; then
+    echo "expecting bucket to be present. exiting.."
+    exit_1;
+fi
+
+./mc cp README.md minio2/newbucket/
+
+sleep 5
+./mc stat minio1/newbucket/README.md
+if [ $? -eq 1 ]; then
+    echo "expecting object to be present. exiting.."
+    exit_1;
+fi
+
+./mc stat minio3/newbucket/README.md
+if [ $? -eq 1 ]; then
+    echo "expecting object to be present. exiting.."
+    exit_1;
+fi
+
+./mc rm minio3/newbucket/README.md
+sleep 5
+
+./mc stat minio2/newbucket/README.md
+if [ $? -eq 0 ]; then
+    echo "expected file to be deleted, exiting.."
+    exit_1;
+fi
+
+./mc stat minio1/newbucket/README.md
+if [ $? -eq 0 ]; then
+    echo "expected file to be deleted, exiting.."
+    exit_1;
+fi
