@@ -1054,6 +1054,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
+		Versioned:   true,
 	}
 
 	merged, err := z.listPath(ctx, &opts)
