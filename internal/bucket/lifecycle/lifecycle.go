@@ -149,13 +149,13 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
 			continue
 		}
-		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now()) {
+		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Expiration.IsDaysNull() {
 			return true
 		}
-		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now()) {
+		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Transition.IsNull() { // this allows for Transition.Days to be zero.
@@ -303,7 +303,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				// Specifying the Days tag will automatically perform ExpiredObjectDeleteMarker cleanup
 				// once delete markers are old enough to satisfy the age criteria.
 				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
-				if time.Now().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
+				if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
 					return DeleteVersionAction
 				}
 			}
@@ -320,7 +320,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
+				if time.Now().UTC().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
 					return DeleteVersionAction
 				}
 			}
@@ -356,7 +356,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					}
 				}
 
-				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+				if !obj.RestoreExpires.IsZero() && time.Now().UTC().After(obj.RestoreExpires) {
 					if obj.VersionID != "" {
 						action = DeleteRestoredVersionAction
 					} else {
@@ -364,7 +364,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					}
 				}
 			}
-			if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+			if !obj.RestoreExpires.IsZero() && time.Now().UTC().After(obj.RestoreExpires) {
 				if obj.VersionID != "" {
 					action = DeleteRestoredVersionAction
 				} else {
@@ -383,6 +383,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 //   e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
 //       transition in 1 day, then the expected transition time is `Fri, 23 May 2020 00:00:00 GMT`
 func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
+	if days == 0 {
+		return modTime
+	}
 	t := modTime.UTC().Add(time.Duration(days+1) * 24 * time.Hour)
 	return t.Truncate(24 * time.Hour)
 }

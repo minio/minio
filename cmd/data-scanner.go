@@ -1008,7 +1008,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		}
 
 		// NoncurrentDays not passed yet.
-		if time.Now().UTC().Before(obj.SuccessorModTime.AddDate(0, 0, days)) {
+		if time.Now().UTC().Before(lifecycle.ExpectedExpiryTime(obj.SuccessorModTime, days)) {
 			// add this version back to remaining versions for
 			// subsequent lifecycle policy applications
 			fivs = append(fivs, fi)
