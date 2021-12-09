@@ -45,13 +45,13 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.12.6
+	github.com/minio/console v0.12.8
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.16
-	github.com/minio/mc v0.0.0-20211118223026-df75eed32e9e // indirect
-	github.com/minio/minio-go/v7 v7.0.17-0.20211201162519-091751848a69
+	github.com/minio/madmin-go v1.1.17
+	github.com/minio/mc v0.0.0-20211207230606-23a05f5a17f2 // indirect
+	github.com/minio/minio-go/v7 v7.0.17
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.9
 	github.com/minio/selfupdate v0.3.1
