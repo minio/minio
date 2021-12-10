@@ -25,6 +25,12 @@ const (
 
 	Timeout = time.Second * 30
 
+	DefaultChunkSize = 64 * 1024
+	FiveHunderedKB   = 500 * 1024
+	OneMB            = 1024 * 1024
+	TenMB            = 10 * OneMB
+	HundredMB        = 10 * TenMB
+
 	//Error codes
 	PathDoesNotExist = "path_no_exist"
 )
@@ -67,10 +73,9 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 	var prefixes []string
 	var isTruncated bool
 	var markedPath string
-	// prefixMap := make(map[string]interface{})
 
 	remotePath = filepath.Clean(remotePath)
-	// commonPrefix := getCommonPrefix(remotePath)
+	commonPrefix := getCommonPrefix(remotePath)
 	offsetPath := filepath.Join(remotePath, marker)
 	for {
 		oResult, err := getRegularRefs(alloc, remotePath, offsetPath, fileType, PageLimit)
@@ -84,25 +89,16 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 
 		for i := 0; i < len(oResult.Refs); i++ {
 			ref := oResult.Refs[i]
+			trimmedPath := strings.TrimPrefix(ref.Path, remotePath+"/")
 			if isDelimited {
 				if ref.Type == Dir {
-					dirPrefix := getCommonPrefix(ref.Path)
+					dirPrefix := filepath.Join(commonPrefix, trimmedPath) + "/"
 					prefixes = append(prefixes, dirPrefix)
 					continue
-					// if _, ok := prefixMap[dirPrefix]; !ok {
-					// 	prefixMap[dirPrefix] = nil
-					// }
 				}
-				// dirPrefix := getCommonPrefix(ref.ParentPath)
-				// if _, ok := prefixMap[dirPrefix]; !ok {
-				// 	prefixMap[dirPrefix] = nil
-				// 	prefixes = append(prefixes, dirPrefix)
-				// }
 			}
 
-			// refPrefixName := strings.TrimPrefix(ref.Path, remotePath+"/")
-			// ref.Name = filepath.Join(commonPrefix, refPrefixName)
-			ref.Name = getCommonPrefix(ref.Path)
+			ref.Name = filepath.Join(commonPrefix, trimmedPath)
 
 			refs = append(refs, ref)
 			if maxRefs != 0 && len(refs) >= maxRefs {
@@ -186,7 +182,7 @@ func getFileReader(ctx context.Context, alloc *sdk.Allocation, remotePath string
 }
 
 func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType string, r io.Reader, size int64, isUpdate, shouldEncrypt bool) (err error) {
-	cb := statusCB{
+	cb := &statusCB{
 		doneCh: make(chan struct{}, 1),
 		errCh:  make(chan error, 1),
 	}
@@ -207,7 +203,25 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 		return err
 	}
 
-	chunkUpload, err := sdk.CreateChunkedUpload(workDir, alloc, fileMeta, r, isUpdate, sdk.WithEncrypt(shouldEncrypt))
+	var chunkSize int64
+	switch {
+	case size > HundredMB:
+		chunkSize = 2 * TenMB
+	case size > TenMB:
+		chunkSize = TenMB
+	case size > OneMB:
+		chunkSize = OneMB
+	case size > FiveHunderedKB:
+		chunkSize = FiveHunderedKB
+	default:
+		chunkSize = DefaultChunkSize
+	}
+
+	chunkUpload, err := sdk.CreateChunkedUpload(workDir, alloc, fileMeta, newMinioReader(r), isUpdate, false,
+		sdk.WithStatusCallback(cb),
+		sdk.WithChunkSize(int64(chunkSize)),
+	)
+
 	if err != nil {
 		return
 	}

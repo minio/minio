@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	zerror "github.com/0chain/errors"
@@ -126,7 +127,7 @@ func (zob *zcnObjects) Shutdown(ctx context.Context) error {
 }
 
 func (zob *zcnObjects) Production() bool {
-	return false
+	return true
 }
 
 func (zob *zcnObjects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, error) {
@@ -140,21 +141,25 @@ func (zob *zcnObjects) DeleteBucket(ctx context.Context, bucketName string, opts
 	}
 
 	remotePath := filepath.Join(RootPath, bucketName)
-	if opts.Force {
-		return zob.alloc.DeleteFile(remotePath)
-	}
 
 	ref, err := getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
 		return err
 	}
 
-	// if ref.
-	_ = ref.Type == Dir //?
+	if ref.Type != Dir {
+		return fmt.Errorf("%v is object not bucket", bucketName)
+	}
 
-	_ = ref
-	//Find a way to find if ref is not empty
-	return nil
+	if opts.Force {
+		return zob.alloc.DeleteFile(remotePath)
+	}
+
+	if ref.Size > 0 {
+		return fmt.Errorf("%v bucket is not empty", bucketName)
+	}
+
+	return zob.alloc.DeleteFile(remotePath)
 }
 
 func (zob *zcnObjects) DeleteObject(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (oInfo minio.ObjectInfo, err error) {
@@ -232,6 +237,8 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		remotePath = filepath.Join(RootPath, bucket, object)
 	}
 
+	fmt.Println("Getting object info for: ", remotePath)
+
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
@@ -240,7 +247,7 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 	return minio.ObjectInfo{
 		Bucket:      bucket,
-		Name:        ref.Name,
+		Name:        getCommonPrefix(remotePath),
 		ModTime:     ref.UpdatedAt,
 		Size:        ref.ActualFileSize,
 		IsDir:       ref.Type == Dir,
@@ -251,10 +258,6 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 //GetObjectNInfo Provides reader with read cursor placed at offset upto some length
 func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
-	fmt.Printf("\nData shards: %v\n", zob.alloc.DataShards)
-	defer func() {
-		fmt.Printf("\nError: %v\n", err)
-	}()
 	var remotePath string
 	if bucket == RootBucketName {
 		remotePath = filepath.Join(RootPath, object)
@@ -348,9 +351,6 @@ func (zob *zcnObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 
 //ListObjects Lists files of directories as objects
 func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
-	//prefix, marker and maxKeys can be implemented
-	//delimiter can be implemented as well but would make less sense. so don't use it.
-	fmt.Printf("\nList objects; bucket: %v\n, prefix: %v\n, marker: %v\n, delimeter: %v\n, maxkeys: %v\n,", bucket, prefix, marker, delimiter, maxKeys)
 	var remotePath, fileType string
 	if bucket == RootBucketName {
 		remotePath = filepath.Join(RootPath, prefix)
@@ -359,25 +359,52 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		remotePath = filepath.Join(RootPath, bucket, prefix)
 	}
 
+	var isSuffix bool
+	if strings.HasSuffix(prefix, "/") {
+		remotePath = filepath.Clean(remotePath) + "/"
+		isSuffix = true
+	}
+
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
+		switch err := err.(type) {
+		case *zerror.Error:
+			if err.Code == PathDoesNotExist {
+				return result, nil
+			}
+		}
 		return
 	}
 
 	if ref.Type == File {
+		if isSuffix {
+			return minio.ListObjectsInfo{
+					IsTruncated: false,
+					Objects:     []minio.ObjectInfo{},
+					Prefixes:    []string{},
+				},
+				nil
+		}
+		parentPath, fileName := filepath.Split(ref.Path)
+		commonPrefix := getCommonPrefix(parentPath)
+		objName := filepath.Join(commonPrefix, fileName)
 		return minio.ListObjectsInfo{
 				IsTruncated: false,
 				Objects: []minio.ObjectInfo{
 					{
-						Bucket:  bucket,
-						Name:    getCommonPrefix(ref.Path),
-						Size:    ref.ActualFileSize,
-						IsDir:   false,
-						ModTime: ref.UpdatedAt,
-						AccTime: time.Now(),
+						Bucket:       bucket,
+						Name:         objName,
+						Size:         ref.ActualFileSize,
+						IsDir:        false,
+						ModTime:      ref.UpdatedAt,
+						ETag:         ref.ActualFileHash,
+						ContentType:  ref.MimeType,
+						AccTime:      time.Now(),
+						StorageClass: "STANDARD",
 					},
 				},
+				Prefixes: []string{},
 			},
 			nil
 	}
@@ -393,36 +420,23 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		return minio.ListObjectsInfo{}, err
 	}
 
-	fmt.Printf("\nprefixes: %v\n", prefixes)
 	for _, ref := range refs {
-		fmt.Printf("\n%+v\n", ref)
-		// var isDir bool
-		// var size int64
 		if ref.Type == Dir {
-			// fmt.Println("Ref is dir")
-			// // size = ref.Size
-			// isDir = true
 			continue
-
-		}
-		// size = ref.ActualFileSize
-
-		// fmt.Println("isDir is ", isDir)
-		objInfo := minio.ObjectInfo{
-			Bucket:  bucket,
-			Name:    ref.Name,
-			ModTime: ref.UpdatedAt,
-			Size:    ref.ActualFileSize,
-			IsDir:   false,
-			// ContentType: ref.MimeType,
-			ETag: ref.ActualFileHash,
 		}
 
-		fmt.Printf("\nObject info: %+v\n", objInfo)
-		objects = append(objects, objInfo)
+		objects = append(objects, minio.ObjectInfo{
+			Bucket:       bucket,
+			Name:         ref.Name,
+			ModTime:      ref.UpdatedAt,
+			Size:         ref.ActualFileSize,
+			IsDir:        false,
+			ContentType:  ref.MimeType,
+			ETag:         ref.ActualFileHash,
+			StorageClass: "STANDARD",
+		})
 	}
 
-	// prefixes = []string{}
 	result.IsTruncated = isTruncated
 	result.NextMarker = nextMarker
 	result.Objects = objects
@@ -482,6 +496,39 @@ func (zob *zcnObjects) PutObject(ctx context.Context, bucket, object string, r *
 		ModTime: time.Now(),
 	}
 	return
+}
+
+func (zob *zcnObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	var srcRemotePath, dstRemotePath string
+	if srcBucket == RootBucketName {
+		srcRemotePath = filepath.Join(RootPath, srcObject)
+	} else {
+		srcRemotePath = filepath.Join(RootPath, srcBucket, srcObject)
+	}
+
+	if destBucket == RootBucketName {
+		dstRemotePath = filepath.Join(RootPath, destObject)
+	} else {
+		dstRemotePath = filepath.Join(RootPath, destBucket, destObject)
+	}
+
+	err = zob.alloc.CopyObject(srcRemotePath, dstRemotePath)
+	if err != nil {
+		return
+	}
+
+	var ref *sdk.ORef
+	ref, err = getSingleRegularRef(zob.alloc, dstRemotePath)
+	if err != nil {
+		return
+	}
+
+	return minio.ObjectInfo{
+		Bucket:  destBucket,
+		Name:    destObject,
+		ModTime: ref.UpdatedAt,
+		Size:    ref.ActualFileSize,
+	}, nil
 }
 
 func (zob *zcnObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
