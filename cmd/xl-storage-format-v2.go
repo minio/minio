@@ -658,7 +658,12 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 			return io.ErrUnexpectedEOF
 		}
 		extra := n - has
-		buf = append(buf, make([]byte, extra)...)
+		if int64(cap(buf)) >= n {
+			// Extend since we have enough space.
+			buf = buf[:n]
+		} else {
+			buf = append(buf, make([]byte, extra)...)
+		}
 		_, err := io.ReadFull(r, buf[has:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
