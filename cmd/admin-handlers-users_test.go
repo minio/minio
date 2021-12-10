@@ -844,6 +844,14 @@ func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClie
 	}
 }
 
+func (c *check) mustGetIAMUserInfo(ctx context.Context, admClnt *madmin.AdminClient, accessKey string) madmin.UserInfo {
+	ui, err := admClnt.GetUserInfo(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("should be able to get user info: %v", err)
+	}
+	return ui
+}
+
 func (c *check) mustNotCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) {
 	randUser := mustGetUUID()
 	randPass := mustGetUUID()
