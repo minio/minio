@@ -1,5 +1,7 @@
 package zcn
 
+import "github.com/0chain/gosdk/core/transaction"
+
 type statusCB struct {
 	doneCh chan struct{}
 	errCh  chan error
@@ -21,7 +23,7 @@ func (cb *statusCB) Completed(allocationId, filePath string, filename string, mi
 	cb.doneCh <- struct{}{}
 }
 
-func (cb *statusCB) CommitMetaCompleted(request, response string, err error) {
+func (cb *statusCB) CommitMetaCompleted(request, response string, txn *transaction.Transaction, err error) {
 
 }
 
