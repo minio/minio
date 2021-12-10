@@ -382,6 +382,14 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userCred, exists := globalIAMSys.GetUser(ctx, accessKey)
+	if exists && (userCred.IsTemp() || userCred.IsServiceAccount()) {
+		// Updating STS credential is not allowed, and this API does not
+		// support updating service accounts.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
+		return
+	}
+
 	if (cred.IsTemp() || cred.IsServiceAccount()) && cred.ParentUser == accessKey {
 		// Incoming access key matches parent user then we should
 		// reject password change requests.
@@ -389,39 +397,21 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	implicitPerm := accessKey == cred.AccessKey
-	if !implicitPerm {
-		parentUser := cred.ParentUser
-		if parentUser == "" {
-			parentUser = cred.AccessKey
-		}
-		// For temporary credentials always
-		// the temporary credentials to check
-		// policy without implicit permissions.
-		if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
-			parentUser = cred.AccessKey
-		}
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     parentUser,
-			Groups:          cred.Groups,
-			Action:          iampolicy.CreateUserAdminAction,
-			ConditionValues: getConditionValues(r, "", parentUser, claims),
-			IsOwner:         owner,
-			Claims:          claims,
-		}) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
+	checkDenyOnly := false
+	if accessKey == cred.AccessKey {
+		// Check that there is no explicit deny - otherwise it's allowed
+		// to change one's own password.
+		checkDenyOnly = true
 	}
 
-	if implicitPerm && !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     accessKey,
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          iampolicy.CreateUserAdminAction,
-		ConditionValues: getConditionValues(r, "", accessKey, claims),
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 		IsOwner:         owner,
 		Claims:          claims,
-		DenyOnly:        true, // check if changing password is explicitly denied.
+		DenyOnly:        checkDenyOnly,
 	}) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
