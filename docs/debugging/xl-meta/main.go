@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/cli"
@@ -76,10 +78,6 @@ FLAGS:
 	}
 
 	app.Action = func(c *cli.Context) error {
-		if !c.Args().Present() {
-			cli.ShowAppHelpAndExit(c, 1) // last argument is exit code
-		}
-
 		ndjson := c.Bool("ndjson")
 		decode := func(r io.Reader, file string) ([]byte, error) {
 			b, err := ioutil.ReadAll(r)
@@ -128,31 +126,39 @@ FLAGS:
 				if err != nil {
 					return nil, err
 				}
-				var versions = struct {
-					Versions []json.RawMessage
-					Headers  []json.RawMessage
-				}{
-					Versions: make([]json.RawMessage, nVers),
-					Headers:  make([]json.RawMessage, nVers),
+				type version struct {
+					Idx      int
+					Header   json.RawMessage
+					Metadata json.RawMessage
 				}
+				var versions = make([]version, nVers)
 				err = decodeVersions(v, nVers, func(idx int, hdr, meta []byte) error {
-					var buf bytes.Buffer
-					if _, err := msgp.UnmarshalAsJSON(&buf, hdr); err != nil {
+					var header xlMetaV2VersionHeaderV2
+					if _, err := header.UnmarshalMsg(hdr); err != nil {
 						return err
 					}
-					versions.Headers[idx] = buf.Bytes()
-					buf = bytes.Buffer{}
+					b, err := header.MarshalJSON()
+					if err != nil {
+						return err
+					}
+					var buf bytes.Buffer
 					if _, err := msgp.UnmarshalAsJSON(&buf, meta); err != nil {
 						return err
 					}
-					versions.Versions[idx] = buf.Bytes()
+					versions[idx] = version{
+						Idx:      idx,
+						Header:   b,
+						Metadata: buf.Bytes(),
+					}
 					return nil
 				})
 				if err != nil {
 					return nil, err
 				}
 				enc := json.NewEncoder(buf)
-				if err := enc.Encode(versions); err != nil {
+				if err := enc.Encode(struct {
+					Versions []version
+				}{Versions: versions}); err != nil {
 					return nil, err
 				}
 				data = b
@@ -508,4 +514,78 @@ func decodeVersions(buf []byte, versions int, fn func(idx int, hdr, meta []byte)
 		}
 	}
 	return nil
+}
+
+type xlMetaV2VersionHeaderV2 struct {
+	VersionID [16]byte
+	ModTime   int64
+	Signature [4]byte
+	Type      uint8
+	Flags     uint8
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	{
+		var zb0002 uint8
+		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Type")
+			return
+		}
+		z.Type = zb0002
+	}
+	{
+		var zb0003 uint8
+		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = zb0003
+	}
+	o = bts
+	return
+}
+
+func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, err error) {
+	tmp := struct {
+		VersionID string
+		ModTime   time.Time
+		Signature string
+		Type      uint8
+		Flags     uint8
+	}{
+		VersionID: hex.EncodeToString(z.VersionID[:]),
+		ModTime:   time.Unix(0, z.ModTime),
+		Signature: hex.EncodeToString(z.Signature[:]),
+		Type:      z.Type,
+		Flags:     z.Flags,
+	}
+	return json.Marshal(tmp)
 }
