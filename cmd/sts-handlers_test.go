@@ -712,7 +712,10 @@ func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
 		c.Fatalf("policy add error: %v", err)
 	}
 
-	c.mustCreateIAMUser(ctx, userAdmClient)
+	cr := c.mustCreateIAMUser(ctx, userAdmClient)
+
+	userInfo := c.mustGetIAMUserInfo(ctx, userAdmClient, cr.AccessKey)
+	c.Assert(userInfo.Status, madmin.AccountEnabled)
 }
 
 func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {

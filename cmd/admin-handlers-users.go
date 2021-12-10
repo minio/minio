@@ -164,31 +164,24 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessKey := cred.ParentUser
-	if accessKey == "" {
-		accessKey = cred.AccessKey
+	checkDenyOnly := false
+	if name == cred.AccessKey {
+		// Check that there is no explicit deny - otherwise it's allowed
+		// to view one's own info.
+		checkDenyOnly = true
 	}
 
-	// For temporary credentials always
-	// the temporary credentials to check
-	// policy without implicit permissions.
-	if cred.IsTemp() && cred.ParentUser == globalActiveCred.AccessKey {
-		accessKey = cred.AccessKey
-	}
-
-	implicitPerm := name == accessKey
-	if !implicitPerm {
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     accessKey,
-			Groups:          cred.Groups,
-			Action:          iampolicy.GetUserAdminAction,
-			ConditionValues: getConditionValues(r, "", accessKey, claims),
-			IsOwner:         owner,
-			Claims:          claims,
-		}) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          iampolicy.GetUserAdminAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+		DenyOnly:        checkDenyOnly,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
 	}
 
 	userInfo, err := globalIAMSys.GetUserInfo(ctx, name)
