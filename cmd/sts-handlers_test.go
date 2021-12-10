@@ -628,6 +628,93 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
 	}
 }
 
+func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token: token,
+			}, nil
+		},
+	}
+
+	// Create policy - with name as one of the groups in OpenID the user is
+	// a member of.
+	policy := "projecta"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	value, err := webID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	c.mustNotCreateIAMUser(ctx, userAdmClient)
+
+	// Create admin user policy.
+	policyBytes = []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "admin:*"
+   ]
+  }
+ ]
+}`)
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	c.mustCreateIAMUser(ctx, userAdmClient)
+}
+
 func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -914,6 +1001,7 @@ func TestIAMWithOpenIDServerSuite(t *testing.T) {
 				suite.SetUpOpenID(c, openIDServer, "")
 				suite.TestOpenIDSTS(c)
 				suite.TestOpenIDServiceAcc(c)
+				suite.TestOpenIDSTSAddUser(c)
 				suite.TearDownSuite(c)
 			},
 		)
