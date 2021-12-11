@@ -1392,9 +1392,11 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 	return err
 }
 
-// SetTempUser - saves temporary credential to storage and cache.
+// SetTempUser - saves temporary (STS) credential to storage and cache. If a
+// policy name is given, it is associated with the parent user specified in the
+// credential.
 func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) error {
-	if accessKey == "" || !cred.IsTemp() || cred.IsExpired() {
+	if accessKey == "" || !cred.IsTemp() || cred.IsExpired() || cred.ParentUser == "" {
 		return errInvalidArgument
 	}
 
@@ -1411,26 +1413,12 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 			return fmt.Errorf("specified policy %s, not found %w", policyName, errNoSuchPolicy)
 		}
 
-		err := store.saveMappedPolicy(ctx, accessKey, stsUser, false, mp, options{ttl: ttl})
+		err := store.saveMappedPolicy(ctx, cred.ParentUser, stsUser, false, mp, options{ttl: ttl})
 		if err != nil {
 			return err
 		}
 
-		cache.iamUserPolicyMap[accessKey] = mp
-
-		// We are on purpose not persisting the policy map for parent
-		// user, although this is a hack, it is a good enough hack
-		// at this point in time - we need to overhaul our OIDC
-		// usage with service accounts with a more cleaner implementation
-		//
-		// This mapping is necessary to ensure that valid credentials
-		// have necessary ParentUser present - this is mainly for only
-		// webIdentity based STS tokens.
-		if cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
-			if _, ok := cache.iamUserPolicyMap[cred.ParentUser]; !ok {
-				cache.iamUserPolicyMap[cred.ParentUser] = mp
-			}
-		}
+		cache.iamUserPolicyMap[cred.ParentUser] = mp
 	}
 
 	u := newUserIdentity(cred)

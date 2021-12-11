@@ -238,20 +238,6 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
 	}
 
-	// If LDAP claim key is set, return here.
-	if _, ok := claims.MapClaims[ldapUser]; ok {
-		return claims.Map(), nil
-	}
-
-	// Session token must have a policy, reject requests without policy
-	// claim.
-	_, pokOpenIDClaimName := claims.MapClaims[iamPolicyClaimNameOpenID()]
-	_, pokOpenIDRoleArn := claims.MapClaims[roleArnClaim]
-	_, pokSA := claims.MapClaims[iamPolicyClaimNameSA()]
-	if !pokOpenIDClaimName && !pokOpenIDRoleArn && !pokSA {
-		return nil, errAuthentication
-	}
-
 	return claims.Map(), nil
 }
 
