@@ -183,7 +183,7 @@ ingress:
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
   hosts:
-    - chart-example.local
+    - minio-example.local
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -212,7 +212,7 @@ consoleIngress:
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
   hosts:
-    - chart-example.local
+    - console.minio-example.local
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
