@@ -25,7 +25,7 @@ import (
 // Tests ToObjectInfo function.
 func TestCacheMetadataObjInfo(t *testing.T) {
 	m := cacheMeta{Meta: nil}
-	objInfo := m.ToObjectInfo("testbucket", "testobject")
+	objInfo := m.ToObjectInfo()
 	if objInfo.Size != 0 {
 		t.Fatal("Unexpected object info value for Size", objInfo.Size)
 	}

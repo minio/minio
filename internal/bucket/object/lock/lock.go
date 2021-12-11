@@ -535,7 +535,7 @@ func (l *ObjectLegalHold) IsEmpty() bool {
 func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 	hold = &ObjectLegalHold{}
 	if err = xml.NewDecoder(reader).Decode(hold); err != nil {
-		return
+		return nil, err
 	}
 
 	if !hold.Status.Valid() {

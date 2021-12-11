@@ -40,7 +40,7 @@ lint: ## runs golangci-lint suite of linters
 check: test
 test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./...
 
 test-upgrade: build
 	@echo "Running minio upgrade tests"
@@ -57,8 +57,12 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
 test-replication: install ## verify multi site replication
-	@echo "Running tests for Replication three sites"
+	@echo "Running tests for replicating three sites"
 	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
+
+test-site-replication: install ## verify automatic site replication
+	@echo "Running tests for automatic site replication of IAM"
+	@(env bash $(PWD)/docs/site-replication/run-multi-site.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
@@ -77,16 +81,28 @@ build: checks ## builds minio to $(PWD)
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#')))
-	$(eval TAG := "minio/minio:$(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD)")
-hotfix: hotfix-vars install ## builds minio binary with hotfix tags
+	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
+	$(eval TAG := "minio/minio:$(VERSION)")
 
-docker-hotfix: hotfix checks ## builds minio docker container with hotfix tags
+hotfix: hotfix-vars install ## builds minio binary with hotfix tags
+	@mv -f ./minio ./minio.$(VERSION)
+	@minisign -qQSm ./minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
+	@sha256sum < ./minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio.$(VERSION).sha256sum
+
+hotfix-push: hotfix
+	@scp -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+
+docker-hotfix-push: docker-hotfix
+	@docker push $(TAG)
+
+docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix tags
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) . -f Dockerfile.dev
+	@docker build -t $(TAG) --build-arg RELEASE=$(VERSION) . -f Dockerfile.hotfix
 
 docker: build checks ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) . -f Dockerfile.dev
+	@docker build -t $(TAG) . -f Dockerfile
 
 install: build ## builds minio and installs it to $GOPATH/bin.
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"

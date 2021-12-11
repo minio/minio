@@ -18,11 +18,13 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -311,24 +313,48 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 		t.Fatalf("unexpected error %v", err)
 	}
 
+	testData := []byte("foo")
 	testCases := []struct {
-		volumeName string
-		objectName string
-		data       []byte
-		expectErr  bool
+		volumeName      string
+		objectName      string
+		data            []byte
+		expectErr       bool
+		ignoreIfWindows bool
 	}{
-		{"foo", "myobject", []byte("foo"), false},
-		{"foo", "myobject", []byte{}, false},
+		{"foo", "myobject", testData, false, false},
+		{"foo", "myobject-0byte", []byte{}, false, false},
 		// volume not found error.
-		{"bar", "myobject", []byte{}, true},
+		{"bar", "myobject", testData, true, false},
+		// Test some weird characters over the wire.
+		{"foo", "newline\n", testData, false, true},
+		{"foo", "newline\t", testData, false, true},
+		{"foo", "newline \n", testData, false, true},
+		{"foo", "newline$$$\n", testData, false, true},
+		{"foo", "newline%%%\n", testData, false, true},
+		{"foo", "newline \t % $ & * ^ # @ \n", testData, false, true},
+		{"foo", "\n\tnewline \t % $ & * ^ # @ \n", testData, false, true},
 	}
 
 	for i, testCase := range testCases {
+		if testCase.ignoreIfWindows && runtime.GOOS == "windows" {
+			continue
+		}
 		err := storage.AppendFile(context.Background(), testCase.volumeName, testCase.objectName, testCase.data)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+		}
+
+		if !testCase.expectErr {
+			data, err := storage.ReadAll(context.Background(), testCase.volumeName, testCase.objectName)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !bytes.Equal(data, testCase.data) {
+				t.Fatalf("case %v: expected %v, got %v", i+1, testCase.data, data)
+			}
 		}
 	}
 }

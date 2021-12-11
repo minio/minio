@@ -97,7 +97,7 @@ var magicHeaders = []struct {
 	},
 }
 
-func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name string)) error {
+func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name string) error) error {
 	bf := bufio.NewReader(r)
 	switch f := detect(bf); f {
 	case formatGzip:
@@ -130,6 +130,7 @@ func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name 
 		return fmt.Errorf("Unsupported format %s", f)
 	}
 	tarReader := tar.NewReader(r)
+	n := 0
 	for {
 		header, err := tarReader.Next()
 
@@ -141,7 +142,11 @@ func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name 
 
 		// return any other error
 		case err != nil:
-			return err
+			extra := ""
+			if n > 0 {
+				extra = fmt.Sprintf(" after %d successful object(s)", n)
+			}
+			return fmt.Errorf("tar file error: %w%s", err, extra)
 
 		// if the header is nil, just skip it (not sure how this happens)
 		case header == nil:
@@ -155,9 +160,15 @@ func untar(r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name 
 
 		switch header.Typeflag {
 		case tar.TypeDir: // = directory
-			putObject(tarReader, header.FileInfo(), trimLeadingSlash(pathJoin(name, slashSeparator)))
+			if err := putObject(tarReader, header.FileInfo(), trimLeadingSlash(pathJoin(name, slashSeparator))); err != nil {
+				return err
+			}
+			n++
 		case tar.TypeReg, tar.TypeChar, tar.TypeBlock, tar.TypeFifo, tar.TypeGNUSparse: // = regular
-			putObject(tarReader, header.FileInfo(), trimLeadingSlash(path.Clean(name)))
+			if err := putObject(tarReader, header.FileInfo(), trimLeadingSlash(path.Clean(name))); err != nil {
+				return err
+			}
+			n++
 		default:
 			// ignore symlink'ed
 			continue

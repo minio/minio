@@ -1,10 +1,15 @@
 # MinIO Docker Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
+See our web documentation on [Deploying MinIO in Standalone Mode](Deploy Standalone MinIO in a Container) for a more structured tutorial on deploying MinIO in a container.
+
 ## Prerequisites
 Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
 
 ## Run Standalone MinIO on Docker.
-MinIO needs a persistent volume to store configuration and application data. However, for testing purposes, you can launch MinIO by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
+
+*Note*: Standalone MinIO is intended for early development and evaluation. For production clusters, deploy a [Distributed](https://docs.min.io/minio/baremetal/installation/deployment-and-management.html) MinIO deployment.
+
+MinIO needs a persistent volume to store configuration and application data. For testing purposes, you can launch MinIO by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
 
 ```sh
 docker run \
@@ -15,19 +20,23 @@ docker run \
   quay.io/minio/minio server /data --console-address ":9001"
 ```
 
-To create a MinIO container with persistent storage, you need to map local persistent directories from the host OS to virtual config `~/.minio` and export `/data` directories. To do this, run the below commands
+To create a MinIO container with persistent storage, you need to map local persistent directories from the host OS to virtual config. To do this, run the below commands
 
 #### GNU/Linux and macOS
 ```sh
+mkdir -p ~/minio/data
+
 docker run \
   -p 9000:9000 \
   -p 9001:9001 \
   --name minio1 \
-  -v /mnt/data:/data \
+  -v ~/minio/data:/data \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   quay.io/minio/minio server /data --console-address ":9001"
 ```
+
+The command creates a new local directory `~/minio/data` in your user home directory. It then starts the MinIO container with the `-v` argument to map the local path (`~/minio/data`) to the specified virtual container directory (`/data`). When MinIO writes data to `/data`, that data is actually written to the local path `~/minio/data` where it can persist between container restarts.
 
 #### Windows
 ```sh

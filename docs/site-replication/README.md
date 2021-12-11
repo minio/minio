@@ -1,47 +1,58 @@
-# Site Replication Guide #
-
+# Automatic Site Replication
 This feature allows multiple independent MinIO sites (or clusters) that are using the same external IDentity Provider (IDP) to be configured as replicas. In this situation the set of replica sites are referred to as peer sites or just sites. When site-replication is enabled on a set of sites, the following changes are replicated to all other sites:
 
-- creation and deletion of buckets and objects
-- creation and deletion of all IAM policies
-- creation of STS credentials and creation and deletion of service accounts (for users authenticated by the external IDP)
-- changes to bucket policies, bucket tags, bucket object-lock configurations (including retention and legal hold configuration) and bucket encryption configuration
+- Creation and deletion of buckets and objects
+- Creation and deletion of all IAM policies
+- Creation of STS credentials
+- Creation and deletion of service accounts (for users authenticated by an external IDP)
+- Changes to Bucket features such as:
+  - Bucket Policies
+  - Bucket Tags
+  - Bucket Object-Lock configurations (including retention and legal hold configuration)
+  - Bucket Encryption configuration
 
-The following bucket-scoped items are **not replicated**, and can differ between sites:
+> NOTE: Bucket versioning is automatically enabled for all new and existing buckets on all replicated sites.
 
-- bucket notification configuration
-- ILM configuration
+The following Bucket features will **not be replicated**, is designed to differ between sites:
 
-This feature is built on top of multi-site bucket replication feature. It enables bucket versioning automatically for all new and existing buckets in the replicated sites.
+- Bucket notification configuration
+- Bucket lifecycle (ILM) configuration
 
 ## Pre-requisites
 
-1. Initially, only **one** of the sites being added for replication may have data. After site-replication is successfully configured, this data is replicated to the other (initially empty) sites. Subsequently, objects may be written to any of the sites, and they will be replicated to all other sites.
-2. Only the **LDAP IDP** is currently supported.
-3. All sites **must** have the same root credentials.
-4.  **removing a site** is not allowed from a set of replicated sites once configured. 
-5. [SSE-S3 or SSE-KMS encryption via KMS](https://docs.min.io/docs/minio-kms-quickstart-guide.html "MinIO KMS Guide"), all sites **must**  have access to the same KMS keys. This can be achieved via a central KES server or multiple KES servers (say one per site) connected via a central KMS server.
+- Initially, only **one** of the sites added for replication may have data. After site-replication is successfully configured, this data is replicated to the other (initially empty) sites. Subsequently, objects may be written to any of the sites, and they will be replicated to all other sites.
+- Replication of **LDAP IDP** is currently supported, support for OIDC (OpenID) is in progress.
+- All sites **must** have the same deployment credentials, i.e (MINIO_ROOT_USER, MINIO_ROOT_PASSWORD).
+- **Removing a site** is not allowed from a set of replicated sites once configured.
+- [SSE-S3 or SSE-KMS encryption via KMS](https://docs.min.io/docs/minio-kms-quickstart-guide.html "MinIO KMS Guide"), all sites **must**  have access to a central KMS deployment. This can be achieved via a central KES server or multiple KES servers (say one per site) connected via a central KMS (Vault) server.
 
-## Configuring Site Replication ##
+## Configuring Site Replication
+To configure site replication, ensure that all MinIO sites are using the same external IDP.
 
-To configure site replication, ensure that all MinIO sites are using the same external IDP. 
+- Configure an alias in `mc` for each of the sites. For example if you have three MinIO sites, you may run:
 
-1. Configure an alias in `mc` for each of the sites. For example if you have three MinIO sites, you may run:
-
-```shell
-$ mc alias set minio1 https://minio1.example.com:9000 minio1 minio1123
-$ mc alias set minio2 https://minio2.example.com:9000 minio2 minio2123
-$ mc alias set minio3 https://minio3.example.com:9000 minio3 minio3123
+```sh
+$ mc alias set minio1 https://minio1.example.com:9000 adminuser adminpassword
+$ mc alias set minio2 https://minio2.example.com:9000 adminuser adminpassword
+$ mc alias set minio3 https://minio3.example.com:9000 adminuser adminpassword
 ```
 
-2. Add site replication configuration with:
+or
 
-```shell
+```sh
+$ export MC_HOST_minio1=https://adminuser:adminpassword@minio1.example.com
+$ export MC_HOST_minio2=https://adminuser:adminpassword@minio2.example.com
+$ export MC_HOST_minio3=https://adminuser:adminpassword@minio3.example.com
+```
+
+- Add site replication configuration with:
+
+```sh
 $ mc admin replicate add minio1 minio2 minio3
 ```
 
-3. Once the above command returns success, you may query site replication configuration with:
+- Once the above command returns success, you may query site replication configuration with:
 
-```shell
+```sh
 $ mc admin replicate info minio1
 ```

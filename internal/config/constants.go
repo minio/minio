@@ -39,7 +39,8 @@ const (
 	EnvSiteName   = "MINIO_SITE_NAME"
 	EnvSiteRegion = "MINIO_SITE_REGION"
 
-	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE"
+	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE" // Deprecated Dec 2021
+	EnvMinIOSubnetAPIKey       = "MINIO_SUBNET_API_KEY"
 	EnvMinIOServerURL          = "MINIO_SERVER_URL"
 	EnvMinIOBrowserRedirectURL = "MINIO_BROWSER_REDIRECT_URL"
 	EnvRootDiskThresholdSize   = "MINIO_ROOTDISK_THRESHOLD_SIZE"

@@ -1054,6 +1054,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
+		Versioned:   true,
 	}
 
 	merged, err := z.listPath(ctx, &opts)
@@ -1128,7 +1129,9 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
-		logger.LogIf(ctx, err)
+		if !isErrBucketNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
 		return loi, err
 	}
 
@@ -1748,6 +1751,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 						dirQuorum: 1,
 						objQuorum: 1,
 						bucket:    bucket,
+						strict:    false, // Allow less strict matching.
 					}
 
 					path := baseDirFromPrefix(prefix)

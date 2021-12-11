@@ -37,5 +37,4 @@ jobs:
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
-          go install -v github.com/minio/mc@latest
           make test-replication

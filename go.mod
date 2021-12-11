@@ -12,6 +12,7 @@ require (
 	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
 	github.com/bits-and-blooms/bloom/v3 v3.0.1
+	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/cheggaaa/pb v1.0.29
 	github.com/colinmarc/hdfs/v2 v2.2.0
@@ -40,17 +41,17 @@ require (
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
-	github.com/klauspost/reedsolomon v1.9.13
+	github.com/klauspost/reedsolomon v1.9.15
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.12.5
+	github.com/minio/console v0.12.8
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.16
-	github.com/minio/mc v0.0.0-20211118223026-df75eed32e9e // indirect
-	github.com/minio/minio-go/v7 v7.0.16
+	github.com/minio/madmin-go v1.1.17
+	github.com/minio/mc v0.0.0-20211207230606-23a05f5a17f2 // indirect
+	github.com/minio/minio-go/v7 v7.0.17
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.9
 	github.com/minio/selfupdate v0.3.1

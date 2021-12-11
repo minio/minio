@@ -419,6 +419,9 @@ func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 // Returns true if there still is a need to delete files (n+saveBytes >0),
 // false if no more bytes needs to be saved.
 func (f *fileScorer) adjustSaveBytes(n int64) bool {
+	if f == nil {
+		return false
+	}
 	if int64(f.saveBytes)+n <= 0 {
 		f.saveBytes = 0
 		f.trimQueue()
@@ -582,8 +585,8 @@ func cacheMultiWriter(w1 io.Writer, w2 *io.PipeWriter) io.Writer {
 	return &multiWriter{backendWriter: w1, cacheWriter: w2}
 }
 
-// skipETagVerification returns true if writeback commit is not complete
-func skipETagVerification(m map[string]string) bool {
+// writebackInProgress returns true if writeback commit is not complete
+func writebackInProgress(m map[string]string) bool {
 	if v, ok := m[writeBackStatusHeader]; ok {
 		switch cacheCommitStatus(v) {
 		case CommitPending, CommitFailed:

@@ -41,11 +41,13 @@ type adminErasureTestBed struct {
 	erasureDirs []string
 	objLayer    ObjectLayer
 	router      *mux.Router
+	done        context.CancelFunc
 }
 
 // prepareAdminErasureTestBed - helper function that setups a single-node
 // Erasure backend for admin-handler tests.
 func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, error) {
+	ctx, cancel := context.WithCancel(ctx)
 
 	// reset global variables to start afresh.
 	resetTestGlobals()
@@ -57,11 +59,13 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, erasureDirs, xlErr := initTestErasureObjLayer(ctx)
 	if xlErr != nil {
+		cancel()
 		return nil, xlErr
 	}
 
 	// Initialize minio server config.
 	if err := newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		cancel()
 		return nil, err
 	}
 
@@ -84,12 +88,14 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 		erasureDirs: erasureDirs,
 		objLayer:    objLayer,
 		router:      adminRouter,
+		done:        cancel,
 	}, nil
 }
 
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminErasureTestBed) TearDown() {
+	atb.done()
 	removeRoots(atb.erasureDirs)
 	resetTestGlobals()
 }

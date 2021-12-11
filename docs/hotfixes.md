@@ -109,12 +109,12 @@ To add a hotfix tag to the binary version and embed the relevant
 
 #### Builds the hotfix binary
 ```
-λ make hotfix
+λ CRED_DIR=/media/builder/minio make hotfix
 ```
 
 #### Builds the hotfix container
 ```
-λ make docker-hotfix
+λ CRED_DIR=/media/builder/minio make docker-hotfix
 ```
 
-Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to https://dl.minio.io/server/minio/hotfixes/
+Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to https://dl.minio.io/server/minio/hotfixes/archive/

@@ -157,9 +157,9 @@ helm install --set tls.enabled=true,tls.certSecret=tls-ssl-minio minio/minio
 
 ### Installing certificates from third party CAs
 
-MinIO can connect to other servers, including MinIO nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to MinIO Server by bundling these certificates into a Kubernetes secret and providing it to Helm via the `trustedCertsSecret` value. If `.Values.tls.enabled` is `true` and you're installing certificates for third party CAs, remember to include Minio's own certificate with key `public.crt`, if it also needs to be trusted.
+MinIO can connect to other servers, including MinIO nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to MinIO Server by bundling these certificates into a Kubernetes secret and providing it to Helm via the `trustedCertsSecret` value. If `.Values.tls.enabled` is `true` and you're installing certificates for third party CAs, remember to include MinIO's own certificate with key `public.crt`, if it also needs to be trusted.
 
-For instance, given that TLS is enabled and you need to add trust for Minio's own CA and for the CA of a Keycloak server, a Kubernetes secret can be created from the certificate files using `kubectl`:
+For instance, given that TLS is enabled and you need to add trust for MinIO's own CA and for the CA of a Keycloak server, a Kubernetes secret can be created from the certificate files using `kubectl`:
 
 ```
 kubectl -n minio create secret generic minio-trusted-certs --from-file=public.crt --from-file=keycloak.crt

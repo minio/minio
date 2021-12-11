@@ -193,6 +193,9 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.License != "" {
 		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetConfig.License)
 	}
+	if globalSubnetConfig.APIKey != "" {
+		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
+	}
 }
 
 func initConsoleServer() (*restapi.Server, error) {

@@ -831,6 +831,36 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
 }
 
+func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) madmin.Credentials {
+	randUser := mustGetUUID()
+	randPass := mustGetUUID()
+	err := admClnt.AddUser(ctx, randUser, randPass)
+	if err != nil {
+		c.Fatalf("should be able to create a user: %v", err)
+	}
+	return madmin.Credentials{
+		AccessKey: randUser,
+		SecretKey: randPass,
+	}
+}
+
+func (c *check) mustGetIAMUserInfo(ctx context.Context, admClnt *madmin.AdminClient, accessKey string) madmin.UserInfo {
+	ui, err := admClnt.GetUserInfo(ctx, accessKey)
+	if err != nil {
+		c.Fatalf("should be able to get user info: %v", err)
+	}
+	return ui
+}
+
+func (c *check) mustNotCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) {
+	randUser := mustGetUUID()
+	randPass := mustGetUUID()
+	err := admClnt.AddUser(ctx, randUser, randPass)
+	if err == nil {
+		c.Fatalf("should not be able to create a user")
+	}
+}
+
 func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) madmin.Credentials {
 	cr, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: tgtUser,

@@ -21,10 +21,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"io"
 	"os"
 	"path"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -147,10 +148,6 @@ func TestHealing(t *testing.T) {
 }
 
 func TestHealingDanglingObject(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -180,6 +177,9 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
+	disks = objLayer.(*erasureServerPools).serverPools[0].erasureDisks[0]
+	orgDisks := append([]StorageAPI{}, disks...)
+
 	// Enable versioning.
 	globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
 
@@ -190,11 +190,13 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
+	setDisks := func(newDisks ...StorageAPI) {
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Lock()
+		copy(disks, newDisks)
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Unlock()
 	}
+	// Remove 4 disks.
+	setDisks(nil, nil, nil, nil)
 
 	// Create delete marker under quorum.
 	objInfo, err := objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{Versioned: true})
@@ -202,11 +204,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// Restore...
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err := disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
@@ -243,11 +242,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		}
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
-	}
+	setDisks(nil, nil, nil, nil)
 
 	rd := mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", "")
 	_, err = objLayer.PutObject(ctx, bucket, object, rd, ObjectOptions{
@@ -257,11 +252,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
@@ -297,11 +288,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0400); err != nil {
-			t.Fatal(err)
-		}
-	}
+	setDisks(nil, nil, nil, nil)
 
 	// Create delete marker under quorum.
 	_, err = objLayer.DeleteObject(ctx, bucket, object, ObjectOptions{
@@ -312,11 +299,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, fsDir := range fsDirs[:4] {
-		if err = os.Chmod(fsDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	setDisks(orgDisks[:4]...)
 
 	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
@@ -666,5 +649,128 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 		if h.State != madmin.DriveStateOk {
 			t.Fatalf("Unexpected drive state (%d): %v", i+1, h.State)
 		}
+	}
+}
+
+func TestHealLastDataShard(t *testing.T) {
+	tests := []struct {
+		name     string
+		dataSize int64
+	}{
+		{"4KiB", 4 * humanize.KiByte},
+		{"64KiB", 64 * humanize.KiByte},
+		{"128KiB", 128 * humanize.KiByte},
+		{"1MiB", 1 * humanize.MiByte},
+		{"5MiB", 5 * humanize.MiByte},
+		{"10MiB", 10 * humanize.MiByte},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			nDisks := 16
+			fsDirs, err := getRandomDisks(nDisks)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			defer removeRoots(fsDirs)
+
+			obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bucket := "bucket"
+			object := "object"
+
+			data := make([]byte, test.dataSize)
+			_, err = rand.Read(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var opts ObjectOptions
+
+			err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+			if err != nil {
+				t.Fatalf("Failed to make a bucket - %v", err)
+			}
+
+			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			actualH := sha256.New()
+			_, err = io.Copy(actualH, bytes.NewReader(data))
+			if err != nil {
+				return
+			}
+			actualSha256 := actualH.Sum(nil)
+
+			z := obj.(*erasureServerPools)
+			er := z.serverPools[0].getHashedSet(object)
+
+			disks := er.getDisks()
+			distribution := hashOrder(pathJoin(bucket, object), nDisks)
+			shuffledDisks := shuffleDisks(disks, distribution)
+
+			// remove last data shard
+			err = removeAll(pathJoin(shuffledDisks[11].String(), bucket, object))
+			if err != nil {
+				t.Fatalf("Failed to delete a file - %v", err)
+			}
+			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			defer firstGr.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			firstHealedH := sha256.New()
+			_, err = io.Copy(firstHealedH, firstGr)
+			if err != nil {
+				t.Fatal()
+			}
+			firstHealedDataSha256 := firstHealedH.Sum(nil)
+
+			if !bytes.Equal(actualSha256, firstHealedDataSha256) {
+				t.Fatal("object healed wrong")
+			}
+
+			// remove another data shard
+			err = removeAll(pathJoin(shuffledDisks[1].String(), bucket, object))
+			if err != nil {
+				t.Fatalf("Failed to delete a file - %v", err)
+			}
+
+			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			defer secondGr.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			secondHealedH := sha256.New()
+			_, err = io.Copy(secondHealedH, secondGr)
+			if err != nil {
+				t.Fatal()
+			}
+			secondHealedDataSha256 := secondHealedH.Sum(nil)
+
+			if !bytes.Equal(actualSha256, secondHealedDataSha256) {
+				t.Fatal("object healed wrong")
+			}
+		})
 	}
 }

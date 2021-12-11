@@ -282,3 +282,51 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 
 	return bytesWritten, derr
 }
+
+// Heal reads from readers, reconstruct shards and writes the data to the writers.
+func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.ReaderAt, totalLength int64) (derr error) {
+	if len(writers) != e.parityBlocks+e.dataBlocks {
+		return errInvalidArgument
+	}
+
+	reader := newParallelReader(readers, e, 0, totalLength)
+
+	startBlock := int64(0)
+	endBlock := totalLength / e.blockSize
+	if totalLength%e.blockSize != 0 {
+		endBlock++
+	}
+
+	var bufs [][]byte
+	for block := startBlock; block < endBlock; block++ {
+		var err error
+		bufs, err = reader.Read(bufs)
+		if len(bufs) > 0 {
+			if errors.Is(err, errFileNotFound) || errors.Is(err, errFileCorrupt) {
+				if derr == nil {
+					derr = err
+				}
+			}
+		} else if err != nil {
+			return err
+		}
+
+		if err = e.DecodeDataAndParityBlocks(ctx, bufs); err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
+
+		w := parallelWriter{
+			writers:     writers,
+			writeQuorum: 1,
+			errs:        make([]error, len(writers)),
+		}
+
+		err = w.Write(ctx, bufs)
+		if err != nil {
+			return err
+		}
+	}
+
+	return derr
+}

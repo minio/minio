@@ -271,10 +271,23 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	filePath := pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile)
 	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
+		switch {
+		case isSysErrInvalidArg(err):
+			return p, errUnsupportedDisk
+		case osIsPermission(err):
+			return p, errDiskAccessDenied
+		case isSysErrIO(err):
+			return p, errFaultyDisk
+		case isSysErrNotDir(err):
+			return p, errDiskNotDir
+		}
 		return p, err
 	}
 	if _, err = w.Write(alignedBuf); err != nil {
 		w.Close()
+		if isSysErrInvalidArg(err) {
+			return p, errUnsupportedDisk
+		}
 		return p, err
 	}
 	w.Close()
@@ -666,10 +679,8 @@ func (s *xlStorage) SetDiskID(id string) {
 
 func (s *xlStorage) MakeVolBulk(ctx context.Context, volumes ...string) error {
 	for _, volume := range volumes {
-		if err := s.MakeVol(ctx, volume); err != nil {
-			if errors.Is(err, errDiskAccessDenied) {
-				return errDiskAccessDenied
-			}
+		if err := s.MakeVol(ctx, volume); err != nil && !errors.Is(err, errVolumeExists) {
+			return err
 		}
 	}
 	return nil
@@ -2058,6 +2069,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				logger.LogIf(ctx, err)
 				// Data appears corrupt. Drop data.
 			} else {
+				xlMetaLegacy.DataDir = legacyDataDir
 				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
 					logger.LogIf(ctx, err)
 				}

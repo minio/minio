@@ -969,6 +969,10 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 		concurrent = 32
 	}
 
+	if runtime.GOMAXPROCS(0) < concurrent {
+		concurrent = runtime.GOMAXPROCS(0)
+	}
+
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		duration = time.Second * 10
@@ -981,6 +985,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 			NoRecreate: true,
 		})
 	}
+	defer deleteBucket()
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
@@ -1005,7 +1010,6 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 			w.(http.Flusher).Flush()
 		case result, ok := <-ch:
 			if !ok {
-				deleteBucket()
 				return
 			}
 			if err := enc.Encode(result); err != nil {

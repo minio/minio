@@ -24,9 +24,6 @@ import (
 	"io"
 	"os"
 	"testing"
-
-	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/internal/bpool"
 )
 
 var erasureHealTests = []struct {
@@ -137,15 +134,8 @@ func TestErasureHeal(t *testing.T) {
 			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 
-		// Number of buffers, max 2GB
-		n := (2 * humanize.GiByte) / (int(test.blocksize) * 2)
-
-		// Initialize byte pool once for all sets, bpool size is set to
-		// setCount * setDriveCount with each memory upto blockSizeV2.
-		bp := bpool.NewBytePoolCap(n, int(test.blocksize), int(test.blocksize)*2)
-
 		// test case setup is complete - now call Heal()
-		err = erasure.Heal(context.Background(), readers, staleWriters, test.size, bp)
+		err = erasure.Heal(context.Background(), staleWriters, readers, test.size)
 		closeBitrotReaders(readers)
 		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {

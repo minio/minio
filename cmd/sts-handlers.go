@@ -394,8 +394,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	roleArn := r.Form.Get(stsRoleArn)
-	if roleArn != "" {
+	if globalIAMSys.HasRolePolicy() {
+		roleArn := r.Form.Get(stsRoleArn)
 		_, err := globalIAMSys.GetRolePolicy(roleArn)
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
@@ -406,10 +406,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		// associated policy when credentials are used.
 		m[roleArnClaim] = roleArn
 	} else {
-		// JWT has requested a custom claim with policy value set.
-		// This is a MinIO STS API specific value, this value should
-		// be set and configured on your identity provider as part of
-		// JWT custom claims.
+		// If no role policy is configured, then we use claims from the
+		// JWT. This is a MinIO STS API specific value, this value
+		// should be set and configured on your identity provider as
+		// part of JWT custom claims.
 		policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
 		policies := strings.Join(policySet.ToSlice(), ",")
 		if ok {

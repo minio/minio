@@ -1,7 +1,7 @@
 apiVersion: v1
 description: Multi-Cloud Object Storage
 name: minio
-version: 3.3.0
+version: 3.3.1
 appVersion: RELEASE.2021-11-24T23-19-33Z
 keywords:
   - minio
