@@ -43,12 +43,12 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ $fullName }}
+                name: {{ $fullName }}-console
                 port: 
                   number: {{ $servicePort }}
           {{- else }}
             backend:
-              serviceName: {{ $fullName }}
+              serviceName: {{ $fullName }}-console
               servicePort: {{ $servicePort }}
           {{- end }}
       {{- if . }}
