@@ -9,7 +9,7 @@ MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple 
 Please ensure to replace `/shared/nasvol` with actual mount path.
 
 ```
-podman run \
+docker run \
  -p 9000:9000 \
  -p 9001:9001 \
  --name nas-s3 \
