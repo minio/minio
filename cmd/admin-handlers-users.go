@@ -1198,6 +1198,16 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 }
 
 // InfoCannedPolicy - GET /minio/admin/v3/info-canned-policy?name={policyName}
+//
+// Newer API response with policy timestamps is returned with query parameter
+// `v=2` like:
+//
+// GET /minio/admin/v3/info-canned-policy?name={policyName}&v=2
+//
+// The newer API will eventually become the default (and only) one. The older
+// response is to return only the policy JSON. The newer response returns
+// timestamps along with the policy JSON. Both versions are supported for now,
+// for smooth transition to new API.
 func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "InfoCannedPolicy")
 
@@ -1208,13 +1218,36 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	name := mux.Vars(r)["name"]
+	policies := newMappedPolicy(name).toSlice()
+	if len(policies) != 1 {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTooManyPolicies), r.URL)
+		return
+	}
+
+	policyDoc, err := globalIAMSys.InfoPolicy(name)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	buf, err := json.MarshalIndent(policy, "", " ")
+	// Is the new API version being requested?
+	infoPolicyAPIVersion := r.Form.Get("v")
+	if infoPolicyAPIVersion == "2" {
+		buf, err := json.MarshalIndent(policyDoc, "", " ")
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		w.Write(buf)
+		return
+	} else if infoPolicyAPIVersion != "" {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("invalid version parameter 'v' supplied")), r.URL)
+		return
+	}
+
+	// Return the older API response value of just the policy json.
+	buf, err := json.MarshalIndent(policyDoc.Policy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

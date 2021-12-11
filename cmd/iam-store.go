@@ -24,8 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
@@ -169,6 +171,64 @@ func newMappedPolicy(policy string) MappedPolicy {
 	return MappedPolicy{Version: 1, Policies: policy}
 }
 
+// PolicyDoc represents an IAM policy with some metadata.
+type PolicyDoc struct {
+	Version    int `json:",omitempty"`
+	Policy     iampolicy.Policy
+	CreateDate time.Time `json:",omitempty"`
+	UpdateDate time.Time `json:",omitempty"`
+}
+
+func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
+	now := UTCNow().Round(time.Millisecond)
+	return PolicyDoc{
+		Version:    1,
+		Policy:     p,
+		CreateDate: now,
+		UpdateDate: now,
+	}
+}
+
+// defaultPolicyDoc - used to wrap a default policy as PolicyDoc.
+func defaultPolicyDoc(p iampolicy.Policy) PolicyDoc {
+	return PolicyDoc{
+		Version: 1,
+		Policy:  p,
+	}
+}
+
+func (d *PolicyDoc) update(p iampolicy.Policy) {
+	now := UTCNow().Round(time.Millisecond)
+	d.UpdateDate = now
+	if d.CreateDate.IsZero() {
+		d.CreateDate = now
+	}
+	d.Policy = p
+}
+
+// parseJSON parses both the old and the new format for storing policy
+// definitions.
+//
+// The on-disk format of policy definitions has changed (around early 12/2021)
+// from iampolicy.Policy to PolicyDoc. To avoid a migration, loading supports
+// both the old and the new formats.
+func (d *PolicyDoc) parseJSON(data []byte) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var doc PolicyDoc
+	err := json.Unmarshal(data, &doc)
+	if err != nil {
+		err2 := json.Unmarshal(data, &doc.Policy)
+		if err2 != nil {
+			// Just return the first error.
+			return err
+		}
+		d.Policy = doc.Policy
+		return nil
+	}
+	*d = doc
+	return nil
+}
+
 // key options
 type options struct {
 	ttl int64 // expiry in seconds
@@ -182,7 +242,7 @@ type iamWatchEvent struct {
 // iamCache contains in-memory cache of IAM data.
 type iamCache struct {
 	// map of policy names to policy definitions
-	iamPolicyDocsMap map[string]iampolicy.Policy
+	iamPolicyDocsMap map[string]PolicyDoc
 	// map of usernames to credentials
 	iamUsersMap map[string]auth.Credentials
 	// map of group names to group info
@@ -197,7 +257,7 @@ type iamCache struct {
 
 func newIamCache() *iamCache {
 	return &iamCache{
-		iamPolicyDocsMap:        map[string]iampolicy.Policy{},
+		iamPolicyDocsMap:        map[string]PolicyDoc{},
 		iamUsersMap:             map[string]auth.Credentials{},
 		iamGroupsMap:            map[string]GroupInfo{},
 		iamUserGroupMemberships: map[string]set.StringSet{},
@@ -332,8 +392,8 @@ type IAMStorageAPI interface {
 
 	getUsersSysType() UsersSysType
 
-	loadPolicyDoc(ctx context.Context, policy string, m map[string]iampolicy.Policy) error
-	loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error
+	loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error
+	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error
 
 	loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error
 	loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error
@@ -348,7 +408,7 @@ type IAMStorageAPI interface {
 	loadIAMConfig(ctx context.Context, item interface{}, path string) error
 	deleteIAMConfig(ctx context.Context, path string) error
 
-	savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error
+	savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error
 	saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error
 	saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity, opts ...options) error
 	saveGroupInfo(ctx context.Context, group string, gi GroupInfo) error
@@ -366,10 +426,10 @@ type iamStorageWatcher interface {
 }
 
 // Set default canned policies only if not already overridden by users.
-func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
+func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 	for _, v := range iampolicy.DefaultPolicies {
 		if _, ok := policies[v.Name]; !ok {
-			policies[v.Name] = v.Definition
+			policies[v.Name] = defaultPolicyDoc(v.Definition)
 		}
 	}
 }
@@ -947,11 +1007,29 @@ func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
 		}
 		v, ok := cache.iamPolicyDocsMap[policy]
 		if !ok {
-			return v, errNoSuchPolicy
+			return v.Policy, errNoSuchPolicy
 		}
-		combinedPolicy = combinedPolicy.Merge(v)
+		combinedPolicy = combinedPolicy.Merge(v.Policy)
 	}
 	return combinedPolicy, nil
+}
+
+// GetPolicyDoc - gets the policy doc which has the policy and some metadata.
+// Exactly one policy must be specified here.
+func (store *IAMStoreSys) GetPolicyDoc(name string) (r PolicyDoc, err error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return r, errInvalidArgument
+	}
+
+	cache := store.rlock()
+	defer store.runlock()
+
+	v, ok := cache.iamPolicyDocsMap[name]
+	if !ok {
+		return r, errNoSuchPolicy
+	}
+	return v, nil
 }
 
 // SetPolicy - creates a policy with name.
@@ -964,11 +1042,21 @@ func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iam
 	cache := store.lock()
 	defer store.unlock()
 
-	if err := store.savePolicyDoc(ctx, name, policy); err != nil {
+	var (
+		d  PolicyDoc
+		ok bool
+	)
+	if d, ok = cache.iamPolicyDocsMap[name]; ok {
+		d.update(policy)
+	} else {
+		d = newPolicyDoc(policy)
+	}
+
+	if err := store.savePolicyDoc(ctx, name, d); err != nil {
 		return err
 	}
 
-	cache.iamPolicyDocsMap[name] = policy
+	cache.iamPolicyDocsMap[name] = d
 	return nil
 
 }
@@ -979,7 +1067,7 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 	cache := store.lock()
 	defer store.unlock()
 
-	m := map[string]iampolicy.Policy{}
+	m := map[string]PolicyDoc{}
 	err := store.loadPolicyDocs(ctx, m)
 	if err != nil {
 		return nil, err
@@ -992,8 +1080,8 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 
 	ret := map[string]iampolicy.Policy{}
 	for k, v := range m {
-		if bucketName == "" || v.MatchResource(bucketName) {
-			ret[k] = v
+		if bucketName == "" || v.Policy.MatchResource(bucketName) {
+			ret[k] = v.Policy
 		}
 	}
 
@@ -1011,9 +1099,9 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 		}
 		p, found := cache.iamPolicyDocsMap[policy]
 		if found {
-			if bucketName == "" || p.MatchResource(bucketName) {
+			if bucketName == "" || p.Policy.MatchResource(bucketName) {
 				policies = append(policies, policy)
-				combinedPolicy = combinedPolicy.Merge(p)
+				combinedPolicy = combinedPolicy.Merge(p.Policy)
 			}
 		}
 	}

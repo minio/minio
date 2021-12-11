@@ -29,26 +29,31 @@ import (
 
 var errConfigNotFound = errors.New("config file not found")
 
-func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
+func readConfigWithMetadata(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, ObjectInfo, error) {
 	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
-			return nil, errConfigNotFound
+			return nil, ObjectInfo{}, errConfigNotFound
 		}
 
-		return nil, err
+		return nil, ObjectInfo{}, err
 	}
 	defer r.Close()
 
 	buf, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil, err
+		return nil, ObjectInfo{}, err
 	}
 	if len(buf) == 0 {
-		return nil, errConfigNotFound
+		return nil, ObjectInfo{}, errConfigNotFound
 	}
-	return buf, nil
+	return buf, r.ObjInfo, nil
+}
+
+func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
+	buf, _, err := readConfigWithMetadata(ctx, objAPI, configFile)
+	return buf, err
 }
 
 type objectDeleter interface {
