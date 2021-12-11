@@ -663,6 +663,8 @@ func TestHealLastDataShard(t *testing.T) {
 		{"1MiB", 1 * humanize.MiByte},
 		{"5MiB", 5 * humanize.MiByte},
 		{"10MiB", 10 * humanize.MiByte},
+		{"5MiB-1KiB", 5*humanize.MiByte - 1*humanize.KiByte},
+		{"10MiB-1Kib", 10*humanize.MiByte - 1*humanize.KiByte},
 	}
 
 	for _, test := range tests {
