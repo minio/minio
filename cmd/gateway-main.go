@@ -335,11 +335,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// - compression
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
-	// Prints the formatted startup message once object layer is initialized.
-	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
-		// Check update mode.
-		checkUpdate(globalMinioModeGatewayPrefix + gatewayName)
-	}
+	// Check for updates in non-blocking manner.
+	go func() {
+		if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+			// Check for new updates from dl.min.io.
+			checkUpdate(getMinioMode())
+		}
+	}()
 
 	if !globalCLIContext.Quiet {
 		// Print gateway startup message.
