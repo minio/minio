@@ -48,9 +48,8 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.16
-	github.com/minio/mc v0.0.0-20211118223026-df75eed32e9e // indirect
-	github.com/minio/minio-go/v7 v7.0.16
+	github.com/minio/madmin-go v1.1.17
+	github.com/minio/minio-go/v7 v7.0.17
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.9
 	github.com/minio/selfupdate v0.3.1
@@ -102,4 +101,5 @@ require (
 replace (
 	github.com/0chain/gosdk v1.3.4 => ../gosdk
 	github.com/gomodule/redigo v2.0.0+incompatible => github.com/gomodule/redigo v1.8.5
+	github.com/minio/console v0.12.5 => ../console
 )
