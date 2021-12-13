@@ -460,10 +460,13 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
-		// Check for new updates from dl.min.io.
-		checkUpdate(getMinioMode())
-	}
+	// Check for updates in non-blocking manner.
+	go func() {
+		if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+			// Check for new updates from dl.min.io.
+			checkUpdate(getMinioMode())
+		}
+	}()
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
 		globalActiveCred = auth.DefaultCredentials
