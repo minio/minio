@@ -277,7 +277,13 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 		c.Fatalf("Expected to fail to create STS cred with no associated policy!")
 	}
 
+	// Attempting to set a non-existent policy should fail.
 	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+	err = s.adm.SetPolicy(ctx, policy+"x", userDN, false)
+	if err == nil {
+		c.Fatalf("should not be able to set non-existent policy")
+	}
+
 	err = s.adm.SetPolicy(ctx, policy, userDN, false)
 	if err != nil {
 		c.Fatalf("Unable to set policy: %v", err)
