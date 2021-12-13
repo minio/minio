@@ -4,7 +4,8 @@ Keycloak is an open source Identity and Access Management solution aimed at mode
 
 ## Prerequisites
 
-Configure and install keycloak server by following [Keycloak Installation Guide](https://www.keycloak.org/docs/latest/getting_started/index.html) (finish upto section 3.4)
+Configure and install keycloak server by following [Keycloak Installation Guide](https://www.keycloak.org/docs/latest/server_installation/#installing-the-software).
+For a quick installation, docker-compose reference configs are also available on the [Keycloak GitHub](https://github.com/keycloak/keycloak-containers/tree/main/docker-compose-examples). 
 
 ### Configure Keycloak Realm
 - Go to Clients
