@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	zerror "github.com/0chain/errors"
 	"github.com/0chain/gosdk/zboxcore/sdk"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
@@ -24,7 +23,7 @@ const (
 )
 
 var configDir string
-var allocationId string
+var allocationID string
 
 var zFlags = []cli.Flag{
 	cli.StringFlag{
@@ -35,7 +34,7 @@ var zFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:        "allocationId",
 		Usage:       "Allocation id of an allocation",
-		Destination: &allocationId,
+		Destination: &allocationID,
 	},
 }
 
@@ -97,12 +96,12 @@ func (z *ZCN) Name() string {
 }
 
 func (z *ZCN) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
-	err := initializeSDK(configDir, allocationId)
+	err := initializeSDK(configDir, allocationID)
 	if err != nil {
 		return nil, err
 	}
 
-	allocation, err := sdk.GetAllocation(allocationId)
+	allocation, err := sdk.GetAllocation(allocationID)
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +222,9 @@ func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
+		if isPathNoExistError(err) {
+			return bi, minio.BucketNotFound{Bucket: bucket}
+		}
 		return
 	}
 
@@ -242,6 +244,9 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
+		if isPathNoExistError(err) {
+			return objInfo, minio.ObjectNotFound{Bucket: bucket, Object: object}
+		}
 		return
 	}
 
@@ -267,6 +272,9 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	ref, err := getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
+		if isPathNoExistError(err) {
+			return nil, minio.ObjectNotFound{Bucket: bucket, Object: object}
+		}
 		return nil, err
 	}
 
@@ -368,11 +376,8 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
-		switch err := err.(type) {
-		case *zerror.Error:
-			if err.Code == PathDoesNotExist {
-				return result, nil
-			}
+		if isPathNoExistError(err) {
+			return result, nil
 		}
 		return
 	}
@@ -451,8 +456,6 @@ func (zob *zcnObjects) MakeBucketWithLocation(ctx context.Context, bucket string
 }
 
 func (zob *zcnObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	fmt.Println("Put object is called with bucket and object; ", bucket, object)
-	fmt.Printf("%+v\n", opts)
 	var remotePath string
 	if bucket == RootBucketName {
 		remotePath = filepath.Join(RootPath, object)
@@ -464,13 +467,7 @@ func (zob *zcnObjects) PutObject(ctx context.Context, bucket, object string, r *
 	var isUpdate bool
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
-		fmt.Println("error occurred: ", err)
-		switch zerr := err.(type) {
-		case *zerror.Error:
-			if zerr.Code != PathDoesNotExist {
-				return
-			}
-		default:
+		if !isPathNoExistError(err) {
 			return
 		}
 	}
@@ -535,4 +532,50 @@ func (zob *zcnObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _
 	si.Backend.Type = madmin.Gateway
 	si.Backend.GatewayOnline = true
 	return
+}
+
+func (zob *zcnObjects) ShareFile(ctx context.Context, bucket, object, clientID, pubEncryp string, expires, availableAfter time.Duration) (string, error) {
+	var remotePath string
+	if bucket == "" || (bucket == RootBucketName && object == "") {
+		//share entire allocation i.e. rootpath
+	} else if bucket == RootBucketName {
+		remotePath = filepath.Join(RootPath, object)
+	} else {
+		remotePath = filepath.Join(RootPath, bucket, object)
+	}
+
+	var ref *sdk.ORef
+	ref, err := getSingleRegularRef(zob.alloc, remotePath)
+	if err != nil {
+		return "", err
+	}
+
+	_, fileName := filepath.Split(remotePath)
+
+	authTicket, err := zob.alloc.GetAuthTicket(remotePath, fileName, ref.Type, clientID, pubEncryp, int64(expires.Seconds()), int64(availableAfter.Seconds()))
+	if err != nil {
+		return "", err
+	}
+
+	_ = authTicket
+	//get public url from 0NFT
+	return "", nil
+}
+
+func (zob *zcnObjects) RevokeShareCredential(ctx context.Context, bucket, object, clientID string) (err error) {
+	var remotePath string
+	if bucket == "" || (bucket == RootBucketName && object == "") {
+		//share entire allocation i.e. rootpath
+	} else if bucket == RootBucketName {
+		remotePath = filepath.Join(RootPath, object)
+	} else {
+		remotePath = filepath.Join(RootPath, bucket, object)
+	}
+
+	_, err = getSingleRegularRef(zob.alloc, remotePath)
+	if err != nil {
+		return
+	}
+
+	return zob.alloc.RevokeShare(remotePath, clientID)
 }

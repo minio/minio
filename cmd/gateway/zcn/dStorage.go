@@ -253,3 +253,18 @@ func getCommonPrefix(remotePath string) (commonPrefix string) {
 	*/
 	return strings.Join(pSlice[2:], "/")
 }
+
+func isPathNoExistError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch err := err.(type) {
+	case *zerror.Error:
+		if err.Code == PathDoesNotExist {
+			return true
+		}
+	}
+
+	return false
+}

@@ -314,6 +314,10 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("restoreobject", maxClients(gz(httpTraceAll(api.PostRestoreObjectHandler))))).Queries("restore", "")
 
+		//ShareObjectOrPrefix
+		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+			collectAPIStats("sharefile", maxClients(httpTraceAll(api.ShareFileHandler)))).
+			Queries("share", "true", "clientID", "", "pubEncryp", "", "expires", "{expires:[0-9]+}", "availableAfter", "{availableAfter:[0-9]+}")
 		// Bucket operations
 
 		// GetBucketLocation

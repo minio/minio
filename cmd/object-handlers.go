@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -4218,4 +4219,65 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			Host:       handlers.GetSourceIP(r),
 		})
 	}()
+}
+
+func (api objectAPIHandlers) ShareFileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ShareFile")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	clientID := vars["clientid"]
+	publicEncrypKey := vars["pubEncryp"]
+	availableAfterStr := vars["availableAfter"]
+
+	var expiryTime, availableAfter int64
+	expiryTime, err = strconv.ParseInt(vars["expires"], 10, 64)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, fmt.Errorf("invalid expiry time value: %v", expiryTime)), r.URL)
+		return
+	}
+
+	if availableAfterStr != "" {
+		availableAfter, err = strconv.ParseInt(vars["availableAfter"], 10, 64)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, fmt.Errorf("invalid available after time value: %v", expiryTime)), r.URL)
+			return
+		}
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	expiryDuration := time.Duration(expiryTime) * time.Second
+	availableAfterDuration := time.Duration(availableAfter) * time.Second
+	shareFile := objectAPI.ShareFile
+
+	shareUrl, err := shareFile(ctx, bucket, object, clientID, publicEncrypKey, expiryDuration, availableAfterDuration)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	shareMap := make(map[string]string)
+	shareMap["url"] = shareUrl
+
+	b, _ := json.Marshal(shareMap)
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
