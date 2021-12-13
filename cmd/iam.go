@@ -1191,7 +1191,7 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup
 
 	err := sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Notify all other MinIO peers to reload policy
