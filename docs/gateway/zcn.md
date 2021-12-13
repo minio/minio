@@ -1,5 +1,5 @@
 # MinIO ZCN Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-MinIO ZCN gateway adds Amazon S3 API support to 0chain dStorage filesystem. Applications can use both the S3 and file APIs concurrently without requiring any data migration. Since the gateway is stateless and shared-nothing, you may elastically provision as many MinIO instances as needed to distribute the load.
+MinIO ZCN gateway adds Amazon S3 API support to 0chain dStorage filesystem.
 
 ## Run MinIO Gateway for HDFS Storage
 As a prerequisite to run MinIO ZCN gateway, you need a 0chain credentials; wallet.json, config.yaml and allocation.txt.
