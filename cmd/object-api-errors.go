@@ -668,6 +668,12 @@ func isErrVersionNotFound(err error) bool {
 	return errors.As(err, &versionNotFound)
 }
 
+// isErrMethodNotAllowed - Check if error type is MethodNotAllowed.
+func isErrMethodNotAllowed(err error) bool {
+	var methodNotAllowed MethodNotAllowed
+	return errors.As(err, &methodNotAllowed)
+}
+
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 
