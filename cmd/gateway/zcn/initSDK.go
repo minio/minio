@@ -15,7 +15,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-func initializeSDK(configDir, allocationID string) error {
+func initializeSDK(configDir, allocid string) error {
 	if configDir == "" {
 		var err error
 		configDir, err = getDefaultConfigDir()
@@ -28,18 +28,18 @@ func initializeSDK(configDir, allocationID string) error {
 		return err
 	}
 
-	if allocationID == "" {
+	if allocid == "" {
 		allocFile := filepath.Join(configDir, "allocation.txt")
 		allocBytes, err := ioutil.ReadFile(allocFile)
 		if err != nil {
 			return err
 		}
 
-		allocationId = strings.ReplaceAll(string(allocBytes), " ", "")
-		allocationId = strings.ReplaceAll(allocationId, "\n", "")
+		allocationID = strings.ReplaceAll(string(allocBytes), " ", "")
+		allocationID = strings.ReplaceAll(allocationID, "\n", "")
 
-		if len(allocationId) != 64 {
-			return fmt.Errorf("allocation id has length %q, should be 64", len(allocationId))
+		if len(allocationID) != 64 {
+			return fmt.Errorf("allocation id has length %q, should be 64", len(allocationID))
 		}
 	}
 
