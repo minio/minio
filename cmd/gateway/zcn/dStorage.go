@@ -33,6 +33,8 @@ const (
 
 	//Error codes
 	PathDoesNotExist = "path_no_exist"
+	ConsensusFailed  = "consensus_failed"
+	RetryWaitTime    = 500 * time.Millisecond // milliseconds
 )
 
 func init() {
@@ -137,7 +139,16 @@ func getSingleRegularRef(alloc *sdk.Allocation, remotePath string) (*sdk.ORef, e
 	//log
 	oREsult, err := alloc.GetRefs(remotePath, "", "", "", "", "regular", level, 1)
 	if err != nil {
-		return nil, err
+		if isConsensusFailedError(err) {
+			time.Sleep(RetryWaitTime)
+			//log retrying again
+			oREsult, err = alloc.GetRefs(remotePath, "", "", "", "", "regular", level, 1)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	if len(oREsult.Refs) == 0 {
@@ -266,5 +277,19 @@ func isPathNoExistError(err error) bool {
 		}
 	}
 
+	return false
+}
+
+func isConsensusFailedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch err := err.(type) {
+	case *zerror.Error:
+		if err.Code == ConsensusFailed {
+			return true
+		}
+	}
 	return false
 }
