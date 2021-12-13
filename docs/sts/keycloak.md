@@ -28,7 +28,7 @@ For a quick installation, docker-compose reference configs are also available on
   - Save
 
 - Go to Clients
-  - Client on `account`
+  - Click on `account`
   - Mappers
   - Create
     - `Name` with any text
@@ -38,7 +38,7 @@ For a quick installation, docker-compose reference configs are also available on
     - `Claim JSON Type` is `string`
   - Save
 
-- Open http://localhost:8080/auth/realms/minio/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
+- Open http://localhost:8080/auth/realms/{your-realm-name}/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
 
 ### Enable Keycloak Admin REST API support
 Before being able to authenticate against the Admin REST API using a client_id and a client_secret you need to make sure the client is configured as it follows:
@@ -117,7 +117,7 @@ MINIO_IDENTITY_OPENID_COMMENT       (sentence)  optionally add a comment to this
 
 Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
-~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/minio/.well-known/openid-configuration" client_id="account"
+~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/{your-realm-name}/.well-known/openid-configuration" client_id="account"
 ```
 > NOTE: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
 
