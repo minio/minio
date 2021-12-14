@@ -79,26 +79,26 @@ if [ $? -eq 0 ]; then
 fi
 
 ./mc admin user info minio1 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
 ./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
 # LDAP simple user
 ./mc admin user svcacct add minio2 dillon --access-key testsvc --secret-key testsvc123
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "adding svc account failed, exiting.."
     exit_1;
 fi
@@ -106,19 +106,19 @@ fi
 sleep 10
 
 ./mc admin user svcacct info minio1 testsvc
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "svc account not mirrored, exiting.."
     exit_1;
 fi
 
 ./mc admin user svcacct info minio2 testsvc
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "svc account not mirrored, exiting.."
     exit_1;
 fi
 
 ./mc admin user svcacct rm minio1 testsvc
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "removing svc account failed, exiting.."
     exit_1;
 fi
@@ -140,13 +140,13 @@ fi
 
 sleep 5
 ./mc stat minio2/newbucket
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "expecting bucket to be present. exiting.."
     exit_1;
 fi
 
 ./mc stat minio3/newbucket
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "expecting bucket to be present. exiting.."
     exit_1;
 fi
@@ -155,13 +155,13 @@ fi
 
 sleep 5
 ./mc stat minio1/newbucket/README.md
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "expecting object to be present. exiting.."
     exit_1;
 fi
 
 ./mc stat minio3/newbucket/README.md
-if [ $? -eq 1 ]; then
+if [ $? -ne 0 ]; then
     echo "expecting object to be present. exiting.."
     exit_1;
 fi
@@ -178,5 +178,30 @@ fi
 ./mc stat minio1/newbucket/README.md
 if [ $? -eq 0 ]; then
     echo "expected file to be deleted, exiting.."
+    exit_1;
+fi
+
+./mc mb --with-lock minio3/newbucket-olock
+sleep 5
+
+enabled_minio2=$(./mc stat --json minio2/newbucket-olock| jq -r .metadata.ObjectLock.enabled)
+if [ $? -ne 0 ]; then
+    echo "expected bucket to be mirrored with object-lock but not present, exiting..."
+    exit_1;
+fi
+
+if [ "${enabled_minio2}" != "Enabled" ]; then
+    echo "expected bucket to be mirrored with object-lock enabled, exiting..."
+    exit_1;
+fi
+
+enabled_minio1=$(./mc stat --json minio1/newbucket-olock| jq -r .metadata.ObjectLock.enabled)
+if [ $? -ne 0 ]; then
+    echo "expected bucket to be mirrored with object-lock but not present, exiting..."
+    exit_1;
+fi
+
+if [ "${enabled_minio1}" != "Enabled" ]; then
+    echo "expected bucket to be mirrored with object-lock enabled, exiting..."
     exit_1;
 fi

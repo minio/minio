@@ -86,6 +86,8 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			Description:    e.Message,
 			HTTPStatusCode: e.StatusCode,
 		}
+	case SRError:
+		apiErr = errorCodes.ToAPIErrWithErr(e.Code, e.Cause)
 	default:
 		switch {
 		case errors.Is(err, errConfigNotFound):

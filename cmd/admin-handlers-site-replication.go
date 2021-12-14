@@ -45,16 +45,16 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	}
 
 	var sites []madmin.PeerSite
-	errCode := readJSONBody(ctx, r.Body, &sites, cred.SecretKey)
-	if errCode != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
+	err := parseJSONBody(ctx, r.Body, &sites, cred.SecretKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	status, errInfo := globalSiteReplicationSys.AddPeerClusters(ctx, sites)
-	if errInfo.Code != ErrNone {
-		logger.LogIf(ctx, errInfo)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(errInfo.Code, errInfo.Cause), r.URL)
+	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -82,16 +82,14 @@ func (a adminAPIHandlers) SRInternalJoin(w http.ResponseWriter, r *http.Request)
 	}
 
 	var joinArg madmin.SRInternalJoinReq
-	errCode := readJSONBody(ctx, r.Body, &joinArg, cred.SecretKey)
-	if errCode != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
+	if err := parseJSONBody(ctx, r.Body, &joinArg, cred.SecretKey); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	errInfo := globalSiteReplicationSys.InternalJoinReq(ctx, joinArg)
-	if errInfo.Code != ErrNone {
-		logger.LogIf(ctx, errInfo)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(errInfo.Code, errInfo.Cause), r.URL)
+	if err := globalSiteReplicationSys.InternalJoinReq(ctx, joinArg); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 }
@@ -114,7 +112,7 @@ func (a adminAPIHandlers) SRInternalBucketOps(w http.ResponseWriter, r *http.Req
 	var err error
 	switch operation {
 	default:
-		err = errInvalidArgument
+		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.MakeWithVersioningBktOp:
 		_, isLockEnabled := r.Form["lockEnabled"]
 		_, isVersioningEnabled := r.Form["versioningEnabled"]
@@ -151,16 +149,15 @@ func (a adminAPIHandlers) SRInternalReplicateIAMItem(w http.ResponseWriter, r *h
 	}
 
 	var item madmin.SRIAMItem
-	errCode := readJSONBody(ctx, r.Body, &item, "")
-	if errCode != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
+	if err := parseJSONBody(ctx, r.Body, &item, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	var err error
 	switch item.Type {
 	default:
-		err = errInvalidArgument
+		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.SRIAMItemPolicy:
 		if item.Policy == nil {
 			err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil)
@@ -202,16 +199,15 @@ func (a adminAPIHandlers) SRInternalReplicateBucketItem(w http.ResponseWriter, r
 	}
 
 	var item madmin.SRBucketMeta
-	errCode := readJSONBody(ctx, r.Body, &item, "")
-	if errCode != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
+	if err := parseJSONBody(ctx, r.Body, &item, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	var err error
 	switch item.Type {
 	default:
-		err = errInvalidArgument
+		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.SRBucketMetaTypePolicy:
 		if item.Policy == nil {
 			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
@@ -293,24 +289,25 @@ func (a adminAPIHandlers) SRInternalGetIDPSettings(w http.ResponseWriter, r *htt
 	}
 }
 
-func readJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptionKey string) APIErrorCode {
+func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptionKey string) error {
 	data, err := ioutil.ReadAll(body)
 	if err != nil {
-		return ErrInvalidRequest
+		return SRError{
+			Cause: err,
+			Code:  ErrSiteReplicationInvalidRequest,
+		}
 	}
 
 	if encryptionKey != "" {
 		data, err = madmin.DecryptData(encryptionKey, bytes.NewReader(data))
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return ErrInvalidRequest
+			return SRError{
+				Cause: err,
+				Code:  ErrSiteReplicationInvalidRequest,
+			}
 		}
 	}
 
-	err = json.Unmarshal(data, v)
-	if err != nil {
-		return ErrAdminConfigBadJSON
-	}
-
-	return ErrNone
+	return json.Unmarshal(data, v)
 }
