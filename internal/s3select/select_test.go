@@ -683,70 +683,116 @@ func TestCSVQueries(t *testing.T) {
 }
 
 func TestCSVQueries2(t *testing.T) {
-	input := `id,time,num,num2,text
+	testInput := []byte(`id,time,num,num2,text
 1,2010-01-01T,7867786,4565.908123,"a text, with comma"
 2,2017-01-02T03:04Z,-5, 0.765111,
-`
+`)
 	var testTable = []struct {
 		name       string
 		query      string
+		input      []byte
 		requestXML []byte // override request XML
 		wantResult string
 	}{
 		{
 			name:       "select-all",
+			input:      testInput,
 			query:      `SELECT * from s3object AS s WHERE id = '1'`,
 			wantResult: `{"id":"1","time":"2010-01-01T","num":"7867786","num2":"4565.908123","text":"a text, with comma"}`,
 		},
 		{
 			name:       "select-all-2",
+			input:      testInput,
 			query:      `SELECT * from s3object s WHERE id = 2`,
 			wantResult: `{"id":"2","time":"2017-01-02T03:04Z","num":"-5","num2":" 0.765111","text":""}`,
 		},
 		{
 			name:       "select-text-convert",
+			input:      testInput,
 			query:      `SELECT CAST(text AS STRING) AS text from s3object s WHERE id = 1`,
 			wantResult: `{"text":"a text, with comma"}`,
 		},
 		{
 			name:       "select-text-direct",
+			input:      testInput,
 			query:      `SELECT text from s3object s WHERE id = 1`,
 			wantResult: `{"text":"a text, with comma"}`,
 		},
 		{
 			name:       "select-time-direct",
+			input:      testInput,
 			query:      `SELECT time from s3object s WHERE id = 2`,
 			wantResult: `{"time":"2017-01-02T03:04Z"}`,
 		},
 		{
 			name:       "select-int-direct",
+			input:      testInput,
 			query:      `SELECT num from s3object s WHERE id = 2`,
 			wantResult: `{"num":"-5"}`,
 		},
 		{
 			name:       "select-float-direct",
+			input:      testInput,
 			query:      `SELECT num2 from s3object s WHERE id = 2`,
 			wantResult: `{"num2":" 0.765111"}`,
 		},
 		{
 			name:       "select-in-array",
+			input:      testInput,
 			query:      `select id from S3Object s WHERE id in [1,3]`,
 			wantResult: `{"id":"1"}`,
 		},
 		{
 			name:       "select-in-array-matchnone",
+			input:      testInput,
 			query:      `select id from S3Object s WHERE s.id in [4,3]`,
 			wantResult: ``,
 		},
 		{
 			name:       "select-float-by-val",
+			input:      testInput,
 			query:      `SELECT num2 from s3object s WHERE num2 = 0.765111`,
 			wantResult: `{"num2":" 0.765111"}`,
 		},
 		{
 			name:       "select-non_exiting_values",
+			input:      testInput,
 			query:      `SELECT _1 as first, s._100 from s3object s LIMIT 1`,
 			wantResult: `{"first":"1","_100":null}`,
+		},
+		{
+			name:       "select-is_null_noresults",
+			input:      testInput,
+			query:      `select _2 from S3object where _2 IS NULL`,
+			wantResult: ``,
+		},
+		{
+			name:  "select-is_null_results",
+			input: testInput,
+			query: `select _2 from S3object WHERE _100 IS NULL`,
+			wantResult: `{"_2":"2010-01-01T"}
+{"_2":"2017-01-02T03:04Z"}`,
+		},
+		{
+			name:  "select-is_not_null_results",
+			input: testInput,
+			query: `select _2 from S3object where _2 IS NOT NULL`,
+			wantResult: `{"_2":"2010-01-01T"}
+{"_2":"2017-01-02T03:04Z"}`,
+		},
+		{
+			name:       "select-is_not_null_noresults",
+			input:      testInput,
+			query:      `select _2 from S3object WHERE _100 IS NOT NULL`,
+			wantResult: ``,
+		},
+		{
+			name: "select-is_not_string",
+			input: []byte(`c1,c2,c3
+1,2,3
+1,,3`),
+			query:      `select * from S3object where _2 IS NOT ''`,
+			wantResult: `{"c1":"1","c2":"2","c3":"3"}`,
 		},
 	}
 
@@ -782,7 +828,7 @@ func TestCSVQueries2(t *testing.T) {
 			}
 
 			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+				return ioutil.NopCloser(bytes.NewBuffer(testCase.input)), nil
 			}); err != nil {
 				t.Fatal(err)
 			}

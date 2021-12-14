@@ -184,7 +184,7 @@ type ConditionRHS struct {
 
 // Compare represents the RHS of a comparison expression
 type Compare struct {
-	Operator string   `parser:"@( \"<>\" | \"<=\" | \">=\" | \"=\" | \"<\" | \">\" | \"!=\" )"`
+	Operator string   `parser:"@( \"<>\" | \"<=\" | \">=\" | \"=\" | \"<\" | \">\" | \"!=\" | \"IS\" \"NOT\" | \"IS\")"`
 	Operand  *Operand `parser:"  @@"`
 }
 

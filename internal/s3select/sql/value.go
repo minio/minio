@@ -326,12 +326,14 @@ func (v *Value) negate() {
 
 // Supported comparison operators
 const (
-	opLt   = "<"
-	opLte  = "<="
-	opGt   = ">"
-	opGte  = ">="
-	opEq   = "="
-	opIneq = "!="
+	opLt    = "<"
+	opLte   = "<="
+	opGt    = ">"
+	opGte   = ">="
+	opEq    = "="
+	opIneq  = "!="
+	opIs    = "IS"
+	opIsNot = "ISNOT"
 )
 
 // InferBytesType will attempt to infer the data type of bytes.
@@ -384,6 +386,21 @@ func (v *Value) InferBytesType() (err error) {
 func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 	if !isValidComparisonOperator(op) {
 		return false, errArithInvalidOperator
+	}
+	switch op {
+	case opIs:
+		if a.IsNull() {
+			return v.IsNull(), nil
+		}
+		// Forward to Equal
+		op = opEq
+	case opIsNot:
+		if a.IsNull() {
+			return !v.IsNull(), nil
+		}
+		// Forward to not equal.
+		op = opIneq
+	default:
 	}
 
 	// Check if type conversion/inference is needed - it is needed
@@ -747,12 +764,7 @@ func inferTypeAsString(v *Value) {
 
 func isValidComparisonOperator(op string) bool {
 	switch op {
-	case opLt:
-	case opLte:
-	case opGt:
-	case opGte:
-	case opEq:
-	case opIneq:
+	case opLt, opLte, opGt, opGte, opEq, opIneq, opIs, opIsNot:
 	default:
 		return false
 	}
