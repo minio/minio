@@ -129,6 +129,7 @@ const (
 	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
+	ErrReplicationDenyEditError
 	ErrReplicationNoMatchingRuleError
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
@@ -887,6 +888,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioReplicationNoMatchingRule",
 		Description:    "No matching replication rule found for this object prefix",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationDenyEditError: {
+		Code:           "XMinioReplicationDenyEdit",
+		Description:    "Replication config cannot be altered in cluster replication setup",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrBucketRemoteIdenticalToSource: {
 		Code:           "XMinioAdminRemoteIdenticalToSource",

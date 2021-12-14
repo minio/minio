@@ -1608,6 +1608,13 @@ func (c *SiteReplicationSys) annotatePeerErr(dstPeer string, annotation string, 
 	return fmt.Errorf("%s->%s: %s: %v", c.state.Name, dstPeer, annotation, err)
 }
 
+// isEnabled returns true if site replication is enabled
+func (c *SiteReplicationSys) isEnabled() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.enabled
+}
+
 // Other helpers
 
 // newRemoteClusterHTTPTransport returns a new http configuration
