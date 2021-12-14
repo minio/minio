@@ -28,3 +28,7 @@ xl-meta*
 healing-bin*
 inspect*
 200M*
+hash-set
+minio.RELEASE*
+mc
+nancy

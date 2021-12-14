@@ -113,6 +113,7 @@ func main() {
 				continue
 			}
 			parts := 1
+			multipart := false
 			s := strings.Split(object.ETag, "-")
 			switch len(s) {
 			case 1:
@@ -124,6 +125,7 @@ func main() {
 					log.Println("ETAG: wrong format:", err)
 					continue
 				}
+				multipart = true
 			default:
 				log.Println("Unexpected ETAG format", object.ETag)
 				continue
@@ -148,13 +150,12 @@ func main() {
 
 			corrupted := false
 
-			switch parts {
-			case 1:
+			if !multipart {
 				md5sum := fmt.Sprintf("%x", partsMD5Sum[0])
 				if md5sum != object.ETag {
 					corrupted = true
 				}
-			default:
+			} else {
 				var totalMD5SumBytes []byte
 				for _, sum := range partsMD5Sum {
 					totalMD5SumBytes = append(totalMD5SumBytes, sum...)
