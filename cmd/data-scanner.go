@@ -972,14 +972,14 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 
 }
 
-// applyMaxNoncurrentVersionLimit removes noncurrent versions older than the most recent MaxNoncurrentVersions configured.
+// applyNewerNoncurrentVersionLimit removes noncurrent versions older than the most recent NewerNoncurrentVersions configured.
 // Note: This function doesn't update sizeSummary since it always removes versions that it doesn't return.
-func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
 	if i.lifeCycle == nil {
 		return fivs, nil
 	}
 
-	lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
+	_, days, lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
 	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
 		return fivs, nil
 	}
@@ -992,6 +992,7 @@ func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o Obje
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
 		obj := fi.ToObjectInfo(i.bucket, i.objectPath())
+		// skip versions with object locking enabled
 		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			if i.debug {
 				if obj.VersionID != "" {
@@ -1000,22 +1001,34 @@ func (i *scannerItem) applyMaxNoncurrentVersionLimit(ctx context.Context, o Obje
 					console.Debugf(applyVersionActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 				}
 			}
+			// add this version back to remaining versions for
+			// subsequent lifecycle policy applications
+			fivs = append(fivs, fi)
 			continue
 		}
+
+		// NoncurrentDays not passed yet.
+		if time.Now().UTC().Before(lifecycle.ExpectedExpiryTime(obj.SuccessorModTime, days)) {
+			// add this version back to remaining versions for
+			// subsequent lifecycle policy applications
+			fivs = append(fivs, fi)
+			continue
+		}
+
 		toDel = append(toDel, ObjectToDelete{
 			ObjectName: fi.Name,
 			VersionID:  fi.VersionID,
 		})
 	}
 
-	globalExpiryState.enqueueByMaxNoncurrent(i.bucket, toDel)
+	globalExpiryState.enqueueByNewerNoncurrent(i.bucket, toDel)
 	return fivs, nil
 }
 
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
-	return i.applyMaxNoncurrentVersionLimit(ctx, o, fivs)
+	return i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.

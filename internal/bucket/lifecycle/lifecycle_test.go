@@ -114,7 +114,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 		// Lifecycle with max noncurrent versions
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><MaxNoncurrentVersions>5</MaxNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
@@ -414,6 +414,24 @@ func TestComputeActions(t *testing.T) {
 			objectSuccessorModTime: time.Now().Add(-1 * time.Nanosecond).UTC(),
 			versionID:              uuid.New().String(),
 		},
+		// Lifecycle rules with NewerNoncurrentVersions specified must return NoneAction.
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			versionID:      uuid.NewString(),
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: NoneAction,
+		},
+		// Disabled rules with NewerNoncurrentVersions shouldn't affect outcome.
+		{
+			inputConfig:            `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NoncurrentDays>5</NoncurrentDays></NoncurrentVersionExpiration></Rule><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Disabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:             "foodir/fooobject",
+			versionID:              uuid.NewString(),
+			objectModTime:          time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			objectSuccessorModTime: time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isNoncurrent:           true,
+			expectedAction:         DeleteVersionAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -636,14 +654,55 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 			ID:     strconv.Itoa(i),
 			Status: "Enabled",
 			NoncurrentVersionExpiration: NoncurrentVersionExpiration{
-				MaxNoncurrentVersions: i,
+				NewerNoncurrentVersions: i,
+				NoncurrentDays:          ExpirationDays(i),
 			},
 		})
 	}
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); lim != 1 {
-		t.Fatalf("Expected max noncurrent versions limit to be 1 but got %d", lim)
+	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
+		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
+	}
+}
+
+func TestMaxNoncurrentBackwardCompat(t *testing.T) {
+	testCases := []struct {
+		xml      string
+		expected NoncurrentVersionExpiration
+	}{
+		{
+			xml: `<NoncurrentVersionExpiration><NoncurrentDays>1</NoncurrentDays><NewerNoncurrentVersions>3</NewerNoncurrentVersions></NoncurrentVersionExpiration>`,
+			expected: NoncurrentVersionExpiration{
+				XMLName: xml.Name{
+					Local: "NoncurrentVersionExpiration",
+				},
+				NoncurrentDays:          1,
+				NewerNoncurrentVersions: 3,
+				set:                     true,
+			},
+		},
+		{
+			xml: `<NoncurrentVersionExpiration><NoncurrentDays>2</NoncurrentDays><MaxNoncurrentVersions>4</MaxNoncurrentVersions></NoncurrentVersionExpiration>`,
+			expected: NoncurrentVersionExpiration{
+				XMLName: xml.Name{
+					Local: "NoncurrentVersionExpiration",
+				},
+				NoncurrentDays:          2,
+				NewerNoncurrentVersions: 4,
+				set:                     true,
+			},
+		},
+	}
+	for i, tc := range testCases {
+		var got NoncurrentVersionExpiration
+		dec := xml.NewDecoder(strings.NewReader(tc.xml))
+		if err := dec.Decode(&got); err != nil || got != tc.expected {
+			if err != nil {
+				t.Fatalf("%d: Failed to unmarshal xml %v", i+1, err)
+			}
+			t.Fatalf("%d: Expected %v but got %v", i+1, tc.expected, got)
+		}
 	}
 }

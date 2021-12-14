@@ -29,11 +29,10 @@ import (
 )
 
 var (
-	errLifecycleTooManyRules                = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule                      = Errorf("Lifecycle configuration should have at least one rule")
-	errLifecycleDuplicateID                 = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
-	errXMLNotWellFormed                     = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
-	errLifecycleInvalidNoncurrentExpiration = Errorf("Exactly one of NoncurrentDays (positive integer) or MaxNoncurrentVersions should be specified in a NoncurrentExpiration rule.")
+	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
+	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
 )
 
 const (
@@ -141,7 +140,7 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.NoncurrentVersionExpiration.NoncurrentDays > 0 {
 			return true
 		}
-		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
 			return true
 		}
 		if !rule.NoncurrentVersionTransition.IsNull() {
@@ -150,13 +149,13 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
 			continue
 		}
-		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now()) {
+		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Expiration.IsDaysNull() {
 			return true
 		}
-		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now()) {
+		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Transition.IsNull() { // this allows for Transition.Days to be zero.
@@ -238,7 +237,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 			rules = append(rules, rule)
 			continue
 		}
-		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
+		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
 			rules = append(rules, rule)
 			continue
 		}
@@ -304,17 +303,24 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				// Specifying the Days tag will automatically perform ExpiredObjectDeleteMarker cleanup
 				// once delete markers are old enough to satisfy the age criteria.
 				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
-				if time.Now().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
+				if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
 					return DeleteVersionAction
 				}
 			}
 		}
 
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
+			// Skip rules with newer noncurrent versions specified.
+			// These rules are not handled at an individual version
+			// level. ComputeAction applies only to a specific
+			// version.
+			if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
+				continue
+			}
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
+				if time.Now().UTC().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
 					return DeleteVersionAction
 				}
 			}
@@ -350,7 +356,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					}
 				}
 
-				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+				if !obj.RestoreExpires.IsZero() && time.Now().UTC().After(obj.RestoreExpires) {
 					if obj.VersionID != "" {
 						action = DeleteRestoredVersionAction
 					} else {
@@ -358,7 +364,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					}
 				}
 			}
-			if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+			if !obj.RestoreExpires.IsZero() && time.Now().UTC().After(obj.RestoreExpires) {
 				if obj.VersionID != "" {
 					action = DeleteRestoredVersionAction
 				} else {
@@ -377,6 +383,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 //   e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
 //       transition in 1 day, then the expected transition time is `Fri, 23 May 2020 00:00:00 GMT`
 func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
+	if days == 0 {
+		return modTime
+	}
 	t := modTime.UTC().Add(time.Duration(days+1) * 24 * time.Hour)
 	return t.Truncate(24 * time.Hour)
 }
@@ -395,6 +404,11 @@ func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 	// Iterate over all actionable rules and find the earliest
 	// expiration date and its associated rule ID.
 	for _, rule := range lc.FilterActionableRules(obj) {
+		// We don't know the index of this version and hence can't
+		// reliably compute expected expiry time.
+		if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
+			continue
+		}
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() && !obj.IsLatest && obj.VersionID != "" {
 			return rule.ID, ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))
 		}
@@ -477,31 +491,28 @@ func (lc Lifecycle) TransitionTier(obj ObjectOpts) string {
 	return ""
 }
 
-// NoncurrentVersionsExpirationLimit returns the minimum limit on number of
+// NoncurrentVersionsExpirationLimit returns the maximum limit on number of
 // noncurrent versions across rules.
-func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) int {
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, int, int) {
 	var lim int
+	var days int
+	var ruleID string
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions == 0 {
+		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 {
 			continue
 		}
-		if lim == 0 || lim > rule.NoncurrentVersionExpiration.MaxNoncurrentVersions {
-			lim = rule.NoncurrentVersionExpiration.MaxNoncurrentVersions
+		// Pick the highest number of NewerNoncurrentVersions value
+		// among overlapping rules.
+		if lim == 0 || lim < rule.NoncurrentVersionExpiration.NewerNoncurrentVersions {
+			lim = rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
+		}
+		// Pick the earliest applicable NoncurrentDays among overlapping
+		// rules. Note: ruleID is that of the rule which determines the
+		// time of expiry.
+		if ndays := int(rule.NoncurrentVersionExpiration.NoncurrentDays); days == 0 || days > ndays {
+			days = ndays
+			ruleID = rule.ID
 		}
 	}
-	return lim
-}
-
-// HasMaxNoncurrentVersions returns true if there exists a rule with
-// MaxNoncurrentVersions limit set.
-func (lc Lifecycle) HasMaxNoncurrentVersions() bool {
-	for _, rule := range lc.Rules {
-		if rule.Status == Disabled {
-			continue
-		}
-		if rule.NoncurrentVersionExpiration.MaxNoncurrentVersions > 0 {
-			return true
-		}
-	}
-	return false
+	return ruleID, days, lim
 }
