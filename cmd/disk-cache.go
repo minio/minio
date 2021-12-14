@@ -706,7 +706,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 				oi, _, err := dcache.Stat(GlobalContext, bucket, object)
 				// avoid cache overwrite if another background routine filled cache
 				if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-					dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false, true)
+					dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false, false)
 				}
 			}()
 		}

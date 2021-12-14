@@ -56,7 +56,6 @@ const (
 	DefaultAfter         = "0"
 	DefaultWaterMarkLow  = "70"
 	DefaultWaterMarkHigh = "80"
-	DefaultCacheCommit   = WriteThrough
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -96,7 +95,7 @@ var (
 		},
 		config.KV{
 			Key:   Commit,
-			Value: DefaultCacheCommit,
+			Value: "",
 		},
 	}
 )
