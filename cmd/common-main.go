@@ -18,12 +18,14 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -433,7 +435,153 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
 }
 
+type envKV struct {
+	Key   string
+	Value string
+	Skip  bool
+}
+
+func (e envKV) String() string {
+	if e.Skip {
+		return ""
+	}
+	return fmt.Sprintf("%s=%s", e.Key, e.Value)
+}
+
+func parsEnvEntry(envEntry string) (envKV, error) {
+	if strings.TrimSpace(envEntry) == "" {
+		// Skip all empty lines
+		return envKV{
+			Skip: true,
+		}, nil
+	}
+	const envSeparator = "="
+	envTokens := strings.SplitN(strings.TrimSpace(strings.TrimPrefix(envEntry, "export")), envSeparator, 2)
+	if len(envTokens) != 2 {
+		return envKV{}, fmt.Errorf("envEntry malformed; %s, expected to be of form 'KEY=value'", envEntry)
+	}
+	return envKV{
+		Key:   envTokens[0],
+		Value: envTokens[1],
+	}, nil
+}
+
+// Similar to os.Environ returns a copy of strings representing
+// the environment values from a file, in the form "key, value".
+// in a structured form.
+func minioEnvironFromFile(envConfigFile string) ([]envKV, error) {
+	f, err := os.Open(envConfigFile)
+	if err != nil {
+		if os.IsNotExist(err) { // ignore if file doesn't exist.
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	var ekvs []envKV
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		ekv, err := parsEnvEntry(scanner.Text())
+		if err != nil {
+			return nil, err
+		}
+		if ekv.Skip {
+			// Skips empty lines
+			continue
+		}
+		ekvs = append(ekvs, ekv)
+	}
+	if err = scanner.Err(); err != nil {
+		return nil, err
+	}
+	return ekvs, nil
+}
+
+func readFromSecret(sp string) (string, error) {
+	// Supports reading path from docker secrets, filename is
+	// relative to /run/secrets/ position.
+	if isFile(pathJoin("/run/secrets/", sp)) {
+		sp = pathJoin("/run/secrets/", sp)
+	}
+	credBuf, err := ioutil.ReadFile(sp)
+	if err != nil {
+		if os.IsNotExist(err) { // ignore if file doesn't exist.
+			return "", nil
+		}
+		return "", err
+	}
+	return string(credBuf), nil
+}
+
+func loadEnvVarsFromFiles() {
+	if env.IsSet(config.EnvAccessKeyFile) {
+		accessKey, err := readFromSecret(env.Get(config.EnvAccessKeyFile, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the secret file(s)")
+		}
+		if accessKey != "" {
+			os.Setenv(config.EnvRootUser, accessKey)
+		}
+	}
+
+	if env.IsSet(config.EnvSecretKeyFile) {
+		secretKey, err := readFromSecret(env.Get(config.EnvSecretKeyFile, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the secret file(s)")
+		}
+		if secretKey != "" {
+			os.Setenv(config.EnvRootPassword, secretKey)
+		}
+	}
+
+	if env.IsSet(config.EnvRootUserFile) {
+		rootUser, err := readFromSecret(env.Get(config.EnvRootUserFile, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the secret file(s)")
+		}
+		if rootUser != "" {
+			os.Setenv(config.EnvRootUser, rootUser)
+		}
+	}
+
+	if env.IsSet(config.EnvRootPasswordFile) {
+		rootPassword, err := readFromSecret(env.Get(config.EnvRootPasswordFile, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the secret file(s)")
+		}
+		if rootPassword != "" {
+			os.Setenv(config.EnvRootPassword, rootPassword)
+		}
+	}
+
+	if env.IsSet(config.EnvKMSSecretKeyFile) {
+		kmsSecret, err := readFromSecret(env.Get(config.EnvKMSSecretKeyFile, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to read the KMS secret key inherited from secret file")
+		}
+		if kmsSecret != "" {
+			os.Setenv(config.EnvKMSSecretKey, kmsSecret)
+		}
+	}
+
+	if env.IsSet(config.EnvConfigEnvFile) {
+		ekvs, err := minioEnvironFromFile(env.Get(config.EnvConfigEnvFile, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to read the config environment file")
+		}
+		for _, ekv := range ekvs {
+			os.Setenv(ekv.Key, ekv.Value)
+		}
+	}
+}
+
 func handleCommonEnvVars() {
+	loadEnvVarsFromFiles()
+
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
@@ -530,8 +678,8 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.EnableOn), config.EnableOff)
 
-	// Check if the supported credential env vars, "MINIO_ROOT_USER" and
-	// "MINIO_ROOT_PASSWORD" are provided
+	// Check if the supported credential env vars,
+	// "MINIO_ROOT_USER" and "MINIO_ROOT_PASSWORD" are provided
 	// Warn user if deprecated environment variables,
 	// "MINIO_ACCESS_KEY" and "MINIO_SECRET_KEY", are defined
 	// Check all error conditions first
@@ -552,25 +700,24 @@ func handleCommonEnvVars() {
 	// are defined or both are not defined.
 	// Check both cases and authenticate them if correctly defined
 	var user, password string
-	haveRootCredentials := false
-	haveAccessCredentials := false
+	var hasCredentials bool
 	//nolint:gocritic
 	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
 		user = env.Get(config.EnvRootUser, "")
 		password = env.Get(config.EnvRootPassword, "")
-		haveRootCredentials = true
+		hasCredentials = true
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 		user = env.Get(config.EnvAccessKey, "")
 		password = env.Get(config.EnvSecretKey, "")
-		haveAccessCredentials = true
+		hasCredentials = true
 	}
-	if haveRootCredentials || haveAccessCredentials {
+	if hasCredentials {
 		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")
 		}
-		if haveAccessCredentials {
+		if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
 				"         Please use %s and %s",
 				config.EnvAccessKey, config.EnvSecretKey,
