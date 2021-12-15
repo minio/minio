@@ -794,6 +794,14 @@ func TestCSVQueries2(t *testing.T) {
 			query:      `select * from S3object where _2 IS NOT ''`,
 			wantResult: `{"c1":"1","c2":"2","c3":"3"}`,
 		},
+		{
+			name: "select-is_not_string",
+			input: []byte(`c1,c2,c3
+1,2,3
+1,,3`),
+			query:      `select * from S3object where _2 != '' AND _2 > 1`,
+			wantResult: `{"c1":"1","c2":"2","c3":"3"}`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
