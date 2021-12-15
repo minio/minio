@@ -69,8 +69,18 @@ spec:
           command:
             - "/bin/sh"
             - "-ce"
+            {{- if eq .Values.gateway.type "nas" }}
             - "/usr/bin/docker-entrypoint.sh minio gateway nas {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
+            {{- end }}
+            {{- if eq .Values.gateway.type "gcs" }}
+            - "/usr/bin/docker-entrypoint.sh minio gateway gcs {{ .Values.gateway.gcs.projectId }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
+            {{- end }}
           volumeMounts:
+            {{- if eq .Values.gateway.type "gcs" }}
+            - name: minio-user
+              mountPath: "/tmp/gcs-credentials"
+              readOnly: true
+            {{- end }}
             {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
@@ -95,6 +105,10 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
+            {{- if eq .Values.gateway.type "gcs" }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/tmp/gcs-credentials/service-account-file.json""
+            {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
