@@ -78,7 +78,7 @@ spec:
           volumeMounts:
             {{- if eq .Values.gateway.type "gcs" }}
             - name: minio-user
-              mountPath: "/etc/credentials"
+              mountPath: "/tmp/gcs-credentials"
               readOnly: true
             {{- end }}
             {{- if .Values.persistence.enabled }}
