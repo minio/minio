@@ -891,7 +891,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationDenyEditError: {
 		Code:           "XMinioReplicationDenyEdit",
-		Description:    "Replication config cannot be altered in cluster replication setup",
+		Description:    "Cannot alter local replication config since this server is in a cluster replication setup",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrBucketRemoteIdenticalToSource: {
