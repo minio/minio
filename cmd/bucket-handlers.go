@@ -1586,7 +1586,10 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
+	if globalSiteReplicationSys.isEnabled() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
+		return
+	}
 	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNeedsVersioningError), r.URL)
 		return
@@ -1686,6 +1689,10 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 	// Check if bucket exists.
 	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if globalSiteReplicationSys.isEnabled() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
 		return
 	}
 	if err := globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, nil); err != nil {
