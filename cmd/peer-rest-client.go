@@ -720,6 +720,11 @@ func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []st
 
 // GetMetacacheListing - get a new or existing metacache.
 func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPathOptions) (*metacache, error) {
+	if client == nil {
+		resp := localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
+		return &resp, nil
+	}
+
 	var reader bytes.Buffer
 	err := gob.NewEncoder(&reader).Encode(o)
 	if err != nil {
@@ -737,6 +742,9 @@ func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPat
 
 // UpdateMetacacheListing - update an existing metacache it will unconditionally be updated to the new state.
 func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m metacache) (metacache, error) {
+	if client == nil {
+		return localMetacacheMgr.updateCacheEntry(m)
+	}
 	b, err := m.MarshalMsg(nil)
 	if err != nil {
 		return m, err
