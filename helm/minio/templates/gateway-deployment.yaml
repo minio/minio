@@ -107,7 +107,7 @@ spec:
                   key: rootPassword
             {{- if eq .Values.gateway.type "gcs" }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: "/etc/credentials/gcs_key.json"
+              value: "/tmp/gcs-credentials/service-account-file.json""
             {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
