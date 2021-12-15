@@ -375,15 +375,13 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 
 			buckets, _ := z.ListBuckets(ctx)
 
-			buckets = append(buckets, BucketInfo{
-				Name: pathJoin(minioMetaBucket, minioConfigPrefix),
-			})
-
 			// Buckets data are dispersed in multiple zones/sets, make
 			// sure to heal all bucket metadata configuration.
-			buckets = append(buckets, []BucketInfo{
-				{Name: pathJoin(minioMetaBucket, bucketMetaPrefix)},
-			}...)
+			buckets = append(buckets, BucketInfo{
+				Name: pathJoin(minioMetaBucket, minioConfigPrefix),
+			}, BucketInfo{
+				Name: pathJoin(minioMetaBucket, bucketMetaPrefix),
+			})
 
 			// Heal latest buckets first.
 			sort.Slice(buckets, func(i, j int) bool {
@@ -441,10 +439,12 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								continue
 							}
 
-							logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
+							logger.Info("Healing disk '%s' on %s pool, %s set complete", disk,
+								humanize.Ordinal(i+1), humanize.Ordinal(setIndex+1))
 							logger.Info("Summary:\n")
 							tracker.printTo(os.Stdout)
 							logger.LogIf(ctx, tracker.delete(ctx))
+							logger.Info("\n")
 
 							// Only upon success pop the healed disk.
 							globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())

@@ -168,9 +168,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	bgSeq := mustGetHealSequence(ctx)
 	scanMode := globalHealConfig.ScanMode()
 
+	// Make sure to copy since `buckets slice`
+	// is modified in place by tracker.
+	healBuckets := make([]string, len(buckets))
+	copy(healBuckets, buckets)
+
 	var retErr error
 	// Heal all buckets with all objects
-	for _, bucket := range buckets {
+	for _, bucket := range healBuckets {
 		if tracker.isHealed(bucket) {
 			continue
 		}
@@ -318,6 +323,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		default:
 			tracker.bucketDone(bucket)
 			logger.LogIf(ctx, tracker.update(ctx))
+			logger.Info("Healing bucket %s content on %s erasure set complete",
+				bucket, humanize.Ordinal(tracker.SetIndex+1))
 		}
 	}
 	tracker.Object = ""
