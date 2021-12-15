@@ -1962,7 +1962,10 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	defer func() {
 		if err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
+				srcVolume, srcPath,
+				dstVolume, dstPath,
+				err))
 		}
 		if err == nil {
 			if s.globalSync {
