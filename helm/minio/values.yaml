@@ -109,7 +109,7 @@ gateway:
   type: "nas" # currently only "nas,gcs" are supported.
   replicas: 4
   gcs:
-    gcsKeyJson: "" # credential json file of service account key (not required if using existingSecret)
+    serviceAccountFile: "" # credential JSON file of service account key (not required if using existing secret)
     projectId: "" # Google cloud project id required
 
 ## TLS Settings for MinIO
