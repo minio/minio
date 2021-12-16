@@ -71,7 +71,17 @@ var (
 
 // initDataScanner will start the scanner in the background.
 func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
-	go runDataScanner(ctx, objAPI)
+	go func() {
+		// Run the data scanner in a loop
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				runDataScanner(ctx, objAPI)
+			}
+		}
+	}()
 }
 
 type safeDuration struct {
