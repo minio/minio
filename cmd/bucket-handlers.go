@@ -500,7 +500,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
-			}, goi, gerr)
+			}, ObjectOptions{}, goi, gerr)
 			replicateSync = repsync
 			if replicate {
 				if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object.ObjectName); apiErrCode != ErrNone {
@@ -604,7 +604,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		if replicateDeletes {
 			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-				dv := DeletedObjectVersionInfo{
+				dv := DeletedObjectReplicationInfo{
 					DeletedObject: dobj,
 					Bucket:        bucket,
 				}

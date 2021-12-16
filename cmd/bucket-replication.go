@@ -183,9 +183,13 @@ func isStandardHeader(matchHeaderKey string) bool {
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (replicate, sync bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, dopts ObjectOptions, oi ObjectInfo, gerr error) (replicate, sync bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
+		return false, sync
+	}
+	// incoming replication request should not be re-replicated.
+	if dopts.ReplicationRequest {
 		return false, sync
 	}
 	opts := replication.ObjectOpts{
@@ -231,7 +235,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 // target cluster, the object version is marked deleted on the source and hidden from listing. It is permanently
 // deleted from the source when the VersionPurgeStatus changes to "Complete", i.e after replication succeeds
 // on target.
-func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectAPI ObjectLayer) {
+func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, objectAPI ObjectLayer) {
 	bucket := dobj.Bucket
 	versionID := dobj.DeleteMarkerVersionID
 	if versionID == "" {
@@ -272,51 +276,67 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		return
 	}
 
-	// Lock the object name before starting replication operation.
-	// Use separate lock that doesn't collide with regular objects.
-	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
-	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, rcfg.RoleArn))
-		sendEvent(eventArgs{
-			BucketName: bucket,
-			Object: ObjectInfo{
-				Bucket:       bucket,
-				Name:         dobj.ObjectName,
-				VersionID:    versionID,
-				DeleteMarker: dobj.DeleteMarker,
-			},
-			Host:      "Internal: [Replication]",
-			EventName: event.ObjectReplicationNotTracked,
-		})
-		return
-	}
-	defer lk.Unlock()
-	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
-		VersionID: versionID,
-		Internal: miniogo.AdvancedRemoveOptions{
-			ReplicationDeleteMarker: dobj.DeleteMarkerVersionID != "",
-			ReplicationMTime:        dobj.DeleteMarkerMTime.Time,
-			ReplicationStatus:       miniogo.ReplicationStatusReplica,
-			ReplicationRequest:      true, // always set this to distinguish between `mc mirror` replication and serverside
-		},
-	})
-
 	replicationStatus := dobj.DeleteMarkerReplicationStatus
 	versionPurgeStatus := dobj.VersionPurgeStatus
 
-	if rmErr != nil {
-		if dobj.VersionID == "" {
-			replicationStatus = string(replication.Failed)
-		} else {
-			versionPurgeStatus = Failed
+	// early return if already replicated delete marker for healing replication
+	if dobj.DeleteMarkerVersionID != "" && dobj.OpType == replication.HealReplicationType {
+		if _, err := tgt.StatObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+			VersionID: versionID,
+			Internal: miniogo.AdvancedGetOptions{
+				ReplicationProxyRequest: "false",
+			}}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+			if dobj.VersionID == "" {
+				replicationStatus = string(replication.Completed)
+			} else {
+				versionPurgeStatus = Failed
+			}
 		}
-		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", rcfg.GetDestination().Bucket, dobj.ObjectName, versionID, rmErr))
-	} else {
-		if dobj.VersionID == "" {
-			replicationStatus = string(replication.Completed)
+	}
+	if !versionPurgeStatus.Empty() || replicationStatus != string(replication.Completed) {
+		// Lock the object name before starting replication operation.
+		// Use separate lock that doesn't collide with regular objects.
+		lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
+		ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, rcfg.RoleArn))
+			sendEvent(eventArgs{
+				BucketName: bucket,
+				Object: ObjectInfo{
+					Bucket:       bucket,
+					Name:         dobj.ObjectName,
+					VersionID:    versionID,
+					DeleteMarker: dobj.DeleteMarker,
+				},
+				Host:      "Internal: [Replication]",
+				EventName: event.ObjectReplicationNotTracked,
+			})
+			return
+		}
+		defer lk.Unlock()
+		rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
+			VersionID: versionID,
+			Internal: miniogo.AdvancedRemoveOptions{
+				ReplicationDeleteMarker: dobj.DeleteMarkerVersionID != "",
+				ReplicationMTime:        dobj.DeleteMarkerMTime.Time,
+				ReplicationStatus:       miniogo.ReplicationStatusReplica,
+				ReplicationRequest:      true, // always set this to distinguish between `mc mirror` replication and serverside
+			},
+		})
+
+		if rmErr != nil {
+			if dobj.VersionID == "" {
+				replicationStatus = string(replication.Failed)
+			} else {
+				versionPurgeStatus = Failed
+			}
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", rcfg.GetDestination().Bucket, dobj.ObjectName, versionID, rmErr))
 		} else {
-			versionPurgeStatus = Complete
+			if dobj.VersionID == "" {
+				replicationStatus = string(replication.Completed)
+			} else {
+				versionPurgeStatus = Complete
+			}
 		}
 	}
 	prevStatus := dobj.DeleteMarkerReplicationStatus
@@ -931,10 +951,11 @@ func filterReplicationStatusMetadata(metadata map[string]string) map[string]stri
 	return dst
 }
 
-// DeletedObjectVersionInfo has info on deleted object
-type DeletedObjectVersionInfo struct {
+// DeletedObjectReplicationInfo has info on deleted object
+type DeletedObjectReplicationInfo struct {
 	DeletedObject
 	Bucket string
+	OpType replication.Type
 }
 
 var (
@@ -948,9 +969,9 @@ type ReplicationPool struct {
 	mu                 sync.Mutex
 	size               int
 	replicaCh          chan ReplicateObjectInfo
-	replicaDeleteCh    chan DeletedObjectVersionInfo
+	replicaDeleteCh    chan DeletedObjectReplicationInfo
 	mrfReplicaCh       chan ReplicateObjectInfo
-	mrfReplicaDeleteCh chan DeletedObjectVersionInfo
+	mrfReplicaDeleteCh chan DeletedObjectReplicationInfo
 	killCh             chan struct{}
 	wg                 sync.WaitGroup
 	objLayer           ObjectLayer
@@ -960,9 +981,9 @@ type ReplicationPool struct {
 func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
 	pool := &ReplicationPool{
 		replicaCh:          make(chan ReplicateObjectInfo, 100000),
-		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 100000),
+		replicaDeleteCh:    make(chan DeletedObjectReplicationInfo, 100000),
 		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
-		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
+		mrfReplicaDeleteCh: make(chan DeletedObjectReplicationInfo, 100000),
 		objLayer:           o,
 	}
 	pool.Resize(sz)
@@ -1050,7 +1071,7 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObje
 	}
 }
 
-func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi DeletedObjectVersionInfo) {
+func (p *ReplicationPool) queueReplicaDeleteTask(ctx context.Context, doi DeletedObjectReplicationInfo) {
 	if p == nil {
 		return
 	}
@@ -1217,7 +1238,7 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 	}
 }
 
-func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo, o ObjectLayer, sync bool) {
+func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer, sync bool) {
 	globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
 }

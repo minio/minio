@@ -331,6 +331,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	case "EntityTooSmall":
 		err = PartTooSmall{}
 	}
+	switch minioErr.StatusCode {
+	case http.StatusMethodNotAllowed:
+		err = toObjectErr(errMethodNotAllowed, bucket, object)
+	}
 
 	return err
 }

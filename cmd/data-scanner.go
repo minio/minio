@@ -1138,7 +1138,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 		} else {
 			versionID = oi.VersionID
 		}
-		globalReplicationPool.queueReplicaDeleteTask(ctx, DeletedObjectVersionInfo{
+		globalReplicationPool.queueReplicaDeleteTask(ctx, DeletedObjectReplicationInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    oi.Name,
 				DeleteMarkerVersionID:         dmVersionID,
@@ -1149,6 +1149,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 				VersionPurgeStatus:            oi.VersionPurgeStatus,
 			},
 			Bucket: oi.Bucket,
+			OpType: replication.HealReplicationType,
 		})
 	}
 }

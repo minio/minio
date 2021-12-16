@@ -3170,7 +3170,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		})
 	}
 
-	replicateDel, replicateSync := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
+	replicateDel, replicateSync := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, opts, goi, gerr)
 	if replicateDel {
 		if opts.VersionID != "" {
 			opts.VersionPurgeStatus = Pending
@@ -3260,7 +3260,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		} else {
 			versionID = objInfo.VersionID
 		}
-		dobj := DeletedObjectVersionInfo{
+		dobj := DeletedObjectReplicationInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    object,
 				VersionID:                     versionID,
