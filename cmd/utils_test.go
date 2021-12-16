@@ -490,7 +490,7 @@ func TestGetMinioMode(t *testing.T) {
 
 func TestTimedValue(t *testing.T) {
 	var cache timedValue
-
+	t.Parallel()
 	cache.Once.Do(func() {
 		cache.TTL = 2 * time.Second
 		cache.Update = func() (interface{}, error) {
