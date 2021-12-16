@@ -1,4 +1,4 @@
-name: Functional Tests
+name: Healing Functional Tests
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build:
-    name: Go ${{ matrix.go-version }} on ${{ matrix.os }} - healing
+    name: Go ${{ matrix.go-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -45,4 +45,4 @@ jobs:
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
-          make verify
+          make verify-healing

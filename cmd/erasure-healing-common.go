@@ -26,29 +26,59 @@ import (
 )
 
 // commonTime returns a maximally occurring time from a list of time.
-func commonTime(modTimes []time.Time) (modTime time.Time) {
-	timeOccurenceMap := make(map[int64]int, len(modTimes))
+func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime time.Time, maxima int) {
+	timeOccurenceMap := make(map[int64]int, len(times))
+	groupNano := group.Nanoseconds()
 	// Ignore the uuid sentinel and count the rest.
-	for _, t := range modTimes {
+	for _, t := range times {
 		if t.Equal(timeSentinel) {
 			continue
 		}
-		timeOccurenceMap[t.UnixNano()]++
+		nano := t.UnixNano()
+		if group > 0 {
+			for k := range timeOccurenceMap {
+				if k == nano {
+					// We add to ourself later
+					continue
+				}
+				diff := k - nano
+				if diff < 0 {
+					diff = -diff
+				}
+				// We are within the limit
+				if diff < groupNano {
+					timeOccurenceMap[k]++
+				}
+			}
+		}
+		// Add ourself...
+		timeOccurenceMap[nano]++
 	}
 
-	var maxima int // Counter for remembering max occurrence of elements.
+	maxima = 0 // Counter for remembering max occurrence of elements.
+	latest := int64(0)
 
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
 	for nano, count := range timeOccurenceMap {
-		t := time.Unix(0, nano).UTC()
-		if count > maxima || (count == maxima && t.After(modTime)) {
+		if count < maxima {
+			continue
+		}
+
+		// We are at or above maxima
+		if count > maxima || nano > latest {
 			maxima = count
-			modTime = t
+			latest = nano
 		}
 	}
 
-	// Return the collected common modTime.
+	// Return the collected common max time, with maxima
+	return time.Unix(0, latest).UTC(), maxima
+}
+
+// commonTime returns a maximally occurring time from a list of time.
+func commonTime(modTimes []time.Time) (modTime time.Time) {
+	modTime, _ = commonTimeAndOccurence(modTimes, 0)
 	return modTime
 }
 
@@ -86,6 +116,19 @@ func filterOnlineDisksInplace(fi FileInfo, partsMetadata []FileInfo, onlineDisks
 		}
 		onlineDisks[i] = nil
 	}
+}
+
+// Extracts list of disk mtimes from FileInfo slice and returns, skips
+// slice elements that have errors.
+func listObjectDiskMtimes(partsMetadata []FileInfo) (diskMTimes []time.Time) {
+	diskMTimes = bootModtimes(len(partsMetadata))
+	for index, metadata := range partsMetadata {
+		if metadata.IsValid() {
+			// Once the file is found, save the disk mtime saved on disk.
+			diskMTimes[index] = metadata.DiskMTime
+		}
+	}
+	return diskMTimes
 }
 
 // Notes:
@@ -184,6 +227,13 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
 	errs []error, latestMeta FileInfo,
 	bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+
+	var diskMTime time.Time
+	delta := 5 * time.Second
+	if !latestMeta.DataShardFixed() {
+		diskMTime = pickValidDiskTimeWithQuorum(partsMetadata,
+			latestMeta.Erasure.DataBlocks)
+	}
 
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
@@ -286,6 +336,14 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		case madmin.HealNormalScan:
 			if !meta.Deleted && !meta.IsRemote() {
 				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, meta)
+			}
+		}
+
+		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
+			if !partsMetadata[i].AcceptableDelta(diskMTime, delta) {
+				// not with in acceptable delta, skip.
+				partsMetadata[i] = FileInfo{}
+				continue
 			}
 		}
 

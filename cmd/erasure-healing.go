@@ -24,11 +24,37 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 )
+
+const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
+
+// AcceptableDelta returns 'true' if the fi.DiskMTime is under
+// acceptable delta of "delta" duration with maxTime.
+//
+// This code is primarily used for heuristic detection of
+// incorrect shards, as per https://github.com/minio/minio/pull/13803
+//
+// This check only is active if we could find maximally
+// occurring disk mtimes that are somewhat same across
+// the quorum. Allowing to skip those shards which we
+// might think are wrong.
+func (fi FileInfo) AcceptableDelta(maxTime time.Time, delta time.Duration) bool {
+	diff := maxTime.Sub(fi.DiskMTime)
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff < delta
+}
+
+// DataShardFixed - data shard fixed?
+func (fi FileInfo) DataShardFixed() bool {
+	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
+}
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
@@ -224,6 +250,11 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 		return true
 	}
 	if erErr == nil {
+		if meta.XLV1 {
+			// Legacy means heal always
+			// always check first.
+			return true
+		}
 		if !meta.Deleted && !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			if IsErr(dataErr, []error{
@@ -234,19 +265,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 				return true
 			}
 		}
-		if !latestMeta.MetadataEquals(meta) {
-			return true
-		}
-		if !latestMeta.TransitionInfoEquals(meta) {
-			return true
-		}
-		if !latestMeta.ReplicationInfoEquals(meta) {
-			return true
-		}
-		if !latestMeta.ModTime.Equal(meta.ModTime) {
-			return true
-		}
-		if meta.XLV1 {
+		if !latestMeta.Equals(meta) {
 			return true
 		}
 	}

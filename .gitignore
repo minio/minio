@@ -32,3 +32,4 @@ hash-set
 minio.RELEASE*
 mc
 nancy
+inspects/*
