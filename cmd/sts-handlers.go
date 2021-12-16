@@ -278,6 +278,22 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Call hook for site replication.
+	if cred.ParentUser != globalActiveCred.AccessKey {
+		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemSTSAcc,
+			STSCredential: &madmin.SRSTSCredential{
+				AccessKey:    cred.AccessKey,
+				SecretKey:    cred.SecretKey,
+				SessionToken: cred.SessionToken,
+				ParentUser:   cred.ParentUser,
+			},
+		}); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
 	assumeRoleResponse := &AssumeRoleResponse{
 		Result: AssumeRoleResult{
 			Credentials: cred,
@@ -497,6 +513,21 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Call hook for site replication.
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemSTSAcc,
+		STSCredential: &madmin.SRSTSCredential{
+			AccessKey:           cred.AccessKey,
+			SecretKey:           cred.SecretKey,
+			SessionToken:        cred.SessionToken,
+			ParentUser:          cred.ParentUser,
+			ParentPolicyMapping: policyName,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	var encodedSuccessResponse []byte
 	switch action {
 	case clientGrants:
@@ -653,13 +684,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	// Call hook for cluster-replication.
+	// Call hook for site replication.
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    cred.AccessKey,
 			SecretKey:    cred.SecretKey,
 			SessionToken: cred.SessionToken,
+			ParentUser:   cred.ParentUser,
 		},
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -805,9 +837,25 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName)
+	policyName := certificate.Subject.CommonName
+	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
+		return
+	}
+
+	// Call hook for site replication.
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemSTSAcc,
+		STSCredential: &madmin.SRSTSCredential{
+			AccessKey:           tmpCredentials.AccessKey,
+			SecretKey:           tmpCredentials.SecretKey,
+			SessionToken:        tmpCredentials.SessionToken,
+			ParentUser:          tmpCredentials.ParentUser,
+			ParentPolicyMapping: policyName,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 

@@ -636,6 +636,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 	}
 
 	sys.notifyForUser(ctx, cred.AccessKey, true)
+
 	return nil
 }
 

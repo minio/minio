@@ -62,6 +62,17 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemIAMUser,
+		IAMUser: &madmin.SRIAMUser{
+			AccessKey:   accessKey,
+			IsDeleteReq: true,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
 }
 
 // ListUsers - GET /minio/admin/v3/list-users?bucket={bucket}
@@ -220,8 +231,17 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	} else {
 		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
-
 	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemGroupInfo,
+		GroupInfo: &madmin.SRGroupInfo{
+			UpdateReq: updReq,
+		},
+	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -427,6 +447,18 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemIAMUser,
+		IAMUser: &madmin.SRIAMUser{
+			AccessKey:   accessKey,
+			IsDeleteReq: false,
+			UserReq:     &ureq,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
 }
 
 // AddServiceAccount - PUT /minio/admin/v3/add-service-account
@@ -585,14 +617,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Call hook for cluster-replication.
-	//
-	// FIXME: This wont work in an OpenID situation as the parent credential
-	// may not be present on peer clusters to provide inherited policies.
-	// Also, we should not be replicating root user's service account - as
-	// they are not authenticated by a common external IDP, so we skip when
-	// opts.ldapUser == "".
-	if _, isLDAPAccount := opts.claims[ldapUserN]; isLDAPAccount {
+	// Call hook for cluster-replication if the service account is not for a
+	// root user.
+	if newCred.ParentUser != globalActiveCred.AccessKey {
 		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{

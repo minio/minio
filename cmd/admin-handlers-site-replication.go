@@ -178,6 +178,10 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, item.PolicyMapping)
 	case madmin.SRIAMItemSTSAcc:
 		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, item.STSCredential)
+	case madmin.SRIAMItemIAMUser:
+		err = globalSiteReplicationSys.PeerIAMUserChangeHandler(ctx, item.IAMUser)
+	case madmin.SRIAMItemGroupInfo:
+		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)

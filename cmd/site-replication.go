@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -551,13 +552,19 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 // GetIDPSettings returns info about the configured identity provider. It is
 // used to validate that all peers have the same IDP.
 func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSettings {
-	return madmin.IDPSettings{
+	s := madmin.IDPSettings{}
+	s.LDAP = madmin.LDAPSettings{
 		IsLDAPEnabled:          globalLDAPConfig.Enabled,
 		LDAPUserDNSearchBase:   globalLDAPConfig.UserDNSearchBaseDN,
 		LDAPUserDNSearchFilter: globalLDAPConfig.UserDNSearchFilter,
 		LDAPGroupSearchBase:    globalLDAPConfig.GroupSearchBaseDistName,
 		LDAPGroupSearchFilter:  globalLDAPConfig.GroupSearchFilter,
 	}
+	s.OpenID = globalOpenIDConfig.GetSettings()
+	if s.OpenID.Enabled {
+		s.OpenID.Region = globalSite.Region
+	}
+	return s
 }
 
 func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []PeerSiteInfo) (bool, error) {
@@ -580,13 +587,8 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 		s = append(s, is)
 	}
 
-	for _, v := range s {
-		if !v.IsLDAPEnabled {
-			return false, nil
-		}
-	}
 	for i := 1; i < len(s); i++ {
-		if s[i] != s[0] {
+		if !reflect.DeepEqual(s[i], s[0]) {
 			return false, nil
 		}
 	}
@@ -984,12 +986,8 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 // OpenID, such mappings are provided from the IDP directly and so are not
 // applicable here.
 //
-// Only certain service accounts can be replicated:
-//
-// Service accounts created for STS credentials using an external IDP: such STS
-// credentials would be valid on the peer clusters as they are assumed to be
-// using the same external IDP. Service accounts when using internal IDP or for
-// root user will not be replicated.
+// Service accounts are replicated as long as they are not meant for the root
+// user.
 //
 // STS accounts are replicated, but only if the session token is verifiable
 // using the local cluster's root credential.
@@ -1024,6 +1022,44 @@ func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyNam
 		err = globalIAMSys.DeletePolicy(ctx, policyName, true)
 	} else {
 		err = globalIAMSys.SetPolicy(ctx, policyName, *p)
+	}
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
+// PeerIAMUserChangeHandler - copies IAM user to local.
+func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, change *madmin.SRIAMUser) error {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+	var err error
+	if change.IsDeleteReq {
+		err = globalIAMSys.DeleteUser(ctx, change.AccessKey, true)
+	} else {
+		if change.UserReq == nil {
+			return errSRInvalidRequest(errInvalidArgument)
+		}
+		err = globalIAMSys.CreateUser(ctx, change.AccessKey, *change.UserReq)
+	}
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
+// PeerGroupInfoChangeHandler - copies group changes to local.
+func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, change *madmin.SRGroupInfo) error {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+	updReq := change.UpdateReq
+	var err error
+	if updReq.IsRemove {
+		err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
+	} else {
+		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
 	if err != nil {
 		return wrapSRErr(err)
@@ -1120,31 +1156,31 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 		return fmt.Errorf("Expiry claim was not found: %v", mapClaims)
 	}
 
-	// Extract the username and lookup DN and groups in LDAP.
-	ldapUser, ok := claims.Lookup(ldapUserN)
-	if !ok {
-		return fmt.Errorf("Could not find LDAP username in claims: %v", mapClaims)
-	}
-
-	// Need to lookup the groups from LDAP.
-	ldapUserDN, ldapGroups, err := globalLDAPConfig.LookupUserDN(ldapUser)
-	if err != nil {
-		return fmt.Errorf("unable to query LDAP server for %s: %v", ldapUser, err)
-	}
-
 	cred := auth.Credentials{
 		AccessKey:    stsCred.AccessKey,
 		SecretKey:    stsCred.SecretKey,
 		Expiration:   time.Unix(expiry, 0).UTC(),
 		SessionToken: stsCred.SessionToken,
+		ParentUser:   stsCred.ParentUser,
 		Status:       auth.AccountOn,
-		ParentUser:   ldapUserDN,
-		Groups:       ldapGroups,
+	}
+
+	// Extract the username and lookup DN and groups in LDAP.
+	ldapUser, isLDAPSTS := claims.Lookup(ldapUserN)
+	switch {
+	case isLDAPSTS:
+		// Need to lookup the groups from LDAP.
+		_, ldapGroups, err := globalLDAPConfig.LookupUserDN(ldapUser)
+		if err != nil {
+			return fmt.Errorf("unable to query LDAP server for %s: %v", ldapUser, err)
+		}
+
+		cred.Groups = ldapGroups
 	}
 
 	// Set these credentials to IAM.
-	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
-		return fmt.Errorf("unable to save STS credential: %v", err)
+	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, stsCred.ParentPolicyMapping); err != nil {
+		return fmt.Errorf("unable to save STS credential and/or parent policy mapping: %v", err)
 	}
 
 	return nil
@@ -1497,6 +1533,11 @@ func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) error {
 			return errSRBackendIssue(err)
 		}
 		for user, acc := range serviceAccounts {
+			if user == siteReplicatorSvcAcc {
+				// skip the site replicate svc account as it is
+				// already replicated.
+				continue
+			}
 			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.AccessKey)
 			if err != nil {
 				return errSRBackendIssue(err)
