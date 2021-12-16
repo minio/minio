@@ -70,6 +70,9 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 		opts.ProxyHeaderSet = true
 		opts.ProxyRequest = strings.Join(v, "") == "true"
 	}
+	if _, ok := header[xhttp.MinIOSourceReplicationRequest]; ok {
+		opts.ReplicationRequest = true
+	}
 	return
 }
 
