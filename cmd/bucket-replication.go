@@ -41,6 +41,9 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
+// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
+const ReplicationWorkerMultiplier = 1.5
+
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	if globalIsGateway {
@@ -916,8 +919,8 @@ type ReplicationPool struct {
 // NewReplicationPool creates a pool of replication workers of specified size
 func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
 	pool := &ReplicationPool{
-		replicaCh:          make(chan ReplicateObjectInfo, 1000),
-		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
+		replicaCh:          make(chan ReplicateObjectInfo, 100000),
+		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 100000),
 		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
 		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
 		objLayer:           o,
@@ -999,11 +1002,11 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObje
 			close(p.replicaCh)
 			close(p.mrfReplicaCh)
 		})
-		return
 	case p.replicaCh <- ri:
 	case p.mrfReplicaCh <- ri:
 		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
 	default:
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Replication workers could not keep up with incoming traffic - consider increasing number of replication workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), replicationSubsystem)
 	}
 }
 
@@ -1177,4 +1180,9 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo, o ObjectLayer, sync bool) {
 	globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
+}
+
+// suggestedWorkers recommends an increase in number of workers to meet replication load.
+func (p *ReplicationPool) suggestedWorkers(failQueue bool) int {
+	return int(float64(p.size) * ReplicationWorkerMultiplier)
 }
