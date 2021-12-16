@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	//minio "github.com/minio/minio-go/v7"
+	// "github.com/minio/madmin-go"
+	// "github.com/minio/minio-go/v7"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -40,6 +43,9 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
+
+// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
+const ReplicationWorkerMultiplier = 1.5
 
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
@@ -266,6 +272,26 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		return
 	}
 
+	// Lock the object name before starting replication operation.
+	// Use separate lock that doesn't collide with regular objects.
+	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
+	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, rcfg.RoleArn))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
+		return
+	}
+	defer lk.Unlock()
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
 		VersionID: versionID,
 		Internal: miniogo.AdvancedRemoveOptions{
@@ -600,7 +626,24 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		})
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, writeLock, ObjectOptions{
+
+	// Lock the object name before starting replication.
+	// Use separate lock that doesn't collide with regular objects.
+	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+object)
+	ctx, err = lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, cfg.RoleArn))
+		return
+	}
+	defer lk.Unlock()
+
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
@@ -651,6 +694,33 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		if rtype == replicateNone {
 			// object with same VersionID already exists, replication kicked off by
 			// PutObject might have completed
+			if objInfo.ReplicationStatus == replication.Pending || objInfo.ReplicationStatus == replication.Failed {
+				// if metadata is not updated for some reason after replication, such as 503 encountered while updating metadata - make sure
+				// to set ReplicationStatus as Completed.Note that replication Stats would have been updated despite metadata update failure.
+				z, ok := objectAPI.(*erasureServerPools)
+				if !ok {
+					return
+				}
+				// This lower level implementation is necessary to avoid write locks from CopyObject.
+				poolIdx, err := z.getPoolIdx(ctx, bucket, object, objInfo.Size)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+				} else {
+					fi := FileInfo{}
+					fi.VersionID = objInfo.VersionID
+					fi.Metadata = make(map[string]string, len(objInfo.UserDefined))
+					for k, v := range objInfo.UserDefined {
+						fi.Metadata[k] = v
+					}
+					fi.Metadata[xhttp.AmzBucketReplicationStatus] = replication.Completed.String()
+					if objInfo.UserTags != "" {
+						fi.Metadata[xhttp.AmzObjectTagging] = objInfo.UserTags
+					}
+					if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, fi); err != nil {
+						logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+					}
+				}
+			}
 			return
 		}
 	}
@@ -782,7 +852,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	}
 	// re-queue failures once more - keep a retry count to avoid flooding the queue if
 	// the target site is down. Leave it to scanner to catch up instead.
-	if replicationStatus == replication.Failed && ri.RetryCount < 1 {
+	if replicationStatus != replication.Completed && ri.RetryCount < 1 {
 		ri.OpType = replication.HealReplicationType
 		ri.RetryCount++
 		globalReplicationPool.queueReplicaTask(GlobalContext, ri)
@@ -889,8 +959,8 @@ type ReplicationPool struct {
 // NewReplicationPool creates a pool of replication workers of specified size
 func NewReplicationPool(ctx context.Context, o ObjectLayer, sz int) *ReplicationPool {
 	pool := &ReplicationPool{
-		replicaCh:          make(chan ReplicateObjectInfo, 1000),
-		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 1000),
+		replicaCh:          make(chan ReplicateObjectInfo, 100000),
+		replicaDeleteCh:    make(chan DeletedObjectVersionInfo, 100000),
 		mrfReplicaCh:       make(chan ReplicateObjectInfo, 100000),
 		mrfReplicaDeleteCh: make(chan DeletedObjectVersionInfo, 100000),
 		objLayer:           o,
@@ -972,11 +1042,11 @@ func (p *ReplicationPool) queueReplicaTask(ctx context.Context, ri ReplicateObje
 			close(p.replicaCh)
 			close(p.mrfReplicaCh)
 		})
-		return
 	case p.replicaCh <- ri:
 	case p.mrfReplicaCh <- ri:
 		// queue all overflows into the mrfReplicaCh to handle incoming pending/failed operations
 	default:
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Replication workers could not keep up with incoming traffic - consider increasing number of replication workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), replicationSubsystem)
 	}
 }
 
@@ -1150,4 +1220,9 @@ func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer,
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo, o ObjectLayer, sync bool) {
 	globalReplicationPool.queueReplicaDeleteTask(GlobalContext, dv)
 	globalReplicationStats.Update(dv.Bucket, 0, replication.Pending, replication.StatusType(""), replication.DeleteReplicationType)
+}
+
+// suggestedWorkers recommends an increase in number of workers to meet replication load.
+func (p *ReplicationPool) suggestedWorkers(failQueue bool) int {
+	return int(float64(p.size) * ReplicationWorkerMultiplier)
 }
