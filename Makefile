@@ -73,8 +73,8 @@ hotfix: hotfix-vars install ## builds minio binary with hotfix tags
 	@sha256sum < ./minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio.$(VERSION).sha256sum
 
 hotfix-push: hotfix
-	@scp -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
-	@scp -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -i ${CRED_DIR}/minio-private.key -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -i ${CRED_DIR}/minio-private.key -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
 
 docker-hotfix-push: docker-hotfix
 	@docker push $(TAG)
