@@ -24,11 +24,23 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 )
+
+// This is needed to ensure that we can handle
+// https://github.com/minio/minio/pull/13803
+// issue but this metadata is verify specific
+// and it shouldn't be interpreted by any
+// other layer than healing.
+const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
+
+func (fi FileInfo) isDataShardFixed() bool {
+	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
+}
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
@@ -224,6 +236,11 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 		return true
 	}
 	if erErr == nil {
+		if meta.XLV1 {
+			// Legacy means heal always
+			// always check first.
+			return true
+		}
 		if !meta.Deleted && !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			if IsErr(dataErr, []error{
@@ -234,20 +251,22 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 				return true
 			}
 		}
-		if !latestMeta.MetadataEquals(meta) {
+		if !latestMeta.Equals(meta) {
 			return true
 		}
-		if !latestMeta.TransitionInfoEquals(meta) {
-			return true
-		}
-		if !latestMeta.ReplicationInfoEquals(meta) {
-			return true
-		}
-		if !latestMeta.ModTime.Equal(meta.ModTime) {
-			return true
-		}
-		if meta.XLV1 {
-			return true
+		// This will be done only once, so heal only if its possible.
+		if !latestMeta.DiskMTime.Equal(timeSentinel) && !latestMeta.DiskMTime.IsZero() {
+			// If disk mTime mismatches it is considered outdated
+			// to be healed, to fix the bug reported in
+			// https://github.com/minio/minio/pull/13803
+
+			// This check only is active if we could find maximally occurring
+			// disk mtimes that are same this also honors the quorum, this
+			// will heal existing disk implicitly in such situations
+			// automatically fixing such objects.
+			if !latestMeta.DiskMTime.Round(time.Second).Equal(meta.DiskMTime.Round(time.Second)) {
+				return true
+			}
 		}
 	}
 	return false
@@ -302,6 +321,8 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, versionID)
 	}
+
+	latestMeta.DiskMTime = pickValidDiskTimeWithQuorum(partsMetadata, errs, result.DataBlocks)
 
 	// List of disks having all parts as per latest metadata.
 	// NOTE: do not pass in latestDisks to diskWithAllParts since
@@ -542,6 +563,13 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// record the index of the updated disks
 		partsMetadata[i].Erasure.Index = i + 1
+
+		// if disk mTime is present then we are sure that
+		// we are attempting to heal, make sure to add metadata
+		// to avoid next heal on the drive.
+		if !latestMeta.DiskMTime.Equal(timeSentinel) && !latestMeta.DiskMTime.IsZero() {
+			partsMetadata[i].Metadata[reservedMetadataPrefixLowerDataShardFix] = "true"
+		}
 
 		// Attempt a rename now from healed data to final location.
 		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {

@@ -93,7 +93,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	// After heal the meta file should be as expected.
-	if !reflect.DeepEqual(fileInfoPreHeal, fileInfoPostHeal) {
+	if !fileInfoPreHeal.Equals(fileInfoPostHeal) {
 		t.Fatal("HealObject failed")
 	}
 
@@ -122,7 +122,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	// After heal the meta file should be as expected.
-	if !reflect.DeepEqual(fileInfoPreHeal, fileInfoPostHeal) {
+	if !fileInfoPreHeal.Equals(fileInfoPostHeal) {
 		t.Fatal("HealObject failed")
 	}
 
@@ -699,7 +699,8 @@ func TestHealLastDataShard(t *testing.T) {
 				t.Fatalf("Failed to make a bucket - %v", err)
 			}
 
-			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+			_, err = obj.PutObject(ctx, bucket, object,
+				mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 
 			if err != nil {
 				t.Fatal(err)
@@ -724,7 +725,9 @@ func TestHealLastDataShard(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to delete a file - %v", err)
 			}
-			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{
+				ScanMode: madmin.HealNormalScan,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -738,21 +741,23 @@ func TestHealLastDataShard(t *testing.T) {
 			firstHealedH := sha256.New()
 			_, err = io.Copy(firstHealedH, firstGr)
 			if err != nil {
-				t.Fatal()
+				t.Fatal(err)
 			}
 			firstHealedDataSha256 := firstHealedH.Sum(nil)
 
 			if !bytes.Equal(actualSha256, firstHealedDataSha256) {
-				t.Fatal("object healed wrong")
+				t.Fatalf("object healed wrong, expected %x, got %x",
+					actualSha256, firstHealedDataSha256)
 			}
 
 			// remove another data shard
-			err = removeAll(pathJoin(shuffledDisks[1].String(), bucket, object))
-			if err != nil {
+			if err = removeAll(pathJoin(shuffledDisks[1].String(), bucket, object)); err != nil {
 				t.Fatalf("Failed to delete a file - %v", err)
 			}
 
-			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+			_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{
+				ScanMode: madmin.HealNormalScan,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -766,12 +771,13 @@ func TestHealLastDataShard(t *testing.T) {
 			secondHealedH := sha256.New()
 			_, err = io.Copy(secondHealedH, secondGr)
 			if err != nil {
-				t.Fatal()
+				t.Fatal(err)
 			}
 			secondHealedDataSha256 := secondHealedH.Sum(nil)
 
 			if !bytes.Equal(actualSha256, secondHealedDataSha256) {
-				t.Fatal("object healed wrong")
+				t.Fatalf("object healed wrong, expected %x, got %x",
+					actualSha256, secondHealedDataSha256)
 			}
 		})
 	}

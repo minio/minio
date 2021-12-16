@@ -26,29 +26,35 @@ import (
 )
 
 // commonTime returns a maximally occurring time from a list of time.
-func commonTime(modTimes []time.Time) (modTime time.Time) {
-	timeOccurenceMap := make(map[int64]int, len(modTimes))
+func commonTimeAndOccurence(times []time.Time) (maxTime time.Time, maxima int) {
+	timeOccurenceMap := make(map[int64]int, len(times))
 	// Ignore the uuid sentinel and count the rest.
-	for _, t := range modTimes {
+	for _, t := range times {
 		if t.Equal(timeSentinel) {
 			continue
 		}
 		timeOccurenceMap[t.UnixNano()]++
 	}
 
-	var maxima int // Counter for remembering max occurrence of elements.
+	maxima = 0 // Counter for remembering max occurrence of elements.
 
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
 	for nano, count := range timeOccurenceMap {
 		t := time.Unix(0, nano).UTC()
-		if count > maxima || (count == maxima && t.After(modTime)) {
+		if count > maxima || (count == maxima && t.After(maxTime)) {
 			maxima = count
-			modTime = t
+			maxTime = t
 		}
 	}
 
-	// Return the collected common modTime.
+	// Return the collected common max time, with maxima
+	return maxTime, maxima
+}
+
+// commonTime returns a maximally occurring time from a list of time.
+func commonTime(modTimes []time.Time) (modTime time.Time) {
+	modTime, _ = commonTimeAndOccurence(modTimes)
 	return modTime
 }
 
@@ -86,6 +92,26 @@ func filterOnlineDisksInplace(fi FileInfo, partsMetadata []FileInfo, onlineDisks
 		}
 		onlineDisks[i] = nil
 	}
+}
+
+// Extracts list of disk mtimes from FileInfo slice and returns, skips
+// slice elements that have errors.
+func listObjectDiskMtimes(partsMetadata []FileInfo, errs []error) (diskMTimes []time.Time) {
+	diskMTimes = bootModtimes(len(partsMetadata))
+	for index, metadata := range partsMetadata {
+		if errs[index] != nil {
+			continue
+		}
+		if metadata.isDataShardFixed() {
+			// We are not interested in blocks already fixed skip them.
+			// if this is already fixed once, we should skip capturing
+			// this list altogether.
+			return diskMTimes
+		}
+		// Once the file is found, save the disk mtime saved on disk.
+		diskMTimes[index] = metadata.DiskMTime
+	}
+	return diskMTimes
 }
 
 // Notes:

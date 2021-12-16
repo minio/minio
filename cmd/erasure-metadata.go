@@ -205,10 +205,14 @@ func (fi FileInfo) TransitionInfoEquals(ofi FileInfo) bool {
 
 // MetadataEquals returns true if FileInfos Metadata maps are equal, false otherwise.
 func (fi FileInfo) MetadataEquals(ofi FileInfo) bool {
-	if len(fi.Metadata) != len(ofi.Metadata) {
-		return false
-	}
 	for k, v := range fi.Metadata {
+		if k == reservedMetadataPrefixLowerDataShardFix {
+			// Skip this since this is a special
+			// metadata that might not exist on all
+			// drives, but that is expected so skip
+			// verifying this.
+			continue
+		}
 		if ov, ok := ofi.Metadata[k]; !ok || ov != v {
 			return false
 		}
@@ -349,6 +353,17 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	}
 
 	return FileInfo{}, errErasureReadQuorum
+}
+
+func pickValidDiskTimeWithQuorum(metaArr []FileInfo, errs []error, quorum int) time.Time {
+	diskMTimes := listObjectDiskMtimes(metaArr, errs)
+
+	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes)
+	if diskMaxima >= quorum {
+		return diskMTime
+	}
+
+	return timeSentinel
 }
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a

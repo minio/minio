@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v42" // Added FreeVersions to FileInfoVersions
+	storageRESTVersion       = "v43" // Added DiskMTime field for FileInfo
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
