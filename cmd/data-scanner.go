@@ -1259,6 +1259,7 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 				DeleteMarker:          roi.DeleteMarker,
 			},
 			Bucket: roi.Bucket,
+			OpType: replication.HealReplicationType,
 		}
 		if roi.ExistingObjResync.mustResync() {
 			doi.OpType = replication.ExistingObjectReplicationType
