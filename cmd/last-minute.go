@@ -102,39 +102,21 @@ type LastMinuteLatencies struct {
 	LastSec int64
 }
 
-// Clone safely returns a copy for a LastMinuteLatencies structure
-func (l *LastMinuteLatencies) Clone() LastMinuteLatencies {
-	n := LastMinuteLatencies{}
-	n.LastSec = l.LastSec
-	for i := range l.Totals {
-		for j := range l.Totals[i] {
-			n.Totals[i][j] = AccElem{
-				Total: l.Totals[i][j].Total,
-				N:     l.Totals[i][j].N,
-			}
-		}
-	}
-	return n
-}
-
 // Merge safely merges two LastMinuteLatencies structures into one
 func (l LastMinuteLatencies) Merge(o LastMinuteLatencies) (merged LastMinuteLatencies) {
-	cl := l.Clone()
-	co := o.Clone()
-
-	if cl.LastSec > co.LastSec {
-		co.forwardTo(cl.LastSec)
-		merged.LastSec = cl.LastSec
+	if l.LastSec > o.LastSec {
+		o.forwardTo(l.LastSec)
+		merged.LastSec = l.LastSec
 	} else {
-		cl.forwardTo(co.LastSec)
-		merged.LastSec = co.LastSec
+		l.forwardTo(o.LastSec)
+		merged.LastSec = o.LastSec
 	}
 
-	for i := range cl.Totals {
-		for j := range cl.Totals[i] {
+	for i := range merged.Totals {
+		for j := range merged.Totals[i] {
 			merged.Totals[i][j] = AccElem{
-				Total: cl.Totals[i][j].Total + co.Totals[i][j].Total,
-				N:     cl.Totals[i][j].N + co.Totals[i][j].N,
+				Total: l.Totals[i][j].Total + o.Totals[i][j].Total,
+				N:     l.Totals[i][j].N + o.Totals[i][j].N,
 			}
 		}
 	}
