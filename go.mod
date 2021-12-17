@@ -49,8 +49,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.1.17
-	github.com/minio/mc v0.0.0-20211207230606-23a05f5a17f2 // indirect
+	github.com/minio/madmin-go v1.1.18
 	github.com/minio/minio-go/v7 v7.0.17
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.9
@@ -168,6 +167,7 @@ require (
 	github.com/minio/colorjson v1.0.1 // indirect
 	github.com/minio/direct-csi v1.3.5-0.20210601185811-f7776f7961bf // indirect
 	github.com/minio/filepath v1.0.0 // indirect
+	github.com/minio/mc v0.0.0-20211207230606-23a05f5a17f2 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/operator v0.0.0-20211011212245-31460bbbc4b7 // indirect
 	github.com/minio/operator/logsearchapi v0.0.0-20211011212245-31460bbbc4b7 // indirect

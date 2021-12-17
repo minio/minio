@@ -1869,6 +1869,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			}
 
 			tls := getTLSInfo()
+			isK8s := IsKubernetes()
+			isDocker := IsDocker()
 			healthInfo.Minio.Info = madmin.MinioInfo{
 				Mode:         infoMessage.Mode,
 				Domain:       infoMessage.Domain,
@@ -1882,6 +1884,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				Backend:      infoMessage.Backend,
 				Servers:      servers,
 				TLS:          &tls,
+				IsKubernetes: &isK8s,
+				IsDocker:     &isDocker,
 			}
 			partialWrite(healthInfo)
 		}
