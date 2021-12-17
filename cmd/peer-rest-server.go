@@ -1113,7 +1113,7 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 
 	enc := gob.NewEncoder(w)
 
-	ch := ReportMetrics(r.Context(), GetGeneratorsForPeer)
+	ch := ReportMetrics(r.Context(), peerMetricsGroups)
 	for m := range ch {
 		if err := enc.Encode(m); err != nil {
 			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
