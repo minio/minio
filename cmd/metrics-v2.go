@@ -211,14 +211,15 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache timedValue
+	metricsCache  timedValue
+	cacheInterval time.Duration
 }
 
 // RegisterRead register the metrics populator function to be used
 // to populate new values upon cache invalidation.
 func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 	g.metricsCache.Once.Do(func() {
-		g.metricsCache.TTL = 10 * time.Second
+		g.metricsCache.TTL = g.cacheInterval
 		g.metricsCache.Update = func() (interface{}, error) {
 			return read(GlobalContext), nil
 		}
@@ -229,7 +230,14 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 // once the TTL expires "read()" registered function is called
 // to return the new values and updated.
 func (g *MetricsGroup) Get() []Metric {
-	c, err := g.metricsCache.Get()
+	var c interface{}
+	var err error
+	if g.cacheInterval <= 0 {
+		c, err = g.metricsCache.Update()
+	} else {
+		c, err = g.metricsCache.Get()
+	}
+
 	if err != nil {
 		return []Metric{}
 	}
@@ -1285,7 +1293,9 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 }
 
 func getCacheMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 20)
 		cacheObjLayer := newCachedObjectLayerFn()
@@ -1424,7 +1434,9 @@ func getNetworkMetrics() *MetricsGroup {
 }
 
 func getBucketUsageMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
@@ -1510,7 +1522,9 @@ func getBucketUsageMetrics() *MetricsGroup {
 }
 
 func getLocalStorageMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
@@ -1551,7 +1565,9 @@ func getLocalStorageMetrics() *MetricsGroup {
 }
 
 func getClusterStorageMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
