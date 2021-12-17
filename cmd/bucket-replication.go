@@ -1808,22 +1808,15 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	// add initial usage stat to cluster stats
 	usageStat := globalReplicationStats.GetInitialUsage(bucket)
 	totReplicaSize += usageStat.ReplicaSize
-	if usageStat.Stats != nil {
-		for arn, stat := range usageStat.Stats {
-			st := stats[arn]
-			if st == nil {
-				st = &BucketReplicationStat{
-					ReplicatedSize: stat.ReplicatedSize,
-					FailedSize:     stat.FailedSize,
-					FailedCount:    stat.FailedCount,
-				}
-			} else {
-				st.ReplicatedSize += stat.ReplicatedSize
-				st.FailedSize += stat.FailedSize
-				st.FailedCount += stat.FailedCount
-			}
+	for arn, stat := range usageStat.Stats {
+		st, ok := stats[arn]
+		if !ok {
+			st = &BucketReplicationStat{}
 			stats[arn] = st
 		}
+		st.ReplicatedSize += stat.ReplicatedSize
+		st.FailedSize += stat.FailedSize
+		st.FailedCount += stat.FailedCount
 	}
 	s = BucketReplicationStats{
 		Stats: make(map[string]*BucketReplicationStat, len(stats)),
