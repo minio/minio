@@ -58,17 +58,9 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(ctx, accessKey); err != nil {
+	if err := globalIAMSys.DeleteUser(ctx, accessKey, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other MinIO peers to delete user.
-	for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 }
 
@@ -978,16 +970,10 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
+	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// Call site replication hook. Only LDAP accounts are supported for

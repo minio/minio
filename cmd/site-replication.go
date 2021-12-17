@@ -1080,16 +1080,9 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		}
 
 	case change.Delete != nil:
-		err := globalIAMSys.DeleteServiceAccount(ctx, change.Delete.AccessKey)
+		err := globalIAMSys.DeleteServiceAccount(ctx, change.Delete.AccessKey, true)
 		if err != nil {
 			return wrapSRErr(err)
-		}
-
-		for _, nerr := range globalNotificationSys.DeleteServiceAccount(change.Delete.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
 		}
 
 	}
