@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -245,21 +246,17 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := map[string]interface{}{
-		expClaim: UTCNow().Add(duration).Unix(),
+		expClaim:    UTCNow().Add(duration).Unix(),
+		parentClaim: user.AccessKey,
 	}
 
-	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
+	// Validate that user.AccessKey's policies can be retrieved - it may not
+	// be in case the user is disabled.
+	_, err = globalIAMSys.PolicyDBGet(user.AccessKey, false)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
-
-	policyName := strings.Join(policies, ",")
-
-	// This policy is the policy associated with the user
-	// requesting for temporary credentials. The temporary
-	// credentials will inherit the same policy requirements.
-	m[iamPolicyClaimNameOpenID()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
@@ -272,12 +269,12 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the parent of the temporary access key, this is useful
-	// in obtaining service accounts by this cred.
+	// Set the parent of the temporary access key, so that it's access
+	// policy is inherited from `user.AccessKey`.
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName); err != nil {
+	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
@@ -483,7 +480,17 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		issFromToken, _ = v.(string)
 	}
 
-	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
+	// Since issFromToken can have `/` characters (it is typically the
+	// provider URL), we hash and encode it to base64 here. This is needed
+	// because there will be a policy mapping stored on drives whose
+	// filename is this parentUser: therefore, it needs to have only valid
+	// filename characters and needs to have bounded length.
+	{
+		h := sha256.New()
+		h.Write([]byte("openid:" + subFromToken + ":" + issFromToken))
+		bs := h.Sum(nil)
+		cred.ParentUser = base64.RawURLEncoding.EncodeToString(bs)
+	}
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName); err != nil {
@@ -787,12 +794,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	parentUser := "tls:" + certificate.Subject.CommonName
 
 	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim:                   UTCNow().Add(expiry).Unix(),
-		parentClaim:                parentUser,
-		subClaim:                   certificate.Subject.CommonName,
-		audClaim:                   certificate.Subject.Organization,
-		issClaim:                   certificate.Issuer.CommonName,
-		iamPolicyClaimNameOpenID(): certificate.Subject.CommonName,
+		expClaim:    UTCNow().Add(expiry).Unix(),
+		parentClaim: parentUser,
+		subClaim:    certificate.Subject.CommonName,
+		audClaim:    certificate.Subject.Organization,
+		issClaim:    certificate.Issuer.CommonName,
 	}, globalActiveCred.SecretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)

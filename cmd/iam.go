@@ -568,7 +568,45 @@ func (sys *IAMSys) notifyForUser(ctx context.Context, accessKey string, isTemp b
 	}
 }
 
-// SetTempUser - set temporary user credentials, these credentials have an expiry.
+// SetTempUser - set temporary user credentials, these credentials have an
+// expiry. The permissions for these STS credentials is determined in one of the
+// following ways:
+//
+// - RoleARN - if a role-arn is specified in the request, the STS credential's
+// policy is the role's policy.
+//
+// - inherited from parent - this is the case for AssumeRole API, where the
+// parent user is an actual real user with their own (permanent) credentials and
+// policy association.
+//
+// - inherited from "virtual" parent - this is the case for AssumeRoleWithLDAP
+// where the parent user is the DN of the actual LDAP user. The parent user
+// itself cannot login, but the policy associated with them determines the base
+// policy for the STS credential. The policy mapping can be updated by the
+// administrator.
+//
+// - from `Subject.CommonName` field from the STS request for
+// AssumeRoleWithCertificate. In this case, the policy for the STS credential
+// has the same name as the value of this field.
+//
+// - from special JWT claim from STS request for AssumeRoleWithOIDC API (when
+// not using RoleARN). The claim value can be a string or a list and refers to
+// the names of access policies.
+//
+// For all except the RoleARN case, the implementation is the same - the policy
+// for the STS credential is associated with a parent user. For the
+// AssumeRoleWithCertificate case, the "virtual" parent user is the value of the
+// `Subject.CommonName` field. For the OIDC (without RoleARN) case the "virtual"
+// parent is derived as a concatenation of the `sub` and `iss` fields. The
+// policies applicable to the STS credential are associated with this "virtual"
+// parent.
+//
+// When a policyName is given to this function, the policy association is
+// created and stored in the IAM store. Thus, it should NOT be given for the
+// role-arn case (because the role-to-policy mapping is separately stored
+// elsewhere), the AssumeRole case (because the parent user is real and their
+// policy is associated via policy-set API) and the AssumeRoleWithLDAP case
+// (because the policy association is made via policy-set API).
 func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
@@ -1388,34 +1426,26 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 		}
 		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
 	} else {
-		// If roleArn is not used, we fall back to using policy claim
-		// from JWT.
-		policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
+		// Lookup the parent user's mapping if there's no role-ARN.
+		mp, ok := sys.store.GetMappedPolicy(parentUser, false)
 		if !ok {
-			// When claims are set, it should have a policy claim field.
-			return false
-		}
-		// When claims are set, it should have policies as claim.
-		if policySet.IsEmpty() {
-			// No policy, no access!
-			return false
+			// TODO (deprecated in Dec 2021): Only need to handle
+			// behavior for STS credentials created in older
+			// releases. Otherwise, reject such cases, once older
+			// behavior is deprecated.
+
+			// If there is no parent policy mapping, we fall back to
+			// using policy claim from JWT.
+			policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
+			if !ok {
+				// When claims are set, it should have a policy claim field.
+				return false
+			}
+			policies = policySet.ToSlice()
+		} else {
+			policies = mp.toSlice()
 		}
 
-		// If policy is available for given user, check the policy.
-		mp, ok := sys.store.GetMappedPolicy(args.AccountName, false)
-		if !ok {
-			// No policy set for the user that we can find, no access!
-			return false
-		}
-
-		if !policySet.Equals(mp.policySet()) {
-			// When claims has a policy, it should match the
-			// policy of args.AccountName which server remembers.
-			// if not reject such requests.
-			return false
-		}
-
-		policies = policySet.ToSlice()
 	}
 
 	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
