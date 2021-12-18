@@ -82,27 +82,52 @@ e.g., To scan objects stored under `user-uploads/` prefix and remove versions ol
 ```
 
 
-### 3.2 Automatic removal of noncurrent versions older than most recent 
+### 3.2 Automatic removal of noncurrent versions keeping only most recent ones after noncurrent days
 
-It is possible to configure automatic removal of noncurrent versions older than the most recent `N` using MinIO specific lifecycle policy extension `MaxNoncurrentVersions`.
+It is possible to configure automatic removal of older noncurrent versions keeping only the most recent `N` using `NewerNoncurrentVersions`.
 
-e.g, To remove noncurrent versions of all objects older than most recent 5 noncurrent versions under the prefix `user-uploads/`,
+e.g, To remove noncurrent versions of all objects keeping the most recent 5 noncurrent versions under the prefix `user-uploads/` 30 days after they become noncurrent ,
 ```
 {
     "Rules": [
         {
-            "ID": "Remove noncurrent versions older than",
+            "ID": "Keep only most recent 5 noncurrent versions",
             "Status": "Enabled",
             "Filter": {
                 "Prefix": "users-uploads/"
             },
             "NoncurrentVersionExpiration": {
-                "MaxNoncurrentVersions": 5
+                "NewerNoncurrentVersions": 5,
+                "NoncurrentDays": 30
             }
         }
     ]
 }
 ```
+
+#### 3.2.a Automatic removal of noncurrent versions keeping only most recent ones immediately (MinIO only extension)
+
+This is available only on MinIO as an extension to the NewerNoncurrentVersions feature. The following rule makes it possible to remove older noncurrent versions
+of objects under the prefix `user-uploads/` as soon as there are more than `N` noncurrent versions of an object.
+
+```
+{
+    "Rules": [
+        {
+            "ID": "Keep only most recent 5 noncurrent versions",
+            "Status": "Enabled",
+            "Filter": {
+                "Prefix": "users-uploads/"
+            },
+            "NoncurrentVersionExpiration": {
+                "NewerNoncurrentVersions": 5
+            }
+        }
+    ]
+}
+```
+Note: This rule has an implicit zero NoncurrentDays, which makes the expiry of those 'extra' noncurrent versions immediate.
+
 ### 3.3 Automatic removal of delete markers with no other versions
 
 When an object has only one version as a delete marker, the latter can be automatically removed after a certain number of days using the following configuration:
