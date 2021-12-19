@@ -164,7 +164,7 @@ func getValidPath(path string) (string, error) {
 		return path, err
 	}
 
-	fi, err := Lstat(path)
+	fi, err := Stat(path)
 	if err != nil && !osIsNotExist(err) {
 		return path, err
 	}
