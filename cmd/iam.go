@@ -582,6 +582,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for {
+		// Only first node is responsible of migrating IAM data
+		if !globalEndpoints.FirstLocal() {
+			break
+		}
+
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		if _, err := txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
