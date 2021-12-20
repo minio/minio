@@ -31,11 +31,14 @@ import (
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"golang.org/x/oauth2"
 )
 
 func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	suite.SetUpSuite(c)
+	// The STS for root test needs to be the first one after setup.
+	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
 	suite.TearDownSuite(c)
 }
@@ -151,6 +154,81 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
 	if err.Error() != "Access Denied." {
 		c.Fatalf("unexpected non-access-denied err: %v", err)
+	}
+}
+
+// TestSTSForRoot - needs to be the first test after server setup due to the
+// buckets list check.
+func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: globalActiveCred.AccessKey,
+			SecretKey: globalActiveCred.SecretKey,
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("err calling assumeRole: %v", err)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that a bucket can be created
+	bucket2 := getRandomBucketName()
+	err = minioClient.MakeBucket(ctx, bucket2, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Validate that admin APIs can be called - create an madmin client with
+	// user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	accInfo, err := userAdmClient.AccountInfo(ctx, madmin.AccountOpts{})
+	if err != nil {
+		c.Fatalf("root user STS should be able to get account info: %v", err)
+	}
+
+	gotBuckets := set.NewStringSet()
+	for _, b := range accInfo.Buckets {
+		gotBuckets.Add(b.Name)
+		if !(b.Access.Read && b.Access.Write) {
+			c.Fatalf("root user should have read and write access to bucket: %v", b.Name)
+		}
+	}
+	shouldHaveBuckets := set.CreateStringSet(bucket2, bucket)
+	if !gotBuckets.Equals(shouldHaveBuckets) {
+		c.Fatalf("root user should have access to all buckets")
 	}
 }
 

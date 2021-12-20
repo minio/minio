@@ -1425,6 +1425,8 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			return false
 		}
 		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
+	} else if parentUser == globalActiveCred.AccessKey {
+		policies = []string{"consoleAdmin"}
 	} else {
 		// Lookup the parent user's mapping if there's no role-ARN.
 		mp, ok := sys.store.GetMappedPolicy(parentUser, false)
