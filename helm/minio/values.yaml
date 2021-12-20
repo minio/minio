@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2021-11-24T23-19-33Z
+  tag: RELEASE.2021-12-10T23-03-39Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,16 +25,11 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2021-11-16T20-37-36Z
+  tag: RELEASE.2021-12-16T23-38-39Z
   pullPolicy: IfNotPresent
 
-## minio mode, i.e. standalone or distributed or gateway (nas,gcs)
-## Distributed MinIO ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
-## NAS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-nas.html
-## GCS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-gcs.html
-mode: distributed
-
-## NOTE: currently only "nas,gcs" gateways are supported.
+## minio mode, i.e. standalone or distributed or gateway.
+mode: distributed ## other supported values are "standalone", "gateway"
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: []
@@ -342,8 +337,18 @@ serviceAccount:
 metrics:
   serviceMonitor:
     enabled: false
-    additionalLabels: {}
     public: true
+    additionalLabels: {}
+    relabelConfigs: {}
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s
+
+## ETCD settings: https://github.com/minio/minio/blob/master/docs/sts/etcd.md
+## Define endpoints to enable this section.
+etcd:
+  endpoints: []
+  pathPrefix: ""
+  corednsPathPrefix: ""
+  clientCert: ""
+  clientCertKey: ""

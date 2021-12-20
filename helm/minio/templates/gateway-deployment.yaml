@@ -107,12 +107,32 @@ spec:
                   key: rootPassword
             {{- if eq .Values.gateway.type "gcs" }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: "/tmp/gcs-credentials/service-account-file.json""
+              value: "/tmp/gcs-credentials/service-account-file.json"
             {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
             {{- end}}
+            {{- if .Values.etcd.endpoints }}
+            - name: MINIO_ETCD_ENDPOINTS
+              value: {{ join "," .Values.etcd.endpoints | quote }}
+            {{- if .Values.etcd.clientCert }}
+            - name: MINIO_ETCD_CLIENT_CERT
+              value: "/etc/credentials/etcd_client_cert.pem"
+            {{- end }}
+            {{- if .Values.etcd.clientCertKey }}
+            - name: MINIO_ETCD_CLIENT_CERT_KEY
+              value: "/etc/credentials/etcd_client_cert_key.pem"
+            {{- end }}
+            {{- if .Values.etcd.pathPrefix }}
+            - name: MINIO_ETCD_PATH_PREFIX
+              value: {{ .Values.etcd.pathPrefix }}
+            {{- end }}
+            {{- if .Values.etcd.corednsPathPrefix }}
+            - name: MINIO_ETCD_COREDNS_PATH
+              value: {{ .Values.etcd.corednsPathPrefix }}
+            {{- end }}
+            {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
               value: {{ $val | quote }}
