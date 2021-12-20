@@ -1425,12 +1425,15 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			return false
 		}
 		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
-	} else if parentUser == globalActiveCred.AccessKey {
-		policies = []string{"consoleAdmin"}
 	} else {
 		// Lookup the parent user's mapping if there's no role-ARN.
-		mp, ok := sys.store.GetMappedPolicy(parentUser, false)
-		if !ok {
+		var err error
+		policies, err = sys.store.PolicyDBGet(parentUser, false, args.Groups...)
+		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("error fetching policies on %s: %v", parentUser, err))
+			return false
+		}
+		if len(policies) == 0 {
 			// TODO (deprecated in Dec 2021): Only need to handle
 			// behavior for STS credentials created in older
 			// releases. Otherwise, reject such cases, once older
@@ -1444,10 +1447,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 				return false
 			}
 			policies = policySet.ToSlice()
-		} else {
-			policies = mp.toSlice()
 		}
-
 	}
 
 	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
