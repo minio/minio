@@ -1107,19 +1107,11 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	accountName := cred.AccessKey
-	var policies []string
-	switch globalIAMSys.usersSysType {
-	case MinIOUsersSysType:
-		policies, err = globalIAMSys.PolicyDBGet(accountName, false)
-	case LDAPUsersSysType:
-		parentUser := accountName
-		if cred.ParentUser != "" {
-			parentUser = cred.ParentUser
-		}
-		policies, err = globalIAMSys.PolicyDBGet(parentUser, false, cred.Groups...)
-	default:
-		err = errors.New("should never happen")
+	if cred.IsTemp() || cred.IsServiceAccount() {
+		// For derived credentials, check the parent user's permissions.
+		accountName = cred.ParentUser
 	}
+	policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

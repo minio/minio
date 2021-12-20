@@ -40,6 +40,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	// The STS for root test needs to be the first one after setup.
 	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
+	suite.TestSTSWithGroupPolicy(c)
 	suite.TearDownSuite(c)
 }
 
@@ -157,6 +158,103 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 	}
 }
 
+func (s *TestSuiteIAM) TestSTSWithGroupPolicy(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	// confirm that the user is unable to access the bucket - we have not
+	// yet set any policy
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	c.mustNotListObjects(ctx, uClient, bucket)
+
+	err = s.adm.UpdateGroupMembers(ctx, madmin.GroupAddRemove{
+		Group:   "test-group",
+		Members: []string{accessKey},
+	})
+	if err != nil {
+		c.Fatalf("unable to add user to group: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, "test-group", true)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// confirm that the user is able to access the bucket - permission comes
+	// from group.
+	c.mustListObjects(ctx, uClient, bucket)
+
+	// Create STS user.
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+			Location:  "",
+		},
+	}
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("err calling assumeRole: %v", err)
+	}
+
+	// Check that STS user client has access coming from parent user's
+	// group.
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client cannot remove any objects
+	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
+	if err.Error() != "Access Denied." {
+		c.Fatalf("unexpected non-access-denied err: %v", err)
+	}
+}
+
 // TestSTSForRoot - needs to be the first test after server setup due to the
 // buckets list check.
 func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
@@ -230,10 +328,6 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	if !gotBuckets.Equals(shouldHaveBuckets) {
 		c.Fatalf("root user should have access to all buckets")
 	}
-}
-
-func (s *TestSuiteIAM) GetLDAPServer(c *check) string {
-	return os.Getenv(EnvTestLDAPServer)
 }
 
 // SetUpLDAP - expects to setup an LDAP test server using the test LDAP
