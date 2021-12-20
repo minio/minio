@@ -45,6 +45,26 @@ export MINIO_ROOT_PASSWORD=minio123`,
 				},
 			},
 		},
+		// Value with double quotes
+		{`export MINIO_ROOT_USER="minio"`,
+			false,
+			[]envKV{
+				{
+					Key:   "MINIO_ROOT_USER",
+					Value: "minio",
+				},
+			},
+		},
+		// Value with single quotes
+		{`export MINIO_ROOT_USER='minio'`,
+			false,
+			[]envKV{
+				{
+					Key:   "MINIO_ROOT_USER",
+					Value: "minio",
+				},
+			},
+		},
 		{`
 MINIO_ROOT_USER=minio
 MINIO_ROOT_PASSWORD=minio123`,
