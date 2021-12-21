@@ -30,6 +30,7 @@ const (
 	OneMB            = 1024 * 1024
 	TenMB            = 10 * OneMB
 	HundredMB        = 10 * TenMB
+	OneGB            = 1024 * OneMB
 
 	//Error codes
 	PathDoesNotExist = "path_no_exist"
@@ -158,7 +159,7 @@ func getSingleRegularRef(alloc *sdk.Allocation, remotePath string) (*sdk.ORef, e
 	return &oREsult.Refs[0], nil
 }
 
-func getFileReader(ctx context.Context, alloc *sdk.Allocation, remotePath string) (*os.File, string, error) {
+func getFileReader(ctx context.Context, alloc *sdk.Allocation, remotePath string, fileSize uint64) (*os.File, string, error) {
 	localFilePath := filepath.Join(tempdir, remotePath)
 	os.Remove(localFilePath)
 
@@ -168,7 +169,7 @@ func getFileReader(ctx context.Context, alloc *sdk.Allocation, remotePath string
 	}
 
 	var ctxCncl context.CancelFunc
-	ctx, ctxCncl = context.WithTimeout(ctx, Timeout)
+	ctx, ctxCncl = context.WithTimeout(ctx, getTimeOut(fileSize))
 	defer ctxCncl()
 
 	err := alloc.DownloadFile(localFilePath, remotePath, &cb)

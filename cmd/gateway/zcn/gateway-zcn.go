@@ -286,7 +286,7 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		IsDir:   ref.Type == Dir,
 	}
 
-	f, localPath, err := getFileReader(ctx, zob.alloc, remotePath)
+	f, localPath, err := getFileReader(ctx, zob.alloc, remotePath, uint64(ref.ActualFileSize))
 	fCloser := func() {
 		f.Close()
 		os.Remove(localPath)
@@ -534,6 +534,9 @@ func (zob *zcnObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _
 	return
 }
 
+/*
+//Unfortunately share file is done by minio client which does't need to communicate with server. It generates share url with access key id and
+//secret key
 func (zob *zcnObjects) ShareFile(ctx context.Context, bucket, object, clientID, pubEncryp string, expires, availableAfter time.Duration) (string, error) {
 	var remotePath string
 	if bucket == "" || (bucket == RootBucketName && object == "") {
@@ -579,3 +582,4 @@ func (zob *zcnObjects) RevokeShareCredential(ctx context.Context, bucket, object
 
 	return zob.alloc.RevokeShare(remotePath, clientID)
 }
+*/
