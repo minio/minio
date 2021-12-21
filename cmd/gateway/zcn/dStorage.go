@@ -32,7 +32,7 @@ const (
 	HundredMB        = 10 * TenMB
 	OneGB            = 1024 * OneMB
 
-	//Error codes
+	// Error codes
 	PathDoesNotExist = "path_no_exist"
 	ConsensusFailed  = "consensus_failed"
 	RetryWaitTime    = 500 * time.Millisecond // milliseconds
@@ -52,8 +52,7 @@ func listRootDir(alloc *sdk.Allocation, fileType string) ([]sdk.ORef, error) {
 	offsetPath := ""
 
 	for {
-		//log
-		oResult, err := getRegularRefs(alloc, RootPath, offsetPath, fileType, PageLimit)
+		oResult, err := getRegularRefs(alloc, rootPath, offsetPath, fileType, PageLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +82,6 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 	for {
 		oResult, err := getRegularRefs(alloc, remotePath, offsetPath, fileType, PageLimit)
 		if err != nil {
-			//log
 			return nil, true, "", nil, err
 		}
 		if len(oResult.Refs) == 0 {
@@ -126,12 +124,6 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 func getRegularRefs(alloc *sdk.Allocation, remotePath, offsetPath, fileType string, pageLimit int) (oResult *sdk.ObjectTreeResult, err error) {
 	level := len(strings.Split(strings.TrimSuffix(remotePath, "/"), "/")) + 1
 	oResult, err = alloc.GetRefs(remotePath, offsetPath, "", "", fileType, "regular", level, pageLimit)
-	if err != nil {
-		//log error
-
-	} else {
-		//log info
-	}
 	return
 }
 

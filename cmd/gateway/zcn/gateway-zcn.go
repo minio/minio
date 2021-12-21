@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	RootPath       = "/"
-	RootBucketName = "root"
+	rootPath       = "/"
+	rootBucketName = "root"
 )
 
 var configDir string
@@ -135,11 +135,11 @@ func (zob *zcnObjects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, e
 
 func (zob *zcnObjects) DeleteBucket(ctx context.Context, bucketName string, opts minio.DeleteBucketOptions) error {
 	//Delete empty bucket. May need to check if directory contains empty directories inside
-	if bucketName == RootBucketName {
+	if bucketName == rootBucketName {
 		return errors.New("cannot remove root path")
 	}
 
-	remotePath := filepath.Join(RootPath, bucketName)
+	remotePath := filepath.Join(rootPath, bucketName)
 
 	ref, err := getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
@@ -163,10 +163,10 @@ func (zob *zcnObjects) DeleteBucket(ctx context.Context, bucketName string, opts
 
 func (zob *zcnObjects) DeleteObject(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (oInfo minio.ObjectInfo, err error) {
 	var remotePath string
-	if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	var ref *sdk.ORef
@@ -191,10 +191,10 @@ func (zob *zcnObjects) DeleteObject(ctx context.Context, bucket, object string, 
 
 func (zob *zcnObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) (delObs []minio.DeletedObject, errs []error) {
 	var rootPath string
-	if bucket == RootBucketName {
-		rootPath = RootPath
+	if bucket == rootBucketName {
+		rootPath = rootPath
 	} else {
-		rootPath = filepath.Join(RootPath, bucket)
+		rootPath = filepath.Join(rootPath, bucket)
 	}
 
 	for _, object := range objects {
@@ -213,10 +213,10 @@ func (zob *zcnObjects) DeleteObjects(ctx context.Context, bucket string, objects
 
 func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
 	var remotePath string
-	if bucket == RootBucketName {
-		remotePath = RootPath
+	if bucket == rootBucketName {
+		remotePath = rootPath
 	} else {
-		remotePath = filepath.Join(RootPath, bucket)
+		remotePath = filepath.Join(rootPath, bucket)
 	}
 
 	var ref *sdk.ORef
@@ -233,10 +233,10 @@ func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 
 func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var remotePath string
-	if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	fmt.Println("Getting object info for: ", remotePath)
@@ -264,10 +264,10 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 //GetObjectNInfo Provides reader with read cursor placed at offset upto some length
 func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var remotePath string
-	if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	ref, err := getSingleRegularRef(zob.alloc, remotePath)
@@ -312,7 +312,7 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 //ListBuckets Lists directories of root path(/) as buckets.
 func (zob *zcnObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	rootRef, err := getSingleRegularRef(zob.alloc, RootPath)
+	rootRef, err := getSingleRegularRef(zob.alloc, rootPath)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +324,7 @@ func (zob *zcnObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 
 	//Consider root path as bucket as well.
 	buckets = append(buckets, minio.BucketInfo{
-		Name:    RootBucketName,
+		Name:    rootBucketName,
 		Created: rootRef.CreatedAt,
 	})
 
@@ -360,11 +360,11 @@ func (zob *zcnObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 //ListObjects Lists files of directories as objects
 func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	var remotePath, fileType string
-	if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, prefix)
+	if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, prefix)
 		fileType = File
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, prefix)
+		remotePath = filepath.Join(rootPath, bucket, prefix)
 	}
 
 	var isSuffix bool
@@ -451,16 +451,16 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 
 func (zob *zcnObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
 	//Create a directory; ignore opts
-	remotePath := filepath.Join(RootPath, bucket)
+	remotePath := filepath.Join(rootPath, bucket)
 	return zob.alloc.CreateDir(remotePath)
 }
 
 func (zob *zcnObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var remotePath string
-	if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	var ref *sdk.ORef
@@ -497,16 +497,16 @@ func (zob *zcnObjects) PutObject(ctx context.Context, bucket, object string, r *
 
 func (zob *zcnObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var srcRemotePath, dstRemotePath string
-	if srcBucket == RootBucketName {
-		srcRemotePath = filepath.Join(RootPath, srcObject)
+	if srcBucket == rootBucketName {
+		srcRemotePath = filepath.Join(rootPath, srcObject)
 	} else {
-		srcRemotePath = filepath.Join(RootPath, srcBucket, srcObject)
+		srcRemotePath = filepath.Join(rootPath, srcBucket, srcObject)
 	}
 
-	if destBucket == RootBucketName {
-		dstRemotePath = filepath.Join(RootPath, destObject)
+	if destBucket == rootBucketName {
+		dstRemotePath = filepath.Join(rootPath, destObject)
 	} else {
-		dstRemotePath = filepath.Join(RootPath, destBucket, destObject)
+		dstRemotePath = filepath.Join(rootPath, destBucket, destObject)
 	}
 
 	err = zob.alloc.CopyObject(srcRemotePath, dstRemotePath)
@@ -539,12 +539,12 @@ func (zob *zcnObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _
 //secret key
 func (zob *zcnObjects) ShareFile(ctx context.Context, bucket, object, clientID, pubEncryp string, expires, availableAfter time.Duration) (string, error) {
 	var remotePath string
-	if bucket == "" || (bucket == RootBucketName && object == "") {
+	if bucket == "" || (bucket == rootBucketName && object == "") {
 		//share entire allocation i.e. rootpath
-	} else if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	} else if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	var ref *sdk.ORef
@@ -567,12 +567,12 @@ func (zob *zcnObjects) ShareFile(ctx context.Context, bucket, object, clientID, 
 
 func (zob *zcnObjects) RevokeShareCredential(ctx context.Context, bucket, object, clientID string) (err error) {
 	var remotePath string
-	if bucket == "" || (bucket == RootBucketName && object == "") {
+	if bucket == "" || (bucket == rootBucketName && object == "") {
 		//share entire allocation i.e. rootpath
-	} else if bucket == RootBucketName {
-		remotePath = filepath.Join(RootPath, object)
+	} else if bucket == rootBucketName {
+		remotePath = filepath.Join(rootPath, object)
 	} else {
-		remotePath = filepath.Join(RootPath, bucket, object)
+		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
 	_, err = getSingleRegularRef(zob.alloc, remotePath)
