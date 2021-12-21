@@ -184,6 +184,25 @@ type FileInfo struct {
 	// no other caller must set this value other than multi-object delete call.
 	// usage in other calls in undefined please avoid.
 	Idx int `msg:"i"`
+
+	// DiskMTime indicates the mtime of the xl.meta on disk
+	// This is mainly used for detecting a particular issue
+	// reported in https://github.com/minio/minio/pull/13803
+	DiskMTime time.Time `msg:"dmt"`
+}
+
+// Equals checks if fi(FileInfo) matches ofi(FileInfo)
+func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
+	if !fi.MetadataEquals(ofi) {
+		return false
+	}
+	if !fi.ReplicationInfoEquals(ofi) {
+		return false
+	}
+	if !fi.TransitionInfoEquals(ofi) {
+		return false
+	}
+	return fi.ModTime.Equal(ofi.ModTime)
 }
 
 // GetDataDir returns an expected dataDir given FileInfo

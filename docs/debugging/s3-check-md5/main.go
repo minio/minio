@@ -25,6 +25,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -35,6 +36,8 @@ import (
 var (
 	endpoint, accessKey, secretKey string
 	bucket, prefix                 string
+	debug                          bool
+	versions                       bool
 )
 
 // getMD5Sum returns MD5 sum of given data.
@@ -50,6 +53,8 @@ func main() {
 	flag.StringVar(&secretKey, "secret-key", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", "S3 Secret Key")
 	flag.StringVar(&bucket, "bucket", "", "Select a specific bucket")
 	flag.StringVar(&prefix, "prefix", "", "Select a prefix")
+	flag.BoolVar(&debug, "debug", false, "Prints HTTP network calls to S3 endpoint")
+	flag.BoolVar(&versions, "versions", false, "Verify all versions")
 	flag.Parse()
 
 	if endpoint == "" {
@@ -81,7 +86,9 @@ func main() {
 		log.Fatalln()
 	}
 
-	// s3Client.TraceOn(os.Stderr)
+	if debug {
+		s3Client.TraceOn(os.Stderr)
+	}
 
 	var buckets []string
 	if bucket != "" {
@@ -100,7 +107,8 @@ func main() {
 		opts := minio.ListObjectsOptions{
 			Recursive:    true,
 			Prefix:       prefix,
-			WithVersions: true,
+			WithVersions: versions,
+			WithMetadata: true,
 		}
 
 		// List all objects from a bucket-name with a matching prefix.
@@ -110,6 +118,19 @@ func main() {
 				continue
 			}
 			if object.IsDeleteMarker {
+				log.Println("DELETE marker skipping object:", object.Key)
+				continue
+			}
+			if _, ok := object.UserMetadata["X-Amz-Server-Side-Encryption-Customer-Algorithm"]; ok {
+				log.Println("Objects encrypted with SSE-C do not have md5sum as ETag:", object.Key)
+				continue
+			}
+			if _, ok := object.UserMetadata["X-Amz-Server-Side-Encryption-Customer-Algorithm"]; ok {
+				log.Println("Objects encrypted with SSE-C do not have md5sum as ETag:", object.Key)
+				continue
+			}
+			if v, ok := object.UserMetadata["X-Amz-Server-Side-Encryption"]; ok && v == "aws:kms" {
+				log.Println("Objects encrypted with SSE-KMS do not have md5sum as ETag:", object.Key)
 				continue
 			}
 			parts := 1
@@ -132,10 +153,12 @@ func main() {
 			}
 
 			var partsMD5Sum [][]byte
-
 			for p := 1; p <= parts; p++ {
-				obj, err := s3Client.GetObject(context.Background(), bucket, object.Key,
-					minio.GetObjectOptions{VersionID: object.VersionID, PartNumber: p})
+				opts := minio.GetObjectOptions{
+					VersionID:  object.VersionID,
+					PartNumber: p,
+				}
+				obj, err := s3Client.GetObject(context.Background(), bucket, object.Key, opts)
 				if err != nil {
 					log.Println("GET", bucket, object.Key, object.VersionID, "=>", err)
 					continue
@@ -149,7 +172,6 @@ func main() {
 			}
 
 			corrupted := false
-
 			if !multipart {
 				md5sum := fmt.Sprintf("%x", partsMD5Sum[0])
 				if md5sum != object.ETag {
@@ -169,7 +191,7 @@ func main() {
 			if corrupted {
 				log.Println("CORRUPTED object:", bucket, object.Key, object.VersionID)
 			} else {
-				log.Println("INTACT", bucket, object.Key, object.VersionID)
+				log.Println("INTACT object:", bucket, object.Key, object.VersionID)
 			}
 		}
 	}

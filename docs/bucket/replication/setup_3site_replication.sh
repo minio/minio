@@ -240,18 +240,18 @@ head -c 221227088 </dev/urandom >200M
 sleep 10
 
 echo "Verifying ETag for all objects"
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket bucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket bucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket bucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket bucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket bucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket bucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket bucket
 
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket olockbucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket olockbucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket olockbucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket olockbucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket olockbucket
-./s3-check-md5 -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket olockbucket
+./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket olockbucket
 
 catch

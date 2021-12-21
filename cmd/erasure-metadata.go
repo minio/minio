@@ -351,6 +351,17 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	return FileInfo{}, errErasureReadQuorum
 }
 
+func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
+	diskMTimes := listObjectDiskMtimes(metaArr)
+
+	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes, 5*time.Second)
+	if diskMaxima >= quorum {
+		return diskMTime
+	}
+
+	return timeSentinel
+}
+
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
 func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
