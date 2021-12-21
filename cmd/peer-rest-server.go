@@ -157,7 +157,7 @@ func (s *peerRESTServer) DeleteServiceAccountHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := globalIAMSys.DeleteServiceAccount(r.Context(), accessKey); err != nil {
+	if err := globalIAMSys.DeleteServiceAccount(r.Context(), accessKey, false); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -209,7 +209,7 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(r.Context(), accessKey); err != nil {
+	if err := globalIAMSys.DeleteUser(r.Context(), accessKey, false); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

@@ -536,12 +536,26 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
-func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, regUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, regUser); err != nil {
+		return err
+	}
+
+	// Notify all other MinIO peers to delete user.
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteUser(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CurrentPolicies - returns comma separated policy string, from
@@ -912,7 +926,7 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 }
 
 // DeleteServiceAccount - delete a service account
-func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -922,7 +936,20 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 		return nil
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, svcUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, svcUser); err != nil {
+		return err
+	}
+
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteServiceAccount(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CreateUser - create new user credentials and policy, if user already exists
