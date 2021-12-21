@@ -29,6 +29,7 @@ function start_minio_16drive() {
     export MINIO_ROOT_PASSWORD=minio123
     export MC_HOST_minio="http://minio:minio123@127.0.0.1:${start_port}/"
     unset MINIO_KMS_AUTO_ENCRYPTION # do not auto-encrypt objects
+    export _MINIO_SHARD_DISKTIME_DELTA="5s" # do not change this as its needed for tests
 
     MC_BUILD_DIR="mc-$RANDOM"
     if ! git clone --quiet https://github.com/minio/mc "$MC_BUILD_DIR"; then
