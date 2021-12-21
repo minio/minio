@@ -71,6 +71,9 @@ spec:
             - "-ce"
             - "/usr/bin/docker-entrypoint.sh minio server {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }}"
           volumeMounts:
+            - name: minio-user
+              mountPath: "/tmp/credentials"
+              readOnly: true
             {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
@@ -104,11 +107,11 @@ spec:
               value: {{ join "," .Values.etcd.endpoints | quote }}
             {{- if .Values.etcd.clientCert }}
             - name: MINIO_ETCD_CLIENT_CERT
-              value: "/etc/credentials/etcd_client_cert.pem"
+              value: "/tmp/credentials/etcd_client_cert.pem"
             {{- end }}
             {{- if .Values.etcd.clientCertKey }}
             - name: MINIO_ETCD_CLIENT_CERT_KEY
-              value: "/etc/credentials/etcd_client_cert_key.pem"
+              value: "/tmp/credentials/etcd_client_cert_key.pem"
             {{- end }}
             {{- if .Values.etcd.pathPrefix }}
             - name: MINIO_ETCD_PATH_PREFIX

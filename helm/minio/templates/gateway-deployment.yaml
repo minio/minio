@@ -76,11 +76,9 @@ spec:
             - "/usr/bin/docker-entrypoint.sh minio gateway gcs {{ .Values.gateway.gcs.projectId }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
             {{- end }}
           volumeMounts:
-            {{- if eq .Values.gateway.type "gcs" }}
             - name: minio-user
-              mountPath: "/tmp/gcs-credentials"
+              mountPath: "/tmp/credentials"
               readOnly: true
-            {{- end }}
             {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
@@ -107,7 +105,7 @@ spec:
                   key: rootPassword
             {{- if eq .Values.gateway.type "gcs" }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: "/tmp/gcs-credentials/service-account-file.json"
+              value: "/tmp/credentials/service-account-file.json"
             {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
@@ -118,11 +116,11 @@ spec:
               value: {{ join "," .Values.etcd.endpoints | quote }}
             {{- if .Values.etcd.clientCert }}
             - name: MINIO_ETCD_CLIENT_CERT
-              value: "/etc/credentials/etcd_client_cert.pem"
+              value: "/tmp/credentials/etcd_client.crt"
             {{- end }}
             {{- if .Values.etcd.clientCertKey }}
             - name: MINIO_ETCD_CLIENT_CERT_KEY
-              value: "/etc/credentials/etcd_client_cert_key.pem"
+              value: "/tmp/credentials/etcd_client.key"
             {{- end }}
             {{- if .Values.etcd.pathPrefix }}
             - name: MINIO_ETCD_PATH_PREFIX
