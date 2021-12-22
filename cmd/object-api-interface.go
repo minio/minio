@@ -245,10 +245,6 @@ type ObjectLayer interface {
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
 	DeleteObjectTags(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
-
-	// Operations for 0chain only
-	ShareFile(ctx context.Context, bucket, object, clientID, pubEncryp string, expires, availableAfter time.Duration) (string, error)
-	RevokeShareCredential(ctx context.Context, bucket, object, clientID string) error
 }
 
 // GetObject - TODO(aead): This function just acts as an adapter for GetObject tests and benchmarks

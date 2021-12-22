@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/minio/minio/internal/logger"
 
@@ -283,12 +282,4 @@ func (a GatewayUnsupported) TransitionObject(ctx context.Context, bucket, object
 // RestoreTransitionedObject - restore transitioned object content locally on this cluster.
 func (a GatewayUnsupported) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return NotImplemented{}
-}
-
-func (a GatewayUnsupported) ShareFile(ctx context.Context, bucket, object, clientID, pubEncryp string, expires, availableAfter time.Duration) (string, error) {
-	return "", nil
-}
-
-func (a GatewayUnsupported) RevokeShareCredential(ctx context.Context, bucket, object, clientID string) error {
-	return nil
 }
