@@ -82,6 +82,7 @@ const (
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
+	ErrAccessKeyDisabled
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
@@ -514,6 +515,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The Access Key Id you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
+	ErrAccessKeyDisabled: {
+		Code:           "InvalidAccessKeyId",
+		Description:    "Your account is disabled; please contact your administrator.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	ErrInvalidBucketName: {
 		Code:           "InvalidBucketName",
 		Description:    "The specified bucket is not valid.",
@@ -681,7 +687,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrAllAccessDisabled: {
 		Code:           "AllAccessDisabled",
-		Description:    "All access to this bucket has been disabled.",
+		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrMalformedPolicy: {
