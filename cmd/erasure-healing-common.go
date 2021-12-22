@@ -225,10 +225,11 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 // - slice of errors about the state of data files on disk - can have
 //   a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
-	errs []error, latestMeta FileInfo,
-	bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
+	errs []error, latestMeta FileInfo, bucket, object string,
+	scanMode madmin.HealScanMode) ([]StorageAPI, []error, time.Time) {
 
 	var diskMTime time.Time
+	var shardFix bool
 	if !latestMeta.DataShardFixed() {
 		diskMTime = pickValidDiskTimeWithQuorum(partsMetadata,
 			latestMeta.Erasure.DataBlocks)
@@ -283,6 +284,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 
 		if erasureDistributionReliable {
 			if !meta.IsValid() {
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
 				continue
 			}
 
@@ -302,6 +305,23 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 					dataErrs[i] = errFileCorrupt
 					continue
 				}
+			}
+		}
+
+		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
+			if !partsMetadata[i].AcceptableDelta(diskMTime, shardDiskTimeDelta) {
+				// not with in acceptable delta, skip.
+				// If disk mTime mismatches it is considered outdated
+				// https://github.com/minio/minio/pull/13803
+				//
+				// This check only is active if we could find maximally
+				// occurring disk mtimes that are somewhat same across
+				// the quorum. Allowing to skip those shards which we
+				// might think are wrong.
+				shardFix = true
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
+				continue
 			}
 		}
 
@@ -338,14 +358,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			}
 		}
 
-		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
-			if !partsMetadata[i].AcceptableDelta(diskMTime, shardDiskTimeDelta) {
-				// not with in acceptable delta, skip.
-				partsMetadata[i] = FileInfo{}
-				continue
-			}
-		}
-
 		if dataErrs[i] == nil {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
@@ -355,5 +367,10 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 	}
 
-	return availableDisks, dataErrs
+	if shardFix {
+		// Only when shard is fixed return an appropriate disk mtime value.
+		return availableDisks, dataErrs, diskMTime
+	} // else return timeSentinel for disk mtime
+
+	return availableDisks, dataErrs, timeSentinel
 }
