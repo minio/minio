@@ -373,3 +373,58 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 		return
 	}
 }
+
+// SiteReplicationEdit - PUT /minio/admin/v3/site-replication/edit
+func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationEdit")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	if objectAPI == nil {
+		return
+	}
+	var site madmin.PeerInfo
+	err := parseJSONBody(ctx, r.Body, &site, cred.SecretKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	body, err := json.Marshal(status)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, body)
+}
+
+// SRPeerEdit - PUT /minio/admin/v3/site-replication/peer/edit
+//
+// used internally to tell current cluster to update endpoint for peer
+func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerEdit")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var pi madmin.PeerInfo
+	if err := parseJSONBody(ctx, r.Body, &pi, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.PeerEditReq(ctx, pi); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}

@@ -1335,6 +1335,20 @@ func (c *SiteReplicationSys) getAdminClient(ctx context.Context, deploymentID st
 	return getAdminClient(peer.Endpoint, creds.AccessKey, creds.SecretKey)
 }
 
+// getAdminClientWithEndpoint - NOTE: ensure to take at least a read lock on SiteReplicationSys
+// before calling this.
+func (c *SiteReplicationSys) getAdminClientWithEndpoint(ctx context.Context, deploymentID, endpoint string) (*madmin.AdminClient, error) {
+	creds, err := c.getPeerCreds()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := c.state.Peers[deploymentID]; !ok {
+		return nil, errSRPeerNotFound
+	}
+	return getAdminClient(endpoint, creds.AccessKey, creds.SecretKey)
+}
+
 func (c *SiteReplicationSys) getPeerCreds() (*auth.Credentials, error) {
 	creds, ok := globalIAMSys.store.GetUser(c.state.ServiceAccountAccessKey)
 	if !ok {
@@ -2473,4 +2487,111 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 		}
 	}
 	return info, nil
+}
+
+// EditPeerCluster - edits replication configuration and updates peer endpoint.
+func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.PeerInfo) (madmin.ReplicateEditStatus, error) {
+	sites, err := c.GetClusterInfo(ctx)
+	if err != nil {
+		return madmin.ReplicateEditStatus{}, errSRBackendIssue(err)
+	}
+	if !sites.Enabled {
+		return madmin.ReplicateEditStatus{}, errSRNotEnabled
+	}
+
+	var (
+		found     bool
+		admClient *madmin.AdminClient
+	)
+
+	for _, v := range sites.Sites {
+		if peer.DeploymentID == v.DeploymentID {
+			found = true
+			if peer.Endpoint == v.Endpoint {
+				return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("Endpoint %s entered for deployment id %s already configured in site replication", v.Endpoint, v.DeploymentID))
+			}
+			admClient, err = c.getAdminClientWithEndpoint(ctx, v.DeploymentID, peer.Endpoint)
+			if err != nil {
+				return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
+			}
+			// check if endpoint is reachable
+			if _, err = admClient.ServerInfo(ctx); err != nil {
+				return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("Endpoint %s not reachable: %w", peer.Endpoint, err))
+			}
+		}
+	}
+
+	if !found {
+		return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("%s not found in existing replicated sites", peer.DeploymentID))
+	}
+
+	errs := make(map[string]error, len(c.state.Peers))
+	var wg sync.WaitGroup
+
+	pi := c.state.Peers[peer.DeploymentID]
+	pi.Endpoint = peer.Endpoint
+
+	for i, v := range sites.Sites {
+		if v.DeploymentID == globalDeploymentID {
+			c.state.Peers[peer.DeploymentID] = pi
+			continue
+		}
+		wg.Add(1)
+		go func(pi madmin.PeerInfo, i int) {
+			defer wg.Done()
+			v := sites.Sites[i]
+			admClient, err := c.getAdminClient(ctx, v.DeploymentID)
+			if v.DeploymentID == peer.DeploymentID {
+				admClient, err = c.getAdminClientWithEndpoint(ctx, v.DeploymentID, peer.Endpoint)
+			}
+			if err != nil {
+				errs[v.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
+				return
+			}
+			if err = admClient.SRPeerEdit(ctx, pi); err != nil {
+				errs[v.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", v.Name, err))
+				return
+			}
+		}(pi, i)
+	}
+
+	wg.Wait()
+	for dID, err := range errs {
+		if err != nil {
+			return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", c.state.Peers[dID].Name, err))
+		}
+	}
+	// we can now save the cluster replication configuration state.
+	if err = c.saveToDisk(ctx, c.state); err != nil {
+		return madmin.ReplicateEditStatus{
+			Status:    madmin.ReplicateAddStatusPartial,
+			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
+		}, nil
+	}
+
+	result := madmin.ReplicateEditStatus{
+		Success: true,
+		Status:  fmt.Sprintf("Cluster replication configuration updated with endpoint %s for peer %s successfully", peer.Endpoint, peer.Name),
+	}
+	return result, nil
+}
+
+// PeerEditReq - internal API handler to respond to a peer cluster's request
+// to edit endpoint.
+func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInfo) error {
+	ourName := ""
+	for i := range c.state.Peers {
+		p := c.state.Peers[i]
+		if p.DeploymentID == arg.DeploymentID {
+			p.Endpoint = arg.Endpoint
+			c.state.Peers[arg.DeploymentID] = p
+		}
+		if p.DeploymentID == globalDeploymentID {
+			ourName = p.Name
+		}
+	}
+	if err := c.saveToDisk(ctx, c.state); err != nil {
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+	}
+	return nil
 }
