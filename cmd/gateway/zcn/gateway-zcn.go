@@ -87,14 +87,17 @@ func zcnGatewayMain(ctx *cli.Context) {
 	minio.StartGateway(ctx, &ZCN{args: ctx.Args()})
 }
 
+// ZCN implements gateway
 type ZCN struct {
 	args []string
 }
 
+// Name implements gateway interface
 func (z *ZCN) Name() string {
 	return minio.ZCNBAckendGateway
 }
 
+// NewGatewayLayer initializes 0chain gosdk and return zcnObjects
 func (z *ZCN) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	err := initializeSDK(configDir, allocationID)
 	if err != nil {
@@ -120,6 +123,7 @@ type zcnObjects struct {
 	metrics *minio.BackendMetrics
 }
 
+// Shutdown Remove temporary directory
 func (zob *zcnObjects) Shutdown(ctx context.Context) error {
 	os.RemoveAll(tempdir)
 	return nil
@@ -133,8 +137,8 @@ func (zob *zcnObjects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, e
 	return zob.metrics, nil
 }
 
+// DeleteBucket Delete only empty bucket unless forced
 func (zob *zcnObjects) DeleteBucket(ctx context.Context, bucketName string, opts minio.DeleteBucketOptions) error {
-	//Delete empty bucket. May need to check if directory contains empty directories inside
 	if bucketName == rootBucketName {
 		return errors.New("cannot remove root path")
 	}
@@ -146,7 +150,7 @@ func (zob *zcnObjects) DeleteBucket(ctx context.Context, bucketName string, opts
 		return err
 	}
 
-	if ref.Type != Dir {
+	if ref.Type != dirType {
 		return fmt.Errorf("%v is object not bucket", bucketName)
 	}
 
@@ -185,20 +189,20 @@ func (zob *zcnObjects) DeleteObject(ctx context.Context, bucket, object string, 
 		Name:    ref.Name,
 		ModTime: time.Now(),
 		Size:    ref.ActualFileSize,
-		IsDir:   ref.Type == Dir,
+		IsDir:   ref.Type == dirType,
 	}, nil
 }
 
 func (zob *zcnObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) (delObs []minio.DeletedObject, errs []error) {
-	var rootPath string
+	var basePath string
 	if bucket == rootBucketName {
-		rootPath = rootPath
+		basePath = rootPath
 	} else {
-		rootPath = filepath.Join(rootPath, bucket)
+		basePath = filepath.Join(rootPath, bucket)
 	}
 
 	for _, object := range objects {
-		remotePath := filepath.Join(rootPath, object.ObjectName)
+		remotePath := filepath.Join(basePath, object.ObjectName)
 		err := zob.alloc.DeleteFile(remotePath)
 		if err != nil {
 			errs = append(errs, err)
@@ -211,6 +215,7 @@ func (zob *zcnObjects) DeleteObjects(ctx context.Context, bucket string, objects
 	return
 }
 
+// GetBucketInfo Get directory's metadata and present it as minio.BucketInfo
 func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
 	var remotePath string
 	if bucket == rootBucketName {
@@ -231,6 +236,7 @@ func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 	return minio.BucketInfo{Name: ref.Name, Created: ref.CreatedAt}, nil
 }
 
+// GetObjectInfo Get file meta data and respond it as minio.ObjectInfo
 func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var remotePath string
 	if bucket == rootBucketName {
@@ -255,13 +261,13 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		Name:        getCommonPrefix(remotePath),
 		ModTime:     ref.UpdatedAt,
 		Size:        ref.ActualFileSize,
-		IsDir:       ref.Type == Dir,
+		IsDir:       ref.Type == dirType,
 		AccTime:     time.Now(),
 		ContentType: ref.MimeType,
 	}, nil
 }
 
-//GetObjectNInfo Provides reader with read cursor placed at offset upto some length
+// GetObjectNInfo Provides reader with read cursor placed at offset upto some length
 func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var remotePath string
 	if bucket == rootBucketName {
@@ -283,7 +289,7 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		Name:    ref.Name,
 		ModTime: ref.UpdatedAt,
 		Size:    ref.ActualFileSize,
-		IsDir:   ref.Type == Dir,
+		IsDir:   ref.Type == dirType,
 	}
 
 	f, localPath, err := getFileReader(ctx, zob.alloc, remotePath, uint64(ref.ActualFileSize))
@@ -310,7 +316,7 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	return
 }
 
-//ListBuckets Lists directories of root path(/) as buckets.
+// ListBuckets Lists directories of root path(/) and root path itself as buckets.
 func (zob *zcnObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	rootRef, err := getSingleRegularRef(zob.alloc, rootPath)
 	if err != nil {
@@ -322,7 +328,7 @@ func (zob *zcnObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 		return nil, err
 	}
 
-	//Consider root path as bucket as well.
+	// Consider root path as bucket as well.
 	buckets = append(buckets, minio.BucketInfo{
 		Name:    rootBucketName,
 		Created: rootRef.CreatedAt,
@@ -357,12 +363,14 @@ func (zob *zcnObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 	return
 }
 
-//ListObjects Lists files of directories as objects
+// ListObjects Lists files of directories as objects
 func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
-	var remotePath, fileType string
+	// objFileType For root path list objects should only provide file and not dirs.
+	// Dirs under root path are presented as buckets as well
+	var remotePath, objFileType string
 	if bucket == rootBucketName {
 		remotePath = filepath.Join(rootPath, prefix)
-		fileType = File
+		objFileType = fileType
 	} else {
 		remotePath = filepath.Join(rootPath, bucket, prefix)
 	}
@@ -382,7 +390,7 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		return
 	}
 
-	if ref.Type == File {
+	if ref.Type == fileType {
 		if isSuffix {
 			return minio.ListObjectsInfo{
 					IsTruncated: false,
@@ -420,13 +428,13 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		isDelimited = true
 	}
 
-	refs, isTruncated, nextMarker, prefixes, err := listRegularRefs(zob.alloc, remotePath, marker, fileType, maxKeys, isDelimited)
+	refs, isTruncated, nextMarker, prefixes, err := listRegularRefs(zob.alloc, remotePath, marker, objFileType, maxKeys, isDelimited)
 	if err != nil {
 		return minio.ListObjectsInfo{}, err
 	}
 
 	for _, ref := range refs {
-		if ref.Type == Dir {
+		if ref.Type == dirType {
 			continue
 		}
 
@@ -450,7 +458,7 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 }
 
 func (zob *zcnObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
-	//Create a directory; ignore opts
+	// Create a directory; ignore opts
 	remotePath := filepath.Join(rootPath, bucket)
 	return zob.alloc.CreateDir(remotePath)
 }

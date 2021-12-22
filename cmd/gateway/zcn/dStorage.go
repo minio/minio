@@ -19,23 +19,21 @@ import (
 var tempdir string
 
 const (
-	PageLimit = 100
-	Dir       = "d"
-	File      = "f"
+	pageLimit = 100
+	dirType   = "d"
+	fileType  = "f"
 
-	Timeout = time.Second * 30
-
-	DefaultChunkSize = 64 * 1024
-	FiveHunderedKB   = 500 * 1024
-	OneMB            = 1024 * 1024
-	TenMB            = 10 * OneMB
-	HundredMB        = 10 * TenMB
-	OneGB            = 1024 * OneMB
+	defaultChunkSize = 64 * 1024
+	fiveHunderedKB   = 500 * 1024
+	oneMB            = 1024 * 1024
+	tenMB            = 10 * oneMB
+	hundredMB        = 10 * tenMB
+	oneGB            = 1024 * oneMB
 
 	// Error codes
-	PathDoesNotExist = "path_no_exist"
-	ConsensusFailed  = "consensus_failed"
-	RetryWaitTime    = 500 * time.Millisecond // milliseconds
+	pathDoesNotExist = "path_no_exist"
+	consensusFailed  = "consensus_failed"
+	retryWaitTime    = 500 * time.Millisecond // milliseconds
 )
 
 func init() {
@@ -52,7 +50,7 @@ func listRootDir(alloc *sdk.Allocation, fileType string) ([]sdk.ORef, error) {
 	offsetPath := ""
 
 	for {
-		oResult, err := getRegularRefs(alloc, rootPath, offsetPath, fileType, PageLimit)
+		oResult, err := getRegularRefs(alloc, rootPath, offsetPath, fileType, pageLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +78,7 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 	commonPrefix := getCommonPrefix(remotePath)
 	offsetPath := filepath.Join(remotePath, marker)
 	for {
-		oResult, err := getRegularRefs(alloc, remotePath, offsetPath, fileType, PageLimit)
+		oResult, err := getRegularRefs(alloc, remotePath, offsetPath, fileType, pageLimit)
 		if err != nil {
 			return nil, true, "", nil, err
 		}
@@ -92,7 +90,7 @@ func listRegularRefs(alloc *sdk.Allocation, remotePath, marker, fileType string,
 			ref := oResult.Refs[i]
 			trimmedPath := strings.TrimPrefix(ref.Path, remotePath+"/")
 			if isDelimited {
-				if ref.Type == Dir {
+				if ref.Type == dirType {
 					dirPrefix := filepath.Join(commonPrefix, trimmedPath) + "/"
 					prefixes = append(prefixes, dirPrefix)
 					continue
@@ -129,12 +127,10 @@ func getRegularRefs(alloc *sdk.Allocation, remotePath, offsetPath, fileType stri
 
 func getSingleRegularRef(alloc *sdk.Allocation, remotePath string) (*sdk.ORef, error) {
 	level := len(strings.Split(strings.TrimSuffix(remotePath, "/"), "/"))
-	//log
 	oREsult, err := alloc.GetRefs(remotePath, "", "", "", "", "regular", level, 1)
 	if err != nil {
 		if isConsensusFailedError(err) {
-			time.Sleep(RetryWaitTime)
-			//log retrying again
+			time.Sleep(retryWaitTime)
 			oREsult, err = alloc.GetRefs(remotePath, "", "", "", "", "regular", level, 1)
 			if err != nil {
 				return nil, err
@@ -145,7 +141,7 @@ func getSingleRegularRef(alloc *sdk.Allocation, remotePath string) (*sdk.ORef, e
 	}
 
 	if len(oREsult.Refs) == 0 {
-		return nil, zerror.New(PathDoesNotExist, fmt.Sprintf("remotepath %v does not exist", remotePath))
+		return nil, zerror.New(pathDoesNotExist, fmt.Sprintf("remotepath %v does not exist", remotePath))
 	}
 
 	return &oREsult.Refs[0], nil
@@ -191,7 +187,7 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 		errCh:  make(chan error, 1),
 	}
 
-	attrs := fileref.Attributes{} //default is owner pays
+	attrs := fileref.Attributes{} // default is owner pays
 	_, fileName := filepath.Split(remotePath)
 	fileMeta := sdk.FileMeta{
 		Path:       "",
@@ -209,21 +205,21 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 
 	var chunkSize int64
 	switch {
-	case size > HundredMB:
-		chunkSize = 2 * TenMB
-	case size > TenMB:
-		chunkSize = TenMB
-	case size > OneMB:
-		chunkSize = OneMB
-	case size > FiveHunderedKB:
-		chunkSize = FiveHunderedKB
+	case size > hundredMB:
+		chunkSize = 2 * tenMB
+	case size > tenMB:
+		chunkSize = tenMB
+	case size > oneMB:
+		chunkSize = oneMB
+	case size > fiveHunderedKB:
+		chunkSize = fiveHunderedKB
 	default:
-		chunkSize = DefaultChunkSize
+		chunkSize = defaultChunkSize
 	}
 
 	chunkUpload, err := sdk.CreateChunkedUpload(workDir, alloc, fileMeta, newMinioReader(r), isUpdate, false,
 		sdk.WithStatusCallback(cb),
-		sdk.WithChunkSize(int64(chunkSize)),
+		sdk.WithChunkSize(chunkSize),
 	)
 
 	if err != nil {
@@ -265,7 +261,7 @@ func isPathNoExistError(err error) bool {
 
 	switch err := err.(type) {
 	case *zerror.Error:
-		if err.Code == PathDoesNotExist {
+		if err.Code == pathDoesNotExist {
 			return true
 		}
 	}
@@ -280,7 +276,7 @@ func isConsensusFailedError(err error) bool {
 
 	switch err := err.(type) {
 	case *zerror.Error:
-		if err.Code == ConsensusFailed {
+		if err.Code == consensusFailed {
 			return true
 		}
 	}
