@@ -954,7 +954,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, n
 
 // CreateUser - create new user credentials and policy, if user already exists
 // they shall be rewritten with new inputs.
-func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmin.UserInfo) error {
+func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -967,11 +967,11 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmi
 		return auth.ErrInvalidAccessKeyLength
 	}
 
-	if !auth.IsSecretKeyValid(uinfo.SecretKey) {
+	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	err := sys.store.AddUser(ctx, accessKey, uinfo)
+	err := sys.store.AddUser(ctx, accessKey, ureq)
 	if err != nil {
 		return err
 	}

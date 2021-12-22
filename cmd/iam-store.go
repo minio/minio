@@ -1629,7 +1629,7 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 }
 
 // AddUser - adds/updates long term user account to storage.
-func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, uinfo madmin.UserInfo) error {
+func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) error {
 	cache := store.lock()
 	defer store.unlock()
 
@@ -1642,9 +1642,9 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, uinfo m
 
 	u := newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
-		SecretKey: uinfo.SecretKey,
+		SecretKey: ureq.SecretKey,
 		Status: func() string {
-			if uinfo.Status == madmin.AccountEnabled {
+			if ureq.Status == madmin.AccountEnabled {
 				return auth.AccountOn
 			}
 			return auth.AccountOff
@@ -1657,25 +1657,7 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, uinfo m
 
 	cache.iamUsersMap[accessKey] = u.Credentials
 
-	// Set policy if specified.
-	if uinfo.PolicyName != "" {
-		policy := uinfo.PolicyName
-		// Handle policy mapping set/update
-		mp := newMappedPolicy(policy)
-		for _, p := range mp.toSlice() {
-			if _, found := cache.iamPolicyDocsMap[policy]; !found {
-				logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, p))
-				return errNoSuchPolicy
-			}
-		}
-
-		if err := store.saveMappedPolicy(ctx, accessKey, regUser, false, mp); err != nil {
-			return err
-		}
-		cache.iamUserPolicyMap[accessKey] = mp
-	}
 	return nil
-
 }
 
 // UpdateUserSecretKey - sets user secret key to storage.
