@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -182,7 +181,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	if !fi.DataShardFixed() {
 		diskMTime := pickValidDiskTimeWithQuorum(metaArr, fi.Erasure.DataBlocks)
-		delta := 5 * time.Second
 		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
 			for index := range onlineDisks {
 				if onlineDisks[index] == OfflineDisk {
@@ -191,7 +189,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 				if !metaArr[index].IsValid() {
 					continue
 				}
-				if !metaArr[index].AcceptableDelta(diskMTime, delta) {
+				if !metaArr[index].AcceptableDelta(diskMTime, shardDiskTimeDelta) {
 					// If disk mTime mismatches it is considered outdated
 					// https://github.com/minio/minio/pull/13803
 					//

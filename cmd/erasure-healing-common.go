@@ -229,7 +229,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	bucket, object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
 
 	var diskMTime time.Time
-	delta := 5 * time.Second
 	if !latestMeta.DataShardFixed() {
 		diskMTime = pickValidDiskTimeWithQuorum(partsMetadata,
 			latestMeta.Erasure.DataBlocks)
@@ -340,7 +339,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 
 		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
-			if !partsMetadata[i].AcceptableDelta(diskMTime, delta) {
+			if !partsMetadata[i].AcceptableDelta(diskMTime, shardDiskTimeDelta) {
 				// not with in acceptable delta, skip.
 				partsMetadata[i] = FileInfo{}
 				continue

@@ -354,7 +354,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
 	diskMTimes := listObjectDiskMtimes(metaArr)
 
-	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes, 5*time.Second)
+	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes, shardDiskTimeDelta)
 	if diskMaxima >= quorum {
 		return diskMTime
 	}

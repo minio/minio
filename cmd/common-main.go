@@ -67,6 +67,7 @@ import (
 
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+var shardDiskTimeDelta time.Duration
 var defaultAWSCredProvider []credentials.Provider
 
 func init() {
@@ -134,6 +135,12 @@ func init() {
 				Transport: NewGatewayHTTPTransport(),
 			},
 		},
+	}
+
+	var err error
+	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
+	if err != nil {
+		shardDiskTimeDelta = 1 * time.Minute
 	}
 
 	// All minio-go API operations shall be performed only once,
