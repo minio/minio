@@ -100,7 +100,7 @@ var (
 	ErrInvalidCacheEncryptionKey = newErrFn(
 		"Invalid cache encryption master key value",
 		"Please check the passed value",
-		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
+		"MINIO_CACHE_ENCRYPTION_SECRET_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
 	)
 
 	ErrInvalidCacheRange = newErrFn(
