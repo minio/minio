@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	mysqlTableExists          = `SELECT 1 FROM %s;`
-	mysqlCreateNamespaceTable = `CREATE TABLE %s (key_name VARCHAR(4096), value JSON, PRIMARY KEY (key_name))
+	mysqlTableExists = `SELECT 1 FROM %s;`
+	// Some MySQL has a 3072 byte limit on key sizes.
+	mysqlCreateNamespaceTable = `CREATE TABLE %s (key_name VARCHAR(3072), value JSON, PRIMARY KEY (key_name))
                                        CHARACTER SET = utf8mb4 COLLATE = utf8mb4_bin ROW_FORMAT = Dynamic;`
 	mysqlCreateAccessTable = `CREATE TABLE %s (event_time DATETIME NOT NULL, event_data JSON)
                                     ROW_FORMAT = Dynamic;`
