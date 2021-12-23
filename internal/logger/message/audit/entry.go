@@ -31,10 +31,10 @@ const Version = "1"
 
 // Entry - audit entry logs.
 type Entry struct {
-	Version      string `json:"version"`
-	DeploymentID string `json:"deploymentid,omitempty"`
-	Time         string `json:"time"`
-	Trigger      string `json:"trigger"`
+	Version      string    `json:"version"`
+	DeploymentID string    `json:"deploymentid,omitempty"`
+	Time         time.Time `json:"time"`
+	Trigger      string    `json:"trigger"`
 	API          struct {
 		Name            string `json:"name,omitempty"`
 		Bucket          string `json:"bucket,omitempty"`
@@ -61,7 +61,7 @@ func NewEntry(deploymentID string) Entry {
 	return Entry{
 		Version:      Version,
 		DeploymentID: deploymentID,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		Time:         time.Now().UTC(),
 	}
 }
 
