@@ -1119,3 +1119,27 @@ func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (dailyAll
 	}
 	return dailyAllTierStats(result), nil
 }
+
+// DevNull - Used by netperf to pump data to peer
+func (client *peerRESTClient) DevNull(ctx context.Context, r io.Reader) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDevNull, nil, r, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return err
+}
+
+// Netperf - To initiate netperf on peer
+func (client *peerRESTClient) Netperf(ctx context.Context, duration time.Duration) (madmin.NetperfNodeResult, error) {
+	var result madmin.NetperfNodeResult
+	values := make(url.Values)
+	values.Set(peerRESTDuration, duration.String())
+	respBody, err := client.callWithContext(context.Background(), peerRESTMethodNetperf, values, nil, -1)
+	if err != nil {
+		return result, err
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&result)
+	return result, err
+}

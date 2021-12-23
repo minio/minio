@@ -345,6 +345,11 @@ var (
 	globalIsCICD bool
 
 	globalRootDiskThreshold uint64
+
+	// Used for collecting stats for netperf
+	globalNetPerfMinDuration = time.Second * 10
+	globalNetPerfRX          netPerfRX
+
 	// Add new variable global values here.
 )
 

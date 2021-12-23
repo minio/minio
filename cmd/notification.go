@@ -1553,6 +1553,58 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 	return nerrs
 }
 
+// Netperf - perform mesh style network throughput test
+func (sys *NotificationSys) Netperf(ctx context.Context, duration time.Duration) []madmin.NetperfNodeResult {
+	length := len(sys.allPeerClients)
+	if length == 0 {
+		// For single node erasure setup.
+		return nil
+	}
+	results := make([]madmin.NetperfNodeResult, length)
+
+	scheme := "http"
+	if globalIsTLS {
+		scheme = "https"
+	}
+
+	var wg sync.WaitGroup
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			r, err := sys.peerClients[index].Netperf(ctx, duration)
+			u := &url.URL{
+				Scheme: scheme,
+				Host:   sys.peerClients[index].host.String(),
+			}
+			if err != nil {
+				results[index].Error = err.Error()
+			} else {
+				results[index] = r
+			}
+			results[index].Endpoint = u.String()
+		}(index)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r := netperf(ctx, duration)
+		u := &url.URL{
+			Scheme: scheme,
+			Host:   globalLocalNodeName,
+		}
+		results[len(results)-1] = r
+		results[len(results)-1].Endpoint = u.String()
+	}()
+	wg.Wait()
+
+	return results
+}
+
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
 func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
