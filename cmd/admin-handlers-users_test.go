@@ -18,8 +18,15 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -29,7 +36,9 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
 )
 
@@ -177,6 +186,7 @@ func TestIAMInternalIDPServerSuite(t *testing.T) {
 
 				suite.SetUpSuite(c)
 				suite.TestUserCreate(c)
+				suite.TestUserPolicyEscalationBug(c)
 				suite.TestPolicyCreate(c)
 				suite.TestCannedPolicies(c)
 				suite.TestGroupAddRemove(c)
@@ -222,6 +232,24 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 		c.Fatalf("user could not create bucket: %v", err)
 	}
 
+	// 3.10. Check that user's password can be updated.
+	_, newSecretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, newSecretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to update user's secret key: %v", err)
+	}
+	// 3.10.1 Check that old password no longer works.
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err == nil {
+		c.Fatalf("user was unexpectedly able to create bucket with bad password!")
+	}
+	// 3.10.2 Check that new password works.
+	client = s.getUserClient(c, accessKey, newSecretKey, "")
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("user could not create bucket: %v", err)
+	}
+
 	// 4. Check that user can be disabled and verify it.
 	err = s.adm.SetUserStatus(ctx, accessKey, madmin.AccountDisabled)
 	if err != nil {
@@ -257,6 +285,108 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
 	if err == nil {
 		c.Fatalf("user account was not deleted!")
+	}
+}
+
+func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// 2. Create a user, associate policy and verify access
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+	// 2.1 check that user does not have any access to the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	c.mustNotListObjects(ctx, uClient, bucket)
+
+	// 2.2 create and associate policy to user
+	policy := "mypolicy-test-user-update"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+	// 2.3 check user has access to bucket
+	c.mustListObjects(ctx, uClient, bucket)
+	// 2.3 check that user cannot delete the bucket
+	err = uClient.RemoveBucket(ctx, bucket)
+	if err == nil || err.Error() != "Access Denied." {
+		c.Fatalf("bucket was deleted unexpectedly or got unexpected err: %v", err)
+	}
+
+	// 3. Craft a request to update the user's permissions
+	ep := s.adm.GetEndpointURL()
+	urlValue := url.Values{}
+	urlValue.Add("accessKey", accessKey)
+	u, err := url.Parse(fmt.Sprintf("%s://%s/minio/admin/v3/add-user?%s", ep.Scheme, ep.Host, s3utils.QueryEncode(urlValue)))
+	if err != nil {
+		c.Fatalf("unexpected url parse err: %v", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), nil)
+	if err != nil {
+		c.Fatalf("unexpected new request err: %v", err)
+	}
+	reqBodyArg := madmin.UserInfo{
+		SecretKey:  secretKey,
+		PolicyName: "consoleAdmin",
+		Status:     madmin.AccountEnabled,
+	}
+	buf, err := json.Marshal(reqBodyArg)
+	if err != nil {
+		c.Fatalf("unexpected json encode err: %v", err)
+	}
+	buf, err = madmin.EncryptData(secretKey, buf)
+	if err != nil {
+		c.Fatalf("unexpected encryption err: %v", err)
+	}
+
+	req.ContentLength = int64(len(buf))
+	sum := sha256.Sum256(buf)
+	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum[:]))
+	req.Body = ioutil.NopCloser(bytes.NewReader(buf))
+	req = signer.SignV4(*req, accessKey, secretKey, "", "")
+
+	// 3.1 Execute the request.
+	resp, err := s.TestSuiteCommon.client.Do(req)
+	if err != nil {
+		c.Fatalf("unexpected request err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		c.Fatalf("got unexpected response: %#v\n", resp)
+	}
+
+	// 3.2 check that user cannot delete the bucket
+	err = uClient.RemoveBucket(ctx, bucket)
+	if err == nil || err.Error() != "Access Denied." {
+		c.Fatalf("User was able to escalate privileges (Err=%v)!", err)
 	}
 }
 
