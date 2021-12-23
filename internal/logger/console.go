@@ -80,7 +80,7 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   FatalLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   InformationLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 	})
 	if err != nil {
 		panic(err)
@@ -192,7 +192,7 @@ func (i errorMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   ErrorLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
 	})
 	if err != nil {

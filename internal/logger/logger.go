@@ -349,7 +349,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		Host:         req.Host,
 		RequestID:    req.RequestID,
 		UserAgent:    req.UserAgent,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		Time:         time.Now().UTC(),
 		API: &log.API{
 			Name: API,
 			Args: &log.Args{
