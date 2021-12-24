@@ -710,6 +710,9 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 
 	select {
 	case globalBackgroundHealRoutine.tasks <- task:
+		if serverDebugLog {
+			logger.Info("Task in the queue: %#v", task)
+		}
 	case <-h.ctx.Done():
 		return nil
 	}
@@ -885,6 +888,7 @@ func (h *healSequence) healObject(bucket, object, versionID string) error {
 		bucket:    bucket,
 		object:    object,
 		versionID: versionID,
+		opts:      &h.settings,
 	}, madmin.HealItemObject)
 
 	// Wait and proceed if there are active requests
