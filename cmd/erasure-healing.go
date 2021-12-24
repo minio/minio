@@ -331,7 +331,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// used here for reconstruction. This is done to ensure that
 	// we do not skip drives that have inconsistent metadata to be
 	// skipped from purging when they are stale.
-	availableDisks, dataErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata,
+	availableDisks, dataErrs, diskMTime := disksWithAllParts(ctx, onlineDisks, partsMetadata,
 		errs, latestMeta, bucket, object, scanMode)
 
 	// Loop to find number of disks with valid data, per-drive
@@ -579,6 +579,20 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				result.After.Drives[i].State = madmin.DriveStateOk
 			}
 		}
+	}
+
+	if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
+		// Update metadata to indicate special fix.
+		_, err = er.PutObjectMetadata(ctx, bucket, object, ObjectOptions{
+			NoLock: true,
+			UserDefined: map[string]string{
+				reservedMetadataPrefixLowerDataShardFix: "true",
+				// another reserved metadata to capture original disk-mtime
+				// captured for this version of the object, to be used
+				// possibly in future to heal other versions if possible.
+				ReservedMetadataPrefixLower + "disk-mtime": diskMTime.String(),
+			},
+		})
 	}
 
 	// Set the size of the object in the heal result

@@ -80,8 +80,6 @@ function start_minio_16drive() {
     ## - 1st data shard.
     rm -rf "${WORK_DIR}/xl3/healing-shard-bucket/unaligned"
     sleep 10
-    ## Heal the shard
-    "${WORK_DIR}/mc" admin heal --quiet --recursive minio/healing-shard-bucket
 
     go build ./docs/debugging/s3-check-md5/
     if ! ./s3-check-md5 \
@@ -120,7 +118,27 @@ function start_minio_16drive() {
 	echo "server1 log:"
 	cat "${WORK_DIR}/server1.log"
 	echo "FAILED"
-	mkdir inspects
+	mkdir -p inspects
+	(cd inspects; "${WORK_DIR}/mc" admin inspect minio/healing-shard-bucket/unaligned/**)
+
+	"${WORK_DIR}/mc" mb play/inspects
+	"${WORK_DIR}/mc" mirror inspects play/inspects
+
+	purge "$WORK_DIR"
+	exit 1
+    fi
+
+    "${WORK_DIR}/mc" admin heal --quiet --recursive minio/healing-shard-bucket
+
+    if ! ./s3-check-md5 \
+	 -debug \
+	 -access-key minio \
+	 -secret-key minio123 \
+	 -endpoint http://127.0.0.1:${start_port}/ 2>&1 | grep INTACT; then
+	echo "server1 log:"
+	cat "${WORK_DIR}/server1.log"
+	echo "FAILED"
+	mkdir -p inspects
 	(cd inspects; "${WORK_DIR}/mc" admin inspect minio/healing-shard-bucket/unaligned/**)
 
 	"${WORK_DIR}/mc" mb play/inspects

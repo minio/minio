@@ -125,10 +125,6 @@ func main() {
 				log.Println("Objects encrypted with SSE-C do not have md5sum as ETag:", object.Key)
 				continue
 			}
-			if _, ok := object.UserMetadata["X-Amz-Server-Side-Encryption-Customer-Algorithm"]; ok {
-				log.Println("Objects encrypted with SSE-C do not have md5sum as ETag:", object.Key)
-				continue
-			}
 			if v, ok := object.UserMetadata["X-Amz-Server-Side-Encryption"]; ok && v == "aws:kms" {
 				log.Println("Objects encrypted with SSE-KMS do not have md5sum as ETag:", object.Key)
 				continue
