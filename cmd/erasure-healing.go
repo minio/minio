@@ -954,13 +954,9 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	// This allows to quickly check if all is ok or all are missing.
 	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
 	if isAllNotFound(errs) {
-		err = toObjectErr(errFileNotFound, bucket, object)
-		if versionID != "" {
-			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
-		}
 		// Nothing to do, file is already gone.
 		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints,
-			errs, bucket, object, versionID), err
+			errs, bucket, object, versionID), nil
 	}
 
 	// Heal the object.
