@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -456,7 +457,8 @@ func (e envKV) String() string {
 }
 
 func parsEnvEntry(envEntry string) (envKV, error) {
-	if strings.TrimSpace(envEntry) == "" {
+	envEntry = strings.TrimSpace(envEntry)
+	if envEntry == "" {
 		// Skip all empty lines
 		return envKV{
 			Skip: true,
@@ -529,7 +531,7 @@ func readFromSecret(sp string) (string, error) {
 		}
 		return "", err
 	}
-	return string(credBuf), nil
+	return string(bytes.TrimSpace(credBuf)), nil
 }
 
 func loadEnvVarsFromFiles() {
