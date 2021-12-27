@@ -67,12 +67,12 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	writeSuccessResponseJSON(w, body)
 }
 
-// SRInternalJoin - PUT /minio/admin/v3/site-replication/join
+// SRPeerJoin - PUT /minio/admin/v3/site-replication/join
 //
 // used internally to tell current cluster to enable SR with
 // the provided peer clusters and service account.
-func (a adminAPIHandlers) SRInternalJoin(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRInternalJoin")
+func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerJoin")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -81,7 +81,7 @@ func (a adminAPIHandlers) SRInternalJoin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var joinArg madmin.SRInternalJoinReq
+	var joinArg madmin.SRPeerJoinReq
 	if err := parseJSONBody(ctx, r.Body, &joinArg, cred.SecretKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -94,9 +94,9 @@ func (a adminAPIHandlers) SRInternalJoin(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// SRInternalBucketOps - PUT /minio/admin/v3/site-replication/bucket-ops?bucket=x&operation=y
-func (a adminAPIHandlers) SRInternalBucketOps(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRInternalBucketOps")
+// SRPeerBucketOps - PUT /minio/admin/v3/site-replication/bucket-ops?bucket=x&operation=y
+func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerBucketOps")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -137,9 +137,9 @@ func (a adminAPIHandlers) SRInternalBucketOps(w http.ResponseWriter, r *http.Req
 
 }
 
-// SRInternalReplicateIAMItem - PUT /minio/admin/v3/site-replication/iam-item
-func (a adminAPIHandlers) SRInternalReplicateIAMItem(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRInternalReplicateIAMItem")
+// SRPeerReplicateIAMItem - PUT /minio/admin/v3/site-replication/iam-item
+func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerReplicateIAMItem")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -187,9 +187,9 @@ func (a adminAPIHandlers) SRInternalReplicateIAMItem(w http.ResponseWriter, r *h
 	}
 }
 
-// SRInternalReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
-func (a adminAPIHandlers) SRInternalReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRInternalReplicateBucketItem")
+// SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
+func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerReplicateBucketItem")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -272,7 +272,7 @@ func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (a adminAPIHandlers) SRInternalGetIDPSettings(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SiteReplicationGetIDPSettings")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))

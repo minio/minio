@@ -427,7 +427,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
 	}
 
-	joinReq := madmin.SRInternalJoinReq{
+	joinReq := madmin.SRPeerJoinReq{
 		SvcAcctAccessKey: svcCred.AccessKey,
 		SvcAcctSecretKey: secretKey,
 		Peers:            make(map[string]madmin.PeerInfo),
@@ -462,7 +462,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			break
 		}
 		joinReq.SvcAcctParent = v.AccessKey
-		err = admClient.SRInternalJoin(ctx, joinReq)
+		err = admClient.SRPeerJoin(ctx, joinReq)
 		if err != nil {
 			peerAddErr = errSRPeerResp(fmt.Errorf("unable to link with peer %s: %w", v.Name, err))
 			break
@@ -515,7 +515,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 
 // InternalJoinReq - internal API handler to respond to a peer cluster's request
 // to join.
-func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRInternalJoinReq) error {
+func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRPeerJoinReq) error {
 	var ourName string
 	for d, p := range arg.Peers {
 		if d == globalDeploymentID {
@@ -574,7 +574,7 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 			return false, errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
 		}
 
-		is, err := admClient.SRInternalGetIDPSettings(ctx)
+		is, err := admClient.SRPeerGetIDPSettings(ctx)
 		if err != nil {
 			return false, errSRPeerResp(fmt.Errorf("unable to fetch IDP settings from %s: %v", v.Name, err))
 		}
@@ -654,7 +654,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 				return err
 			}
 
-			err = admClient.SRInternalBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap)
+			err = admClient.SRPeerBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap)
 			logger.LogIf(ctx, c.annotatePeerErr(p.Name, "MakeWithVersioning", err))
 			return err
 		},
@@ -682,7 +682,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 				return err
 			}
 
-			err = admClient.SRInternalBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil)
+			err = admClient.SRPeerBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil)
 			logger.LogIf(ctx, c.annotatePeerErr(p.Name, "ConfigureRepl", err))
 			return err
 		},
@@ -719,7 +719,7 @@ func (c *SiteReplicationSys) DeleteBucketHook(ctx context.Context, bucket string
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalBucketOps(ctx, bucket, op, nil)
+		err = admClient.SRPeerBucketOps(ctx, bucket, op, nil)
 		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "DeleteBucket", err))
 		return err
 	})
@@ -1010,8 +1010,8 @@ func (c *SiteReplicationSys) IAMChangeHook(ctx context.Context, item madmin.SRIA
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalReplicateIAMItem(ctx, item)
-		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRInternalReplicateIAMItem", err))
+		err = admClient.SRPeerReplicateIAMItem(ctx, item)
+		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRPeerReplicateIAMItem", err))
 		return err
 	})
 	return cErr.summaryErr
@@ -1169,8 +1169,8 @@ func (c *SiteReplicationSys) BucketMetaHook(ctx context.Context, item madmin.SRB
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalReplicateBucketMeta(ctx, item)
-		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRInternalReplicateBucketMeta", err))
+		err = admClient.SRPeerReplicateBucketMeta(ctx, item)
+		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRPeerReplicateBucketMeta", err))
 		return err
 	})
 	return cErr.summaryErr
