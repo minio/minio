@@ -286,12 +286,10 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// Initialize heal result object
 	result = madmin.HealResultItem{
-		Type:         madmin.HealItemObject,
-		Bucket:       bucket,
-		Object:       object,
-		DiskCount:    len(storageDisks),
-		ParityBlocks: er.defaultParityCount,
-		DataBlocks:   len(storageDisks) - er.defaultParityCount,
+		Type:      madmin.HealItemObject,
+		Bucket:    bucket,
+		Object:    object,
+		DiskCount: len(storageDisks),
 	}
 
 	if !opts.NoLock {
@@ -306,10 +304,19 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// Re-read when we have lock...
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
+	if isAllNotFound(errs) {
+		// Nothing to do, file is already gone.
+		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints,
+			errs, bucket, object, versionID), nil
+	}
 
-	if _, err = getLatestFileInfo(ctx, partsMetadata, errs); err != nil {
+	readQuorum, _, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
+	if err != nil {
 		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
 	}
+
+	result.ParityBlocks = result.DiskCount - readQuorum
+	result.DataBlocks = readQuorum
 
 	// List of disks having latest version of the object er.meta
 	// (by modtime).
@@ -317,7 +324,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, result.DataBlocks)
+	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, readQuorum)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, versionID)
 	}
@@ -392,13 +399,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	if isAllNotFound(errs) {
-		err = toObjectErr(errFileNotFound, bucket, object)
-		if versionID != "" {
-			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
-		}
 		// File is fully gone, fileInfo is empty.
 		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs,
-			bucket, object, versionID), err
+			bucket, object, versionID), nil
 	}
 
 	// If less than read quorum number of disks have all the parts
@@ -663,7 +666,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 	}
 	if dryRun || danglingObject || isAllNotFound(errs) {
 		// Nothing to do, file is already gone.
-		return hr, toObjectErr(errFileNotFound, bucket, object)
+		return hr, nil
 	}
 	for i, err := range errs {
 		if err == errVolumeNotFound || err == errFileNotFound {
@@ -768,8 +771,15 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 // A 0 length slice will always return false.
 func isAllNotFound(errs []error) bool {
 	for _, err := range errs {
-		if errors.Is(err, errFileNotFound) || errors.Is(err, errVolumeNotFound) || errors.Is(err, errFileVersionNotFound) {
-			continue
+		if err != nil {
+			switch err.Error() {
+			case errFileNotFound.Error():
+				fallthrough
+			case errVolumeNotFound.Error():
+				fallthrough
+			case errFileVersionNotFound.Error():
+				continue
+			}
 		}
 		return false
 	}
