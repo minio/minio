@@ -84,6 +84,19 @@ func (er erasureObjects) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// defaultWQuorum write quorum based on setDriveCount and defaultParityCount
+func (er erasureObjects) defaultWQuorum() int {
+	dataCount := er.setDriveCount - er.defaultParityCount
+	if dataCount == er.defaultParityCount {
+		return dataCount + 1
+	}
+	return dataCount
+}
+
+func (er erasureObjects) defaultRQuorum() int {
+	return er.setDriveCount - er.defaultParityCount
+}
+
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []madmin.Disk
 

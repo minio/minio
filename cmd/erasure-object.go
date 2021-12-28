@@ -498,7 +498,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
-		return objInfo, getWriteQuorum(len(er.getDisks())), toObjectErr(err, bucket, object)
+		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
 	}
 
 	wquorum = fi.Erasure.DataBlocks
@@ -1113,7 +1113,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		// class for objects which have reduced quorum
 		// storage class only needs to be honored for
 		// Read() requests alone which we already do.
-		writeQuorums[i] = getWriteQuorum(len(storageDisks))
+		writeQuorums[i] = er.defaultWQuorum()
 	}
 
 	versionsMap := make(map[string]FileInfoVersions, len(objects))
@@ -1600,7 +1600,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 	// Wait for all the routines.
 	mErrs := g.Wait()
 
-	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, getWriteQuorum(len(onlineDisks)))
+	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, er.defaultWQuorum())
 }
 
 // DeleteObjectTags - delete object tags from an existing object

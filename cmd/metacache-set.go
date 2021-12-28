@@ -544,7 +544,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	// Special case: ask all disks if the drive count is 4
 	if askDisks == -1 || er.setDriveCount == 4 {
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
-		listingQuorum = getReadQuorum(er.setDriveCount)
+		listingQuorum = er.defaultRQuorum()
 	}
 	if askDisks == 0 {
 		askDisks = globalAPIConfig.getListQuorum()
