@@ -1630,6 +1630,14 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				anonymizeAddr(&se)
 				healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, se)
 			}
+
+			// Check if there is significant difference
+			// in time from different nodes
+			ntpErr := AnalyzeTimeInfo(deadlinedCtx)
+			if len(ntpErr.Errors) > 0 {
+				healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, ntpErr)
+			}
+
 			partialWrite(healthInfo)
 		}
 	}

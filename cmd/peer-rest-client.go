@@ -398,6 +398,17 @@ func (client *peerRESTClient) GetPartitions(ctx context.Context) (info madmin.Pa
 	return info, err
 }
 
+// GetTimeInfo - return the current time on the server
+func (client *peerRESTClient) GetTimeInfo(ctx context.Context) (info madmin.TimeInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodCurrentTime, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // GetOSInfo - fetch OS information for a remote node.
 func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfo, nil, nil, -1)

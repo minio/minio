@@ -1024,6 +1024,31 @@ func (sys *NotificationSys) GetPartitions(ctx context.Context) []madmin.Partitio
 	return reply
 }
 
+// GetTimeInfo - Current time. Used to detect time mismatch (NTP not configured)
+func (sys *NotificationSys) GetTimeInfo(ctx context.Context) []madmin.TimeInfo {
+	reply := make([]madmin.TimeInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetTimeInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
 // GetOSInfo - Get operating system's information
 func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 	reply := make([]madmin.OSInfo, len(sys.peerClients))
