@@ -29,8 +29,8 @@ import (
 
 var errConfigNotFound = errors.New("config file not found")
 
-func readConfigWithMetadata(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, ObjectInfo, error) {
-	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
+func readConfigWithMetadata(ctx context.Context, store objectIO, configFile string) ([]byte, ObjectInfo, error) {
+	r, err := store.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
@@ -51,8 +51,8 @@ func readConfigWithMetadata(ctx context.Context, objAPI ObjectLayer, configFile 
 	return buf, r.ObjInfo, nil
 }
 
-func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
-	buf, _, err := readConfigWithMetadata(ctx, objAPI, configFile)
+func readConfig(ctx context.Context, store objectIO, configFile string) ([]byte, error) {
+	buf, _, err := readConfigWithMetadata(ctx, store, configFile)
 	return buf, err
 }
 
@@ -70,13 +70,13 @@ func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) 
 	return err
 }
 
-func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
+func saveConfig(ctx context.Context, store objectIO, configFile string, data []byte) error {
 	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
 	if err != nil {
 		return err
 	}
 
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader), ObjectOptions{MaxParity: true})
+	_, err = store.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader), ObjectOptions{MaxParity: true})
 	return err
 }
 
