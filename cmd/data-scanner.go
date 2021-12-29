@@ -72,14 +72,16 @@ var (
 // initDataScanner will start the scanner in the background.
 func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	go func() {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		// Run the data scanner in a loop
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				runDataScanner(ctx, objAPI)
+			runDataScanner(ctx, objAPI)
+			duration := time.Duration(r.Float64() * float64(scannerCycle.Get()))
+			if duration < time.Second {
+				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				duration = time.Second
 			}
+			time.Sleep(duration)
 		}
 	}()
 }
@@ -106,20 +108,14 @@ func (s *safeDuration) Get() time.Duration {
 // There should only ever be one scanner running per cluster.
 func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 scanner is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "runDataScanner.lock")
-	var ctx context.Context
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for {
-		lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
-		if err != nil {
-			time.Sleep(time.Duration(r.Float64() * float64(scannerCycle.Get())))
-			continue
-		}
-		ctx = lkctx.Context()
-		defer lkctx.Cancel()
-		break
-		// No unlock for "leader" lock.
+	locker := objAPI.NewNSLock(minioMetaBucket, "scanner/runDataScanner.lock")
+	lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
+	if err != nil {
+		return
 	}
+	ctx := lkctx.Context()
+	defer lkctx.Cancel()
+	// No unlock for "leader" lock.
 
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1

@@ -297,13 +297,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) ([]BucketInfo, error
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
 
-	// Make sure to hold lock for entire migration to avoid
-	// such that only one server should migrate the entire config
-	// at a given time, this big transaction lock ensures this
-	// appropriately. This is also true for rotation of encrypted
-	// content.
-	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
@@ -319,6 +312,13 @@ func initServer(ctx context.Context, newObject ObjectLayer) ([]BucketInfo, error
 			return nil, fmt.Errorf("Initializing sub-systems stopped gracefully %w", ctx.Err())
 		default:
 		}
+
+		// Make sure to hold lock for entire migration to avoid
+		// such that only one server should migrate the entire config
+		// at a given time, this big transaction lock ensures this
+		// appropriately. This is also true for rotation of encrypted
+		// content.
+		txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
