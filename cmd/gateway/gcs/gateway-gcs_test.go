@@ -72,7 +72,6 @@ func TestToGCSPageToken(t *testing.T) {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, toGCSPageToken(testCase.Name), testCase.Token)
 		}
 	}
-
 }
 
 // TestIsValidGCSProjectIDFormat tests isValidGCSProjectIDFormat
@@ -166,7 +165,6 @@ func TestGCSMultipartDataName(t *testing.T) {
 }
 
 func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
-
 	listBucketResult := miniogo.ListBucketResult{
 		IsTruncated:    false,
 		Marker:         "testMarker",

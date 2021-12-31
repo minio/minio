@@ -112,7 +112,7 @@ func (r *Config) UserInfo(accessToken string) (map[string]interface{}, error) {
 	}
 
 	dec := json.NewDecoder(resp.Body)
-	var claims = map[string]interface{}{}
+	claims := map[string]interface{}{}
 
 	if err = dec.Decode(&claims); err != nil {
 		// uncomment this for debugging when needed.

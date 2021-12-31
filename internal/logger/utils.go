@@ -29,7 +29,7 @@ var ansiRE = regexp.MustCompile("(\x1b[^m]*m)")
 
 // Print ANSI Control escape
 func ansiEscape(format string, args ...interface{}) {
-	var Esc = "\x1b"
+	Esc := "\x1b"
 	fmt.Printf("%s%s", Esc, fmt.Sprintf(format, args...))
 }
 
@@ -58,5 +58,4 @@ func ansiRestoreAttributes() {
 	if color.IsTerminal() {
 		ansiEscape("8")
 	}
-
 }

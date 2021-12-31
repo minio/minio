@@ -56,14 +56,22 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 		tag    string
 		errStr string
 	}{
-		{time.Date(2017, time.September, 29, 19, 16, 56, 0, utcLoc),
-			"RELEASE.2017-09-29T19-16-56Z", ""},
-		{time.Date(2017, time.August, 5, 0, 0, 53, 0, utcLoc),
-			"RELEASE.2017-08-05T00-00-53Z", ""},
-		{time.Now().UTC(), "2017-09-29T19:16:56Z",
-			"2017-09-29T19:16:56Z is not a valid release tag"},
-		{time.Now().UTC(), "DEVELOPMENT.GOGET",
-			"DEVELOPMENT.GOGET is not a valid release tag"},
+		{
+			time.Date(2017, time.September, 29, 19, 16, 56, 0, utcLoc),
+			"RELEASE.2017-09-29T19-16-56Z", "",
+		},
+		{
+			time.Date(2017, time.August, 5, 0, 0, 53, 0, utcLoc),
+			"RELEASE.2017-08-05T00-00-53Z", "",
+		},
+		{
+			time.Now().UTC(), "2017-09-29T19:16:56Z",
+			"2017-09-29T19:16:56Z is not a valid release tag",
+		},
+		{
+			time.Now().UTC(), "DEVELOPMENT.GOGET",
+			"DEVELOPMENT.GOGET is not a valid release tag",
+		},
 	}
 	for i, testCase := range testCases {
 		if testCase.errStr != "" {
@@ -80,7 +88,6 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 			t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.t, tagTime)
 		}
 	}
-
 }
 
 func TestDownloadURL(t *testing.T) {
@@ -310,10 +317,14 @@ func TestParseReleaseData(t *testing.T) {
 		{"more than.two.fields", time.Time{}, "", "", true},
 		{"more minio.RELEASE.fields", time.Time{}, "", "", true},
 		{"more minio.RELEASE.2016-10-07T01-16-39Z", time.Time{}, "", "", true},
-		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
-			"minio.RELEASE.2016-10-07T01-16-39Z", false},
-		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
-			"minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix", false},
+		{
+			"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
+			"minio.RELEASE.2016-10-07T01-16-39Z", false,
+		},
+		{
+			"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d",
+			"minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix", false,
+		},
 	}
 
 	for i, testCase := range testCases {

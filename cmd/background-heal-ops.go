@@ -115,7 +115,6 @@ func newHealRoutine() *healRoutine {
 		tasks:   make(chan healTask),
 		workers: workers,
 	}
-
 }
 
 // healDiskFormat - heals format.json, return value indicates if a

@@ -23,7 +23,6 @@ import (
 
 // GetTotalCapacity gets the total capacity in the cluster.
 func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
-
 	for _, disk := range diskInfo {
 		capacity += disk.TotalSpace
 	}

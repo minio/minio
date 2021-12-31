@@ -339,6 +339,7 @@ func Test_metacacheReader_next(t *testing.T) {
 		}
 	}
 }
+
 func Test_metacacheReader_peek(t *testing.T) {
 	r := loadMetacacheSample(t)
 	defer r.Close()

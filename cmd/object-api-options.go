@@ -156,7 +156,6 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 				Err:    err,
 			}
 		}
-
 	}
 	return opts, nil
 }

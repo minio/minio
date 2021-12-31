@@ -22,9 +22,7 @@ import (
 	"io"
 )
 
-var (
-	errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
-)
+var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
 
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {

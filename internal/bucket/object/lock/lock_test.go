@@ -55,6 +55,7 @@ func TestParseMode(t *testing.T) {
 		}
 	}
 }
+
 func TestParseLegalHoldStatus(t *testing.T) {
 	tests := []struct {
 		value          string
@@ -510,6 +511,7 @@ func TestParseObjectLegalHold(t *testing.T) {
 		}
 	}
 }
+
 func TestFilterObjectLockMetadata(t *testing.T) {
 	tests := []struct {
 		metadata        map[string]string
@@ -576,9 +578,11 @@ func TestFilterObjectLockMetadata(t *testing.T) {
 				"x-amz-object-lock-mode":              "governance",
 				"x-amz-object-lock-retain-until-date": "2020-02-01",
 			},
-			expected: map[string]string{"x-amz-object-lock-legal-hold": "on",
+			expected: map[string]string{
+				"x-amz-object-lock-legal-hold":        "on",
 				"x-amz-object-lock-mode":              "governance",
-				"x-amz-object-lock-retain-until-date": "2020-02-01"},
+				"x-amz-object-lock-retain-until-date": "2020-02-01",
+			},
 		},
 	}
 

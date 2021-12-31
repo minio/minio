@@ -67,7 +67,6 @@ func NewEntry(deploymentID string) Entry {
 
 // ToEntry - constructs an audit entry from a http request
 func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, deploymentID string) Entry {
-
 	entry := NewEntry(deploymentID)
 
 	entry.RemoteHost = handlers.GetSourceIP(r)

@@ -55,7 +55,7 @@ func NewWithConfig(config Config) (KMS, error) {
 	if len(config.Endpoints) == 0 {
 		return nil, errors.New("kms: no server endpoints")
 	}
-	var endpoints = make([]string, len(config.Endpoints)) // Copy => avoid being affect by any changes to the original slice
+	endpoints := make([]string, len(config.Endpoints)) // Copy => avoid being affect by any changes to the original slice
 	copy(endpoints, config.Endpoints)
 
 	client := kes.NewClientWithConfig("", &tls.Config{
@@ -85,7 +85,7 @@ func (c *kesClient) Stat() (Status, error) {
 	if _, err := c.client.Version(ctx); err != nil {
 		return Status{}, err
 	}
-	var endpoints = make([]string, len(c.client.Endpoints))
+	endpoints := make([]string, len(c.client.Endpoints))
 	copy(endpoints, c.client.Endpoints)
 	return Status{
 		Name:       "KES",

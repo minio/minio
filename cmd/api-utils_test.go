@@ -44,7 +44,6 @@ func TestS3EncodeName(t *testing.T) {
 			if testCase.expectedOutput != outputText {
 				t.Errorf("Expected `%s`, got `%s`", testCase.expectedOutput, outputText)
 			}
-
 		})
 	}
 }

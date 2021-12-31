@@ -61,8 +61,7 @@ func genSampleCSVData(count int) []byte {
 	return buf.Bytes()
 }
 
-type nullResponseWriter struct {
-}
+type nullResponseWriter struct{}
 
 func (w *nullResponseWriter) Header() http.Header {
 	return nil
@@ -79,7 +78,7 @@ func (w *nullResponseWriter) Flush() {
 }
 
 func benchmarkSelect(b *testing.B, count int, query string) {
-	var requestXML = []byte(`
+	requestXML := []byte(`
 <?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
     <Expression>` + query + `</Expression>

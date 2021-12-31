@@ -251,7 +251,7 @@ func lockFile(fd syscall.Handle, flags uint32) error {
 }
 
 func lockFileEx(h syscall.Handle, flags, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {
-	var reserved = uint32(0)
+	reserved := uint32(0)
 	r1, _, e1 := syscall.Syscall6(procLockFileEx.Addr(), 6, uintptr(h), uintptr(flags),
 		uintptr(reserved), uintptr(locklow), uintptr(lockhigh), uintptr(unsafe.Pointer(ol)))
 	if r1 == 0 {

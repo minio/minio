@@ -37,7 +37,8 @@ func joinWithSlash(accessKey, date, region, service, requestVersion string) stri
 		date,
 		region,
 		service,
-		requestVersion}, SlashSeparator)
+		requestVersion,
+	}, SlashSeparator)
 }
 
 // generate CredentialHeader from its fields.
@@ -59,7 +60,6 @@ func generateCredentials(t *testing.T, accessKey string, date string, region, se
 
 // validates the credential fields against the expected credential.
 func validateCredentialfields(t *testing.T, testNum int, expectedCredentials credentialHeader, actualCredential credentialHeader) {
-
 	if expectedCredentials.accessKey != actualCredential.accessKey {
 		t.Errorf("Test %d: AccessKey mismatch: Expected \"%s\", got \"%s\"", testNum, expectedCredentials.accessKey, actualCredential.accessKey)
 	}
@@ -87,7 +87,6 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 //		        "aws4_request",
 //                       },SlashSeparator)
 func TestParseCredentialHeader(t *testing.T) {
-
 	sampleTimeStr := UTCNow().Format(yyyymmdd)
 
 	testCases := []struct {
@@ -296,7 +295,6 @@ func TestParseSignature(t *testing.T) {
 		if actualErrCode == ErrNone {
 			if testCase.expectedSignStr != actualSignStr {
 				t.Errorf("Test %d: Expected the result to be \"%s\", but got \"%s\". ", i+1, testCase.expectedSignStr, actualSignStr)
-
 			}
 		}
 
@@ -342,7 +340,6 @@ func TestParseSignedHeaders(t *testing.T) {
 		if actualErrCode == ErrNone {
 			if strings.Join(testCase.expectedSignedHeaders, ",") != strings.Join(actualSignedHeaders, ",") {
 				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedSignedHeaders, actualSignedHeaders)
-
 			}
 		}
 
@@ -518,7 +515,6 @@ func TestParseSignV4(t *testing.T) {
 		}
 
 	}
-
 }
 
 // TestDoesV4PresignParamsExist - tests validate the logic to
@@ -619,7 +615,6 @@ func TestDoesV4PresignParamsExist(t *testing.T) {
 		inputQuery := url.Values{}
 		// iterating through input query key value and setting the inputQuery of type url.Values.
 		for j := 0; j < len(testCase.inputQueryKeyVals)-1; j += 2 {
-
 			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
 		}
 
@@ -629,7 +624,6 @@ func TestDoesV4PresignParamsExist(t *testing.T) {
 			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
 		}
 	}
-
 }
 
 // TestParsePreSignV4 - Validates the parsing logic of Presignied v4 request from its url query values.
@@ -668,7 +662,6 @@ func TestParsePreSignV4(t *testing.T) {
 		// The other query params should exist, other wise ErrInvalidQueryParams will be returned because of missing fields.
 		{
 			inputQueryKeyVals: []string{
-
 				"X-Amz-Algorithm", "InvalidValue",
 				"X-Amz-Credential", "",
 				"X-Amz-Signature", "",

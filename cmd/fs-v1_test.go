@@ -205,7 +205,6 @@ func TestFSDeleteObject(t *testing.T) {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
-
 }
 
 // TestFSDeleteBucket - tests for fs DeleteBucket
@@ -263,7 +262,7 @@ func TestFSListBuckets(t *testing.T) {
 	}
 
 	// Create a bucket with invalid name
-	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
+	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0o777); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 	f, err := os.Create(pathJoin(fs.fsPath, "test"))

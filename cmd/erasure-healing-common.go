@@ -226,8 +226,8 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 //   a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
 	errs []error, latestMeta FileInfo, bucket, object string,
-	scanMode madmin.HealScanMode) ([]StorageAPI, []error, time.Time) {
-
+	scanMode madmin.HealScanMode) ([]StorageAPI, []error, time.Time,
+) {
 	var diskMTime time.Time
 	var shardFix bool
 	if !latestMeta.DataShardFixed() {

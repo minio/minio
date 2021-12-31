@@ -820,7 +820,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadataByIndex(onlineDisks, partsMetadata, fi)
 
 	// Save current erasure metadata for validation.
-	var currentFI = fi
+	currentFI := fi
 
 	// Allocate parts similar to incoming slice.
 	fi.Parts = make([]ObjectPartInfo, len(parts))

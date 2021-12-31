@@ -58,7 +58,7 @@ func (c *CoreDNS) Close() error {
 
 // List - Retrieves list of DNS entries for the domain.
 func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
-	var srvRecords = map[string][]SrvRecord{}
+	srvRecords := map[string][]SrvRecord{}
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.", domainName), c.prefixPath)
 		records, err := c.list(key+etcdPathSeparator, true)

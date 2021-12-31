@@ -38,9 +38,13 @@ func TestParseEndpoints(t *testing.T) {
 		{"http://localhost:2379000", nil, false, false},
 
 		// Valid inputs
-		{"https://localhost:2379,https://localhost:2380", []string{
-			"https://localhost:2379", "https://localhost:2380"},
-			true, true},
+		{
+			"https://localhost:2379,https://localhost:2380",
+			[]string{
+				"https://localhost:2379", "https://localhost:2380",
+			},
+			true, true,
+		},
 		{"http://localhost:2379", []string{"http://localhost:2379"}, false, true},
 	}
 

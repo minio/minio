@@ -145,7 +145,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var unlockOnDefer bool
-	var nsUnlocker = func() {}
+	nsUnlocker := func() {}
 	defer func() {
 		if unlockOnDefer {
 			nsUnlocker()
@@ -475,7 +475,6 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
-
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
 	if opts.VersionID != "" && !fi.VersionPurgeStatus().Empty() {
@@ -1177,7 +1176,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	}
 
 	// Initialize list of errors.
-	var delObjErrs = make([][]error, len(storageDisks))
+	delObjErrs := make([][]error, len(storageDisks))
 
 	var wg sync.WaitGroup
 	// Remove versions in bulk for each disk
@@ -1820,6 +1819,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		})
 	}
 	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
-		MTime: oi.ModTime})
+		MTime: oi.ModTime,
+	})
 	return setRestoreHeaderFn(oi, err)
 }

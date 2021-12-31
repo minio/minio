@@ -44,14 +44,12 @@ func NewLRWMutex() *LRWMutex {
 // If the lock is already in use, the calling go routine
 // blocks until the mutex is available.
 func (lm *LRWMutex) Lock() {
-
 	const isWriteLock = true
 	lm.lockLoop(context.Background(), lm.id, lm.source, math.MaxInt64, isWriteLock)
 }
 
 // GetLock tries to get a write lock on lm before the timeout occurs.
 func (lm *LRWMutex) GetLock(ctx context.Context, id string, source string, timeout time.Duration) (locked bool) {
-
 	const isWriteLock = true
 	return lm.lockLoop(ctx, id, source, timeout, isWriteLock)
 }
@@ -61,14 +59,12 @@ func (lm *LRWMutex) GetLock(ctx context.Context, id string, source string, timeo
 // If one or more read lock are already in use, it will grant another lock.
 // Otherwise the calling go routine blocks until the mutex is available.
 func (lm *LRWMutex) RLock() {
-
 	const isWriteLock = false
 	lm.lockLoop(context.Background(), lm.id, lm.source, 1<<63-1, isWriteLock)
 }
 
 // GetRLock tries to get a read lock on lm before the timeout occurs.
 func (lm *LRWMutex) GetRLock(ctx context.Context, id string, source string, timeout time.Duration) (locked bool) {
-
 	const isWriteLock = false
 	return lm.lockLoop(ctx, id, source, timeout, isWriteLock)
 }
@@ -128,7 +124,6 @@ func (lm *LRWMutex) lockLoop(ctx context.Context, id, source string, timeout tim
 //
 // It is a run-time error if lm is not locked on entry to Unlock.
 func (lm *LRWMutex) Unlock() {
-
 	isWriteLock := true
 	success := lm.unlock(isWriteLock)
 	if !success {
@@ -140,7 +135,6 @@ func (lm *LRWMutex) Unlock() {
 //
 // It is a run-time error if lm is not locked on entry to RUnlock.
 func (lm *LRWMutex) RUnlock() {
-
 	isWriteLock := false
 	success := lm.unlock(isWriteLock)
 	if !success {
@@ -178,7 +172,6 @@ func (lm *LRWMutex) ForceUnlock() {
 
 	lm.ref = 0
 	lm.isWriteLock = false
-
 }
 
 // DRLocker returns a sync.Locker interface that implements

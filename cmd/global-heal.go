@@ -89,7 +89,7 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		}
 	}
 
-	var healDisksMap = map[string]struct{}{}
+	healDisksMap := map[string]struct{}{}
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
 	}
@@ -139,7 +139,6 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 	status.SCParity[storageclass.RRS] = backendInfo.RRSCParity
 
 	return status, true
-
 }
 
 func mustGetHealSequence(ctx context.Context) *healSequence {
@@ -306,7 +305,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			},
 			finished: nil,
 		})
-
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the

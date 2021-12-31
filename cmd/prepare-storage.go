@@ -96,7 +96,7 @@ func formatErasureCleanupTmp(diskPath string) error {
 	// Removal of tmp-old folder is backgrounded completely.
 	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
 
-	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0777); err != nil {
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777); err != nil {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			err))

@@ -26,10 +26,8 @@ import (
 	"unsafe"
 )
 
-var (
-	// GetVolumeInformation provides windows drive volume information.
-	GetVolumeInformation = kernel32.NewProc("GetVolumeInformationW")
-)
+// GetVolumeInformation provides windows drive volume information.
+var GetVolumeInformation = kernel32.NewProc("GetVolumeInformationW")
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
 func getFSType(path string) string {
@@ -37,7 +35,7 @@ func getFSType(path string) string {
 	var lpVolumeSerialNumber uint32
 	var lpFileSystemFlags, lpMaximumComponentLength uint32
 	var lpFileSystemNameBuffer, volumeName [260]uint16
-	var ps = syscall.StringToUTF16Ptr(filepath.VolumeName(path))
+	ps := syscall.StringToUTF16Ptr(filepath.VolumeName(path))
 
 	// Extract values safely
 	// BOOL WINAPI GetVolumeInformation(

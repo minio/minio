@@ -61,7 +61,7 @@ func TestJSONQueries(t *testing.T) {
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
 
-	var testTable = []struct {
+	testTable := []struct {
 		name       string
 		query      string
 		requestXML []byte // override request XML
@@ -100,14 +100,16 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"id":0}
 {"id":1}
 {"id":2}
-{"id":3}`},
+{"id":3}`,
+		},
 		{
 			name:  "bignum-2",
 			query: `SELECT id from s3object s WHERE s.id >= -9223372036854775808`,
 			wantResult: `{"id":0}
 {"id":1}
 {"id":2}
-{"id":3}`},
+{"id":3}`,
+		},
 		{
 			name:       "donatello-3",
 			query:      `SELECT * from s3object s WHERE 'value' IN s.synonyms[*]`,
@@ -603,7 +605,7 @@ func TestCSVQueries(t *testing.T) {
 	input := `index,ID,CaseNumber,Date,Day,Month,Year,Block,IUCR,PrimaryType,Description,LocationDescription,Arrest,Domestic,Beat,District,Ward,CommunityArea,FBI Code,XCoordinate,YCoordinate,UpdatedOn,Latitude,Longitude,Location
 2700763,7732229,,2010-05-26 00:00:00,26,May,2010,113XX S HALSTED ST,1150,,CREDIT CARD FRAUD,,False,False,2233,22.0,34.0,,11,,,,41.688043288,-87.6422444,"(41.688043288, -87.6422444)"`
 
-	var testTable = []struct {
+	testTable := []struct {
 		name       string
 		query      string
 		requestXML []byte
@@ -687,7 +689,7 @@ func TestCSVQueries2(t *testing.T) {
 1,2010-01-01T,7867786,4565.908123,"a text, with comma"
 2,2017-01-02T03:04Z,-5, 0.765111,
 `)
-	var testTable = []struct {
+	testTable := []struct {
 		name       string
 		query      string
 		input      []byte
@@ -872,7 +874,7 @@ func TestCSVQueries3(t *testing.T) {
 apple,1,true
 mango,3,false
 `
-	var testTable = []struct {
+	testTable := []struct {
 		name       string
 		query      string
 		requestXML []byte // override request XML
@@ -1014,7 +1016,7 @@ true`,
 }
 
 func TestCSVInput(t *testing.T) {
-	var testTable = []struct {
+	testTable := []struct {
 		requestXML     []byte
 		expectedResult []byte
 	}{
@@ -1114,7 +1116,7 @@ func TestCSVInput(t *testing.T) {
 		},
 	}
 
-	var csvData = []byte(`one,two,three
+	csvData := []byte(`one,two,three
 -1,foo,true
 ,bar,false
 2.5,baz,true
@@ -1158,12 +1160,10 @@ func TestCSVInput(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestJSONInput(t *testing.T) {
-
-	var testTable = []struct {
+	testTable := []struct {
 		requestXML     []byte
 		expectedResult []byte
 	}{
@@ -1239,7 +1239,7 @@ func TestJSONInput(t *testing.T) {
 		},
 	}
 
-	var jsonData = []byte(`{"three":true,"two":"foo","one":-1}
+	jsonData := []byte(`{"three":true,"two":"foo","one":-1}
 {"three":false,"two":"bar","one":null}
 {"three":true,"two":"baz","one":2.5}
 `)
@@ -1288,7 +1288,7 @@ func TestParquetInput(t *testing.T) {
 	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
 	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
 
-	var testTable = []struct {
+	testTable := []struct {
 		requestXML     []byte
 		expectedResult []byte
 	}{
@@ -1405,7 +1405,7 @@ func TestParquetInputSchema(t *testing.T) {
 	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
 	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
 
-	var testTable = []struct {
+	testTable := []struct {
 		requestXML []byte
 		wantResult string
 	}{
@@ -1517,7 +1517,6 @@ func TestParquetInputSchema(t *testing.T) {
 			if !reflect.DeepEqual(gotS, testCase.wantResult) {
 				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.requestXML, gotS, testCase.wantResult)
 			}
-
 		})
 	}
 }
@@ -1526,7 +1525,7 @@ func TestParquetInputSchemaCSV(t *testing.T) {
 	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
 	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
 
-	var testTable = []struct {
+	testTable := []struct {
 		requestXML []byte
 		wantResult string
 	}{
@@ -1636,7 +1635,6 @@ func TestParquetInputSchemaCSV(t *testing.T) {
 			if !reflect.DeepEqual(gotS, testCase.wantResult) {
 				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.requestXML, gotS, testCase.wantResult)
 			}
-
 		})
 	}
 }

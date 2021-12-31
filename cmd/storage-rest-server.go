@@ -746,7 +746,7 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 	doneCh := make(chan error)
 	ctx := r.Context()
 	go func() {
-		var canWrite = true
+		canWrite := true
 		write := func(b []byte) {
 			if canWrite {
 				n, err := w.Write(b)
@@ -820,7 +820,7 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 	doneCh := make(chan error)
 	go func() {
-		var canWrite = true
+		canWrite := true
 		write := func(b []byte) {
 			if canWrite {
 				n, err := w.Write(b)
@@ -940,7 +940,7 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 	blockCh := make(chan []byte)
 	h := httpStreamResponse{done: doneCh, block: blockCh}
 	go func() {
-		var canWrite = true
+		canWrite := true
 		write := func(b []byte) {
 			if canWrite {
 				n, err := w.Write(b)

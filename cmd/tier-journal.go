@@ -57,9 +57,7 @@ const (
 	tierJournalHdrLen  = 2 // 2 bytes
 )
 
-var (
-	errUnsupportedJournalVersion = errors.New("unsupported pending deletes journal version")
-)
+var errUnsupportedJournalVersion = errors.New("unsupported pending deletes journal version")
 
 func newTierDiskJournal() *tierDiskJournal {
 	return &tierDiskJournal{}
@@ -75,7 +73,7 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 	}
 	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
 		j.diskPath = diskPath
-		if err := os.MkdirAll(filepath.Dir(j.JournalPath()), os.FileMode(0700)); err != nil {
+		if err := os.MkdirAll(filepath.Dir(j.JournalPath()), os.FileMode(0o700)); err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -255,7 +253,7 @@ func (jd *tierDiskJournal) Open() error {
 	}
 
 	var err error
-	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0666)
+	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0o666)
 	if err != nil {
 		return err
 	}

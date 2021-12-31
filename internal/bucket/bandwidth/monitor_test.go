@@ -80,7 +80,8 @@ func TestMonitor_GetReport(t *testing.T) {
 			want2: &madmin.BucketBandwidthReport{
 				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {
 					LimitInBytesPerSecond:            1024 * 1024,
-					CurrentBandwidthInBytesPerSecond: exponentialMovingAverage(betaBucket, float64(oneMiB), 2*float64(oneMiB))}},
+					CurrentBandwidthInBytesPerSecond: exponentialMovingAverage(betaBucket, float64(oneMiB), 2*float64(oneMiB)),
+				}},
 			},
 		},
 	}

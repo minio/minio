@@ -417,7 +417,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 	saverWg.Add(1)
 	go func() {
 		// Add jitter to the update time so multiple sets don't sync up.
-		var updateTime = 30*time.Second + time.Duration(float64(10*time.Second)*rand.Float64())
+		updateTime := 30*time.Second + time.Duration(float64(10*time.Second)*rand.Float64())
 		t := time.NewTicker(updateTime)
 		defer t.Stop()
 		defer saverWg.Done()

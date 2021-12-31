@@ -67,8 +67,7 @@ func fatal(err error, msg string, data ...interface{}) {
 
 var fatalMessage fatalMsg
 
-type fatalMsg struct {
-}
+type fatalMsg struct{}
 
 func (f fatalMsg) json(msg string, args ...interface{}) {
 	var message string
@@ -89,7 +88,6 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	fmt.Println(string(logJSON))
 
 	os.Exit(1)
-
 }
 
 func (f fatalMsg) quiet(msg string, args ...interface{}) {
@@ -224,8 +222,7 @@ func Info(msg string, data ...interface{}) {
 
 var startupMessage startUpMsg
 
-type startUpMsg struct {
-}
+type startUpMsg struct{}
 
 func (s startUpMsg) json(msg string, args ...interface{}) {
 }

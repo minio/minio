@@ -73,7 +73,8 @@ func Test_minioEnvironFromFile(t *testing.T) {
 		expectedErr  bool
 		expectedEkvs []envKV
 	}{
-		{`
+		{
+			`
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123`,
 			false,
@@ -89,7 +90,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			},
 		},
 		// Value with double quotes
-		{`export MINIO_ROOT_USER="minio"`,
+		{
+			`export MINIO_ROOT_USER="minio"`,
 			false,
 			[]envKV{
 				{
@@ -99,7 +101,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			},
 		},
 		// Value with single quotes
-		{`export MINIO_ROOT_USER='minio'`,
+		{
+			`export MINIO_ROOT_USER='minio'`,
 			false,
 			[]envKV{
 				{
@@ -108,7 +111,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 				},
 			},
 		},
-		{`
+		{
+			`
 MINIO_ROOT_USER=minio
 MINIO_ROOT_PASSWORD=minio123`,
 			false,
@@ -123,7 +127,8 @@ MINIO_ROOT_PASSWORD=minio123`,
 				},
 			},
 		},
-		{`
+		{
+			`
 export MINIO_ROOT_USERminio
 export MINIO_ROOT_PASSWORD=minio123`,
 			true,

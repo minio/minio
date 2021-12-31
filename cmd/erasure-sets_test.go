@@ -162,7 +162,7 @@ func TestNewErasureSets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var nDisks = 16 // Maximum disks.
+	nDisks := 16 // Maximum disks.
 	var erasureDisks []string
 	for i := 0; i < nDisks; i++ {
 		// Do not attempt to create this path, the test validates

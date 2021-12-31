@@ -484,7 +484,6 @@ func registerAPIRouter(router *mux.Router) {
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
 	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
-
 }
 
 // corsHandler handler for CORS (Cross Origin Resource Sharing)

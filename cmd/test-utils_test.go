@@ -723,8 +723,8 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 }
 
 func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
-	secretKey, signature string, currTime time.Time) (*http.Request, error) {
-
+	secretKey, signature string, currTime time.Time) (*http.Request, error,
+) {
 	regionStr := globalSite.Region
 	var stream []byte
 	var buffer []byte
@@ -1204,13 +1204,11 @@ func randString(n int) string {
 // generate random object name.
 func getRandomObjectName() string {
 	return randString(16)
-
 }
 
 // generate random bucket name.
 func getRandomBucketName() string {
 	return randString(60)
-
 }
 
 // construct URL for http requests for bucket operations.
@@ -1262,7 +1260,6 @@ func getMultiDeleteObjectURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
 	queryValue.Set("delete", "")
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
-
 }
 
 // return URL for HEAD on the object.
@@ -1575,8 +1572,8 @@ func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, 
 // The test works in 2 steps, here is the description of the steps.
 //   STEP 1: Call the handler with the unsigned HTTP request (anonReq), assert for the `ErrAccessDenied` error response.
 func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, bucketPolicy *policy.Policy) {
-
+	anonReq *http.Request, bucketPolicy *policy.Policy,
+) {
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
 
@@ -1664,7 +1661,6 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	if rec.Code != unsupportedSignature {
 		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, unsupportedSignature, rec.Code)))
 	}
-
 }
 
 // ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint,
@@ -2227,8 +2223,8 @@ func TestToErrIsNil(t *testing.T) {
 // All upload failures are considered test errors - this function is
 // intended as a helper for other tests.
 func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentials, bucketName, objectName string,
-	partSizes []int64, metadata map[string]string, asMultipart bool) {
-
+	partSizes []int64, metadata map[string]string, asMultipart bool,
+) {
 	if len(partSizes) == 0 {
 		t.Fatalf("Cannot upload an object without part sizes")
 	}

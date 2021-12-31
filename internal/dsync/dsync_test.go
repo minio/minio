@@ -36,11 +36,15 @@ import (
 
 const numberOfNodes = 5
 
-var ds *Dsync
-var rpcPaths []string // list of rpc paths where lock server is serving.
+var (
+	ds       *Dsync
+	rpcPaths []string // list of rpc paths where lock server is serving.
+)
 
-var nodes = make([]string, numberOfNodes) // list of node IP addrs or hostname with ports.
-var lockServers []*lockServer
+var (
+	nodes       = make([]string, numberOfNodes) // list of node IP addrs or hostname with ports.
+	lockServers []*lockServer
+)
 
 func startRPCServers() {
 	for i := range nodes {
@@ -94,7 +98,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSimpleLock(t *testing.T) {
-
 	dm := NewDRWMutex(ds, "test")
 
 	dm.Lock(id, source)
@@ -106,7 +109,6 @@ func TestSimpleLock(t *testing.T) {
 }
 
 func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
-
 	dm := NewDRWMutex(ds, "test")
 
 	dm.Lock(id, source)
@@ -132,7 +134,6 @@ func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
 
 // Test two locks for same resource, one succeeds, one fails (after timeout)
 func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
-
 	dm1st := NewDRWMutex(ds, "aap")
 	dm2nd := NewDRWMutex(ds, "aap")
 
@@ -156,7 +157,6 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 
 // Test three locks for same resource, one succeeds, one fails (after timeout)
 func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
-
 	dm1st := NewDRWMutex(ds, "aap")
 	dm2nd := NewDRWMutex(ds, "aap")
 	dm3rd := NewDRWMutex(ds, "aap")
@@ -221,7 +221,6 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 
 // Test two locks for different resources, both succeed
 func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
-
 	dm1 := NewDRWMutex(ds, "aap")
 	dm2 := NewDRWMutex(ds, "noot")
 
@@ -332,7 +331,7 @@ func BenchmarkMutexUncontended(b *testing.B) {
 		*DRWMutex
 	}
 	b.RunParallel(func(pb *testing.PB) {
-		var mu = PaddedMutex{NewDRWMutex(ds, "")}
+		mu := PaddedMutex{NewDRWMutex(ds, "")}
 		for pb.Next() {
 			mu.Lock(id, source)
 			mu.Unlock()

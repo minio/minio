@@ -110,7 +110,6 @@ func errSRBucketConfigError(err error) SRError {
 		Cause: err,
 		Code:  ErrSiteReplicationBucketConfigError,
 	}
-
 }
 
 func errSRBucketMetaError(err error) SRError {
@@ -127,12 +126,10 @@ func errSRIAMError(err error) SRError {
 	}
 }
 
-var (
-	errSRObjectLayerNotReady = SRError{
-		Cause: fmt.Errorf("object layer not ready"),
-		Code:  ErrServerNotInitialized,
-	}
-)
+var errSRObjectLayerNotReady = SRError{
+	Cause: fmt.Errorf("object layer not ready"),
+	Code:  ErrServerNotInitialized,
+}
 
 func getSRStateFilePath() string {
 	return srStatePrefix + SlashSeparator + srStateFile
@@ -345,7 +342,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	deploymentIDsSet := set.NewStringSet()
 	localHasBuckets := false
 	nonLocalPeerWithBuckets := ""
-	var selfIdx = -1
+	selfIdx := -1
 	for i, v := range sites {
 		// deploymentIDs must be unique
 		if deploymentIDsSet.Contains(v.DeploymentID) {

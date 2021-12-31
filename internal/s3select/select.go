@@ -229,9 +229,7 @@ type S3Select struct {
 	close          func() error
 }
 
-var (
-	legacyXMLName = "SelectObjectContentRequest"
-)
+var legacyXMLName = "SelectObjectContentRequest"
 
 // UnmarshalXML - decodes XML data.
 func (s3Select *S3Select) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

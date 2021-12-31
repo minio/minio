@@ -38,7 +38,6 @@ type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
 func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
-
 	adminAPI := adminAPIHandlers{}
 	// Admin router
 	adminRouter := router.PathPrefix(adminPathPrefix).Subrouter()

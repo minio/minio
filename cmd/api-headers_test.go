@@ -23,7 +23,7 @@ import (
 
 func TestNewRequestID(t *testing.T) {
 	// Ensure that it returns an alphanumeric result of length 16.
-	var id = mustGetRequestID(UTCNow())
+	id := mustGetRequestID(UTCNow())
 
 	if len(id) != 16 {
 		t.Fail()

@@ -50,7 +50,6 @@ type Type interface {
 	fmt.Stringer
 
 	IsRequested(http.Header) bool
-
 	IsEncrypted(map[string]string) bool
 }
 

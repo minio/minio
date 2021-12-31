@@ -219,7 +219,6 @@ func TestReadExtended(t *testing.T) {
 
 	for i, c := range cases {
 		t.Run(c.file, func(t *testing.T) {
-
 			var err error
 			var record sql.Record
 			var result bytes.Buffer
@@ -435,7 +434,6 @@ func TestReadFailures(t *testing.T) {
 
 	for i, c := range cases {
 		t.Run(c.file, func(t *testing.T) {
-
 			var err error
 			var record sql.Record
 			var result bytes.Buffer

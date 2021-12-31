@@ -32,7 +32,6 @@ const (
 )
 
 func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-
 	drwm := NewDRWMutex(ds, "simplelock")
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -91,7 +90,6 @@ func TestSimpleWriteLockTimedOut(t *testing.T) {
 }
 
 func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-
 	drwm := NewDRWMutex(ds, "duallock")
 
 	// fmt.Println("Getting initial write lock")
@@ -126,7 +124,6 @@ func TestDualWriteLockAcquired(t *testing.T) {
 	if locked != expected {
 		t.Errorf("TestDualWriteLockAcquired(): \nexpected %#v\ngot      %#v", expected, locked)
 	}
-
 }
 
 func TestDualWriteLockTimedOut(t *testing.T) {
@@ -136,7 +133,6 @@ func TestDualWriteLockTimedOut(t *testing.T) {
 	if locked != expected {
 		t.Errorf("TestDualWriteLockTimedOut(): \nexpected %#v\ngot      %#v", expected, locked)
 	}
-
 }
 
 // Test cases below are copied 1 to 1 from sync/rwmutex_test.go (adapted to use DRWMutex)

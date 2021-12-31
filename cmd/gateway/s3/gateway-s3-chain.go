@@ -89,7 +89,6 @@ func (c *Chain) Retrieve() (credentials.Value, error) {
 	}
 
 	return credentials.Value{}, fmt.Errorf("no credentials found in %s cannot proceed", providers)
-
 }
 
 // IsExpired will returned the expired state of the currently cached provider

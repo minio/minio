@@ -303,7 +303,6 @@ func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
 
 // GetNetPerfInfo - fetch network information for a remote node.
 func (client *peerRESTClient) GetNetPerfInfo(ctx context.Context) (info madmin.PeerNetPerfInfo, err error) {
-
 	// 100 Gbit ->  256 MiB  *  50 threads
 	// 40 Gbit  ->  256 MiB  *  20 threads
 	// 25 Gbit  ->  128 MiB  *  25 threads
@@ -757,7 +756,6 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 	defer http.DrainBody(respBody)
 	var resp metacache
 	return resp, msgp.Decode(respBody, &resp)
-
 }
 
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {

@@ -106,7 +106,6 @@ type esClient interface {
 	createIndex(ElasticsearchArgs) error
 	ping(context.Context, ElasticsearchArgs) (bool, error)
 	stop()
-
 	entryExists(context.Context, string, string) (bool, error)
 	removeEntry(context.Context, string, string) error
 	updateEntry(context.Context, string, string, event.Event) error
@@ -408,7 +407,6 @@ func (c *esClientV7) getServerSupportStatus(ctx context.Context) (ESSupportStatu
 		}
 	}
 	return ESSUnknown, "", fmt.Errorf("Unable to get ES Server Version - got INFO response: %v", m)
-
 }
 
 func (c *esClientV7) isAtleastV7() bool {

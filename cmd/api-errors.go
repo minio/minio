@@ -2125,7 +2125,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		return noError
 	}
 
-	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
+	apiErr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
 	e, ok := err.(dns.ErrInvalidBucketName)
 	if ok {
 		code := toAPIErrorCode(ctx, e)
@@ -2238,7 +2238,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 			// since S3 only sends one Error XML response.
 			if len(e.Errors) >= 1 {
 				apiErr.Code = e.Errors[0].Reason
-
 			}
 		case azblob.StorageError:
 			apiErr = APIError{

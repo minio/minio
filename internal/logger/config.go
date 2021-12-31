@@ -277,7 +277,6 @@ func lookupLegacyConfig() (Config, error) {
 	}
 
 	return cfg, nil
-
 }
 
 // GetAuditKafka - returns a map of registered notification 'kafka' targets

@@ -505,7 +505,6 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			gr.Close()
 		}
 	}
-
 }
 
 func TestHeadObjectNoQuorum(t *testing.T) {

@@ -40,9 +40,7 @@ const (
 	NvmeAdminIdentify   = 0x06
 )
 
-var (
-	nvmeIoctlAdminCmd = ioctl.Iowr('N', 0x41, unsafe.Sizeof(nvmePassthruCommand{}))
-)
+var nvmeIoctlAdminCmd = ioctl.Iowr('N', 0x41, unsafe.Sizeof(nvmePassthruCommand{}))
 
 // NewNVMeDevice creates a new NVMeDevice struct with name
 func NewNVMeDevice(name string) *NVMeDevice {
@@ -51,7 +49,7 @@ func NewNVMeDevice(name string) *NVMeDevice {
 
 // Open - open device file to find kernel info
 func (d *NVMeDevice) Open() (err error) {
-	d.fd, err = unix.Open(d.Name, unix.O_RDWR, 0600)
+	d.fd, err = unix.Open(d.Name, unix.O_RDWR, 0o600)
 	return err
 }
 

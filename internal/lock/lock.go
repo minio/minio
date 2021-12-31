@@ -25,10 +25,8 @@ import (
 	"sync"
 )
 
-var (
-	// ErrAlreadyLocked is returned if the underlying fd is already locked.
-	ErrAlreadyLocked = errors.New("file already locked")
-)
+// ErrAlreadyLocked is returned if the underlying fd is already locked.
+var ErrAlreadyLocked = errors.New("file already locked")
 
 // RLockedFile represents a read locked file, implements a special
 // closer which only closes the associated *os.File when the ref count.
@@ -87,13 +85,12 @@ func newRLockedFile(lkFile *LockedFile) (*RLockedFile, error) {
 // RLockedOpenFile - returns a wrapped read locked file, if the file
 // doesn't exist at path returns an error.
 func RLockedOpenFile(path string) (*RLockedFile, error) {
-	lkFile, err := LockedOpenFile(path, os.O_RDONLY, 0666)
+	lkFile, err := LockedOpenFile(path, os.O_RDONLY, 0o666)
 	if err != nil {
 		return nil, err
 	}
 
 	return newRLockedFile(lkFile)
-
 }
 
 // LockedFile represents a locked file

@@ -167,7 +167,6 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32) error
-
 	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)
 	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
@@ -222,7 +221,6 @@ type ObjectLayer interface {
 	IsEncryptionSupported() bool
 	IsTaggingSupported() bool
 	IsCompressionSupported() bool
-
 	SetDriveCounts() []int // list of erasure stripe size for each pool in order.
 
 	// Healing operations.

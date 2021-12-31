@@ -37,14 +37,12 @@ import (
 	"github.com/minio/pkg/env"
 )
 
-var (
-	gatewayCmd = cli.Command{
-		Name:            "gateway",
-		Usage:           "start object storage gateway",
-		Flags:           append(ServerFlags, GlobalFlags...),
-		HideHelpCommand: true,
-	}
-)
+var gatewayCmd = cli.Command{
+	Name:            "gateway",
+	Usage:           "start object storage gateway",
+	Flags:           append(ServerFlags, GlobalFlags...),
+	HideHelpCommand: true,
+}
 
 // GatewayLocker implements custom NewNSLock implementation
 type GatewayLocker struct {

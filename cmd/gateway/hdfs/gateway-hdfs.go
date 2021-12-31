@@ -133,7 +133,6 @@ func getKerberosClient() (*krb.Client, error) {
 		realm := env.Get("KRB5REALM", "")
 		if username == "" || realm == "" {
 			return nil, errors.New("empty KRB5USERNAME or KRB5REALM")
-
 		}
 
 		return krb.NewWithKeytab(username, realm, kt, cfg), nil
@@ -216,7 +215,7 @@ func (g *HDFS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, err
 		return nil, fmt.Errorf("unable to initialize hdfsClient: %v", err)
 	}
 
-	if err = clnt.MkdirAll(minio.PathJoin(commonPath, hdfsSeparator, minioMetaTmpBucket), os.FileMode(0755)); err != nil {
+	if err = clnt.MkdirAll(minio.PathJoin(commonPath, hdfsSeparator, minioMetaTmpBucket), os.FileMode(0o755)); err != nil {
 		return nil, err
 	}
 
@@ -324,7 +323,7 @@ func (n *hdfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string,
 	if !hdfsIsValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	return hdfsToObjectErr(ctx, n.clnt.Mkdir(n.hdfsPathJoin(bucket), os.FileMode(0755)), bucket)
+	return hdfsToObjectErr(ctx, n.clnt.Mkdir(n.hdfsPathJoin(bucket), os.FileMode(0o755)), bucket)
 }
 
 func (n *hdfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
@@ -480,7 +479,6 @@ func fileInfoToObjectInfo(bucket string, entry string, fi os.FileInfo) minio.Obj
 // a path entry to an `os.FileInfo`. It also saves the listed path's `os.FileInfo` in the cache.
 func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) (os.FileInfo, error) {
 	dirReader, err := n.clnt.Open(filePath)
-
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +492,6 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 
 	fileInfos[key] = dirStat
 	infos, err := dirReader.Readdir(0)
-
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +599,6 @@ func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
 	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
-
 }
 
 func (n *hdfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
@@ -689,7 +685,7 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 
 	// If its a directory create a prefix {
 	if strings.HasSuffix(object, hdfsSeparator) && r.Size() == 0 {
-		if err = n.clnt.MkdirAll(name, os.FileMode(0755)); err != nil {
+		if err = n.clnt.MkdirAll(name, os.FileMode(0o755)); err != nil {
 			n.deleteObject(n.hdfsPathJoin(bucket), name)
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
@@ -707,7 +703,7 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 		}
 		dir := path.Dir(name)
 		if dir != "" {
-			if err = n.clnt.MkdirAll(dir, os.FileMode(0755)); err != nil {
+			if err = n.clnt.MkdirAll(dir, os.FileMode(0o755)); err != nil {
 				w.Close()
 				n.deleteObject(n.hdfsPathJoin(bucket), dir)
 				return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
@@ -839,7 +835,7 @@ func (n *hdfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, objec
 	name := n.hdfsPathJoin(bucket, object)
 	dir := path.Dir(name)
 	if dir != "" {
-		if err = n.clnt.MkdirAll(dir, os.FileMode(0755)); err != nil {
+		if err = n.clnt.MkdirAll(dir, os.FileMode(0o755)); err != nil {
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 	}

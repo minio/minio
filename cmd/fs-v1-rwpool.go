@@ -148,7 +148,7 @@ func (fsi *fsIOPool) Write(path string) (wlk *lock.LockedFile, err error) {
 		return nil, err
 	}
 
-	wlk, err = lock.LockedOpenFile(path, os.O_RDWR, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -175,12 +175,12 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 	}
 
 	// Creates parent if missing.
-	if err = mkdirAll(pathutil.Dir(path), 0777); err != nil {
+	if err = mkdirAll(pathutil.Dir(path), 0o777); err != nil {
 		return nil, err
 	}
 
 	// Attempt to create the file.
-	wlk, err = lock.LockedOpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		switch {
 		case osIsPermission(err):
@@ -220,7 +220,6 @@ func (fsi *fsIOPool) Close(path string) error {
 
 	// If the file is closed, remove it from the reader pool map.
 	if rlkFile.IsClosed() {
-
 		// Purge the cached lock path from map.
 		delete(fsi.readersMap, path)
 	}

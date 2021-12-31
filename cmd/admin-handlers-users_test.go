@@ -653,7 +653,6 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
 	if !strings.Contains(infoStr, `"s3:PutObject"`) || !strings.Contains(infoStr, ":"+bucket+"/") {
 		c.Fatalf("policy contains unexpected content!")
 	}
-
 }
 
 func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {

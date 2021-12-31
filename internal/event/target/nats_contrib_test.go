@@ -31,9 +31,11 @@ func TestNatsConnPlain(t *testing.T) {
 
 	clientConfig := &NATSArgs{
 		Enable: true,
-		Address: xnet.Host{Name: "localhost",
+		Address: xnet.Host{
+			Name:      "localhost",
 			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
+			IsPortSet: true,
+		},
 		Subject: "test",
 	}
 	con, err := clientConfig.connectNats()
@@ -53,9 +55,11 @@ func TestNatsConnUserPass(t *testing.T) {
 
 	clientConfig := &NATSArgs{
 		Enable: true,
-		Address: xnet.Host{Name: "localhost",
+		Address: xnet.Host{
+			Name:      "localhost",
 			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
+			IsPortSet: true,
+		},
 		Subject:  "test",
 		Username: opts.Username,
 		Password: opts.Password,
@@ -77,9 +81,11 @@ func TestNatsConnToken(t *testing.T) {
 
 	clientConfig := &NATSArgs{
 		Enable: true,
-		Address: xnet.Host{Name: "localhost",
+		Address: xnet.Host{
+			Name:      "localhost",
 			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
+			IsPortSet: true,
+		},
 		Subject: "test",
 		Token:   opts.Authorization,
 	}

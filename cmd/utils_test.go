@@ -293,7 +293,6 @@ func TestToS3ETag(t *testing.T) {
 
 // Test contains
 func TestContains(t *testing.T) {
-
 	testErr := errors.New("test err")
 
 	testCases := []struct {
@@ -398,8 +397,8 @@ func TestCeilFrac(t *testing.T) {
 
 // Test if isErrIgnored works correctly.
 func TestIsErrIgnored(t *testing.T) {
-	var errIgnored = fmt.Errorf("ignored error")
-	var testCases = []struct {
+	errIgnored := fmt.Errorf("ignored error")
+	testCases := []struct {
 		err     error
 		ignored bool
 	}{
@@ -425,7 +424,7 @@ func TestIsErrIgnored(t *testing.T) {
 
 // Test queries()
 func TestQueries(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		keys      []string
 		keyvalues []string
 	}{
@@ -446,7 +445,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestLCP(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		prefixes     []string
 		commonPrefix string
 	}{
@@ -485,7 +484,6 @@ func TestGetMinioMode(t *testing.T) {
 
 	globalIsGateway, globalGatewayName = true, "azure"
 	testMinioMode(globalMinioModeGatewayPrefix + globalGatewayName)
-
 }
 
 func TestTimedValue(t *testing.T) {

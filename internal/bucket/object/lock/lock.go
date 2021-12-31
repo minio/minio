@@ -121,9 +121,7 @@ const (
 	ntpServerEnv = "MINIO_NTP_SERVER"
 )
 
-var (
-	ntpServer = env.Get(ntpServerEnv, "")
-)
+var ntpServer = env.Get(ntpServerEnv, "")
 
 // UTCNowNTP - is similar in functionality to UTCNow()
 // but only used when we do not wish to rely on system
@@ -424,7 +422,6 @@ func ParseObjectLockRetentionHeaders(h http.Header) (rmode RetMode, r RetentionD
 	}
 
 	return rmode, RetentionDate{retDate}, nil
-
 }
 
 // GetObjectRetentionMeta constructs ObjectRetention from metadata
@@ -480,7 +477,6 @@ func ParseObjectLockLegalHoldHeaders(h http.Header) (lhold ObjectLegalHold, err 
 		lhold = ObjectLegalHold{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Status: lh}
 	}
 	return lhold, nil
-
 }
 
 // ObjectLegalHold specified in

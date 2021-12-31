@@ -38,7 +38,7 @@ func TestLockFail(t *testing.T) {
 		}
 	}()
 
-	_, err = LockedOpenFile(f.Name(), os.O_APPEND, 0600)
+	_, err = LockedOpenFile(f.Name(), os.O_APPEND, 0o600)
 	if err == nil {
 		t.Fatal("Should fail here")
 	}
@@ -57,7 +57,7 @@ func TestLockDirFail(t *testing.T) {
 		}
 	}()
 
-	_, err = LockedOpenFile(d, os.O_APPEND, 0600)
+	_, err = LockedOpenFile(d, os.O_APPEND, 0o600)
 	if err == nil {
 		t.Fatal("Should fail here")
 	}
@@ -141,7 +141,7 @@ func TestLockAndUnlock(t *testing.T) {
 	}()
 
 	// lock the file
-	l, err := LockedOpenFile(f.Name(), os.O_WRONLY, 0600)
+	l, err := LockedOpenFile(f.Name(), os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestLockAndUnlock(t *testing.T) {
 	}
 
 	// try lock the unlocked file
-	dupl, err := LockedOpenFile(f.Name(), os.O_WRONLY|os.O_CREATE, 0600)
+	dupl, err := LockedOpenFile(f.Name(), os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Errorf("err = %v, want %v", err, nil)
 	}
@@ -160,7 +160,7 @@ func TestLockAndUnlock(t *testing.T) {
 	// blocking on locked file
 	locked := make(chan struct{}, 1)
 	go func() {
-		bl, blerr := LockedOpenFile(f.Name(), os.O_WRONLY, 0600)
+		bl, blerr := LockedOpenFile(f.Name(), os.O_WRONLY, 0o600)
 		if blerr != nil {
 			t.Error(blerr)
 			return

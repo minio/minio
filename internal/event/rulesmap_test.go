@@ -158,8 +158,10 @@ func TestNewRulesMap(t *testing.T) {
 		"*", TargetID{"1", "webhook"})
 
 	rulesMapCase2 := make(RulesMap)
-	rulesMapCase2.add([]Name{ObjectAccessedGet, ObjectAccessedHead,
-		ObjectCreatedPut, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}, "*", TargetID{"1", "webhook"})
+	rulesMapCase2.add([]Name{
+		ObjectAccessedGet, ObjectAccessedHead,
+		ObjectCreatedPut, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold,
+	}, "*", TargetID{"1", "webhook"})
 
 	rulesMapCase3 := make(RulesMap)
 	rulesMapCase3.add([]Name{ObjectRemovedDelete}, "2010*.jpg", TargetID{"1", "webhook"})

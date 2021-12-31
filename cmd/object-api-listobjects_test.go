@@ -1008,7 +1008,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 }
 
 func objInfoNames(o []ObjectInfo) []string {
-	var res = make([]string, len(o))
+	res := make([]string, len(o))
 	for i := range o {
 		res[i] = o[i].Name
 	}
@@ -1830,7 +1830,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			var foundObjects []ObjectInfo
 			var foundPrefixes []string
-			var marker = ""
+			marker := ""
 			for {
 				result, err := obj.ListObjects(context.Background(), testCase.bucketName,
 					testCase.prefix, marker, testCase.delimiter, testCase.page)

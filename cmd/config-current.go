@@ -50,7 +50,7 @@ import (
 )
 
 func initHelp() {
-	var kvs = map[string]config.KVS{
+	kvs := map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.CompressionSubSys:    compress.DefaultKVS,
@@ -78,7 +78,7 @@ func initHelp() {
 	config.RegisterDefaultKVS(kvs)
 
 	// Captures help for each sub-system
-	var helpSubSys = config.HelpKVS{
+	helpSubSys := config.HelpKVS{
 		config.HelpKV{
 			Key:         config.SiteSubSys,
 			Description: "label the server and its location",
@@ -205,7 +205,7 @@ func initHelp() {
 		}
 	}
 
-	var helpMap = map[string]config.HelpKVS{
+	helpMap := map[string]config.HelpKVS{
 		"":                          helpSubSys, // Help for all sub-systems.
 		config.SiteSubSys:           config.SiteHelp,
 		config.RegionSubSys:         config.RegionHelp,

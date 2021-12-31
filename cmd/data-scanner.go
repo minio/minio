@@ -277,7 +277,6 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		defer func() {
 			console.Debugf(logPrefix+" Scanner time: %v %s\n", time.Since(t), logSuffix)
 		}()
-
 	}
 
 	switch cache.Info.Name {
@@ -875,8 +874,10 @@ func (i *scannerItem) transformMetaDir() {
 	i.objectName = split[len(split)-1]
 }
 
-var applyActionsLogPrefix = color.Green("applyActions:")
-var applyVersionActionsLogPrefix = color.Green("applyVersionActions:")
+var (
+	applyActionsLogPrefix        = color.Green("applyActions:")
+	applyVersionActionsLogPrefix = color.Green("applyVersionActions:")
+)
 
 func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi ObjectInfo) (size int64) {
 	if i.debug {
@@ -979,7 +980,6 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
 	}
-
 }
 
 // applyNewerNoncurrentVersionLimit removes noncurrent versions older than the most recent NewerNoncurrentVersions configured.
@@ -1100,7 +1100,6 @@ func applyTransitionRule(obj ObjectInfo) bool {
 	}
 	globalTransitionState.queueTransitionTask(obj)
 	return true
-
 }
 
 func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {

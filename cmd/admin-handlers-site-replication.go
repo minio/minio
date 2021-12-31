@@ -134,7 +134,6 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
 }
 
 // SRPeerReplicateIAMItem - PUT /minio/admin/v3/site-replication/iam-item

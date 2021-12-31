@@ -241,7 +241,6 @@ func (target *KafkaTarget) Close() error {
 
 // Check if atleast one broker in cluster is active
 func (k KafkaArgs) pingBrokers() bool {
-
 	for _, broker := range k.Brokers {
 		_, dErr := net.Dial("tcp", broker.String())
 		if dErr == nil {
@@ -276,7 +275,6 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	config.Net.SASL.Enable = args.SASL.Enable
 
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
-
 	if err != nil {
 		target.loggerOnce(context.Background(), err, target.ID())
 		return target, err

@@ -170,7 +170,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	cfg := globalServerConfig.Clone()
 	vars := mux.Vars(r)
-	var buf = &bytes.Buffer{}
+	buf := &bytes.Buffer{}
 	cw := config.NewConfigWriteTo(cfg, vars["key"])
 	if _, err := cw.WriteTo(buf); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

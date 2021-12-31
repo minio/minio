@@ -228,7 +228,7 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var inputs = []xlMetaV2{
+	inputs := []xlMetaV2{
 		0: {
 			versions: []xlMetaV2ShallowVersion{
 				{header: xlMetaV2VersionHeader{
@@ -379,7 +379,7 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 	for i, xl := range inputs {
 		xl.sortByModTime()
 		var err error
-		var entry = metaCacheEntry{
+		entry := metaCacheEntry{
 			name: "testobject",
 		}
 		entry.metadata, err = xl.AppendTo(nil)
