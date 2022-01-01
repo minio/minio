@@ -422,10 +422,15 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	objects := make([]ObjectV, len(deleteObjectsReq.Objects))
 	// Convert object name delete objects if it has `/` in the beginning.
 	for i := range deleteObjectsReq.Objects {
 		deleteObjectsReq.Objects[i].ObjectName = trimLeadingSlash(deleteObjectsReq.Objects[i].ObjectName)
+		objects[i] = deleteObjectsReq.Objects[i].ObjectV
 	}
+
+	// Make sure to update context to print ObjectNames for multi objects.
+	ctx = updateReqContext(ctx, objects...)
 
 	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
 	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
@@ -527,8 +532,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		if replicateDeletes {
 			dsc = checkReplicateDelete(ctx, bucket, ObjectToDelete{
-				ObjectName: object.ObjectName,
-				VersionID:  object.VersionID,
+				ObjectV: ObjectV{
+					ObjectName: object.ObjectName,
+					VersionID:  object.VersionID,
+				},
 			}, goi, opts, gerr)
 			if dsc.ReplicateAny() {
 				if object.VersionID != "" {
@@ -581,8 +588,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		// created during DeleteMarker creation when client didn't
 		// specify a versionID.
 		objToDel := ObjectToDelete{
-			ObjectName:                    dObjects[i].ObjectName,
-			VersionID:                     dObjects[i].VersionID,
+			ObjectV: ObjectV{
+				ObjectName: dObjects[i].ObjectName,
+				VersionID:  dObjects[i].VersionID,
+			},
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus(),
 			VersionPurgeStatuses:          dObjects[i].ReplicationState.VersionPurgeStatusInternal,
 			DeleteMarkerReplicationStatus: dObjects[i].ReplicationState.ReplicationStatusInternal,

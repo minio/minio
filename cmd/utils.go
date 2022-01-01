@@ -752,6 +752,21 @@ func likelyUnescapeGeneric(p string, escapeFn func(string) (string, error)) stri
 	return ep
 }
 
+func updateReqContext(ctx context.Context, objects ...ObjectV) context.Context {
+	req := logger.GetReqInfo(ctx)
+	if req != nil {
+		req.Objects = make([]logger.ObjectVersion, 0, len(objects))
+		for _, ov := range objects {
+			req.Objects = append(req.Objects, logger.ObjectVersion{
+				ObjectName: ov.ObjectName,
+				VersionID:  ov.VersionID,
+			})
+		}
+		return logger.SetReqInfo(ctx, req)
+	}
+	return ctx
+}
+
 // Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	vars := mux.Vars(r)
@@ -770,6 +785,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		API:          api,
 		BucketName:   bucket,
 		ObjectName:   object,
+		VersionID:    strings.TrimSpace(r.Form.Get(xhttp.VersionID)),
 	}
 	return logger.SetReqInfo(r.Context(), reqInfo)
 }

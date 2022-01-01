@@ -3387,7 +3387,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		os.SetTransitionState(goi.TransitionedObject)
 	}
 
-	dsc := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, opts, gerr)
+	dsc := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+		ObjectV: ObjectV{
+			ObjectName: object,
+			VersionID:  opts.VersionID,
+		},
+	}, goi, opts, gerr)
 	if dsc.ReplicateAny() {
 		opts.SetDeleteReplicationState(dsc, opts.VersionID)
 	}
@@ -3414,8 +3419,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 		if vID != "" {
 			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
-				ObjectName: object,
-				VersionID:  vID,
+				ObjectV: ObjectV{
+					ObjectName: object,
+					VersionID:  vID,
+				},
 			}, goi, gerr)
 			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL)

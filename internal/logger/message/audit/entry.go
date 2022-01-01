@@ -29,6 +29,12 @@ import (
 // Version - represents the current version of audit log structure.
 const Version = "1"
 
+// ObjectVersion object version key/versionId
+type ObjectVersion struct {
+	ObjectName string `json:"objectName"`
+	VersionID  string `json:"VersionId,omitempty"`
+}
+
 // Entry - audit entry logs.
 type Entry struct {
 	Version      string    `json:"version"`
@@ -36,15 +42,16 @@ type Entry struct {
 	Time         time.Time `json:"time"`
 	Trigger      string    `json:"trigger"`
 	API          struct {
-		Name            string `json:"name,omitempty"`
-		Bucket          string `json:"bucket,omitempty"`
-		Object          string `json:"object,omitempty"`
-		Status          string `json:"status,omitempty"`
-		StatusCode      int    `json:"statusCode,omitempty"`
-		InputBytes      int64  `json:"rx"`
-		OutputBytes     int64  `json:"tx"`
-		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
-		TimeToResponse  string `json:"timeToResponse,omitempty"`
+		Name            string          `json:"name,omitempty"`
+		Bucket          string          `json:"bucket,omitempty"`
+		Object          string          `json:"object,omitempty"`
+		Objects         []ObjectVersion `json:"objects,omitempty"`
+		Status          string          `json:"status,omitempty"`
+		StatusCode      int             `json:"statusCode,omitempty"`
+		InputBytes      int64           `json:"rx"`
+		OutputBytes     int64           `json:"tx"`
+		TimeToFirstByte string          `json:"timeToFirstByte,omitempty"`
+		TimeToResponse  string          `json:"timeToResponse,omitempty"`
 	} `json:"api"`
 	RemoteHost string                 `json:"remotehost,omitempty"`
 	RequestID  string                 `json:"requestID,omitempty"`

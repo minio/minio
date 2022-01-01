@@ -48,10 +48,15 @@ func (t DeleteMarkerMTime) MarshalXML(e *xml.Encoder, startElement xml.StartElem
 	return e.EncodeElement(t.Time.Format(time.RFC3339), startElement)
 }
 
-// ObjectToDelete carries key name for the object to delete.
-type ObjectToDelete struct {
+// ObjectV object version key/versionId
+type ObjectV struct {
 	ObjectName string `xml:"Key"`
 	VersionID  string `xml:"VersionId"`
+}
+
+// ObjectToDelete carries key name for the object to delete.
+type ObjectToDelete struct {
+	ObjectV
 	// Replication status of DeleteMarker
 	DeleteMarkerReplicationStatus string `xml:"DeleteMarkerReplicationStatus"`
 	// Status of versioned delete (of object or DeleteMarker)
