@@ -51,10 +51,8 @@ const (
 	updateTimeout     = 10 * time.Second
 )
 
-var (
-	// For windows our files have .exe additionally.
-	minioReleaseWindowsInfoURL = minioReleaseURL + "minio.exe.sha256sum"
-)
+// For windows our files have .exe additionally.
+var minioReleaseWindowsInfoURL = minioReleaseURL + "minio.exe.sha256sum"
 
 // minioVersionToReleaseTime - parses a standard official release
 // MinIO version string.
@@ -225,7 +223,6 @@ func IsPCFTile() bool {
 // Any change here should be discussed by opening an issue at
 // https://github.com/minio/minio/issues.
 func getUserAgent(mode string) string {
-
 	userAgentParts := []string{}
 	// Helper function to concisely append a pair of strings to a
 	// the user-agent slice.

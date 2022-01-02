@@ -422,7 +422,6 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
-
 }
 
 // Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both Erasure multiple disks and single node setup.
@@ -507,7 +506,6 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	if rec.Header().Get("Location") != expectedLocation {
 		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.Header().Get("Location"), expectedLocation)
 	}
-
 }
 
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.

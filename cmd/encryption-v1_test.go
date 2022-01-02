@@ -64,7 +64,6 @@ func TestEncryptRequest(t *testing.T) {
 			req.Header.Set(k, v)
 		}
 		_, _, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
-
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
 		}
@@ -285,14 +284,13 @@ func TestGetDecryptedRange(t *testing.T) {
 	)
 
 	// Single part object tests
-	var (
-		mkSPObj = func(s int64) ObjectInfo {
-			return ObjectInfo{
-				Size:        getEncSize(s),
-				UserDefined: udMap(false),
-			}
+
+	mkSPObj := func(s int64) ObjectInfo {
+		return ObjectInfo{
+			Size:        getEncSize(s),
+			UserDefined: udMap(false),
 		}
-	)
+	}
 
 	testSP := []struct {
 		decSz int64
@@ -325,7 +323,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen = pkgSz + 32
+			rLen := pkgSz + 32
 			if test.decSz < pkgSz {
 				rLen = test.decSz + 32
 			}
@@ -341,7 +339,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen = (pkgSz + 32) * 2
+			rLen := (pkgSz + 32) * 2
 			if test.decSz < 2*pkgSz {
 				rLen = (pkgSz + 32) + (test.decSz - pkgSz + 32)
 			}
@@ -356,7 +354,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen = (pkgSz + 32) * 2
+			rLen := (pkgSz + 32) * 2
 			if test.decSz-pkgSz < 2*pkgSz {
 				rLen = (pkgSz + 32) + (test.decSz - pkgSz + 32*2)
 			}
@@ -551,60 +549,90 @@ var getDefaultOptsTests = []struct {
 	encryptionType encrypt.Type
 	err            error
 }{
-	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
-		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{
+		headers: http.Header{
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+			xhttp.AmzServerSideEncryptionCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+		},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: encrypt.SSEC,
-		err:            nil}, // 0
-	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
-		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		err:            nil,
+	}, // 0
+	{
+		headers: http.Header{
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+			xhttp.AmzServerSideEncryptionCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+		},
 		copySource:     true,
 		metadata:       nil,
 		encryptionType: "",
-		err:            nil}, // 1
-	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
-		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"Mz"},
-		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		err:            nil,
+	}, // 1
+	{
+		headers: http.Header{
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+			xhttp.AmzServerSideEncryptionCustomerKey:       []string{"Mz"},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+		},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: "",
-		err:            crypto.ErrInvalidCustomerKey}, // 2
-	{headers: http.Header{xhttp.AmzServerSideEncryption: []string{"AES256"}},
+		err:            crypto.ErrInvalidCustomerKey,
+	}, // 2
+	{
+		headers:        http.Header{xhttp.AmzServerSideEncryption: []string{"AES256"}},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: encrypt.S3,
-		err:            nil}, // 3
-	{headers: http.Header{},
+		err:            nil,
+	}, // 3
+	{
+		headers:    http.Header{},
 		copySource: false,
-		metadata: map[string]string{crypto.MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+		metadata: map[string]string{
+			crypto.MetaSealedKeyS3:       base64.StdEncoding.EncodeToString(make([]byte, 64)),
 			crypto.MetaKeyID:             "kms-key",
-			crypto.MetaDataEncryptionKey: "m-key"},
+			crypto.MetaDataEncryptionKey: "m-key",
+		},
 		encryptionType: encrypt.S3,
-		err:            nil}, // 4
-	{headers: http.Header{},
+		err:            nil,
+	}, // 4
+	{
+		headers:    http.Header{},
 		copySource: true,
-		metadata: map[string]string{crypto.MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+		metadata: map[string]string{
+			crypto.MetaSealedKeyS3:       base64.StdEncoding.EncodeToString(make([]byte, 64)),
 			crypto.MetaKeyID:             "kms-key",
-			crypto.MetaDataEncryptionKey: "m-key"},
+			crypto.MetaDataEncryptionKey: "m-key",
+		},
 		encryptionType: "",
-		err:            nil}, // 5
-	{headers: http.Header{xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
-		xhttp.AmzServerSideEncryptionCopyCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		err:            nil,
+	}, // 5
+	{
+		headers: http.Header{
+			xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
+			xhttp.AmzServerSideEncryptionCopyCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+		},
 		copySource:     true,
 		metadata:       nil,
 		encryptionType: encrypt.SSEC,
-		err:            nil}, // 6
-	{headers: http.Header{xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
-		xhttp.AmzServerSideEncryptionCopyCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		err:            nil,
+	}, // 6
+	{
+		headers: http.Header{
+			xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
+			xhttp.AmzServerSideEncryptionCopyCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+		},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: "",
-		err:            nil}, // 7
+		err:            nil,
+	}, // 7
 }
 
 func TestGetDefaultOpts(t *testing.T) {

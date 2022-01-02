@@ -414,7 +414,7 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 		return nil, nil
 	}
 	data = cdata
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if len(cmetadata) != 0 {
 		if err := json.Unmarshal(cmetadata, &meta); err != nil {
 			return nil, err

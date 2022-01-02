@@ -192,34 +192,41 @@ func TestAzureCodesToObjectError(t *testing.T) {
 	}{
 		{
 			nil, "ContainerAlreadyExists", 0,
-			minio.BucketExists{Bucket: "bucket"}, "bucket", "",
+			minio.BucketExists{Bucket: "bucket"},
+			"bucket", "",
 		},
 		{
 			nil, "InvalidResourceName", 0,
-			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			minio.BucketNameInvalid{Bucket: "bucket."},
+			"bucket.", "",
 		},
 		{
 			nil, "RequestBodyTooLarge", 0,
-			minio.PartTooBig{}, "", "",
+			minio.PartTooBig{},
+			"", "",
 		},
 		{
 			nil, "InvalidMetadata", 0,
-			minio.UnsupportedMetadata{}, "", "",
+			minio.UnsupportedMetadata{},
+			"", "",
 		},
 		{
 			nil, "", http.StatusNotFound,
 			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
-			}, "bucket", "object",
+			},
+			"bucket", "object",
 		},
 		{
 			nil, "", http.StatusNotFound,
-			minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
+			minio.BucketNotFound{Bucket: "bucket"},
+			"bucket", "",
 		},
 		{
 			nil, "", http.StatusBadRequest,
-			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			minio.BucketNameInvalid{Bucket: "bucket."},
+			"bucket.", "",
 		},
 		{
 			fmt.Errorf("unhandled azure error"), "", http.StatusForbidden,

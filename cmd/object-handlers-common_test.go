@@ -48,7 +48,6 @@ func TestCanonicalizeETag(t *testing.T) {
 		etag := canonicalizeETag(test.etag)
 		if test.canonicalizedETag != etag {
 			t.Fatalf("Expected %s , got %s", test.canonicalizedETag, etag)
-
 		}
 	}
 }

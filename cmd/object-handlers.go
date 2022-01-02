@@ -1013,7 +1013,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	srcOpts.VersionID = vid
 
 	// convert copy src encryption options for GET calls
-	var getOpts = ObjectOptions{VersionID: srcOpts.VersionID, Versioned: srcOpts.Versioned}
+	getOpts := ObjectOptions{VersionID: srcOpts.VersionID, Versioned: srcOpts.Versioned}
 	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
 	if getSSE != srcOpts.ServerSideEncryption {
 		getOpts.ServerSideEncryption = getSSE
@@ -1148,7 +1148,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	pReader := NewPutObjReader(srcInfo.Reader)
 
 	// Handle encryption
-	var encMetadata = make(map[string]string)
+	encMetadata := make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
 		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); !ok && crypto.SSECopy.IsRequested(r.Header) {
@@ -1511,7 +1511,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Schedule object for immediate transition if eligible.
 		enqueueTransitionImmediate(objInfo)
 	}
-
 }
 
 // PutObjectHandler - PUT Object
@@ -2222,7 +2221,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	var encMetadata = map[string]string{}
+	encMetadata := map[string]string{}
 
 	if objectAPI.IsEncryptionSupported() {
 		if _, ok := crypto.IsRequested(r.Header); ok {
@@ -2398,7 +2397,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	srcOpts.VersionID = vid
 
 	// convert copy src and dst encryption options for GET/PUT calls
-	var getOpts = ObjectOptions{VersionID: srcOpts.VersionID}
+	getOpts := ObjectOptions{VersionID: srcOpts.VersionID}
 	if srcOpts.ServerSideEncryption != nil {
 		getOpts.ServerSideEncryption = encrypt.SSE(srcOpts.ServerSideEncryption)
 	}
@@ -3083,7 +3082,6 @@ func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
 				return
 			}
 		}
-
 	}()
 	return doneCh
 }
@@ -3592,7 +3590,6 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
-
 }
 
 // GetObjectLegalHoldHandler - get legal hold configuration to object,
@@ -3961,7 +3958,6 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
-
 }
 
 // DeleteObjectTaggingHandler - DELETE object tagging

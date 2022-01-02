@@ -159,7 +159,7 @@ func TestSameFile(t *testing.T) {
 	if !SameFile(fi1, fi2) {
 		t.Fatal("Expected the files to be same")
 	}
-	if err = goioutil.WriteFile(tmpFile, []byte("aaa"), 0644); err != nil {
+	if err = goioutil.WriteFile(tmpFile, []byte("aaa"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	fi2, err = os.Stat(tmpFile)

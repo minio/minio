@@ -51,7 +51,6 @@ func setTCPParameters(network, address string, c syscall.RawConn) error {
 		// Enable TCP quick ACK, John Nagle says
 		// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
-
 	})
 	return nil
 }

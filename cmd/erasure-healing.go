@@ -811,8 +811,8 @@ func isObjectDirDangling(errs []error) (ok bool) {
 }
 
 func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object, versionID string,
-	metaArr []FileInfo, errs []error, dataErrs []error, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-
+	metaArr []FileInfo, errs []error, dataErrs []error, opts madmin.HealOpts) (madmin.HealResultItem, error,
+) {
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 	// Check if the object is dangling, if yes and user requested

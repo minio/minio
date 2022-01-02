@@ -449,7 +449,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var objectsToDelete = map[ObjectToDelete]int{}
+	objectsToDelete := map[ObjectToDelete]int{}
 	getObjectInfoFn := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
 		getObjectInfoFn = api.CacheAPI().GetObjectInfo
@@ -606,8 +606,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	// Generate response
-	var deleteErrors = make([]DeleteError, 0, len(deleteObjectsReq.Objects))
-	var deletedObjects = make([]DeletedObject, 0, len(deleteObjectsReq.Objects))
+	deleteErrors := make([]DeleteError, 0, len(deleteObjectsReq.Objects))
+	deletedObjects := make([]DeletedObject, 0, len(deleteObjectsReq.Objects))
 	for _, deleteResult := range deleteResults {
 		if deleteResult.errInfo.Code != "" {
 			deleteErrors = append(deleteErrors, deleteResult.errInfo)
@@ -1806,7 +1806,8 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 	tgtArns := config.FilterTargetArns(
 		replication.ObjectOpts{
 			OpType:    replication.ResyncReplicationType,
-			TargetArn: arn})
+			TargetArn: arn,
+		})
 
 	if len(tgtArns) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{

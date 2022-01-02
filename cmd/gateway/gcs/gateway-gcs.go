@@ -1121,7 +1121,6 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 		LastModified: minio.UTCNow(),
 		Size:         data.Size(),
 	}, nil
-
 }
 
 // gcsGetPartInfo returns PartInfo of a given object part

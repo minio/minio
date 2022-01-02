@@ -20,18 +20,16 @@ package lsync_test
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"runtime"
-
 	. "github.com/minio/minio/internal/lsync"
 )
 
 func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-
 	ctx := context.Background()
 	lrwm := NewLRWMutex()
 
@@ -89,7 +87,6 @@ func TestSimpleWriteLockTimedOut(t *testing.T) {
 }
 
 func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-
 	ctx := context.Background()
 	lrwm := NewLRWMutex()
 
@@ -124,7 +121,6 @@ func TestDualWriteLockAcquired(t *testing.T) {
 	if locked != expected {
 		t.Errorf("TestDualWriteLockAcquired(): \nexpected %#v\ngot      %#v", expected, locked)
 	}
-
 }
 
 func TestDualWriteLockTimedOut(t *testing.T) {
@@ -134,7 +130,6 @@ func TestDualWriteLockTimedOut(t *testing.T) {
 	if locked != expected {
 		t.Errorf("TestDualWriteLockTimedOut(): \nexpected %#v\ngot      %#v", expected, locked)
 	}
-
 }
 
 // Test cases below are copied 1 to 1 from sync/rwmutex_test.go (adapted to use LRWMutex)

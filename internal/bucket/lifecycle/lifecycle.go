@@ -285,7 +285,7 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
-	var action = NoneAction
+	action := NoneAction
 	if obj.ModTime.IsZero() {
 		return action
 	}

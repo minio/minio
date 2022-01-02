@@ -34,9 +34,11 @@ func TestGetMissingSiteNames(t *testing.T) {
 	}{
 		// Test1: missing some sites in replicated setup
 		{
-			[]madmin.PeerInfo{{Endpoint: "minio1:9000", Name: "minio1", DeploymentID: "dep1"},
+			[]madmin.PeerInfo{
+				{Endpoint: "minio1:9000", Name: "minio1", DeploymentID: "dep1"},
 				{Endpoint: "minio2:9000", Name: "minio2", DeploymentID: "dep2"},
-				{Endpoint: "minio3:9000", Name: "minio3", DeploymentID: "dep3"}},
+				{Endpoint: "minio3:9000", Name: "minio3", DeploymentID: "dep3"},
+			},
 			set.CreateStringSet("dep1", "dep2", "dep3"),
 			set.CreateStringSet("dep1"),
 			[]string{"minio2", "minio3"},

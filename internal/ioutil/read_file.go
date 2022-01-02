@@ -31,11 +31,11 @@ import (
 //
 // passes NOATIME flag for reads on Unix systems to avoid atime updates.
 func ReadFile(name string) ([]byte, error) {
-	f, err := disk.OpenFileDirectIO(name, readMode, 0666)
+	f, err := disk.OpenFileDirectIO(name, readMode, 0o666)
 	if err != nil {
 		// fallback if there is an error to read
 		// 'name' with O_DIRECT
-		f, err = os.OpenFile(name, readMode, 0666)
+		f, err = os.OpenFile(name, readMode, 0o666)
 		if err != nil {
 			return nil, err
 		}

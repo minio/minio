@@ -105,7 +105,7 @@ func TestDataUpdateTracker(t *testing.T) {
 	defer cancel()
 	dut.start(ctx, tmpDir)
 
-	var tests = []struct {
+	tests := []struct {
 		in    string
 		check []string // if not empty, check against these instead.
 		exist bool

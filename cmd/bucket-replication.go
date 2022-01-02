@@ -139,6 +139,7 @@ func (o mustReplicateOptions) ReplicationStatus() (s replication.StatusType) {
 	}
 	return s
 }
+
 func (o mustReplicateOptions) isExistingObjectReplication() bool {
 	return o.opType == replication.ExistingObjectReplicationType
 }
@@ -146,6 +147,7 @@ func (o mustReplicateOptions) isExistingObjectReplication() bool {
 func (o mustReplicateOptions) isMetadataReplication() bool {
 	return o.opType == replication.MetadataReplicationType
 }
+
 func getMustReplicateOptions(o ObjectInfo, op replication.Type, opts ObjectOptions) mustReplicateOptions {
 	if !op.Valid() {
 		op = replication.ObjectReplicationType
@@ -441,7 +443,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		}
 	}
 
-	var eventName = event.ObjectReplicationComplete
+	eventName := event.ObjectReplicationComplete
 	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
@@ -523,7 +525,8 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
-			}}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+			},
+		}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
 			if dobj.VersionID == "" {
 				rinfo.ReplicationStatus = replication.Completed
 				return
@@ -902,7 +905,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
-	var eventName = event.ObjectReplicationComplete
+	eventName := event.ObjectReplicationComplete
 	if rinfos.ReplicationStatus() == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
@@ -1058,7 +1061,8 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		VersionID: objInfo.VersionID,
 		Internal: miniogo.AdvancedGetOptions{
 			ReplicationProxyRequest: "false",
-		}})
+		},
+	})
 	if cerr == nil {
 		rAction = getReplicationAction(objInfo, oi, ri.OpType)
 		rinfo.ReplicationStatus = replication.Completed
@@ -1117,7 +1121,8 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 			Internal: miniogo.AdvancedPutOptions{
 				SourceVersionID:    objInfo.VersionID,
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
-			}}
+			},
+		}
 		if _, err = c.CopyObject(ctx, tgt.Bucket, object, tgt.Bucket, object, getCopyObjMetadata(objInfo, tgt.StorageClass), srcOpts, dstOpts); err != nil {
 			rinfo.ReplicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
@@ -1213,7 +1218,8 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
-		}})
+		},
+	})
 	return err
 }
 
@@ -1357,7 +1363,6 @@ func (p *ReplicationPool) AddWorker() {
 			return
 		}
 	}
-
 }
 
 // AddExistingObjectReplicateWorker adds a worker to queue existing objects that need to be sync'd
@@ -1671,6 +1676,7 @@ type replicationConfig struct {
 func (c replicationConfig) Empty() bool {
 	return c.Config == nil
 }
+
 func (c replicationConfig) Replicate(opts replication.ObjectOpts) bool {
 	return c.Config.Replicate(opts)
 }
@@ -1694,7 +1700,8 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo, dsc *Repli
 			DeleteMarker:   oi.DeleteMarker,
 			VersionID:      oi.VersionID,
 			OpType:         replication.DeleteReplicationType,
-			ExistingObject: true}
+			ExistingObject: true,
+		}
 
 		tgtArns := c.Config.FilterTargetArns(opts)
 		// indicates no matching target with Existing object replication enabled.

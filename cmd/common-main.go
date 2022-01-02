@@ -68,8 +68,11 @@ import (
 
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
-var shardDiskTimeDelta time.Duration
-var defaultAWSCredProvider []credentials.Provider
+
+var (
+	shardDiskTimeDelta     time.Duration
+	defaultAWSCredProvider []credentials.Provider
+)
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -362,7 +365,6 @@ func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() s
 }
 
 func handleCommonCmdArgs(ctx *cli.Context) {
-
 	// Get "json" flag from command line argument and
 	// enable json and quite modes if json flag is turned on.
 	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
@@ -669,7 +671,7 @@ func handleCommonEnvVars() {
 	publicIPs := env.Get(config.EnvPublicIPs, "")
 	if len(publicIPs) != 0 {
 		minioEndpoints := strings.Split(publicIPs, config.ValueSeparator)
-		var domainIPs = set.NewStringSet()
+		domainIPs := set.NewStringSet()
 		for _, endpoint := range minioEndpoints {
 			if net.ParseIP(endpoint) == nil {
 				// Checking if the IP is a DNS entry.
@@ -786,7 +788,7 @@ func handleCommonEnvVars() {
 			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(config.EnvKESServerCA, globalCertsCADir.Get())))
 		}
 
-		var defaultKeyID = env.Get(config.EnvKESKeyName, "")
+		defaultKeyID := env.Get(config.EnvKESKeyName, "")
 		KMS, err := kms.NewWithConfig(kms.Config{
 			Endpoints:    endpoints,
 			DefaultKeyID: defaultKeyID,

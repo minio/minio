@@ -2445,12 +2445,12 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		return err
 	} // if errConfigNotFound proceed to migrate..
 
-	var configFiles = []string{
+	configFiles := []string{
 		getConfigFile(),
 		getConfigFile() + ".deprecated",
 		configFile,
 	}
-	var config = &serverConfigV27{}
+	config := &serverConfigV27{}
 	for _, cfgFile := range configFiles {
 		if _, err = Load(cfgFile, config); err != nil {
 			if !osIsNotExist(err) && !osIsPermission(err) {

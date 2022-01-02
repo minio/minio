@@ -268,7 +268,6 @@ type StringMap map[string]string
 
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-
 	tokens := []xml.Token{start}
 
 	for key, value := range s {
@@ -417,8 +416,8 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 // serialized to match XML and JSON API spec output.
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	listbuckets := make([]Bucket, 0, len(buckets))
-	var data = ListBucketsResponse{}
-	var owner = Owner{
+	data := ListBucketsResponse{}
+	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
@@ -439,14 +438,14 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
-	var owner = Owner{
+	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
-	var data = ListVersionsResponse{}
+	data := ListVersionsResponse{}
 
 	for _, object := range resp.Objects {
-		var content = ObjectVersion{}
+		content := ObjectVersion{}
 		if object.Name == "" {
 			continue
 		}
@@ -486,7 +485,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 
 	prefixes := make([]CommonPrefix, 0, len(resp.Prefixes))
 	for _, prefix := range resp.Prefixes {
-		var prefixItem = CommonPrefix{}
+		prefixItem := CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
 		prefixes = append(prefixes, prefixItem)
 	}
@@ -497,14 +496,14 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
-	var owner = Owner{
+	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
-	var data = ListObjectsResponse{}
+	data := ListObjectsResponse{}
 
 	for _, object := range resp.Objects {
-		var content = Object{}
+		content := Object{}
 		if object.Name == "" {
 			continue
 		}
@@ -535,7 +534,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 
 	prefixes := make([]CommonPrefix, 0, len(resp.Prefixes))
 	for _, prefix := range resp.Prefixes {
-		var prefixItem = CommonPrefix{}
+		prefixItem := CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
 		prefixes = append(prefixes, prefixItem)
 	}
@@ -546,14 +545,14 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
-	var owner = Owner{
+	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
-	var data = ListObjectsV2Response{}
+	data := ListObjectsV2Response{}
 
 	for _, object := range objects {
-		var content = Object{}
+		content := Object{}
 		if object.Name == "" {
 			continue
 		}
@@ -608,7 +607,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 
 	commonPrefixes := make([]CommonPrefix, 0, len(prefixes))
 	for _, prefix := range prefixes {
-		var prefixItem = CommonPrefix{}
+		prefixItem := CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
 		commonPrefixes = append(commonPrefixes, prefixItem)
 	}
@@ -821,8 +820,8 @@ func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIE
 // but accepts the error message directly (this allows messages to be
 // dynamically generated.)
 func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError,
-	errBody string, reqURL *url.URL) {
-
+	errBody string, reqURL *url.URL,
+) {
 	reqInfo := logger.GetReqInfo(ctx)
 	errorResponse := APIErrorResponse{
 		Code:       err.Code,

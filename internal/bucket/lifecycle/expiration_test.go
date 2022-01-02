@@ -57,7 +57,6 @@ func TestInvalidExpiration(t *testing.T) {
 				t.Fatalf("%d: Expected %v but got %v", i+1, tc.expectedErr, err)
 			}
 		})
-
 	}
 
 	validationTestCases := []struct {

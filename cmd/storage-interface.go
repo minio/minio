@@ -33,7 +33,6 @@ type StorageAPI interface {
 	LastConn() time.Time // Returns the last time this disk (re)-connected
 
 	IsLocal() bool
-
 	Hostname() string   // Returns host name if remote host.
 	Endpoint() Endpoint // Returns endpoint.
 
@@ -81,7 +80,6 @@ type StorageAPI interface {
 
 	// Read all.
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
-
 	GetDiskLoc() (poolIdx, setIdx, diskIdx int) // Retrieve location indexes.
 	SetDiskLoc(poolIdx, setIdx, diskIdx int)    // Set location indexes.
 }

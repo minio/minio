@@ -333,7 +333,6 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
-
 }
 
 // DataUsageInfoHandler - GET /minio/admin/v3/datausage
@@ -1332,7 +1331,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	if keyID == "" {
 		keyID = stat.DefaultKey
 	}
-	var response = madmin.KMSKeyStatus{
+	response := madmin.KMSKeyStatus{
 		KeyID: keyID,
 	}
 
@@ -1816,7 +1815,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			anonNetwork[anonEndpoint] = status
 		}
 		return anonNetwork
-
 	}
 
 	anonymizeDrives := func(drives []madmin.Disk) []madmin.Disk {
@@ -1916,7 +1914,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-
 }
 
 func getTLSInfo() madmin.TLSInfo {
@@ -2042,7 +2039,6 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 }
 
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
-
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
 	for _, tgt := range globalConfigTargetList.Targets() {
@@ -2284,7 +2280,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		}
 		if si.Mode == 0 {
 			// Not, set it to default.
-			si.Mode = 0600
+			si.Mode = 0o600
 		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,

@@ -240,7 +240,6 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to MySQL.
 func (target *MySQLTarget) Send(eventKey string) error {
-
 	_, err := target.IsActive()
 	if err != nil {
 		return err
@@ -298,7 +297,6 @@ func (target *MySQLTarget) Close() error {
 
 // Executes the table creation statements.
 func (target *MySQLTarget) executeStmts() error {
-
 	_, err := target.db.Exec(fmt.Sprintf(mysqlTableExists, target.args.Table))
 	if err != nil {
 		createStmt := mysqlCreateNamespaceTable
@@ -329,7 +327,6 @@ func (target *MySQLTarget) executeStmts() error {
 	}
 
 	return nil
-
 }
 
 // NewMySQLTarget - creates new MySQL target.

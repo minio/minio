@@ -307,7 +307,7 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 	// an ugly way of handling this situation. Refer here
 	// https://golang.org/src/mime/multipart/formdata.go#L61
 	if len(form.File) == 0 {
-		var b = &bytes.Buffer{}
+		b := &bytes.Buffer{}
 		for _, v := range formValues["File"] {
 			b.WriteString(v)
 		}
@@ -544,7 +544,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 	}
-
 }
 
 // gets host name for current node

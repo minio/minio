@@ -296,7 +296,6 @@ func (target *PostgreSQLTarget) Close() error {
 
 // Executes the table creation statements.
 func (target *PostgreSQLTarget) executeStmts() error {
-
 	_, err := target.db.Exec(fmt.Sprintf(psqlTableExists, target.args.Table))
 	if err != nil {
 		createStmt := psqlCreateNamespaceTable

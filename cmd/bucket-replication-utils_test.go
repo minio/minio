@@ -77,7 +77,8 @@ var replicatedInfosTests = []struct {
 				ReplicationStatus:     replication.Failed,
 				OpType:                replication.ObjectReplicationType,
 				ReplicationAction:     replicateAll,
-			}},
+			},
+		},
 		expectedCompletedSize:             249,
 		expectedReplicationStatusInternal: "arn1=COMPLETED;arn2=FAILED;",
 		expectedReplicationStatus:         replication.Failed,
@@ -102,7 +103,8 @@ var replicatedInfosTests = []struct {
 				ReplicationStatus:     replication.Failed,
 				OpType:                replication.ObjectReplicationType,
 				ReplicationAction:     replicateAll,
-			}},
+			},
+		},
 		expectedCompletedSize:             0,
 		expectedReplicationStatusInternal: "arn1=PENDING;arn2=FAILED;",
 		expectedReplicationStatus:         replication.Failed,
@@ -182,7 +184,6 @@ var parseReplicationDecisionTest = []struct {
 func TestParseReplicateDecision(t *testing.T) {
 	for i, test := range parseReplicationDecisionTest {
 		dsc, err := parseReplicateDecision(test.expDsc.String())
-
 		if err != nil {
 			if test.expErr != err {
 				t.Errorf("Test%d (%s): Expected parse error got %t , want %t", i+1, test.name, err, test.expErr)

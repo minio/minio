@@ -342,6 +342,7 @@ func TestSameLocalAddrs(t *testing.T) {
 		})
 	}
 }
+
 func TestIsHostIP(t *testing.T) {
 	testCases := []struct {
 		args           string

@@ -278,8 +278,8 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 // background routine to clean up heal results after the
 // aforementioned duration.
 func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLayer) (
-	respBytes []byte, apiErr APIError, errMsg string) {
-
+	respBytes []byte, apiErr APIError, errMsg string,
+) {
 	if h.forceStarted {
 		_, apiErr = ahs.stopHealSequence(pathJoin(h.bucket, h.object))
 		if apiErr.Code != "" {
@@ -338,8 +338,8 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLay
 // representation. The clientToken helps ensure there aren't
 // conflicting clients fetching status.
 func (ahs *allHealState) PopHealStatusJSON(hpath string,
-	clientToken string) ([]byte, APIErrorCode) {
-
+	clientToken string) ([]byte, APIErrorCode,
+) {
 	// fetch heal state for given path
 	h, exists := ahs.getHealSequence(hpath)
 	if !exists {
@@ -453,8 +453,8 @@ type healSequence struct {
 // NewHealSequence - creates healSettings, assumes bucket and
 // objPrefix are already validated.
 func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
-	hs madmin.HealOpts, forceStart bool) *healSequence {
-
+	hs madmin.HealOpts, forceStart bool,
+) *healSequence {
 	reqInfo := &logger.ReqInfo{RemoteHost: clientAddr, API: "Heal", BucketName: bucket}
 	reqInfo.AppendTags("prefix", objPrefix)
 	ctx, cancel := context.WithCancel(logger.SetReqInfo(ctx, reqInfo))

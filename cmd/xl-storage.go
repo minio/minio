@@ -170,7 +170,7 @@ func getValidPath(path string) (string, error) {
 	}
 	if osIsNotExist(err) {
 		// Disk not found create it.
-		if err = mkdirAll(path, 0777); err != nil {
+		if err = mkdirAll(path, 0o777); err != nil {
 			return path, err
 		}
 	}
@@ -269,7 +269,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	_, _ = rand.Read(rnd[:])
 	tmpFile := ".writable-check-" + hex.EncodeToString(rnd[:]) + ".tmp"
 	filePath := pathJoin(p.diskPath, minioMetaTmpBucket, tmpFile)
-	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
 	if err != nil {
 		switch {
 		case isSysErrInvalidArg(err):
@@ -524,7 +524,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 		return sizeS, nil
 	})
-
 	if err != nil {
 		return dataUsageInfo, err
 	}
@@ -663,7 +662,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	}
 
 	format := &formatErasureV3{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(b, &format); err != nil {
 		logger.LogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
@@ -708,7 +707,7 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 		// Volume does not exist we proceed to create.
 		if osIsNotExist(err) {
 			// Make a volume entry, with mode 0777 mkdir honors system umask.
-			err = mkdirAll(volumeDir, 0777)
+			err = mkdirAll(volumeDir, 0o777)
 		}
 		if osIsPermission(err) {
 			return errDiskAccessDenied
@@ -1329,7 +1328,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		return nil, time.Time{}, ctx.Err()
 	}
 
-	f, err := OpenFileDirectIO(filePath, readMode, 0666)
+	f, err := OpenFileDirectIO(filePath, readMode, 0o666)
 	if err != nil {
 		if osIsNotExist(err) {
 			// Check if the object doesn't exist because its bucket
@@ -1521,11 +1520,11 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
 		return nil, osErrToFileErr(err)
 	}
 
-	w, err := OpenFile(filePath, mode|writeMode, 0666)
+	w, err := OpenFile(filePath, mode|writeMode, 0o666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
@@ -1548,11 +1547,11 @@ func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err err
 func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
 		return nil, osErrToFileErr(err)
 	}
 
-	w, err := OpenFile(filePath, mode, 0666)
+	w, err := OpenFile(filePath, mode, 0o666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
@@ -1589,7 +1588,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	file, err := OpenFileDirectIO(filePath, readMode, 0666)
+	file, err := OpenFileDirectIO(filePath, readMode, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1733,11 +1732,11 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(parentFilePath, 0777); err != nil {
+	if err = mkdirAll(parentFilePath, 0o777); err != nil {
 		return osErrToFileErr(err)
 	}
 
-	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
 	if err != nil {
 		return osErrToFileErr(err)
 	}
@@ -2087,7 +2086,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		} else {
 			// This code-path is to preserve the legacy data.
 			xlMetaLegacy := &xlMetaV1Object{}
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			json := jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(dstBuf, xlMetaLegacy); err != nil {
 				logger.LogIf(ctx, err)
 				// Data appears corrupt. Drop data.
@@ -2138,7 +2137,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 
 		// legacy data dir means its old content, honor system umask.
-		if err = mkdirAll(legacyDataPath, 0777); err != nil {
+		if err = mkdirAll(legacyDataPath, 0o777); err != nil {
 			// any failed mkdir-calls delete them.
 			s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			return osErrToFileErr(err)
@@ -2435,7 +2434,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		}
 		return stat, err
 	}
-	var files = []string{pathJoin(volumeDir, path)}
+	files := []string{pathJoin(volumeDir, path)}
 	if glob {
 		files, err = filepathx.Glob(pathJoin(volumeDir, path))
 		if err != nil {

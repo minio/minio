@@ -142,7 +142,6 @@ func (args *WriterArgs) IsEmpty() bool {
 
 // UnmarshalXML - decodes XML data.
 func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-
 	args.QuoteFields = asneeded
 	args.RecordDelimiter = defaultRecordDelimiter
 	args.FieldDelimiter = defaultFieldDelimiter

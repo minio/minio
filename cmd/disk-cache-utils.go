@@ -113,7 +113,6 @@ func cacheControlOpts(o ObjectInfo) *cacheControl {
 		if strings.EqualFold(k, "cache-control") {
 			headerVal = v
 		}
-
 	}
 	if headerVal == "" {
 		return nil
@@ -581,6 +580,7 @@ func (t *multiWriter) Write(p []byte) (n int, err error) {
 	}
 	return len(p), nil
 }
+
 func cacheMultiWriter(w1 io.Writer, w2 *io.PipeWriter) io.Writer {
 	return &multiWriter{backendWriter: w1, cacheWriter: w2}
 }

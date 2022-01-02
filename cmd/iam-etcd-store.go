@@ -139,7 +139,7 @@ func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	if err != nil {
 		return err
 	}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Unmarshal(data, item)
 }
 
@@ -416,7 +416,6 @@ func (ies *IAMEtcdStore) loadGroup(ctx context.Context, group string, m map[stri
 	}
 	m[group] = gi
 	return nil
-
 }
 
 func (ies *IAMEtcdStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
@@ -437,7 +436,6 @@ func (ies *IAMEtcdStore) loadGroups(ctx context.Context, m map[string]GroupInfo)
 		}
 	}
 	return nil
-
 }
 
 func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
@@ -497,7 +495,6 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 		}
 	}
 	return nil
-
 }
 
 func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error {
@@ -601,5 +598,4 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, keyPath string) <-chan iamWa
 		}
 	}()
 	return ch
-
 }

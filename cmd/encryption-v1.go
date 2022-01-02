@@ -186,7 +186,7 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 		// client provided it. Therefore, we create a copy
 		// of the client provided context and add the bucket
 		// key, if not present.
-		var kmsCtx = kms.Context{}
+		kmsCtx := kms.Context{}
 		for k, v := range ctx {
 			kmsCtx[k] = v
 		}
@@ -253,7 +253,7 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 		// client provided it. Therefore, we create a copy
 		// of the client provided context and add the bucket
 		// key, if not present.
-		var kmsCtx = kms.Context{}
+		kmsCtx := kms.Context{}
 		for k, v := range ctx {
 			kmsCtx[k] = v
 		}
@@ -443,7 +443,6 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
 func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
-
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case
 	if !oi.isMultipart() {

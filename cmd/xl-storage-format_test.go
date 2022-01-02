@@ -238,7 +238,7 @@ func TestGetXLMetaV1Jsoniter1(t *testing.T) {
 	}
 
 	var jsoniterXLMeta xlMetaV1Object
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
@@ -248,7 +248,6 @@ func TestGetXLMetaV1Jsoniter1(t *testing.T) {
 // Tests the correctness of constructing XLMetaV1 using jsoniter lib for XLMetaV1 of size 10 parts.
 // The result will be compared with the result obtained from json.unMarshal of the byte data.
 func TestGetXLMetaV1Jsoniter10(t *testing.T) {
-
 	xlMetaJSON := getXLMetaBytes(10)
 
 	var unMarshalXLMeta xlMetaV1Object
@@ -257,7 +256,7 @@ func TestGetXLMetaV1Jsoniter10(t *testing.T) {
 	}
 
 	var jsoniterXLMeta xlMetaV1Object
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
@@ -341,11 +340,12 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 			xhttp.AmzBucketReplicationStatus: "PENDING",
 			xhttp.ContentType:                "application/json",
 		},
-		Parts: []ObjectPartInfo{{
-			Number:     1,
-			Size:       1234345,
-			ActualSize: 1234345,
-		},
+		Parts: []ObjectPartInfo{
+			{
+				Number:     1,
+				Size:       1234345,
+				ActualSize: 1234345,
+			},
 			{
 				Number:     2,
 				Size:       1234345,
@@ -359,11 +359,12 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 			BlockSize:    10000,
 			Index:        1,
 			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8},
-			Checksums: []ChecksumInfo{{
-				PartNumber: 1,
-				Algorithm:  HighwayHash256S,
-				Hash:       nil,
-			},
+			Checksums: []ChecksumInfo{
+				{
+					PartNumber: 1,
+					Algorithm:  HighwayHash256S,
+					Hash:       nil,
+				},
 				{
 					PartNumber: 2,
 					Algorithm:  HighwayHash256S,
@@ -390,7 +391,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 			}
 			b.Logf("Serialized size: %d bytes", len(enc))
 			rng := rand.New(rand.NewSource(0))
-			var dump = make([]byte, len(enc))
+			dump := make([]byte, len(enc))
 			b.Run("UpdateObjectVersion", func(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()

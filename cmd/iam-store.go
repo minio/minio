@@ -213,7 +213,7 @@ func (d *PolicyDoc) update(p iampolicy.Policy) {
 // from iampolicy.Policy to PolicyDoc. To avoid a migration, loading supports
 // both the old and the new formats.
 func (d *PolicyDoc) parseJSON(data []byte) error {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	var doc PolicyDoc
 	err := json.Unmarshal(data, &doc)
 	if err != nil {
@@ -378,7 +378,6 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 
 // IAMStorageAPI defines an interface for the IAM persistence layer
 type IAMStorageAPI interface {
-
 	// The role of the read-write lock is to prevent go routines from
 	// concurrently reading and writing the IAM storage. The (r)lock()
 	// functions return the iamCache. The cache can be safely written to
@@ -387,32 +386,23 @@ type IAMStorageAPI interface {
 	unlock()
 	rlock() *iamCache
 	runlock()
-
 	migrateBackendFormat(context.Context) error
-
 	getUsersSysType() UsersSysType
-
 	loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error
 	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error
-
 	loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error
 	loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error
-
 	loadGroup(ctx context.Context, group string, m map[string]GroupInfo) error
 	loadGroups(ctx context.Context, m map[string]GroupInfo) error
-
 	loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error
 	loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error
-
 	saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error
 	loadIAMConfig(ctx context.Context, item interface{}, path string) error
 	deleteIAMConfig(ctx context.Context, path string) error
-
 	savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error
 	saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error
 	saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity, opts ...options) error
 	saveGroupInfo(ctx context.Context, group string, gi GroupInfo) error
-
 	deletePolicyDoc(ctx context.Context, policyName string) error
 	deleteMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool) error
 	deleteUserIdentity(ctx context.Context, name string, userType IAMUserType) error
@@ -639,7 +629,6 @@ func (store *IAMStoreSys) AddUsersToGroup(ctx context.Context, group string, mem
 	}
 
 	return nil
-
 }
 
 // helper function - does not take any locks. Updates only cache if
@@ -880,7 +869,6 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 		cache.iamGroupPolicyMap[name] = mp
 	}
 	return nil
-
 }
 
 // PolicyNotificationHandler - loads given policy from storage. If not present,
@@ -1034,7 +1022,6 @@ func (store *IAMStoreSys) GetPolicyDoc(name string) (r PolicyDoc, err error) {
 
 // SetPolicy - creates a policy with name.
 func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iampolicy.Policy) error {
-
 	if policy.IsEmpty() || name == "" {
 		return errInvalidArgument
 	}
@@ -1058,7 +1045,6 @@ func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iam
 
 	cache.iamPolicyDocsMap[name] = d
 	return nil
-
 }
 
 // ListPolicies - fetches all policies from storage and updates cache as well.
@@ -1118,7 +1104,6 @@ func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (
 	defer store.runlock()
 
 	return filterPolicies(cache, policyName, bucketName)
-
 }
 
 // GetBucketUsers - returns users (not STS or service accounts) that have access

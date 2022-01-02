@@ -86,8 +86,6 @@ var (
 	errInvalidInternalSealAlgorithm = Errorf("The internal seal algorithm is invalid and not supported")
 )
 
-var (
-	// errOutOfEntropy indicates that the a source of randomness (PRNG) wasn't able
-	// to produce enough random data. This is fatal error and should cause a panic.
-	errOutOfEntropy = Errorf("Unable to read enough randomness from the system")
-)
+// errOutOfEntropy indicates that the a source of randomness (PRNG) wasn't able
+// to produce enough random data. This is fatal error and should cause a panic.
+var errOutOfEntropy = Errorf("Unable to read enough randomness from the system")

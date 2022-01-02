@@ -31,9 +31,11 @@ func TestNatsConnTLSCustomCA(t *testing.T) {
 
 	clientConfig := &NATSArgs{
 		Enable: true,
-		Address: xnet.Host{Name: "localhost",
+		Address: xnet.Host{
+			Name:      "localhost",
 			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
+			IsPortSet: true,
+		},
 		Subject:       "test",
 		Secure:        true,
 		CertAuthority: path.Join("testdata", "contrib", "certs", "root_ca_cert.pem"),
@@ -52,9 +54,11 @@ func TestNatsConnTLSClientAuthorization(t *testing.T) {
 
 	clientConfig := &NATSArgs{
 		Enable: true,
-		Address: xnet.Host{Name: "localhost",
+		Address: xnet.Host{
+			Name:      "localhost",
 			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
+			IsPortSet: true,
+		},
 		Subject:       "test",
 		Secure:        true,
 		CertAuthority: path.Join("testdata", "contrib", "certs", "root_ca_cert.pem"),

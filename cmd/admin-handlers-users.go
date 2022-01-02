@@ -613,7 +613,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var createResp = madmin.AddServiceAccountResp{
+	createResp := madmin.AddServiceAccountResp{
 		Credentials: madmin.Credentials{
 			AccessKey: newCred.AccessKey,
 			SecretKey: newCred.SecretKey,
@@ -814,7 +814,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var infoResp = madmin.InfoServiceAccountResp{
+	infoResp := madmin.InfoServiceAccountResp{
 		ParentUser:    svcAccount.ParentUser,
 		AccountStatus: svcAccount.Status,
 		ImpliedPolicy: impliedPolicy,
@@ -891,7 +891,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		serviceAccountsNames = append(serviceAccountsNames, svc.AccessKey)
 	}
 
-	var listResp = madmin.ListServiceAccountsResp{
+	listResp := madmin.ListServiceAccountsResp{
 		Accounts: serviceAccountsNames,
 	}
 
@@ -1251,7 +1251,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var newPolicies = make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]iampolicy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
@@ -1283,7 +1283,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var newPolicies = make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]iampolicy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {

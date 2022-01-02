@@ -122,7 +122,6 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 // * listen to multiple addresses
 // * controls incoming connections only doing HTTP protocol
 func newHTTPListener(ctx context.Context, serverAddrs []string) (listener *httpListener, err error) {
-
 	var tcpListeners []*net.TCPListener
 
 	// Close all opened listeners on error

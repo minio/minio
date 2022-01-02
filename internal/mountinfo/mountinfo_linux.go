@@ -126,7 +126,7 @@ func readProcMounts(mountFilePath string) (mountInfos, error) {
 }
 
 func parseMountFrom(file io.Reader) (mountInfos, error) {
-	var mounts = mountInfos{}
+	mounts := mountInfos{}
 	scanner := bufio.NewReader(file)
 	for {
 		line, err := scanner.ReadString('\n')

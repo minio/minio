@@ -29,9 +29,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-var (
-	etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
-)
+var etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
 // operation should not proceed. Preconditions supported are:

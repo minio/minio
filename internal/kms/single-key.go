@@ -46,7 +46,7 @@ func Parse(s string) (KMS, error) {
 		return nil, errors.New("kms: invalid master key format")
 	}
 
-	var keyID, b64Key = v[0], v[1]
+	keyID, b64Key := v[0], v[1]
 	key, err := base64.StdEncoding.DecodeString(b64Key)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (kms secretKey) GenerateKey(keyID string, context Context) (DEK, error) {
 	associatedData, _ := context.MarshalText()
 	ciphertext := aead.Seal(nil, nonce, plaintext, associatedData)
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	ciphertext, err = json.Marshal(encryptedKey{
 		Algorithm: algorithm,
 		IV:        iv,
@@ -175,7 +175,7 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 	}
 
 	var encryptedKey encryptedKey
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(ciphertext, &encryptedKey); err != nil {
 		return nil, err
 	}

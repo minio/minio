@@ -46,8 +46,8 @@ const (
 )
 
 func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
-	[]madmin.ConfigHistoryEntry, error) {
-
+	[]madmin.ConfigHistoryEntry, error,
+) {
 	var configHistory []madmin.ConfigHistoryEntry
 
 	// List all kvs
@@ -140,7 +140,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 		return err
 	}
 
-	var configFile = path.Join(minioConfigPrefix, minioConfigFile)
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	if GlobalKMS != nil {
 		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, configFile),
@@ -153,7 +153,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 }
 
 func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, error) {
-	var srvCfg = config.New()
+	srvCfg := config.New()
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	data, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
@@ -174,7 +174,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		}
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &srvCfg); err != nil {
 		return nil, err
 	}

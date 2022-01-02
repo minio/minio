@@ -139,7 +139,6 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithCertificate)).
 		Queries(stsAction, clientCertificate).
 		Queries(stsVersion, stsAPIVersion)
-
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, isErrCodeSTS bool, stsErr STSErrorCode) {
@@ -684,7 +683,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 //
 // API endpoint: https://minio:9000?Action=AssumeRoleWithCertificate&Version=2011-06-15
 func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *http.Request) {
-	var ctx = newContext(r, w, "AssumeRoleWithCertificate")
+	ctx := newContext(r, w, "AssumeRoleWithCertificate")
 
 	if !globalSTSTLSConfig.Enabled {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCertificate' is disabled"))
@@ -706,7 +705,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// policy mapping would be ambigious.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
-	var peerCertificates = make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
+	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
 	for _, cert := range r.TLS.PeerCertificates {
 		if cert.IsCA {
 			continue
@@ -726,7 +725,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		return
 	}
 
-	var certificate = r.TLS.PeerCertificates[0]
+	certificate := r.TLS.PeerCertificates[0]
 	if !globalSTSTLSConfig.InsecureSkipVerify { // Verify whether the client certificate has been issued by a trusted CA.
 		_, err := certificate.Verify(x509.VerifyOptions{
 			KeyUsages: []x509.ExtKeyUsage{
@@ -812,7 +811,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		return
 	}
 
-	var response = new(AssumeRoleWithCertificateResponse)
+	response := new(AssumeRoleWithCertificateResponse)
 	response.Result.Credentials = tmpCredentials
 	response.Metadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
 	writeSuccessResponseXML(w, encodeResponse(response))

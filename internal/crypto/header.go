@@ -36,11 +36,9 @@ func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(xhttp.AmzMetaUnencryptedContentMD5)
 }
 
-var (
-	// SSECopy represents AWS SSE-C for copy requests. It provides
-	// functionality to handle SSE-C copy requests.
-	SSECopy = ssecCopy{}
-)
+// SSECopy represents AWS SSE-C for copy requests. It provides
+// functionality to handle SSE-C copy requests.
+var SSECopy = ssecCopy{}
 
 type ssecCopy struct{}
 

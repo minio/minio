@@ -45,7 +45,8 @@ func TestGetScheme(t *testing.T) {
 		req := &http.Request{
 			Header: http.Header{
 				v.key: []string{v.val},
-			}}
+			},
+		}
 		res := GetSourceScheme(req)
 		if res != v.expected {
 			t.Errorf("wrong header for %s: got %s want %s", v.key, res,
@@ -74,7 +75,8 @@ func TestGetSourceIP(t *testing.T) {
 		req := &http.Request{
 			Header: http.Header{
 				v.key: []string{v.val},
-			}}
+			},
+		}
 		res := GetSourceIP(req)
 		if res != v.expected {
 			t.Errorf("wrong header for %s: got %s want %s", v.key, res,

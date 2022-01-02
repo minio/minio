@@ -103,7 +103,6 @@ func NewDRWMutex(clnt *Dsync, names ...string) *DRWMutex {
 // If the lock is already in use, the calling go routine
 // blocks until the mutex is available.
 func (dm *DRWMutex) Lock(id, source string) {
-
 	isReadLock := false
 	dm.lockBlocking(context.Background(), nil, id, source, isReadLock, Options{
 		Timeout: drwMutexInfinite,
@@ -121,7 +120,6 @@ type Options struct {
 // blocks until either the mutex becomes available and return success or
 // more time has passed than the timeout value and return false.
 func (dm *DRWMutex) GetLock(ctx context.Context, cancel context.CancelFunc, id, source string, opts Options) (locked bool) {
-
 	isReadLock := false
 	return dm.lockBlocking(ctx, cancel, id, source, isReadLock, opts)
 }
@@ -131,7 +129,6 @@ func (dm *DRWMutex) GetLock(ctx context.Context, cancel context.CancelFunc, id, 
 // If one or more read locks are already in use, it will grant another lock.
 // Otherwise the calling go routine blocks until the mutex is available.
 func (dm *DRWMutex) RLock(id, source string) {
-
 	isReadLock := true
 	dm.lockBlocking(context.Background(), nil, id, source, isReadLock, Options{
 		Timeout: drwMutexInfinite,
@@ -145,7 +142,6 @@ func (dm *DRWMutex) RLock(id, source string) {
 // available and return success or more time has passed than the timeout
 // value and return false.
 func (dm *DRWMutex) GetRLock(ctx context.Context, cancel context.CancelFunc, id, source string, opts Options) (locked bool) {
-
 	isReadLock := true
 	return dm.lockBlocking(ctx, cancel, id, source, isReadLock, opts)
 }
@@ -317,7 +313,6 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (boo
 					log("dsync: Refresh returned false for %#v at %s\n", args, c)
 				}
 			}
-
 		}(index, c)
 	}
 
@@ -422,7 +417,6 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				g.lockUID = args.UID
 			}
 			ch <- g
-
 		}(index, isReadLock, c)
 	}
 

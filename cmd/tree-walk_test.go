@@ -147,7 +147,7 @@ func TestTreeWalk(t *testing.T) {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
-	var files = []string{
+	files := []string{
 		"d/e",
 		"d/f",
 		"d/g/h",
@@ -284,7 +284,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	listDir := listDirFactory(context.Background(), disk1, isLeaf)
 
 	// Create the namespace.
-	var files = []string{
+	files := []string{
 		"d/e",
 		"d/f",
 		"d/g/h",
@@ -398,7 +398,7 @@ func TestSortedness(t *testing.T) {
 	listDir := listDirFactory(context.Background(), disk1, isLeaf)
 
 	// Create the namespace.
-	var files = []string{
+	files := []string{
 		"d/e",
 		"d/f",
 		"d/g/h",
@@ -478,7 +478,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	listDir := listDirFactory(context.Background(), disk1, isLeaf)
 
 	// Create the namespace.
-	var files = []string{
+	files := []string{
 		"d/e",
 		"d/f",
 		"d/g/h",

@@ -87,9 +87,13 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 		}, []error{errDiskNotFound}, errVolumeNotFound},
 		{[]error{}, []error{}, errErasureReadQuorum},
-		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
-			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
-			nil, nil},
+		{
+			[]error{
+				errFileNotFound, errFileNotFound, errFileNotFound,
+				errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil,
+			},
+			nil, nil,
+		},
 		// Checks if wrapped context cancelation errors are grouped as one.
 		{canceledErrs, nil, context.Canceled},
 	}

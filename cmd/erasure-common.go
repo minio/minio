@@ -50,7 +50,7 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var newDisks = map[uint64][]StorageAPI{}
+	newDisks := map[uint64][]StorageAPI{}
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
 		i := i

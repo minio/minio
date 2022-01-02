@@ -35,10 +35,8 @@ import (
 	"github.com/minio/minio/internal/logger/message/log"
 )
 
-var (
-	// HighwayHash key for logging in anonymous mode
-	magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
-)
+// HighwayHash key for logging in anonymous mode
+var magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
 
 // Disable disables all logging, false by default. (used for "go test")
 var Disable = false
@@ -159,7 +157,6 @@ func SetDeploymentID(deploymentID string) {
 // This is done to clean up the filename, when stack trace is
 // displayed when an error happens.
 func Init(goPath string, goRoot string) {
-
 	var goPathList []string
 	var goRootList []string
 	var defaultgoPathList []string
@@ -377,7 +374,6 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		if err := t.Send(entry, entry.LogKind); err != nil {
 			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Logger target (%v): %v", entry, t, err), entry.LogKind)
 		}
-
 	}
 }
 

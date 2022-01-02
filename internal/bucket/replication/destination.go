@@ -54,7 +54,6 @@ func (d Destination) IsValid() bool {
 
 func (d Destination) String() string {
 	return d.ARN
-
 }
 
 // LegacyArn returns true if arn format has prefix "arn:aws:s3:::" which was

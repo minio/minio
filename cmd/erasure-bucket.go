@@ -91,7 +91,7 @@ func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
-	var bucketsInfo = make([]BucketInfo, len(storageDisks))
+	bucketsInfo := make([]BucketInfo, len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
 	for index := range storageDisks {
 		index := index

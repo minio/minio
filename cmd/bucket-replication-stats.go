@@ -55,7 +55,6 @@ func (r *ReplicationStats) Delete(bucket string) {
 	r.ulock.Lock()
 	defer r.ulock.Unlock()
 	delete(r.UsageCache, bucket)
-
 }
 
 // UpdateReplicaStat updates in-memory replica statistics with new values.

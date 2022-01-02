@@ -75,7 +75,7 @@ func (ssekms) ParseHTTP(h http.Header) (string, kms.Context, error) {
 			return "", nil, err
 		}
 
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		if err := json.Unmarshal(b, &ctx); err != nil {
 			return "", nil, err
 		}
@@ -209,7 +209,7 @@ func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []
 		if err != nil {
 			return keyID, kmsKey, sealedKey, ctx, Errorf("The internal KMS context is not base64-encoded")
 		}
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		if err = json.Unmarshal(b, &ctx); err != nil {
 			return keyID, kmsKey, sealedKey, ctx, Errorf("The internal sealed KMS context is invalid %w", err)
 		}

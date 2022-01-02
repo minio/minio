@@ -562,8 +562,7 @@ func (e ObjectTooSmall) Error() string {
 }
 
 // OperationTimedOut - a timeout occurred.
-type OperationTimedOut struct {
-}
+type OperationTimedOut struct{}
 
 func (e OperationTimedOut) Error() string {
 	return "Operation timed out"

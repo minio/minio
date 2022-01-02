@@ -219,7 +219,6 @@ func TestExpectedExpiryTime(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestComputeActions(t *testing.T) {
@@ -520,7 +519,6 @@ func TestHasActiveRules(t *testing.T) {
 			if got := lc.HasActiveRules(tc.prefix, true); got != tc.expectedRec {
 				t.Fatalf("Expected result with recursive set to true: `%v`, got: `%v`", tc.expectedRec, got)
 			}
-
 		})
 
 	}

@@ -144,5 +144,4 @@ func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r
 
 	// Write bucket versioning configuration to client
 	writeSuccessResponseXML(w, configData)
-
 }

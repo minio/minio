@@ -147,7 +147,6 @@ func TestXLV2FormatData(t *testing.T) {
 	failOnErr(xl2.Load(trimmed))
 	if len(xl2.data) != 0 {
 		t.Fatal("data, was not trimmed, bytes left:", len(xl2.data))
-
 	}
 	// Corrupt metadata, last 5 bytes is the checksum, so go a bit further back.
 	trimmed[len(trimmed)-10] += 10
@@ -415,7 +414,6 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 			}
 		}
 	})
-
 }
 
 func Test_xlMetaV2Shallow_Load(t *testing.T) {

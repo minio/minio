@@ -305,7 +305,6 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 		}
 	}
 	return disksToHeal
-
 }
 
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed

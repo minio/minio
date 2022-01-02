@@ -39,21 +39,24 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 			expectedValidationErr: errInvalidDeleteMarkerReplicationStatus,
 		},
 		// 2 Invalid delete replication status in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errDeleteReplicationMissing,
 		},
 		// 3 valid replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
 		// 4 missing role in config and destination ARN is in legacy format
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			// destination bucket in config different from bucket specified
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
@@ -61,63 +64,72 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 			expectedValidationErr: errDestinationArnMissing,
 		},
 		// 5 replication destination in different rules not identical
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role></Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><Priority>3</Priority><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication:::destinationbucket2</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role></Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><Priority>3</Priority><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication:::destinationbucket2</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
 		// 6 missing rule status in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errEmptyRuleStatus,
 		},
 		// 7 invalid rule status in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enssabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enssabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errInvalidRuleStatus,
 		},
 		// 8 invalid rule id exceeds length allowed in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><ID>vsUVERgOc8zZYagLSzSa5lE8qeI6nh1lyLNS4R9W052yfecrhhepGboswSWMMNO8CPcXM4GM3nKyQ72EadlMzzZBFoYWKn7ju5GoE5w9c57a0piHR1vexpdd9FrMquiruvAJ0MTGVupm0EegMVxoIOdjx7VgZhGrmi2XDvpVEFT7WmYMA9fSK297XkTHWyECaNHBySJ1Qp4vwX8tPNauKpfHx4kzUpnKe1PZbptGMWbY5qTcwlNuMhVSmgFffShq</ID><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><ID>vsUVERgOc8zZYagLSzSa5lE8qeI6nh1lyLNS4R9W052yfecrhhepGboswSWMMNO8CPcXM4GM3nKyQ72EadlMzzZBFoYWKn7ju5GoE5w9c57a0piHR1vexpdd9FrMquiruvAJ0MTGVupm0EegMVxoIOdjx7VgZhGrmi2XDvpVEFT7WmYMA9fSK297XkTHWyECaNHBySJ1Qp4vwX8tPNauKpfHx4kzUpnKe1PZbptGMWbY5qTcwlNuMhVSmgFffShq</ID><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errInvalidRuleID,
 		},
 		// 9 invalid priority status in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errReplicationUniquePriority,
 		},
 		// 10 no rule in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errReplicationNoRule,
 		},
 		// 11 no destination in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    Errorf("invalid destination '%v'", ""),
 			expectedValidationErr: nil,
 		},
 		// 12 destination not matching ARN in replication config
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>destinationbucket2</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>destinationbucket2</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    fmt.Errorf("invalid destination '%v'", "destinationbucket2"),
 			expectedValidationErr: nil,
 		},
 		// 13 missing role in config and destination ARN has target ARN
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication::8320b6d18f9032b4700f1f03b50d8d1853de8f22cab86931ee794e12f190852c:destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:minio:replication::8320b6d18f9032b4700f1f03b50d8d1853de8f22cab86931ee794e12f190852c:destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			// destination bucket in config different from bucket specified
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
@@ -125,7 +137,8 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 			expectedValidationErr: nil,
 		},
 		// 14 role absent in config and destination ARN has target ARN in invalid format
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:xx:replication::8320b6d18f9032b4700f1f03b50d8d1853de8f22cab86931ee794e12f190852c:destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:xx:replication::8320b6d18f9032b4700f1f03b50d8d1853de8f22cab86931ee794e12f190852c:destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			// destination bucket in config different from bucket specified
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
@@ -154,6 +167,7 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 		})
 	}
 }
+
 func TestReplicate(t *testing.T) {
 	cfgs := []Config{
 		{ // Config0 - Replication config has no filters, all replication enabled
@@ -297,33 +311,37 @@ func TestHasActiveRules(t *testing.T) {
 		expectedNonRec bool
 		expectedRec    bool
 	}{
-
 		// case 1 - only one rule which is in Disabled status
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Disabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:    `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Disabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:         "miss/prefix",
 			expectedNonRec: false,
 			expectedRec:    false,
 		},
 		// case 2 - only one rule which matches prefix filter
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter><Prefix>key/prefix</Prefix></Filter><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:    `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter><Prefix>key/prefix</Prefix></Filter><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:         "key/prefix1",
 			expectedNonRec: true,
 			expectedRec:    true,
 		},
 		// case 3 - empty prefix
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:    `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:         "key-prefix",
 			expectedNonRec: true,
 			expectedRec:    true,
 		},
 		// case 4 - has Filter based on prefix
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter><Prefix>testdir/dir1/</Prefix></Filter><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:    `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter><Prefix>testdir/dir1/</Prefix></Filter><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:         "testdir/",
 			expectedNonRec: false,
 			expectedRec:    true,
 		},
 		// case 5 - has filter with prefix and tags, here we are not matching on tags
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter>
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Filter>
 		<And><Prefix>key-prefix</Prefix><Tag><Key>key1</Key><Value>value1</Value></Tag><Tag><Key>key2</Key><Value>value2</Value></Tag></And></Filter><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:         "testdir/",
 			expectedNonRec: true,
@@ -344,7 +362,6 @@ func TestHasActiveRules(t *testing.T) {
 			if got := cfg.HasActiveRules(tc.prefix, true); got != tc.expectedRec {
 				t.Fatalf("Expected result with recursive set to true: `%v`, got: `%v`", tc.expectedRec, got)
 			}
-
 		})
 
 	}
@@ -357,21 +374,24 @@ func TestFilterActionableRules(t *testing.T) {
 		ExpectedRules []Rule
 	}{
 		// case 1 - only one rule
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+		{
+			inputConfig:   `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			prefix:        "prefix",
 			ExpectedRules: []Rule{{Status: Enabled, Priority: 1, DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled}, DeleteReplication: DeleteReplication{Status: Disabled}, Destination: Destination{Bucket: "destinationbucket", ARN: "arn:minio:replication:xxx::destinationbucket"}}},
 		},
 		// case 2 - multiple rules for same target, overlapping rules with different priority
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>3</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
-			prefix: "prefix",
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>3</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+			prefix:      "prefix",
 			ExpectedRules: []Rule{
 				{Status: Enabled, Priority: 3, DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled}, DeleteReplication: DeleteReplication{Status: Disabled}, Destination: Destination{Bucket: "destinationbucket", ARN: "arn:minio:replication:xxx::destinationbucket"}},
 				{Status: Enabled, Priority: 1, DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled}, DeleteReplication: DeleteReplication{Status: Disabled}, Destination: Destination{Bucket: "destinationbucket", ARN: "arn:minio:replication:xxx::destinationbucket"}},
 			},
 		},
 		// case 3 - multiple rules for different target, overlapping rules on a target
-		{inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>2</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket2</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>4</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket2</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>3</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
-			prefix: "prefix",
+		{
+			inputConfig: `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>2</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket2</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>4</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket2</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>3</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><DeleteReplication><Status>Disabled</Status></DeleteReplication><Prefix>prefix</Prefix><Priority>1</Priority><Destination><Bucket>arn:minio:replication:xxx::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
+			prefix:      "prefix",
 			ExpectedRules: []Rule{
 				{Status: Enabled, Priority: 4, DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled}, DeleteReplication: DeleteReplication{Status: Disabled}, Destination: Destination{Bucket: "destinationbucket2", ARN: "arn:minio:replication:xxx::destinationbucket2"}},
 				{Status: Enabled, Priority: 2, DeleteMarkerReplication: DeleteMarkerReplication{Status: Enabled}, DeleteReplication: DeleteReplication{Status: Disabled}, Destination: Destination{Bucket: "destinationbucket2", ARN: "arn:minio:replication:xxx::destinationbucket2"}},
@@ -389,7 +409,6 @@ func TestFilterActionableRules(t *testing.T) {
 		got := cfg.FilterActionableRules(ObjectOpts{Name: tc.prefix})
 		if len(got) != len(tc.ExpectedRules) {
 			t.Fatalf("Expected matching number of actionable rules: `%v`, got: `%v`", tc.ExpectedRules, got)
-
 		}
 		for i := range got {
 			if got[i].Destination.ARN != tc.ExpectedRules[i].Destination.ARN || got[i].Priority != tc.ExpectedRules[i].Priority {

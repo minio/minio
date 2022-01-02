@@ -59,7 +59,7 @@ func (store *QueueStore) Open() error {
 	store.Lock()
 	defer store.Unlock()
 
-	if err := os.MkdirAll(store.directory, os.FileMode(0770)); err != nil {
+	if err := os.MkdirAll(store.directory, os.FileMode(0o770)); err != nil {
 		return err
 	}
 
@@ -80,7 +80,6 @@ func (store *QueueStore) Open() error {
 
 // write - writes event to the directory.
 func (store *QueueStore) write(key string, e event.Event) error {
-
 	// Marshalls the event.
 	eventData, err := json.Marshal(e)
 	if err != nil {
@@ -88,7 +87,7 @@ func (store *QueueStore) write(key string, e event.Event) error {
 	}
 
 	path := filepath.Join(store.directory, key+eventExt)
-	if err := ioutil.WriteFile(path, eventData, os.FileMode(0770)); err != nil {
+	if err := ioutil.WriteFile(path, eventData, os.FileMode(0o770)); err != nil {
 		return err
 	}
 

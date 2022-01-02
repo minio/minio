@@ -21,9 +21,9 @@ import "testing"
 
 // Tests - bytePool functionality.
 func TestBytePool(t *testing.T) {
-	var size = 4
-	var width = 10
-	var capWidth = 16
+	size := 4
+	width := 10
+	capWidth := 16
 
 	bufPool := NewBytePoolCap(size, width, capWidth)
 

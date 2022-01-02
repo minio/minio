@@ -32,8 +32,7 @@ import (
 // Tests cross device mount verification function, for both failure
 // and success cases.
 func TestCrossDeviceMountPaths(t *testing.T) {
-	successCase :=
-		`/dev/0 /path/to/0/1 type0 flags 0 0
+	successCase := `/dev/0 /path/to/0/1 type0 flags 0 0
 		/dev/1    /path/to/1   type1	flags 1 1
 		/dev/2 /path/to/1/2 type2 flags,1,2=3 2 2
                 /dev/3 /path/to/1.1 type3 falgs,1,2=3 3 3
@@ -44,12 +43,12 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0666); err != nil {
+	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
 		t.Fatal(err)
 	}
 	// Failure case where we detected successfully cross device mounts.
 	{
-		var absPaths = []string{"/path/to/1"}
+		absPaths := []string{"/path/to/1"}
 		if err = checkCrossDevice(absPaths, mountsPath); err == nil {
 			t.Fatal("Expected to fail, but found success")
 		}
@@ -64,7 +63,7 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 	}
 	// Failure case when input path is not absolute.
 	{
-		var absPaths = []string{"."}
+		absPaths := []string{"."}
 		if err = checkCrossDevice(absPaths, mountsPath); err == nil {
 			t.Fatal("Expected to fail for non absolute paths")
 		}
@@ -75,7 +74,7 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 	}
 	// Success case, where path doesn't have any mounts.
 	{
-		var absPaths = []string{"/path/to/x"}
+		absPaths := []string{"/path/to/x"}
 		if err = checkCrossDevice(absPaths, mountsPath); err != nil {
 			t.Fatalf("Expected success, failed instead (%s)", err)
 		}
@@ -85,8 +84,7 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 // Tests cross device mount verification function, for both failure
 // and success cases.
 func TestCrossDeviceMount(t *testing.T) {
-	successCase :=
-		`/dev/0 /path/to/0/1 type0 flags 0 0
+	successCase := `/dev/0 /path/to/0/1 type0 flags 0 0
 		/dev/1    /path/to/1   type1	flags 1 1
 		/dev/2 /path/to/1/2 type2 flags,1,2=3 2 2
                 /dev/3 /path/to/1.1 type3 falgs,1,2=3 3 3
@@ -97,7 +95,7 @@ func TestCrossDeviceMount(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0666); err != nil {
+	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
 		t.Fatal(err)
 	}
 	mounts, err := readProcMounts(mountsPath)
@@ -138,8 +136,7 @@ func TestCrossDeviceMount(t *testing.T) {
 
 // Tests read proc mounts file.
 func TestReadProcmountInfos(t *testing.T) {
-	successCase :=
-		`/dev/0 /path/to/0 type0 flags 0 0
+	successCase := `/dev/0 /path/to/0 type0 flags 0 0
 		/dev/1    /path/to/1   type1	flags 1 1
 		/dev/2 /path/to/2 type2 flags,1,2=3 2 2
 		`
@@ -150,7 +147,7 @@ func TestReadProcmountInfos(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0666); err != nil {
+	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
 		t.Fatal(err)
 	}
 	// Verifies if reading each line worked properly.
@@ -186,8 +183,7 @@ func TestReadProcmountInfos(t *testing.T) {
 
 // Tests read proc mounts reader.
 func TestReadProcMountFrom(t *testing.T) {
-	successCase :=
-		`/dev/0 /path/to/0 type0 flags 0 0
+	successCase := `/dev/0 /path/to/0 type0 flags 0 0
 		/dev/1    /path/to/1   type1	flags 1 1
 		/dev/2 /path/to/2 type2 flags,1,2=3 2 2
 		`

@@ -236,8 +236,8 @@ func TestServiceRestartHandler(t *testing.T) {
 
 // buildAdminRequest - helper function to build an admin API request.
 func buildAdminRequest(queryVal url.Values, method, path string,
-	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
-
+	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error,
+) {
 	req, err := newTestRequest(method,
 		adminPathPrefix+adminAPIVersionPrefix+path+"?"+queryVal.Encode(),
 		contentLength, bodySeeker)
@@ -380,5 +380,4 @@ func TestExtractHealInitParams(t *testing.T) {
 			}
 		}
 	}
-
 }

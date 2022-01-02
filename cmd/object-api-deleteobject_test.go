@@ -32,7 +32,6 @@ func TestDeleteObject(t *testing.T) {
 
 // Unit test for DeleteObject in general.
 func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
-
 	type objectUpload struct {
 		name    string
 		content string

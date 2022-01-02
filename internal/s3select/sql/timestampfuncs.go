@@ -30,16 +30,14 @@ const (
 	layoutNanosecond = "2006-01-02T15:04:05.999999999Z07:00"
 )
 
-var (
-	tformats = []string{
-		layoutYear,
-		layoutMonth,
-		layoutDay,
-		layoutMinute,
-		layoutSecond,
-		layoutNanosecond,
-	}
-)
+var tformats = []string{
+	layoutYear,
+	layoutMonth,
+	layoutDay,
+	layoutMinute,
+	layoutSecond,
+	layoutNanosecond,
+}
 
 func parseSQLTimestamp(s string) (t time.Time, err error) {
 	for _, f := range tformats {

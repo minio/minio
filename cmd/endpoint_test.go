@@ -238,13 +238,18 @@ func TestCreateEndpoints(t *testing.T) {
 		{"localhost:9000", [][]string{{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}}, "", Endpoints{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
 
 		// Erasure Setup with PathEndpointType
-		{":1234", [][]string{{"/d1", "/d2", "/d3", "/d4"}}, ":1234",
+		{
+			":1234",
+			[][]string{{"/d1", "/d2", "/d3", "/d4"}},
+			":1234",
 			Endpoints{
 				Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true},
 				Endpoint{URL: &url.URL{Path: mustAbs("/d2")}, IsLocal: true},
 				Endpoint{URL: &url.URL{Path: mustAbs("/d3")}, IsLocal: true},
 				Endpoint{URL: &url.URL{Path: mustAbs("/d4")}, IsLocal: true},
-			}, ErasureSetupType, nil},
+			},
+			ErasureSetupType, nil,
+		},
 		// DistErasure Setup with URLEndpointType
 		{":9000", [][]string{{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}}, ":9000", Endpoints{
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost", Path: "/d1"}, IsLocal: true},
@@ -350,12 +355,18 @@ func TestGetLocalPeer(t *testing.T) {
 		expectedResult string
 	}{
 		{[]string{"/d1", "/d2", "d3", "d4"}, "127.0.0.1:9000"},
-		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"},
-			"localhost:9000"},
-		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"},
-			"localhost:9000"},
-		{[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"},
-			"localhost:9000"},
+		{
+			[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"},
+			"localhost:9000",
+		},
+		{
+			[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"},
+			"localhost:9000",
+		},
+		{
+			[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"},
+			"localhost:9000",
+		},
 	}
 
 	for i, testCase := range testCases {

@@ -163,7 +163,7 @@ func (w *metacacheWriter) stream() (chan<- metaCacheEntry, error) {
 			return nil, errors.New("metacacheWriter: writer not initialized")
 		}
 	}
-	var objs = make(chan metaCacheEntry, 100)
+	objs := make(chan metaCacheEntry, 100)
 	w.streamErr = nil
 	w.streamWg.Add(1)
 	go func() {
@@ -406,7 +406,7 @@ func (r *metacacheReader) forwardTo(s string) error {
 		r.current.metadata = nil
 	}
 	// temporary name buffer.
-	var tmp = make([]byte, 0, 256)
+	tmp := make([]byte, 0, 256)
 	for {
 		if more, err := r.mr.ReadBool(); !more {
 			switch err {
@@ -838,7 +838,7 @@ type metacacheBlock struct {
 }
 
 func (b metacacheBlock) headerKV() map[string]string {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	v, err := json.Marshal(b)
 	if err != nil {
 		logger.LogIf(context.Background(), err) // Unlikely

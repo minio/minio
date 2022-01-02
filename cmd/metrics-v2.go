@@ -379,6 +379,7 @@ func getBucketUsageTotalBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+
 func getBucketUsageObjectsTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -1029,7 +1030,6 @@ func getS3TTFBMetric() *MetricsGroup {
 					metrics = append(metrics, metric)
 				}
 			}
-
 		}()
 
 		httpRequestsDuration.Collect(ch)
@@ -1744,7 +1744,6 @@ func populateAndPublish(metricsGroups []*MetricsGroup, publish func(m Metric) bo
 
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioNodeCollector) Collect(ch chan<- prometheus.Metric) {
-
 	// Expose MinIO's version information
 	minioVersionInfo.WithLabelValues(Version, CommitID).Set(1.0)
 

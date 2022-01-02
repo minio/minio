@@ -170,7 +170,6 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	} else {
 		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
-
 }
 
 // Initialized checks if IAM is initialized
@@ -801,9 +800,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
-	var (
-		cred auth.Credentials
-	)
+	var cred auth.Credentials
 
 	var err error
 	if len(opts.accessKey) > 0 {

@@ -178,9 +178,7 @@ func (t *transitionState) queueTransitionTask(oi ObjectInfo) {
 	}
 }
 
-var (
-	globalTransitionState *transitionState
-)
+var globalTransitionState *transitionState
 
 func newTransitionState(ctx context.Context, objAPI ObjectLayer) *transitionState {
 	return &transitionState{
@@ -466,9 +464,7 @@ func (sp *SelectParameters) IsEmpty() bool {
 	return sp == nil
 }
 
-var (
-	selectParamsXMLName = "SelectParameters"
-)
+var selectParamsXMLName = "SelectParameters"
 
 // UnmarshalXML - decodes XML data.
 func (sp *SelectParameters) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

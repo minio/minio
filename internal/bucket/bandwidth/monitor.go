@@ -111,6 +111,7 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *madmin.BucketBandwi
 	}
 	return report
 }
+
 func (m *Monitor) trackEWMA() {
 	for {
 		select {

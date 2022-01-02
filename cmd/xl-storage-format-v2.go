@@ -834,7 +834,7 @@ func (x *xlMetaV2) LoadOrConvert(buf []byte) error {
 	}
 
 	xlMeta := &xlMetaV1Object{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(buf, xlMeta); err != nil {
 		return errFileCorrupt
 	}
@@ -1790,7 +1790,7 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 	}
 	// Sanity check. Enable if duplicates show up.
 	if false {
-		var found = make(map[[16]byte]struct{})
+		found := make(map[[16]byte]struct{})
 		for _, ver := range merged {
 			if _, ok := found[ver.header.VersionID]; ok {
 				panic("found dupe")
@@ -1927,7 +1927,6 @@ func (x xlMetaBuf) IsLatestDeleteMarker() bool {
 		}
 		isDeleteMarker = xl.Type == DeleteType
 		return errDoneForNow
-
 	})
 	return isDeleteMarker
 }

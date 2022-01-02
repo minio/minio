@@ -31,7 +31,7 @@ import (
 
 // Test if various paths work as expected when converted to UNC form
 func TestUNCPaths(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		objName string
 		pass    bool
 	}{
