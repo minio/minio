@@ -213,9 +213,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Indicate to our routine to exit cleanly upon return.
 	defer cancel()
 
-	// Hold the lock for migration only.
-	txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
-
 	// allocate dynamic timeout once before the loop
 	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
@@ -223,6 +220,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
+		// Hold the lock for migration only.
+		txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
+
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		lkctx, err := txnLk.GetLock(retryCtx, iamLockTimeout)
