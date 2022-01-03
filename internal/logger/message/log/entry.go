@@ -25,7 +25,7 @@ import (
 // ObjectVersion object version key/versionId
 type ObjectVersion struct {
 	ObjectName string `json:"objectName"`
-	VersionID  string `json:"VersionId,omitempty"`
+	VersionID  string `json:"versionId,omitempty"`
 }
 
 // Args - defines the arguments for the API.

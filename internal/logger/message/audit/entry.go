@@ -32,7 +32,7 @@ const Version = "1"
 // ObjectVersion object version key/versionId
 type ObjectVersion struct {
 	ObjectName string `json:"objectName"`
-	VersionID  string `json:"VersionId,omitempty"`
+	VersionID  string `json:"versionId,omitempty"`
 }
 
 // Entry - audit entry logs.
