@@ -387,7 +387,7 @@ func TestHealCorrectQuorum(t *testing.T) {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
-	cfgFile := pathJoin(bucketConfigPrefix, bucket, ".test.bin")
+	cfgFile := pathJoin(bucketMetaPrefix, bucket, ".test.bin")
 	if err = saveConfig(ctx, objLayer, cfgFile, data); err != nil {
 		t.Fatal(err)
 	}

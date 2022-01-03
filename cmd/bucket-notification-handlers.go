@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	bucketConfigPrefix       = "buckets"
 	bucketNotificationConfig = "notification.xml"
 )
 

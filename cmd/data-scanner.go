@@ -25,7 +25,6 @@ import (
 	"io/fs"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -40,7 +39,6 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
-	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 )
@@ -111,6 +109,9 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 	locker := objAPI.NewNSLock(minioMetaBucket, "scanner/runDataScanner.lock")
 	lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
 	if err != nil {
+		if intDataUpdateTracker.debug {
+			logger.LogIf(pctx, err)
+		}
 		return
 	}
 	ctx := lkctx.Context()
@@ -120,18 +121,11 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1
 
-	br, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageBloomName, nil, http.Header{}, readLock, ObjectOptions{})
-	if err != nil {
-		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
+	buf, _ := readConfig(ctx, objAPI, dataUsageBloomNamePath)
+	if len(buf) >= 8 {
+		if err = binary.Read(bytes.NewReader(buf), binary.LittleEndian, &nextBloomCycle); err != nil {
 			logger.LogIf(ctx, err)
 		}
-	} else {
-		if br.ObjInfo.Size == 8 {
-			if err = binary.Read(br, binary.LittleEndian, &nextBloomCycle); err != nil {
-				logger.LogIf(ctx, err)
-			}
-		}
-		br.Close()
 	}
 
 	scannerTimer := time.NewTimer(scannerCycle.Get())
@@ -161,14 +155,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				nextBloomCycle++
 				var tmp [8]byte
 				binary.LittleEndian.PutUint64(tmp[:], nextBloomCycle)
-				r, err := hash.NewReader(bytes.NewReader(tmp[:]), int64(len(tmp)), "", "", int64(len(tmp)))
-				if err != nil {
-					logger.LogIf(ctx, err)
-					continue
-				}
-
-				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r), ObjectOptions{})
-				if !isErrBucketNotFound(err) {
+				if err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp[:]); err != nil {
 					logger.LogIf(ctx, err)
 				}
 			}

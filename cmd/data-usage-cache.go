@@ -921,6 +921,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	// Abandon if more than 5 minutes, so we don't hold up scanner.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+
 	r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		switch err.(type) {
