@@ -62,23 +62,6 @@ var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
 	"cmd.StartGateway",
-	"cmd.(*webAPIHandlers).ListBuckets",
-	"cmd.(*webAPIHandlers).MakeBucket",
-	"cmd.(*webAPIHandlers).DeleteBucket",
-	"cmd.(*webAPIHandlers).ListObjects",
-	"cmd.(*webAPIHandlers).RemoveObject",
-	"cmd.(*webAPIHandlers).Login",
-	"cmd.(*webAPIHandlers).SetAuth",
-	"cmd.(*webAPIHandlers).CreateURLToken",
-	"cmd.(*webAPIHandlers).Upload",
-	"cmd.(*webAPIHandlers).Download",
-	"cmd.(*webAPIHandlers).DownloadZip",
-	"cmd.(*webAPIHandlers).GetBucketPolicy",
-	"cmd.(*webAPIHandlers).ListAllBucketPolicies",
-	"cmd.(*webAPIHandlers).SetBucketPolicy",
-	"cmd.(*webAPIHandlers).PresignedGet",
-	"cmd.(*webAPIHandlers).ServerInfo",
-	"cmd.(*webAPIHandlers).StorageInfo",
 	// add more here ..
 }
 
@@ -338,6 +321,15 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	if req.DeploymentID == "" {
 		req.DeploymentID = globalDeploymentID
 	}
+
+	objects := make([]log.ObjectVersion, 0, len(req.Objects))
+	for _, ov := range req.Objects {
+		objects = append(objects, log.ObjectVersion{
+			ObjectName: ov.ObjectName,
+			VersionID:  ov.VersionID,
+		})
+	}
+
 	entry := log.Entry{
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),
@@ -350,8 +342,10 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		API: &log.API{
 			Name: API,
 			Args: &log.Args{
-				Bucket: req.BucketName,
-				Object: req.ObjectName,
+				Bucket:    req.BucketName,
+				Object:    req.ObjectName,
+				VersionID: req.VersionID,
+				Objects:   objects,
 			},
 		},
 		Trace: &log.Trace{

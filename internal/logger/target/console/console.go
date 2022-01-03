@@ -20,6 +20,7 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/color"
@@ -83,11 +84,19 @@ func (c *Target) Send(e interface{}, logKind string) error {
 	var apiString string
 	if entry.API != nil {
 		apiString = "API: " + entry.API.Name + "("
-		if entry.API.Args != nil && entry.API.Args.Bucket != "" {
-			apiString = apiString + "bucket=" + entry.API.Args.Bucket
-		}
-		if entry.API.Args != nil && entry.API.Args.Object != "" {
-			apiString = apiString + ", object=" + entry.API.Args.Object
+		if entry.API.Args != nil {
+			if entry.API.Args.Bucket != "" {
+				apiString = apiString + "bucket=" + entry.API.Args.Bucket
+			}
+			if entry.API.Args.Object != "" {
+				apiString = apiString + ", object=" + entry.API.Args.Object
+			}
+			if entry.API.Args.VersionID != "" {
+				apiString = apiString + ", versionId=" + entry.API.Args.VersionID
+			}
+			if len(entry.API.Args.Objects) > 0 {
+				apiString = apiString + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+			}
 		}
 		apiString += ")"
 	} else {

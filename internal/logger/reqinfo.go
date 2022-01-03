@@ -34,32 +34,40 @@ type KeyVal struct {
 	Val interface{}
 }
 
+// ObjectVersion object version key/versionId
+type ObjectVersion struct {
+	ObjectName string
+	VersionID  string `json:"VersionId,omitempty"`
+}
+
 // ReqInfo stores the request info.
 type ReqInfo struct {
-	RemoteHost   string   // Client Host/IP
-	Host         string   // Node Host/IP
-	UserAgent    string   // User Agent
-	DeploymentID string   // x-minio-deployment-id
-	RequestID    string   // x-amz-request-id
-	API          string   // API name - GetObject PutObject NewMultipartUpload etc.
-	BucketName   string   // Bucket name
-	ObjectName   string   // Object name
-	AccessKey    string   // Access Key
-	tags         []KeyVal // Any additional info not accommodated by above fields
+	RemoteHost   string          // Client Host/IP
+	Host         string          // Node Host/IP
+	UserAgent    string          // User Agent
+	DeploymentID string          // x-minio-deployment-id
+	RequestID    string          // x-amz-request-id
+	API          string          // API name - GetObject PutObject NewMultipartUpload etc.
+	BucketName   string          `json:",omitempty"` // Bucket name
+	ObjectName   string          `json:",omitempty"` // Object name
+	VersionID    string          `json:",omitempty"` // corresponding versionID for the object
+	Objects      []ObjectVersion `json:",omitempty"` // Only set during MultiObject delete handler.
+	AccessKey    string          // Access Key
+	tags         []KeyVal        // Any additional info not accommodated by above fields
 	sync.RWMutex
 }
 
 // NewReqInfo :
 func NewReqInfo(remoteHost, userAgent, deploymentID, requestID, api, bucket, object string) *ReqInfo {
-	req := ReqInfo{}
-	req.RemoteHost = remoteHost
-	req.UserAgent = userAgent
-	req.API = api
-	req.DeploymentID = deploymentID
-	req.RequestID = requestID
-	req.BucketName = bucket
-	req.ObjectName = object
-	return &req
+	return &ReqInfo{
+		RemoteHost:   remoteHost,
+		UserAgent:    userAgent,
+		API:          api,
+		DeploymentID: deploymentID,
+		RequestID:    requestID,
+		BucketName:   bucket,
+		ObjectName:   object,
+	}
 }
 
 // AppendTags - appends key/val to ReqInfo.tags

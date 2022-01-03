@@ -574,7 +574,9 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 		c.Assert(response.StatusCode, http.StatusOK)
 		// Append all objects.
 		delObjReq.Objects = append(delObjReq.Objects, ObjectToDelete{
-			ObjectName: objName,
+			ObjectV: ObjectV{
+				ObjectName: objName,
+			},
 		})
 	}
 	// Marshal delete request.

@@ -698,7 +698,9 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	getObjectToDeleteList := func(objectNames []string) (objectList []ObjectToDelete) {
 		for _, objectName := range objectNames {
 			objectList = append(objectList, ObjectToDelete{
-				ObjectName: objectName,
+				ObjectV: ObjectV{
+					ObjectName: objectName,
+				},
 			})
 		}
 
@@ -717,10 +719,21 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 		return deleteErrorList
 	}
 
+	objects := []ObjectToDelete{}
+	objects = append(objects, ObjectToDelete{
+		ObjectV: ObjectV{
+			ObjectName: "private/object",
+		},
+	})
+	objects = append(objects, ObjectToDelete{
+		ObjectV: ObjectV{
+			ObjectName: "public/object",
+		},
+	})
 	requestList := []DeleteObjectsRequest{
 		{Quiet: false, Objects: getObjectToDeleteList(objectNames[:5])},
 		{Quiet: true, Objects: getObjectToDeleteList(objectNames[5:])},
-		{Quiet: false, Objects: []ObjectToDelete{{ObjectName: "private/object"}, {ObjectName: "public/object"}}},
+		{Quiet: false, Objects: objects},
 	}
 
 	// generate multi objects delete response.

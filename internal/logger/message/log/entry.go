@@ -22,11 +22,19 @@ import (
 	"time"
 )
 
+// ObjectVersion object version key/versionId
+type ObjectVersion struct {
+	ObjectName string `json:"objectName"`
+	VersionID  string `json:"VersionId,omitempty"`
+}
+
 // Args - defines the arguments for the API.
 type Args struct {
-	Bucket   string            `json:"bucket,omitempty"`
-	Object   string            `json:"object,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	Bucket    string            `json:"bucket,omitempty"`
+	Object    string            `json:"object,omitempty"`
+	VersionID string            `json:"versionId,omitempty"`
+	Objects   []ObjectVersion   `json:"objects,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 // Trace - defines the trace.

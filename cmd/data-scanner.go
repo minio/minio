@@ -1022,8 +1022,10 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		}
 
 		toDel = append(toDel, ObjectToDelete{
-			ObjectName: fi.Name,
-			VersionID:  fi.VersionID,
+			ObjectV: ObjectV{
+				ObjectName: fi.Name,
+				VersionID:  fi.VersionID,
+			},
 		})
 	}
 

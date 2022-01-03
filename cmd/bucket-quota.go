@@ -193,8 +193,10 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 	numKeys := len(scorer.fileObjInfos())
 	for i, obj := range scorer.fileObjInfos() {
 		objects = append(objects, ObjectToDelete{
-			ObjectName: obj.Name,
-			VersionID:  obj.VersionID,
+			ObjectV: ObjectV{
+				ObjectName: obj.Name,
+				VersionID:  obj.VersionID,
+			},
 		})
 		if len(objects) < maxDeleteList && (i < numKeys-1) {
 			// skip deletion until maxDeleteList or end of slice

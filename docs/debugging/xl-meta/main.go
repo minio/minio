@@ -131,7 +131,7 @@ FLAGS:
 					Header   json.RawMessage
 					Metadata json.RawMessage
 				}
-				var versions = make([]version, nVers)
+				versions := make([]version, nVers)
 				err = decodeVersions(v, nVers, func(idx int, hdr, meta []byte) error {
 					var header xlMetaV2VersionHeaderV2
 					if _, err := header.UnmarshalMsg(hdr); err != nil {
@@ -462,7 +462,6 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 		fn(string(key), val)
 	}
 	return nil
-
 }
 
 const (

@@ -37,7 +37,7 @@ lint: ## runs golangci-lint suite of linters
 	@echo "Running $@ check"
 	@${GOPATH}/bin/golangci-lint cache clean
 	@${GOPATH}/bin/golangci-lint run --build-tags kqueue --timeout=10m --config ./.golangci.yml
-	@${GOPATH}/bin/gofumpt -s -l .
+	@${GOPATH}/bin/gofumpt -l .
 
 check: test
 test: verifiers build ## builds minio, runs linters, tests
