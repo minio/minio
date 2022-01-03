@@ -1183,7 +1183,7 @@ func AnalyzeTimeInfo(ctx context.Context) madmin.SysErrors {
 	timeInfos := append(globalNotificationSys.GetTimeInfo(ctx), localTimeInfo)
 	min, max := GetMinMaxTimeInfo(timeInfos)
 	diff := max.CurrentTime.Sub(min.CurrentTime)
-	if diff > 10*time.Second {
+	if diff > time.Minute {
 		return madmin.SysErrors{
 			NodeCommon: madmin.NodeCommon{Addr: max.Addr},
 			Errors: []string{
