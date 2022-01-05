@@ -87,7 +87,7 @@ func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalSiteReplicationSys.InternalJoinReq(ctx, joinArg); err != nil {
+	if err := globalSiteReplicationSys.PeerJoinReq(ctx, joinArg); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -309,4 +309,50 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 	}
 
 	return json.Unmarshal(data, v)
+}
+
+// SiteReplicationStatus - GET /minio/admin/v3/site-replication/status
+func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationStatus")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
+	if objectAPI == nil {
+		return
+	}
+
+	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err = json.NewEncoder(w).Encode(info); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// SiteReplicationMetaInfo - GET /minio/admin/v3/site-replication/metainfo
+func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationMetaInfo")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
+	if objectAPI == nil {
+		return
+	}
+
+	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err = json.NewEncoder(w).Encode(info); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
 }
