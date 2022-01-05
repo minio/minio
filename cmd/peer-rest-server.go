@@ -449,21 +449,6 @@ func (s *peerRESTServer) GetOSInfoHandler(w http.ResponseWriter, r *http.Request
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
-// GetCurrentTimeHandler - returns operating system's information.
-func (s *peerRESTServer) GetCurrentTimeHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetTimeInfo(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
-}
-
 // GetProcInfoHandler - returns this MinIO process information.
 func (s *peerRESTServer) GetProcInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1368,5 +1353,4 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedtest).HandlerFunc(httpTraceHdrs(server.SpeedtestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadSiteReplicationConfig).HandlerFunc(httpTraceHdrs(server.ReloadSiteReplicationConfigHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCurrentTime).HandlerFunc(httpTraceHdrs(server.GetCurrentTimeHandler))
 }

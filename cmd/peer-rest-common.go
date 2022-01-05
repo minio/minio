@@ -67,7 +67,6 @@ const (
 	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
 	peerRESTMethodSpeedtest                   = "/speedtest"
 	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
-	peerRESTMethodCurrentTime                 = "/currenttime"
 )
 
 const (

@@ -398,17 +398,6 @@ func (client *peerRESTClient) GetPartitions(ctx context.Context) (info madmin.Pa
 	return info, err
 }
 
-// GetTimeInfo - return the current time on the server
-func (client *peerRESTClient) GetTimeInfo(ctx context.Context) (info madmin.TimeInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodCurrentTime, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
 // GetOSInfo - fetch OS information for a remote node.
 func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfo, nil, nil, -1)
@@ -433,12 +422,21 @@ func (client *peerRESTClient) GetSELinuxInfo(ctx context.Context) (info madmin.S
 
 // GetSysConfig - fetch sys config for a remote node.
 func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.SysConfig, err error) {
+	sent := time.Now()
 	respBody, err := client.callWithContext(ctx, peerRESTMethodSysConfig, nil, nil, -1)
 	if err != nil {
 		return
 	}
+	roundtrip := int32(time.Since(sent).Seconds())
 	defer http.DrainBody(respBody)
+
 	err = gob.NewDecoder(respBody).Decode(&info)
+	cfg := info.Config["time-info"]
+	if cfg != nil {
+		ti := cfg.(madmin.TimeInfo)
+		ti.RoundtripDuration = roundtrip
+		info.Config["time-info"] = ti
+	}
 	return info, err
 }
 
