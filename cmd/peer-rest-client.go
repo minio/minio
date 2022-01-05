@@ -427,7 +427,7 @@ func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.Sys
 	if err != nil {
 		return
 	}
-	roundtrip := int32(time.Since(sent).Seconds())
+	roundtrip := int32(time.Since(sent).Milliseconds())
 	defer http.DrainBody(respBody)
 
 	err = gob.NewDecoder(respBody).Decode(&info)
