@@ -23,7 +23,7 @@ require (
 	github.com/djherbis/atime v1.0.0
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
-	github.com/eclipse/paho.mqtt.golang v1.3.0
+	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.13.0
 	github.com/go-ldap/ldap/v3 v3.2.4

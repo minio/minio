@@ -209,8 +209,12 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		args.MaxReconnectInterval = 10 * time.Minute
 	}
 
+	if args.KeepAlive == 0 {
+		args.KeepAlive = 10 * time.Second
+	}
+
 	options := mqtt.NewClientOptions().
-		SetClientID("").
+		SetClientID(id).
 		SetCleanSession(true).
 		SetUsername(args.User).
 		SetPassword(args.Password).
