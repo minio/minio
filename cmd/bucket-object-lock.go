@@ -58,6 +58,10 @@ func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, 
 // enforceRetentionForDeletion checks if it is appropriate to remove an
 // object according to locking configuration when this is lifecycle/ bucket quota asking.
 func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locked bool) {
+	if objInfo.DeleteMarker {
+		return false
+	}
+
 	lhold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
 	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
 		return true
