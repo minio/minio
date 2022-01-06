@@ -613,7 +613,8 @@ func NewGatewayHTTPTransport() *http.Transport {
 
 func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
-		RootCAs: globalRootCAs,
+		RootCAs:            globalRootCAs,
+		ClientSessionCache: tls.NewLRUClientSessionCache(100),
 	}, defaultDialTimeout)()
 
 	// Customize response header timeout for gateway transport.
@@ -639,7 +640,8 @@ func NewRemoteTargetHTTPTransport() *http.Transport {
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 5 * time.Second,
 		TLSClientConfig: &tls.Config{
-			RootCAs: globalRootCAs,
+			RootCAs:            globalRootCAs,
+			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 		},
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
@@ -1135,6 +1137,7 @@ func newTLSConfig(getCert certs.GetCertificateFunc) *tls.Config {
 		MinVersion:               tls.VersionTLS12,
 		NextProtos:               []string{"http/1.1", "h2"},
 		GetCertificate:           getCert,
+		ClientSessionCache:       tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}
 
 	tlsClientIdentity := env.Get(xtls.EnvIdentityTLSEnabled, "") == config.EnableOn
