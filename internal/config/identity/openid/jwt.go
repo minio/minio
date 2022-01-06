@@ -20,6 +20,7 @@ package openid
 import (
 	"crypto"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
@@ -367,6 +369,40 @@ func (r *Config) Validate(token, accessToken, dsecs string) (map[string]interfac
 // ID returns the provider name and authentication type.
 func (Config) ID() ID {
 	return "jwt"
+}
+
+// GetSettings - fetches OIDC settings for site-replication related validation.
+// NOTE that region must be populated by caller as this package does not know.
+func (r *Config) GetSettings() madmin.OpenIDSettings {
+	res := madmin.OpenIDSettings{}
+	if !r.Enabled {
+		return res
+	}
+
+	hashedSecret := ""
+	{
+		h := sha256.New()
+		h.Write([]byte(r.ClientSecret))
+		bs := h.Sum(nil)
+		hashedSecret = base64.RawURLEncoding.EncodeToString(bs)
+	}
+	if r.RolePolicy != "" {
+		res.Roles = make(map[string]madmin.OpenIDProviderSettings)
+		res.Roles[r.roleArn.String()] = madmin.OpenIDProviderSettings{
+			ClaimUserinfoEnabled: r.ClaimUserinfo,
+			RolePolicy:           r.RolePolicy,
+			ClientID:             r.ClientID,
+			HashedClientSecret:   hashedSecret,
+		}
+	} else {
+		res.ClaimProvider = madmin.OpenIDProviderSettings{
+			ClaimName:            r.ClaimName,
+			ClaimUserinfoEnabled: r.ClaimUserinfo,
+			ClientID:             r.ClientID,
+			HashedClientSecret:   hashedSecret,
+		}
+	}
+	return res
 }
 
 // OpenID keys and envs.
