@@ -943,6 +943,10 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	errs := make([]error, len(versions))
 
 	for i, fiv := range versions {
+		if contextCanceled(ctx) {
+			errs[i] = ctx.Err()
+			continue
+		}
 		if err := s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...); err != nil {
 			errs[i] = err
 		}

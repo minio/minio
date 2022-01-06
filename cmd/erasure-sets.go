@@ -974,17 +974,25 @@ func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects 
 
 	// Invoke bulk delete on objects per set and save
 	// the result of the delete operation
-	for _, objsGroup := range objSetMap {
-		set := s.getHashedSet(objsGroup[0].object.ObjectName)
-		dobjects, errs := set.DeleteObjects(ctx, bucket, toNames(objsGroup), opts)
-		for i, obj := range objsGroup {
-			delErrs[obj.origIndex] = errs[i]
-			delObjects[obj.origIndex] = dobjects[i]
-			if errs[i] == nil {
-				auditObjectErasureSet(ctx, obj.object.ObjectName, set)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	wg.Add(len(objSetMap))
+	for setIdx, objsGroup := range objSetMap {
+		go func(set *erasureObjects, group []delObj) {
+			defer wg.Done()
+			dobjects, errs := set.DeleteObjects(ctx, bucket, toNames(group), opts)
+			mu.Lock()
+			defer mu.Unlock()
+			for i, obj := range group {
+				delErrs[obj.origIndex] = errs[i]
+				delObjects[obj.origIndex] = dobjects[i]
+				if errs[i] == nil {
+					auditObjectErasureSet(ctx, obj.object.ObjectName, set)
+				}
 			}
-		}
+		}(s.sets[setIdx], objsGroup)
 	}
+	wg.Wait()
 
 	return delObjects, delErrs
 }

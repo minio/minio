@@ -1197,6 +1197,12 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					continue
 				}
 				for _, v := range dedupVersions[i].Versions {
+					if err == errFileNotFound || err == errFileVersionNotFound {
+						if !dobjects[v.Idx].DeleteMarker {
+							// Not delete marker, if not found, ok.
+							continue
+						}
+					}
 					delObjErrs[index][v.Idx] = err
 				}
 			}

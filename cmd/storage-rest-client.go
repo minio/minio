@@ -611,6 +611,9 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVersions, values, &buffer, -1)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
+		if contextCanceled(ctx) {
+			err = ctx.Err()
+		}
 		for i := range errs {
 			errs[i] = err
 		}
