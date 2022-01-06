@@ -256,8 +256,10 @@ const (
 // Random number state.
 // We generate random temporary file names so that there's a good
 // chance the file doesn't exist yet.
-var randN uint32
-var randmu sync.Mutex
+var (
+	randN  uint32
+	randmu sync.Mutex
+)
 
 // Temp files created in default Tmp dir
 var globalTestTmpDir = os.TempDir()

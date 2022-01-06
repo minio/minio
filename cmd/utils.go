@@ -406,8 +406,10 @@ type minioProfiler interface {
 }
 
 // Global profiler to be used by service go-routine.
-var globalProfiler map[string]minioProfiler
-var globalProfilerMu sync.Mutex
+var (
+	globalProfiler   map[string]minioProfiler
+	globalProfilerMu sync.Mutex
+)
 
 // dump the request into a string in JSON format.
 func dumpRequest(r *http.Request) string {

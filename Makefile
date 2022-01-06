@@ -20,7 +20,6 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.43.0
-	@echo "Installing gofumpt" && go install mvdan.cc/gofumpt@latest
 	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.7-0.20211026165309-e818a1881b0e
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
@@ -37,7 +36,6 @@ lint: ## runs golangci-lint suite of linters
 	@echo "Running $@ check"
 	@${GOPATH}/bin/golangci-lint cache clean
 	@${GOPATH}/bin/golangci-lint run --build-tags kqueue --timeout=10m --config ./.golangci.yml
-	@${GOPATH}/bin/gofumpt -l .
 
 check: test
 test: verifiers build ## builds minio, runs linters, tests

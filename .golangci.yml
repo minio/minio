@@ -24,6 +24,15 @@ linters:
     - unconvert
     - varcheck
     - gocritic
+    - gofumpt
+
+linters-settings:
+  gofumpt:
+    lang-version: "1.17"
+
+    # Choose whether or not to use the extra rules that are disabled
+    # by default
+    extra-rules: false
 
 issues:
   exclude-use-default: false

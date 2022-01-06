@@ -32,14 +32,16 @@ type Target interface {
 	Send(entry interface{}, errKind string) error
 }
 
-// swapMu must be held while reading slice info or swapping targets or auditTargets.
-var swapMu sync.Mutex
+var (
+	// swapMu must be held while reading slice info or swapping targets or auditTargets.
+	swapMu sync.Mutex
 
-// targets is the set of enabled loggers.
-// Must be immutable at all times.
-// Can be swapped to another while holding swapMu
-var targets = []Target{}
-var nTargets int32 // atomic count of len(targets)
+	// targets is the set of enabled loggers.
+	// Must be immutable at all times.
+	// Can be swapped to another while holding swapMu
+	targets  = []Target{}
+	nTargets int32 // atomic count of len(targets)
+)
 
 // Targets returns active targets.
 // Returned slice may not be modified in any way.
@@ -70,8 +72,10 @@ func AuditTargets() []Target {
 // auditTargets is the list of enabled audit loggers
 // Must be immutable at all times.
 // Can be swapped to another while holding swapMu
-var auditTargets = []Target{}
-var nAuditTargets int32 // atomic count of len(auditTargets)
+var (
+	auditTargets  = []Target{}
+	nAuditTargets int32 // atomic count of len(auditTargets)
+)
 
 // AddAuditTarget adds a new audit logger target to the
 // list of enabled loggers
