@@ -49,6 +49,7 @@ import (
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -132,6 +133,8 @@ func init() {
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
+	gob.Register(madmin.TimeInfo{})
+	gob.Register(map[string]interface{}{})
 
 	defaultAWSCredProvider = []credentials.Provider{
 		&credentials.IAM{
