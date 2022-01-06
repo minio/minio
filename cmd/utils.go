@@ -614,7 +614,7 @@ func NewGatewayHTTPTransport() *http.Transport {
 func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs:            globalRootCAs,
-		ClientSessionCache: tls.NewLRUClientSessionCache(100),
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, defaultDialTimeout)()
 
 	// Customize response header timeout for gateway transport.
