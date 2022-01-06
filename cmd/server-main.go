@@ -181,15 +181,17 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.CipherSuitesTLS(),
-		CurvePreferences: fips.EllipticCurvesTLS(),
+		RootCAs:            globalRootCAs,
+		CipherSuites:       fips.CipherSuitesTLS(),
+		CurvePreferences:   fips.EllipticCurvesTLS(),
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.CipherSuitesTLS(),
-		CurvePreferences: fips.EllipticCurvesTLS(),
+		RootCAs:            globalRootCAs,
+		CipherSuites:       fips.CipherSuitesTLS(),
+		CurvePreferences:   fips.EllipticCurvesTLS(),
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back

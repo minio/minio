@@ -417,7 +417,8 @@ func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 		TLSHandshakeTimeout:   timeout,
 		ExpectContinueTimeout: timeout,
 		TLSClientConfig: &tls.Config{
-			RootCAs: globalRootCAs,
+			RootCAs:            globalRootCAs,
+			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 		},
 		DisableCompression: true,
 	}

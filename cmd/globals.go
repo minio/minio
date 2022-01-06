@@ -118,6 +118,9 @@ const (
 
 	// diskMinInodes is the minimum number of inodes we want free on a disk to perform writes.
 	diskMinInodes = 1000
+
+	// tlsClientSessionCacheSize is the cache size for client sessions.
+	tlsClientSessionCacheSize = 100
 )
 
 var globalCLIContext = struct {
