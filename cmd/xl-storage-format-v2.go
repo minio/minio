@@ -927,7 +927,7 @@ func (x *xlMetaV2) loadLegacy(buf []byte) error {
 		return errors.New("unknown major metadata version")
 	}
 	if allMeta == nil {
-		return errCorruptedFormat
+		return errFileCorrupt
 	}
 	// bts will shrink as we decode.
 	bts := allMeta

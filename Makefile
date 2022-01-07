@@ -67,6 +67,10 @@ test-site-replication-oidc: install ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with OIDC)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-oidc.sh)
 
+test-site-replication-minio: install ## verify automatic site replication
+	@echo "Running tests for automatic site replication of IAM (with MinIO IDP)"
+	@(env bash $(PWD)/docs/site-replication/run-multi-site-minio-idp.sh)
+
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
 	@CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null

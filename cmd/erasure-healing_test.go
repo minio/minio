@@ -34,6 +34,192 @@ import (
 	"github.com/minio/madmin-go"
 )
 
+// Tests isObjectDangling function
+func TestIsObjectDangling(t *testing.T) {
+	fi := newFileInfo("test-object", 2, 2)
+	fi.Erasure.Index = 1
+
+	testCases := []struct {
+		name             string
+		metaArr          []FileInfo
+		errs             []error
+		dataErrs         []error
+		expectedMeta     FileInfo
+		expectedDangling bool
+	}{
+		{
+			name: "FileInfoExists-case1",
+			metaArr: []FileInfo{
+				{},
+				{},
+				fi,
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errDiskNotFound,
+				nil,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     fi,
+			expectedDangling: false,
+		},
+		{
+			name: "FileInfoExists-case2",
+			metaArr: []FileInfo{
+				{},
+				{},
+				fi,
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileNotFound,
+				nil,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     fi,
+			expectedDangling: false,
+		},
+		{
+			name: "FileInfoUndecided-case1",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errDiskNotFound,
+				errDiskNotFound,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     fi,
+			expectedDangling: false,
+		},
+		{
+			name:    "FileInfoUndecided-case2",
+			metaArr: []FileInfo{},
+			errs: []error{
+				errFileNotFound,
+				errDiskNotFound,
+				errDiskNotFound,
+				errFileNotFound,
+			},
+			dataErrs:         nil,
+			expectedMeta:     FileInfo{},
+			expectedDangling: false,
+		},
+		{
+			name:    "FileInfoUndecided-case3(file deleted)",
+			metaArr: []FileInfo{},
+			errs: []error{
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+			},
+			dataErrs:         nil,
+			expectedMeta:     FileInfo{},
+			expectedDangling: false,
+		},
+		{
+			name: "FileInfoDecided-case1",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     fi,
+			expectedDangling: true,
+		},
+		{
+			name: "FileInfoDecided-case2",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				errFileCorrupt,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     fi,
+			expectedDangling: true,
+		},
+		{
+			name: "FileInfoDecided-case2-delete-marker",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				{Deleted: true},
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				errFileCorrupt,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     FileInfo{Deleted: true},
+			expectedDangling: true,
+		},
+		{
+			name: "FileInfoDecided-case2-(duplicate data errors)",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				{Deleted: true},
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				errFileCorrupt,
+				nil,
+			},
+			dataErrs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				nil,
+				nil,
+			},
+			expectedMeta:     FileInfo{Deleted: true},
+			expectedDangling: true,
+		},
+		// Add new cases as seen
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			gotMeta, dangling := isObjectDangling(testCase.metaArr, testCase.errs, testCase.dataErrs)
+			if !gotMeta.Equals(testCase.expectedMeta) {
+				t.Errorf("Expected %#v, got %#v", testCase.expectedMeta, gotMeta)
+			}
+			if dangling != testCase.expectedDangling {
+				t.Errorf("Expected dangling %t, got %t", testCase.expectedDangling, dangling)
+			}
+		})
+	}
+}
+
 // Tests both object and bucket healing.
 func TestHealing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

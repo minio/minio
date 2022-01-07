@@ -38,3 +38,9 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-replication
+      - name: Test MinIO IDP for automatic site replication
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-site-replication-minio
+
