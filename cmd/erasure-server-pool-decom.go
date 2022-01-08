@@ -862,6 +862,23 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 		return err
 	}
 
+	// TODO: Support decommissioning transition tiers.
+	for _, bucket := range buckets {
+		if lc, err := globalLifecycleSys.Get(bucket.Name); err == nil {
+			if lc.HasTransition() {
+				return fmt.Errorf("Bucket is part of transitioned tier %s: decommission is not allowed in Tier'd setups", bucket.Name)
+			}
+		}
+	}
+
+	// Buckets data are dispersed in multiple zones/sets, make
+	// sure to decommission the necessary metadata.
+	buckets = append(buckets, BucketInfo{
+		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
+	}, BucketInfo{
+		Name: pathJoin(minioMetaBucket, bucketMetaPrefix),
+	})
+
 	var pool *erasureSets
 	for pidx := range z.serverPools {
 		if pidx == idx {
