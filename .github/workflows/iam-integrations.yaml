@@ -88,4 +88,8 @@ jobs:
       - name: Test LDAP for automatic site replication
         if: matrix.ldap == 'localhost:389'
         run: |
-          make test-site-replication
+          make test-site-replication-ldap
+      - name: Test OIDC for automatic site replication
+        if: matrix.openid == 'http://127.0.0.1:5556/dex'
+        run: |
+          make test-site-replication-oidc

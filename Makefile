@@ -59,9 +59,13 @@ test-replication: install ## verify multi site replication
 	@echo "Running tests for replicating three sites"
 	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
 
-test-site-replication: install ## verify automatic site replication
-	@echo "Running tests for automatic site replication of IAM"
-	@(env bash $(PWD)/docs/site-replication/run-multi-site.sh)
+test-site-replication-ldap: install ## verify automatic site replication
+	@echo "Running tests for automatic site replication of IAM (with LDAP)"
+	@(env bash $(PWD)/docs/site-replication/run-multi-site-ldap.sh)
+
+test-site-replication-oidc: install ## verify automatic site replication
+	@echo "Running tests for automatic site replication of IAM (with OIDC)"
+	@(env bash $(PWD)/docs/site-replication/run-multi-site-oidc.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
