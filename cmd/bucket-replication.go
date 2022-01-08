@@ -514,7 +514,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
-	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) {
+	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) || (oi2.UserTagCount > 0 && len(t.ToMap()) == 0) {
 		return replicateMetadata
 	}
 
