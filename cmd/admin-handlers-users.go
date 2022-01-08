@@ -743,14 +743,8 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Call site replication hook. Only LDAP accounts are supported for
-	// replication operations.
-	svcAccClaims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, accessKey)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	if _, isLDAPAccount := svcAccClaims[ldapUserN]; isLDAPAccount {
+	// Call site replication hook - non-root user accounts are replicated.
+	if svcAccount.ParentUser != globalActiveCred.AccessKey {
 		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
@@ -767,6 +761,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
+
 	writeSuccessNoContent(w)
 }
 
@@ -990,22 +985,14 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Save svc acc claims before deletion (for site replication hook).
-	svcAccClaims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, serviceAccount)
-	if err != nil && err != errNoSuchServiceAccount {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Call site replication hook. Only LDAP accounts are supported for
-	// replication operations.
-	if _, isLDAPAccount := svcAccClaims[ldapUserN]; isLDAPAccount {
+	// Call site replication hook - non-root user accounts are replicated.
+	if svcAccount.ParentUser != globalActiveCred.AccessKey {
 		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
