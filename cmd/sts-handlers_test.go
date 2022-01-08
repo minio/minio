@@ -20,19 +20,15 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/coreos/go-oidc"
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"golang.org/x/oauth2"
 )
 
 func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
@@ -742,7 +738,7 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
 	}
 
 	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
@@ -817,7 +813,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
 	}
 
 	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
@@ -907,7 +903,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	}
 
 	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
@@ -985,132 +981,11 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }
 
-type providerParams struct {
-	clientID, clientSecret, providerURL, redirectURL string
-}
-
-var testProvider = providerParams{
-	clientID:     "minio-client-app",
-	clientSecret: "minio-client-app-secret",
-	providerURL:  "http://127.0.0.1:5556/dex",
-	redirectURL:  "http://127.0.0.1:10000/oauth_callback",
-}
-
-// mockTestUserInteraction - tries to login to dex using provided credentials.
-// It performs the user's browser interaction to login and retrieves the auth
-// code from dex and exchanges it for a JWT.
-func mockTestUserInteraction(ctx context.Context, pro providerParams, username, password string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	provider, err := oidc.NewProvider(ctx, pro.providerURL)
-	if err != nil {
-		return "", fmt.Errorf("unable to create provider: %v", err)
-	}
-
-	// Configure an OpenID Connect aware OAuth2 client.
-	oauth2Config := oauth2.Config{
-		ClientID:     pro.clientID,
-		ClientSecret: pro.clientSecret,
-		RedirectURL:  pro.redirectURL,
-
-		// Discovery returns the OAuth2 endpoints.
-		Endpoint: provider.Endpoint(),
-
-		// "openid" is a required scope for OpenID Connect flows.
-		Scopes: []string{oidc.ScopeOpenID, "groups"},
-	}
-
-	state := "xxx"
-	authCodeURL := oauth2Config.AuthCodeURL(state)
-	// fmt.Printf("authcodeurl: %s\n", authCodeURL)
-
-	var lastReq *http.Request
-	checkRedirect := func(req *http.Request, via []*http.Request) error {
-		// fmt.Printf("CheckRedirect:\n")
-		// fmt.Printf("Upcoming: %s %#v\n", req.URL.String(), req)
-		// for _, c := range via {
-		// 	fmt.Printf("Sofar: %s %#v\n", c.URL.String(), c)
-		// }
-		// Save the last request in a redirect chain.
-		lastReq = req
-		// We do not follow redirect back to client application.
-		if req.URL.Path == "/oauth_callback" {
-			return http.ErrUseLastResponse
-		}
-		return nil
-	}
-
-	dexClient := http.Client{
-		CheckRedirect: checkRedirect,
-	}
-
-	u, err := url.Parse(authCodeURL)
-	if err != nil {
-		return "", fmt.Errorf("url parse err: %v", err)
-	}
-
-	// Start the user auth flow. This page would present the login with
-	// email or LDAP option.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return "", fmt.Errorf("new request err: %v", err)
-	}
-	_, err = dexClient.Do(req)
-	// fmt.Printf("Do: %#v %#v\n", resp, err)
-	if err != nil {
-		return "", fmt.Errorf("auth url request err: %v", err)
-	}
-
-	// Modify u to choose the ldap option
-	u.Path += "/ldap"
-	// fmt.Println(u)
-
-	// Pick the LDAP login option. This would return a form page after
-	// following some redirects. `lastReq` would be the URL of the form
-	// page, where we need to POST (submit) the form.
-	req, err = http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return "", fmt.Errorf("new request err (/ldap): %v", err)
-	}
-	_, err = dexClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request err: %v", err)
-	}
-
-	// Fill the login form with our test creds:
-	// fmt.Printf("login form url: %s\n", lastReq.URL.String())
-	formData := url.Values{}
-	formData.Set("login", username)
-	formData.Set("password", password)
-	req, err = http.NewRequestWithContext(ctx, http.MethodPost, lastReq.URL.String(), strings.NewReader(formData.Encode()))
-	if err != nil {
-		return "", fmt.Errorf("new request err (/login): %v", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	_, err = dexClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("post form err: %v", err)
-	}
-	// fmt.Printf("resp: %#v %#v\n", resp.StatusCode, resp.Header)
-	// fmt.Printf("lastReq: %#v\n", lastReq.URL.String())
-
-	// On form submission, the last redirect response contains the auth
-	// code, which we now have in `lastReq`. Exchange it for a JWT id_token.
-	q := lastReq.URL.Query()
-	code := q.Get("code")
-	oauth2Token, err := oauth2Config.Exchange(ctx, code)
-	if err != nil {
-		return "", fmt.Errorf("unable to exchange code for id token: %v", err)
-	}
-
-	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
-	if !ok {
-		return "", fmt.Errorf("id_token not found!")
-	}
-
-	// fmt.Printf("TOKEN: %s\n", rawIDToken)
-	return rawIDToken, nil
+var testAppParams = OpenIDClientAppParams{
+	ClientID:     "minio-client-app",
+	ClientSecret: "minio-client-app-secret",
+	ProviderURL:  "http://127.0.0.1:5556/dex",
+	RedirectURL:  "http://127.0.0.1:10000/oauth_callback",
 }
 
 const (
@@ -1248,7 +1123,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
 	}
 
 	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
@@ -1294,7 +1169,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 	}
 
 	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := mockTestUserInteraction(ctx, testProvider, "dillon@example.io", "dillon")
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
