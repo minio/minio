@@ -37,60 +37,72 @@ import (
 func getAnonReadOnlyBucketPolicy(bucketName string) *policy.Policy {
 	return &policy.Policy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{policy.NewStatement(
-			policy.Allow,
-			policy.NewPrincipal("*"),
-			policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
-			policy.NewResourceSet(policy.NewResource(bucketName, "")),
-			condition.NewFunctions(),
-		)},
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				"",
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(),
+			),
+		},
 	}
 }
 
 func getAnonWriteOnlyBucketPolicy(bucketName string) *policy.Policy {
 	return &policy.Policy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{policy.NewStatement(
-			policy.Allow,
-			policy.NewPrincipal("*"),
-			policy.NewActionSet(
-				policy.GetBucketLocationAction,
-				policy.ListBucketMultipartUploadsAction,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				"",
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(
+					policy.GetBucketLocationAction,
+					policy.ListBucketMultipartUploadsAction,
+				),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(),
 			),
-			policy.NewResourceSet(policy.NewResource(bucketName, "")),
-			condition.NewFunctions(),
-		)},
+		},
 	}
 }
 
 func getAnonReadOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
 	return &policy.Policy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{policy.NewStatement(
-			policy.Allow,
-			policy.NewPrincipal("*"),
-			policy.NewActionSet(policy.GetObjectAction),
-			policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
-			condition.NewFunctions(),
-		)},
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				"",
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.GetObjectAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
+				condition.NewFunctions(),
+			),
+		},
 	}
 }
 
 func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
 	return &policy.Policy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{policy.NewStatement(
-			policy.Allow,
-			policy.NewPrincipal("*"),
-			policy.NewActionSet(
-				policy.AbortMultipartUploadAction,
-				policy.DeleteObjectAction,
-				policy.ListMultipartUploadPartsAction,
-				policy.PutObjectAction,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				"",
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(
+					policy.AbortMultipartUploadAction,
+					policy.DeleteObjectAction,
+					policy.ListMultipartUploadPartsAction,
+					policy.PutObjectAction,
+				),
+				policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
+				condition.NewFunctions(),
 			),
-			policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
-			condition.NewFunctions(),
-		)},
+		},
 	}
 }
 

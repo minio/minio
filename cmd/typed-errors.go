@@ -91,6 +91,12 @@ var errTooManyPolicies = errors.New("Only a single policy may be specified here.
 // error returned in IAM subsystem when an external users systems is configured.
 var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed")
 
+// error returned in IAM service account
+var errIAMServiceAccount = errors.New("Specified service account cannot be updated in this API call")
+
+// error returned in IAM service account is already used.
+var errIAMServiceAccountUsed = errors.New("Specified service account is used by another user")
+
 // error returned in IAM subsystem when IAM sub-system is still being initialized.
 var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
 

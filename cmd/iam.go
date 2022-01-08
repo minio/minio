@@ -883,18 +883,19 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (aut
 	var embeddedPolicy *iampolicy.Policy
 
 	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
-	if err == nil {
-		pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
-		sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
-		if ptok && spok && pt == "embedded-policy" {
-			policyBytes, err := base64.StdEncoding.DecodeString(sp)
-			if err == nil {
-				p, err := iampolicy.ParseConfig(bytes.NewReader(policyBytes))
-				if err == nil {
-					policy := iampolicy.Policy{}.Merge(*p)
-					embeddedPolicy = &policy
-				}
-			}
+	if err != nil {
+		return auth.Credentials{}, nil, err
+	}
+	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
+	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
+	if ptok && spok && pt == "embedded-policy" {
+		policyBytes, err := base64.StdEncoding.DecodeString(sp)
+		if err != nil {
+			return auth.Credentials{}, nil, err
+		}
+		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		if err != nil {
+			return auth.Credentials{}, nil, err
 		}
 	}
 

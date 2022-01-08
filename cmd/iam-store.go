@@ -1084,11 +1084,12 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 			continue
 		}
 		p, found := cache.iamPolicyDocsMap[policy]
-		if found {
-			if bucketName == "" || p.Policy.MatchResource(bucketName) {
-				policies = append(policies, policy)
-				combinedPolicy = combinedPolicy.Merge(p.Policy)
-			}
+		if !found {
+			continue
+		}
+		if bucketName == "" || p.Policy.MatchResource(bucketName) {
+			policies = append(policies, policy)
+			combinedPolicy = combinedPolicy.Merge(p.Policy)
 		}
 	}
 	return strings.Join(policies, ","), combinedPolicy
@@ -1511,13 +1512,16 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 	// Found newly requested service account, to be an existing account -
 	// reject such operation (updates to the service account are handled in
 	// a different API).
-	if _, found := cache.iamUsersMap[accessKey]; found {
-		return errIAMActionNotAllowed
+	if scred, found := cache.iamUsersMap[accessKey]; found {
+		if scred.ParentUser != parentUser {
+			return errIAMServiceAccountUsed
+		}
+		return errIAMServiceAccount
 	}
 
 	// Parent user must not be a service account.
 	if cr, found := cache.iamUsersMap[parentUser]; found && cr.IsServiceAccount() {
-		return errIAMActionNotAllowed
+		return errIAMServiceAccount
 	}
 
 	u := newUserIdentity(cred)

@@ -1470,6 +1470,7 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
+				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				actionSet,
