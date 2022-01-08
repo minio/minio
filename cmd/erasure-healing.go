@@ -246,7 +246,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 	switch {
 	case errors.Is(erErr, errFileNotFound) || errors.Is(erErr, errFileVersionNotFound):
 		return true
-	case errors.Is(erErr, errCorruptedFormat):
+	case errors.Is(erErr, errFileCorrupt):
 		return true
 	}
 	if erErr == nil {
@@ -312,13 +312,13 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
-		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, []error{}, opts)
+		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, nil, opts)
 	}
 
 	result.ParityBlocks = result.DiskCount - readQuorum
 	result.DataBlocks = readQuorum
 
-	// List of disks having latest version of the object er.meta
+	// List of disks having latest version of the object xl.meta
 	// (by modtime).
 	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
@@ -356,10 +356,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			// If data is sane on any one disk, we can
 			// extract the correct object size.
 			result.ObjectSize = partsMetadata[i].Size
-			if partsMetadata[i].Erasure.ParityBlocks > 0 && partsMetadata[i].Erasure.DataBlocks > 0 {
-				result.ParityBlocks = partsMetadata[i].Erasure.ParityBlocks
-				result.DataBlocks = partsMetadata[i].Erasure.DataBlocks
-			}
 		case errs[i] == errDiskNotFound, dataErrs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
 		case errs[i] == errFileNotFound, errs[i] == errFileVersionNotFound, errs[i] == errVolumeNotFound:
@@ -406,7 +402,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// If less than read quorum number of disks have all the parts
 	// of the data, we can't reconstruct the erasure-coded data.
-	if numAvailableDisks < result.DataBlocks {
+	if numAvailableDisks < readQuorum {
 		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, dataErrs, opts)
 	}
 
@@ -466,9 +462,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
 
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
-		result.DataBlocks = latestMeta.Erasure.DataBlocks
-		result.ParityBlocks = latestMeta.Erasure.ParityBlocks
-
 		// Heal each part. erasureHealFile() will write the healed
 		// part to .minio/tmp/uuid/ which needs to be renamed later to
 		// the final location.
@@ -819,21 +812,20 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 	// remove we simply delete it from namespace.
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
-		parityBlocks := m.Erasure.ParityBlocks
-		if m.Erasure.ParityBlocks == 0 {
-			parityBlocks = er.defaultParityCount
+		parityBlocks := er.defaultParityCount
+		dataBlocks := len(storageDisks) - parityBlocks
+		if m.IsValid() {
+			parityBlocks = m.Erasure.ParityBlocks
+			dataBlocks = m.Erasure.DataBlocks
 		}
-		dataBlocks := m.Erasure.DataBlocks
-		if m.Erasure.DataBlocks == 0 {
-			dataBlocks = len(storageDisks) - parityBlocks
-		}
+
 		writeQuorum := dataBlocks
 		if dataBlocks == parityBlocks {
 			writeQuorum++
 		}
+
 		var err error
-		var returnNotFound bool
-		if !opts.DryRun && opts.Remove {
+		if opts.Remove {
 			err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
 				VersionID: versionID,
 			}, false)
@@ -849,19 +841,10 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 				m.Size = 0
 			}
 
-			// Delete successfully purged dangling content, return ObjectNotFound/VersionNotFound instead.
-			if countErrs(errs, nil) == len(errs) {
-				returnNotFound = true
-			}
+			return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints,
+				errs, bucket, object, versionID), nil
 		}
-		if returnNotFound {
-			err = toObjectErr(errFileNotFound, bucket, object)
-			if versionID != "" {
-				err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
-			}
-			return er.defaultHealResult(m, storageDisks, storageEndpoints,
-				errs, bucket, object, versionID), err
-		}
+
 		return er.defaultHealResult(m, storageDisks, storageEndpoints,
 			errs, bucket, object, versionID), toObjectErr(err, bucket, object, versionID)
 	}
@@ -878,54 +861,64 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 // files is lesser than number of data blocks.
 func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (validMeta FileInfo, ok bool) {
 	// We can consider an object data not reliable
-	// when er.meta is not found in read quorum disks.
-	// or when er.meta is not readable in read quorum disks.
-	var notFoundErasureMeta, corruptedErasureMeta int
-	for _, readErr := range errs {
-		if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
-			notFoundErasureMeta++
-		} else if errors.Is(readErr, errCorruptedFormat) {
-			corruptedErasureMeta++
-		}
-	}
-	var notFoundParts int
-	for i := range dataErrs {
-		// Only count part errors, if the error is not
-		// same as er.meta error. This is to avoid
-		// double counting when both parts and er.meta
-		// are not available.
-		if errs[i] != dataErrs[i] {
-			if IsErr(dataErrs[i], []error{
-				errFileNotFound,
-				errFileVersionNotFound,
-			}...) {
-				notFoundParts++
+	// when xl.meta is not found in read quorum disks.
+	// or when xl.meta is not readable in read quorum disks.
+	danglingErrsCount := func(cerrs []error) (int, int) {
+		var (
+			notFoundCount  int
+			corruptedCount int
+		)
+		for _, readErr := range cerrs {
+			if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
+				notFoundCount++
+			} else if errors.Is(readErr, errFileCorrupt) {
+				corruptedCount++
 			}
 		}
+		return notFoundCount, corruptedCount
 	}
+
+	ndataErrs := make([]error, len(dataErrs))
+	for i := range dataErrs {
+		if errs[i] != dataErrs[i] {
+			// Only count part errors, if the error is not
+			// same as xl.meta error. This is to avoid
+			// double counting when both parts and xl.meta
+			// are not available.
+			ndataErrs[i] = dataErrs[i]
+		}
+	}
+
+	notFoundMetaErrs, corruptedMetaErrs := danglingErrsCount(errs)
+	notFoundPartsErrs, corruptedPartsErrs := danglingErrsCount(ndataErrs)
 
 	for _, m := range metaArr {
-		if !m.IsValid() {
-			continue
+		if m.IsValid() {
+			validMeta = m
+			break
 		}
-		validMeta = m
-		break
 	}
 
-	if validMeta.Deleted || validMeta.IsRemote() {
-		// notFoundParts is ignored since a
+	if !validMeta.IsValid() {
+		// We have no idea what this file is, leave it as is.
+		return validMeta, false
+	}
+
+	if validMeta.Deleted {
+		// notFoundPartsErrs is ignored since
 		// - delete marker does not have any parts
-		// - transition status of complete has no parts
-		return validMeta, corruptedErasureMeta+notFoundErasureMeta > len(errs)/2
+		return validMeta, corruptedMetaErrs+notFoundMetaErrs > len(errs)/2
 	}
 
-	// We couldn't find any valid meta we are indeed corrupted, return true right away.
-	if validMeta.Erasure.DataBlocks == 0 {
-		return validMeta, true
+	totalErrs := notFoundMetaErrs + corruptedMetaErrs + notFoundPartsErrs + corruptedPartsErrs
+	if validMeta.IsRemote() {
+		// notFoundPartsErrs is ignored since
+		// - transition status of complete has no parts
+		totalErrs = notFoundMetaErrs + corruptedMetaErrs
 	}
 
 	// We have valid meta, now verify if we have enough files with parity blocks.
-	return validMeta, corruptedErasureMeta+notFoundErasureMeta+notFoundParts > validMeta.Erasure.ParityBlocks
+	return validMeta, totalErrs > validMeta.Erasure.ParityBlocks
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.

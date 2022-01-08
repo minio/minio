@@ -10,7 +10,7 @@ cleanup() {
     echo "Cleaning up instances of MinIO"
     pkill minio
     pkill -9 minio
-    rm -rf /tmp/minio-ldap-idp{1,2,3}
+    rm -rf /tmp/minio-internal-idp{1,2,3}
 }
 
 cleanup
@@ -26,23 +26,15 @@ export MINIO_ROOT_PASSWORD="minio123"
 export MINIO_KMS_AUTO_ENCRYPTION=off
 export MINIO_PROMETHEUS_AUTH_TYPE=public
 export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
-export MINIO_IDENTITY_LDAP_SERVER_ADDR="localhost:389"
-export MINIO_IDENTITY_LDAP_SERVER_INSECURE="on"
-export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN="cn=admin,dc=min,dc=io"
-export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD="admin"
-export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN="dc=min,dc=io"
-export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER="(uid=%s)"
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="ou=swengg,dc=min,dc=io"
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member=%d))"
 
 if [ ! -f ./mc ]; then
     wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
         && chmod +x mc
 fi
 
-minio server --config-dir /tmp/minio-ldap --address ":9001" /tmp/minio-ldap-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
-minio server --config-dir /tmp/minio-ldap --address ":9002" /tmp/minio-ldap-idp2/{1...4} >/tmp/minio2_1.log 2>&1 &
-minio server --config-dir /tmp/minio-ldap --address ":9003" /tmp/minio-ldap-idp3/{1...4} >/tmp/minio3_1.log 2>&1 &
+minio server --config-dir /tmp/minio-internal --address ":9001" /tmp/minio-internal-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
+minio server --config-dir /tmp/minio-internal --address ":9002" /tmp/minio-internal-idp2/{1...4} >/tmp/minio2_1.log 2>&1 &
+minio server --config-dir /tmp/minio-internal --address ":9003" /tmp/minio-internal-idp3/{1...4} >/tmp/minio3_1.log 2>&1 &
 
 sleep 10
 
@@ -52,11 +44,12 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
 ./mc admin replicate add minio1 minio2 minio3
 
-./mc admin policy set minio1 consoleAdmin user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin user add minio1 foobar foo12345
+./mc admin policy set minio1 consoleAdmin user=foobar
 sleep 5
 
-./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin user info minio2 foobar
+./mc admin user info minio3 foobar
 ./mc admin policy add minio1 rw ./docs/site-replication/rw.json
 
 sleep 5
@@ -78,26 +71,25 @@ if [ $? -eq 0 ]; then
     exit_1;
 fi
 
-./mc admin user info minio1 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin user info minio1 foobar
 if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
-./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin user info minio2 foobar
 if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
-./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin user info minio3 foobar
 if [ $? -ne 0 ]; then
     echo "policy mapping missing, exiting.."
     exit_1;
 fi
 
-# LDAP simple user
-./mc admin user svcacct add minio2 dillon --access-key testsvc --secret-key testsvc123
+./mc admin user svcacct add minio2 foobar --access-key testsvc --secret-key testsvc123
 if [ $? -ne 0 ]; then
     echo "adding svc account failed, exiting.."
     exit_1;
@@ -205,5 +197,3 @@ if [ "${enabled_minio1}" != "Enabled" ]; then
     echo "expected bucket to be mirrored with object-lock enabled, exiting..."
     exit_1;
 fi
-
-cleanup
