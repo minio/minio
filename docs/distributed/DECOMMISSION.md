@@ -33,6 +33,9 @@ ERROR: This pool is not scheduled for decommissioning currently.
 ### Canceling a decommission?
 Stop an on-going decommission in progress, mainly used in situations when the load may be
 too high and you may want to schedule the decommission at a later point in time.
+
+`mc admin decommission cancel` without an argument, lists out any on-going decommission in progress.
+
 ```
 λ mc admin decommission cancel alias/
 ┌─────┬─────────────────────────────────┬──────────────────────────────────┬──────────┐
@@ -43,7 +46,7 @@ too high and you may want to schedule the decommission at a later point in time.
 
 > NOTE: Canceled decommission will not make the pool active again, since we might have
 > Potentially partial duplicate content on the other pools, to avoid this scenario be
-> very sure to start decommissioning as a planned activity.
+> absolutely sure to start decommissioning as a planned activity.
 
 ```
 λ mc admin decommission cancel alias/ http://minio{1...2}/data{1...4}
@@ -53,7 +56,7 @@ too high and you may want to schedule the decommission at a later point in time.
 └─────┴─────────────────────────────────┴──────────────────────────────────┴────────────────────┘
 ```
 
-If for some reason decommission fails in between, the `status` will indicate decommission as failed.
+If for some reason decommission fails in between, the `status` will indicate decommission as failed instead.
 ```
 λ mc admin decommission status alias/
 ┌─────┬─────────────────────────────────┬──────────────────────────────────┬──────────────────┐
@@ -61,4 +64,10 @@ If for some reason decommission fails in between, the `status` will indicate dec
 │ 1st │ http://minio{1...2}/data{1...4} │ 439 GiB (used) / 561 GiB (total) │ Draining(Failed) │
 │ 2nd │ http://minio{3...4}/data{1...4} │ 329 GiB (used) / 421 GiB (total) │ Active           │
 └─────┴─────────────────────────────────┴──────────────────────────────────┴──────────────────┘
+```
+
+### Restart a canceled or failed decommission?
+
+```
+λ mc admin decommission start alias/ http://minio{1...2}/data{1...4}
 ```
