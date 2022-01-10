@@ -896,8 +896,17 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 	if disk == nil {
 		return errDiskNotFound
 	}
+	volumes := []string{
+		minioMetaBucket,
+		minioMetaTmpBucket,
+		minioMetaMultipartBucket,
+		minioMetaTmpDeletedBucket,
+		dataUsageBucket,
+		pathJoin(minioMetaBucket, minioConfigPrefix),
+		minioMetaTmpBucket + "-old",
+	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket, dataUsageBucket, minioMetaTmpBucket+"-old")
+	return disk.MakeVolBulk(context.TODO(), volumes...)
 }
 
 // Initialize a new set of set formats which will be written to all disks.

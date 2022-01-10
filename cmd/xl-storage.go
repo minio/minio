@@ -209,6 +209,9 @@ func (s *xlStorage) Sanitize() error {
 		return err
 	}
 
+	// Create any missing paths.
+	makeFormatErasureMetaVolumes(s)
+
 	return formatErasureCleanupTmp(s.diskPath)
 }
 
