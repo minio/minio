@@ -408,7 +408,8 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		if reducedErr == errErasureReadQuorum && bucket != minioMetaBucket {
+		if errors.Is(reducedErr, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+			// Skip buckets that live at `.minio.sys` bucket.
 			if _, ok := isObjectDangling(metaArr, errs, nil); ok {
 				reducedErr = errFileNotFound
 				if opts.VersionID != "" {

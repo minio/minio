@@ -106,6 +106,11 @@ type Transition struct {
 	set bool
 }
 
+// IsEnabled returns if transition is enabled.
+func (t Transition) IsEnabled() bool {
+	return t.set
+}
+
 // MarshalXML encodes transition field into an XML form.
 func (t Transition) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
 	if !t.set {

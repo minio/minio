@@ -353,9 +353,11 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		endpointServerPools = append(endpointServerPools, PoolEndpoints{
+			Legacy:       true,
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
+			CmdLine:      strings.Join(args, " "),
 		})
 		setupType = newSetupType
 		return endpointServerPools, setupType, nil
@@ -376,6 +378,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
+			CmdLine:      arg,
 		}); err != nil {
 			return nil, -1, err
 		}
