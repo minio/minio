@@ -106,7 +106,7 @@ func isEndpointConnectionStable(diskMap map[Endpoint]StorageAPI, endpoint Endpoi
 	if !disk.IsOnline() {
 		return false
 	}
-	if disk.LastConn().After(lastCheck) {
+	if !lastCheck.IsZero() && disk.LastConn().After(lastCheck) {
 		return false
 	}
 	return true
