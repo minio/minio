@@ -816,18 +816,15 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 
 	var svcAccountPolicy iampolicy.Policy
 
-	impliedPolicy := policy == nil
-
-	// If policy is empty, check for policy of the parent user
-	if !impliedPolicy {
-		svcAccountPolicy = svcAccountPolicy.Merge(*policy)
+	if policy != nil {
+		svcAccountPolicy = *policy
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		svcAccountPolicy = svcAccountPolicy.Merge(globalIAMSys.GetCombinedPolicy(policiesNames...))
+		svcAccountPolicy = globalIAMSys.GetCombinedPolicy(policiesNames...)
 	}
 
 	policyJSON, err := json.MarshalIndent(svcAccountPolicy, "", " ")
@@ -839,7 +836,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 	infoResp := madmin.InfoServiceAccountResp{
 		ParentUser:    svcAccount.ParentUser,
 		AccountStatus: svcAccount.Status,
-		ImpliedPolicy: impliedPolicy,
+		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
 	}
 

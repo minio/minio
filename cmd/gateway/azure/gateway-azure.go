@@ -1416,6 +1416,7 @@ func (a *azureObjects) GetBucketPolicy(ctx context.Context, bucket string) (*pol
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
+				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				policy.NewActionSet(

@@ -1114,8 +1114,9 @@ github.com/minio/pkg v1.0.3/go.mod h1:obU54TZ9QlMv0TRaDgQ/JTzf11ZSXxnSfLrm4tMtBP
 github.com/minio/pkg v1.0.4/go.mod h1:obU54TZ9QlMv0TRaDgQ/JTzf11ZSXxnSfLrm4tMtBP8=
 github.com/minio/pkg v1.0.11/go.mod h1:32x/3OmGB0EOi1N+3ggnp+B5VFkSBBB9svPMVfpnf14=
 github.com/minio/pkg v1.1.3/go.mod h1:32x/3OmGB0EOi1N+3ggnp+B5VFkSBBB9svPMVfpnf14=
-github.com/minio/pkg v1.1.11 h1:FQMYrOZzZenQUVwvxM0YjoAZB15Wb+m3TZSu33Lynx0=
 github.com/minio/pkg v1.1.11/go.mod h1:2WJAxesjzmPK9MnLZKm5n1hVYfBg04f2GQs6N5ImNU8=
+github.com/minio/pkg v1.1.14 h1:9tGPH6p0YEsIOHOY3sh2Yl5Dn0JNTkNOdZW/p+MKIi4=
+github.com/minio/pkg v1.1.14/go.mod h1:2WJAxesjzmPK9MnLZKm5n1hVYfBg04f2GQs6N5ImNU8=
 github.com/minio/selfupdate v0.3.1/go.mod h1:b8ThJzzH7u2MkF6PcIra7KaXO9Khf6alWPvMSyTDCFM=
 github.com/minio/selfupdate v0.4.0 h1:A7t07pN4Ch1tBTIRStW0KhUVyykz+2muCqFsITQeEW8=
 github.com/minio/selfupdate v0.4.0/go.mod h1:mcDkzMgq8PRcpCRJo/NlPY7U45O5dfYl2Y0Rg7IustY=
