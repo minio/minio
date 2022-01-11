@@ -117,25 +117,25 @@ func (z *PoolDecommissionInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "id":
-			z.ItemsDecommissioned, err = dc.ReadUint64()
+			z.ItemsDecommissioned, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "ItemsDecommissioned")
 				return
 			}
 		case "idf":
-			z.ItemsDecommissionFailed, err = dc.ReadUint64()
+			z.ItemsDecommissionFailed, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "ItemsDecommissionFailed")
 				return
 			}
 		case "bd":
-			z.BytesDone, err = dc.ReadUint64()
+			z.BytesDone, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "BytesDone")
 				return
 			}
 		case "bf":
-			z.BytesFailed, err = dc.ReadUint64()
+			z.BytesFailed, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "BytesFailed")
 				return
@@ -283,7 +283,7 @@ func (z *PoolDecommissionInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.ItemsDecommissioned)
+	err = en.WriteInt64(z.ItemsDecommissioned)
 	if err != nil {
 		err = msgp.WrapError(err, "ItemsDecommissioned")
 		return
@@ -293,7 +293,7 @@ func (z *PoolDecommissionInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.ItemsDecommissionFailed)
+	err = en.WriteInt64(z.ItemsDecommissionFailed)
 	if err != nil {
 		err = msgp.WrapError(err, "ItemsDecommissionFailed")
 		return
@@ -303,7 +303,7 @@ func (z *PoolDecommissionInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.BytesDone)
+	err = en.WriteInt64(z.BytesDone)
 	if err != nil {
 		err = msgp.WrapError(err, "BytesDone")
 		return
@@ -313,7 +313,7 @@ func (z *PoolDecommissionInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.BytesFailed)
+	err = en.WriteInt64(z.BytesFailed)
 	if err != nil {
 		err = msgp.WrapError(err, "BytesFailed")
 		return
@@ -366,16 +366,16 @@ func (z *PoolDecommissionInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Object)
 	// string "id"
 	o = append(o, 0xa2, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.ItemsDecommissioned)
+	o = msgp.AppendInt64(o, z.ItemsDecommissioned)
 	// string "idf"
 	o = append(o, 0xa3, 0x69, 0x64, 0x66)
-	o = msgp.AppendUint64(o, z.ItemsDecommissionFailed)
+	o = msgp.AppendInt64(o, z.ItemsDecommissionFailed)
 	// string "bd"
 	o = append(o, 0xa2, 0x62, 0x64)
-	o = msgp.AppendUint64(o, z.BytesDone)
+	o = msgp.AppendInt64(o, z.BytesDone)
 	// string "bf"
 	o = append(o, 0xa2, 0x62, 0x66)
-	o = msgp.AppendUint64(o, z.BytesFailed)
+	o = msgp.AppendInt64(o, z.BytesFailed)
 	return
 }
 
@@ -490,25 +490,25 @@ func (z *PoolDecommissionInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "id":
-			z.ItemsDecommissioned, bts, err = msgp.ReadUint64Bytes(bts)
+			z.ItemsDecommissioned, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ItemsDecommissioned")
 				return
 			}
 		case "idf":
-			z.ItemsDecommissionFailed, bts, err = msgp.ReadUint64Bytes(bts)
+			z.ItemsDecommissionFailed, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ItemsDecommissionFailed")
 				return
 			}
 		case "bd":
-			z.BytesDone, bts, err = msgp.ReadUint64Bytes(bts)
+			z.BytesDone, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BytesDone")
 				return
 			}
 		case "bf":
-			z.BytesFailed, bts, err = msgp.ReadUint64Bytes(bts)
+			z.BytesFailed, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "BytesFailed")
 				return
@@ -535,7 +535,7 @@ func (z *PoolDecommissionInfo) Msgsize() (s int) {
 	for za0002 := range z.DecommissionedBuckets {
 		s += msgp.StringPrefixSize + len(z.DecommissionedBuckets[za0002])
 	}
-	s += 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object) + 3 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size
+	s += 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object) + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 3 + msgp.Int64Size
 	return
 }
 
@@ -761,6 +761,109 @@ func (z *PoolStatus) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *decomError) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Err":
+			z.Err, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Err")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z decomError) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "Err"
+	err = en.Append(0x81, 0xa3, 0x45, 0x72, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Err)
+	if err != nil {
+		err = msgp.WrapError(err, "Err")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z decomError) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "Err"
+	o = append(o, 0x81, 0xa3, 0x45, 0x72, 0x72)
+	o = msgp.AppendString(o, z.Err)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *decomError) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Err":
+			z.Err, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Err")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z decomError) Msgsize() (s int) {
+	s = 1 + 4 + msgp.StringPrefixSize + len(z.Err)
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *poolMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
@@ -928,5 +1031,158 @@ func (z *poolMeta) Msgsize() (s int) {
 	for za0001 := range z.Pools {
 		s += z.Pools[za0001].Msgsize()
 	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *poolSpaceInfo) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Free":
+			z.Free, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "Free")
+				return
+			}
+		case "Total":
+			z.Total, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "Total")
+				return
+			}
+		case "Used":
+			z.Used, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "Used")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z poolSpaceInfo) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 3
+	// write "Free"
+	err = en.Append(0x83, 0xa4, 0x46, 0x72, 0x65, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.Free)
+	if err != nil {
+		err = msgp.WrapError(err, "Free")
+		return
+	}
+	// write "Total"
+	err = en.Append(0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.Total)
+	if err != nil {
+		err = msgp.WrapError(err, "Total")
+		return
+	}
+	// write "Used"
+	err = en.Append(0xa4, 0x55, 0x73, 0x65, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.Used)
+	if err != nil {
+		err = msgp.WrapError(err, "Used")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z poolSpaceInfo) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 3
+	// string "Free"
+	o = append(o, 0x83, 0xa4, 0x46, 0x72, 0x65, 0x65)
+	o = msgp.AppendInt64(o, z.Free)
+	// string "Total"
+	o = append(o, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	o = msgp.AppendInt64(o, z.Total)
+	// string "Used"
+	o = append(o, 0xa4, 0x55, 0x73, 0x65, 0x64)
+	o = msgp.AppendInt64(o, z.Used)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *poolSpaceInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Free":
+			z.Free, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Free")
+				return
+			}
+		case "Total":
+			z.Total, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Total")
+				return
+			}
+		case "Used":
+			z.Used, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Used")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z poolSpaceInfo) Msgsize() (s int) {
+	s = 1 + 5 + msgp.Int64Size + 6 + msgp.Int64Size + 5 + msgp.Int64Size
 	return
 }

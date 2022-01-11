@@ -88,6 +88,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		}
 	case SRError:
 		apiErr = errorCodes.ToAPIErrWithErr(e.Code, e.Cause)
+	case decomError:
+		apiErr = APIError{
+			Code:           "XMinioDecommissionNotAllowed",
+			Description:    e.Err,
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	default:
 		switch {
 		case errors.Is(err, errDecommissionAlreadyRunning):
