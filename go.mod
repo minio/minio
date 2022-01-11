@@ -40,7 +40,7 @@ require (
 	github.com/klauspost/compress v1.13.6
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/klauspost/pgzip v1.2.5
-	github.com/klauspost/readahead v1.3.1
+	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.9.15
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.43
