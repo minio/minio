@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/console"
 )
 
 // PoolDecommissionInfo currently decommissioning information
@@ -67,12 +68,20 @@ func (pd *PoolDecommissionInfo) bucketPop(bucket string) {
 		if b == bucket {
 			// Bucket is done.
 			pd.QueuedBuckets = append(pd.QueuedBuckets[:i], pd.QueuedBuckets[i+1:]...)
+			// Clear tracker info.
+			if pd.Bucket == bucket {
+				pd.Bucket = "" // empty this out for next bucket
+				pd.Object = "" // empty this out for next object
+			}
+			return
 		}
 	}
 }
 
 func (pd *PoolDecommissionInfo) bucketsToDecommission() []string {
-	return pd.QueuedBuckets
+	queuedBuckets := make([]string, len(pd.QueuedBuckets))
+	copy(queuedBuckets, pd.QueuedBuckets)
+	return queuedBuckets
 }
 
 func (pd *PoolDecommissionInfo) isBucketDecommissioned(bucket string) bool {
@@ -94,6 +103,7 @@ func (pd *PoolDecommissionInfo) bucketPush(bucket string) {
 		}
 	}
 	pd.QueuedBuckets = append(pd.QueuedBuckets, bucket)
+	pd.Bucket = bucket
 }
 
 // PoolStatus captures current pool status
@@ -271,7 +281,7 @@ func (p poolMeta) IsSuspended(idx int) bool {
 	return p.Pools[idx].Decommission != nil
 }
 
-func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasureSets) (bool, error) {
+func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasureSets, validate bool) (bool, error) {
 	data, err := readConfig(ctx, pool, poolMetaName)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) || isErrObjectNotFound(err) {
@@ -306,6 +316,11 @@ func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasure
 	case poolMetaVersionV1:
 	default:
 		return false, fmt.Errorf("unexpected pool meta version: %d", p.Version)
+	}
+
+	if !validate {
+		// No further validation requested.
+		return false, nil
 	}
 
 	type poolInfo struct {
@@ -423,7 +438,7 @@ const (
 func (z *erasureServerPools) Init(ctx context.Context) error {
 	meta := poolMeta{}
 
-	update, err := meta.load(ctx, z.serverPools[0], z.serverPools)
+	update, err := meta.load(ctx, z.serverPools[0], z.serverPools, true)
 	if err != nil {
 		return err
 	}
@@ -471,33 +486,32 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	defer gr.Close()
 	objInfo := gr.ObjInfo
 	if objInfo.isMultipart() {
-		uploadID, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name,
-			ObjectOptions{
-				VersionID:   objInfo.VersionID,
-				MTime:       objInfo.ModTime,
-				UserDefined: objInfo.UserDefined,
-			})
+		uploadID, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
+			VersionID:   objInfo.VersionID,
+			MTime:       objInfo.ModTime,
+			UserDefined: objInfo.UserDefined,
+		})
 		if err != nil {
 			return err
 		}
 		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, uploadID, ObjectOptions{})
-		parts := make([]CompletePart, 0, len(objInfo.Parts))
-		for _, part := range objInfo.Parts {
+		parts := make([]CompletePart, len(objInfo.Parts))
+		for i, part := range objInfo.Parts {
 			hr, err := hash.NewReader(gr, part.Size, "", "", part.Size)
 			if err != nil {
 				return err
 			}
-			_, err = z.PutObjectPart(ctx, bucket, objInfo.Name, uploadID,
+			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, uploadID,
 				part.Number,
 				NewPutObjReader(hr),
 				ObjectOptions{})
 			if err != nil {
 				return err
 			}
-			parts = append(parts, CompletePart{
-				PartNumber: part.Number,
-				ETag:       part.ETag,
-			})
+			parts[i] = CompletePart{
+				ETag:       pi.ETag,
+				PartNumber: pi.PartNumber,
+			}
 		}
 		_, err = z.CompleteMultipartUpload(ctx, bucket, objInfo.Name, uploadID, parts, ObjectOptions{
 			MTime: objInfo.ModTime,
@@ -534,10 +548,8 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 	var forwardTo string
 	// If we resume to the same bucket, forward to last known item.
 	rbucket, robject := z.poolMeta.ResumeBucketObject(idx)
-	if rbucket != "" {
-		if rbucket == bName {
-			forwardTo = robject
-		}
+	if rbucket != "" && rbucket == bName {
+		forwardTo = robject
 	}
 
 	versioned := globalBucketVersioningSys.Enabled(bName)
@@ -676,11 +688,18 @@ func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx i
 	pool := z.serverPools[idx]
 	for _, bucket := range z.poolMeta.PendingBuckets(idx) {
 		if z.poolMeta.isBucketDecommissioned(idx, bucket) {
+			if serverDebugLog {
+				console.Debugln("decommission: already done, moving on", bucket)
+			}
+
 			z.poolMetaMutex.Lock()
 			z.poolMeta.BucketDone(idx, bucket) // remove from pendingBuckets and persist.
 			z.poolMeta.save(ctx, z.serverPools)
 			z.poolMetaMutex.Unlock()
 			continue
+		}
+		if serverDebugLog {
+			console.Debugln("decommission: currently on bucket", bucket)
 		}
 		if err := z.decommissionPool(ctx, idx, pool, bucket); err != nil {
 			return err
@@ -756,14 +775,16 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 	info.Backend.RRSCParity = rrSCParity
 
 	currentSize := TotalUsableCapacityFree(info)
+	totalSize := TotalUsableCapacity(info)
 
 	poolInfo := z.poolMeta.Pools[idx]
 	if poolInfo.Decommission != nil {
+		poolInfo.Decommission.TotalSize = totalSize
 		poolInfo.Decommission.CurrentSize = currentSize
 	} else {
 		poolInfo.Decommission = &PoolDecommissionInfo{
 			CurrentSize: currentSize,
-			TotalSize:   TotalUsableCapacity(info),
+			TotalSize:   totalSize,
 		}
 	}
 	return poolInfo, nil
@@ -772,7 +793,7 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 func (z *erasureServerPools) ReloadPoolMeta(ctx context.Context) (err error) {
 	meta := poolMeta{}
 
-	if _, err = meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {
+	if _, err = meta.load(ctx, z.serverPools[0], z.serverPools, false); err != nil {
 		return err
 	}
 
@@ -875,7 +896,8 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 	// sure to decommission the necessary metadata.
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
-	}, BucketInfo{
+	})
+	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, bucketMetaPrefix),
 	})
 
