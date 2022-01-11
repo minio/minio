@@ -272,7 +272,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	for index := range z.serverPools {
 		index := index
 		// skip suspended pools for any new I/O.
-		if z.poolMeta.IsSuspended(index) {
+		if z.IsSuspended(index) {
 			continue
 		}
 		g.Go(func() error {
@@ -355,7 +355,7 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 		}
 
 		// skip all objects from suspended pools for mutating calls.
-		if z.poolMeta.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
+		if z.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
 			continue
 		}
 
@@ -886,7 +886,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 
 func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
 	for idx, zone := range z.serverPools {
-		if z.poolMeta.IsSuspended(idx) {
+		if z.IsSuspended(idx) {
 			logger.LogIf(ctx, fmt.Errorf("pool %d is suspended, all writes are suspended", idx+1))
 			continue
 		}
@@ -1828,7 +1828,10 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		defer close(errCh)
 
 		var wg sync.WaitGroup
-		for _, erasureSet := range z.serverPools {
+		for idx, erasureSet := range z.serverPools {
+			if z.IsSuspended(idx) {
+				continue
+			}
 			for _, set := range erasureSet.sets {
 				wg.Add(1)
 				go func(set *erasureObjects) {
@@ -1850,6 +1853,9 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 	results := make([]madmin.HealResultItem, len(z.serverPools))
 	var wg sync.WaitGroup
 	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		wg.Add(1)
 		go func(idx int, pool *erasureSets) {
 			defer wg.Done()

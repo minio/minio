@@ -727,6 +727,12 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 	logger.LogIf(GlobalContext, z.CompleteDecommission(dctx, idx))
 }
 
+func (z *erasureServerPools) IsSuspended(idx int) bool {
+	z.poolMetaMutex.Lock()
+	defer z.poolMetaMutex.Unlock()
+	return z.poolMeta.IsSuspended(idx)
+}
+
 // Decommission - start decommission session.
 func (z *erasureServerPools) Decommission(ctx context.Context, idx int) error {
 	if idx < 0 {
