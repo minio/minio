@@ -219,7 +219,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		healEntry := func(entry metaCacheEntry) {
+			if entry.name == "" && len(entry.metadata) == 0 {
+				// ignore entries that don't have metadata.
+				return
+			}
 			if entry.isDir() {
+				// ignore healing entry.name's with `/` suffix.
 				return
 			}
 			// We might land at .metacache, .trash, .multipart
@@ -246,7 +251,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				}, madmin.HealItemObject)
 				if err != nil {
 					tracker.ItemsFailed++
-					logger.LogIf(ctx, err)
+					logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
 					tracker.ItemsHealed++
 				}
@@ -263,7 +268,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// If not deleted, assume they failed.
 					tracker.ItemsFailed++
 					tracker.BytesFailed += uint64(version.Size)
-					logger.LogIf(ctx, err)
+					if version.VersionID != "" {
+						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
+					} else {
+						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
+					}
 				} else {
 					tracker.ItemsHealed++
 					tracker.BytesDone += uint64(version.Size)
