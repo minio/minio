@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
@@ -90,7 +91,7 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
 	buf, err := readConfig(ctx, objAPI, dataUsageObjNamePath)
 	if err != nil {
-		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
+		if errors.Is(err, errConfigNotFound) {
 			return DataUsageInfo{}, nil
 		}
 		return DataUsageInfo{}, toObjectErr(err, minioMetaBucket, dataUsageObjNamePath)
