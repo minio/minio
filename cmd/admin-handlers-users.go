@@ -1069,11 +1069,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	var err error
 	if !globalIsGateway {
 		// Load the latest calculated data usage
-		dataUsageInfo, err = loadDataUsageFromBackend(ctx, objectAPI)
-		if err != nil {
-			// log the error, continue with the accounting response
-			logger.LogIf(ctx, err)
-		}
+		dataUsageInfo, _ = loadDataUsageFromBackend(ctx, objectAPI)
 	}
 
 	// If etcd, dns federation configured list buckets from etcd.
@@ -1142,11 +1138,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			// Fetch the prefix usage of the current bucket
 			var prefixUsage map[string]uint64
 			if enablePrefixUsage {
-				if pu, err := loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name); err == nil {
-					prefixUsage = pu
-				} else {
-					logger.LogIf(ctx, err)
-				}
+				prefixUsage, _ = loadPrefixUsageFromBackend(ctx, objectAPI, bucket.Name)
 			}
 
 			lcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
