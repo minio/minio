@@ -166,6 +166,36 @@ if [ $? -ne 0 ]; then
     exit_1;
 fi
 
+vID=$(./mc stat minio2/newbucket/README.md --json | jq .versionID)
+if [ $? -ne 0 ]; then
+    echo "expecting object to be present. exiting.."
+    exit_1;
+fi
+./mc tag set --version-id "${vID}" minio2/newbucket/README.md "k=v"
+if [ $? -ne 0 ]; then
+    echo "expecting tag set to be successful. exiting.."
+    exit_1;
+fi
+sleep 5
+
+./mc tag remove --version-id "${vID}" minio2/newbucket/README.md
+if [ $? -ne 0 ]; then
+    echo "expecting tag removal to be successful. exiting.."
+    exit_1;
+fi
+sleep 5
+
+replStatus_minio2=$(./mc stat minio2/newbucket/README.md --json | jq -r .replicationStatus)
+if [ $? -ne 0 ]; then
+    echo "expecting object to be present. exiting.."
+    exit_1;
+fi
+
+if [ ${replStatus_minio2} != "COMPLETED" ]; then
+    echo "expected tag removal to have replicated, exiting..."
+    exit_1;
+fi
+
 ./mc rm minio3/newbucket/README.md
 sleep 5
 

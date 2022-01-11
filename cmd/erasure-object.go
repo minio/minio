@@ -1573,6 +1573,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	fi.Metadata[xhttp.AmzObjectTagging] = tags
+	fi.ReplicationState = opts.PutReplicationState()
 	for k, v := range opts.UserDefined {
 		fi.Metadata[k] = v
 	}
