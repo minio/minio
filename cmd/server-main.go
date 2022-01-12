@@ -291,6 +291,7 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.As(err, &rquorum) ||
 		errors.As(err, &wquorum) ||
+		isErrObjectNotFound(err) ||
 		isErrBucketNotFound(err) ||
 		errors.Is(err, os.ErrDeadlineExceeded)
 }
