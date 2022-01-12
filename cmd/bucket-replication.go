@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -1184,9 +1185,17 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 	defer func() {
 		if err != nil {
 			// block and abort remote upload upon failure.
-			if aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID); aerr != nil {
-				aerr = fmt.Errorf("Unable to cleanup failed multipart replication %s on remote %s/%s: %w", uploadID, bucket, object, aerr)
-				logger.LogIf(ctx, aerr)
+			attempts := 1
+			for attempts <= 3 {
+				aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID)
+				if aerr == nil {
+					return
+				}
+				logger.LogIf(ctx,
+					fmt.Errorf("Trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
+						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
+				attempts++
+				time.Sleep(time.Second)
 			}
 		}
 	}()
