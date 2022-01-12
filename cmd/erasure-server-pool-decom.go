@@ -27,8 +27,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
@@ -54,10 +52,10 @@ type PoolDecommissionInfo struct {
 	Object string `json:"-" msg:"obj"`
 
 	// Verbose information
-	ItemsDecommissioned     uint64 `json:"-" msg:"id"`
-	ItemsDecommissionFailed uint64 `json:"-" msg:"idf"`
-	BytesDone               uint64 `json:"-" msg:"bd"`
-	BytesFailed             uint64 `json:"-" msg:"bf"`
+	ItemsDecommissioned     int64 `json:"-" msg:"id"`
+	ItemsDecommissionFailed int64 `json:"-" msg:"idf"`
+	BytesDone               int64 `json:"-" msg:"bd"`
+	BytesFailed             int64 `json:"-" msg:"bf"`
 }
 
 // bucketPop should be called when a bucket is done decommissioning.
@@ -144,7 +142,7 @@ func (p *poolMeta) returnResumablePools(n int) []PoolStatus {
 
 func (p *poolMeta) DecommissionComplete(idx int) bool {
 	if p.Pools[idx].Decommission != nil {
-		p.Pools[idx].LastUpdate = time.Now().UTC()
+		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.Complete = true
 		p.Pools[idx].Decommission.Failed = false
 		p.Pools[idx].Decommission.Canceled = false
@@ -155,7 +153,7 @@ func (p *poolMeta) DecommissionComplete(idx int) bool {
 
 func (p *poolMeta) DecommissionFailed(idx int) bool {
 	if p.Pools[idx].Decommission != nil {
-		p.Pools[idx].LastUpdate = time.Now().UTC()
+		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.StartTime = time.Time{}
 		p.Pools[idx].Decommission.Complete = false
 		p.Pools[idx].Decommission.Failed = true
@@ -167,7 +165,7 @@ func (p *poolMeta) DecommissionFailed(idx int) bool {
 
 func (p *poolMeta) DecommissionCancel(idx int) bool {
 	if p.Pools[idx].Decommission != nil {
-		p.Pools[idx].LastUpdate = time.Now().UTC()
+		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.StartTime = time.Time{}
 		p.Pools[idx].Decommission.Complete = false
 		p.Pools[idx].Decommission.Failed = false
@@ -227,7 +225,7 @@ var (
 	errDecommissionComplete       = errors.New("decommission is complete, please remove the servers from command-line")
 )
 
-func (p *poolMeta) Decommission(idx int, info StorageInfo) error {
+func (p *poolMeta) Decommission(idx int, pi poolSpaceInfo) error {
 	for i, pool := range p.Pools {
 		if idx == i {
 			continue
@@ -239,15 +237,15 @@ func (p *poolMeta) Decommission(idx int, info StorageInfo) error {
 			return fmt.Errorf("%w at index: %d", errDecommissionAlreadyRunning, i)
 		}
 	}
+
+	now := UTCNow()
 	if p.Pools[idx].Decommission == nil {
-		startSize := TotalUsableCapacityFree(info)
-		totalSize := TotalUsableCapacity(info)
-		p.Pools[idx].LastUpdate = time.Now().UTC()
+		p.Pools[idx].LastUpdate = now
 		p.Pools[idx].Decommission = &PoolDecommissionInfo{
-			StartTime:   UTCNow(),
-			StartSize:   startSize,
-			CurrentSize: startSize,
-			TotalSize:   totalSize,
+			StartTime:   now,
+			StartSize:   pi.Free,
+			CurrentSize: pi.Free,
+			TotalSize:   pi.Total,
 		}
 		return nil
 	}
@@ -260,14 +258,12 @@ func (p *poolMeta) Decommission(idx int, info StorageInfo) error {
 	// Canceled or Failed decommission can be triggered again.
 	if p.Pools[idx].Decommission.StartTime.IsZero() {
 		if p.Pools[idx].Decommission.Canceled || p.Pools[idx].Decommission.Failed {
-			startSize := TotalUsableCapacityFree(info)
-			totalSize := TotalUsableCapacity(info)
-			p.Pools[idx].LastUpdate = time.Now().UTC()
+			p.Pools[idx].LastUpdate = now
 			p.Pools[idx].Decommission = &PoolDecommissionInfo{
-				StartTime:   UTCNow(),
-				StartSize:   startSize,
-				CurrentSize: startSize,
-				TotalSize:   totalSize,
+				StartTime:   now,
+				StartSize:   pi.Free,
+				CurrentSize: pi.Free,
+				TotalSize:   pi.Total,
 			}
 			return nil
 		}
@@ -385,24 +381,31 @@ func (p *poolMeta) CountItem(idx int, size int64, failed bool) {
 	if pd != nil {
 		if failed {
 			pd.ItemsDecommissionFailed++
-			pd.BytesFailed += uint64(size)
+			pd.BytesFailed += size
 		} else {
 			pd.ItemsDecommissioned++
-			pd.BytesDone += uint64(size)
+			pd.BytesDone += size
 		}
 		p.Pools[idx].Decommission = pd
 	}
 }
 
-func (p *poolMeta) updateAfter(ctx context.Context, idx int, pools []*erasureSets, duration time.Duration) error {
+func (p *poolMeta) updateAfter(ctx context.Context, idx int, pools []*erasureSets, duration time.Duration) (bool, error) {
 	if p.Pools[idx].Decommission == nil {
-		return errInvalidArgument
+		return false, errInvalidArgument
 	}
-	if time.Since(p.Pools[idx].LastUpdate) > duration {
-		p.Pools[idx].LastUpdate = time.Now().UTC()
-		return p.save(ctx, pools)
+	now := UTCNow()
+	if now.Sub(p.Pools[idx].LastUpdate) >= duration {
+		if serverDebugLog {
+			console.Debugf("decommission: persisting poolMeta on disk: threshold:%s, poolMeta:%#v\n", now.Sub(p.Pools[idx].LastUpdate), p.Pools[idx])
+		}
+		p.Pools[idx].LastUpdate = now
+		if err := p.save(ctx, pools); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 func (p poolMeta) save(ctx context.Context, pools []*erasureSets) error {
@@ -464,6 +467,7 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 		return nil
 	}
 
+	meta = poolMeta{} // to update write poolMeta fresh.
 	// looks like new pool was added we need to update,
 	// or this is a fresh installation (or an existing
 	// installation with pool removed)
@@ -472,7 +476,7 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 		meta.Pools = append(meta.Pools, PoolStatus{
 			CmdLine:    pool.endpoints.CmdLine,
 			ID:         idx,
-			LastUpdate: time.Now().UTC(),
+			LastUpdate: UTCNow(),
 		})
 	}
 	if err = meta.save(ctx, z.serverPools); err != nil {
@@ -650,7 +654,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			}
 			z.poolMetaMutex.Lock()
 			z.poolMeta.TrackCurrentBucketObject(idx, bName, entry.name)
-			logger.LogIf(ctx, z.poolMeta.updateAfter(ctx, idx, z.serverPools, time.Minute))
+			ok, err := z.poolMeta.updateAfter(ctx, idx, z.serverPools, 30*time.Second)
+			logger.LogIf(ctx, err)
+			if ok {
+				globalNotificationSys.ReloadPoolMeta(ctx)
+			}
 			z.poolMetaMutex.Unlock()
 		}
 
@@ -754,6 +762,51 @@ func (z *erasureServerPools) Decommission(ctx context.Context, idx int) error {
 	return nil
 }
 
+type decomError struct {
+	Err string
+}
+
+func (d decomError) Error() string {
+	return d.Err
+}
+
+type poolSpaceInfo struct {
+	Free  int64
+	Total int64
+	Used  int64
+}
+
+func (z *erasureServerPools) getDecommissionPoolSpaceInfo(idx int) (pi poolSpaceInfo, err error) {
+	if idx < 0 {
+		return pi, errInvalidArgument
+	}
+	if idx+1 > len(z.serverPools) {
+		return pi, errInvalidArgument
+	}
+	info, errs := z.serverPools[idx].StorageInfo(context.Background())
+	for _, err := range errs {
+		if err != nil {
+			return pi, errInvalidArgument
+		}
+	}
+	info.Backend = z.BackendInfo()
+	for _, disk := range info.Disks {
+		if disk.Healing {
+			return pi, decomError{
+				Err: fmt.Sprintf("%s drive is healing, decommission will not be started", disk.Endpoint),
+			}
+		}
+	}
+
+	usableTotal := int64(GetTotalUsableCapacity(info.Disks, info))
+	usableFree := int64(GetTotalUsableCapacityFree(info.Disks, info))
+	return poolSpaceInfo{
+		Total: usableTotal,
+		Free:  usableFree,
+		Used:  usableTotal - usableFree,
+	}, nil
+}
+
 func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, error) {
 	if idx < 0 {
 		return PoolStatus{}, errInvalidArgument
@@ -762,35 +815,19 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 	z.poolMetaMutex.RLock()
 	defer z.poolMetaMutex.RUnlock()
 
-	if idx+1 > len(z.poolMeta.Pools) {
+	pi, err := z.getDecommissionPoolSpaceInfo(idx)
+	if err != nil {
 		return PoolStatus{}, errInvalidArgument
 	}
 
-	pool := z.serverPools[idx]
-	info, _ := pool.StorageInfo(ctx)
-	info.Backend.Type = madmin.Erasure
-
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity <= 0 {
-		scParity = z.serverPools[0].defaultParityCount
-	}
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	info.Backend.StandardSCData = append(info.Backend.StandardSCData, pool.SetDriveCount()-scParity)
-	info.Backend.RRSCData = append(info.Backend.RRSCData, pool.SetDriveCount()-rrSCParity)
-	info.Backend.StandardSCParity = scParity
-	info.Backend.RRSCParity = rrSCParity
-
-	currentSize := TotalUsableCapacityFree(info)
-	totalSize := TotalUsableCapacity(info)
-
 	poolInfo := z.poolMeta.Pools[idx]
 	if poolInfo.Decommission != nil {
-		poolInfo.Decommission.TotalSize = totalSize
-		poolInfo.Decommission.CurrentSize = currentSize
+		poolInfo.Decommission.TotalSize = pi.Total
+		poolInfo.Decommission.CurrentSize = poolInfo.Decommission.StartSize + poolInfo.Decommission.BytesDone
 	} else {
 		poolInfo.Decommission = &PoolDecommissionInfo{
-			CurrentSize: currentSize,
-			TotalSize:   totalSize,
+			TotalSize:   pi.Total,
+			CurrentSize: pi.Free,
 		}
 	}
 	return poolInfo, nil
@@ -893,7 +930,9 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 	for _, bucket := range buckets {
 		if lc, err := globalLifecycleSys.Get(bucket.Name); err == nil {
 			if lc.HasTransition() {
-				return fmt.Errorf("Bucket is part of transitioned tier %s: decommission is not allowed in Tier'd setups", bucket.Name)
+				return decomError{
+					Err: fmt.Sprintf("Bucket is part of transitioned tier %s: decommission is not allowed in Tier'd setups", bucket.Name),
+				}
 			}
 		}
 	}
@@ -919,23 +958,15 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 		return errInvalidArgument
 	}
 
-	info, _ := pool.StorageInfo(ctx)
-	info.Backend.Type = madmin.Erasure
-
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity <= 0 {
-		scParity = z.serverPools[0].defaultParityCount
+	pi, err := z.getDecommissionPoolSpaceInfo(idx)
+	if err != nil {
+		return err
 	}
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	info.Backend.StandardSCData = append(info.Backend.StandardSCData, pool.SetDriveCount()-scParity)
-	info.Backend.RRSCData = append(info.Backend.RRSCData, pool.SetDriveCount()-rrSCParity)
-	info.Backend.StandardSCParity = scParity
-	info.Backend.RRSCParity = rrSCParity
 
 	z.poolMetaMutex.Lock()
 	defer z.poolMetaMutex.Unlock()
 
-	if err = z.poolMeta.Decommission(idx, info); err != nil {
+	if err = z.poolMeta.Decommission(idx, pi); err != nil {
 		return err
 	}
 	z.poolMeta.QueueBuckets(idx, buckets)
