@@ -523,31 +523,6 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 	return objInfo, wquorum, nil
 }
 
-func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
-	// Undo rename object on disks where RenameFile succeeded.
-
-	// If srcEntry/dstEntry are objects then add a trailing slash to copy
-	// over all the parts inside the object directory
-	if isDir {
-		srcEntry = retainSlash(srcEntry)
-		dstEntry = retainSlash(dstEntry)
-	}
-	g := errgroup.WithNErrs(len(disks))
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				_ = disks[index].RenameFile(context.TODO(), dstBucket, dstEntry, srcBucket, srcEntry)
-			}
-			return nil
-		}, index)
-	}
-	g.Wait()
-}
-
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
 	defer NSUpdated(dstBucket, dstEntry)
@@ -585,46 +560,6 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	return evalDisks(disks, errs), err
-}
-
-// rename - common function that renamePart and renameObject use to rename
-// the respective underlying storage layer representations.
-func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
-	if isDir {
-		dstEntry = retainSlash(dstEntry)
-		srcEntry = retainSlash(srcEntry)
-	}
-	defer NSUpdated(dstBucket, dstEntry)
-
-	g := errgroup.WithNErrs(len(disks))
-
-	// Rename file on all underlying storage disks.
-	for index := range disks {
-		index := index
-		g.Go(func() error {
-			if disks[index] == nil {
-				return errDiskNotFound
-			}
-			if err := disks[index].RenameFile(ctx, srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
-				if !IsErrIgnored(err, ignoredErr...) {
-					return err
-				}
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all renames to finish.
-	errs := g.Wait()
-
-	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
-	// otherwise return failure. Cleanup successful renames.
-	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
-		// Undo all the partial rename operations.
-		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
-	}
 	return evalDisks(disks, errs), err
 }
 
@@ -904,7 +839,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
+			er.renameAll(context.Background(), minioMetaTmpBucket, tempObj)
 		}
 	}()
 
@@ -1066,42 +1001,6 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
 		}, index)
 	}
-	// return errors if any during deletion
-	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
-}
-
-// deleteObject - wrapper for delete object, deletes an object from
-// all the disks in parallel, including `xl.meta` associated with the
-// object.
-func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int) error {
-	var err error
-
-	disks := er.getDisks()
-	tmpObj := mustGetUUID()
-	if bucket == minioMetaTmpBucket {
-		tmpObj = object
-	} else {
-		// Rename the current object while requiring write quorum, but also consider
-		// that a non found object in a given disk as a success since it already
-		// confirms that the object doesn't have a part in that disk (already removed)
-		disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObj, true, writeQuorum,
-			[]error{errFileNotFound})
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
-	}
-
-	g := errgroup.WithNErrs(len(disks))
-	for index := range disks {
-		index := index
-		g.Go(func() error {
-			if disks[index] == nil {
-				return errDiskNotFound
-			}
-			return disks[index].Delete(ctx, minioMetaTmpBucket, tmpObj, true)
-		}, index)
-	}
-
 	// return errors if any during deletion
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }

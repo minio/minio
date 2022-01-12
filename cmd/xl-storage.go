@@ -1984,12 +1984,12 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 	return s.deleteFile(volumeDir, filePath, recursive)
 }
 
-func skipAccessChecks(volume string) bool {
+func skipAccessChecks(volume string) (ok bool) {
 	switch volume {
-	case minioMetaTmpBucket, minioMetaBucket, minioMetaMultipartBucket:
-		return true
+	case minioMetaTmpBucket, minioMetaBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket:
+		ok = true
 	}
-	return false
+	return ok
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.
@@ -2249,10 +2249,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 					s.deleteFile(dstVolumeDir, legacyDataPath, true)
 				}
 				s.deleteFile(dstVolumeDir, dstDataPath, false)
-				// Looks like srcFilePath is missing usually at .minio.sys/ ignore it.
-				if !errors.Is(err, errFileNotFound) {
-					logger.LogIf(ctx, err)
-				}
 				return osErrToFileErr(err)
 			}
 		}
@@ -2264,12 +2260,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			}
 			s.deleteFile(dstVolumeDir, dstFilePath, false)
-
-			// Looks like srcFilePath is missing usually at .minio.sys/ ignore it.
-			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
-			}
-
 			return osErrToFileErr(err)
 		}
 
@@ -2287,8 +2277,6 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			}
 			s.deleteFile(dstVolumeDir, dstFilePath, false)
-
-			logger.LogIf(ctx, err)
 			return err
 		}
 	}
@@ -2311,25 +2299,27 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	if err != nil {
 		return err
 	}
-	// Stat a volume entry.
-	if err = Access(srcVolumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
+	if !skipAccessChecks(srcVolume) {
+		// Stat a volume entry.
+		if err = Access(srcVolumeDir); err != nil {
+			if osIsNotExist(err) {
+				return errVolumeNotFound
+			} else if isSysErrIO(err) {
+				return errFaultyDisk
+			}
+			return err
 		}
-		return err
 	}
-
-	if err = Access(dstVolumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
+	if !skipAccessChecks(dstVolume) {
+		if err = Access(dstVolumeDir); err != nil {
+			if osIsNotExist(err) {
+				return errVolumeNotFound
+			} else if isSysErrIO(err) {
+				return errFaultyDisk
+			}
+			return err
 		}
-		return err
 	}
-
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)
 	dstIsDir := HasSuffix(dstPath, SlashSeparator)
 	// Either src and dst have to be directories or files, else return error.
