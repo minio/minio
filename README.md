@@ -227,21 +227,27 @@ For example: `export MINIO_SERVER_URL="https://minio.example.net"`
 `mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. Follow the MinIO Client [Quickstart Guide](https://docs.min.io/docs/minio-client-quickstart-guide) for further instructions.
 
 # Upgrading MinIO
-MinIO server supports rolling upgrades, i.e. you can update one MinIO instance at a time in a distributed cluster. This allows upgrades with no downtime. Upgrades can be done manually by replacing the binary with the latest release and restarting all servers in a rolling fashion. However, we recommend all our users to use [`mc admin update`](https://docs.min.io/docs/minio-admin-complete-guide.html#update) from the client. This will update all the nodes in the cluster simultaneously and restart them, as shown in the following command from the MinIO client (mc):
+Upgrades require zero downtime in MinIO, all upgrades are non-disruptive, all transactions on MinIO are atomic. So upgrading all the servers simultaneously is the recommended way to upgrade MinIO.
 
+> NOTE: requires internet access to update directly from https://dl.min.io, optionally you can host any mirrors at https://my-artifactory.example.com/minio/
+
+- For deployments that installed the MinIO server binary by hand, use [`mc admin update`](https://docs.min.io/minio/baremetal/reference/minio-mc-admin/mc-admin-update.html)
 ```
 mc admin update <minio alias, e.g., myminio>
 ```
 
-> NOTE: some releases might not allow rolling upgrades, this is always called out in the release notes and it is generally advised to read release notes before upgrading. In such a situation `mc admin update` is the recommended upgrading mechanism to upgrade all servers at once.
+- For deployments without external internet access (e.g. airgapped environments), download the binary from https://dl.min.io and replace the existing MinIO binary let's say for example `/usr/local/bin/minio`, apply executable permissions `chmod +x /usr/local/bin/minio` and do `mc admin service restart alias/`.
 
-## Important things to remember during MinIO upgrades
+- For RPM/DEB installations, upgrade those packages **parallelly** on all servers. Once upgraded, perform `systemctl restart minio` across all nodes in **parallel**.
 
-- Container environments are advised to update the container images instead of updating binaries inside the container.
-- `mc admin update` is disabled in kubernetes/container environments, container environments provide their own mechanisms to rollout of updates.
-- `mc admin update` will only work if the user running MinIO has write access to the parent directory where the binary is located, for example if the current binary is at `/usr/local/bin/minio`, you would need write access to `/usr/local/bin`.
-- `mc admin update` updates and restarts all servers simultaneously, applications would retry and continue their respective operations upon upgrade.
-- If using `kes` as KMS with MinIO, just replace the binary and restart `kes` more information about `kes` can be found [here](https://github.com/minio/kes/wiki)
+
+## Upgrade Checklist
+- Test all upgrades in a lower environment (DEV, QA, UAT) before applying to production. Performing blind upgrades in production environments carries significant risk.
+- Read the release notes for the target MinIO release *before* performing any installation, there is no forced requirement to upgrade to latest releases. If it has a bug fix you are looking for then yes, 
+  else avoid disturbing a running system.
+- Make sure MinIO process has write access to `/usr/local/bin` if you plan to use `mc admin update`. This is needed for MinIO to download the latest binary from https://dl.min.io and save it locally for upgrades.
+- `mc admin update` is not supported in kubernetes/container environments, container environments provide their own mechanisms for container updates.
+- **We do not recommend upgrading one MinIO server at a time, the product is designed to support **parallel** upgrades please follow our recommended guidelines.**
 
 # Explore Further
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
