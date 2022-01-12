@@ -236,10 +236,38 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
-// Test refreshing lock
+// Test refreshing lock - refresh should always return true
+//
+func TestSuccessfulLockRefresh(t *testing.T) {
+	dm := NewDRWMutex(ds, "aap")
+	contextCanceled := make(chan struct{})
+
+	ctx, cl := context.WithCancel(context.Background())
+	cancel := func() {
+		cl()
+		close(contextCanceled)
+	}
+
+	if !dm.GetLock(ctx, cancel, id, source, Options{Timeout: 5 * time.Minute}) {
+		t.Fatal("GetLock() should be successful")
+	}
+
+	timer := time.NewTimer(drwMutexRefreshInterval * 2)
+
+	select {
+	case <-contextCanceled:
+		t.Fatal("Lock context canceled which is not expected")
+	case <-timer.C:
+	}
+
+	// Should be safe operation in all cases
+	dm.Unlock()
+}
+
+// Test canceling context while quorum servers report lock not found
 func TestFailedRefreshLock(t *testing.T) {
 	// Simulate Refresh RPC response to return no locking found
-	for i := range lockServers {
+	for i := range lockServers[:3] {
 		lockServers[i].setRefreshReply(false)
 		defer lockServers[i].setRefreshReply(true)
 	}
