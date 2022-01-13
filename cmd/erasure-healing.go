@@ -540,7 +540,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 			// If all disks are having errors, we give up.
 			if disksToHealCount == 0 {
-				return result, fmt.Errorf("all disks had write errors, unable to heal")
+				return result, fmt.Errorf("all disks had write errors, unable to heal %s/%s", bucket, object)
 			}
 
 		}

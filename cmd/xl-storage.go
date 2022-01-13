@@ -1984,6 +1984,14 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 	return s.deleteFile(volumeDir, filePath, recursive)
 }
 
+func skipAccessChecks(volume string) bool {
+	switch volume {
+	case minioMetaTmpBucket, minioMetaBucket, minioMetaMultipartBucket:
+		return true
+	}
+	return false
+}
+
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	defer func() {
@@ -2010,23 +2018,27 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		return err
 	}
 
-	// Stat a volume entry.
-	if err = Access(srcVolumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
+	if !skipAccessChecks(srcVolume) {
+		// Stat a volume entry.
+		if err = Access(srcVolumeDir); err != nil {
+			if osIsNotExist(err) {
+				return errVolumeNotFound
+			} else if isSysErrIO(err) {
+				return errFaultyDisk
+			}
+			return err
 		}
-		return err
 	}
 
-	if err = Access(dstVolumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
+	if !skipAccessChecks(dstVolume) {
+		if err = Access(dstVolumeDir); err != nil {
+			if osIsNotExist(err) {
+				return errVolumeNotFound
+			} else if isSysErrIO(err) {
+				return errFaultyDisk
+			}
+			return err
 		}
-		return err
 	}
 
 	srcFilePath := pathutil.Join(srcVolumeDir, pathJoin(srcPath, xlStorageFormatFile))
@@ -2237,7 +2249,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 					s.deleteFile(dstVolumeDir, legacyDataPath, true)
 				}
 				s.deleteFile(dstVolumeDir, dstDataPath, false)
-				if err != errFileNotFound {
+				// Looks like srcFilePath is missing usually at .minio.sys/ ignore it.
+				if !errors.Is(err, errFileNotFound) {
 					logger.LogIf(ctx, err)
 				}
 				return osErrToFileErr(err)
@@ -2252,9 +2265,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			}
 			s.deleteFile(dstVolumeDir, dstFilePath, false)
 
-			if err != errFileNotFound {
+			// Looks like srcFilePath is missing usually at .minio.sys/ ignore it.
+			if !errors.Is(err, errFileNotFound) {
 				logger.LogIf(ctx, err)
 			}
+
 			return osErrToFileErr(err)
 		}
 

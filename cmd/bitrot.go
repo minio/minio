@@ -119,8 +119,10 @@ func newBitrotReader(disk StorageAPI, data []byte, bucket string, filePath strin
 // Close all the readers.
 func closeBitrotReaders(rs []io.ReaderAt) {
 	for _, r := range rs {
-		if br, ok := r.(io.Closer); ok {
-			br.Close()
+		if r != nil {
+			if br, ok := r.(io.Closer); ok {
+				br.Close()
+			}
 		}
 	}
 }
@@ -128,8 +130,10 @@ func closeBitrotReaders(rs []io.ReaderAt) {
 // Close all the writers.
 func closeBitrotWriters(ws []io.Writer) {
 	for _, w := range ws {
-		if bw, ok := w.(io.Closer); ok {
-			bw.Close()
+		if w != nil {
+			if bw, ok := w.(io.Closer); ok {
+				bw.Close()
+			}
 		}
 	}
 }

@@ -701,9 +701,10 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		if disk == nil {
 			continue
 		}
-
-		inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
-		writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
+		if disk.IsOnline() {
+			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
+			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
+		}
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
@@ -720,6 +721,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 
 	for i, w := range writers {
 		if w == nil {
+			// Make sure to avoid writing to disks which we couldn't complete in erasure.Encode()
 			onlineDisks[i] = nil
 			continue
 		}
@@ -930,6 +932,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			continue
 		}
 
+		if !disk.IsOnline() {
+			continue
+		}
+
 		if len(inlineBuffers) > 0 {
 			sz := shardFileSize
 			if sz < 0 {
@@ -939,6 +945,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
+
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
@@ -1012,6 +1019,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// Rename the successfully written temporary object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum); err != nil {
+		if errors.Is(err, errFileNotFound) {
+			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+		}
 		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}

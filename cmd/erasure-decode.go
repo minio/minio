@@ -322,8 +322,8 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 			errs:        make([]error, len(writers)),
 		}
 
-		err = w.Write(ctx, bufs)
-		if err != nil {
+		if err = w.Write(ctx, bufs); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
 	}
