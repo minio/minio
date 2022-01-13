@@ -299,7 +299,7 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 			if z.APILatencies == nil {
-				z.APILatencies = make(map[string]string, zb0002)
+				z.APILatencies = make(map[string]uint64, zb0002)
 			} else if len(z.APILatencies) > 0 {
 				for key := range z.APILatencies {
 					delete(z.APILatencies, key)
@@ -308,13 +308,13 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 			for zb0002 > 0 {
 				zb0002--
 				var za0001 string
-				var za0002 string
+				var za0002 uint64
 				za0001, err = dc.ReadString()
 				if err != nil {
 					err = msgp.WrapError(err, "APILatencies")
 					return
 				}
-				za0002, err = dc.ReadString()
+				za0002, err = dc.ReadUint64()
 				if err != nil {
 					err = msgp.WrapError(err, "APILatencies", za0001)
 					return
@@ -381,7 +381,7 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "APILatencies")
 			return
 		}
-		err = en.WriteString(za0002)
+		err = en.WriteUint64(za0002)
 		if err != nil {
 			err = msgp.WrapError(err, "APILatencies", za0001)
 			return
@@ -421,7 +421,7 @@ func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendMapHeader(o, uint32(len(z.APILatencies)))
 	for za0001, za0002 := range z.APILatencies {
 		o = msgp.AppendString(o, za0001)
-		o = msgp.AppendString(o, za0002)
+		o = msgp.AppendUint64(o, za0002)
 	}
 	// string "APICalls"
 	o = append(o, 0xa8, 0x41, 0x50, 0x49, 0x43, 0x61, 0x6c, 0x6c, 0x73)
@@ -459,7 +459,7 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			if z.APILatencies == nil {
-				z.APILatencies = make(map[string]string, zb0002)
+				z.APILatencies = make(map[string]uint64, zb0002)
 			} else if len(z.APILatencies) > 0 {
 				for key := range z.APILatencies {
 					delete(z.APILatencies, key)
@@ -467,14 +467,14 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			for zb0002 > 0 {
 				var za0001 string
-				var za0002 string
+				var za0002 uint64
 				zb0002--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "APILatencies")
 					return
 				}
-				za0002, bts, err = msgp.ReadStringBytes(bts)
+				za0002, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "APILatencies", za0001)
 					return
@@ -529,7 +529,7 @@ func (z *DiskMetrics) Msgsize() (s int) {
 	if z.APILatencies != nil {
 		for za0001, za0002 := range z.APILatencies {
 			_ = za0002
-			s += msgp.StringPrefixSize + len(za0001) + msgp.StringPrefixSize + len(za0002)
+			s += msgp.StringPrefixSize + len(za0001) + msgp.Uint64Size
 		}
 	}
 	s += 9 + msgp.MapHeaderSize
