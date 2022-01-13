@@ -30,6 +30,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestCheckPathLength(t *testing.T) {
@@ -1662,6 +1664,98 @@ func TestXLStorageRenameFile(t *testing.T) {
 		if err := xlStorage.RenameFile(context.Background(), testCase.srcVol, testCase.srcPath, testCase.destVol, testCase.destPath); err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage %d:  Expected the error to be : \"%v\", got: \"%v\".", i+1, testCase.expectedErr, err)
 		}
+	}
+}
+
+// TestXLStorageDeleteVersion will test if version deletes and bulk deletes work as expected.
+func TestXLStorageDeleteVersion(t *testing.T) {
+	// create xlStorage test setup
+	xl, path, err := newXLStorageTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
+	ctx := context.Background()
+
+	volume := "myvol-vol"
+	object := "my-object"
+	if err := xl.MakeVol(ctx, volume); err != nil {
+		t.Fatalf("Unable to create volume, %s", err)
+	}
+	var versions [50]string
+	for i := range versions {
+		versions[i] = uuid.New().String()
+		fi := FileInfo{
+			Name: object, Volume: volume, VersionID: versions[i], ModTime: UTCNow(), DataDir: uuid.NewString(), Size: 10000,
+			Erasure: ErasureInfo{
+				Algorithm:    erasureAlgorithm,
+				DataBlocks:   4,
+				ParityBlocks: 4,
+				BlockSize:    blockSizeV2,
+				Index:        1,
+				Distribution: []int{0, 1, 2, 3, 4, 5, 6, 7},
+				Checksums:    nil,
+			},
+		}
+		if err := xl.WriteMetadata(ctx, volume, object, fi); err != nil {
+			t.Fatalf("Unable to create object, %s", err)
+		}
+	}
+	var deleted [len(versions)]bool
+	checkVerExist := func(t testing.TB) {
+		t.Helper()
+		for i := range versions {
+			shouldExist := !deleted[i]
+			fi, err := xl.ReadVersion(ctx, volume, object, versions[i], false)
+			if shouldExist {
+				if err != nil {
+					t.Fatalf("Version %s should exist, but got err %v", versions[i], err)
+				}
+				return
+			}
+			if err != errFileVersionNotFound {
+				t.Fatalf("Version %s should not exist, but returned: %#v", versions[i], fi)
+			}
+		}
+	}
+
+	// Delete version 0...
+	checkVerExist(t)
+	err = xl.DeleteVersion(ctx, volume, object, FileInfo{Name: object, Volume: volume, VersionID: versions[0]}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted[0] = true
+	checkVerExist(t)
+
+	// Delete 10 in bulk, including a non-existing.
+	fis := []FileInfoVersions{{Name: object, Volume: volume}}
+	for i := range versions[:10] {
+		fis[0].Versions = append(fis[0].Versions, FileInfo{Name: object, Volume: volume, VersionID: versions[i]})
+		deleted[i] = true
+	}
+	errs := xl.DeleteVersions(ctx, volume, fis)
+	if errs[0] != nil {
+		t.Fatalf("expected nil error, got %v", errs[0])
+	}
+	checkVerExist(t)
+
+	// Delete them all... (some again)
+	fis[0].Versions = nil
+	for i := range versions[:] {
+		fis[0].Versions = append(fis[0].Versions, FileInfo{Name: object, Volume: volume, VersionID: versions[i]})
+		deleted[i] = true
+	}
+	errs = xl.DeleteVersions(ctx, volume, fis)
+	if errs[0] != nil {
+		t.Fatalf("expected nil error, got %v", errs[0])
+	}
+	checkVerExist(t)
+
+	// Meta should be deleted now...
+	fi, err := xl.ReadVersion(ctx, volume, object, "", false)
+	if err != errFileNotFound {
+		t.Fatalf("Object %s should not exist, but returned: %#v", object, fi)
 	}
 }
 
