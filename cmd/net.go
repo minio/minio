@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
@@ -102,10 +104,17 @@ func mustGetLocalIP6() (ipList set.StringSet) {
 
 // getHostIP returns IP address of given host.
 func getHostIP(host string) (ipList set.StringSet, err error) {
-	var ips []net.IP
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	if ips, err = net.LookupIP(host); err != nil {
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
 		return ipList, err
+	}
+
+	ips := make([]net.IP, len(addrs))
+	for i, ia := range addrs {
+		ips[i] = ia.IP
 	}
 
 	ipList = set.NewStringSet()
