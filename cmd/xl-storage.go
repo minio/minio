@@ -888,13 +888,19 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	var (
 		dataDir     string
 		lastVersion bool
+		updated     bool
 	)
 
 	for _, fi := range fis {
 		dataDir, lastVersion, err = xlMeta.DeleteVersion(fi)
 		if err != nil {
+			if !fi.Deleted && (err == errFileNotFound || err == errFileVersionNotFound) {
+				// Ignore these since
+				continue
+			}
 			return err
 		}
+		updated = true
 		if dataDir != "" {
 			versionID := fi.VersionID
 			if versionID == "" {
@@ -918,6 +924,10 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	}
 
 	if !lastVersion {
+		if !updated {
+			return nil
+		}
+
 		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
