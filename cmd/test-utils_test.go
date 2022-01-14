@@ -2157,6 +2157,7 @@ func mustGetPoolEndpoints(args ...string) EndpointServerPools {
 		SetCount:     setCount,
 		DrivesPerSet: drivesPerSet,
 		Endpoints:    endpoints,
+		CmdLine:      strings.Join(args, " "),
 	}}
 }
 

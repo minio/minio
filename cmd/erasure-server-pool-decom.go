@@ -277,62 +277,27 @@ func (p poolMeta) IsSuspended(idx int) bool {
 	return p.Pools[idx].Decommission != nil
 }
 
-func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasureSets, validate bool) (bool, error) {
-	data, err := readConfig(ctx, pool, poolMetaName)
-	if err != nil {
-		if errors.Is(err, errConfigNotFound) || isErrObjectNotFound(err) {
-			return true, nil
-		}
-		return false, err
-	}
-	if len(data) == 0 {
-		return true, nil
-	}
-	if len(data) <= 4 {
-		return false, fmt.Errorf("poolMeta: no data")
-	}
-	// Read header
-	switch binary.LittleEndian.Uint16(data[0:2]) {
-	case poolMetaFormat:
-	default:
-		return false, fmt.Errorf("poolMeta: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
-	}
-	switch binary.LittleEndian.Uint16(data[2:4]) {
-	case poolMetaVersion:
-	default:
-		return false, fmt.Errorf("poolMeta: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
-	}
-
-	// OK, parse data.
-	if _, err = p.UnmarshalMsg(data[4:]); err != nil {
-		return false, err
-	}
-
-	switch p.Version {
-	case poolMetaVersionV1:
-	default:
-		return false, fmt.Errorf("unexpected pool meta version: %d", p.Version)
-	}
-
-	if !validate {
-		// No further validation requested.
-		return false, nil
-	}
-
+func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 	type poolInfo struct {
-		position  int
-		completed bool
+		position     int
+		completed    bool
+		decomStarted bool // started but not finished yet
 	}
 
 	rememberedPools := make(map[string]poolInfo)
 	for idx, pool := range p.Pools {
 		complete := false
-		if pool.Decommission != nil && pool.Decommission.Complete {
-			complete = true
+		decomStarted := false
+		if pool.Decommission != nil {
+			if pool.Decommission.Complete {
+				complete = true
+			}
+			decomStarted = true
 		}
 		rememberedPools[pool.CmdLine] = poolInfo{
-			position:  idx,
-			completed: complete,
+			position:     idx,
+			completed:    complete,
+			decomStarted: decomStarted,
 		}
 	}
 
@@ -373,7 +338,56 @@ func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasure
 		}
 	}
 
-	return len(rememberedPools) != len(specifiedPools), nil
+	update := len(rememberedPools) != len(specifiedPools)
+	if update {
+		for k, pi := range rememberedPools {
+			if pi.decomStarted && !pi.completed {
+				return false, fmt.Errorf("pool(%s) = %s is being decommissioned, No changes should be made to the command line arguments. Please complete the decommission in progress", humanize.Ordinal(pi.position+1), k)
+			}
+		}
+	}
+	return update, nil
+}
+
+func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasureSets) error {
+	data, err := readConfig(ctx, pool, poolMetaName)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) || isErrObjectNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if len(data) == 0 {
+		// Seems to be empty create a new poolMeta object.
+		return nil
+	}
+	if len(data) <= 4 {
+		return fmt.Errorf("poolMeta: no data")
+	}
+	// Read header
+	switch binary.LittleEndian.Uint16(data[0:2]) {
+	case poolMetaFormat:
+	default:
+		return fmt.Errorf("poolMeta: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
+	}
+	switch binary.LittleEndian.Uint16(data[2:4]) {
+	case poolMetaVersion:
+	default:
+		return fmt.Errorf("poolMeta: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
+	}
+
+	// OK, parse data.
+	if _, err = p.UnmarshalMsg(data[4:]); err != nil {
+		return err
+	}
+
+	switch p.Version {
+	case poolMetaVersionV1:
+	default:
+		return fmt.Errorf("unexpected pool meta version: %d", p.Version)
+	}
+
+	return nil
 }
 
 func (p *poolMeta) CountItem(idx int, size int64, failed bool) {
@@ -441,7 +455,11 @@ const (
 func (z *erasureServerPools) Init(ctx context.Context) error {
 	meta := poolMeta{}
 
-	update, err := meta.load(ctx, z.serverPools[0], z.serverPools, true)
+	if err := meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {
+		return err
+	}
+
+	update, err := meta.validate(z.serverPools)
 	if err != nil {
 		return err
 	}
@@ -836,7 +854,7 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 func (z *erasureServerPools) ReloadPoolMeta(ctx context.Context) (err error) {
 	meta := poolMeta{}
 
-	if _, err = meta.load(ctx, z.serverPools[0], z.serverPools, false); err != nil {
+	if err = meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {
 		return err
 	}
 
