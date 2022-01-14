@@ -86,7 +86,7 @@ func availableMemory() (available uint64) {
 		return
 	}
 
-	available = memStats.Available / 2
+	available = memStats.Total / 2
 	return
 }
 
