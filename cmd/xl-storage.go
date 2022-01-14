@@ -60,6 +60,9 @@ const (
 	// For hardrives it is possible to set this to a lower value to avoid any
 	// spike in latency. But currently we are simply keeping it optimal for SSDs.
 
+	// bigFileThreshold is the point where we add readahead to put operations.
+	bigFileThreshold = 128 * humanize.MiByte
+
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
