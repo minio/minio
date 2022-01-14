@@ -239,6 +239,10 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 // Test refreshing lock - refresh should always return true
 //
 func TestSuccessfulLockRefresh(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	dm := NewDRWMutex(ds, "aap")
 	contextCanceled := make(chan struct{})
 
@@ -266,6 +270,10 @@ func TestSuccessfulLockRefresh(t *testing.T) {
 
 // Test canceling context while quorum servers report lock not found
 func TestFailedRefreshLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	// Simulate Refresh RPC response to return no locking found
 	for i := range lockServers[:3] {
 		lockServers[i].setRefreshReply(false)
@@ -298,6 +306,10 @@ func TestFailedRefreshLock(t *testing.T) {
 
 // Test Unlock should not timeout
 func TestUnlockShouldNotTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	dm := NewDRWMutex(ds, "aap")
 
 	if !dm.GetLock(context.Background(), nil, id, source, Options{Timeout: 5 * time.Minute}) {
