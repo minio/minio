@@ -64,8 +64,7 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		}, index)
 	}
 
-	writeQuorum := getWriteQuorum(len(storageDisks))
-	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
+	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, er.defaultWQuorum())
 	return toObjectErr(err, bucket)
 }
 
@@ -92,7 +91,7 @@ func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
-	var bucketsInfo = make([]BucketInfo, len(storageDisks))
+	bucketsInfo := make([]BucketInfo, len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
 	for index := range storageDisks {
 		index := index
@@ -121,8 +120,7 @@ func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := getReadQuorum(len(storageDisks))
-	return BucketInfo{}, reduceReadQuorumErrs(ctx, errs, nil, readQuorum)
+	return BucketInfo{}, reduceReadQuorumErrs(ctx, errs, nil, er.defaultRQuorum())
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
@@ -167,8 +165,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, opts D
 		return nil
 	}
 
-	writeQuorum := getWriteQuorum(len(storageDisks))
-	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
+	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, er.defaultWQuorum())
 	if err == errErasureWriteQuorum && !opts.NoRecreate {
 		undoDeleteBucket(storageDisks, bucket)
 	}

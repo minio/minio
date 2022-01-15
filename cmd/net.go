@@ -325,7 +325,6 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 // formats, point to the same machine, e.g:
 //  ':9000' and 'http://localhost:9000/' will return true
 func sameLocalAddrs(addr1, addr2 string) (bool, error) {
-
 	// Extract host & port from given parameters
 	host1, port1, err := extractHostPort(addr1)
 	if err != nil {

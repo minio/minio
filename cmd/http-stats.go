@@ -128,7 +128,7 @@ func (stats *HTTPAPIStats) Dec(api string) {
 func (stats *HTTPAPIStats) Load() map[string]int {
 	stats.Lock()
 	defer stats.Unlock()
-	var apiStats = make(map[string]int, len(stats.apiStats))
+	apiStats := make(map[string]int, len(stats.apiStats))
 	for k, v := range stats.apiStats {
 		apiStats[k] = v
 	}

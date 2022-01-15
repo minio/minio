@@ -36,11 +36,15 @@ import (
 
 const numberOfNodes = 5
 
-var ds *Dsync
-var rpcPaths []string // list of rpc paths where lock server is serving.
+var (
+	ds       *Dsync
+	rpcPaths []string // list of rpc paths where lock server is serving.
+)
 
-var nodes = make([]string, numberOfNodes) // list of node IP addrs or hostname with ports.
-var lockServers []*lockServer
+var (
+	nodes       = make([]string, numberOfNodes) // list of node IP addrs or hostname with ports.
+	lockServers []*lockServer
+)
 
 func startRPCServers() {
 	for i := range nodes {
@@ -94,7 +98,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSimpleLock(t *testing.T) {
-
 	dm := NewDRWMutex(ds, "test")
 
 	dm.Lock(id, source)
@@ -106,7 +109,6 @@ func TestSimpleLock(t *testing.T) {
 }
 
 func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
-
 	dm := NewDRWMutex(ds, "test")
 
 	dm.Lock(id, source)
@@ -132,7 +134,6 @@ func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
 
 // Test two locks for same resource, one succeeds, one fails (after timeout)
 func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
-
 	dm1st := NewDRWMutex(ds, "aap")
 	dm2nd := NewDRWMutex(ds, "aap")
 
@@ -156,7 +157,6 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 
 // Test three locks for same resource, one succeeds, one fails (after timeout)
 func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
-
 	dm1st := NewDRWMutex(ds, "aap")
 	dm2nd := NewDRWMutex(ds, "aap")
 	dm3rd := NewDRWMutex(ds, "aap")
@@ -221,7 +221,6 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 
 // Test two locks for different resources, both succeed
 func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
-
 	dm1 := NewDRWMutex(ds, "aap")
 	dm2 := NewDRWMutex(ds, "noot")
 
@@ -237,10 +236,46 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
-// Test refreshing lock
+// Test refreshing lock - refresh should always return true
+//
+func TestSuccessfulLockRefresh(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	dm := NewDRWMutex(ds, "aap")
+	contextCanceled := make(chan struct{})
+
+	ctx, cl := context.WithCancel(context.Background())
+	cancel := func() {
+		cl()
+		close(contextCanceled)
+	}
+
+	if !dm.GetLock(ctx, cancel, id, source, Options{Timeout: 5 * time.Minute}) {
+		t.Fatal("GetLock() should be successful")
+	}
+
+	timer := time.NewTimer(drwMutexRefreshInterval * 2)
+
+	select {
+	case <-contextCanceled:
+		t.Fatal("Lock context canceled which is not expected")
+	case <-timer.C:
+	}
+
+	// Should be safe operation in all cases
+	dm.Unlock()
+}
+
+// Test canceling context while quorum servers report lock not found
 func TestFailedRefreshLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	// Simulate Refresh RPC response to return no locking found
-	for i := range lockServers {
+	for i := range lockServers[:3] {
 		lockServers[i].setRefreshReply(false)
 		defer lockServers[i].setRefreshReply(true)
 	}
@@ -271,6 +306,10 @@ func TestFailedRefreshLock(t *testing.T) {
 
 // Test Unlock should not timeout
 func TestUnlockShouldNotTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	dm := NewDRWMutex(ds, "aap")
 
 	if !dm.GetLock(context.Background(), nil, id, source, Options{Timeout: 5 * time.Minute}) {
@@ -332,7 +371,7 @@ func BenchmarkMutexUncontended(b *testing.B) {
 		*DRWMutex
 	}
 	b.RunParallel(func(pb *testing.PB) {
-		var mu = PaddedMutex{NewDRWMutex(ds, "")}
+		mu := PaddedMutex{NewDRWMutex(ds, "")}
 		for pb.Next() {
 			mu.Lock(id, source)
 			mu.Unlock()

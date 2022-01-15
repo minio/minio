@@ -57,7 +57,6 @@ func TestQueueStorePut(t *testing.T) {
 	store, err := setUpStore(queueDir, 100)
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
-
 	}
 	// Put 100 events.
 	for i := 0; i < 100; i++ {

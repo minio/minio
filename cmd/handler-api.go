@@ -77,7 +77,6 @@ func availableMemory() (available uint64) {
 		if available != 9223372036854771712 {
 			// This means cgroup memory limit is configured.
 			return
-
 		} // no-limit set proceed to set the limits based on virtual memory.
 
 	} // for all other platforms limits are based on virtual memory.

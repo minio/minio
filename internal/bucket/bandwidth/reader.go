@@ -64,7 +64,6 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 			need = 1 // to ensure we read at least one byte for every Read
 			tokens = b
 		}
-
 	} else { // all tokens go towards payload
 		need = int(math.Min(float64(b), float64(need)))
 		tokens = need

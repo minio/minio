@@ -159,10 +159,15 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
-	case io.ErrUnexpectedEOF.Error(), io.ErrShortWrite.Error():
-		return IncompleteBody{}
-	case context.Canceled.Error(), context.DeadlineExceeded.Error():
-		return IncompleteBody{}
+	case io.ErrUnexpectedEOF.Error(), io.ErrShortWrite.Error(), context.Canceled.Error(), context.DeadlineExceeded.Error():
+		apiErr := IncompleteBody{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
 	}
 	return err
 }
@@ -562,8 +567,7 @@ func (e ObjectTooSmall) Error() string {
 }
 
 // OperationTimedOut - a timeout occurred.
-type OperationTimedOut struct {
-}
+type OperationTimedOut struct{}
 
 func (e OperationTimedOut) Error() string {
 	return "Operation timed out"

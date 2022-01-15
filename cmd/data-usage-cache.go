@@ -624,7 +624,7 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 	// Appears to be printed with _MINIO_SERVER_DEBUG=off
 	// console.Debugf(" %d children found, compacting %v\n", total, path)
 
-	var leaves = make([]struct {
+	leaves := make([]struct {
 		objects uint64
 		path    dataUsageHash
 	}, total)
@@ -774,7 +774,7 @@ func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *allTierStats {
 // bucketsUsageInfo returns the buckets usage info as a map, with
 // key as bucket name
 func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]BucketUsageInfo {
-	var dst = make(map[string]BucketUsageInfo, len(buckets))
+	dst := make(map[string]BucketUsageInfo, len(buckets))
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
@@ -797,7 +797,6 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 					ReplicationPendingCount: stat.PendingCount,
 					ReplicationFailedCount:  stat.FailedCount,
 				}
-
 			}
 		}
 		dst[bucket.Name] = bui
@@ -922,6 +921,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	// Abandon if more than 5 minutes, so we don't hold up scanner.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+
 	r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		switch err.(type) {

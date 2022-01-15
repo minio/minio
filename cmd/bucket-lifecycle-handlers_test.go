@@ -150,8 +150,8 @@ func TestBucketLifecycle(t *testing.T) {
 // Simple tests of bucket lifecycle: PUT, GET, DELETE.
 // Tests are related and the order is important.
 func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	creds auth.Credentials, t *testing.T) {
-
+	creds auth.Credentials, t *testing.T,
+) {
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		method     string
@@ -266,8 +266,8 @@ func testBucketLifecycle(obj ObjectLayer, instanceType, bucketName string, apiRo
 		lifecycleResponse  []byte
 		errorResponse      APIErrorResponse
 		shouldPass         bool
-	}) {
-
+	},
+) {
 	for i, testCase := range testCases {
 		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()

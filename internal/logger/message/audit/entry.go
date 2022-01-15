@@ -29,22 +29,29 @@ import (
 // Version - represents the current version of audit log structure.
 const Version = "1"
 
+// ObjectVersion object version key/versionId
+type ObjectVersion struct {
+	ObjectName string `json:"objectName"`
+	VersionID  string `json:"versionId,omitempty"`
+}
+
 // Entry - audit entry logs.
 type Entry struct {
-	Version      string `json:"version"`
-	DeploymentID string `json:"deploymentid,omitempty"`
-	Time         string `json:"time"`
-	Trigger      string `json:"trigger"`
+	Version      string    `json:"version"`
+	DeploymentID string    `json:"deploymentid,omitempty"`
+	Time         time.Time `json:"time"`
+	Trigger      string    `json:"trigger"`
 	API          struct {
-		Name            string `json:"name,omitempty"`
-		Bucket          string `json:"bucket,omitempty"`
-		Object          string `json:"object,omitempty"`
-		Status          string `json:"status,omitempty"`
-		StatusCode      int    `json:"statusCode,omitempty"`
-		InputBytes      int64  `json:"rx"`
-		OutputBytes     int64  `json:"tx"`
-		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
-		TimeToResponse  string `json:"timeToResponse,omitempty"`
+		Name            string          `json:"name,omitempty"`
+		Bucket          string          `json:"bucket,omitempty"`
+		Object          string          `json:"object,omitempty"`
+		Objects         []ObjectVersion `json:"objects,omitempty"`
+		Status          string          `json:"status,omitempty"`
+		StatusCode      int             `json:"statusCode,omitempty"`
+		InputBytes      int64           `json:"rx"`
+		OutputBytes     int64           `json:"tx"`
+		TimeToFirstByte string          `json:"timeToFirstByte,omitempty"`
+		TimeToResponse  string          `json:"timeToResponse,omitempty"`
 	} `json:"api"`
 	RemoteHost string                 `json:"remotehost,omitempty"`
 	RequestID  string                 `json:"requestID,omitempty"`
@@ -61,13 +68,12 @@ func NewEntry(deploymentID string) Entry {
 	return Entry{
 		Version:      Version,
 		DeploymentID: deploymentID,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		Time:         time.Now().UTC(),
 	}
 }
 
 // ToEntry - constructs an audit entry from a http request
 func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, deploymentID string) Entry {
-
 	entry := NewEntry(deploymentID)
 
 	entry.RemoteHost = handlers.GetSourceIP(r)

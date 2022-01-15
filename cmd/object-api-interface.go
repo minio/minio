@@ -71,6 +71,9 @@ type ObjectOptions struct {
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
+
+	// Mutate set to 'true' if the call is namespace mutation call
+	Mutate bool
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
@@ -167,7 +170,6 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32) error
-
 	BackendInfo() madmin.BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error)
 	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
@@ -222,7 +224,6 @@ type ObjectLayer interface {
 	IsEncryptionSupported() bool
 	IsTaggingSupported() bool
 	IsCompressionSupported() bool
-
 	SetDriveCounts() []int // list of erasure stripe size for each pool in order.
 
 	// Healing operations.

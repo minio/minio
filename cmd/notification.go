@@ -326,7 +326,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 			header, zerr := zip.FileInfoHeader(dummyFileInfo{
 				name:    fmt.Sprintf("profile-%s-%s", client.host.String(), typ),
 				size:    int64(len(data)),
-				mode:    0600,
+				mode:    0o600,
 				modTime: UTCNow(),
 				isDir:   false,
 				sys:     nil,
@@ -376,7 +376,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    fmt.Sprintf("profile-%s-%s", thisAddr, typ),
 			size:    int64(len(data)),
-			mode:    0600,
+			mode:    0o600,
 			modTime: UTCNow(),
 			isDir:   false,
 			sys:     nil,
@@ -432,7 +432,7 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 // updateBloomFilter will cycle all servers to the current index and
 // return a merged bloom filter if a complete one can be retrieved.
 func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
-	var req = bloomFilterRequest{
+	req := bloomFilterRequest{
 		Current: current,
 		Oldest:  current - dataUsageUpdateDirCycles,
 	}
@@ -614,6 +614,26 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 		ReplicationStats: globalReplicationStats.Get(bucketName),
 	})
 	return bucketStats
+}
+
+// ReloadPoolMeta reloads on disk updates on pool metadata
+func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.ReloadPoolMeta(ctx)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
 }
 
 // LoadTransitionTierConfig notifies remote peers to load their remote tier

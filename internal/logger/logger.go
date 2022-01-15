@@ -35,10 +35,8 @@ import (
 	"github.com/minio/minio/internal/logger/message/log"
 )
 
-var (
-	// HighwayHash key for logging in anonymous mode
-	magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
-)
+// HighwayHash key for logging in anonymous mode
+var magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
 
 // Disable disables all logging, false by default. (used for "go test")
 var Disable = false
@@ -64,23 +62,6 @@ var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
 	"cmd.StartGateway",
-	"cmd.(*webAPIHandlers).ListBuckets",
-	"cmd.(*webAPIHandlers).MakeBucket",
-	"cmd.(*webAPIHandlers).DeleteBucket",
-	"cmd.(*webAPIHandlers).ListObjects",
-	"cmd.(*webAPIHandlers).RemoveObject",
-	"cmd.(*webAPIHandlers).Login",
-	"cmd.(*webAPIHandlers).SetAuth",
-	"cmd.(*webAPIHandlers).CreateURLToken",
-	"cmd.(*webAPIHandlers).Upload",
-	"cmd.(*webAPIHandlers).Download",
-	"cmd.(*webAPIHandlers).DownloadZip",
-	"cmd.(*webAPIHandlers).GetBucketPolicy",
-	"cmd.(*webAPIHandlers).ListAllBucketPolicies",
-	"cmd.(*webAPIHandlers).SetBucketPolicy",
-	"cmd.(*webAPIHandlers).PresignedGet",
-	"cmd.(*webAPIHandlers).ServerInfo",
-	"cmd.(*webAPIHandlers).StorageInfo",
 	// add more here ..
 }
 
@@ -159,7 +140,6 @@ func SetDeploymentID(deploymentID string) {
 // This is done to clean up the filename, when stack trace is
 // displayed when an error happens.
 func Init(goPath string, goRoot string) {
-
 	var goPathList []string
 	var goRootList []string
 	var defaultgoPathList []string
@@ -341,6 +321,15 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	if req.DeploymentID == "" {
 		req.DeploymentID = globalDeploymentID
 	}
+
+	objects := make([]log.ObjectVersion, 0, len(req.Objects))
+	for _, ov := range req.Objects {
+		objects = append(objects, log.ObjectVersion{
+			ObjectName: ov.ObjectName,
+			VersionID:  ov.VersionID,
+		})
+	}
+
 	entry := log.Entry{
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),
@@ -349,12 +338,14 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		Host:         req.Host,
 		RequestID:    req.RequestID,
 		UserAgent:    req.UserAgent,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		Time:         time.Now().UTC(),
 		API: &log.API{
 			Name: API,
 			Args: &log.Args{
-				Bucket: req.BucketName,
-				Object: req.ObjectName,
+				Bucket:    req.BucketName,
+				Object:    req.ObjectName,
+				VersionID: req.VersionID,
+				Objects:   objects,
 			},
 		},
 		Trace: &log.Trace{
@@ -374,7 +365,9 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 
 	// Iterate over all logger targets to send the log entry
 	for _, t := range Targets() {
-		t.Send(entry, entry.LogKind)
+		if err := t.Send(entry, entry.LogKind); err != nil {
+			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Logger target (%v): %v", entry, t, err), entry.LogKind)
+		}
 	}
 }
 

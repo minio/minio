@@ -473,27 +473,32 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 // start a collector that picks up entries from objectUpdatedCh
 // and adds them  to the current bloom filter.
 func (d *dataUpdateTracker) startCollector(ctx context.Context) {
-	for in := range d.input {
-		bucket, _ := path2BucketObjectWithBasePath("", in)
-		if bucket == "" {
-			if d.debug && len(in) > 0 {
-				console.Debugf(color.Green("dataUpdateTracker:")+" no bucket (%s)\n", in)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case in := <-d.input:
+			bucket, _ := path2BucketObjectWithBasePath("", in)
+			if bucket == "" {
+				if d.debug && len(in) > 0 {
+					console.Debugf(color.Green("dataUpdateTracker:")+" no bucket (%s)\n", in)
+				}
+				continue
 			}
-			continue
-		}
 
-		if isReservedOrInvalidBucket(bucket, false) {
-			continue
-		}
-		split := splitPathDeterministic(in)
+			if isReservedOrInvalidBucket(bucket, false) {
+				continue
+			}
+			split := splitPathDeterministic(in)
 
-		// Add all paths until done.
-		d.mu.Lock()
-		for i := range split {
-			d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
+			// Add all paths until done.
+			d.mu.Lock()
+			for i := range split {
+				d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
+			}
+			d.dirty = d.dirty || len(split) > 0
+			d.mu.Unlock()
 		}
-		d.dirty = d.dirty || len(split) > 0
-		d.mu.Unlock()
 	}
 }
 

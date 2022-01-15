@@ -45,7 +45,7 @@ func (c Context) MarshalText() ([]byte, error) {
 
 	// Pre-allocate a buffer - 128 bytes is an arbitrary
 	// heuristic value that seems like a good starting size.
-	var b = bytes.NewBuffer(make([]byte, 0, 128))
+	b := bytes.NewBuffer(make([]byte, 0, 128))
 	if len(c) == 1 {
 		for k, v := range c {
 			b.WriteString(`{"`)

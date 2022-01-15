@@ -177,7 +177,11 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	toObjectNames := func(testCases []testCaseType) []ObjectToDelete {
 		names := make([]ObjectToDelete, len(testCases))
 		for i := range testCases {
-			names[i] = ObjectToDelete{ObjectName: testCases[i].object}
+			names[i] = ObjectToDelete{
+				ObjectV: ObjectV{
+					ObjectName: testCases[i].object,
+				},
+			}
 		}
 		return names
 	}
@@ -505,7 +509,6 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			gr.Close()
 		}
 	}
-
 }
 
 func TestHeadObjectNoQuorum(t *testing.T) {

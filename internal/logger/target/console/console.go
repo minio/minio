@@ -20,8 +20,8 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
@@ -81,15 +81,28 @@ func (c *Target) Send(e interface{}, logKind string) error {
 		}
 	}
 
-	apiString := "API: " + entry.API.Name + "("
-	if entry.API.Args != nil && entry.API.Args.Bucket != "" {
-		apiString = apiString + "bucket=" + entry.API.Args.Bucket
+	var apiString string
+	if entry.API != nil {
+		apiString = "API: " + entry.API.Name + "("
+		if entry.API.Args != nil {
+			if entry.API.Args.Bucket != "" {
+				apiString = apiString + "bucket=" + entry.API.Args.Bucket
+			}
+			if entry.API.Args.Object != "" {
+				apiString = apiString + ", object=" + entry.API.Args.Object
+			}
+			if entry.API.Args.VersionID != "" {
+				apiString = apiString + ", versionId=" + entry.API.Args.VersionID
+			}
+			if len(entry.API.Args.Objects) > 0 {
+				apiString = apiString + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+			}
+		}
+		apiString += ")"
+	} else {
+		apiString = "INTERNAL"
 	}
-	if entry.API.Args != nil && entry.API.Args.Object != "" {
-		apiString = apiString + ", object=" + entry.API.Args.Object
-	}
-	apiString += ")"
-	timeString := "Time: " + time.Now().Format(logger.TimeFormat)
+	timeString := "Time: " + entry.Time.Format(logger.TimeFormat)
 
 	var deploymentID string
 	if entry.DeploymentID != "" {
@@ -120,8 +133,8 @@ func (c *Target) Send(e interface{}, logKind string) error {
 		tagString = "\n       " + tagString
 	}
 
-	var msg = color.FgRed(color.Bold(entry.Trace.Message))
-	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
+	msg := color.FgRed(color.Bold(entry.Trace.Message))
+	output := fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
 		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 

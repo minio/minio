@@ -18,7 +18,6 @@
 package subnet
 
 import (
-	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )
@@ -27,17 +26,27 @@ var (
 	// DefaultKVS - default KV config for subnet settings
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.License,
+			Key:   config.License, // Deprecated Dec 2021
+			Value: "",
+		},
+		config.KV{
+			Key:   config.APIKey,
 			Value: "",
 		},
 	}
 
-	// HelpLicense - provides help for license config
-	HelpLicense = config.HelpKVS{
+	// HelpSubnet - provides help for subnet api key config
+	HelpSubnet = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.License,
+			Key:         config.License, // Deprecated Dec 2021
 			Type:        "string",
-			Description: "Subnet license token for the cluster",
+			Description: "[DEPRECATED use api_key] Subnet license token for the cluster",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         config.APIKey,
+			Type:        "string",
+			Description: "Subnet api key for the cluster",
 			Optional:    true,
 		},
 	}
@@ -45,18 +54,11 @@ var (
 
 // Config represents the subnet related configuration
 type Config struct {
-	// The subnet license token
+	// The subnet license token - Deprecated Dec 2021
 	License string `json:"license"`
-}
 
-func validateLicenseFormat(lic string) error {
-	if len(lic) == 0 {
-		return nil
-	}
-
-	// Only verifying that the string is a parseable JWT token as of now
-	_, _, err := new(jwtgo.Parser).ParseUnverified(lic, jwtgo.MapClaims{})
-	return err
+	// The subnet api key
+	APIKey string `json:"api_key"`
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.
@@ -66,6 +68,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	cfg.License = env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License))
+	cfg.APIKey = env.Get(config.EnvMinIOSubnetAPIKey, kvs.Get(config.APIKey))
 
-	return cfg, validateLicenseFormat(cfg.License)
+	return cfg, nil
 }

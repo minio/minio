@@ -85,3 +85,11 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-iam
+      - name: Test LDAP for automatic site replication
+        if: matrix.ldap == 'localhost:389'
+        run: |
+          make test-site-replication-ldap
+      - name: Test OIDC for automatic site replication
+        if: matrix.openid == 'http://127.0.0.1:5556/dex'
+        run: |
+          make test-site-replication-oidc

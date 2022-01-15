@@ -130,7 +130,6 @@ func FromMinioClientListMultipartsInfo(lmur minio.ListMultipartUploadsResult) Li
 		CommonPrefixes:     commonPrefixes,
 		EncodingType:       lmur.EncodingType,
 	}
-
 }
 
 // FromMinioClientObjectInfo converts minio ObjectInfo to gateway ObjectInfo

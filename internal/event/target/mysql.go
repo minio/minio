@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	mysqlTableExists          = `SELECT 1 FROM %s;`
-	mysqlCreateNamespaceTable = `CREATE TABLE %s (key_name VARCHAR(4096), value JSON, PRIMARY KEY (key_name))
+	mysqlTableExists = `SELECT 1 FROM %s;`
+	// Some MySQL has a 3072 byte limit on key sizes.
+	mysqlCreateNamespaceTable = `CREATE TABLE %s (key_name VARCHAR(3072), value JSON, PRIMARY KEY (key_name))
                                        CHARACTER SET = utf8mb4 COLLATE = utf8mb4_bin ROW_FORMAT = Dynamic;`
 	mysqlCreateAccessTable = `CREATE TABLE %s (event_time DATETIME NOT NULL, event_data JSON)
                                     ROW_FORMAT = Dynamic;`
@@ -239,7 +240,6 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to MySQL.
 func (target *MySQLTarget) Send(eventKey string) error {
-
 	_, err := target.IsActive()
 	if err != nil {
 		return err
@@ -297,7 +297,6 @@ func (target *MySQLTarget) Close() error {
 
 // Executes the table creation statements.
 func (target *MySQLTarget) executeStmts() error {
-
 	_, err := target.db.Exec(fmt.Sprintf(mysqlTableExists, target.args.Table))
 	if err != nil {
 		createStmt := mysqlCreateNamespaceTable
@@ -328,7 +327,6 @@ func (target *MySQLTarget) executeStmts() error {
 	}
 
 	return nil
-
 }
 
 // NewMySQLTarget - creates new MySQL target.

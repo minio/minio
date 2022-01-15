@@ -89,7 +89,7 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		}
 	}
 
-	var healDisksMap = map[string]struct{}{}
+	healDisksMap := map[string]struct{}{}
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
 	}
@@ -139,7 +139,6 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 	status.SCParity[storageclass.RRS] = backendInfo.RRSCParity
 
 	return status, true
-
 }
 
 func mustGetHealSequence(ctx context.Context) *healSequence {
@@ -168,9 +167,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	bgSeq := mustGetHealSequence(ctx)
 	scanMode := globalHealConfig.ScanMode()
 
+	// Make sure to copy since `buckets slice`
+	// is modified in place by tracker.
+	healBuckets := make([]string, len(buckets))
+	copy(healBuckets, buckets)
+
 	var retErr error
 	// Heal all buckets with all objects
-	for _, bucket := range buckets {
+	for _, bucket := range healBuckets {
 		if tracker.isHealed(bucket) {
 			continue
 		}
@@ -215,7 +219,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		healEntry := func(entry metaCacheEntry) {
+			if entry.name == "" && len(entry.metadata) == 0 {
+				// ignore entries that don't have metadata.
+				return
+			}
 			if entry.isDir() {
+				// ignore healing entry.name's with `/` suffix.
 				return
 			}
 			// We might land at .metacache, .trash, .multipart
@@ -242,7 +251,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				}, madmin.HealItemObject)
 				if err != nil {
 					tracker.ItemsFailed++
-					logger.LogIf(ctx, err)
+					logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
 					tracker.ItemsHealed++
 				}
@@ -259,7 +268,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// If not deleted, assume they failed.
 					tracker.ItemsFailed++
 					tracker.BytesFailed += uint64(version.Size)
-					logger.LogIf(ctx, err)
+					if version.VersionID != "" {
+						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
+					} else {
+						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
+					}
 				} else {
 					tracker.ItemsHealed++
 					tracker.BytesDone += uint64(version.Size)
@@ -301,7 +314,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			},
 			finished: nil,
 		})
-
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the
@@ -318,6 +330,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		default:
 			tracker.bucketDone(bucket)
 			logger.LogIf(ctx, tracker.update(ctx))
+			logger.Info("Healing bucket %s content on %s erasure set complete",
+				bucket, humanize.Ordinal(tracker.SetIndex+1))
 		}
 	}
 	tracker.Object = ""

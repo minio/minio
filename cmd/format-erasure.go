@@ -242,7 +242,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0666)
+	return ioutil.WriteFile(formatPath, b, 0o666)
 }
 
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
@@ -266,7 +266,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 		return err
 	}
 
-	if err = mkdirAll(pathJoin(export, minioMetaMultipartBucket), 0755); err != nil {
+	if err = mkdirAll(pathJoin(export, minioMetaMultipartBucket), 0o755); err != nil {
 		return err
 	}
 
@@ -284,12 +284,12 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(formatPath, b, 0666)
+	return ioutil.WriteFile(formatPath, b, 0o666)
 }
 
 // countErrs - count a specific error.
 func countErrs(errs []error, err error) int {
-	var i = 0
+	i := 0
 	for _, err1 := range errs {
 		if err1 == err {
 			i++
@@ -314,7 +314,7 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Initialize format configs.
-	var formats = make([]*formatErasureV3, len(storageDisks))
+	formats := make([]*formatErasureV3, len(storageDisks))
 
 	// Load format from each disk in parallel
 	for index := range storageDisks {
@@ -534,7 +534,6 @@ func formatErasureFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI
 	// Deployment ID needs to be set on all the disks.
 	// Save `format.json` across all disks.
 	return saveFormatErasureAll(GlobalContext, storageDisks, formats)
-
 }
 
 // Update only the valid local disks which have not been updated before.
@@ -662,7 +661,6 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 
 // Initializes meta volume only on local storage disks.
 func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatErasureV3) error {
-
 	// Compute the local disks eligible for meta volumes (re)initialization
 	disksToInit := make([]StorageAPI, 0, len(storageDisks))
 	for index := range storageDisks {
@@ -811,7 +809,6 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 		}
 	}
 	return nil
-
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
@@ -899,8 +896,17 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 	if disk == nil {
 		return errDiskNotFound
 	}
+	volumes := []string{
+		minioMetaBucket,
+		minioMetaTmpBucket,
+		minioMetaMultipartBucket,
+		minioMetaTmpDeletedBucket,
+		dataUsageBucket,
+		pathJoin(minioMetaBucket, minioConfigPrefix),
+		minioMetaTmpBucket + "-old",
+	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket, dataUsageBucket, minioMetaTmpBucket+"-old")
+	return disk.MakeVolBulk(context.TODO(), volumes...)
 }
 
 // Initialize a new set of set formats which will be written to all disks.

@@ -69,6 +69,9 @@ func (e *Expression) evalNode(r Record, tableAlias string) (*Value, error) {
 		if !ok {
 			return nil, errExpectedBool
 		}
+		if b {
+			return FromBool(true), nil
+		}
 		result = result || b
 	}
 	return FromBool(result), nil
@@ -90,6 +93,9 @@ func (e *AndCondition) evalNode(r Record, tableAlias string) (*Value, error) {
 		b, ok := res.ToBool()
 		if !ok {
 			return nil, errExpectedBool
+		}
+		if !b {
+			return FromBool(false), nil
 		}
 		result = result && b
 	}

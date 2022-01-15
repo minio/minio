@@ -163,7 +163,7 @@ func (w *metacacheWriter) stream() (chan<- metaCacheEntry, error) {
 			return nil, errors.New("metacacheWriter: writer not initialized")
 		}
 	}
-	var objs = make(chan metaCacheEntry, 100)
+	objs := make(chan metaCacheEntry, 100)
 	w.streamErr = nil
 	w.streamWg.Add(1)
 	go func() {
@@ -406,7 +406,7 @@ func (r *metacacheReader) forwardTo(s string) error {
 		r.current.metadata = nil
 	}
 	// temporary name buffer.
-	var tmp = make([]byte, 0, 256)
+	tmp := make([]byte, 0, 256)
 	for {
 		if more, err := r.mr.ReadBool(); !more {
 			switch err {
@@ -457,7 +457,7 @@ func (r *metacacheReader) forwardTo(s string) error {
 // Will return io.EOF if end of stream is reached.
 // If requesting 0 objects nil error will always be returned regardless of at end of stream.
 // Use peek to determine if at end of stream.
-func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string) (metaCacheEntriesSorted, error) {
+func (r *metacacheReader) readN(n int, inclDeleted, inclDirs, inclVersions bool, prefix string) (metaCacheEntriesSorted, error) {
 	r.checkInit()
 	if n == 0 {
 		return metaCacheEntriesSorted{}, nil
@@ -528,10 +528,10 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 			metaDataPoolPut(meta.metadata)
 			meta.metadata = nil
 		}
-		if !inclDirs && meta.isDir() {
+		if !inclDirs && (meta.isDir() || (!inclVersions && meta.isObjectDir() && meta.isLatestDeletemarker())) {
 			continue
 		}
-		if !inclDeleted && meta.isLatestDeletemarker() {
+		if !inclDeleted && meta.isLatestDeletemarker() && meta.isObject() && !meta.isObjectDir() {
 			continue
 		}
 		res = append(res, meta)
@@ -838,7 +838,7 @@ type metacacheBlock struct {
 }
 
 func (b metacacheBlock) headerKV() map[string]string {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	v, err := json.Marshal(b)
 	if err != nil {
 		logger.LogIf(context.Background(), err) // Unlikely

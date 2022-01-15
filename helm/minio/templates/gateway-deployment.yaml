@@ -69,8 +69,16 @@ spec:
           command:
             - "/bin/sh"
             - "-ce"
+            {{- if eq .Values.gateway.type "nas" }}
             - "/usr/bin/docker-entrypoint.sh minio gateway nas {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
+            {{- end }}
+            {{- if eq .Values.gateway.type "gcs" }}
+            - "/usr/bin/docker-entrypoint.sh minio gateway gcs {{ .Values.gateway.gcs.projectId }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
+            {{- end }}
           volumeMounts:
+            - name: minio-user
+              mountPath: "/tmp/credentials"
+              readOnly: true
             {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
@@ -95,10 +103,34 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
+            {{- if eq .Values.gateway.type "gcs" }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/tmp/credentials/service-account-file.json"
+            {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
             {{- end}}
+            {{- if .Values.etcd.endpoints }}
+            - name: MINIO_ETCD_ENDPOINTS
+              value: {{ join "," .Values.etcd.endpoints | quote }}
+            {{- if .Values.etcd.clientCert }}
+            - name: MINIO_ETCD_CLIENT_CERT
+              value: "/tmp/credentials/etcd_client.crt"
+            {{- end }}
+            {{- if .Values.etcd.clientCertKey }}
+            - name: MINIO_ETCD_CLIENT_CERT_KEY
+              value: "/tmp/credentials/etcd_client.key"
+            {{- end }}
+            {{- if .Values.etcd.pathPrefix }}
+            - name: MINIO_ETCD_PATH_PREFIX
+              value: {{ .Values.etcd.pathPrefix }}
+            {{- end }}
+            {{- if .Values.etcd.corednsPathPrefix }}
+            - name: MINIO_ETCD_COREDNS_PATH
+              value: {{ .Values.etcd.corednsPathPrefix }}
+            {{- end }}
+            {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
               value: {{ $val | quote }}

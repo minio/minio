@@ -234,7 +234,7 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 }
 
 // Update update storage-class with new config
-func (sCfg Config) Update(newCfg Config) {
+func (sCfg *Config) Update(newCfg Config) {
 	ConfigLock.Lock()
 	defer ConfigLock.Unlock()
 	sCfg.RRS = newCfg.RRS

@@ -110,5 +110,4 @@ func TestRWPool(t *testing.T) {
 			t.Fatal("Unexpected error", err)
 		}
 	}
-
 }

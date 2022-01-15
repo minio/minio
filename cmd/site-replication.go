@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -40,16 +41,16 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/bucket/policy"
+	bktpolicy "github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 const (
 	srStatePrefix = minioConfigPrefix + "/site-replication"
-
-	srStateFile = "state.json"
+	srStateFile   = "state.json"
 )
 
 const (
@@ -57,11 +58,26 @@ const (
 )
 
 var (
-	errSRCannotJoin     = errors.New("this site is already configured for site-replication")
-	errSRDuplicateSites = errors.New("duplicate sites provided for site-replication")
-	errSRSelfNotFound   = errors.New("none of the given sites correspond to the current one")
-	errSRPeerNotFound   = errors.New("peer not found")
-	errSRNotEnabled     = errors.New("site replication is not enabled")
+	errSRCannotJoin = SRError{
+		Cause: errors.New("this site is already configured for site-replication"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRDuplicateSites = SRError{
+		Cause: errors.New("duplicate sites provided for site-replication"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRSelfNotFound = SRError{
+		Cause: errors.New("none of the given sites correspond to the current one"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRPeerNotFound = SRError{
+		Cause: errors.New("peer not found"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRNotEnabled = SRError{
+		Cause: errors.New("site replication is not enabled"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
 )
 
 func errSRInvalidRequest(err error) SRError {
@@ -97,7 +113,6 @@ func errSRBucketConfigError(err error) SRError {
 		Cause: err,
 		Code:  ErrSiteReplicationBucketConfigError,
 	}
-
 }
 
 func errSRBucketMetaError(err error) SRError {
@@ -114,12 +129,10 @@ func errSRIAMError(err error) SRError {
 	}
 }
 
-var (
-	errSRObjectLayerNotReady = SRError{
-		Cause: fmt.Errorf("object layer not ready"),
-		Code:  ErrServerNotInitialized,
-	}
-)
+var errSRObjectLayerNotReady = SRError{
+	Cause: fmt.Errorf("object layer not ready"),
+	Code:  ErrServerNotInitialized,
+}
 
 func getSRStateFilePath() string {
 	return srStatePrefix + SlashSeparator + srStateFile
@@ -310,7 +323,7 @@ func (c *SiteReplicationSys) getSiteStatuses(ctx context.Context, sites []madmin
 }
 
 // AddPeerClusters - add cluster sites for replication configuration.
-func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmin.PeerSite) (madmin.ReplicateAddStatus, SRError) {
+func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmin.PeerSite) (madmin.ReplicateAddStatus, error) {
 	sites, serr := c.getSiteStatuses(ctx, psites)
 	if serr.Cause != nil {
 		return madmin.ReplicateAddStatus{}, serr
@@ -332,11 +345,11 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	deploymentIDsSet := set.NewStringSet()
 	localHasBuckets := false
 	nonLocalPeerWithBuckets := ""
-	var selfIdx = -1
+	selfIdx := -1
 	for i, v := range sites {
 		// deploymentIDs must be unique
 		if deploymentIDsSet.Contains(v.DeploymentID) {
-			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errSRDuplicateSites)
+			return madmin.ReplicateAddStatus{}, errSRDuplicateSites
 		}
 		deploymentIDsSet.Add(v.DeploymentID)
 
@@ -352,32 +365,32 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	if c.enabled {
 		// If current cluster is already SR enabled and no new site being added ,fail.
 		if currDeploymentIDsSet.Equals(deploymentIDsSet) {
-			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errSRCannotJoin)
+			return madmin.ReplicateAddStatus{}, errSRCannotJoin
 		}
 		if len(currDeploymentIDsSet.Intersection(deploymentIDsSet)) != len(currDeploymentIDsSet) {
 			diffSlc := getMissingSiteNames(currDeploymentIDsSet, deploymentIDsSet, currSites.Sites)
-			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("All existing replicated sites must be specified - missing %s", strings.Join(diffSlc, " ")))
+			return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("all existing replicated sites must be specified - missing %s", strings.Join(diffSlc, " ")))
 		}
 	}
 	// For this `add` API, either all clusters must be empty or the local
 	// cluster must be the only one having some buckets.
 
 	if localHasBuckets && nonLocalPeerWithBuckets != "" {
-		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errors.New("Only one cluster may have data when configuring site replication"))
+		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errors.New("only one cluster may have data when configuring site replication"))
 	}
 
 	if !localHasBuckets && nonLocalPeerWithBuckets != "" {
-		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("Please send your request to the cluster containing data/buckets: %s", nonLocalPeerWithBuckets))
+		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("please send your request to the cluster containing data/buckets: %s", nonLocalPeerWithBuckets))
 	}
 
 	// validate that all clusters are using the same (LDAP based)
 	// external IDP.
-	pass, verr := c.validateIDPSettings(ctx, sites)
-	if verr.Cause != nil {
-		return madmin.ReplicateAddStatus{}, verr
+	pass, err := c.validateIDPSettings(ctx, sites)
+	if err != nil {
+		return madmin.ReplicateAddStatus{}, err
 	}
 	if !pass {
-		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(fmt.Errorf("All cluster sites must have the same (LDAP) IDP settings."))
+		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errors.New("all cluster sites must have the same (LDAP) IDP settings"))
 	}
 
 	// FIXME: Ideally, we also need to check if there are any global IAM
@@ -414,7 +427,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
 	}
 
-	joinReq := madmin.SRInternalJoinReq{
+	joinReq := madmin.SRPeerJoinReq{
 		SvcAcctAccessKey: svcCred.AccessKey,
 		SvcAcctSecretKey: secretKey,
 		Peers:            make(map[string]madmin.PeerInfo),
@@ -430,7 +443,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 
 	addedCount := 0
 	var (
-		peerAddErr SRError
+		peerAddErr error
 		admClient  *madmin.AdminClient
 	)
 
@@ -449,7 +462,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			break
 		}
 		joinReq.SvcAcctParent = v.AccessKey
-		err = admClient.SRInternalJoin(ctx, joinReq)
+		err = admClient.SRPeerJoin(ctx, joinReq)
 		if err != nil {
 			peerAddErr = errSRPeerResp(fmt.Errorf("unable to link with peer %s: %w", v.Name, err))
 			break
@@ -457,7 +470,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		addedCount++
 	}
 
-	if peerAddErr.Cause != nil {
+	if peerAddErr != nil {
 		if addedCount == 0 {
 			return madmin.ReplicateAddStatus{}, peerAddErr
 		}
@@ -470,8 +483,9 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			ErrDetail: peerAddErr.Error(),
 		}
 
-		return partial, SRError{}
+		return partial, nil
 	}
+
 	// Other than handling existing buckets, we can now save the cluster
 	// replication configuration state.
 	state := srState{
@@ -479,29 +493,29 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		Peers:                   joinReq.Peers,
 		ServiceAccountAccessKey: svcCred.AccessKey,
 	}
-	err = c.saveToDisk(ctx, state)
-	if err != nil {
+
+	if err = c.saveToDisk(ctx, state); err != nil {
 		return madmin.ReplicateAddStatus{
 			Status:    madmin.ReplicateAddStatusPartial,
 			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, SRError{}
+		}, nil
 	}
 
 	result := madmin.ReplicateAddStatus{
 		Success: true,
 		Status:  madmin.ReplicateAddStatusSuccess,
 	}
-	initialSyncErr := c.syncLocalToPeers(ctx)
-	if initialSyncErr.Code != ErrNone {
-		result.InitialSyncErrorMessage = initialSyncErr.Error()
+
+	if err := c.syncLocalToPeers(ctx); err != nil {
+		result.InitialSyncErrorMessage = err.Error()
 	}
 
-	return result, SRError{}
+	return result, nil
 }
 
-// InternalJoinReq - internal API handler to respond to a peer cluster's request
+// PeerJoinReq - internal API handler to respond to a peer cluster's request
 // to join.
-func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRInternalJoinReq) SRError {
+func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJoinReq) error {
 	var ourName string
 	for d, p := range arg.Peers {
 		if d == globalDeploymentID {
@@ -510,7 +524,7 @@ func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRI
 		}
 	}
 	if ourName == "" {
-		return errSRInvalidRequest(errSRSelfNotFound)
+		return errSRSelfNotFound
 	}
 
 	_, _, err := globalIAMSys.GetServiceAccount(ctx, arg.SvcAcctAccessKey)
@@ -529,26 +543,31 @@ func (c *SiteReplicationSys) InternalJoinReq(ctx context.Context, arg madmin.SRI
 		Peers:                   arg.Peers,
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
 	}
-	err = c.saveToDisk(ctx, state)
-	if err != nil {
+	if err = c.saveToDisk(ctx, state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
 	}
-	return SRError{}
+	return nil
 }
 
 // GetIDPSettings returns info about the configured identity provider. It is
 // used to validate that all peers have the same IDP.
 func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSettings {
-	return madmin.IDPSettings{
+	s := madmin.IDPSettings{}
+	s.LDAP = madmin.LDAPSettings{
 		IsLDAPEnabled:          globalLDAPConfig.Enabled,
 		LDAPUserDNSearchBase:   globalLDAPConfig.UserDNSearchBaseDN,
 		LDAPUserDNSearchFilter: globalLDAPConfig.UserDNSearchFilter,
 		LDAPGroupSearchBase:    globalLDAPConfig.GroupSearchBaseDistName,
 		LDAPGroupSearchFilter:  globalLDAPConfig.GroupSearchFilter,
 	}
+	s.OpenID = globalOpenIDConfig.GetSettings()
+	if s.OpenID.Enabled {
+		s.OpenID.Region = globalSite.Region
+	}
+	return s
 }
 
-func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []PeerSiteInfo) (bool, SRError) {
+func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []PeerSiteInfo) (bool, error) {
 	s := make([]madmin.IDPSettings, 0, len(peers))
 	for _, v := range peers {
 		if v.self {
@@ -561,24 +580,19 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 			return false, errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
 		}
 
-		is, err := admClient.SRInternalGetIDPSettings(ctx)
+		is, err := admClient.SRPeerGetIDPSettings(ctx)
 		if err != nil {
 			return false, errSRPeerResp(fmt.Errorf("unable to fetch IDP settings from %s: %v", v.Name, err))
 		}
 		s = append(s, is)
 	}
 
-	for _, v := range s {
-		if !v.IsLDAPEnabled {
-			return false, SRError{}
-		}
-	}
 	for i := 1; i < len(s); i++ {
-		if s[i] != s[0] {
-			return false, SRError{}
+		if !reflect.DeepEqual(s[i], s[0]) {
+			return false, nil
 		}
 	}
-	return true, SRError{}
+	return true, nil
 }
 
 // GetClusterInfo - returns site replication information.
@@ -621,7 +635,11 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 		optsMap["location"] = opts.Location
 	}
 	if opts.LockEnabled {
-		optsMap["lockEnabled"] = ""
+		optsMap["lockEnabled"] = "true"
+		optsMap["versioningEnabled"] = "true"
+	}
+	if opts.VersioningEnabled {
+		optsMap["versioningEnabled"] = "true"
 	}
 
 	// Create bucket and enable versioning on all peers.
@@ -637,7 +655,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 				return err
 			}
 
-			err = admClient.SRInternalBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap)
+			err = admClient.SRPeerBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap)
 			logger.LogIf(ctx, c.annotatePeerErr(p.Name, "MakeWithVersioning", err))
 			return err
 		},
@@ -665,7 +683,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 				return err
 			}
 
-			err = admClient.SRInternalBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil)
+			err = admClient.SRPeerBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil)
 			logger.LogIf(ctx, c.annotatePeerErr(p.Name, "ConfigureRepl", err))
 			return err
 		},
@@ -702,7 +720,7 @@ func (c *SiteReplicationSys) DeleteBucketHook(ctx context.Context, bucket string
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalBucketOps(ctx, bucket, op, nil)
+		err = admClient.SRPeerBucketOps(ctx, bucket, op, nil)
 		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "DeleteBucket", err))
 		return err
 	})
@@ -715,6 +733,7 @@ func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Con
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
+
 	err := objAPI.MakeBucketWithLocation(ctx, bucket, opts)
 	if err != nil {
 		// Check if this is a bucket exists error.
@@ -730,27 +749,25 @@ func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Con
 		globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 	}
 
-	// Enable versioning on the bucket.
-	config, err := globalBucketVersioningSys.Get(bucket)
+	meta, err := globalBucketMetadataSys.Get(bucket)
 	if err != nil {
+		logger.LogIf(ctx, c.annotateErr("MakeBucketErr on peer call", err))
 		return wrapSRErr(err)
 	}
-	if !config.Enabled() {
-		verConf := versioning.Versioning{
-			Status: versioning.Enabled,
-		}
-		// FIXME: need to confirm if skipping object lock and
-		// versioning-suspended state checks are valid here.
-		cfgData, err := xml.Marshal(verConf)
-		if err != nil {
-			return wrapSRErr(err)
-		}
-		err = globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, cfgData)
-		if err != nil {
-			logger.LogIf(ctx, c.annotateErr("Versioning enabling error on peer call", err))
-			return wrapSRErr(err)
-		}
+
+	meta.VersioningConfigXML = enabledBucketVersioningConfig
+	if opts.LockEnabled {
+		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 	}
+
+	if err := meta.Save(context.Background(), objAPI); err != nil {
+		return wrapSRErr(err)
+	}
+
+	globalBucketMetadataSys.Set(bucket, meta)
+
+	// Load updated bucket metadata into memory as new metadata updated.
+	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 	return nil
 }
 
@@ -932,14 +949,24 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 		return errSRNotEnabled
 	}
 
-	// FIXME: need to handle cases where globalDNSConfig is set.
-
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
+
+	if globalDNSConfig != nil {
+		if err := globalDNSConfig.Delete(bucket); err != nil {
+			return err
+		}
+	}
+
 	err := objAPI.DeleteBucket(ctx, bucket, DeleteBucketOptions{Force: forceDelete})
 	if err != nil {
+		if globalDNSConfig != nil {
+			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, please fix it manually", err2))
+			}
+		}
 		return err
 	}
 
@@ -959,12 +986,8 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 // OpenID, such mappings are provided from the IDP directly and so are not
 // applicable here.
 //
-// Only certain service accounts can be replicated:
-//
-// Service accounts created for STS credentials using an external IDP: such STS
-// credentials would be valid on the peer clusters as they are assumed to be
-// using the same external IDP. Service accounts when using internal IDP or for
-// root user will not be replicated.
+// Service accounts are replicated as long as they are not meant for the root
+// user.
 //
 // STS accounts are replicated, but only if the session token is verifiable
 // using the local cluster's root credential.
@@ -984,8 +1007,8 @@ func (c *SiteReplicationSys) IAMChangeHook(ctx context.Context, item madmin.SRIA
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalReplicateIAMItem(ctx, item)
-		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRInternalReplicateIAMItem", err))
+		err = admClient.SRPeerReplicateIAMItem(ctx, item)
+		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRPeerReplicateIAMItem", err))
 		return err
 	})
 	return cErr.summaryErr
@@ -1006,8 +1029,49 @@ func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyNam
 	return nil
 }
 
+// PeerIAMUserChangeHandler - copies IAM user to local.
+func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, change *madmin.SRIAMUser) error {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+	var err error
+	if change.IsDeleteReq {
+		err = globalIAMSys.DeleteUser(ctx, change.AccessKey, true)
+	} else {
+		if change.UserReq == nil {
+			return errSRInvalidRequest(errInvalidArgument)
+		}
+		err = globalIAMSys.CreateUser(ctx, change.AccessKey, *change.UserReq)
+	}
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
+// PeerGroupInfoChangeHandler - copies group changes to local.
+func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, change *madmin.SRGroupInfo) error {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+	updReq := change.UpdateReq
+	var err error
+	if updReq.IsRemove {
+		err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
+	} else {
+		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+	}
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
 // PeerSvcAccChangeHandler - copies service-account change to local.
-func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change madmin.SRSvcAccChange) error {
+func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change *madmin.SRSvcAccChange) error {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
 	switch {
 	case change.Create != nil:
 		var sp *iampolicy.Policy
@@ -1051,16 +1115,9 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		}
 
 	case change.Delete != nil:
-		err := globalIAMSys.DeleteServiceAccount(ctx, change.Delete.AccessKey)
+		err := globalIAMSys.DeleteServiceAccount(ctx, change.Delete.AccessKey, true)
 		if err != nil {
 			return wrapSRErr(err)
-		}
-
-		for _, nerr := range globalNotificationSys.DeleteServiceAccount(change.Delete.AccessKey) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
 		}
 
 	}
@@ -1069,7 +1126,10 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 }
 
 // PeerPolicyMappingHandler - copies policy mapping to local.
-func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mapping madmin.SRPolicyMapping) error {
+func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mapping *madmin.SRPolicyMapping) error {
+	if mapping == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
 	err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
 	if err != nil {
 		return wrapSRErr(err)
@@ -1078,7 +1138,11 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 }
 
 // PeerSTSAccHandler - replicates STS credential locally.
-func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madmin.SRSTSCredential) error {
+func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *madmin.SRSTSCredential) error {
+	if stsCred == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+
 	// Verify the session token of the stsCred
 	claims, err := auth.ExtractClaims(stsCred.SessionToken, globalActiveCred.SecretKey)
 	if err != nil {
@@ -1089,19 +1153,7 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 	mapClaims := claims.Map()
 	expiry, err := auth.ExpToInt64(mapClaims["exp"])
 	if err != nil {
-		return fmt.Errorf("Expiry claim was not found")
-	}
-
-	// Extract the username and lookup DN and groups in LDAP.
-	ldapUser, ok := claims.Lookup(ldapUserN)
-	if !ok {
-		return fmt.Errorf("Could not find LDAP username in claims")
-	}
-
-	// Need to lookup the groups from LDAP.
-	ldapUserDN, ldapGroups, err := globalLDAPConfig.LookupUserDN(ldapUser)
-	if err != nil {
-		return fmt.Errorf("unable to query LDAP server for %s: %v", ldapUser, err)
+		return fmt.Errorf("Expiry claim was not found: %v", mapClaims)
 	}
 
 	cred := auth.Credentials{
@@ -1109,14 +1161,26 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred madm
 		SecretKey:    stsCred.SecretKey,
 		Expiration:   time.Unix(expiry, 0).UTC(),
 		SessionToken: stsCred.SessionToken,
+		ParentUser:   stsCred.ParentUser,
 		Status:       auth.AccountOn,
-		ParentUser:   ldapUserDN,
-		Groups:       ldapGroups,
+	}
+
+	// Extract the username and lookup DN and groups in LDAP.
+	ldapUser, isLDAPSTS := claims.Lookup(ldapUserN)
+	switch {
+	case isLDAPSTS:
+		// Need to lookup the groups from LDAP.
+		_, ldapGroups, err := globalLDAPConfig.LookupUserDN(ldapUser)
+		if err != nil {
+			return fmt.Errorf("unable to query LDAP server for %s: %v", ldapUser, err)
+		}
+
+		cred.Groups = ldapGroups
 	}
 
 	// Set these credentials to IAM.
-	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
-		return fmt.Errorf("unable to save STS credential: %v", err)
+	if err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, stsCred.ParentPolicyMapping); err != nil {
+		return fmt.Errorf("unable to save STS credential and/or parent policy mapping: %v", err)
 	}
 
 	return nil
@@ -1140,8 +1204,8 @@ func (c *SiteReplicationSys) BucketMetaHook(ctx context.Context, item madmin.SRB
 			return wrapSRErr(err)
 		}
 
-		err = admClient.SRInternalReplicateBucketMeta(ctx, item)
-		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRInternalReplicateBucketMeta", err))
+		err = admClient.SRPeerReplicateBucketMeta(ctx, item)
+		logger.LogIf(ctx, c.annotatePeerErr(p.Name, "SRPeerReplicateBucketMeta", err))
 		return err
 	})
 	return cErr.summaryErr
@@ -1252,7 +1316,7 @@ func (c *SiteReplicationSys) getAdminClient(ctx context.Context, deploymentID st
 func (c *SiteReplicationSys) getPeerCreds() (*auth.Credentials, error) {
 	creds, ok := globalIAMSys.store.GetUser(c.state.ServiceAccountAccessKey)
 	if !ok {
-		return nil, errors.New("site replication service account not found!")
+		return nil, errors.New("site replication service account not found")
 	}
 	return &creds, nil
 }
@@ -1260,7 +1324,7 @@ func (c *SiteReplicationSys) getPeerCreds() (*auth.Credentials, error) {
 // syncLocalToPeers is used when initially configuring site replication, to
 // copy existing buckets, their settings, service accounts and policies to all
 // new peers.
-func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) SRError {
+func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) error {
 	// If local has buckets, enable versioning on them, create them on peers
 	// and setup replication rules.
 	objAPI := newObjectLayerFn()
@@ -1469,6 +1533,11 @@ func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) SRError {
 			return errSRBackendIssue(err)
 		}
 		for user, acc := range serviceAccounts {
+			if user == siteReplicatorSvcAcc {
+				// skip the site replicate svc account as it is
+				// already replicated.
+				continue
+			}
 			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.AccessKey)
 			if err != nil {
 				return errSRBackendIssue(err)
@@ -1509,7 +1578,7 @@ func (c *SiteReplicationSys) syncLocalToPeers(ctx context.Context) SRError {
 		}
 	}
 
-	return SRError{}
+	return nil
 }
 
 // Concurrency helpers
@@ -1599,6 +1668,13 @@ func (c *SiteReplicationSys) annotatePeerErr(dstPeer string, annotation string, 
 	return fmt.Errorf("%s->%s: %s: %v", c.state.Name, dstPeer, annotation, err)
 }
 
+// isEnabled returns true if site replication is enabled
+func (c *SiteReplicationSys) isEnabled() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.enabled
+}
+
 // Other helpers
 
 // newRemoteClusterHTTPTransport returns a new http configuration
@@ -1607,7 +1683,8 @@ func newRemoteClusterHTTPTransport() *http.Transport {
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
-			RootCAs: globalRootCAs,
+			RootCAs:            globalRootCAs,
+			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 		},
 	}
 	return tr
@@ -1655,4 +1732,583 @@ func getMissingSiteNames(oldDeps, newDeps set.StringSet, currSites []madmin.Peer
 		}
 	}
 	return diffSlc
+}
+
+type srBucketMetaInfo struct {
+	madmin.SRBucketInfo
+	DeploymentID string
+}
+
+type srPolicy struct {
+	policy       json.RawMessage
+	DeploymentID string
+}
+
+type srUserPolicyMapping struct {
+	madmin.SRPolicyMapping
+	DeploymentID string
+}
+
+type srGroupPolicyMapping struct {
+	madmin.SRPolicyMapping
+	DeploymentID string
+}
+
+// SiteReplicationStatus returns the site replication status across clusters participating in site replication.
+func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI ObjectLayer) (info madmin.SRStatusInfo, err error) {
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return info, err
+	}
+
+	sris := make([]madmin.SRInfo, len(c.state.Peers))
+	sriErrs := make([]error, len(c.state.Peers))
+	g := errgroup.WithNErrs(len(c.state.Peers))
+	var depIDs []string
+	for d := range c.state.Peers {
+		depIDs = append(depIDs, d)
+	}
+	for index := range depIDs {
+		index := index
+		if depIDs[index] == globalDeploymentID {
+			g.Go(func() error {
+				sris[index], sriErrs[index] = c.SiteReplicationMetaInfo(ctx, objAPI)
+				return nil
+			}, index)
+			continue
+		}
+		g.Go(func() error {
+			admClient, err := c.getAdminClient(ctx, depIDs[index])
+			if err != nil {
+				return err
+			}
+			sris[index], sriErrs[index] = admClient.SRMetaInfo(ctx)
+			return nil
+		}, index)
+	}
+	// Wait for the go routines.
+	g.Wait()
+
+	for _, serr := range sriErrs {
+		if serr != nil {
+			return info, errSRBackendIssue(serr)
+		}
+	}
+	info.Enabled = true
+	info.Sites = make(map[string]madmin.PeerInfo, len(c.state.Peers))
+	for d, peer := range c.state.Peers {
+		info.Sites[d] = peer
+	}
+
+	var maxBuckets int
+	depIdxes := make(map[string]int)
+	for i, sri := range sris {
+		depIdxes[sri.DeploymentID] = i
+		if len(sri.Buckets) > maxBuckets {
+			maxBuckets = len(sri.Buckets)
+		}
+	}
+	// mapping b/w entity and entity config across sites
+	bucketStats := make(map[string][]srBucketMetaInfo)
+	policyStats := make(map[string][]srPolicy)
+	userPolicyStats := make(map[string][]srUserPolicyMapping)
+	groupPolicyStats := make(map[string][]srGroupPolicyMapping)
+
+	numSites := len(sris)
+	for _, sri := range sris {
+		for b, si := range sri.Buckets {
+			if _, ok := bucketStats[si.Bucket]; !ok {
+				bucketStats[b] = make([]srBucketMetaInfo, 0, numSites)
+			}
+			bucketStats[b] = append(bucketStats[b], srBucketMetaInfo{SRBucketInfo: si, DeploymentID: sri.DeploymentID})
+		}
+		for pname, policy := range sri.Policies {
+			if _, ok := policyStats[pname]; !ok {
+				policyStats[pname] = make([]srPolicy, 0, numSites)
+			}
+			policyStats[pname] = append(policyStats[pname], srPolicy{policy: policy, DeploymentID: sri.DeploymentID})
+		}
+		for user, policy := range sri.UserPolicies {
+			if _, ok := userPolicyStats[user]; !ok {
+				userPolicyStats[user] = make([]srUserPolicyMapping, 0, numSites)
+			}
+			userPolicyStats[user] = append(userPolicyStats[user], srUserPolicyMapping{SRPolicyMapping: policy, DeploymentID: sri.DeploymentID})
+		}
+		for group, policy := range sri.GroupPolicies {
+			if _, ok := userPolicyStats[group]; !ok {
+				groupPolicyStats[group] = make([]srGroupPolicyMapping, 0, numSites)
+			}
+			groupPolicyStats[group] = append(groupPolicyStats[group], srGroupPolicyMapping{SRPolicyMapping: policy, DeploymentID: sri.DeploymentID})
+		}
+	}
+	info.StatsSummary = make(map[string]madmin.SRSiteSummary, len(c.state.Peers))
+	info.BucketMismatches = make(map[string]map[string]madmin.SRBucketStatsSummary)
+	info.PolicyMismatches = make(map[string]map[string]madmin.SRPolicyStatsSummary)
+	info.UserMismatches = make(map[string]map[string]madmin.SRUserStatsSummary)
+	info.GroupMismatches = make(map[string]map[string]madmin.SRGroupStatsSummary)
+	// collect user policy mapping replication status across sites
+	for u, pslc := range userPolicyStats {
+		policySet := set.NewStringSet()
+		uPolicyCount := 0
+		for _, ps := range pslc {
+			policyBytes, err := json.Marshal(ps)
+			if err != nil {
+				continue
+			}
+			uPolicyCount++
+			if policyStr := string(policyBytes); !policySet.Contains(policyStr) {
+				policySet.Add(policyStr)
+			}
+		}
+		policyMismatch := !isReplicated(uPolicyCount, numSites, policySet)
+		if policyMismatch {
+			for _, ps := range pslc {
+				dID := depIdxes[ps.DeploymentID]
+				_, hasUser := sris[dID].UserPolicies[u]
+
+				info.UserMismatches[u][ps.DeploymentID] = madmin.SRUserStatsSummary{
+					PolicyMismatch: policyMismatch,
+					UserMissing:    !hasUser,
+				}
+			}
+		}
+	}
+
+	// collect user policy mapping replication status across sites
+
+	for g, pslc := range groupPolicyStats {
+		policySet := set.NewStringSet()
+		gPolicyCount := 0
+		for _, ps := range pslc {
+			policyBytes, err := json.Marshal(ps)
+			if err != nil {
+				continue
+			}
+			gPolicyCount++
+			if policyStr := string(policyBytes); !policySet.Contains(policyStr) {
+				policySet.Add(policyStr)
+			}
+		}
+		policyMismatch := !isReplicated(gPolicyCount, numSites, policySet)
+		if policyMismatch {
+			for _, ps := range pslc {
+				dID := depIdxes[ps.DeploymentID]
+				_, hasGroup := sris[dID].GroupPolicies[g]
+
+				info.GroupMismatches[g][ps.DeploymentID] = madmin.SRGroupStatsSummary{
+					PolicyMismatch: policyMismatch,
+					GroupMissing:   !hasGroup,
+				}
+			}
+		}
+	}
+	// collect IAM policy replication status across sites
+
+	for p, pslc := range policyStats {
+		var policies []*iampolicy.Policy
+		uPolicyCount := 0
+		for _, ps := range pslc {
+			plcy, err := iampolicy.ParseConfig(bytes.NewReader(ps.policy))
+			if err != nil {
+				continue
+			}
+			policies = append(policies, plcy)
+			uPolicyCount++
+			sum := info.StatsSummary[ps.DeploymentID]
+			sum.TotalIAMPoliciesCount++
+			info.StatsSummary[ps.DeploymentID] = sum
+		}
+		policyMismatch := !isIAMPolicyReplicated(uPolicyCount, numSites, policies)
+		switch {
+		case policyMismatch:
+			for _, ps := range pslc {
+				dID := depIdxes[ps.DeploymentID]
+				_, hasPolicy := sris[dID].Policies[p]
+				if len(info.PolicyMismatches[p]) == 0 {
+					info.PolicyMismatches[p] = make(map[string]madmin.SRPolicyStatsSummary)
+				}
+				info.PolicyMismatches[p][ps.DeploymentID] = madmin.SRPolicyStatsSummary{
+					PolicyMismatch: policyMismatch,
+					PolicyMissing:  !hasPolicy,
+				}
+			}
+		default:
+			// no mismatch
+			for _, s := range pslc {
+				sum := info.StatsSummary[s.DeploymentID]
+				if !policyMismatch {
+					sum.ReplicatedIAMPolicies++
+				}
+				info.StatsSummary[s.DeploymentID] = sum
+			}
+
+		}
+	}
+	// collect bucket metadata replication stats across sites
+	for b, slc := range bucketStats {
+		tagSet := set.NewStringSet()
+		olockConfigSet := set.NewStringSet()
+		var policies []*bktpolicy.Policy
+		var replCfgs []*sreplication.Config
+		sseCfgSet := set.NewStringSet()
+		var tagCount, olockCfgCount, sseCfgCount int
+		for _, s := range slc {
+			if s.ReplicationConfig != nil {
+				cfgBytes, err := base64.StdEncoding.DecodeString(*s.ReplicationConfig)
+				if err != nil {
+					continue
+				}
+				cfg, err := sreplication.ParseConfig(bytes.NewReader(cfgBytes))
+				if err != nil {
+					continue
+				}
+				replCfgs = append(replCfgs, cfg)
+			}
+			if s.Tags != nil {
+				tagBytes, err := base64.StdEncoding.DecodeString(*s.Tags)
+				if err != nil {
+					continue
+				}
+				tagCount++
+				if !tagSet.Contains(string(tagBytes)) {
+					tagSet.Add(string(tagBytes))
+				}
+			}
+			if len(s.Policy) > 0 {
+				plcy, err := bktpolicy.ParseConfig(bytes.NewReader(s.Policy), b)
+				if err != nil {
+					continue
+				}
+				policies = append(policies, plcy)
+			}
+			if s.ObjectLockConfig != nil {
+				olockCfgCount++
+				if !olockConfigSet.Contains(*s.ObjectLockConfig) {
+					olockConfigSet.Add(*s.ObjectLockConfig)
+				}
+			}
+			if s.SSEConfig != nil {
+				if !sseCfgSet.Contains(*s.SSEConfig) {
+					sseCfgSet.Add(*s.SSEConfig)
+				}
+				sseCfgCount++
+			}
+			ss, ok := info.StatsSummary[s.DeploymentID]
+			if !ok {
+				ss = madmin.SRSiteSummary{}
+			}
+			// increment total number of replicated buckets
+			if len(slc) == numSites {
+				ss.ReplicatedBuckets++
+			}
+			ss.TotalBucketsCount++
+			if tagCount > 0 {
+				ss.TotalTagsCount++
+			}
+			if olockCfgCount > 0 {
+				ss.TotalLockConfigCount++
+			}
+			if sseCfgCount > 0 {
+				ss.TotalSSEConfigCount++
+			}
+			if len(policies) > 0 {
+				ss.TotalBucketPoliciesCount++
+			}
+			info.StatsSummary[s.DeploymentID] = ss
+		}
+		tagMismatch := !isReplicated(tagCount, numSites, tagSet)
+		olockCfgMismatch := !isReplicated(olockCfgCount, numSites, olockConfigSet)
+		sseCfgMismatch := !isReplicated(sseCfgCount, numSites, sseCfgSet)
+		policyMismatch := !isBktPolicyReplicated(numSites, policies)
+		replCfgMismatch := !isBktReplCfgReplicated(numSites, replCfgs)
+		switch {
+		case tagMismatch, olockCfgMismatch, sseCfgMismatch, policyMismatch, replCfgMismatch:
+			info.BucketMismatches[b] = make(map[string]madmin.SRBucketStatsSummary, numSites)
+			for _, s := range slc {
+				dID := depIdxes[s.DeploymentID]
+				_, hasBucket := sris[dID].Buckets[s.Bucket]
+				info.BucketMismatches[b][s.DeploymentID] = madmin.SRBucketStatsSummary{
+					DeploymentID:           s.DeploymentID,
+					HasBucket:              hasBucket,
+					TagMismatch:            tagMismatch,
+					OLockConfigMismatch:    olockCfgMismatch,
+					SSEConfigMismatch:      sseCfgMismatch,
+					PolicyMismatch:         policyMismatch,
+					ReplicationCfgMismatch: replCfgMismatch,
+					HasReplicationCfg:      len(replCfgs) > 0,
+				}
+			}
+			fallthrough
+		default:
+			// no mismatch
+			for _, s := range slc {
+				sum := info.StatsSummary[s.DeploymentID]
+				if !olockCfgMismatch && olockCfgCount == numSites {
+					sum.ReplicatedLockConfig++
+				}
+				if !sseCfgMismatch && sseCfgCount == numSites {
+					sum.ReplicatedSSEConfig++
+				}
+				if !policyMismatch && len(policies) == numSites {
+					sum.ReplicatedBucketPolicies++
+				}
+				if !tagMismatch && tagCount == numSites {
+					sum.ReplicatedTags++
+				}
+				info.StatsSummary[s.DeploymentID] = sum
+			}
+		}
+	}
+	// maximum buckets users etc seen across sites
+	info.MaxBuckets = len(bucketStats)
+	info.MaxUsers = len(userPolicyStats)
+	info.MaxGroups = len(groupPolicyStats)
+	info.MaxPolicies = len(policyStats)
+	return
+}
+
+// isReplicated returns true if count of replicated matches the number of
+// sites and there is atmost one unique entry in the set.
+func isReplicated(cntReplicated, total int, valSet set.StringSet) bool {
+	if cntReplicated > 0 && cntReplicated < total {
+		return false
+	}
+	if len(valSet) > 1 {
+		// mismatch - one or more sites has differing tags/policy
+		return false
+	}
+	return true
+}
+
+// isIAMPolicyReplicated returns true if count of replicated IAM policies matches total
+// number of sites and IAM policies are identical.
+func isIAMPolicyReplicated(cntReplicated, total int, policies []*iampolicy.Policy) bool {
+	if cntReplicated > 0 && cntReplicated != total {
+		return false
+	}
+	// check if policies match between sites
+	var prev *iampolicy.Policy
+	for i, p := range policies {
+		if i == 0 {
+			prev = p
+			continue
+		}
+		if !prev.Equals(*p) {
+			return false
+		}
+	}
+	return true
+}
+
+// isBktPolicyReplicated returns true if count of replicated bucket policies matches total
+// number of sites and bucket policies are identical.
+func isBktPolicyReplicated(total int, policies []*bktpolicy.Policy) bool {
+	if len(policies) > 0 && len(policies) != total {
+		return false
+	}
+	// check if policies match between sites
+	var prev *bktpolicy.Policy
+	for i, p := range policies {
+		if i == 0 {
+			prev = p
+			continue
+		}
+		if !prev.Equals(*p) {
+			return false
+		}
+	}
+	return true
+}
+
+// isBktReplCfgReplicated returns true if all the sites have same number
+// of replication rules with all replication features enabled.
+func isBktReplCfgReplicated(total int, cfgs []*sreplication.Config) bool {
+	cntReplicated := len(cfgs)
+	if cntReplicated > 0 && cntReplicated != len(cfgs) {
+		return false
+	}
+	// check if policies match between sites
+	var prev *sreplication.Config
+	for i, c := range cfgs {
+		if i == 0 {
+			prev = c
+			continue
+		}
+		if len(prev.Rules) != len(c.Rules) {
+			return false
+		}
+		if len(c.Rules) != total-1 {
+			return false
+		}
+		for _, r := range c.Rules {
+			if !strings.HasPrefix(r.ID, "site-repl-") {
+				return false
+			}
+			if r.DeleteMarkerReplication.Status == sreplication.Disabled ||
+				r.DeleteReplication.Status == sreplication.Disabled ||
+				r.ExistingObjectReplication.Status == sreplication.Disabled ||
+				r.SourceSelectionCriteria.ReplicaModifications.Status == sreplication.Disabled {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// SiteReplicationMetaInfo returns the metadata info on buckets, policies etc for the replicated site
+func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI ObjectLayer) (info madmin.SRInfo, err error) {
+	if objAPI == nil {
+		return info, errSRObjectLayerNotReady
+	}
+
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return info, nil
+	}
+	buckets, err := objAPI.ListBuckets(ctx)
+	if err != nil {
+		return info, errSRBackendIssue(err)
+	}
+	info.DeploymentID = globalDeploymentID
+
+	info.Buckets = make(map[string]madmin.SRBucketInfo, len(buckets))
+	for _, bucketInfo := range buckets {
+		bucket := bucketInfo.Name
+		bms := madmin.SRBucketInfo{Bucket: bucket}
+		// Get bucket policy if present.
+		policy, err := globalPolicySys.Get(bucket)
+		found := true
+		if _, ok := err.(BucketPolicyNotFound); ok {
+			found = false
+		} else if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		if found {
+			policyJSON, err := json.Marshal(policy)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			bms.Policy = policyJSON
+		}
+
+		// Get bucket tags if present.
+		tags, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
+		found = true
+		if _, ok := err.(BucketTaggingNotFound); ok {
+			found = false
+		} else if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		if found {
+			tagBytes, err := xml.Marshal(tags)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			tagCfgStr := base64.StdEncoding.EncodeToString(tagBytes)
+			bms.Tags = &tagCfgStr
+		}
+
+		// Get object-lock config if present.
+		objLockCfg, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
+		found = true
+		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
+			found = false
+		} else if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		if found {
+			objLockCfgData, err := xml.Marshal(objLockCfg)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			objLockStr := base64.StdEncoding.EncodeToString(objLockCfgData)
+			bms.ObjectLockConfig = &objLockStr
+		}
+
+		// Get existing bucket bucket encryption settings
+		sseConfig, err := globalBucketMetadataSys.GetSSEConfig(bucket)
+		found = true
+		if _, ok := err.(BucketSSEConfigNotFound); ok {
+			found = false
+		} else if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		if found {
+			sseConfigData, err := xml.Marshal(sseConfig)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			sseConfigStr := base64.StdEncoding.EncodeToString(sseConfigData)
+			bms.SSEConfig = &sseConfigStr
+		}
+		// Get replication config if present
+		rcfg, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+		found = true
+		if _, ok := err.(BucketReplicationConfigNotFound); ok {
+			found = false
+		} else if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		if found {
+			rcfgXML, err := xml.Marshal(rcfg)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			rcfgXMLStr := base64.StdEncoding.EncodeToString(rcfgXML)
+			bms.ReplicationConfig = &rcfgXMLStr
+		}
+		info.Buckets[bucket] = bms
+	}
+
+	{
+		// Replicate IAM policies on local to all peers.
+		allPolicies, err := globalIAMSys.ListPolicies(ctx, "")
+		if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+		info.Policies = make(map[string]json.RawMessage, len(allPolicies))
+		for pname, policy := range allPolicies {
+			policyJSON, err := json.Marshal(policy)
+			if err != nil {
+				return info, wrapSRErr(err)
+			}
+			info.Policies[pname] = json.RawMessage(policyJSON)
+		}
+	}
+
+	{
+		// Replicate policy mappings on local to all peers.
+		userPolicyMap := make(map[string]MappedPolicy)
+		groupPolicyMap := make(map[string]MappedPolicy)
+		globalIAMSys.store.rlock()
+		errU := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
+		errG := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
+		globalIAMSys.store.runlock()
+		if errU != nil {
+			return info, errSRBackendIssue(errU)
+		}
+		if errG != nil {
+			return info, errSRBackendIssue(errG)
+		}
+		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
+		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, len(c.state.Peers))
+		for user, mp := range userPolicyMap {
+			info.UserPolicies[user] = madmin.SRPolicyMapping{
+				IsGroup:     false,
+				UserOrGroup: user,
+				Policy:      mp.Policies,
+			}
+		}
+
+		for group, mp := range groupPolicyMap {
+			info.UserPolicies[group] = madmin.SRPolicyMapping{
+				IsGroup:     true,
+				UserOrGroup: group,
+				Policy:      mp.Policies,
+			}
+		}
+	}
+	return info, nil
 }

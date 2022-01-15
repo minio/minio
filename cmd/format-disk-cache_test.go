@@ -245,7 +245,7 @@ func genFormatCacheInvalidDisksOrder() []*formatCacheV2 {
 		formatConfigs[index] = format
 	}
 	// Re order disks for failure case.
-	var disks1 = make([]string, 8)
+	disks1 := make([]string, 8)
 	copy(disks1, disks)
 	disks1[1], disks1[2] = disks[2], disks[1]
 	formatConfigs[2].Cache.Disks = disks1

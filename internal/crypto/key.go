@@ -111,9 +111,7 @@ func (key ObjectKey) Seal(extKey []byte, iv [32]byte, domain, bucket, object str
 // may be cryptographically bound to the object's path the same bucket/object as during sealing
 // must be provided. On success the ObjectKey contains the decrypted sealed key.
 func (key *ObjectKey) Unseal(extKey []byte, sealedKey SealedKey, domain, bucket, object string) error {
-	var (
-		unsealConfig sio.Config
-	)
+	var unsealConfig sio.Config
 	switch sealedKey.Algorithm {
 	default:
 		return Errorf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm)

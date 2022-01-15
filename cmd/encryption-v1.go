@@ -68,6 +68,21 @@ const (
 
 )
 
+// KMSKeyID returns in AWS compatible KMS KeyID() format.
+func (o ObjectInfo) KMSKeyID() string {
+	if len(o.UserDefined) == 0 {
+		return ""
+	}
+	kmsID, ok := o.UserDefined[crypto.MetaKeyID]
+	if !ok {
+		return ""
+	}
+	if strings.HasPrefix(kmsID, "arn:aws:kms:") {
+		return kmsID
+	}
+	return "arn:aws:kms:" + kmsID
+}
+
 // isMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
@@ -76,15 +91,18 @@ func (o *ObjectInfo) isMultipart() bool {
 		return false
 	}
 	_, encrypted := crypto.IsEncrypted(o.UserDefined)
-	if encrypted && !crypto.IsMultiPart(o.UserDefined) {
-		return false
-	}
-	for _, part := range o.Parts {
-		_, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
+	if encrypted {
+		if !crypto.IsMultiPart(o.UserDefined) {
 			return false
 		}
+		for _, part := range o.Parts {
+			_, err := sio.DecryptedSize(uint64(part.Size))
+			if err != nil {
+				return false
+			}
+		}
 	}
+
 	// Further check if this object is uploaded using multipart mechanism
 	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
@@ -168,7 +186,7 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 		// client provided it. Therefore, we create a copy
 		// of the client provided context and add the bucket
 		// key, if not present.
-		var kmsCtx = kms.Context{}
+		kmsCtx := kms.Context{}
 		for k, v := range ctx {
 			kmsCtx[k] = v
 		}
@@ -235,7 +253,7 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 		// client provided it. Therefore, we create a copy
 		// of the client provided context and add the bucket
 		// key, if not present.
-		var kmsCtx = kms.Context{}
+		kmsCtx := kms.Context{}
 		for k, v := range ctx {
 			kmsCtx[k] = v
 		}
@@ -425,7 +443,6 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
 func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
-
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case
 	if !oi.isMultipart() {

@@ -224,7 +224,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 	uploadID := mustGetUUID()
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 
-	err := mkdirAll(uploadIDDir, 0755)
+	err := mkdirAll(uploadIDDir, 0o755)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return "", err
@@ -240,7 +240,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 		return "", err
 	}
 
-	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0666); err != nil {
+	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0o666); err != nil {
 		logger.LogIf(ctx, err)
 		return "", err
 	}
@@ -252,8 +252,8 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
-
+	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error,
+) {
 	if srcOpts.VersionID != "" && srcOpts.VersionID != nullVersionID {
 		return pi, VersionNotFound{
 			Bucket:    srcBucket,
@@ -397,7 +397,7 @@ func (fs *FSObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploa
 	}
 
 	var fsMeta fsMetaV1
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
 		return minfo, toObjectErr(err, bucket, object)
 	}
@@ -526,7 +526,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	}
 
 	var fsMeta fsMetaV1
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
 		return result, err
 	}
@@ -542,7 +542,6 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 //
 // Implements S3 compatible Complete multipart API.
 func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart, opts ObjectOptions) (oi ObjectInfo, e error) {
-
 	var actualSize int64
 
 	if err := checkCompleteMultipartArgs(ctx, bucket, object, fs); err != nil {

@@ -59,10 +59,13 @@ const (
 	cacheExpiryDays  = 90 * time.Hour * 24 // defaults to 90 days
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
-	SSECacheEncrypted               = "X-Minio-Internal-Encrypted-Cache"
-	cacheMultipartDir               = "multipart"
+	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"
+	cacheMultipartDir = "multipart"
+	cacheWritebackDir = "writeback"
+
 	cacheStaleUploadCleanupInterval = time.Hour * 24
 	cacheStaleUploadExpiry          = time.Hour * 24
+	cacheWBStaleUploadExpiry        = time.Hour * 24 * 7
 )
 
 // CacheChecksumInfoV1 - carries checksums of individual blocks on disk.
@@ -105,15 +108,15 @@ func (r *RangeInfo) Empty() bool {
 	return r.Range == "" && r.File == "" && r.Size == 0
 }
 
-func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
+func (m *cacheMeta) ToObjectInfo() (o ObjectInfo) {
 	if len(m.Meta) == 0 {
 		m.Meta = make(map[string]string)
 		m.Stat.ModTime = timeSentinel
 	}
 
 	o = ObjectInfo{
-		Bucket:            bucket,
-		Name:              object,
+		Bucket:            m.Bucket,
+		Name:              m.Object,
 		CacheStatus:       CacheHit,
 		CacheLookupStatus: CacheHit,
 	}
@@ -187,7 +190,7 @@ func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCa
 		quotaPct = config.Quota
 	}
 
-	if err := os.MkdirAll(dir, 0777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '%s' dir, %w", dir, err)
 	}
 	cache := diskCache{
@@ -325,7 +328,11 @@ func (c *diskCache) purge(ctx context.Context) {
 	expiry := UTCNow().Add(-cacheExpiryDays)
 	// defaulting max hits count to 100
 	// ignore error we know what value we are passing.
-	scorer, _ := newFileScorer(toFree, time.Now().Unix(), 100)
+	scorer, err := newFileScorer(toFree, time.Now().Unix(), 100)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
 
 	// this function returns FileInfo for cached range files.
 	fiStatRangesFn := func(ranges map[string]string, pathPrefix string) map[string]os.FileInfo {
@@ -377,7 +384,7 @@ func (c *diskCache) purge(ctx context.Context) {
 		lastAtime := lastAtimeFn(meta.PartNumbers, pathJoin(c.dir, name))
 		// stat all cached file ranges.
 		cachedRngFiles := fiStatRangesFn(meta.Ranges, pathJoin(c.dir, name))
-		objInfo := meta.ToObjectInfo("", "")
+		objInfo := meta.ToObjectInfo()
 		// prevent gc from clearing un-synced commits. This metadata is present when
 		// cache writeback commit setting is enabled.
 		status, ok := objInfo.UserDefined[writeBackStatusHeader]
@@ -388,9 +395,7 @@ func (c *diskCache) purge(ctx context.Context) {
 		switch {
 		case cc != nil:
 			if cc.isStale(objInfo.ModTime) {
-				if err = removeAll(cacheDir); err != nil {
-					logger.LogIf(ctx, err)
-				}
+				removeAll(cacheDir)
 				scorer.adjustSaveBytes(-objInfo.Size)
 				// break early if sufficient disk space reclaimed.
 				if c.diskUsageLow() {
@@ -406,11 +411,12 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 
 		for fname, fi := range cachedRngFiles {
+			if fi == nil {
+				continue
+			}
 			if cc != nil {
 				if cc.isStale(objInfo.ModTime) {
-					if err = removeAll(fname); err != nil {
-						logger.LogIf(ctx, err)
-					}
+					removeAll(fname)
 					scorer.adjustSaveBytes(-fi.Size())
 
 					// break early if sufficient disk space reclaimed.
@@ -425,9 +431,11 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 		// clean up stale cache.json files for objects that never got cached but access count was maintained in cache.json
 		fi, err := os.Stat(pathJoin(cacheDir, cacheMetaJSONFile))
-		if err != nil || (fi.ModTime().Before(expiry) && len(cachedRngFiles) == 0) {
+		if err != nil || (fi != nil && fi.ModTime().Before(expiry) && len(cachedRngFiles) == 0) {
 			removeAll(cacheDir)
-			scorer.adjustSaveBytes(-fi.Size())
+			if fi != nil {
+				scorer.adjustSaveBytes(-fi.Size())
+			}
 			// Proceed to next file.
 			return nil
 		}
@@ -486,7 +494,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 	if partial {
 		return oi, numHits, errFileNotFound
 	}
-	oi = meta.ToObjectInfo("", "")
+	oi = meta.ToObjectInfo()
 	oi.Bucket = bucket
 	oi.Name = object
 
@@ -521,7 +529,7 @@ func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HT
 		return
 	}
 
-	oi = meta.ToObjectInfo("", "")
+	oi = meta.ToObjectInfo()
 	oi.Bucket = bucket
 	oi.Name = object
 	if !partial {
@@ -573,12 +581,16 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 	if _, err := os.Stat(pathJoin(cacheObjPath, cacheDataFile)); err == nil {
 		partial = false
 	}
+	if writebackInProgress(meta.Meta) {
+		partial = false
+	}
 	return meta, partial, meta.Hits, nil
 }
 
 // saves object metadata to disk cache
 // incHitsOnly is true if metadata update is incrementing only the hit counter
-func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
+// finalizeWB is true only if metadata update accompanied by moving part from temp location to cache dir.
+func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly, finalizeWB bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachedPath)
 	lkctx, err := cLock.GetLock(ctx, globalOperationTimeout)
@@ -587,7 +599,18 @@ func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, met
 	}
 	ctx = lkctx.Context()
 	defer cLock.Unlock(lkctx.Cancel)
-	return c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly)
+	if err = c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly); err != nil {
+		return err
+	}
+	// move part saved in writeback directory and cache.json atomically
+	if finalizeWB {
+		wbdir := getCacheWriteBackSHADir(c.dir, bucket, object)
+		if err = renameAll(pathJoin(wbdir, cacheDataFile), pathJoin(cachedPath, cacheDataFile)); err != nil {
+			return err
+		}
+		removeAll(wbdir) // cleanup writeback/shadir
+	}
+	return nil
 }
 
 // saves object metadata to disk cache
@@ -596,10 +619,10 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	metaPath := pathJoin(cachedPath, cacheMetaJSONFile)
 	// Create cache directory if needed
-	if err := os.MkdirAll(cachedPath, 0777); err != nil {
+	if err := os.MkdirAll(cachedPath, 0o777); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		return err
 	}
@@ -659,10 +682,10 @@ func (c *diskCache) updateMetadata(ctx context.Context, bucket, object, etag str
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	metaPath := pathJoin(cachedPath, cacheMetaJSONFile)
 	// Create cache directory if needed
-	if err := os.MkdirAll(cachedPath, 0777); err != nil {
+	if err := os.MkdirAll(cachedPath, 0o777); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(metaPath, os.O_RDWR, 0666)
+	f, err := os.OpenFile(metaPath, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}
@@ -702,9 +725,14 @@ func getCacheSHADir(dir, bucket, object string) string {
 	return pathJoin(dir, getSHA256Hash([]byte(pathJoin(bucket, object))))
 }
 
+// returns temporary writeback cache location.
+func getCacheWriteBackSHADir(dir, bucket, object string) string {
+	return pathJoin(dir, minioMetaBucket, "writeback", getSHA256Hash([]byte(pathJoin(bucket, object))))
+}
+
 // Cache data to disk with bitrot checksum added for each block of 1MB
 func (c *diskCache) bitrotWriteToCache(cachePath, fileName string, reader io.Reader, size uint64) (int64, string, error) {
-	if err := os.MkdirAll(cachePath, 0777); err != nil {
+	if err := os.MkdirAll(cachePath, 0o777); err != nil {
 		return 0, "", err
 	}
 	filePath := pathJoin(cachePath, fileName)
@@ -779,6 +807,7 @@ func newCacheEncryptReader(content io.Reader, bucket, object string, metadata ma
 	}
 	return reader, nil
 }
+
 func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) ([]byte, error) {
 	var sealedKey crypto.SealedKey
 	if globalCacheKMS == nil {
@@ -799,6 +828,7 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	metadata[SSECacheEncrypted] = ""
 	return objectKey[:], nil
 }
+
 func (c *diskCache) GetLockContext(ctx context.Context, bucket, object string) (RWLocker, LockContext, error) {
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(cachePath)
@@ -846,12 +876,17 @@ func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Read
 	if !c.diskSpaceAvailable(size) {
 		return oi, errDiskFull
 	}
-	if err := os.MkdirAll(cachePath, 0777); err != nil {
+
+	if writeback {
+		cachePath = getCacheWriteBackSHADir(c.dir, bucket, object)
+	}
+
+	if err := os.MkdirAll(cachePath, 0o777); err != nil {
 		return oi, err
 	}
-	var metadata = cloneMSS(opts.UserDefined)
-	var reader = data
-	var actualSize = uint64(size)
+	metadata := cloneMSS(opts.UserDefined)
+	reader := data
+	actualSize := uint64(size)
 	if globalCacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
@@ -900,14 +935,14 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 		return errDiskFull
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
-	if err := os.MkdirAll(cachePath, 0777); err != nil {
+	if err := os.MkdirAll(cachePath, 0o777); err != nil {
 		return err
 	}
-	var metadata = cloneMSS(opts.UserDefined)
-	var reader = data
-	var actualSize = uint64(rlen)
+	metadata := cloneMSS(opts.UserDefined)
+	reader := data
+	actualSize := uint64(rlen)
 	// objSize is the actual size of object (with encryption overhead if any)
-	var objSize = uint64(size)
+	objSize := uint64(size)
 	if globalCacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
@@ -1131,6 +1166,9 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		}()
 	} else {
 		go func() {
+			if writebackInProgress(objInfo.UserDefined) {
+				cacheObjPath = getCacheWriteBackSHADir(c.dir, bucket, object)
+			}
 			filePath := pathJoin(cacheObjPath, cacheFile)
 			err := c.bitrotReadFromCache(ctx, filePath, startOffset, length, pw)
 			if err != nil {
@@ -1199,7 +1237,7 @@ func (c *diskCache) scanCacheWritebackFailures(ctx context.Context) {
 			return nil
 		}
 
-		objInfo := meta.ToObjectInfo("", "")
+		objInfo := meta.ToObjectInfo()
 		status, ok := objInfo.UserDefined[writeBackStatusHeader]
 		if !ok || status == CommitComplete.String() {
 			return nil
@@ -1233,12 +1271,12 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 
 	cachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(cachePath, uploadID)
-	if err := os.MkdirAll(uploadIDDir, 0777); err != nil {
+	if err := os.MkdirAll(uploadIDDir, 0o777); err != nil {
 		return uploadID, err
 	}
 	metaPath := pathJoin(uploadIDDir, cacheMetaJSONFile)
 
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		return uploadID, err
 	}
@@ -1295,7 +1333,7 @@ func (c *diskCache) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		return oi, errDiskFull
 	}
 	reader := data
-	var actualSize = uint64(size)
+	actualSize := uint64(size)
 	if globalCacheKMS != nil {
 		reader, err = newCachePartEncryptReader(ctx, bucket, object, partID, data, size, meta.Meta)
 		if err != nil {
@@ -1344,7 +1382,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	defer uploadLock.Unlock(ulkctx.Cancel)
 
 	metaPath := pathJoin(uploadDir, cacheMetaJSONFile)
-	f, err := os.OpenFile(metaPath, os.O_RDWR, 0666)
+	f, err := os.OpenFile(metaPath, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}
@@ -1497,6 +1535,8 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	}
 	uploadMeta.Stat.Size = objectSize
 	uploadMeta.Stat.ModTime = roi.ModTime
+	uploadMeta.Bucket = bucket
+	uploadMeta.Object = object
 	// if encrypted - make sure ETag updated
 
 	uploadMeta.Meta["etag"] = roi.ETag
@@ -1520,7 +1560,7 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	uploadMeta.Hits++
 	metaPath := pathJoin(uploadIDDir, cacheMetaJSONFile)
 
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		return oi, err
 	}
@@ -1532,7 +1572,7 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	}
 	renameAll(pathJoin(uploadIDDir, cacheMetaJSONFile), pathJoin(cachePath, cacheMetaJSONFile))
 	removeAll(uploadIDDir) // clean up any unused parts in the uploadIDDir
-	return uploadMeta.ToObjectInfo(bucket, object), nil
+	return uploadMeta.ToObjectInfo(), nil
 }
 
 func (c *diskCache) AbortUpload(bucket, object, uploadID string) (err error) {
@@ -1579,9 +1619,6 @@ func getMultipartCacheSHADir(dir, bucket, object string) string {
 
 // clean up stale cache multipart uploads according to cleanup interval.
 func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
-	if !c.commitWritethrough {
-		return
-	}
 	timer := time.NewTimer(cacheStaleUploadCleanupInterval)
 	defer timer.Stop()
 	for {
@@ -1604,6 +1641,22 @@ func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
 					}
 					return nil
 				})
+			})
+			// clean up of writeback folder where cache.json no longer exists in the main c.dir/<sha256(bucket,object> path
+			// and if past upload expiry window.
+			readDirFn(pathJoin(c.dir, minioMetaBucket, cacheWritebackDir), func(shaDir string, typ os.FileMode) error {
+				wbdir := pathJoin(c.dir, minioMetaBucket, cacheWritebackDir, shaDir)
+				cachedir := pathJoin(c.dir, shaDir)
+				if _, err := os.Stat(cachedir); os.IsNotExist(err) {
+					fi, err := os.Stat(wbdir)
+					if err != nil {
+						return nil
+					}
+					if now.Sub(fi.ModTime()) > cacheWBStaleUploadExpiry {
+						return removeAll(wbdir)
+					}
+				}
+				return nil
 			})
 		}
 	}

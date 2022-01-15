@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Tests maximum object size.
@@ -292,7 +293,6 @@ func TestToS3ETag(t *testing.T) {
 
 // Test contains
 func TestContains(t *testing.T) {
-
 	testErr := errors.New("test err")
 
 	testCases := []struct {
@@ -397,8 +397,8 @@ func TestCeilFrac(t *testing.T) {
 
 // Test if isErrIgnored works correctly.
 func TestIsErrIgnored(t *testing.T) {
-	var errIgnored = fmt.Errorf("ignored error")
-	var testCases = []struct {
+	errIgnored := fmt.Errorf("ignored error")
+	testCases := []struct {
 		err     error
 		ignored bool
 	}{
@@ -424,7 +424,7 @@ func TestIsErrIgnored(t *testing.T) {
 
 // Test queries()
 func TestQueries(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		keys      []string
 		keyvalues []string
 	}{
@@ -445,7 +445,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestLCP(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		prefixes     []string
 		commonPrefix string
 	}{
@@ -484,5 +484,33 @@ func TestGetMinioMode(t *testing.T) {
 
 	globalIsGateway, globalGatewayName = true, "azure"
 	testMinioMode(globalMinioModeGatewayPrefix + globalGatewayName)
+}
 
+func TestTimedValue(t *testing.T) {
+	var cache timedValue
+	t.Parallel()
+	cache.Once.Do(func() {
+		cache.TTL = 2 * time.Second
+		cache.Update = func() (interface{}, error) {
+			return time.Now(), nil
+		}
+	})
+
+	i, _ := cache.Get()
+	t1 := i.(time.Time)
+
+	j, _ := cache.Get()
+	t2 := j.(time.Time)
+
+	if !t1.Equal(t2) {
+		t.Fatalf("expected time to be equal: %s != %s", t1, t2)
+	}
+
+	time.Sleep(3 * time.Second)
+	k, _ := cache.Get()
+	t3 := k.(time.Time)
+
+	if t1.Equal(t3) {
+		t.Fatalf("expected time to be un-equal: %s == %s", t1, t3)
+	}
 }

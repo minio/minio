@@ -123,7 +123,7 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 		return err
 	}
 
-	if err = os.Mkdir((dirPath), 0777); err != nil {
+	if err = os.Mkdir((dirPath), 0o777); err != nil {
 		switch {
 		case osIsExist(err):
 			return errVolumeExists
@@ -309,7 +309,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, falloc
 		return 0, err
 	}
 
-	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+	if err := mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
 		switch {
 		case osIsPermission(err):
 			return 0, errFileAccessDenied
@@ -329,7 +329,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, falloc
 	if globalFSOSync {
 		flags |= os.O_SYNC
 	}
-	writer, err := lock.Open(filePath, flags, 0666)
+	writer, err := lock.Open(filePath, flags, 0o666)
 	if err != nil {
 		return 0, osErrToFileErr(err)
 	}

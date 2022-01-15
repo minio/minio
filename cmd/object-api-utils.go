@@ -278,7 +278,7 @@ func removeStandardStorageClass(metadata map[string]string) map[string]string {
 // cleanMetadataKeys takes keyNames to be filtered
 // and returns a new map with all the entries with keyNames removed.
 func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
-	var newMeta = make(map[string]string, len(metadata))
+	newMeta := make(map[string]string, len(metadata))
 	for k, v := range metadata {
 		if contains(keyNames, k) {
 			continue
@@ -513,7 +513,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 	}
 
 	var start int64
-	var end = int64(-1)
+	end := int64(-1)
 	for i := 0; i < len(oi.Parts) && i < partNumber; i++ {
 		start = end + 1
 		end = start + oi.Parts[i].ActualSize - 1
@@ -591,8 +591,8 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
 func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
-	fn ObjReaderFn, off, length int64, err error) {
-
+	fn ObjReaderFn, off, length int64, err error,
+) {
 	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
 		return nil, 0, 0, PreConditionFailed{}
 	}
@@ -873,7 +873,7 @@ func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
 // CleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
 // encryption metadata that was sent by minio gateway
 func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
-	var newMeta = make(map[string]string, len(metadata))
+	newMeta := make(map[string]string, len(metadata))
 	for k, v := range metadata {
 		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
 			newMeta[strings.TrimPrefix(k, "X-Amz-Meta-")] = v
@@ -957,7 +957,6 @@ func compressSelfTest() {
 	failOnErr(err)
 	if !bytes.Equal(got, data[skip:]) {
 		logger.Fatal(errSelfTestFailure, "compress: self-test roundtrip mismatch.")
-
 	}
 }
 

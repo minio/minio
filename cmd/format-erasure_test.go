@@ -124,11 +124,11 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = os.MkdirAll(pathJoin(rootPath, minioMetaBucket), os.FileMode(0755)); err != nil {
+	if err = os.MkdirAll(pathJoin(rootPath, minioMetaBucket), os.FileMode(0o755)); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0644)); err != nil {
+	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -175,7 +175,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0644)); err != nil {
+	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +195,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0644)); err != nil {
+	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 

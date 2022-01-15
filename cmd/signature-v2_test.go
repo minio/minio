@@ -178,14 +178,12 @@ func TestValidateV2AuthHeader(t *testing.T) {
 		// Test case - 1.
 		// Case with empty V2AuthString.
 		{
-
 			authString:    "",
 			expectedError: ErrAuthHeaderEmpty,
 		},
 		// Test case - 2.
 		// Test case with `signV2Algorithm` ("AWS") not being the prefix.
 		{
-
 			authString:    "NoV2Prefix",
 			expectedError: ErrSignatureVersionNotSupported,
 		},
@@ -194,28 +192,24 @@ func TestValidateV2AuthHeader(t *testing.T) {
 		// below is the correct format of V2 Authorization header.
 		// Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature
 		{
-
 			authString:    signV2Algorithm,
 			expectedError: ErrMissingFields,
 		},
 		// Test case - 4.
 		// Test case with signature part missing.
 		{
-
 			authString:    fmt.Sprintf("%s %s", signV2Algorithm, accessID),
 			expectedError: ErrMissingFields,
 		},
 		// Test case - 5.
 		// Test case with wrong accessID.
 		{
-
 			authString:    fmt.Sprintf("%s %s:%s", signV2Algorithm, "InvalidAccessID", "signature"),
 			expectedError: ErrInvalidAccessKeyID,
 		},
 		// Test case - 6.
 		// Case with right accessID and format.
 		{
-
 			authString:    fmt.Sprintf("%s %s:%s", signV2Algorithm, accessID, "signature"),
 			expectedError: ErrNone,
 		},
@@ -223,7 +217,6 @@ func TestValidateV2AuthHeader(t *testing.T) {
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Case %d AuthStr \"%s\".", i+1, testCase.authString), func(t *testing.T) {
-
 			req := &http.Request{
 				Header: make(http.Header),
 				URL:    &url.URL{},
@@ -236,7 +229,6 @@ func TestValidateV2AuthHeader(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestDoesPolicySignatureV2Match(t *testing.T) {

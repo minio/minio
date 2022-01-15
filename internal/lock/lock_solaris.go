@@ -47,7 +47,7 @@ func lockedOpenFile(path string, flag int, perm os.FileMode, rlockType int) (*Lo
 		}
 	}
 
-	var lock = syscall.Flock_t{
+	lock := syscall.Flock_t{
 		Start:  0,
 		Len:    0,
 		Pid:    0,

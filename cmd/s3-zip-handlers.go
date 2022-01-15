@@ -323,7 +323,7 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 
 // getFilesFromZIPObject reads a partial stream of a zip file to build the zipindex.Files index
 func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, opts ObjectOptions) (zipindex.Files, ObjectInfo, error) {
-	var size = 1 << 20
+	size := 1 << 20
 	var objSize int64
 	for {
 		rs := &HTTPRangeSpec{IsSuffixLength: true, Start: int64(-size)}

@@ -38,7 +38,7 @@ func TestGetCacheControlOpts(t *testing.T) {
 		{"max-age=2592000, no-store", timeSentinel, &cacheControl{maxAge: 2592000, sMaxAge: 0, noStore: true, minFresh: 0, expiry: time.Time{}}, false},
 		{"must-revalidate, max-age=600", timeSentinel, &cacheControl{maxAge: 600, sMaxAge: 0, minFresh: 0, expiry: time.Time{}}, false},
 		{"s-maxAge=2500, max-age=600", timeSentinel, &cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Time{}}, false},
-		{"s-maxAge=2500, max-age=600", expiry, &cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Date(2015, time.October, 21, 07, 28, 00, 00, time.UTC)}, false},
+		{"s-maxAge=2500, max-age=600", expiry, &cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Date(2015, time.October, 21, 0o7, 28, 0o0, 0o0, time.UTC)}, false},
 		{"s-maxAge=2500, max-age=600s", timeSentinel, &cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Time{}}, true},
 	}
 
@@ -61,7 +61,6 @@ func TestGetCacheControlOpts(t *testing.T) {
 }
 
 func TestIsMetadataSame(t *testing.T) {
-
 	testCases := []struct {
 		m1       map[string]string
 		m2       map[string]string
@@ -148,6 +147,7 @@ func TestNewFileScorer(t *testing.T) {
 		t.Fatal("unexpected file list", fs.queueString())
 	}
 }
+
 func TestBytesToClear(t *testing.T) {
 	testCases := []struct {
 		total         int64

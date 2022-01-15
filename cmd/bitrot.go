@@ -119,8 +119,10 @@ func newBitrotReader(disk StorageAPI, data []byte, bucket string, filePath strin
 // Close all the readers.
 func closeBitrotReaders(rs []io.ReaderAt) {
 	for _, r := range rs {
-		if br, ok := r.(io.Closer); ok {
-			br.Close()
+		if r != nil {
+			if br, ok := r.(io.Closer); ok {
+				br.Close()
+			}
 		}
 	}
 }
@@ -128,8 +130,10 @@ func closeBitrotReaders(rs []io.ReaderAt) {
 // Close all the writers.
 func closeBitrotWriters(ws []io.Writer) {
 	for _, w := range ws {
-		if bw, ok := w.(io.Closer); ok {
-			bw.Close()
+		if w != nil {
+			if bw, ok := w.(io.Closer); ok {
+				bw.Close()
+			}
 		}
 	}
 }
@@ -212,7 +216,7 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 // bitrotSelfTest tries to catch any issue in the bitrot implementation
 // early instead of silently corrupting data.
 func bitrotSelfTest() {
-	var checksums = map[BitrotAlgorithm]string{
+	checksums := map[BitrotAlgorithm]string{
 		SHA256:          "a7677ff19e0182e4d52e3a3db727804abc82a5818749336369552e54b838b004",
 		BLAKE2b512:      "e519b7d84b1c3c917985f544773a35cf265dcab10948be3550320d156bab612124a5ae2ae5a8c73c0eea360f68b0e28136f26e858756dbfe7375a7389f26c669",
 		HighwayHash256:  "39c0407ed3f01b18d22c85db4aeff11e060ca5f43131b0126731ca197cd42313",

@@ -40,7 +40,7 @@ func loadMetacacheSample(t testing.TB) *metacacheReader {
 func loadMetacacheSampleEntries(t testing.TB) metaCacheEntriesSorted {
 	r := loadMetacacheSample(t)
 	defer r.Close()
-	entries, err := r.readN(-1, false, true, "")
+	entries, err := r.readN(-1, false, true, false, "")
 	if err != io.EOF {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func Test_metacacheReader_readNames(t *testing.T) {
 func Test_metacacheReader_readN(t *testing.T) {
 	r := loadMetacacheSample(t)
 	defer r.Close()
-	entries, err := r.readN(-1, false, true, "")
+	entries, err := r.readN(-1, false, true, false, "")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -79,7 +79,7 @@ func Test_metacacheReader_readN(t *testing.T) {
 	}
 
 	want = want[:0]
-	entries, err = r.readN(0, false, true, "")
+	entries, err = r.readN(0, false, true, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -90,7 +90,7 @@ func Test_metacacheReader_readN(t *testing.T) {
 	// Reload.
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(0, false, true, "")
+	entries, err = r.readN(0, false, true, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -98,7 +98,7 @@ func Test_metacacheReader_readN(t *testing.T) {
 		t.Fatal("unexpected length:", entries.len(), "want:", len(want))
 	}
 
-	entries, err = r.readN(5, false, true, "")
+	entries, err = r.readN(5, false, true, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -117,7 +117,7 @@ func Test_metacacheReader_readN(t *testing.T) {
 func Test_metacacheReader_readNDirs(t *testing.T) {
 	r := loadMetacacheSample(t)
 	defer r.Close()
-	entries, err := r.readN(-1, false, true, "")
+	entries, err := r.readN(-1, false, true, false, "")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -138,7 +138,7 @@ func Test_metacacheReader_readNDirs(t *testing.T) {
 	want = noDirs
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(-1, false, false, "")
+	entries, err = r.readN(-1, false, false, false, "")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -152,7 +152,7 @@ func Test_metacacheReader_readNDirs(t *testing.T) {
 	}
 
 	want = want[:0]
-	entries, err = r.readN(0, false, false, "")
+	entries, err = r.readN(0, false, false, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -163,7 +163,7 @@ func Test_metacacheReader_readNDirs(t *testing.T) {
 	// Reload.
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(0, false, false, "")
+	entries, err = r.readN(0, false, false, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -171,7 +171,7 @@ func Test_metacacheReader_readNDirs(t *testing.T) {
 		t.Fatal("unexpected length:", entries.len(), "want:", len(want))
 	}
 
-	entries, err = r.readN(5, false, false, "")
+	entries, err = r.readN(5, false, false, false, "")
 	if err != nil {
 		t.Fatal(err, entries.len())
 	}
@@ -190,7 +190,7 @@ func Test_metacacheReader_readNDirs(t *testing.T) {
 func Test_metacacheReader_readNPrefix(t *testing.T) {
 	r := loadMetacacheSample(t)
 	defer r.Close()
-	entries, err := r.readN(-1, false, true, "src/compress/bzip2/")
+	entries, err := r.readN(-1, false, true, false, "src/compress/bzip2/")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -206,7 +206,7 @@ func Test_metacacheReader_readNPrefix(t *testing.T) {
 
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(-1, false, true, "src/nonexist")
+	entries, err = r.readN(-1, false, true, false, "src/nonexist")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -222,7 +222,7 @@ func Test_metacacheReader_readNPrefix(t *testing.T) {
 
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(-1, false, true, "src/a")
+	entries, err = r.readN(-1, false, true, false, "src/a")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -238,7 +238,7 @@ func Test_metacacheReader_readNPrefix(t *testing.T) {
 
 	r = loadMetacacheSample(t)
 	defer r.Close()
-	entries, err = r.readN(-1, false, true, "src/compress/zlib/e")
+	entries, err = r.readN(-1, false, true, false, "src/compress/zlib/e")
 	if err != io.EOF {
 		t.Fatal(err, entries.len())
 	}
@@ -339,6 +339,7 @@ func Test_metacacheReader_next(t *testing.T) {
 		}
 	}
 }
+
 func Test_metacacheReader_peek(t *testing.T) {
 	r := loadMetacacheSample(t)
 	defer r.Close()

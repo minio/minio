@@ -1121,7 +1121,6 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 		LastModified: minio.UTCNow(),
 		Size:         data.Size(),
 	}, nil
-
 }
 
 // gcsGetPartInfo returns PartInfo of a given object part
@@ -1471,6 +1470,7 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
+				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				actionSet,

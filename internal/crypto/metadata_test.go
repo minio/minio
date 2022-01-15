@@ -306,7 +306,6 @@ var s3CreateMetadataTests = []struct {
 	SealedDataKey []byte
 	SealedKey     SealedKey
 }{
-
 	{KeyID: "", SealedDataKey: nil, SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "my-minio-key", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},

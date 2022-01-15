@@ -84,7 +84,7 @@ func (dir *ConfigDir) Get() string {
 
 // Attempts to create all directories, ignores any permission denied errors.
 func mkdirAllIgnorePerm(path string) error {
-	err := os.MkdirAll(path, 0700)
+	err := os.MkdirAll(path, 0o700)
 	if err != nil {
 		// It is possible in kubernetes like deployments this directory
 		// is already mounted and is not writable, ignore any write errors.

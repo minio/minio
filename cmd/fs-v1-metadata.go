@@ -91,7 +91,7 @@ func (c *FSChecksumInfoV1) UnmarshalJSON(data []byte) error {
 	}
 
 	var info checksuminfo
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal(data, &info)
 	if err != nil {
 		return err
@@ -230,7 +230,7 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		return 0, io.EOF
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(fsMetaBuf, m); err != nil {
 		return 0, err
 	}

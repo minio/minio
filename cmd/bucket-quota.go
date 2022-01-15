@@ -154,7 +154,7 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 	// ModTime to find the oldest objects in bucket to delete. In
 	// the context of bucket quota enforcement - number of hits are
 	// irrelevant.
-	scorer, err := newFileScorer(toFree, time.Now().Unix(), 1)
+	scorer, err := newFileScorer(toFree, UTCNow().Unix(), 1)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return
@@ -162,11 +162,6 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 
 	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
 	for obj := range objInfoCh {
-		if obj.DeleteMarker {
-			// Delete markers are automatically added for FIFO purge.
-			scorer.addFileWithObjInfo(obj, 1)
-			continue
-		}
 		// skip objects currently under retention
 		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			continue
@@ -178,6 +173,7 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 	if scorer.seenBytes <= cfg.Quota {
 		return
 	}
+
 	// Calculate how much we want to delete now.
 	toFreeNow := scorer.seenBytes - cfg.Quota
 	// We were less over quota than we thought. Adjust so we delete less.
@@ -193,8 +189,10 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 	numKeys := len(scorer.fileObjInfos())
 	for i, obj := range scorer.fileObjInfos() {
 		objects = append(objects, ObjectToDelete{
-			ObjectName: obj.Name,
-			VersionID:  obj.VersionID,
+			ObjectV: ObjectV{
+				ObjectName: obj.Name,
+				VersionID:  obj.VersionID,
+			},
 		})
 		if len(objects) < maxDeleteList && (i < numKeys-1) {
 			// skip deletion until maxDeleteList or end of slice
@@ -209,9 +207,9 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 		_, deleteErrs := objectAPI.DeleteObjects(ctx, bucket, objects, ObjectOptions{
 			Versioned: versioned,
 		})
-		for i := range deleteErrs {
-			if deleteErrs[i] != nil {
-				logger.LogIf(ctx, deleteErrs[i])
+		for j := range deleteErrs {
+			if deleteErrs[j] != nil {
+				logger.LogIf(ctx, deleteErrs[j])
 				continue
 			}
 

@@ -60,7 +60,8 @@ const (
 	RegionName = "name"
 	AccessKey  = "access_key"
 	SecretKey  = "secret_key"
-	License    = "license"
+	License    = "license" // Deprecated Dec 2021
+	APIKey     = "api_key"
 )
 
 // Top level config constants.
@@ -251,7 +252,7 @@ func (kvs KVS) GetWithDefault(key string, defaultKVS KVS) string {
 
 // Keys returns the list of keys for the current KVS
 func (kvs KVS) Keys() []string {
-	var keys = make([]string, len(kvs))
+	keys := make([]string, len(kvs))
 	var foundComment bool
 	for i := range kvs {
 		if kvs[i].Key == madmin.CommentKey {
@@ -816,7 +817,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 		return false, Errorf("sub-system '%s' cannot have empty keys", subSys)
 	}
 
-	var kvs = KVS{}
+	kvs := KVS{}
 	var prevK string
 	for _, v := range fields {
 		kv := strings.SplitN(v, KvSeparator, 2)

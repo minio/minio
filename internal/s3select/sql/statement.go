@@ -26,9 +26,7 @@ import (
 	"github.com/minio/simdjson-go"
 )
 
-var (
-	errBadLimitSpecified = errors.New("Limit value must be a positive integer")
-)
+var errBadLimitSpecified = errors.New("Limit value must be a positive integer")
 
 const (
 	baseTableName = "s3object"

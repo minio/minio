@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -138,7 +139,6 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithCertificate)).
 		Queries(stsAction, clientCertificate).
 		Queries(stsVersion, stsAPIVersion)
-
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, isErrCodeSTS bool, stsErr STSErrorCode) {
@@ -245,21 +245,17 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := map[string]interface{}{
-		expClaim: UTCNow().Add(duration).Unix(),
+		expClaim:    UTCNow().Add(duration).Unix(),
+		parentClaim: user.AccessKey,
 	}
 
-	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
+	// Validate that user.AccessKey's policies can be retrieved - it may not
+	// be in case the user is disabled.
+	_, err = globalIAMSys.PolicyDBGet(user.AccessKey, false)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
-
-	policyName := strings.Join(policies, ",")
-
-	// This policy is the policy associated with the user
-	// requesting for temporary credentials. The temporary
-	// credentials will inherit the same policy requirements.
-	m[iamPolicyClaimNameOpenID()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
@@ -272,14 +268,30 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the parent of the temporary access key, this is useful
-	// in obtaining service accounts by this cred.
+	// Set the parent of the temporary access key, so that it's access
+	// policy is inherited from `user.AccessKey`.
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName); err != nil {
+	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
+	}
+
+	// Call hook for site replication.
+	if cred.ParentUser != globalActiveCred.AccessKey {
+		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemSTSAcc,
+			STSCredential: &madmin.SRSTSCredential{
+				AccessKey:    cred.AccessKey,
+				SecretKey:    cred.SecretKey,
+				SessionToken: cred.SessionToken,
+				ParentUser:   cred.ParentUser,
+			},
+		}); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	assumeRoleResponse := &AssumeRoleResponse{
@@ -394,8 +406,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	roleArn := r.Form.Get(stsRoleArn)
-	if roleArn != "" {
+	if globalIAMSys.HasRolePolicy() {
+		roleArn := r.Form.Get(stsRoleArn)
 		_, err := globalIAMSys.GetRolePolicy(roleArn)
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
@@ -406,10 +418,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		// associated policy when credentials are used.
 		m[roleArnClaim] = roleArn
 	} else {
-		// JWT has requested a custom claim with policy value set.
-		// This is a MinIO STS API specific value, this value should
-		// be set and configured on your identity provider as part of
-		// JWT custom claims.
+		// If no role policy is configured, then we use claims from the
+		// JWT. This is a MinIO STS API specific value, this value
+		// should be set and configured on your identity provider as
+		// part of JWT custom claims.
 		policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
 		policies := strings.Join(policySet.ToSlice(), ",")
 		if ok {
@@ -483,11 +495,36 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		issFromToken, _ = v.(string)
 	}
 
-	cred.ParentUser = "openid:" + subFromToken + ":" + issFromToken
+	// Since issFromToken can have `/` characters (it is typically the
+	// provider URL), we hash and encode it to base64 here. This is needed
+	// because there will be a policy mapping stored on drives whose
+	// filename is this parentUser: therefore, it needs to have only valid
+	// filename characters and needs to have bounded length.
+	{
+		h := sha256.New()
+		h.Write([]byte("openid:" + subFromToken + ":" + issFromToken))
+		bs := h.Sum(nil)
+		cred.ParentUser = base64.RawURLEncoding.EncodeToString(bs)
+	}
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
+		return
+	}
+
+	// Call hook for site replication.
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemSTSAcc,
+		STSCredential: &madmin.SRSTSCredential{
+			AccessKey:           cred.AccessKey,
+			SecretKey:           cred.SecretKey,
+			SessionToken:        cred.SessionToken,
+			ParentUser:          cred.ParentUser,
+			ParentPolicyMapping: policyName,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -647,13 +684,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	// Call hook for cluster-replication.
+	// Call hook for site replication.
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    cred.AccessKey,
 			SecretKey:    cred.SecretKey,
 			SessionToken: cred.SessionToken,
+			ParentUser:   cred.ParentUser,
 		},
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -677,7 +715,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 //
 // API endpoint: https://minio:9000?Action=AssumeRoleWithCertificate&Version=2011-06-15
 func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *http.Request) {
-	var ctx = newContext(r, w, "AssumeRoleWithCertificate")
+	ctx := newContext(r, w, "AssumeRoleWithCertificate")
 
 	if !globalSTSTLSConfig.Enabled {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCertificate' is disabled"))
@@ -699,7 +737,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// policy mapping would be ambigious.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
-	var peerCertificates = make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
+	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
 	for _, cert := range r.TLS.PeerCertificates {
 		if cert.IsCA {
 			continue
@@ -719,7 +757,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		return
 	}
 
-	var certificate = r.TLS.PeerCertificates[0]
+	certificate := r.TLS.PeerCertificates[0]
 	if !globalSTSTLSConfig.InsecureSkipVerify { // Verify whether the client certificate has been issued by a trusted CA.
 		_, err := certificate.Verify(x509.VerifyOptions{
 			KeyUsages: []x509.ExtKeyUsage{
@@ -787,12 +825,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	parentUser := "tls:" + certificate.Subject.CommonName
 
 	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(map[string]interface{}{
-		expClaim:                   UTCNow().Add(expiry).Unix(),
-		parentClaim:                parentUser,
-		subClaim:                   certificate.Subject.CommonName,
-		audClaim:                   certificate.Subject.Organization,
-		issClaim:                   certificate.Issuer.CommonName,
-		iamPolicyClaimNameOpenID(): certificate.Subject.CommonName,
+		expClaim:    UTCNow().Add(expiry).Unix(),
+		parentClaim: parentUser,
+		subClaim:    certificate.Subject.CommonName,
+		audClaim:    certificate.Subject.Organization,
+		issClaim:    certificate.Issuer.CommonName,
 	}, globalActiveCred.SecretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
@@ -800,13 +837,29 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, certificate.Subject.CommonName)
+	policyName := certificate.Subject.CommonName
+	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
 
-	var response = new(AssumeRoleWithCertificateResponse)
+	// Call hook for site replication.
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemSTSAcc,
+		STSCredential: &madmin.SRSTSCredential{
+			AccessKey:           tmpCredentials.AccessKey,
+			SecretKey:           tmpCredentials.SecretKey,
+			SessionToken:        tmpCredentials.SessionToken,
+			ParentUser:          tmpCredentials.ParentUser,
+			ParentPolicyMapping: policyName,
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	response := new(AssumeRoleWithCertificateResponse)
 	response.Result.Credentials = tmpCredentials
 	response.Metadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
 	writeSuccessResponseXML(w, encodeResponse(response))

@@ -108,7 +108,7 @@ func (d *DEK) UnmarshalText(text []byte) error {
 		Ciphertext []byte `json:"ciphertext"`
 	}
 	var v JSON
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(text, &v); err != nil {
 		return err
 	}

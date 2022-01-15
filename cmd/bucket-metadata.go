@@ -120,7 +120,7 @@ func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string)
 		logger.LogIf(ctx, errors.New("bucket name cannot be empty"))
 		return errors.New("bucket name cannot be empty")
 	}
-	configFile := path.Join(bucketConfigPrefix, name, bucketMetadataFile)
+	configFile := path.Join(bucketMetaPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, api, configFile)
 	if err != nil {
 		return err
@@ -277,7 +277,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 	}
 
 	for _, legacyFile := range legacyConfigs {
-		configFile := path.Join(bucketConfigPrefix, b.Name, legacyFile)
+		configFile := path.Join(bucketMetaPrefix, b.Name, legacyFile)
 
 		configData, err := readConfig(ctx, objectAPI, configFile)
 		if err != nil {
@@ -338,7 +338,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 	}
 
 	for legacyFile := range configs {
-		configFile := path.Join(bucketConfigPrefix, b.Name, legacyFile)
+		configFile := path.Join(bucketMetaPrefix, b.Name, legacyFile)
 		if err := deleteConfig(ctx, objectAPI, configFile); err != nil && !errors.Is(err, errConfigNotFound) {
 			logger.LogIf(ctx, err)
 		}
@@ -365,7 +365,7 @@ func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
 		return err
 	}
 
-	configFile := path.Join(bucketConfigPrefix, b.Name, bucketMetadataFile)
+	configFile := path.Join(bucketMetaPrefix, b.Name, bucketMetadataFile)
 	return saveConfig(ctx, api, configFile, data)
 }
 
@@ -377,7 +377,7 @@ func deleteBucketMetadata(ctx context.Context, obj objectDeleter, bucket string)
 		bucketMetadataFile,
 	}
 	for _, metaFile := range metadataFiles {
-		configFile := path.Join(bucketConfigPrefix, bucket, metaFile)
+		configFile := path.Join(bucketMetaPrefix, bucket, metaFile)
 		if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
 			return err
 		}

@@ -303,7 +303,6 @@ func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
 
 // GetNetPerfInfo - fetch network information for a remote node.
 func (client *peerRESTClient) GetNetPerfInfo(ctx context.Context) (info madmin.PeerNetPerfInfo, err error) {
-
 	// 100 Gbit ->  256 MiB  *  50 threads
 	// 40 Gbit  ->  256 MiB  *  20 threads
 	// 25 Gbit  ->  128 MiB  *  25 threads
@@ -423,12 +422,21 @@ func (client *peerRESTClient) GetSELinuxInfo(ctx context.Context) (info madmin.S
 
 // GetSysConfig - fetch sys config for a remote node.
 func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.SysConfig, err error) {
+	sent := time.Now()
 	respBody, err := client.callWithContext(ctx, peerRESTMethodSysConfig, nil, nil, -1)
 	if err != nil {
 		return
 	}
+	roundtrip := int32(time.Since(sent).Milliseconds())
 	defer http.DrainBody(respBody)
+
 	err = gob.NewDecoder(respBody).Decode(&info)
+	cfg := info.Config["time-info"]
+	if cfg != nil {
+		ti := cfg.(madmin.TimeInfo)
+		ti.RoundtripDuration = roundtrip
+		info.Config["time-info"] = ti
+	}
 	return info, err
 }
 
@@ -720,6 +728,11 @@ func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []st
 
 // GetMetacacheListing - get a new or existing metacache.
 func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPathOptions) (*metacache, error) {
+	if client == nil {
+		resp := localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
+		return &resp, nil
+	}
+
 	var reader bytes.Buffer
 	err := gob.NewEncoder(&reader).Encode(o)
 	if err != nil {
@@ -737,6 +750,9 @@ func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPat
 
 // UpdateMetacacheListing - update an existing metacache it will unconditionally be updated to the new state.
 func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m metacache) (metacache, error) {
+	if client == nil {
+		return localMetacacheMgr.updateCacheEntry(m)
+	}
 	b, err := m.MarshalMsg(nil)
 	if err != nil {
 		return m, err
@@ -749,7 +765,16 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 	defer http.DrainBody(respBody)
 	var resp metacache
 	return resp, msgp.Decode(respBody, &resp)
+}
 
+func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodReloadPoolMeta, nil, nil, 0)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
 }
 
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {

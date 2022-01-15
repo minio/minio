@@ -181,15 +181,17 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.CipherSuitesTLS(),
-		CurvePreferences: fips.EllipticCurvesTLS(),
+		RootCAs:            globalRootCAs,
+		CipherSuites:       fips.CipherSuitesTLS(),
+		CurvePreferences:   fips.EllipticCurvesTLS(),
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.CipherSuitesTLS(),
-		CurvePreferences: fips.EllipticCurvesTLS(),
+		RootCAs:            globalRootCAs,
+		CipherSuites:       fips.CipherSuitesTLS(),
+		CurvePreferences:   fips.EllipticCurvesTLS(),
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, rest.DefaultTimeout)()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -289,6 +291,7 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.As(err, &rquorum) ||
 		errors.As(err, &wquorum) ||
+		isErrObjectNotFound(err) ||
 		isErrBucketNotFound(err) ||
 		errors.Is(err, os.ErrDeadlineExceeded)
 }
@@ -296,13 +299,6 @@ func configRetriableErrors(err error) bool {
 func initServer(ctx context.Context, newObject ObjectLayer) ([]BucketInfo, error) {
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
-
-	// Make sure to hold lock for entire migration to avoid
-	// such that only one server should migrate the entire config
-	// at a given time, this big transaction lock ensures this
-	// appropriately. This is also true for rotation of encrypted
-	// content.
-	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -319,6 +315,13 @@ func initServer(ctx context.Context, newObject ObjectLayer) ([]BucketInfo, error
 			return nil, fmt.Errorf("Initializing sub-systems stopped gracefully %w", ctx.Err())
 		default:
 		}
+
+		// Make sure to hold lock for entire migration to avoid
+		// such that only one server should migrate the entire config
+		// at a given time, this big transaction lock ensures this
+		// appropriately. This is also true for rotation of encrypted
+		// content.
+		txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
@@ -460,10 +463,13 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
-		// Check for new updates from dl.min.io.
-		checkUpdate(getMinioMode())
-	}
+	// Check for updates in non-blocking manner.
+	go func() {
+		if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+			// Check for new updates from dl.min.io.
+			checkUpdate(getMinioMode())
+		}
+	}()
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {
 		globalActiveCred = auth.DefaultCredentials
@@ -588,8 +594,9 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	// initialize the new disk cache objects.
 	if globalCacheConfig.Enabled {
-		// initialize the new disk cache objects.
+		logStartupMessage(color.Yellow("WARNING: Disk caching is deprecated for single/multi drive MinIO setups. Please migrate to using MinIO S3 gateway instead of disk caching"))
 		var cacheAPI CacheObjectLayer
 		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")

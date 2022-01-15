@@ -71,9 +71,7 @@ const (
 	maxRecordMessageLength = (128 << 10) - 256
 )
 
-var (
-	bufLength = payloadLenForMsgLen(maxRecordMessageLength)
-)
+var bufLength = payloadLenForMsgLen(maxRecordMessageLength)
 
 // newRecordsMessage - creates new Records Message which can contain a single record, partial records,
 // or multiple records. Depending on the size of the result, a response can contain one or more of these messages.

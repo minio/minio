@@ -277,7 +277,6 @@ func (r *Reader) startReaders(newReader func(io.Reader) *csv.Reader) error {
 		}()
 	}
 	return nil
-
 }
 
 // NewReader - creates new CSV reader using readCloser.

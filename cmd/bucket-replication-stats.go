@@ -51,8 +51,10 @@ func (r *ReplicationStats) Delete(bucket string) {
 	r.Lock()
 	defer r.Unlock()
 	delete(r.Cache, bucket)
-	delete(r.UsageCache, bucket)
 
+	r.ulock.Lock()
+	defer r.ulock.Unlock()
+	delete(r.UsageCache, bucket)
 }
 
 // UpdateReplicaStat updates in-memory replica statistics with new values.
@@ -82,10 +84,12 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration t
 	bs, ok := r.Cache[bucket]
 	if !ok {
 		bs = &BucketReplicationStats{Stats: make(map[string]*BucketReplicationStat)}
+		r.Cache[bucket] = bs
 	}
 	b, ok := bs.Stats[arn]
 	if !ok {
 		b = &BucketReplicationStat{}
+		bs.Stats[arn] = b
 	}
 	switch status {
 	case replication.Completed:
@@ -115,9 +119,6 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration t
 			b.ReplicaSize += n
 		}
 	}
-
-	bs.Stats[arn] = b
-	r.Cache[bucket] = bs
 }
 
 // GetInitialUsage get replication metrics available at the time of cluster initialization
@@ -128,10 +129,10 @@ func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats
 	r.ulock.RLock()
 	defer r.ulock.RUnlock()
 	st, ok := r.UsageCache[bucket]
-	if ok {
-		return st.Clone()
+	if !ok {
+		return BucketReplicationStats{}
 	}
-	return BucketReplicationStats{Stats: make(map[string]*BucketReplicationStat)}
+	return st.Clone()
 }
 
 // Get replication metrics for a bucket from this node since this node came up.
@@ -145,7 +146,7 @@ func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 
 	st, ok := r.Cache[bucket]
 	if !ok {
-		return BucketReplicationStats{Stats: make(map[string]*BucketReplicationStat)}
+		return BucketReplicationStats{}
 	}
 	return st.Clone()
 }
@@ -162,41 +163,46 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
 	rTimer := time.NewTimer(time.Minute * 1)
 	defer rTimer.Stop()
+	var (
+		dui DataUsageInfo
+		err error
+	)
+outer:
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-rTimer.C:
-			dui, err := loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
+			dui, err = loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
 			if err != nil {
 				continue
 			}
-			// data usage has not captured any data yet.
-			if dui.LastUpdate.IsZero() {
-				continue
+			// If LastUpdate is set, data usage is available.
+			if !dui.LastUpdate.IsZero() {
+				break outer
 			}
-			m := make(map[string]*BucketReplicationStats)
-			for bucket, usage := range dui.BucketsUsage {
-				b := &BucketReplicationStats{
-					Stats: make(map[string]*BucketReplicationStat, len(usage.ReplicationInfo)),
-				}
-				for arn, uinfo := range usage.ReplicationInfo {
-					b.Stats[arn] = &BucketReplicationStat{
-						FailedSize:     int64(uinfo.ReplicationFailedSize),
-						ReplicatedSize: int64(uinfo.ReplicatedSize),
-						ReplicaSize:    int64(uinfo.ReplicaSize),
-						FailedCount:    int64(uinfo.ReplicationFailedCount),
-					}
-				}
-				b.ReplicaSize += int64(usage.ReplicaSize)
-				if b.hasReplicationUsage() {
-					m[bucket] = b
-				}
-			}
-			r.ulock.Lock()
-			defer r.ulock.Unlock()
-			r.UsageCache = m
-			return
 		}
 	}
+
+	m := make(map[string]*BucketReplicationStats)
+	for bucket, usage := range dui.BucketsUsage {
+		b := &BucketReplicationStats{
+			Stats: make(map[string]*BucketReplicationStat, len(usage.ReplicationInfo)),
+		}
+		for arn, uinfo := range usage.ReplicationInfo {
+			b.Stats[arn] = &BucketReplicationStat{
+				FailedSize:     int64(uinfo.ReplicationFailedSize),
+				ReplicatedSize: int64(uinfo.ReplicatedSize),
+				ReplicaSize:    int64(uinfo.ReplicaSize),
+				FailedCount:    int64(uinfo.ReplicationFailedCount),
+			}
+		}
+		b.ReplicaSize += int64(usage.ReplicaSize)
+		if b.hasReplicationUsage() {
+			m[bucket] = b
+		}
+	}
+	r.ulock.Lock()
+	defer r.ulock.Unlock()
+	r.UsageCache = m
 }

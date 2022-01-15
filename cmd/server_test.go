@@ -257,7 +257,6 @@ func (s *TestSuiteCommon) TestCors(c *check) {
 			}
 		}
 	}
-
 }
 
 func (s *TestSuiteCommon) TestObjectDir(c *check) {
@@ -476,7 +475,6 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *check) {
 	response, err = s.client.Do(request)
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusConflict)
-
 }
 
 func (s *TestSuiteCommon) TestListenNotificationHandler(c *check) {
@@ -576,7 +574,9 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 		c.Assert(response.StatusCode, http.StatusOK)
 		// Append all objects.
 		delObjReq.Objects = append(delObjReq.Objects, ObjectToDelete{
-			ObjectName: objName,
+			ObjectV: ObjectV{
+				ObjectName: objName,
+			},
 		})
 	}
 	// Marshal delete request.
@@ -591,7 +591,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	var deleteResp = DeleteObjectsResponse{}
+	deleteResp := DeleteObjectsResponse{}
 	delRespBytes, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
@@ -1405,7 +1405,6 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *check) {
 	// Since the "If-Modified-Since" header was ahead in time compared to the actual
 	// modified time of the object expecting the response status to be http.StatusNotModified.
 	c.Assert(response.StatusCode, http.StatusOK)
-
 }
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.
@@ -1594,20 +1593,22 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 		c.Assert(response.StatusCode, http.StatusOK)
 	}
 
-	var testCases = []struct {
+	testCases := []struct {
 		getURL          string
 		expectedStrings []string
 	}{
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", ""), []string{"<Key>foo bar 1</Key>", "<Key>foo bar 2</Key>"}},
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
-		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
 				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
-		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
@@ -1669,7 +1670,6 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	c.Assert(err, nil)
 	// validating the error response.
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
-
 }
 
 // TestPutBucketErrors - request for non valid bucket operation
@@ -1879,7 +1879,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *check) {
 
 	// test Cases containing data to make partial range requests.
 	// also has expected response data.
-	var testCases = []struct {
+	testCases := []struct {
 		byteRange      string
 		expectedString string
 	}{

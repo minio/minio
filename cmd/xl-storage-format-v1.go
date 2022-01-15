@@ -160,7 +160,7 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON - custom checksum info unmarshaller
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	var info checksumInfoJSON
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &info); err != nil {
 		return err
 	}
@@ -192,16 +192,17 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 
 	fi := FileInfo{
-		Volume:    volume,
-		Name:      path,
-		ModTime:   m.Stat.ModTime,
-		Size:      m.Stat.Size,
-		Metadata:  m.Meta,
-		Parts:     m.Parts,
-		Erasure:   m.Erasure,
-		VersionID: m.VersionID,
-		DataDir:   m.DataDir,
-		XLV1:      true,
+		Volume:      volume,
+		Name:        path,
+		ModTime:     m.Stat.ModTime,
+		Size:        m.Stat.Size,
+		Metadata:    m.Meta,
+		Parts:       m.Parts,
+		Erasure:     m.Erasure,
+		VersionID:   m.VersionID,
+		DataDir:     m.DataDir,
+		XLV1:        true,
+		NumVersions: 1,
 	}
 
 	return fi, nil

@@ -52,7 +52,10 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 			if p.errs[i] == nil {
 				if n != len(blocks[i]) {
 					p.errs[i] = io.ErrShortWrite
+					p.writers[i] = nil
 				}
+			} else {
+				p.writers[i] = nil
 			}
 		}(i)
 	}
@@ -93,6 +96,7 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer
 		blocks, err = e.EncodeData(ctx, buf[:n])
 		if err != nil {
 			logger.LogIf(ctx, err)
+
 			return 0, err
 		}
 

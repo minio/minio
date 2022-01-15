@@ -67,8 +67,7 @@ func fatal(err error, msg string, data ...interface{}) {
 
 var fatalMessage fatalMsg
 
-type fatalMsg struct {
-}
+type fatalMsg struct{}
 
 func (f fatalMsg) json(msg string, args ...interface{}) {
 	var message string
@@ -80,7 +79,7 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   FatalLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
 	})
 	if err != nil {
@@ -89,7 +88,6 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	fmt.Println(string(logJSON))
 
 	os.Exit(1)
-
 }
 
 func (f fatalMsg) quiet(msg string, args ...interface{}) {
@@ -159,7 +157,7 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   InformationLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 	})
 	if err != nil {
 		panic(err)
@@ -192,7 +190,7 @@ func (i errorMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&log.Entry{
 		Level:   ErrorLvl.String(),
 		Message: message,
-		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
 	})
 	if err != nil {
@@ -224,8 +222,7 @@ func Info(msg string, data ...interface{}) {
 
 var startupMessage startUpMsg
 
-type startUpMsg struct {
-}
+type startUpMsg struct{}
 
 func (s startUpMsg) json(msg string, args ...interface{}) {
 }

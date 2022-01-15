@@ -19,6 +19,9 @@ package openid
 
 import (
 	"crypto"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +34,7 @@ import (
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
@@ -110,7 +114,7 @@ func (r *Config) UserInfo(accessToken string) (map[string]interface{}, error) {
 	}
 
 	dec := json.NewDecoder(resp.Body)
-	var claims = map[string]interface{}{}
+	claims := map[string]interface{}{}
 
 	if err = dec.Decode(&claims); err != nil {
 		// uncomment this for debugging when needed.
@@ -367,6 +371,40 @@ func (Config) ID() ID {
 	return "jwt"
 }
 
+// GetSettings - fetches OIDC settings for site-replication related validation.
+// NOTE that region must be populated by caller as this package does not know.
+func (r *Config) GetSettings() madmin.OpenIDSettings {
+	res := madmin.OpenIDSettings{}
+	if !r.Enabled {
+		return res
+	}
+
+	hashedSecret := ""
+	{
+		h := sha256.New()
+		h.Write([]byte(r.ClientSecret))
+		bs := h.Sum(nil)
+		hashedSecret = base64.RawURLEncoding.EncodeToString(bs)
+	}
+	if r.RolePolicy != "" {
+		res.Roles = make(map[string]madmin.OpenIDProviderSettings)
+		res.Roles[r.roleArn.String()] = madmin.OpenIDProviderSettings{
+			ClaimUserinfoEnabled: r.ClaimUserinfo,
+			RolePolicy:           r.RolePolicy,
+			ClientID:             r.ClientID,
+			HashedClientSecret:   hashedSecret,
+		}
+	} else {
+		res.ClaimProvider = madmin.OpenIDProviderSettings{
+			ClaimName:            r.ClaimName,
+			ClaimUserinfoEnabled: r.ClaimUserinfo,
+			ClientID:             r.ClientID,
+			HashedClientSecret:   hashedSecret,
+		}
+	}
+	return res
+}
+
 // OpenID keys and envs.
 const (
 	JwksURL       = "jwks_url"
@@ -576,11 +614,21 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 				return c, config.Errorf("unable to generate a domain from the OpenID config.")
 			}
 		}
-		clientIDFragment := c.ClientID[:8]
-		if clientIDFragment == "" {
-			return c, config.Errorf("unable to get a non-empty clientID fragment from the OpenID config.")
+
+		if c.ClientID == "" {
+			return c, config.Errorf("client ID must not be empty")
 		}
-		resourceID := domain + "_" + clientIDFragment
+
+		// We set the resource ID of the role arn as a hash of client
+		// ID, so we can get a short roleARN that stays the same on
+		// restart.
+		var resourceID string
+		{
+			h := sha1.New()
+			h.Write([]byte(c.ClientID))
+			bs := h.Sum(nil)
+			resourceID = base64.RawURLEncoding.EncodeToString(bs)
+		}
 		c.roleArn, err = arn.NewIAMRoleARN(resourceID, serverRegion)
 		if err != nil {
 			return c, config.Errorf("unable to generate ARN from the OpenID config: %v", err)

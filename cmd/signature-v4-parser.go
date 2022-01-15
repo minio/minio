@@ -107,7 +107,6 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 	// Should validate region, only if region is set.
 	if !isValidRegion(sRegion, region) {
 		return ch, ErrAuthorizationHeaderMalformed
-
 	}
 	if credElements[2] != string(stype) {
 		switch stype {

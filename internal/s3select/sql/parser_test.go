@@ -84,7 +84,6 @@ func TestJSONPath(t *testing.T) {
 		}
 		// repr.Println(j, repr.Indent("  "), repr.OmitEmpty(true))
 	}
-
 }
 
 func TestIdentifierParsing(t *testing.T) {
@@ -342,7 +341,6 @@ func TestFromClauseJSONPath(t *testing.T) {
 
 		// repr.Println(s, repr.Indent("  "), repr.OmitEmpty(true))
 	}
-
 }
 
 func TestSelectParsing(t *testing.T) {

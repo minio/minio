@@ -307,7 +307,7 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 	// an ugly way of handling this situation. Refer here
 	// https://golang.org/src/mime/multipart/formdata.go#L61
 	if len(form.File) == 0 {
-		var b = &bytes.Buffer{}
+		b := &bytes.Buffer{}
 		for _, v := range formValues["File"] {
 			b.WriteString(v)
 		}
@@ -430,56 +430,7 @@ func extractAPIVersion(r *http.Request) string {
 }
 
 func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			return
-		}
-		version := extractAPIVersion(r)
-		switch {
-		case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'peer' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", peerRESTVersion, version, ReleaseTag)
-			writeErrorResponseString(r.Context(), w, APIError{
-				Code:           "XMinioPeerVersionMismatch",
-				Description:    desc,
-				HTTPStatusCode: http.StatusUpgradeRequired,
-			}, r.URL)
-		case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'storage' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", storageRESTVersion, version, ReleaseTag)
-			writeErrorResponseString(r.Context(), w, APIError{
-				Code:           "XMinioStorageVersionMismatch",
-				Description:    desc,
-				HTTPStatusCode: http.StatusUpgradeRequired,
-			}, r.URL)
-		case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-			desc := fmt.Sprintf("Server expects 'lock' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", lockRESTVersion, version, ReleaseTag)
-			writeErrorResponseString(r.Context(), w, APIError{
-				Code:           "XMinioLockVersionMismatch",
-				Description:    desc,
-				HTTPStatusCode: http.StatusUpgradeRequired,
-			}, r.URL)
-		case strings.HasPrefix(r.URL.Path, adminPathPrefix):
-			var desc string
-			if version == "v1" {
-				desc = fmt.Sprintf("Server expects client requests with 'admin' API version '%s', found '%s', please upgrade the client to latest releases", madmin.AdminAPIVersion, version)
-			} else if version == madmin.AdminAPIVersion {
-				desc = fmt.Sprintf("This 'admin' API is not supported by server in '%s'", getMinioMode())
-			} else {
-				desc = fmt.Sprintf("Unexpected client 'admin' API version found '%s', expected '%s', please downgrade the client to older releases", version, madmin.AdminAPIVersion)
-			}
-			writeErrorResponseJSON(r.Context(), w, APIError{
-				Code:           "XMinioAdminVersionMismatch",
-				Description:    desc,
-				HTTPStatusCode: http.StatusUpgradeRequired,
-			}, r.URL)
-		default:
-			writeErrorResponse(r.Context(), w, APIError{
-				Code: "BadRequest",
-				Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
-					r.Method, r.URL.Path),
-				HTTPStatusCode: http.StatusBadRequest,
-			}, r.URL)
-		}
-	}
+	return errorResponseHandler
 }
 
 // If none of the http routes match respond with appropriate errors
@@ -487,24 +438,21 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
-	version := extractAPIVersion(r)
+	desc := "Do not upgrade one server at a time - please follow the recommended guidelines mentioned here https://github.com/minio/minio#upgrading-minio for your environment"
 	switch {
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
-		desc := fmt.Sprintf("Server expects 'peer' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", peerRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioPeerVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
-		desc := fmt.Sprintf("Server expects 'storage' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", storageRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioStorageVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-		desc := fmt.Sprintf("Server expects 'lock' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", lockRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioLockVersionMismatch",
 			Description:    desc,
@@ -512,11 +460,13 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, adminPathPrefix):
 		var desc string
-		if version == "v1" {
+		version := extractAPIVersion(r)
+		switch version {
+		case "v1", madmin.AdminAPIVersionV2:
 			desc = fmt.Sprintf("Server expects client requests with 'admin' API version '%s', found '%s', please upgrade the client to latest releases", madmin.AdminAPIVersion, version)
-		} else if version == madmin.AdminAPIVersion {
+		case madmin.AdminAPIVersion:
 			desc = fmt.Sprintf("This 'admin' API is not supported by server in '%s'", getMinioMode())
-		} else {
+		default:
 			desc = fmt.Sprintf("Unexpected client 'admin' API version found '%s', expected '%s', please downgrade the client to older releases", version, madmin.AdminAPIVersion)
 		}
 		writeErrorResponseJSON(r.Context(), w, APIError{
@@ -532,7 +482,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 	}
-
 }
 
 // gets host name for current node

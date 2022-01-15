@@ -53,7 +53,7 @@ type Config struct {
 // json entries for CacheConfig.
 func (cfg *Config) UnmarshalJSON(data []byte) (err error) {
 	type Alias Config
-	var _cfg = &struct {
+	_cfg := &struct {
 		*Alias
 	}{
 		Alias: (*Alias)(cfg),

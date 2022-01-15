@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -62,6 +63,8 @@ const (
 	ObjectLockRetentionTimestamp = "objectlock-retention-timestamp"
 	// ObjectLockLegalHoldTimestamp - the last time a legal hold metadata modification happened on this cluster for this object version
 	ObjectLockLegalHoldTimestamp = "objectlock-legalhold-timestamp"
+	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
+	ReplicationWorkerMultiplier = 1.5
 )
 
 // gets replication config associated to a given bucket name.
@@ -137,6 +140,7 @@ func (o mustReplicateOptions) ReplicationStatus() (s replication.StatusType) {
 	}
 	return s
 }
+
 func (o mustReplicateOptions) isExistingObjectReplication() bool {
 	return o.opType == replication.ExistingObjectReplicationType
 }
@@ -144,6 +148,7 @@ func (o mustReplicateOptions) isExistingObjectReplication() bool {
 func (o mustReplicateOptions) isMetadataReplication() bool {
 	return o.opType == replication.MetadataReplicationType
 }
+
 func getMustReplicateOptions(o ObjectInfo, op replication.Type, opts ObjectOptions) mustReplicateOptions {
 	if !op.Valid() {
 		op = replication.ObjectReplicationType
@@ -439,7 +444,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		}
 	}
 
-	var eventName = event.ObjectReplicationComplete
+	eventName := event.ObjectReplicationComplete
 	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
@@ -515,19 +520,18 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		}
 		return
 	}
-	// early return if already replicated delete marker for existing object replication
-	if dobj.DeleteMarkerVersionID != "" && dobj.OpType == replication.ExistingObjectReplicationType {
+	// early return if already replicated delete marker for existing object replication/ healing delete markers
+	if dobj.DeleteMarkerVersionID != "" && (dobj.OpType == replication.ExistingObjectReplicationType || dobj.OpType == replication.HealReplicationType) {
 		if _, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
-			}}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+			},
+		}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
 			if dobj.VersionID == "" {
 				rinfo.ReplicationStatus = replication.Completed
-			} else {
-				rinfo.VersionPurgeStatus = Complete
+				return
 			}
-			return
 		}
 	}
 
@@ -766,7 +770,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
-	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) {
+	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) || (oi2.UserTagCount != len(t.ToMap())) {
 		return replicateMetadata
 	}
 
@@ -902,7 +906,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
-	var eventName = event.ObjectReplicationComplete
+	eventName := event.ObjectReplicationComplete
 	if rinfos.ReplicationStatus() == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
@@ -1058,7 +1062,8 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		VersionID: objInfo.VersionID,
 		Internal: miniogo.AdvancedGetOptions{
 			ReplicationProxyRequest: "false",
-		}})
+		},
+	})
 	if cerr == nil {
 		rAction = getReplicationAction(objInfo, oi, ri.OpType)
 		rinfo.ReplicationStatus = replication.Completed
@@ -1117,7 +1122,8 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 			Internal: miniogo.AdvancedPutOptions{
 				SourceVersionID:    objInfo.VersionID,
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
-			}}
+			},
+		}
 		if _, err = c.CopyObject(ctx, tgt.Bucket, object, tgt.Bucket, object, getCopyObjMetadata(objInfo, tgt.StorageClass), srcOpts, dstOpts); err != nil {
 			rinfo.ReplicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
@@ -1179,9 +1185,17 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 	defer func() {
 		if err != nil {
 			// block and abort remote upload upon failure.
-			if aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID); aerr != nil {
-				aerr = fmt.Errorf("Unable to cleanup failed multipart replication %s on remote %s/%s: %w", uploadID, bucket, object, aerr)
-				logger.LogIf(ctx, aerr)
+			attempts := 1
+			for attempts <= 3 {
+				aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID)
+				if aerr == nil {
+					return
+				}
+				logger.LogIf(ctx,
+					fmt.Errorf("Trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
+						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
+				attempts++
+				time.Sleep(time.Second)
 			}
 		}
 	}()
@@ -1213,7 +1227,8 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
-		}})
+		},
+	})
 	return err
 }
 
@@ -1357,7 +1372,6 @@ func (p *ReplicationPool) AddWorker() {
 			return
 		}
 	}
-
 }
 
 // AddExistingObjectReplicateWorker adds a worker to queue existing objects that need to be sync'd
@@ -1412,6 +1426,14 @@ func (p *ReplicationPool) ResizeFailedWorkers(n int) {
 	}
 }
 
+// suggestedWorkers recommends an increase in number of workers to meet replication load.
+func (p *ReplicationPool) suggestedWorkers(failQueue bool) int {
+	if failQueue {
+		return int(float64(p.mrfWorkerSize) * ReplicationWorkerMultiplier)
+	}
+	return int(float64(p.workerSize) * ReplicationWorkerMultiplier)
+}
+
 func (p *ReplicationPool) queueReplicaFailedTask(ri ReplicateObjectInfo) {
 	if p == nil {
 		return
@@ -1425,6 +1447,7 @@ func (p *ReplicationPool) queueReplicaFailedTask(ri ReplicateObjectInfo) {
 		})
 	case p.mrfReplicaCh <- ri:
 	default:
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Replication failed workers could not keep up with healing failures - consider increasing number of replication failed workers with `mc admin config set api replication_failed_workers=%d`", p.suggestedWorkers(true)), replicationSubsystem)
 	}
 }
 
@@ -1450,6 +1473,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		})
 	case ch <- ri:
 	default:
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Replication workers could not keep up with incoming traffic - consider increasing number of replication workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), replicationSubsystem)
 	}
 }
 
@@ -1486,6 +1510,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		})
 	case ch <- doi:
 	default:
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Replication workers could not keep up with incoming traffic - consider increasing number of replication workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), replicationSubsystem)
 	}
 }
 
@@ -1660,6 +1685,7 @@ type replicationConfig struct {
 func (c replicationConfig) Empty() bool {
 	return c.Config == nil
 }
+
 func (c replicationConfig) Replicate(opts replication.ObjectOpts) bool {
 	return c.Config.Replicate(opts)
 }
@@ -1683,7 +1709,8 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo, dsc *Repli
 			DeleteMarker:   oi.DeleteMarker,
 			VersionID:      oi.VersionID,
 			OpType:         replication.DeleteReplicationType,
-			ExistingObject: true}
+			ExistingObject: true,
+		}
 
 		tgtArns := c.Config.FilterTargetArns(opts)
 		// indicates no matching target with Existing object replication enabled.
@@ -1797,22 +1824,15 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	// add initial usage stat to cluster stats
 	usageStat := globalReplicationStats.GetInitialUsage(bucket)
 	totReplicaSize += usageStat.ReplicaSize
-	if usageStat.Stats != nil {
-		for arn, stat := range usageStat.Stats {
-			st := stats[arn]
-			if st == nil {
-				st = &BucketReplicationStat{
-					ReplicatedSize: stat.ReplicatedSize,
-					FailedSize:     stat.FailedSize,
-					FailedCount:    stat.FailedCount,
-				}
-			} else {
-				st.ReplicatedSize += stat.ReplicatedSize
-				st.FailedSize += stat.FailedSize
-				st.FailedCount += stat.FailedCount
-			}
+	for arn, stat := range usageStat.Stats {
+		st, ok := stats[arn]
+		if !ok {
+			st = &BucketReplicationStat{}
 			stats[arn] = st
 		}
+		st.ReplicatedSize += stat.ReplicatedSize
+		st.FailedSize += stat.FailedSize
+		st.FailedCount += stat.FailedCount
 	}
 	s = BucketReplicationStats{
 		Stats: make(map[string]*BucketReplicationStat, len(stats)),

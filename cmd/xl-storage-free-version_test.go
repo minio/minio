@@ -84,8 +84,8 @@ func TestFreeVersion(t *testing.T) {
 			}},
 		},
 		MarkDeleted: false,
-		//DeleteMarkerReplicationStatus: "",
-		//VersionPurgeStatus:            "",
+		// DeleteMarkerReplicationStatus: "",
+		// VersionPurgeStatus:            "",
 		NumVersions:      1,
 		SuccessorModTime: time.Time{},
 	}

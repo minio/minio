@@ -21,9 +21,7 @@ import (
 	"encoding/xml"
 )
 
-var (
-	errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
-)
+var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
 
 // Filter - a filter for a replication configuration Rule.
 type Filter struct {

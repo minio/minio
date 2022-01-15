@@ -349,7 +349,6 @@ func azureTierToS3StorageClass(tierType string) string {
 	default:
 		return "STANDARD"
 	}
-
 }
 
 // azurePropertiesToS3Meta converts Azure metadata/properties to S3
@@ -578,7 +577,6 @@ func (a *azureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 		resp, err := a.client.ListContainersSegment(ctx, marker, azblob.ListContainersSegmentOptions{
 			Prefix: bucket,
 		})
-
 		if err != nil {
 			return bi, azureToObjectError(err, bucket)
 		}
@@ -604,7 +602,6 @@ func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 
 	for marker.NotDone() {
 		resp, err := a.client.ListContainersSegment(ctx, marker, azblob.ListContainersSegmentOptions{})
-
 		if err != nil {
 			return nil, azureToObjectError(err)
 		}
@@ -1419,6 +1416,7 @@ func (a *azureObjects) GetBucketPolicy(ctx context.Context, bucket string) (*pol
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
+				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				policy.NewActionSet(

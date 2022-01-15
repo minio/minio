@@ -22,5 +22,14 @@ stage/
 .sia_temp/
 config.json
 node_modules/
-*.log
-.gititnore
+mc.*
+s3-check-md5*
+xl-meta*
+healing-*
+inspect*
+200M*
+hash-set
+minio.RELEASE*
+mc
+nancy
+inspects/*

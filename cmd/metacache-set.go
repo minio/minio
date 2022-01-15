@@ -91,6 +91,9 @@ type listPathOptions struct {
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
 
+	// Versioned is this a ListObjectVersions call.
+	Versioned bool
+
 	// pool and set of where the cache is located.
 	pool, set int
 }
@@ -134,7 +137,7 @@ func (o *listPathOptions) debugln(data ...interface{}) {
 // The returned function will return the results once there is enough or input is closed,
 // or the context is canceled.
 func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCacheEntry) func() (metaCacheEntriesSorted, error) {
-	var resultsDone = make(chan metaCacheEntriesSorted)
+	resultsDone := make(chan metaCacheEntriesSorted)
 	// Copy so we can mutate
 	resCh := resultsDone
 	var done bool
@@ -156,7 +159,7 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 				resCh = nil
 				continue
 			}
-			if !o.IncludeDirectories && entry.isDir() {
+			if !o.IncludeDirectories && (entry.isDir() || (!o.Versioned && entry.isObjectDir() && entry.isLatestDeletemarker())) {
 				continue
 			}
 			if o.Marker != "" && entry.name < o.Marker {
@@ -168,7 +171,7 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 			if !o.Recursive && !entry.isInDir(o.Prefix, o.Separator) {
 				continue
 			}
-			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
+			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				continue
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
@@ -215,7 +218,7 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 	}
 	o.debugln("searching for ", search)
 	var tmp metacacheBlock
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	i := 0
 	for {
 		partKey := fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, i)
@@ -324,13 +327,13 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 				pastPrefix = true
 				return false
 			}
-			if !o.IncludeDirectories && entry.isDir() {
+			if !o.IncludeDirectories && (entry.isDir() || (!o.Versioned && entry.isObjectDir() && entry.isLatestDeletemarker())) {
 				return true
 			}
 			if !entry.isInDir(o.Prefix, o.Separator) {
 				return true
 			}
-			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
+			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				return entries.len() < o.Limit
 			}
 			entries.o = append(entries.o, entry)
@@ -343,7 +346,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 	}
 
 	// We should not need to filter more.
-	return r.readN(o.Limit, o.InclDeleted, o.IncludeDirectories, o.Prefix)
+	return r.readN(o.Limit, o.InclDeleted, o.IncludeDirectories, o.Versioned, o.Prefix)
 }
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
@@ -541,7 +544,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	// Special case: ask all disks if the drive count is 4
 	if askDisks == -1 || er.setDriveCount == 4 {
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
-		listingQuorum = getReadQuorum(er.setDriveCount)
+		listingQuorum = er.defaultRQuorum()
 	}
 	if askDisks == 0 {
 		askDisks = globalAPIConfig.getListQuorum()
@@ -764,7 +767,7 @@ type listPathRawOptions struct {
 	// agreed is called if all disks agreed.
 	agreed func(entry metaCacheEntry)
 
-	// partial will be returned when there is disagreement between disks.
+	// partial will be called when there is disagreement between disks.
 	// if disk did not return any result, but also haven't errored
 	// the entry will be empty and errs will
 	partial func(entries metaCacheEntries, nAgreed int, errs []error)
@@ -905,7 +908,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				continue
 			}
 			// If exact match, we agree.
-			if current.matches(&entry, opts.bucket) {
+			if _, ok := current.matches(&entry, true); ok {
 				topEntries[i] = entry
 				agree++
 				continue

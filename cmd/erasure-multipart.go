@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -392,6 +393,53 @@ func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObjec
 	return partInfo, nil
 }
 
+func undoRenamePart(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, errs []error) {
+	// Undo rename object on disks where RenameFile succeeded.
+	g := errgroup.WithNErrs(len(disks))
+	for index, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			if errs[index] == nil {
+				_ = disks[index].RenameFile(context.TODO(), dstBucket, dstEntry, srcBucket, srcEntry)
+			}
+			return nil
+		}, index)
+	}
+	g.Wait()
+}
+
+// renamePart - renames multipart part to its relevant location under uploadID.
+func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
+	g := errgroup.WithNErrs(len(disks))
+
+	// Rename file on all underlying storage disks.
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			return disks[index].RenameFile(ctx, srcBucket, srcEntry, dstBucket, dstEntry)
+		}, index)
+	}
+
+	// Wait for all renames to finish.
+	errs := g.Wait()
+
+	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
+	// otherwise return failure. Cleanup successful renames.
+	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	if err == errErasureWriteQuorum {
+		// Undo all the partial rename operations.
+		undoRenamePart(disks, srcBucket, srcEntry, dstBucket, dstEntry, errs)
+	}
+
+	return evalDisks(disks, errs), err
+}
+
 // PutObjectPart - reads incoming stream and internally erasure codes
 // them. This call is similar to single put operation but it is part
 // of the multipart transaction.
@@ -481,7 +529,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.deleteObject(context.Background(), minioMetaTmpBucket, tmpPart, writeQuorum)
+			er.renameAll(context.Background(), minioMetaTmpBucket, tmpPart)
 		}
 	}()
 
@@ -521,7 +569,22 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, err := erasure.Encode(pctx, data, writers, buffer, writeQuorum)
+	toEncode := io.Reader(data)
+	if data.Size() > bigFileThreshold {
+		// Add input readahead.
+		// We use 2 buffers, so we always have a full buffer of input.
+		bufA := er.bp.Get()
+		bufB := er.bp.Get()
+		defer er.bp.Put(bufA)
+		defer er.bp.Put(bufB)
+		ra, err := readahead.NewReaderBuffer(data, [][]byte{bufA[:fi.Erasure.BlockSize], bufB[:fi.Erasure.BlockSize]})
+		if err == nil {
+			toEncode = ra
+			defer ra.Close()
+		}
+	}
+
+	n, err := erasure.Encode(pctx, toEncode, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
@@ -555,7 +618,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Rename temporary part file to its final location.
 	partPath := pathJoin(uploadIDPath, fi.DataDir, partSuffix)
-	onlineDisks, err = rename(wctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, false, writeQuorum, nil)
+	onlineDisks, err = renamePart(wctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
@@ -820,7 +883,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadataByIndex(onlineDisks, partsMetadata, fi)
 
 	// Save current erasure metadata for validation.
-	var currentFI = fi
+	currentFI := fi
 
 	// Allocate parts similar to incoming slice.
 	fi.Parts = make([]ObjectPartInfo, len(parts))
@@ -978,21 +1041,8 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 		return toObjectErr(err, bucket, object, uploadID)
 	}
 
-	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
-
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllFileInfo(ctx, er.getDisks(), minioMetaMultipartBucket, uploadIDPath, "", false)
-
-	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
-	if err != nil {
-		return toObjectErr(err, bucket, object, uploadID)
-	}
-
 	// Cleanup all uploaded parts.
-	if err = er.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object, uploadID)
-	}
+	er.renameAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
 
 	// Successfully purged.
 	return nil

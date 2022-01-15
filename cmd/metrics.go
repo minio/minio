@@ -92,7 +92,6 @@ func (c *minioCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
-
 	// Expose MinIO's version information
 	minioVersionInfo.WithLabelValues(Version, CommitID).Set(1.0)
 
@@ -647,7 +646,6 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 }
 
 func metricsHandler() http.Handler {
-
 	registry := prometheus.NewRegistry()
 
 	err := registry.Register(minioVersionInfo)
@@ -671,7 +669,6 @@ func metricsHandler() http.Handler {
 				ErrorHandling: promhttp.ContinueOnError,
 			}),
 	)
-
 }
 
 // AuthMiddleware checks if the bearer token is valid and authorized.

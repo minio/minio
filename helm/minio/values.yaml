@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2021-11-24T23-19-33Z
+  tag: RELEASE.2021-12-29T06-49-06Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,15 +25,11 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2021-11-16T20-37-36Z
+  tag: RELEASE.2021-12-29T06-52-55Z
   pullPolicy: IfNotPresent
 
-## minio mode, i.e. standalone or distributed or gateway (nas)
-## Distributed MinIO ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
-## NAS Gateway MinIO ref: https://docs.min.io/docs/minio-gateway-for-nas.html
-mode: distributed
-
-## NOTE: currently only "nas" gateway is supported.
+## minio mode, i.e. standalone or distributed or gateway.
+mode: distributed ## other supported values are "standalone", "gateway"
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: []
@@ -105,8 +101,11 @@ pools: 1
 
 # Deploy if 'mode == gateway' - 4 replicas.
 gateway:
-  type: "nas" # currently only "nas" is supported.
+  type: "nas" # currently only "nas,gcs" are supported.
   replicas: 4
+  gcs:
+    serviceAccountFile: "" # credential JSON file of service account key (not required if using existing secret)
+    projectId: "" # Google cloud project id required
 
 ## TLS Settings for MinIO
 tls:
@@ -183,7 +182,7 @@ ingress:
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
   hosts:
-    - chart-example.local
+    - minio-example.local
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -212,7 +211,7 @@ consoleIngress:
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
   hosts:
-    - chart-example.local
+    - console.minio-example.local
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -327,7 +326,7 @@ podDisruptionBudget:
   enabled: false
   maxUnavailable: 1
 
-## Specify the service account to use for the Minio pods. If 'create' is set to 'false'
+## Specify the service account to use for the MinIO pods. If 'create' is set to 'false'
 ## and 'name' is left unspecified, the account 'default' will be used.
 serviceAccount:
   create: true
@@ -338,8 +337,18 @@ serviceAccount:
 metrics:
   serviceMonitor:
     enabled: false
-    additionalLabels: {}
     public: true
+    additionalLabels: {}
+    relabelConfigs: {}
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s
+
+## ETCD settings: https://github.com/minio/minio/blob/master/docs/sts/etcd.md
+## Define endpoints to enable this section.
+etcd:
+  endpoints: []
+  pathPrefix: ""
+  corednsPathPrefix: ""
+  clientCert: ""
+  clientCertKey: ""

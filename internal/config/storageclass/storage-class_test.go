@@ -29,24 +29,48 @@ func TestParseStorageClass(t *testing.T) {
 		wantSc          StorageClass
 		expectedError   error
 	}{
-		{"EC:3", StorageClass{
-			Parity: 3},
-			nil},
-		{"EC:4", StorageClass{
-			Parity: 4},
-			nil},
-		{"AB:4", StorageClass{
-			Parity: 4},
-			errors.New("Unsupported scheme AB. Supported scheme is EC")},
-		{"EC:4:5", StorageClass{
-			Parity: 4},
-			errors.New("Too many sections in EC:4:5")},
-		{"EC:A", StorageClass{
-			Parity: 4},
-			errors.New(`strconv.Atoi: parsing "A": invalid syntax`)},
-		{"AB", StorageClass{
-			Parity: 4},
-			errors.New("Too few sections in AB")},
+		{
+			"EC:3",
+			StorageClass{
+				Parity: 3,
+			},
+			nil,
+		},
+		{
+			"EC:4",
+			StorageClass{
+				Parity: 4,
+			},
+			nil,
+		},
+		{
+			"AB:4",
+			StorageClass{
+				Parity: 4,
+			},
+			errors.New("Unsupported scheme AB. Supported scheme is EC"),
+		},
+		{
+			"EC:4:5",
+			StorageClass{
+				Parity: 4,
+			},
+			errors.New("Too many sections in EC:4:5"),
+		},
+		{
+			"EC:A",
+			StorageClass{
+				Parity: 4,
+			},
+			errors.New(`strconv.Atoi: parsing "A": invalid syntax`),
+		},
+		{
+			"AB",
+			StorageClass{
+				Parity: 4,
+			},
+			errors.New("Too few sections in AB"),
+		},
 	}
 	for i, tt := range tests {
 		gotSc, err := parseStorageClass(tt.storageClassEnv)

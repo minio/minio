@@ -71,7 +71,7 @@ type erasureSets struct {
 	erasureLockOwner string
 
 	// List of endpoints provided on the command line.
-	endpoints Endpoints
+	endpoints PoolEndpoints
 
 	// String version of all the endpoints, an optimization
 	// to avoid url.String() conversion taking CPU on
@@ -106,7 +106,7 @@ func isEndpointConnectionStable(diskMap map[Endpoint]StorageAPI, endpoint Endpoi
 	if !disk.IsOnline() {
 		return false
 	}
-	if disk.LastConn().After(lastCheck) {
+	if !lastCheck.IsZero() && disk.LastConn().After(lastCheck) {
 		return false
 	}
 	return true
@@ -206,9 +206,9 @@ func (s *erasureSets) connectDisks() {
 	}()
 
 	var wg sync.WaitGroup
-	var setsJustConnected = make([]bool, s.setCount)
+	setsJustConnected := make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
-	for _, endpoint := range s.endpoints {
+	for _, endpoint := range s.endpoints.Endpoints {
 		if isEndpointConnectionStable(diskMap, endpoint, s.lastConnectDisksOpTime) {
 			continue
 		}
@@ -328,7 +328,7 @@ func (s *erasureSets) GetEndpoints(setIndex int) func() []Endpoint {
 
 		eps := make([]Endpoint, s.setDriveCount)
 		for i := 0; i < s.setDriveCount; i++ {
-			eps[i] = s.endpoints[setIndex*s.setDriveCount+i]
+			eps[i] = s.endpoints.Endpoints[setIndex*s.setDriveCount+i]
 		}
 		return eps
 	}
@@ -350,12 +350,12 @@ func (s *erasureSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = defaultMonitorNewDiskInterval + time.Second*5
 
 // Initialize new set of erasure coded sets.
-func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatErasureV3, defaultParityCount, poolIdx int) (*erasureSets, error) {
+func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks []StorageAPI, format *formatErasureV3, defaultParityCount, poolIdx int) (*erasureSets, error) {
 	setCount := len(format.Erasure.Sets)
 	setDriveCount := len(format.Erasure.Sets[0])
 
-	endpointStrings := make([]string, len(endpoints))
-	for i, endpoint := range endpoints {
+	endpointStrings := make([]string, len(endpoints.Endpoints))
+	for i, endpoint := range endpoints.Endpoints {
 		endpointStrings[i] = endpoint.String()
 	}
 
@@ -398,18 +398,18 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
 
-	var erasureLockers = map[string]dsync.NetLocker{}
-	for _, endpoint := range endpoints {
+	erasureLockers := map[string]dsync.NetLocker{}
+	for _, endpoint := range endpoints.Endpoints {
 		if _, ok := erasureLockers[endpoint.Host]; !ok {
 			erasureLockers[endpoint.Host] = newLockAPI(endpoint)
 		}
 	}
 
 	for i := 0; i < setCount; i++ {
-		var lockerEpSet = set.NewStringSet()
+		lockerEpSet := set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
-			endpoint := endpoints[i*setDriveCount+j]
-			// Only add lockers per endpoint.
+			endpoint := endpoints.Endpoints[i*setDriveCount+j]
+			// Only add lockers only one per endpoint and per erasure set.
 			if locker, ok := erasureLockers[endpoint.Host]; ok && !lockerEpSet.Contains(endpoint.Host) {
 				lockerEpSet.Add(endpoint.Host)
 				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
@@ -865,7 +865,7 @@ func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObj
 // that all buckets are present on all sets.
 func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
 	var listBuckets []BucketInfo
-	var healBuckets = map[string]VolInfo{}
+	healBuckets := map[string]VolInfo{}
 	for _, set := range s.sets {
 		// lists all unique buckets across drives.
 		if err := listAllBuckets(ctx, set.getDisks(), healBuckets, s.defaultParityCount); err != nil {
@@ -958,13 +958,13 @@ func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects 
 	}
 
 	// The result of delete operation on all passed objects
-	var delErrs = make([]error, len(objects))
+	delErrs := make([]error, len(objects))
 
 	// The result of delete objects
-	var delObjects = make([]DeletedObject, len(objects))
+	delObjects := make([]DeletedObject, len(objects))
 
 	// A map between a set and its associated objects
-	var objSetMap = make(map[int][]delObj)
+	objSetMap := make(map[int][]delObj)
 
 	// Group objects by set index
 	for i, object := range objects {
@@ -974,17 +974,25 @@ func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects 
 
 	// Invoke bulk delete on objects per set and save
 	// the result of the delete operation
-	for _, objsGroup := range objSetMap {
-		set := s.getHashedSet(objsGroup[0].object.ObjectName)
-		dobjects, errs := set.DeleteObjects(ctx, bucket, toNames(objsGroup), opts)
-		for i, obj := range objsGroup {
-			delErrs[obj.origIndex] = errs[i]
-			delObjects[obj.origIndex] = dobjects[i]
-			if errs[i] == nil {
-				auditObjectErasureSet(ctx, obj.object.ObjectName, set)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	wg.Add(len(objSetMap))
+	for setIdx, objsGroup := range objSetMap {
+		go func(set *erasureObjects, group []delObj) {
+			defer wg.Done()
+			dobjects, errs := set.DeleteObjects(ctx, bucket, toNames(group), opts)
+			mu.Lock()
+			defer mu.Unlock()
+			for i, obj := range group {
+				delErrs[obj.origIndex] = errs[i]
+				delObjects[obj.origIndex] = dobjects[i]
+				if errs[i] == nil {
+					auditObjectErasureSet(ctx, obj.object.ObjectName, set)
+				}
 			}
-		}
+		}(s.sets[setIdx], objsGroup)
 	}
+	wg.Wait()
 
 	return delObjects, delErrs
 }
@@ -1147,7 +1155,7 @@ func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs 
 	// result, also populate disks to be healed.
 	for i, format := range formats {
 		drive := endpoints.GetString(i)
-		var state = madmin.DriveStateCorrupt
+		state := madmin.DriveStateCorrupt
 		switch {
 		case format != nil:
 			state = madmin.DriveStateOk
@@ -1226,7 +1234,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	storageDisks, _ := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
+	storageDisks, _ := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints.Endpoints)
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
@@ -1256,7 +1264,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	}
 
 	// Fetch all the drive info status.
-	beforeDrives := formatsToDrivesInfo(s.endpoints, formats, sErrs)
+	beforeDrives := formatsToDrivesInfo(s.endpoints.Endpoints, formats, sErrs)
 
 	res.After.Drives = make([]madmin.HealDriveInfo, len(beforeDrives))
 	res.Before.Drives = make([]madmin.HealDriveInfo, len(beforeDrives))
@@ -1274,7 +1282,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
 
 	if !dryRun {
-		var tmpNewFormats = make([]*formatErasureV3, s.setCount*s.setDriveCount)
+		tmpNewFormats := make([]*formatErasureV3, s.setCount*s.setDriveCount)
 		for i := range newFormatSets {
 			for j := range newFormatSets[i] {
 				if newFormatSets[i][j] == nil {

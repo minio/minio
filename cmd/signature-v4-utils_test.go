@@ -76,7 +76,7 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
-	globalIAMSys.CreateUser(ctx, ucreds.AccessKey, madmin.UserInfo{
+	globalIAMSys.CreateUser(ctx, ucreds.AccessKey, madmin.AddOrUpdateUserReq{
 		SecretKey: ucreds.SecretKey,
 		Status:    madmin.AccountEnabled,
 	})
@@ -173,7 +173,6 @@ func TestIsValidRegion(t *testing.T) {
 
 		expectedResult bool
 	}{
-
 		{"", "", true},
 		{globalMinioDefaultRegion, "", true},
 		{globalMinioDefaultRegion, "US", true},

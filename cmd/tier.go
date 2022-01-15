@@ -359,7 +359,6 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 		return nil, decErr
 	}
 	return cfg, nil
-
 }
 
 // Reset clears remote tier configured and clears tier driver cache.
@@ -372,7 +371,6 @@ func (config *TierConfigMgr) Reset() {
 		delete(config.Tiers, k)
 	}
 	config.Unlock()
-
 }
 
 // Init initializes tier configuration reading from objAPI

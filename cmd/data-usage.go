@@ -18,13 +18,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"net/http"
+	"errors"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -32,28 +30,24 @@ const (
 	dataUsageRoot   = SlashSeparator
 	dataUsageBucket = minioMetaBucket + SlashSeparator + bucketMetaPrefix
 
-	dataUsageObjName   = ".usage.json"
+	dataUsageObjName       = ".usage.json"
+	dataUsageObjNamePath   = bucketMetaPrefix + SlashSeparator + dataUsageObjName
+	dataUsageBloomName     = ".bloomcycle.bin"
+	dataUsageBloomNamePath = bucketMetaPrefix + SlashSeparator + dataUsageBloomName
+
 	dataUsageCacheName = ".usage-cache.bin"
-	dataUsageBloomName = ".bloomcycle.bin"
 )
 
 // storeDataUsageInBackend will store all objects sent on the gui channel until closed.
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan DataUsageInfo) {
 	for dataUsageInfo := range dui {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}
-		size := int64(len(dataUsageJSON))
-		r, err := hash.NewReader(bytes.NewReader(dataUsageJSON), size, "", "", size)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageObjName, NewPutObjReader(r), ObjectOptions{})
-		if !isErrBucketNotFound(err) {
+		if err = saveConfig(ctx, objAPI, dataUsageObjNamePath, dataUsageJSON); err != nil {
 			logger.LogIf(ctx, err)
 		}
 	}
@@ -95,18 +89,17 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
-	r, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageObjName, nil, http.Header{}, readLock, ObjectOptions{})
+	buf, err := readConfig(ctx, objAPI, dataUsageObjNamePath)
 	if err != nil {
-		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
+		if errors.Is(err, errConfigNotFound) {
 			return DataUsageInfo{}, nil
 		}
-		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
+		return DataUsageInfo{}, toObjectErr(err, minioMetaBucket, dataUsageObjNamePath)
 	}
-	defer r.Close()
 
 	var dataUsageInfo DataUsageInfo
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err = json.NewDecoder(r).Decode(&dataUsageInfo); err != nil {
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(buf, &dataUsageInfo); err != nil {
 		return DataUsageInfo{}, err
 	}
 	// For forward compatibility reasons, we need to add this code.

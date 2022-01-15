@@ -332,8 +332,10 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 }
 
 // getRemoteTargetInstanceTransport contains a singleton roundtripper.
-var getRemoteTargetInstanceTransport http.RoundTripper
-var getRemoteTargetInstanceTransportOnce sync.Once
+var (
+	getRemoteTargetInstanceTransport     http.RoundTripper
+	getRemoteTargetInstanceTransportOnce sync.Once
+)
 
 // Returns a minio-go Client configured to access remote host described in replication target config.
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*TargetClient, error) {
@@ -414,7 +416,7 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 		return nil, nil
 	}
 	data = cdata
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if len(cmetadata) != 0 {
 		if err := json.Unmarshal(cmetadata, &meta); err != nil {
 			return nil, err

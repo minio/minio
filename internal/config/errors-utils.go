@@ -120,7 +120,6 @@ func ErrorToErr(err error) Err {
 // FmtError converts a fatal error message to a more clear error
 // using some colors
 func FmtError(introMsg string, err error, jsonFlag bool) string {
-
 	renderedTxt := ""
 	uiErr := ErrorToErr(err)
 	// JSON print

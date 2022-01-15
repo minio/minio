@@ -42,6 +42,7 @@ type Config struct {
 	AuthToken  string            `json:"authToken"`
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
+	QueueSize  int               `json:"queueSize"`
 	Transport  http.RoundTripper `json:"-"`
 
 	// Custom logger
@@ -133,6 +134,7 @@ func (h *Target) startHTTPLogger() {
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 				h.config.Endpoint, bytes.NewReader(logJSON))
 			if err != nil {
+				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
 				cancel()
 				continue
 			}
@@ -173,7 +175,7 @@ func (h *Target) startHTTPLogger() {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	h := &Target{
-		logCh:  make(chan interface{}, 10000),
+		logCh:  make(chan interface{}, config.QueueSize),
 		config: config,
 	}
 

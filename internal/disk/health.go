@@ -30,10 +30,9 @@ import (
 
 // GetHealthInfo about the drive
 func GetHealthInfo(ctx context.Context, drive, fsPath string) (madmin.DiskLatency, madmin.DiskThroughput, error) {
-
 	// Create a file with O_DIRECT flag, choose default umask and also make sure
 	// we are exclusively writing to a new file using O_EXCL.
-	w, err := OpenFileDirectIO(fsPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	w, err := OpenFileDirectIO(fsPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
 	if err != nil {
 		return madmin.DiskLatency{}, madmin.DiskThroughput{}, err
 	}

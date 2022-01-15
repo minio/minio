@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -169,7 +170,6 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	} else {
 		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
-
 }
 
 // Initialized checks if IAM is initialized
@@ -213,9 +213,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Indicate to our routine to exit cleanly upon return.
 	defer cancel()
 
-	// Hold the lock for migration only.
-	txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
-
 	// allocate dynamic timeout once before the loop
 	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
@@ -223,6 +220,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
+		// Hold the lock for migration only.
+		txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
+
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		lkctx, err := txnLk.GetLock(retryCtx, iamLockTimeout)
@@ -338,12 +338,14 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 // Prints IAM role ARNs.
 func (sys *IAMSys) printIAMRoles() {
-	arns := sys.GetRoleARNs()
-
-	if len(arns) == 0 {
+	if len(sys.rolesMap) == 0 {
 		return
 	}
-
+	var arns []string
+	for arn := range sys.rolesMap {
+		arns = append(arns, arn.String())
+	}
+	sort.Strings(arns)
 	msgs := make([]string, 0, len(arns))
 	for _, arn := range arns {
 		msgs = append(msgs, color.Bold(arn))
@@ -430,13 +432,9 @@ func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (e
 	return err
 }
 
-// GetRoleARNs - returns a list of enabled role ARNs.
-func (sys *IAMSys) GetRoleARNs() []string {
-	var res []string
-	for arn := range sys.rolesMap {
-		res = append(res, arn.String())
-	}
-	return res
+// HasRolePolicy - returns if a role policy is configured for IAM.
+func (sys *IAMSys) HasRolePolicy() bool {
+	return len(sys.rolesMap) > 0
 }
 
 // GetRolePolicy - returns policies associated with a role ARN.
@@ -478,13 +476,28 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 	return nil
 }
 
-// InfoPolicy - expands the canned policy into its JSON structure.
-func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
+// InfoPolicy - returns the policy definition with some metadata.
+func (sys *IAMSys) InfoPolicy(policyName string) (*madmin.PolicyInfo, error) {
 	if !sys.Initialized() {
-		return iampolicy.Policy{}, errServerNotInitialized
+		return nil, errServerNotInitialized
 	}
 
-	return sys.store.GetPolicy(policyName)
+	d, err := sys.store.GetPolicyDoc(policyName)
+	if err != nil {
+		return nil, err
+	}
+
+	pdata, err := json.Marshal(d.Policy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &madmin.PolicyInfo{
+		PolicyName: policyName,
+		Policy:     pdata,
+		CreateDate: d.CreateDate,
+		UpdateDate: d.UpdateDate,
+	}, nil
 }
 
 // ListPolicies - lists all canned policies.
@@ -522,12 +535,26 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
-func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, regUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, regUser); err != nil {
+		return err
+	}
+
+	// Notify all other MinIO peers to delete user.
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteUser(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CurrentPolicies - returns comma separated policy string, from
@@ -554,7 +581,45 @@ func (sys *IAMSys) notifyForUser(ctx context.Context, accessKey string, isTemp b
 	}
 }
 
-// SetTempUser - set temporary user credentials, these credentials have an expiry.
+// SetTempUser - set temporary user credentials, these credentials have an
+// expiry. The permissions for these STS credentials is determined in one of the
+// following ways:
+//
+// - RoleARN - if a role-arn is specified in the request, the STS credential's
+// policy is the role's policy.
+//
+// - inherited from parent - this is the case for AssumeRole API, where the
+// parent user is an actual real user with their own (permanent) credentials and
+// policy association.
+//
+// - inherited from "virtual" parent - this is the case for AssumeRoleWithLDAP
+// where the parent user is the DN of the actual LDAP user. The parent user
+// itself cannot login, but the policy associated with them determines the base
+// policy for the STS credential. The policy mapping can be updated by the
+// administrator.
+//
+// - from `Subject.CommonName` field from the STS request for
+// AssumeRoleWithCertificate. In this case, the policy for the STS credential
+// has the same name as the value of this field.
+//
+// - from special JWT claim from STS request for AssumeRoleWithOIDC API (when
+// not using RoleARN). The claim value can be a string or a list and refers to
+// the names of access policies.
+//
+// For all except the RoleARN case, the implementation is the same - the policy
+// for the STS credential is associated with a parent user. For the
+// AssumeRoleWithCertificate case, the "virtual" parent user is the value of the
+// `Subject.CommonName` field. For the OIDC (without RoleARN) case the "virtual"
+// parent is derived as a concatenation of the `sub` and `iss` fields. The
+// policies applicable to the STS credential are associated with this "virtual"
+// parent.
+//
+// When a policyName is given to this function, the policy association is
+// created and stored in the IAM store. Thus, it should NOT be given for the
+// role-arn case (because the role-to-policy mapping is separately stored
+// elsewhere), the AssumeRole case (because the parent user is real and their
+// policy is associated via policy-set API) and the AssumeRoleWithLDAP case
+// (because the policy association is made via policy-set API).
 func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
@@ -571,6 +636,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 	}
 
 	sys.notifyForUser(ctx, cred.AccessKey, true)
+
 	return nil
 }
 
@@ -735,9 +801,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
-	var (
-		cred auth.Credentials
-	)
+	var cred auth.Credentials
 
 	var err error
 	if len(opts.accessKey) > 0 {
@@ -819,18 +883,19 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (aut
 	var embeddedPolicy *iampolicy.Policy
 
 	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
-	if err == nil {
-		pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
-		sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
-		if ptok && spok && pt == "embedded-policy" {
-			policyBytes, err := base64.StdEncoding.DecodeString(sp)
-			if err == nil {
-				p, err := iampolicy.ParseConfig(bytes.NewReader(policyBytes))
-				if err == nil {
-					policy := iampolicy.Policy{}.Merge(*p)
-					embeddedPolicy = &policy
-				}
-			}
+	if err != nil {
+		return auth.Credentials{}, nil, err
+	}
+	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
+	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
+	if ptok && spok && pt == "embedded-policy" {
+		policyBytes, err := base64.StdEncoding.DecodeString(sp)
+		if err != nil {
+			return auth.Credentials{}, nil, err
+		}
+		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		if err != nil {
+			return auth.Credentials{}, nil, err
 		}
 	}
 
@@ -860,7 +925,7 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 }
 
 // DeleteServiceAccount - delete a service account
-func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -870,12 +935,25 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 		return nil
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, svcUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, svcUser); err != nil {
+		return err
+	}
+
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteServiceAccount(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CreateUser - create new user credentials and policy, if user already exists
 // they shall be rewritten with new inputs.
-func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmin.UserInfo) error {
+func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -888,11 +966,11 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmi
 		return auth.ErrInvalidAccessKeyLength
 	}
 
-	if !auth.IsSecretKeyValid(uinfo.SecretKey) {
+	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	err := sys.store.AddUser(ctx, accessKey, uinfo)
+	err := sys.store.AddUser(ctx, accessKey, ureq)
 	if err != nil {
 		return err
 	}
@@ -1177,7 +1255,7 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup
 
 	err := sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Notify all other MinIO peers to reload policy
@@ -1374,34 +1452,28 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 		}
 		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
 	} else {
-		// If roleArn is not used, we fall back to using policy claim
-		// from JWT.
-		policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
-		if !ok {
-			// When claims are set, it should have a policy claim field.
+		// Lookup the parent user's mapping if there's no role-ARN.
+		var err error
+		policies, err = sys.store.PolicyDBGet(parentUser, false, args.Groups...)
+		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("error fetching policies on %s: %v", parentUser, err))
 			return false
 		}
-		// When claims are set, it should have policies as claim.
-		if policySet.IsEmpty() {
-			// No policy, no access!
-			return false
-		}
+		if len(policies) == 0 {
+			// TODO (deprecated in Dec 2021): Only need to handle
+			// behavior for STS credentials created in older
+			// releases. Otherwise, reject such cases, once older
+			// behavior is deprecated.
 
-		// If policy is available for given user, check the policy.
-		mp, ok := sys.store.GetMappedPolicy(args.AccountName, false)
-		if !ok {
-			// No policy set for the user that we can find, no access!
-			return false
+			// If there is no parent policy mapping, we fall back to
+			// using policy claim from JWT.
+			policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
+			if !ok {
+				// When claims are set, it should have a policy claim field.
+				return false
+			}
+			policies = policySet.ToSlice()
 		}
-
-		if !policySet.Equals(mp.policySet()) {
-			// When claims has a policy, it should match the
-			// policy of args.AccountName which server remembers.
-			// if not reject such requests.
-			return false
-		}
-
-		policies = policySet.ToSlice()
 	}
 
 	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))

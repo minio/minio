@@ -148,6 +148,7 @@ func (d *naughtyDisk) StatVol(ctx context.Context, volume string) (vol VolInfo, 
 	}
 	return d.disk.StatVol(ctx, volume)
 }
+
 func (d *naughtyDisk) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err

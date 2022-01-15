@@ -90,7 +90,7 @@ func commonSetDriveCount(divisibleSize uint64, setCounts []uint64) (setSize uint
 // input argument patterns, the symmetry calculation is to ensure that
 // we also use uniform number of drives common across all ellipses patterns.
 func possibleSetCountsWithSymmetry(setCounts []uint64, argPatterns []ellipses.ArgPattern) []uint64 {
-	var newSetCounts = make(map[uint64]struct{})
+	newSetCounts := make(map[uint64]struct{})
 	for _, ss := range setCounts {
 		var symmetry bool
 		for _, argPattern := range argPatterns {
@@ -224,7 +224,7 @@ func (s endpointSet) getEndpoints() (endpoints []string) {
 // this function also intelligently decides on what will
 // be the right set size etc.
 func (s endpointSet) Get() (sets [][]string) {
-	var k = uint64(0)
+	k := uint64(0)
 	endpoints := s.getEndpoints()
 	for i := range s.setIndexes {
 		for j := range s.setIndexes[i] {
@@ -253,7 +253,7 @@ func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
 // of endpoints following the ellipses pattern, this is what is used
 // by the object layer for initializing itself.
 func parseEndpointSet(customSetDriveCount uint64, args ...string) (ep endpointSet, err error) {
-	var argPatterns = make([]ellipses.ArgPattern, len(args))
+	argPatterns := make([]ellipses.ArgPattern, len(args))
 	for i, arg := range args {
 		patterns, perr := ellipses.FindEllipsesPatterns(arg)
 		if perr != nil {
@@ -332,15 +332,13 @@ const (
 	EnvErasureSetDriveCount = "MINIO_ERASURE_SET_DRIVE_COUNT"
 )
 
-var (
-	globalCustomErasureDriveCount = false
-)
+var globalCustomErasureDriveCount = false
 
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
 func createServerEndpoints(serverAddr string, args ...string) (
-	endpointServerPools EndpointServerPools, setupType SetupType, err error) {
-
+	endpointServerPools EndpointServerPools, setupType SetupType, err error,
+) {
 	if len(args) == 0 {
 		return nil, -1, errInvalidArgument
 	}
@@ -355,9 +353,11 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		endpointServerPools = append(endpointServerPools, PoolEndpoints{
+			Legacy:       true,
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
+			CmdLine:      strings.Join(args, " "),
 		})
 		setupType = newSetupType
 		return endpointServerPools, setupType, nil
@@ -378,6 +378,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
+			CmdLine:      arg,
 		}); err != nil {
 			return nil, -1, err
 		}

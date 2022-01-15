@@ -29,6 +29,20 @@ const (
 	EnvRootUser     = "MINIO_ROOT_USER"
 	EnvRootPassword = "MINIO_ROOT_PASSWORD"
 
+	// Legacy files
+	EnvAccessKeyFile = "MINIO_ACCESS_KEY_FILE"
+	EnvSecretKeyFile = "MINIO_SECRET_KEY_FILE"
+
+	// Current files
+	EnvRootUserFile     = "MINIO_ROOT_USER_FILE"
+	EnvRootPasswordFile = "MINIO_ROOT_PASSWORD_FILE"
+
+	// Set all config environment variables from 'config.env'
+	// if necessary. Overrides all previous settings and also
+	// overrides all environment values passed from
+	// 'podman run -e ENV=value'
+	EnvConfigEnvFile = "MINIO_CONFIG_ENV_FILE"
+
 	EnvBrowser    = "MINIO_BROWSER"
 	EnvDomain     = "MINIO_DOMAIN"
 	EnvPublicIPs  = "MINIO_PUBLIC_IPS"
@@ -39,19 +53,21 @@ const (
 	EnvSiteName   = "MINIO_SITE_NAME"
 	EnvSiteRegion = "MINIO_SITE_REGION"
 
-	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE"
+	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE" // Deprecated Dec 2021
+	EnvMinIOSubnetAPIKey       = "MINIO_SUBNET_API_KEY"
 	EnvMinIOServerURL          = "MINIO_SERVER_URL"
 	EnvMinIOBrowserRedirectURL = "MINIO_BROWSER_REDIRECT_URL"
 	EnvRootDiskThresholdSize   = "MINIO_ROOTDISK_THRESHOLD_SIZE"
 
 	EnvUpdate = "MINIO_UPDATE"
 
-	EnvKMSSecretKey  = "MINIO_KMS_SECRET_KEY"
-	EnvKESEndpoint   = "MINIO_KMS_KES_ENDPOINT"
-	EnvKESKeyName    = "MINIO_KMS_KES_KEY_NAME"
-	EnvKESClientKey  = "MINIO_KMS_KES_KEY_FILE"
-	EnvKESClientCert = "MINIO_KMS_KES_CERT_FILE"
-	EnvKESServerCA   = "MINIO_KMS_KES_CAPATH"
+	EnvKMSSecretKey     = "MINIO_KMS_SECRET_KEY"
+	EnvKMSSecretKeyFile = "MINIO_KMS_SECRET_KEY_FILE"
+	EnvKESEndpoint      = "MINIO_KMS_KES_ENDPOINT"
+	EnvKESKeyName       = "MINIO_KMS_KES_KEY_NAME"
+	EnvKESClientKey     = "MINIO_KMS_KES_KEY_FILE"
+	EnvKESClientCert    = "MINIO_KMS_KES_CERT_FILE"
+	EnvKESServerCA      = "MINIO_KMS_KES_CAPATH"
 
 	EnvEndpoints  = "MINIO_ENDPOINTS"   // legacy
 	EnvWorm       = "MINIO_WORM"        // legacy

@@ -103,7 +103,6 @@ func NewDRWMutex(clnt *Dsync, names ...string) *DRWMutex {
 // If the lock is already in use, the calling go routine
 // blocks until the mutex is available.
 func (dm *DRWMutex) Lock(id, source string) {
-
 	isReadLock := false
 	dm.lockBlocking(context.Background(), nil, id, source, isReadLock, Options{
 		Timeout: drwMutexInfinite,
@@ -121,7 +120,6 @@ type Options struct {
 // blocks until either the mutex becomes available and return success or
 // more time has passed than the timeout value and return false.
 func (dm *DRWMutex) GetLock(ctx context.Context, cancel context.CancelFunc, id, source string, opts Options) (locked bool) {
-
 	isReadLock := false
 	return dm.lockBlocking(ctx, cancel, id, source, isReadLock, opts)
 }
@@ -131,7 +129,6 @@ func (dm *DRWMutex) GetLock(ctx context.Context, cancel context.CancelFunc, id, 
 // If one or more read locks are already in use, it will grant another lock.
 // Otherwise the calling go routine blocks until the mutex is available.
 func (dm *DRWMutex) RLock(id, source string) {
-
 	isReadLock := true
 	dm.lockBlocking(context.Background(), nil, id, source, isReadLock, Options{
 		Timeout: drwMutexInfinite,
@@ -145,7 +142,6 @@ func (dm *DRWMutex) RLock(id, source string) {
 // available and return success or more time has passed than the timeout
 // value and return false.
 func (dm *DRWMutex) GetRLock(ctx context.Context, cancel context.CancelFunc, id, source string, opts Options) (locked bool) {
-
 	isReadLock := true
 	return dm.lockBlocking(ctx, cancel, id, source, isReadLock, opts)
 }
@@ -238,8 +234,8 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 			case <-refreshTimer.C:
 				refreshTimer.Reset(drwMutexRefreshInterval)
 
-				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum)
-				if err == nil && !refreshed {
+				noQuorum, err := refreshLock(ctx, dm.clnt, id, source, quorum)
+				if err == nil && noQuorum {
 					// Clean the lock locally and in remote nodes
 					forceUnlock(ctx, dm.clnt, id)
 					// Execute the caller lock loss callback
@@ -277,10 +273,12 @@ func forceUnlock(ctx context.Context, ds *Dsync, id string) {
 
 type refreshResult struct {
 	offline   bool
-	succeeded bool
+	refreshed bool
 }
 
-func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (bool, error) {
+// Refresh the given lock in all nodes, return true to indicate if a lock
+// does not exist in enough quorum nodes.
+func refreshLock(ctx context.Context, ds *Dsync, id, source string, quorum int) (bool, error) {
 	restClnts, _ := ds.GetLockers()
 
 	// Create buffered channel of size equal to total number of nodes.
@@ -306,18 +304,13 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (boo
 			defer cancel()
 
 			refreshed, err := c.Refresh(ctx, args)
-			if refreshed && err == nil {
-				ch <- refreshResult{succeeded: true}
+			if err != nil {
+				ch <- refreshResult{offline: true}
+				log("dsync: Unable to call Refresh failed with %s for %#v at %s\n", err, args, c)
 			} else {
-				if err != nil {
-					ch <- refreshResult{offline: true}
-					log("dsync: Unable to call Refresh failed with %s for %#v at %s\n", err, args, c)
-				} else {
-					ch <- refreshResult{succeeded: false}
-					log("dsync: Refresh returned false for %#v at %s\n", args, c)
-				}
+				ch <- refreshResult{refreshed: refreshed}
+				log("dsync: Refresh returned false for %#v at %s\n", args, c)
 			}
-
 		}(index, c)
 	}
 
@@ -327,37 +320,30 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (boo
 	// b) received too many refreshed for quorum to be still possible
 	// c) timed out
 	//
-	i, refreshFailed, refreshSucceeded := 0, 0, 0
+	lockNotFound, lockRefreshed := 0, 0
 	done := false
 
-	for ; i < len(restClnts); i++ {
+	for i := 0; i < len(restClnts); i++ {
 		select {
-		case refresh := <-ch:
-			if refresh.offline {
+		case refreshResult := <-ch:
+			if refreshResult.offline {
 				continue
 			}
-			if refresh.succeeded {
-				refreshSucceeded++
+			if refreshResult.refreshed {
+				lockRefreshed++
 			} else {
-				refreshFailed++
+				lockNotFound++
 			}
-			if refreshFailed > quorum {
-				// We know that we are not going to succeed with refresh
+			if lockRefreshed >= quorum || lockNotFound > len(restClnts)-quorum {
 				done = true
 			}
 		case <-ctx.Done():
 			// Refreshing is canceled
 			return false, ctx.Err()
 		}
-
 		if done {
 			break
 		}
-	}
-
-	refreshQuorum := refreshSucceeded >= quorum
-	if !refreshQuorum {
-		refreshQuorum = refreshFailed < quorum
 	}
 
 	// We may have some unused results in ch, release them async.
@@ -368,7 +354,8 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int) (boo
 		}
 	}()
 
-	return refreshQuorum, nil
+	noQuorum := lockNotFound > len(restClnts)-quorum
+	return noQuorum, nil
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
@@ -422,7 +409,6 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				g.lockUID = args.UID
 			}
 			ch <- g
-
 		}(index, isReadLock, c)
 	}
 
