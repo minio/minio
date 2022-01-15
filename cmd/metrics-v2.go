@@ -226,10 +226,31 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 	})
 }
 
+func (m *Metric) copyMetric() Metric {
+	metric := Metric{
+		Description:          m.Description,
+		Value:                m.Value,
+		HistogramBucketLabel: m.HistogramBucketLabel,
+		StaticLabels:         make(map[string]string),
+		VariableLabels:       make(map[string]string),
+		Histogram:            make(map[string]uint64),
+	}
+	for k, v := range m.StaticLabels {
+		metric.StaticLabels[k] = v
+	}
+	for k, v := range m.VariableLabels {
+		metric.VariableLabels[k] = v
+	}
+	for k, v := range m.Histogram {
+		metric.Histogram[k] = v
+	}
+	return metric
+}
+
 // Get - returns cached value always upton the configured TTL,
 // once the TTL expires "read()" registered function is called
 // to return the new values and updated.
-func (g *MetricsGroup) Get() []Metric {
+func (g *MetricsGroup) Get() (metrics []Metric) {
 	var c interface{}
 	var err error
 	if g.cacheInterval <= 0 {
@@ -247,7 +268,11 @@ func (g *MetricsGroup) Get() []Metric {
 		return []Metric{}
 	}
 
-	return m
+	metrics = make([]Metric, 0, len(m))
+	for i := range m {
+		metrics = append(metrics, m[i].copyMetric())
+	}
+	return metrics
 }
 
 func getClusterCapacityTotalBytesMD() MetricDescription {
