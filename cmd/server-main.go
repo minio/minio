@@ -51,23 +51,27 @@ import (
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{
 	cli.StringFlag{
-		Name:  "address",
-		Value: ":" + GlobalMinioDefaultPort,
-		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+		Name:   "address",
+		Value:  ":" + GlobalMinioDefaultPort,
+		Usage:  "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+		EnvVar: "MINIO_ADDRESS",
 	},
 	cli.IntFlag{
-		Name:  "listeners",
-		Value: 1,
-		Usage: "bind N number of listeners per ADDRESS:PORT",
+		Name:   "listeners",
+		Value:  1,
+		Usage:  "bind N number of listeners per ADDRESS:PORT",
+		EnvVar: "MINIO_LISTENERS",
 	},
 	cli.StringFlag{
-		Name:  "console-address",
-		Usage: "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
+		Name:   "console-address",
+		Usage:  "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
+		EnvVar: "MINIO_CONSOLE_ADDRESS",
 	},
 	cli.DurationFlag{
 		Name:   "shutdown-timeout",
 		Value:  xhttp.DefaultShutdownTimeout,
 		Usage:  "shutdown timeout to gracefully shutdown server",
+		EnvVar: "MINIO_SHUTDOWN_TIMEOUT",
 		Hidden: true,
 	},
 }
