@@ -49,6 +49,7 @@ type apiConfig struct {
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
 	deleteCleanupInterval       time.Duration
+	disableODirect              bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -150,6 +151,14 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.staleUploadsExpiry = cfg.StaleUploadsExpiry
 	t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
 	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
+	t.disableODirect = cfg.DisableODirect
+}
+
+func (t *apiConfig) isDisableODirect() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.disableODirect
 }
 
 func (t *apiConfig) getListQuorum() int {

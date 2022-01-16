@@ -94,5 +94,11 @@ var (
 			Optional:    true,
 			Type:        "duration",
 		},
+		config.HelpKV{
+			Key:         apiDisableODirect,
+			Description: "set to disable O_DIRECT for reads under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing.",
+			Optional:    true,
+			Type:        "boolean",
+		},
 	}
 )

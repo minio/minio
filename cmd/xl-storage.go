@@ -1652,7 +1652,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	}
 
 	alignment := offset%xioutil.DirectioAlignSize == 0
-	if !alignment {
+	if !alignment || globalAPIConfig.isDisableODirect() {
 		if err = disk.DisableDirectIO(file); err != nil {
 			file.Close()
 			return nil, err
