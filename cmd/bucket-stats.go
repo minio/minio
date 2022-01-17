@@ -38,7 +38,7 @@ func (rl ReplicationLatency) merge(other ReplicationLatency) (newReplLatency Rep
 // Get upload latency of each object size range
 func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
 	ret = make(map[string]uint64)
-	avg := rl.UploadHistogram.GetAvg()
+	avg := rl.UploadHistogram.GetAvgData()
 	for k, v := range avg {
 		// Convert nanoseconds to milliseconds
 		ret[sizeTagToString(k)] = v.avg() / uint64(time.Millisecond)
