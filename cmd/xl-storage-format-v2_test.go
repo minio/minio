@@ -570,7 +570,7 @@ func Test_mergeXLV2Versions(t *testing.T) {
 			}
 		})
 		t.Run(fmt.Sprintf("modtime-q%d", i), func(t *testing.T) {
-			// Mutate signature, non strict
+			// Mutate modtime, but rest is consistent.
 			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
 			for i, ver := range vers {
 				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
@@ -581,8 +581,12 @@ func Test_mergeXLV2Versions(t *testing.T) {
 				vMod = append(vMod, newVers)
 			}
 			merged := mergeXLV2Versions(i, false, vMod...)
-			if len(merged) == 0 {
+			if len(merged) == 0 && i < 2 {
 				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results")
 				return
 			}
 			for _, ver := range merged {
