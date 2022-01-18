@@ -861,8 +861,9 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		return
 	}
 	tgtArns := cfg.FilterTargetArns(replication.ObjectOpts{
-		Name: object,
-		SSEC: crypto.SSEC.IsEncrypted(objInfo.UserDefined),
+		Name:     object,
+		SSEC:     crypto.SSEC.IsEncrypted(objInfo.UserDefined),
+		UserTags: objInfo.UserTags,
 	})
 	// Lock the object name before starting replication.
 	// Use separate lock that doesn't collide with regular objects.
