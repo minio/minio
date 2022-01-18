@@ -19,14 +19,8 @@ package dsync
 
 import (
 	"context"
-	"fmt"
-	golog "log"
 	"math/rand"
-	"net"
-	"net/http"
-	"net/rpc"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -34,67 +28,23 @@ import (
 	"github.com/google/uuid"
 )
 
-const numberOfNodes = 5
-
-var (
-	ds       *Dsync
-	rpcPaths []string // list of rpc paths where lock server is serving.
-)
-
-var (
-	nodes       = make([]string, numberOfNodes) // list of node IP addrs or hostname with ports.
-	lockServers []*lockServer
-)
-
-func startRPCServers() {
-	for i := range nodes {
-		server := rpc.NewServer()
-		ls := &lockServer{
-			mutex:   sync.Mutex{},
-			lockMap: make(map[string]int64),
-		}
-		server.RegisterName("Dsync", ls)
-		// For some reason the registration paths need to be different (even for different server objs)
-		server.HandleHTTP(rpcPaths[i], fmt.Sprintf("%s-debug", rpcPaths[i]))
-		l, e := net.Listen("tcp", ":"+strconv.Itoa(i+12345))
-		if e != nil {
-			golog.Fatal("listen error:", e)
-		}
-		go http.Serve(l, nil)
-
-		lockServers = append(lockServers, ls)
-	}
-
-	// Let servers start
-	time.Sleep(10 * time.Millisecond)
-}
-
 // TestMain initializes the testing framework
 func TestMain(m *testing.M) {
-	const rpcPath = "/dsync"
-
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	for i := range nodes {
-		nodes[i] = fmt.Sprintf("127.0.0.1:%d", i+12345)
-	}
-	for i := range nodes {
-		rpcPaths = append(rpcPaths, rpcPath+"-"+strconv.Itoa(i))
-	}
+	startRPCServers()
 
 	// Initialize net/rpc clients for dsync.
 	var clnts []NetLocker
 	for i := 0; i < len(nodes); i++ {
-		clnts = append(clnts, newClient(nodes[i], rpcPaths[i]))
+		clnts = append(clnts, newClient(nodes[i].URL))
 	}
 
 	ds = &Dsync{
 		GetLockers: func() ([]NetLocker, string) { return clnts, uuid.New().String() },
 	}
 
-	startRPCServers()
-
-	os.Exit(m.Run())
+	code := m.Run()
+	stopRPCServers()
+	os.Exit(code)
 }
 
 func TestSimpleLock(t *testing.T) {
@@ -281,7 +231,7 @@ func TestFailedRefreshLock(t *testing.T) {
 	}
 
 	dm := NewDRWMutex(ds, "aap")
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(1)
 
 	ctx, cl := context.WithCancel(context.Background())

@@ -189,6 +189,9 @@ func TestHTTPListenerStartClose(t *testing.T) {
 				// Ignore if IP is unbindable.
 				continue
 			}
+			if strings.Contains(err.Error(), "bind: address already in use") {
+				continue
+			}
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
@@ -232,6 +235,9 @@ func TestHTTPListenerAddr(t *testing.T) {
 				// Ignore if IP is unbindable.
 				continue
 			}
+			if strings.Contains(err.Error(), "bind: address already in use") {
+				continue
+			}
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
@@ -270,6 +276,9 @@ func TestHTTPListenerAddrs(t *testing.T) {
 		if err != nil {
 			if strings.Contains(err.Error(), "The requested address is not valid in its context") {
 				// Ignore if IP is unbindable.
+				continue
+			}
+			if strings.Contains(err.Error(), "bind: address already in use") {
 				continue
 			}
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)

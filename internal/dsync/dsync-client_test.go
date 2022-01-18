@@ -18,33 +18,55 @@
 package dsync
 
 import (
+	"bytes"
 	"context"
-	"net/rpc"
-	"sync"
+	"errors"
+	"net/http"
+	"net/url"
+	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/rest"
 )
 
 // ReconnectRPCClient is a wrapper type for rpc.Client which provides reconnect on first failure.
 type ReconnectRPCClient struct {
-	mutex    sync.Mutex
-	rpc      *rpc.Client
-	addr     string
-	endpoint string
+	u   *url.URL
+	rpc *rest.Client
 }
 
 // newClient constructs a ReconnectRPCClient object with addr and endpoint initialized.
 // It _doesn't_ connect to the remote endpoint. See Call method to see when the
 // connect happens.
-func newClient(addr, endpoint string) NetLocker {
+func newClient(endpoint string) NetLocker {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		panic(err)
+	}
+
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		MaxIdleConnsPerHost:   1024,
+		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
+		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
+		IdleConnTimeout:       15 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Minute, // Set conservative timeouts for MinIO internode.
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 15 * time.Second,
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}
+
 	return &ReconnectRPCClient{
-		addr:     addr,
-		endpoint: endpoint,
+		u:   u,
+		rpc: rest.NewClient(u, tr, nil),
 	}
 }
 
 // Close closes the underlying socket file descriptor.
 func (rpcClient *ReconnectRPCClient) IsOnline() bool {
-	rpcClient.mutex.Lock()
-	defer rpcClient.mutex.Unlock()
 	// If rpc client has not connected yet there is nothing to close.
 	return rpcClient.rpc != nil
 }
@@ -55,74 +77,73 @@ func (rpcClient *ReconnectRPCClient) IsLocal() bool {
 
 // Close closes the underlying socket file descriptor.
 func (rpcClient *ReconnectRPCClient) Close() error {
-	rpcClient.mutex.Lock()
-	defer rpcClient.mutex.Unlock()
-	// If rpc client has not connected yet there is nothing to close.
-	if rpcClient.rpc == nil {
-		return nil
-	}
-	// Reset rpcClient.rpc to allow for subsequent calls to use a new
-	// (socket) connection.
-	clnt := rpcClient.rpc
-	rpcClient.rpc = nil
-	return clnt.Close()
+	return nil
 }
 
-// Call makes a RPC call to the remote endpoint using the default codec, namely encoding/gob.
-func (rpcClient *ReconnectRPCClient) Call(serviceMethod string, args interface{}, reply interface{}) (err error) {
-	rpcClient.mutex.Lock()
-	defer rpcClient.mutex.Unlock()
-	dialCall := func() error {
-		// If the rpc.Client is nil, we attempt to (re)connect with the remote endpoint.
-		if rpcClient.rpc == nil {
-			clnt, derr := rpc.DialHTTPPath("tcp", rpcClient.addr, rpcClient.endpoint)
-			if derr != nil {
-				return derr
-			}
-			rpcClient.rpc = clnt
-		}
-		// If the RPC fails due to a network-related error, then we reset
-		// rpc.Client for a subsequent reconnect.
-		return rpcClient.rpc.Call(serviceMethod, args, reply)
+var (
+	errLockConflict = errors.New("lock conflict")
+	errLockNotFound = errors.New("lock not found")
+)
+
+func toLockError(err error) error {
+	if err == nil {
+		return nil
 	}
-	if err = dialCall(); err == rpc.ErrShutdown {
-		rpcClient.rpc.Close()
-		rpcClient.rpc = nil
-		err = dialCall()
+
+	switch err.Error() {
+	case errLockConflict.Error():
+		return errLockConflict
+	case errLockNotFound.Error():
+		return errLockNotFound
 	}
 	return err
 }
 
+// Call makes a RPC call to the remote endpoint using the default codec, namely encoding/gob.
+func (rpcClient *ReconnectRPCClient) Call(method string, args LockArgs) (status bool, err error) {
+	buf, err := args.MarshalMsg(nil)
+	if err != nil {
+		return false, err
+	}
+	body := bytes.NewReader(buf)
+	respBody, err := rpcClient.rpc.Call(context.Background(), method,
+		url.Values{}, body, body.Size())
+	defer xhttp.DrainBody(respBody)
+
+	switch toLockError(err) {
+	case nil:
+		return true, nil
+	case errLockConflict, errLockNotFound:
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
 func (rpcClient *ReconnectRPCClient) RLock(ctx context.Context, args LockArgs) (status bool, err error) {
-	err = rpcClient.Call("Dsync.RLock", &args, &status)
-	return status, err
+	return rpcClient.Call("/v1/rlock", args)
 }
 
 func (rpcClient *ReconnectRPCClient) Lock(ctx context.Context, args LockArgs) (status bool, err error) {
-	err = rpcClient.Call("Dsync.Lock", &args, &status)
-	return status, err
+	return rpcClient.Call("/v1/lock", args)
 }
 
 func (rpcClient *ReconnectRPCClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
-	err = rpcClient.Call("Dsync.RUnlock", &args, &status)
-	return status, err
+	return rpcClient.Call("/v1/runlock", args)
 }
 
 func (rpcClient *ReconnectRPCClient) Unlock(ctx context.Context, args LockArgs) (status bool, err error) {
-	err = rpcClient.Call("Dsync.Unlock", &args, &status)
-	return status, err
+	return rpcClient.Call("/v1/unlock", args)
 }
 
 func (rpcClient *ReconnectRPCClient) Refresh(ctx context.Context, args LockArgs) (refreshed bool, err error) {
-	err = rpcClient.Call("Dsync.Refresh", &args, &refreshed)
-	return refreshed, err
+	return rpcClient.Call("/v1/refresh", args)
 }
 
 func (rpcClient *ReconnectRPCClient) ForceUnlock(ctx context.Context, args LockArgs) (reply bool, err error) {
-	err = rpcClient.Call("Dsync.ForceUnlock", &args, &reply)
-	return reply, err
+	return rpcClient.Call("/v1/force-unlock", args)
 }
 
 func (rpcClient *ReconnectRPCClient) String() string {
-	return "http://" + rpcClient.addr + "/" + rpcClient.endpoint
+	return rpcClient.u.String()
 }
