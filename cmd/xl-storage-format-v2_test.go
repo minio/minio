@@ -19,11 +19,15 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/klauspost/compress/zip"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
@@ -475,4 +479,269 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 		}
 		test(t, &xl)
 	})
+}
+
+func Test_mergeXLV2Versions(t *testing.T) {
+	dataZ, err := ioutil.ReadFile("testdata/xl-meta-consist.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vers [][]xlMetaV2ShallowVersion
+	zr, err := zip.NewReader(bytes.NewReader(dataZ), int64(len(dataZ)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range zr.File {
+		if file.UncompressedSize64 == 0 {
+			continue
+		}
+		in, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer in.Close()
+		buf, err := io.ReadAll(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var xl xlMetaV2
+		err = xl.LoadOrConvert(buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		vers = append(vers, xl.versions)
+	}
+	for _, v2 := range vers {
+		for _, ver := range v2 {
+			b, _ := json.Marshal(ver.header)
+			t.Log(string(b))
+			var x xlMetaV2Version
+			_, _ = x.unmarshalV(0, ver.meta)
+			b, _ = json.Marshal(x)
+			t.Log(string(b), x.getSignature())
+		}
+	}
+
+	for i := range vers {
+		t.Run(fmt.Sprintf("non-strict-q%d", i), func(t *testing.T) {
+			merged := mergeXLV2Versions(i, false, vers...)
+			if len(merged) == 0 {
+				t.Error("Did not get any results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("strict-q%d", i), func(t *testing.T) {
+			merged := mergeXLV2Versions(i, true, vers...)
+			if len(merged) == 0 {
+				t.Error("Did not get any results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("signature-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.Signature = [4]byte{byte(i + 10), 0, 0, 0}
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, false, vMod...)
+			if len(merged) == 0 {
+				t.Error("Did not get any results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("modtime-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.ModTime += int64(i)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, false, vMod...)
+			if len(merged) == 0 {
+				t.Error("Did not get any results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("flags-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.Flags += xlFlags(i)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, false, vMod...)
+			if len(merged) == 0 {
+				t.Error("Did not get any results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("versionid-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.VersionID[0] += byte(i)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, false, vMod...)
+			if len(merged) == 0 && i < 2 {
+				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("strict-signature-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.Signature = [4]byte{byte(i + 10), 0, 0, 0}
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, true, vMod...)
+			if len(merged) == 0 && i < 2 {
+				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results")
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("strict-modtime-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.ModTime += int64(i + 10)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, true, vMod...)
+			if len(merged) == 0 && i < 2 {
+				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results", len(merged), merged[0].header)
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("strict-flags-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.Flags += xlFlags(i + 10)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, true, vMod...)
+			if len(merged) == 0 && i < 2 {
+				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results", len(merged))
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("strict-type-q%d", i), func(t *testing.T) {
+			// Mutate signature, non strict
+			vMod := make([][]xlMetaV2ShallowVersion, 0, len(vers))
+			for i, ver := range vers {
+				newVers := make([]xlMetaV2ShallowVersion, 0, len(ver))
+				for _, v := range ver {
+					v.header.Type += VersionType(i + 10)
+					newVers = append(newVers, v)
+				}
+				vMod = append(vMod, newVers)
+			}
+			merged := mergeXLV2Versions(i, true, vMod...)
+			if len(merged) == 0 && i < 2 {
+				t.Error("Did not get any results")
+				return
+			}
+			if len(merged) > 0 && i >= 2 {
+				t.Error("Got unexpected results", len(merged))
+				return
+			}
+			for _, ver := range merged {
+				if ver.header.Type == invalidVersionType {
+					t.Errorf("Invalid result returned: %v", ver.header)
+				}
+			}
+		})
+	}
 }
