@@ -214,7 +214,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				}
 			}
 			di.Metrics = &madmin.DiskMetrics{
-				APILatencies: make(map[string]string),
+				APILatencies: make(map[string]interface{}),
 				APICalls:     make(map[string]uint64),
 			}
 			for k, v := range info.Metrics.APILatencies {

@@ -45,8 +45,7 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	}
 
 	var sites []madmin.PeerSite
-	err := parseJSONBody(ctx, r.Body, &sites, cred.SecretKey)
-	if err != nil {
+	if err := parseJSONBody(ctx, r.Body, &sites, cred.SecretKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -224,6 +223,20 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
 			} else {
 				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, bktPolicy)
+			}
+		}
+	case madmin.SRBucketMetaTypeQuotaConfig:
+		if item.Quota == nil {
+			err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, nil)
+		} else {
+			quotaConfig, err := parseBucketQuota(item.Bucket, item.Quota)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			if err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, quotaConfig); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
 			}
 		}
 	case madmin.SRBucketMetaTypeTags:

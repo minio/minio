@@ -42,23 +42,40 @@ export MC_HOST_minio1=http://minio:minio123@localhost:9001
 export MC_HOST_minio2=http://minio:minio123@localhost:9002
 export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
-./mc admin replicate add minio1 minio2 minio3
+./mc admin replicate add minio1 minio2
 
 ./mc admin user add minio1 foobar foo12345
+
+## add foobar-g group with foobar
+./mc admin group add minio2 foobar-g foobar
+
 ./mc admin policy set minio1 consoleAdmin user=foobar
 sleep 5
 
 ./mc admin user info minio2 foobar
-./mc admin user info minio3 foobar
+
+./mc admin group info minio1 foobar-g
+
 ./mc admin policy add minio1 rw ./docs/site-replication/rw.json
 
 sleep 5
 ./mc admin policy info minio2 rw >/dev/null 2>&1
+
+./mc admin replicate status minio1
+
+## Add a new empty site
+./mc admin replicate add minio1 minio2 minio3
+
+sleep 10
+
 ./mc admin policy info minio3 rw >/dev/null 2>&1
 
 ./mc admin policy remove minio3 rw
 
+./mc admin replicate status minio3
+
 sleep 10
+
 ./mc admin policy info minio1 rw
 if [ $? -eq 0 ]; then
     echo "expecting the command to fail, exiting.."
@@ -71,21 +88,33 @@ if [ $? -eq 0 ]; then
     exit_1;
 fi
 
+./mc admin policy info minio3 rw
+if [ $? -eq 0 ]; then
+    echo "expecting the command to fail, exiting.."
+    exit_1;
+fi
+
 ./mc admin user info minio1 foobar
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
+    echo "policy mapping missing on 'minio1', exiting.."
     exit_1;
 fi
 
 ./mc admin user info minio2 foobar
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
+    echo "policy mapping missing on 'minio2', exiting.."
     exit_1;
 fi
 
 ./mc admin user info minio3 foobar
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
+    echo "policy mapping missing on 'minio3', exiting.."
+    exit_1;
+fi
+
+./mc admin group info minio3 foobar-g
+if [ $? -ne 0 ]; then
+    echo "group mapping missing on 'minio3', exiting.."
     exit_1;
 fi
 
