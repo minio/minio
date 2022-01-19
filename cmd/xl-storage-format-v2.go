@@ -264,9 +264,13 @@ func (x xlMetaV2VersionHeader) String() string {
 
 // matchesNotStrict returns whether x and o have both have non-zero version,
 // their versions match and their type match.
+// If they have zero version, modtime must match.
 func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
-	return x.VersionID != [16]byte{} &&
-		x.VersionID == o.VersionID &&
+	if x.VersionID == [16]byte{} {
+		return x.VersionID == o.VersionID &&
+			x.Type == o.Type && o.ModTime == x.ModTime
+	}
+	return x.VersionID == o.VersionID &&
 		x.Type == o.Type
 }
 
@@ -508,7 +512,14 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	c.ErasureIndex = 0
 
 	// Nil 0 size allownil, so we don't differentiate between nil and 0 len.
-	if len(c.PartETags) == 0 {
+	allEmpty := true
+	for _, tag := range c.PartETags {
+		if len(tag) != 0 {
+			allEmpty = false
+			break
+		}
+	}
+	if allEmpty {
 		c.PartETags = nil
 	}
 	if len(c.PartActualSizes) == 0 {
@@ -1676,6 +1687,9 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type
 func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
+	if quorum <= 0 {
+		quorum = 1
+	}
 	if len(versions) < quorum || len(versions) == 0 {
 		return nil
 	}
@@ -1686,14 +1700,16 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 		// No need for non-strict checks if quorum is 1.
 		strict = true
 	}
+	// Shallow copy input
+	versions = append(make([][]xlMetaV2ShallowVersion, 0, len(versions)), versions...)
+
 	// Our result
 	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
 	tops := make([]xlMetaV2ShallowVersion, len(versions))
 	for {
 		// Step 1 create slice with all top versions.
 		tops = tops[:0]
-		var topSig [4]byte
-		var topID [16]byte
+		var topSig xlMetaV2VersionHeader
 		consistent := true // Are all signatures consistent (shortcut)
 		for _, vers := range versions {
 			if len(vers) == 0 {
@@ -1703,10 +1719,9 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			ver := vers[0]
 			if len(tops) == 0 {
 				consistent = true
-				topSig = ver.header.Signature
-				topID = ver.header.VersionID
+				topSig = ver.header
 			} else {
-				consistent = consistent && topSig == ver.header.Signature && topID == ver.header.VersionID
+				consistent = consistent && ver.header == topSig
 			}
 			tops = append(tops, vers[0])
 		}
@@ -1732,7 +1747,7 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 					continue
 				}
 				if i == 0 || ver.header.sortsBefore(latest.header) {
-					if i == 0 {
+					if i == 0 || latestCount == 0 {
 						latestCount = 1
 					} else if !strict && ver.header.matchesNotStrict(latest.header) {
 						latestCount++
@@ -1744,12 +1759,45 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 				}
 
 				// Mismatch, but older.
-				if !strict && ver.header.matchesNotStrict(latest.header) {
-					// If non-nil version ID and it matches, assume match, but keep newest.
-					if ver.header.sortsBefore(latest.header) {
-						latest = ver
-					}
+				if latestCount > 0 && !strict && ver.header.matchesNotStrict(latest.header) {
 					latestCount++
+					continue
+				}
+				if latestCount > 0 && ver.header.VersionID == latest.header.VersionID {
+					// Version IDs match, but otherwise unable to resolve.
+					// We are either strict, or don't have enough information to match.
+					// Switch to a pure counting algo.
+					x := make(map[xlMetaV2VersionHeader]int, len(tops))
+					for _, a := range tops {
+						if a.header.VersionID != ver.header.VersionID {
+							continue
+						}
+						if !strict {
+							a.header.Signature = [4]byte{}
+						}
+						x[a.header]++
+					}
+					latestCount = 0
+					for k, v := range x {
+						if v < latestCount {
+							continue
+						}
+						if v == latestCount && latest.header.sortsBefore(k) {
+							// Tiebreak, use sort.
+							continue
+						}
+						for _, a := range tops {
+							hdr := a.header
+							if !strict {
+								hdr.Signature = [4]byte{}
+							}
+							if hdr == k {
+								latest = a
+							}
+						}
+						latestCount = v
+					}
+					break
 				}
 			}
 			if latestCount >= quorum {
