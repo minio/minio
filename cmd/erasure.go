@@ -517,6 +517,11 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 					} else {
 						logger.LogIf(ctx, err)
 					}
+					// This ensures that we don't close
+					// bucketResults channel while the
+					// updates-collector goroutine still
+					// holds a reference to this.
+					wg.Wait()
 					continue
 				}
 
