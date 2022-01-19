@@ -75,7 +75,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListUsers - GET /minio/admin/v3/list-users?bucket={bucket}
+// ListBucketUsers - GET /minio/admin/v3/list-users?bucket={bucket}
 func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListBucketUsers")
 
