@@ -102,15 +102,14 @@ func mustGetLocalIP6() (ipList set.StringSet) {
 
 // getHostIP returns IP address of given host.
 func getHostIP(host string) (ipList set.StringSet, err error) {
-	var ips []net.IP
-
-	if ips, err = net.LookupIP(host); err != nil {
+	addrs, err := globalDNSCache.LookupHost(GlobalContext, host)
+	if err != nil {
 		return ipList, err
 	}
 
 	ipList = set.NewStringSet()
-	for _, ip := range ips {
-		ipList.Add(ip.String())
+	for _, addr := range addrs {
+		ipList.Add(addr)
 	}
 
 	return ipList, err

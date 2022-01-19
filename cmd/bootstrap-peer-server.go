@@ -108,6 +108,7 @@ var skipEnvs = map[string]struct{}{
 	"MINIO_OPTS":         {},
 	"MINIO_CERT_PASSWD":  {},
 	"MINIO_SERVER_DEBUG": {},
+	"MINIO_DSYNC_TRACE":  {},
 }
 
 func getServerSystemCfg() ServerSystemConfig {

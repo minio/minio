@@ -643,20 +643,33 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		}
 	}
 
-	// Check whether same path is not used in endpoints of a host on different port.
-	{
-		pathIPMap := make(map[string]set.StringSet)
-		for _, endpoint := range endpoints {
-			host := endpoint.Hostname()
-			hostIPSet, _ := getHostIP(host)
-			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
-				if !IPSet.Intersection(hostIPSet).IsEmpty() {
-					return endpoints, setupType,
-						config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
+	orchestrated := IsKubernetes() || IsDocker()
+	if !orchestrated {
+		// Check whether same path is not used in endpoints of a host on different port.
+		// Only verify this on baremetal setups, DNS is not available in orchestrated
+		// environments so we can't do much here.
+		{
+			pathIPMap := make(map[string]set.StringSet)
+			hostIPCache := make(map[string]set.StringSet)
+			for _, endpoint := range endpoints {
+				host := endpoint.Hostname()
+				hostIPSet, ok := hostIPCache[host]
+				if !ok {
+					hostIPSet, err = getHostIP(host)
+					if err != nil {
+						return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
+					}
+					hostIPCache[host] = hostIPSet
 				}
-				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
-			} else {
-				pathIPMap[endpoint.Path] = hostIPSet
+				if IPSet, ok := pathIPMap[endpoint.Path]; ok {
+					if !IPSet.Intersection(hostIPSet).IsEmpty() {
+						return endpoints, setupType,
+							config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("same path '%s' can not be served by different port on same address", endpoint.Path))
+					}
+					pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
+				} else {
+					pathIPMap[endpoint.Path] = hostIPSet
+				}
 			}
 		}
 	}

@@ -179,11 +179,17 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	}(storageDisks)
 
 	// Sanitize all local disks during server startup.
+	var wg sync.WaitGroup
 	for _, disk := range storageDisks {
 		if disk != nil && disk.IsLocal() {
-			disk.(*xlStorageDiskIDCheck).storage.(*xlStorage).Sanitize()
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				disk.(*xlStorageDiskIDCheck).storage.(*xlStorage).Sanitize()
+			}(disk)
 		}
 	}
+	wg.Wait()
 
 	for i, err := range errs {
 		if err != nil {
@@ -239,13 +245,14 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	// Return error when quorum unformatted disks - indicating we are
 	// waiting for first server to be online.
-	if quorumUnformattedDisks(sErrs) && !firstDisk {
+	unformattedDisks := quorumUnformattedDisks(sErrs)
+	if unformattedDisks && !firstDisk {
 		return nil, nil, errNotFirstDisk
 	}
 
 	// Return error when quorum unformatted disks but waiting for rest
 	// of the servers to be online.
-	if quorumUnformattedDisks(sErrs) && firstDisk {
+	if unformattedDisks && firstDisk {
 		return nil, nil, errFirstDiskWait
 	}
 
@@ -311,10 +318,18 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	// Wait on each try for an update.
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
 	var tries int
+	storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+	if err == nil {
+		return storageDisks, format, nil
+	}
+
+	tries++ // tried already once
+
+	// Wait on each try for an update.
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:

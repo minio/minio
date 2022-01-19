@@ -580,22 +580,23 @@ func serverMain(ctx *cli.Context) {
 	// Initialize users credentials and policies in background right after config has initialized.
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalNotificationSys, globalRefreshIAMInterval)
 
-	// Initialize transition tier configuration manager
-	if globalIsErasure {
-		if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
-			logger.LogIf(GlobalContext, err)
-		}
-	}
-
 	initDataScanner(GlobalContext, newObject)
 
-	if globalIsErasure { // to be done after config init
+	// Initialize transition tier configuration manager
+	if globalIsErasure {
 		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
-		globalTierJournal, err = initTierDeletionJournal(GlobalContext)
-		if err != nil {
-			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
-		}
+
+		go func() {
+			if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
+				logger.LogIf(GlobalContext, err)
+			}
+
+			globalTierJournal, err = initTierDeletionJournal(GlobalContext)
+			if err != nil {
+				logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
+			}
+		}()
 	}
 
 	// initialize the new disk cache objects.
@@ -609,7 +610,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
-	printStartupMessage(getAPIEndpoints(), err)
+	go printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
 		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables", globalActiveCred)
@@ -636,7 +637,17 @@ func serverMain(ctx *cli.Context) {
 	if serverDebugLog {
 		logger.Info("== DEBUG Mode enabled ==")
 		logger.Info("Currently set environment settings:")
+		ks := []string{
+			config.EnvAccessKey,
+			config.EnvSecretKey,
+			config.EnvRootUser,
+			config.EnvRootPassword,
+		}
 		for _, v := range os.Environ() {
+			// Do not print sensitive creds in debug.
+			if contains(ks, strings.Split(v, "=")[0]) {
+				continue
+			}
 			logger.Info(v)
 		}
 		logger.Info("======")
