@@ -7,6 +7,9 @@ assignees: ''
 
 ---
 
+## NOTE
+If this case is urgent, please subscribe to [Subnet](https://min.io/pricing) so that our 24/7 support team may help you faster.
+
 <!--- Provide a general summary of the issue in the Title above -->
 
 ## Expected Behavior
