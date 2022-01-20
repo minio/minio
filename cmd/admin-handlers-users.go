@@ -330,6 +330,20 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemGroupInfo,
+		GroupInfo: &madmin.SRGroupInfo{
+			UpdateReq: madmin.GroupAddRemove{
+				Group:    group,
+				Status:   madmin.GroupStatus(status),
+				IsRemove: false,
+			},
+		},
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
 }
 
 // SetUserStatus - PUT /minio/admin/v3/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
@@ -347,13 +361,27 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	accessKey := vars["accessKey"]
 	status := vars["status"]
 
-	// This API is not allowed to lookup accessKey user status
+	// This API is not allowed to lookup master access key user status
 	if accessKey == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
 
 	if err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status)); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemIAMUser,
+		IAMUser: &madmin.SRIAMUser{
+			AccessKey:   accessKey,
+			IsDeleteReq: false,
+			UserReq: &madmin.AddOrUpdateUserReq{
+				Status: madmin.AccountStatus(status),
+			},
+		},
+	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

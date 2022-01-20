@@ -65,12 +65,28 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if _, err = parseBucketQuota(bucket, data); err != nil {
+	quotaConfig, err := parseBucketQuota(bucket, data)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	if err = globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, data); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	bucketMeta := madmin.SRBucketMeta{
+		Type:   madmin.SRBucketMetaTypeQuotaConfig,
+		Bucket: bucket,
+		Quota:  data,
+	}
+	if quotaConfig.Quota == 0 {
+		bucketMeta.Quota = nil
+	}
+
+	// Call site replication hook.
+	if err = globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

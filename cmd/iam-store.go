@@ -1486,7 +1486,8 @@ func (store *IAMStoreSys) SetUserStatus(ctx context.Context, accessKey string, s
 		AccessKey: accessKey,
 		SecretKey: cred.SecretKey,
 		Status: func() string {
-			if status == madmin.AccountEnabled {
+			switch string(status) {
+			case string(madmin.AccountEnabled), string(auth.AccountOn):
 				return auth.AccountOn
 			}
 			return auth.AccountOff
@@ -1555,6 +1556,10 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 	switch opts.status {
 	// The caller did not ask to update status account, do nothing
 	case "":
+	case string(madmin.AccountEnabled):
+		cr.Status = auth.AccountOn
+	case string(madmin.AccountDisabled):
+		cr.Status = auth.AccountOff
 	// Update account status
 	case auth.AccountOn, auth.AccountOff:
 		cr.Status = opts.status
@@ -1633,7 +1638,8 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 		AccessKey: accessKey,
 		SecretKey: ureq.SecretKey,
 		Status: func() string {
-			if ureq.Status == madmin.AccountEnabled {
+			switch string(ureq.Status) {
+			case string(madmin.AccountEnabled), string(auth.AccountOn):
 				return auth.AccountOn
 			}
 			return auth.AccountOff
