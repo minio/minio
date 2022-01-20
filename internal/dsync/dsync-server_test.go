@@ -148,13 +148,13 @@ func (lh *lockServerHandler) RLockHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func stopRPCServers() {
+func stopLockServers() {
 	for i := 0; i < numberOfNodes; i++ {
 		nodes[i].Close()
 	}
 }
 
-func startRPCServers() {
+func startLockServers() {
 	for i := 0; i < numberOfNodes; i++ {
 		lsrv := &lockServer{
 			mutex:   sync.Mutex{},
