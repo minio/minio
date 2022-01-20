@@ -164,6 +164,8 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 		result.IsTruncated = true
 		if len(objInfos) > 0 {
 			result.NextMarker = objInfos[len(objInfos)-1].Name
+		} else if len(result.Prefixes) > 0 {
+			result.NextMarker = result.Prefixes[len(result.Prefixes)-1]
 		}
 	}
 
@@ -399,6 +401,8 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		result.IsTruncated = true
 		if len(objInfos) > 0 {
 			result.NextMarker = objInfos[len(objInfos)-1].Name
+		} else if len(result.Prefixes) > 0 {
+			result.NextMarker = result.Prefixes[len(result.Prefixes)-1]
 		}
 	}
 
