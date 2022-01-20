@@ -29,13 +29,13 @@ import (
 	"github.com/minio/minio/internal/rest"
 )
 
-// ReconnectRPCClient is a wrapper type for rpc.Client which provides reconnect on first failure.
-type ReconnectRPCClient struct {
-	u   *url.URL
-	rpc *rest.Client
+// ReconnectRESTClient is a wrapper type for rest.Client which provides reconnect on first failure.
+type ReconnectRESTClient struct {
+	u    *url.URL
+	rest *rest.Client
 }
 
-// newClient constructs a ReconnectRPCClient object with addr and endpoint initialized.
+// newClient constructs a ReconnectRESTClient object with addr and endpoint initialized.
 // It _doesn't_ connect to the remote endpoint. See Call method to see when the
 // connect happens.
 func newClient(endpoint string) NetLocker {
@@ -59,24 +59,24 @@ func newClient(endpoint string) NetLocker {
 		DisableCompression: true,
 	}
 
-	return &ReconnectRPCClient{
-		u:   u,
-		rpc: rest.NewClient(u, tr, nil),
+	return &ReconnectRESTClient{
+		u:    u,
+		rest: rest.NewClient(u, tr, nil),
 	}
 }
 
 // Close closes the underlying socket file descriptor.
-func (rpcClient *ReconnectRPCClient) IsOnline() bool {
-	// If rpc client has not connected yet there is nothing to close.
-	return rpcClient.rpc != nil
+func (restClient *ReconnectRESTClient) IsOnline() bool {
+	// If rest client has not connected yet there is nothing to close.
+	return restClient.rest != nil
 }
 
-func (rpcClient *ReconnectRPCClient) IsLocal() bool {
+func (restClient *ReconnectRESTClient) IsLocal() bool {
 	return false
 }
 
 // Close closes the underlying socket file descriptor.
-func (rpcClient *ReconnectRPCClient) Close() error {
+func (restClient *ReconnectRESTClient) Close() error {
 	return nil
 }
 
@@ -99,14 +99,14 @@ func toLockError(err error) error {
 	return err
 }
 
-// Call makes a RPC call to the remote endpoint using the default codec, namely encoding/gob.
-func (rpcClient *ReconnectRPCClient) Call(method string, args LockArgs) (status bool, err error) {
+// Call makes a REST call to the remote endpoint using the msgp codec
+func (restClient *ReconnectRESTClient) Call(method string, args LockArgs) (status bool, err error) {
 	buf, err := args.MarshalMsg(nil)
 	if err != nil {
 		return false, err
 	}
 	body := bytes.NewReader(buf)
-	respBody, err := rpcClient.rpc.Call(context.Background(), method,
+	respBody, err := restClient.rest.Call(context.Background(), method,
 		url.Values{}, body, body.Size())
 	defer xhttp.DrainBody(respBody)
 
@@ -120,30 +120,30 @@ func (rpcClient *ReconnectRPCClient) Call(method string, args LockArgs) (status 
 	}
 }
 
-func (rpcClient *ReconnectRPCClient) RLock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return rpcClient.Call("/v1/rlock", args)
+func (restClient *ReconnectRESTClient) RLock(ctx context.Context, args LockArgs) (status bool, err error) {
+	return restClient.Call("/v1/rlock", args)
 }
 
-func (rpcClient *ReconnectRPCClient) Lock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return rpcClient.Call("/v1/lock", args)
+func (restClient *ReconnectRESTClient) Lock(ctx context.Context, args LockArgs) (status bool, err error) {
+	return restClient.Call("/v1/lock", args)
 }
 
-func (rpcClient *ReconnectRPCClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return rpcClient.Call("/v1/runlock", args)
+func (restClient *ReconnectRESTClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
+	return restClient.Call("/v1/runlock", args)
 }
 
-func (rpcClient *ReconnectRPCClient) Unlock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return rpcClient.Call("/v1/unlock", args)
+func (restClient *ReconnectRESTClient) Unlock(ctx context.Context, args LockArgs) (status bool, err error) {
+	return restClient.Call("/v1/unlock", args)
 }
 
-func (rpcClient *ReconnectRPCClient) Refresh(ctx context.Context, args LockArgs) (refreshed bool, err error) {
-	return rpcClient.Call("/v1/refresh", args)
+func (restClient *ReconnectRESTClient) Refresh(ctx context.Context, args LockArgs) (refreshed bool, err error) {
+	return restClient.Call("/v1/refresh", args)
 }
 
-func (rpcClient *ReconnectRPCClient) ForceUnlock(ctx context.Context, args LockArgs) (reply bool, err error) {
-	return rpcClient.Call("/v1/force-unlock", args)
+func (restClient *ReconnectRESTClient) ForceUnlock(ctx context.Context, args LockArgs) (reply bool, err error) {
+	return restClient.Call("/v1/force-unlock", args)
 }
 
-func (rpcClient *ReconnectRPCClient) String() string {
-	return rpcClient.u.String()
+func (restClient *ReconnectRESTClient) String() string {
+	return restClient.u.String()
 }

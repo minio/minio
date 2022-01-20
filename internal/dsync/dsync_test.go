@@ -30,9 +30,9 @@ import (
 
 // TestMain initializes the testing framework
 func TestMain(m *testing.M) {
-	startRPCServers()
+	startLockServers()
 
-	// Initialize net/rpc clients for dsync.
+	// Initialize locker clients for dsync.
 	var clnts []NetLocker
 	for i := 0; i < len(nodes); i++ {
 		clnts = append(clnts, newClient(nodes[i].URL))
@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 	}
 
 	code := m.Run()
-	stopRPCServers()
+	stopLockServers()
 	os.Exit(code)
 }
 
@@ -224,7 +224,7 @@ func TestFailedRefreshLock(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	// Simulate Refresh RPC response to return no locking found
+	// Simulate Refresh response to return no locking found
 	for i := range lockServers[:3] {
 		lockServers[i].setRefreshReply(false)
 		defer lockServers[i].setRefreshReply(true)
