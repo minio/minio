@@ -338,6 +338,9 @@ var (
 	globalServiceFreezeCnt int32
 	globalServiceFreezeMu  sync.Mutex // Updates.
 
+	// List of local drives to this node, this is only set during server startup.
+	globalLocalDrives []StorageAPI
+
 	// Add new variable global values here.
 )
 

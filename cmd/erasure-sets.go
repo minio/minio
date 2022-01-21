@@ -414,43 +414,66 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				lockerEpSet.Add(endpoint.Host)
 				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
 			}
-			disk := storageDisks[i*setDriveCount+j]
-			if disk == nil {
-				continue
-			}
-			diskID, derr := disk.GetDiskID()
-			if derr != nil {
-				continue
-			}
-			m, n, err := findDiskIndexByDiskID(format, diskID)
-			if err != nil {
-				continue
-			}
-			if m != i || n != j {
-				logger.LogIf(GlobalContext, fmt.Errorf("Detected unexpected disk ordering refusing to use the disk - poolID: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
-				s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
-				continue
-			}
-			disk.SetDiskLoc(s.poolIndex, m, n)
-			s.endpointStrings[m*setDriveCount+n] = disk.String()
-			s.erasureDisks[m][n] = disk
-		}
-
-		// Initialize erasure objects for a given set.
-		s.sets[i] = &erasureObjects{
-			setIndex:              i,
-			poolIndex:             poolIdx,
-			setDriveCount:         setDriveCount,
-			defaultParityCount:    defaultParityCount,
-			getDisks:              s.GetDisks(i),
-			getLockers:            s.GetLockers(i),
-			getEndpoints:          s.GetEndpoints(i),
-			deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
-			nsMutex:               mutex,
-			bp:                    bp,
-			bpOld:                 bpOld,
 		}
 	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < setCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			var innerWg sync.WaitGroup
+			for j := 0; j < setDriveCount; j++ {
+				disk := storageDisks[i*setDriveCount+j]
+				if disk == nil {
+					continue
+				}
+				innerWg.Add(1)
+				go func(disk StorageAPI, i, j int) {
+					defer innerWg.Done()
+					diskID, err := disk.GetDiskID()
+					if err != nil {
+						if !errors.Is(err, errUnformattedDisk) {
+							logger.LogIf(ctx, err)
+						}
+						return
+					}
+					m, n, err := findDiskIndexByDiskID(format, diskID)
+					if err != nil {
+						logger.LogIf(ctx, err)
+						return
+					}
+					if m != i || n != j {
+						logger.LogIf(ctx, fmt.Errorf("Detected unexpected disk ordering refusing to use the disk - poolID: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
+						s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
+						return
+					}
+					disk.SetDiskLoc(s.poolIndex, m, n)
+					s.endpointStrings[m*setDriveCount+n] = disk.String()
+					s.erasureDisks[m][n] = disk
+				}(disk, i, j)
+			}
+			innerWg.Wait()
+
+			// Initialize erasure objects for a given set.
+			s.sets[i] = &erasureObjects{
+				setIndex:              i,
+				poolIndex:             poolIdx,
+				setDriveCount:         setDriveCount,
+				defaultParityCount:    defaultParityCount,
+				getDisks:              s.GetDisks(i),
+				getLockers:            s.GetLockers(i),
+				getEndpoints:          s.GetEndpoints(i),
+				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
+				nsMutex:               mutex,
+				bp:                    bp,
+				bpOld:                 bpOld,
+			}
+		}(i)
+	}
+
+	wg.Wait()
 
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx)

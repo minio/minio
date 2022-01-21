@@ -132,11 +132,12 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = formatErasureMigrate(rootPath); err != nil {
+	formatData, _, err := formatErasureMigrate(rootPath)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	migratedVersion, err := formatGetBackendErasureVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
+	migratedVersion, err := formatGetBackendErasureVersion(formatData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = formatErasureMigrate(rootPath); err == nil {
+	if _, _, err = formatErasureMigrate(rootPath); err == nil {
 		t.Fatal("Expected to fail with unexpected backend format")
 	}
 
@@ -199,7 +200,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = formatErasureMigrate(rootPath); err == nil {
+	if _, _, err = formatErasureMigrate(rootPath); err == nil {
 		t.Fatal("Expected to fail with unexpected backend format version number")
 	}
 }

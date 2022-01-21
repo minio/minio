@@ -141,6 +141,8 @@ func TestTreeWalk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
+	defer os.RemoveAll(fsDir)
+
 	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
@@ -175,11 +177,6 @@ func TestTreeWalk(t *testing.T) {
 
 	// Simple test when marker is set.
 	testTreeWalkMarker(t, listDir, isLeaf, isLeafDir)
-
-	err = os.RemoveAll(fsDir)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 // Test if tree walk go-routine exits cleanly if tree walk is aborted because of timeout.
@@ -188,6 +185,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
+	defer os.RemoveAll(fsDir)
 	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
@@ -250,10 +248,6 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if ok {
 		t.Error("Tree-walk go routine has not exited after timeout.")
 	}
-	err = os.RemoveAll(fsDir)
-	if err != nil {
-		t.Error(err)
-	}
 }
 
 // TestRecursiveWalk - tests if treeWalk returns entries correctly with and
@@ -264,6 +258,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
+	defer os.RemoveAll(fsDir1)
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -366,10 +361,6 @@ func TestRecursiveTreeWalk(t *testing.T) {
 			}
 		})
 	}
-	err = os.RemoveAll(fsDir1)
-	if err != nil {
-		t.Error(err)
-	}
 }
 
 func TestSortedness(t *testing.T) {
@@ -378,6 +369,7 @@ func TestSortedness(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
+	defer os.RemoveAll(fsDir1)
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -444,12 +436,6 @@ func TestSortedness(t *testing.T) {
 			t.Error(i+1, "Expected entries to be sort, but it wasn't")
 		}
 	}
-
-	// Remove directory created for testing
-	err = os.RemoveAll(fsDir1)
-	if err != nil {
-		t.Error(err)
-	}
 }
 
 func TestTreeWalkIsEnd(t *testing.T) {
@@ -458,6 +444,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
+	defer os.RemoveAll(fsDir1)
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -525,11 +512,5 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		if !entry.end {
 			t.Errorf("Test %d: Last entry %s, doesn't have EOF marker set", i, entry.entry)
 		}
-	}
-
-	// Remove directory created for testing
-	err = os.RemoveAll(fsDir1)
-	if err != nil {
-		t.Error(err)
 	}
 }
