@@ -28,7 +28,7 @@ Therefore, the metadata is wrapped as a binary array for easy skipping.
 | ---------------|----------------|----------------------------------------
 | xlHeader       | [4]byte        | `'X', 'L', '2', ' '`
 | xlVersionMajor | uint16         | Major xl-meta version.
-| xlVersionMinor | uint16         | Major xl-meta version.
+| xlVersionMinor | uint16         | Minor xl-meta version.
 | xlMetaV2       | msgp bin array | Bin array with serialized metadata
 | crc            | msgp uint      | Lower 32 bits of 64 bit xxhash of previous array contents (v1.2+ only)
 | inline data    | binary         | Inline data if any, see Inline Data section for encoding.  
@@ -120,6 +120,9 @@ const (
 )
 ```
 
+The "Metadata" section contains a single version, encoded in similar fashion as each version in the `Versions` array
+of the previous version.
+
 # Inline Data
 
 Inline data is optional. If no inline data is present, it is encoded as 0 bytes.
@@ -130,3 +133,5 @@ Inline data is optional. If no inline data is present, it is encoded as 0 bytes.
 | id -> data          | msgp map[string][]byte      | Map of string id -> byte content
 
 Currently only xlMetaInlineDataVer == 1 exists.
+
+The ID is the string encoded Version ID of which the data corresponds.
