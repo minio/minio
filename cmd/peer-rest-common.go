@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v18" // Add LoadPoolMeta
+	peerRESTVersion       = "v19" // Add getlastdaytierstats
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix

@@ -250,11 +250,11 @@ func (t *transitionState) getDailyAllTierStats() dailyAllTierStats {
 	t.lastDayMu.RLock()
 	defer t.lastDayMu.RUnlock()
 
-	res := make(map[string]lastDayTierStats, len(t.lastDayStats))
+	res := make(dailyAllTierStats, len(t.lastDayStats))
 	for tier, st := range t.lastDayStats {
 		res[tier] = st.clone()
 	}
-	return dailyAllTierStats(res)
+	return res
 }
 
 // UpdateWorkers at the end of this function leaves n goroutines waiting for
