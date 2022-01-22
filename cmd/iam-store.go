@@ -1457,7 +1457,20 @@ func (store *IAMStoreSys) GetAllParentUsers() []string {
 	res := set.NewStringSet()
 	for _, cred := range cache.iamUsersMap {
 		if cred.IsServiceAccount() || cred.IsTemp() {
-			res.Add(cred.ParentUser)
+			parentUser := cred.ParentUser
+			if cred.SessionToken != "" {
+				claims, err := getClaimsFromToken(cred.SessionToken)
+				if err != nil {
+					continue
+				}
+				if v, ok := claims[subClaim]; ok {
+					subFromToken, ok := v.(string)
+					if ok {
+						parentUser = subFromToken
+					}
+				}
+			}
+			res.Add(parentUser)
 		}
 	}
 
