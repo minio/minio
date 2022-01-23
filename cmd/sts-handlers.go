@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+/// Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -79,16 +79,6 @@ const (
 	// Role Claim key
 	roleArnClaim = "roleArn"
 )
-
-func parseOpenIDParentUser(parentUser string) (userID string, err error) {
-	if strings.HasPrefix(parentUser, "openid:") {
-		tokens := strings.SplitN(strings.TrimPrefix(parentUser, "openid:"), ":", 2)
-		if len(tokens) == 2 {
-			return tokens[0], nil
-		}
-	}
-	return "", errSkipFile
-}
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
 type stsAPIHandlers struct{}

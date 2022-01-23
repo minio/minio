@@ -1006,11 +1006,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var expiredUsers []string
 	for _, parentUser := range parentUsers {
-		userid, err := parseOpenIDParentUser(parentUser)
-		if err == errSkipFile {
-			continue
-		}
-		u, err := globalOpenIDConfig.LookupUser(userid)
+		u, err := globalOpenIDConfig.LookupUser(parentUser)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
