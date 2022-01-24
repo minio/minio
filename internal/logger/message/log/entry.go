@@ -52,7 +52,7 @@ type API struct {
 
 // Entry - defines fields and values of each log entry.
 type Entry struct {
-	DeploymentID string    `json:"deploymentid,omitempty"`
+	DeploymentID string    `json:"deploymentid"`
 	Level        string    `json:"level"`
 	LogKind      string    `json:"errKind"`
 	Time         time.Time `json:"time"`
