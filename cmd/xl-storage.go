@@ -625,7 +625,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	fileInfo := s.formatFileInfo
 	lastCheck := s.formatLastCheck
 
-	// check if we have a valid disk ID that is less than 5 seconds old.
+	// check if we have a valid disk ID that is less than 1 seconds old.
 	if fileInfo != nil && diskID != "" && time.Since(lastCheck) <= 1*time.Second {
 		s.RUnlock()
 		return diskID, nil
