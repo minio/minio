@@ -178,6 +178,8 @@ When an object is deleted from the source bucket, the corresponding replica vers
 
 Note that due to this extension behavior, AWS SDK's may not support the extension functionality pertaining to replicating versioned deletes.
 
+Note that just like with [AWS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/delete-marker-replication.html), Delete marker replication is disallowed in MinIO when the replication rule has tags.
+
 To add a replication rule allowing both delete marker replication, versioned delete replication or both specify the --replicate flag with comma separated values as in the example below.
 
 Additional permission of "s3:ReplicateDelete" action would need to be specified on the access key configured for the target cluster if Delete Marker replication or versioned delete replication is enabled.
