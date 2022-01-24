@@ -76,10 +76,29 @@ If for some reason decommission fails in between, the `status` will indicate dec
 λ mc admin decommission start alias/ http://minio{1...2}/data{1...4}
 ```
 
+### When decommission is 'Complete'?
+Once decommission is complete, it will be indicated with *Complete* status.  *Complete* means that now you can now safely remove the first pool argument from the MinIO command line.
+```
+λ mc admin decommission status alias/
+┌─────┬─────────────────────────────────┬──────────────────────────────────┬──────────┐
+│ ID  │ Pools                           │ Capacity                         │ Status   │
+│ 1st │ http://minio{1...2}/data{1...4} │ 439 GiB (used) / 561 GiB (total) │ Complete │
+│ 2nd │ http://minio{3...4}/data{1...4} │ 329 GiB (used) / 421 GiB (total) │ Active   │
+└─────┴─────────────────────────────────┴──────────────────────────────────┴──────────┘
+```
+
+- On baremetal setups if you have `MINIO_VOLUMES="http://minio{1...2}/data{1...4} http://minio{3...4}/data{1...4}"` you can remove the first argument `http://minio{1...2}/data{1...4}` to update your `MINIO_VOLUMES` setting and using `systemctl restart minio` on all the servers in the setup in parallel.
+
+- On Kubernetes setups MinIO the statefulset specification needs to be modified by changing the command line input for the MinIO container. Once the relevant changes are done proceed to execute `kubectl apply -f statefulset.yaml`.
+
+- On Operator based MinIO deployments you need to modify the `tenant.yaml` specification and modify the `pools:` section from two entries to a single entry, once relevant changes are done proceed to execute `kubectl apply -f tenant.yaml`.
+
+> Without a 'Complete' status any 'Active' or 'Draining' pool(s) are not allowed to be removed once configured.
+
 ### NOTE
 - Empty delete marker's i.e objects with no other successor versions are not transitioned to the new pool, to avoid any empty metadata being recreated on the newer pool. We do not think this is needed, please open a GitHub issue if you think otherwise.
 
 ### TODO
 - Richer progress UI is not present at the moment, this will be addressed in subsequent releases. Currently however a RATE of data transfer and usage increase is displayed via `mc`.
-
-- Transitioned Hot Tier's as pooled setups are not currently supported, attempting to decommission buckets with ILM Transition will be rejected by the server. We will be working on adding support for this in future.
+- Transitioned Hot Tier's as pooled setups are not currently supported, attempting to decommission buckets with ILM Transition will be rejected by the server. This will be supported in future releases.
+- Embedded Console UI does not support Decommissioning through the UI yet. This will be supported in future releases.
