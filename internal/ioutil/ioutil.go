@@ -238,10 +238,7 @@ func SameFile(fi1, fi2 os.FileInfo) bool {
 	if fi1.Mode() != fi2.Mode() {
 		return false
 	}
-	if fi1.Size() != fi2.Size() {
-		return false
-	}
-	return true
+	return fi1.Size() == fi2.Size()
 }
 
 // DirectioAlignSize - DirectIO alignment needs to be 4K. Defined here as

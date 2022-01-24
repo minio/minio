@@ -72,16 +72,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 	)
 
-	var localDrives []string
-
+	var localDrives []StorageAPI
 	local := endpointServerPools.FirstLocal()
 	for i, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.IsLocal {
-				localDrives = append(localDrives, endpoint.Path)
-			}
-		}
-
 		// If storage class is not set during startup, default values are used
 		// -- Default for Reduced Redundancy Storage class is, parity = 2
 		// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
@@ -99,6 +92,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
 		if err != nil {
 			return nil, err
+		}
+
+		for _, storageDisk := range storageDisks[i] {
+			if storageDisk != nil && storageDisk.IsLocal() {
+				localDrives = append(localDrives, storageDisk)
+			}
 		}
 
 		if deploymentID == "" {
@@ -124,7 +123,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		err := z.Init(ctx)
+		err := z.Init(ctx) // Initializes all pools.
 		if err != nil {
 			if !configRetriableErrors(err) {
 				logger.Fatal(err, "Unable to initialize backend")
@@ -135,8 +134,14 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		break
 	}
 
+	drives := make([]string, 0, len(localDrives))
+	for _, localDrive := range localDrives {
+		drives = append(drives, localDrive.Endpoint().Path)
+	}
+
+	globalLocalDrives = localDrives
 	ctx, z.shutdown = context.WithCancel(ctx)
-	go intDataUpdateTracker.start(ctx, localDrives...)
+	go intDataUpdateTracker.start(ctx, drives...)
 	return z, nil
 }
 
@@ -177,17 +182,13 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 	found := 0
 	for _, s := range z.serverPools {
 		for _, disks := range s.erasureDisks {
-			for i, disk := range disks {
+			for _, disk := range disks {
 				if disk == OfflineDisk {
 					continue
 				}
 				stats, err := disk.StatInfoFile(ctx, volume, file, true)
 				if err != nil {
 					continue
-				}
-				did, err := disk.GetDiskID()
-				if err != nil {
-					did = fmt.Sprintf("disk-%d", i)
 				}
 				for _, si := range stats {
 					found++
@@ -200,7 +201,9 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 					} else {
 						r = io.NopCloser(bytes.NewBuffer([]byte{}))
 					}
-					err = fn(r, disk.Hostname(), did, pathJoin(volume, si.Name), si)
+					// Keep disk path instead of ID, to ensure that the downloaded zip file can be
+					// easily automated with `minio server hostname{1...n}/disk{1...m}`.
+					err = fn(r, disk.Hostname(), disk.Endpoint().Path, pathJoin(volume, si.Name), si)
 					r.Close()
 					if err != nil {
 						return err

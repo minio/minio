@@ -35,8 +35,8 @@ import (
 
 const (
 	minioConfigPrefix = "config"
-
-	kvPrefix = ".kv"
+	minioConfigBucket = minioMetaBucket + SlashSeparator + minioConfigPrefix
+	kvPrefix          = ".kv"
 
 	// Captures all the previous SetKV operations and allows rollback.
 	minioConfigHistoryPrefix = minioConfigPrefix + "/history"

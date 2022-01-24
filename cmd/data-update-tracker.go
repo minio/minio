@@ -204,14 +204,14 @@ func (d *dataUpdateTracker) latestWithDir(dir string) uint64 {
 // All of these will exit when the context is canceled.
 func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 	if len(drives) == 0 {
-		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No drives specified"))
+		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No local drives specified"))
 		return
 	}
 	d.load(ctx, drives...)
 	go d.startCollector(ctx)
 	// startSaver will unlock.
 	d.mu.Lock()
-	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives)
+	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives...)
 }
 
 // load will attempt to load data tracking information from the supplied drives.
@@ -221,7 +221,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 // If object is shared the caller should lock it.
 func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 	if len(drives) == 0 {
-		logger.LogIf(ctx, errors.New("dataUpdateTracker.load: No drives specified"))
+		logger.LogIf(ctx, errors.New("dataUpdateTracker.load: No local drives specified"))
 		return
 	}
 	for _, drive := range drives {
@@ -246,7 +246,11 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 // startSaver will start a saver that will write d to all supplied drives at specific intervals.
 // 'd' must be write locked when started and will be unlocked.
 // The saver will save and exit when supplied context is closed.
-func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Duration, drives []string) {
+func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Duration, drives ...string) {
+	if len(drives) == 0 {
+		return
+	}
+
 	saveNow := d.save
 	exited := make(chan struct{})
 	d.saveExited = exited

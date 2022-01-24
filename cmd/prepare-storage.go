@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -70,7 +71,7 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 }()
 
 // Cleans up tmp directory of the local disk.
-func formatErasureCleanupTmp(diskPath string) error {
+func formatErasureCleanupTmp(diskPath string) {
 	// Need to move temporary objects left behind from previous run of minio
 	// server to a unique directory under `minioMetaTmpBucket-old` to clean
 	// up `minioMetaTmpBucket` for the current run.
@@ -81,9 +82,23 @@ func formatErasureCleanupTmp(diskPath string) error {
 	//
 	// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
 	// temporary objects from one of the previous runs of minio server.
-	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", mustGetUUID())
+	tmpID := mustGetUUID()
+	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", tmpID)
 	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
-		tmpOld); err != nil && err != errFileNotFound {
+		tmpOld); err != nil && !errors.Is(err, errFileNotFound) {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			tmpOld,
+			osErrToFileErr(err)))
+	}
+
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777); err != nil {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
+			pathJoin(diskPath, minioMetaTmpBucket),
+			err))
+	}
+
+	if err := renameAll(tmpOld, pathJoin(diskPath, minioMetaTmpDeletedBucket, tmpID)); err != nil && !errors.Is(err, errFileNotFound) {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			tmpOld,
@@ -92,16 +107,6 @@ func formatErasureCleanupTmp(diskPath string) error {
 
 	// Renames and schedules for purging all bucket metacache.
 	renameAllBucketMetacache(diskPath)
-
-	// Removal of tmp-old folder is backgrounded completely.
-	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
-
-	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777); err != nil {
-		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
-			pathJoin(diskPath, minioMetaTmpBucket),
-			err))
-	}
-	return nil
 }
 
 // Following error message is added to fix a regression in release
@@ -177,19 +182,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 			closeStorageDisks(storageDisks)
 		}
 	}(storageDisks)
-
-	// Sanitize all local disks during server startup.
-	var wg sync.WaitGroup
-	for _, disk := range storageDisks {
-		if disk != nil && disk.IsLocal() {
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-				disk.(*xlStorageDiskIDCheck).storage.(*xlStorage).Sanitize()
-			}(disk)
-		}
-	}
-	wg.Wait()
 
 	for i, err := range errs {
 		if err != nil {
@@ -297,10 +289,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		logger.LogIf(GlobalContext, err)
 		return nil, nil, err
 	}
-
-	// The will always recreate some directories inside .minio.sys of
-	// the local disk such as tmp, multipart and background-ops
-	initErasureMetaVolumesInLocalDisks(storageDisks, formatConfigs)
 
 	return storageDisks, format, nil
 }

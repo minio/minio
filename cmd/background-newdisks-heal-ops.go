@@ -289,20 +289,20 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {
-	for _, ep := range globalEndpoints {
-		for _, endpoint := range ep.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-			// Try to connect to the current endpoint
-			// and reformat if the current disk is not formatted
-			disk, _, err := connectEndpoint(endpoint)
-			if errors.Is(err, errUnformattedDisk) {
-				disksToHeal = append(disksToHeal, endpoint)
-			} else if err == nil && disk != nil && disk.Healing() != nil {
-				disksToHeal = append(disksToHeal, disk.Endpoint())
-			}
+	for _, disk := range globalLocalDrives {
+		_, err := disk.GetDiskID()
+		if errors.Is(err, errUnformattedDisk) {
+			disksToHeal = append(disksToHeal, disk.Endpoint())
+			continue
 		}
+		if disk.Healing() != nil {
+			disksToHeal = append(disksToHeal, disk.Endpoint())
+		}
+	}
+	if len(disksToHeal) == globalEndpoints.NEndpoints() {
+		// When all disks == all command line endpoints
+		// this is a fresh setup, no need to trigger healing.
+		return Endpoints{}
 	}
 	return disksToHeal
 }
