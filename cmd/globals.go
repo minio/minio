@@ -341,6 +341,10 @@ var (
 	// List of local drives to this node, this is only set during server startup.
 	globalLocalDrives []StorageAPI
 
+	// Is MINIO_CI_CD set?
+	globalIsCICD bool
+
+	globalRootDiskThreshold uint64
 	// Add new variable global values here.
 )
 
