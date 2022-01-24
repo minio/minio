@@ -285,6 +285,11 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 			return s, err
 		}
 		Remove(filePath)
+
+		// Create all necessary bucket folders if possible.
+		if err = makeFormatErasureMetaVolumes(s); err != nil {
+			return nil, err
+		}
 	} else {
 		format := &formatErasureV3{}
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -294,11 +299,6 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		s.diskID = format.Erasure.This
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
-	}
-
-	// Create all necessary bucket folders if possible.
-	if err = makeFormatErasureMetaVolumes(s); err != nil {
-		return nil, err
 	}
 
 	// Success.
@@ -1422,8 +1422,9 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 	// Specific optimization to avoid re-read from the drives for `format.json`
 	// in-case the caller is a network operation.
 	if volume == minioMetaBucket && path == formatConfigFile {
+		formatData := make([]byte, len(s.formatData))
 		s.RLock()
-		formatData := s.formatData
+		copy(formatData, s.formatData)
 		s.RUnlock()
 		if len(formatData) > 0 {
 			return formatData, nil
