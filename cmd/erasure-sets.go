@@ -160,6 +160,9 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 //   - i'th position is the set index
 //   - j'th position is the disk index in the current set
 func findDiskIndexByDiskID(refFormat *formatErasureV3, diskID string) (int, int, error) {
+	if diskID == "" {
+		return -1, -1, errDiskNotFound
+	}
 	if diskID == offlineDiskUUID {
 		return -1, -1, fmt.Errorf("diskID: %s is offline", diskID)
 	}
@@ -437,6 +440,9 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 						if !errors.Is(err, errUnformattedDisk) {
 							logger.LogIf(ctx, err)
 						}
+						return
+					}
+					if diskID == "" {
 						return
 					}
 					m, n, err := findDiskIndexByDiskID(format, diskID)
@@ -1337,6 +1343,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			m, n, err := findDiskIndexByDiskID(refFormat, format.Erasure.This)
 			if err != nil {
+				logger.LogIf(ctx, err)
 				continue
 			}
 
