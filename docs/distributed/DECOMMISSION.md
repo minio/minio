@@ -6,6 +6,7 @@ Decommissiong is a mechanism in MinIO to drain older pools (usually with old har
 
 - A pool in decommission still allows READ access to all its contents, newer WRITEs will be automatically scheduled to only new pools.
 - All versioned buckets maintain the same order for "versions" for each objects after being decommissioned to the newer pools.
+- A pool in decommission resumes from where it was left off (for example - in-case of cluster restarts or restarts attempted after a failed decommission attempt).
 
 ### How to decommission a pool?
 ```
@@ -27,8 +28,15 @@ Decommissiong is a mechanism in MinIO to drain older pools (usually with old har
 #### Decommissioning status
 ```
 λ mc admin decommission status alias/ http://minio{1...2}/data{1...4}
-Progress: ===================> [1GiB/sec] [15%] [4TiB/50TiB]
-Time Remaining: 4 hours (started 3 hours ago)
+Decommissioning rate at 36 MiB/sec [4 TiB/50 TiB]
+Started: 1 minute ago
+```
+
+Once it is **Complete**
+
+```
+λ mc admin decommission status alias/ http://minio{1...2}/data{1...4}
+Decommission of pool http://minio{1...2}/data{1...4} is complete, you may now remove it from server command line
 ```
 
 #### A pool not under decommissioning will throw an error
