@@ -1605,7 +1605,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 
 func getLocalXLStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval: 3 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
@@ -1622,7 +1622,7 @@ func getLocalXLStorageMetrics() *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDiskAPILatencyMD(),
 					Value:          float64(val / 1000),
-					VariableLabels: map[string]string{"disk": disk.DrivePath, "api": "xl." + apiName},
+					VariableLabels: map[string]string{"disk": disk.DrivePath, "api": "storage." + apiName},
 				})
 			}
 		}
