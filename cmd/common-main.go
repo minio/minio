@@ -40,6 +40,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	fcolor "github.com/fatih/color"
 	"github.com/go-openapi/loads"
 	"github.com/inconshreveable/mousetrap"
@@ -651,6 +652,16 @@ func handleCommonEnvVars() {
 	if err != nil {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
+
+	if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+		size, err := humanize.ParseBytes(rootDiskSize)
+		if err != nil {
+			logger.Fatal(err, fmt.Sprintf("Invalid %s value in environment variable", config.EnvRootDiskThresholdSize))
+		}
+		globalRootDiskThreshold = size
+	}
+
+	globalIsCICD = env.Get("MINIO_CI_CD", "") != ""
 
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {

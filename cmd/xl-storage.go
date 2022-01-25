@@ -41,12 +41,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
-	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/env"
 	"github.com/yargevad/filepathx"
 )
 
@@ -215,38 +213,32 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	}
 
 	var rootDisk bool
-	if env.Get("MINIO_CI_CD", "") != "" {
+	if globalIsCICD {
 		rootDisk = true
 	} else {
 		rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
 		if err != nil {
 			return nil, err
 		}
-		if !rootDisk {
-			// If for some reason we couldn't detect the
-			// root disk use - MINIO_ROOTDISK_THRESHOLD_SIZE
-			// to figure out if the disk is root disk or not.
-			if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
-				info, err := disk.GetInfo(path)
-				if err != nil {
-					return nil, err
-				}
-				size, err := humanize.ParseBytes(rootDiskSize)
-				if err != nil {
-					return nil, err
-				}
-				// size of the disk is less than the threshold or
-				// equal to the size of the disk at path, treat
-				// such disks as rootDisks and reject them.
-				rootDisk = info.Total <= size
+		if !rootDisk && globalRootDiskThreshold > 0 {
+			// If for some reason we couldn't detect the root disk
+			// use - MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
+			// this disk is a root disk.
+			info, err := disk.GetInfo(path)
+			if err != nil {
+				return nil, err
 			}
+
+			// treat those disks with size less than or equal to the
+			// threshold as rootDisks.
+			rootDisk = info.Total <= globalRootDiskThreshold
 		}
 	}
 
 	s = &xlStorage{
 		diskPath:   path,
 		endpoint:   ep,
-		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
+		globalSync: globalFSOSync,
 		rootDisk:   rootDisk,
 		poolIndex:  -1,
 		setIndex:   -1,
@@ -285,6 +277,11 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 			return s, err
 		}
 		Remove(filePath)
+
+		// Create all necessary bucket folders if possible.
+		if err = makeFormatErasureMetaVolumes(s); err != nil {
+			return nil, err
+		}
 	} else {
 		format := &formatErasureV3{}
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -294,11 +291,6 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		s.diskID = format.Erasure.This
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
-	}
-
-	// Create all necessary bucket folders if possible.
-	if err = makeFormatErasureMetaVolumes(s); err != nil {
-		return nil, err
 	}
 
 	// Success.
@@ -1423,7 +1415,8 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 	// in-case the caller is a network operation.
 	if volume == minioMetaBucket && path == formatConfigFile {
 		s.RLock()
-		formatData := s.formatData
+		formatData := make([]byte, len(s.formatData))
+		copy(formatData, s.formatData)
 		s.RUnlock()
 		if len(formatData) > 0 {
 			return formatData, nil
