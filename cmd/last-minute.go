@@ -161,28 +161,26 @@ func (l *lastMinuteLatency) forwardTo(t int64) {
 }
 
 // LastMinuteLatencies keeps track of last minute latencies.
-type LastMinuteLatencies struct {
-	Totals [sizeLastElemMarker]lastMinuteLatency
-}
+type LastMinuteLatencies [sizeLastElemMarker]lastMinuteLatency
 
 // Merge safely merges two LastMinuteLatencies structures into one
 func (l LastMinuteLatencies) Merge(o LastMinuteLatencies) (merged LastMinuteLatencies) {
-	for i := range merged.Totals {
-		merged.Totals[i] = l.Totals[i].merge(o.Totals[i])
+	for i := range l {
+		merged[i] = l[i].merge(o[i])
 	}
 	return merged
 }
 
 // Add latency t from object with the specified size.
 func (l *LastMinuteLatencies) Add(size int64, t time.Duration) {
-	l.Totals[sizeToTag(size)].add(t)
+	l[sizeToTag(size)].add(t)
 }
 
 // GetAvgData will return the average for each bucket from the last time minute.
 // The number of objects is also included.
 func (l *LastMinuteLatencies) GetAvgData() [sizeLastElemMarker]AccElem {
 	var res [sizeLastElemMarker]AccElem
-	for i, elem := range l.Totals[:] {
+	for i, elem := range l[:] {
 		res[i] = elem.getAvgData()
 	}
 	return res
