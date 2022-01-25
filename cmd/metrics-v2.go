@@ -70,7 +70,7 @@ func init() {
 
 	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
 		getNodeHealthMetrics(),
-		getLocalXLStorageMetrics(),
+		getLocalDiskStorageMetrics(),
 		getCacheMetrics(),
 		getHTTPMetrics(),
 		getNetworkMetrics(),
@@ -1603,7 +1603,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getLocalXLStorageMetrics() *MetricsGroup {
+func getLocalDiskStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 3 * time.Second,
 	}
