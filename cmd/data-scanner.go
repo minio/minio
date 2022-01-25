@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"math/rand"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -181,7 +183,8 @@ type folderScanner struct {
 	healFolderInclude     uint32 // Include a clean folder one in n cycles.
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 
-	disks []StorageAPI
+	disks       []StorageAPI
+	disksQuorum int
 
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
@@ -247,7 +250,7 @@ var globalScannerStats scannerStats
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
 
 	logPrefix := color.Green("data-usage: ")
@@ -280,13 +283,15 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 	}
 
 	// Add disks for set healing.
-	if len(cache.Disks) > 0 {
+	if poolIdx >= 0 && setIdx >= 0 {
 		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
 		if ok {
-			s.disks = objAPI.GetDisksID(cache.Disks...)
-			if len(s.disks) != len(cache.Disks) {
-				console.Debugf(logPrefix+"Missing disks, want %d, found %d. Cannot heal. %s\n", len(cache.Disks), len(s.disks), logSuffix)
-				s.disks = s.disks[:0]
+			if poolIdx < len(objAPI.serverPools) && setIdx < len(objAPI.serverPools[poolIdx].sets) {
+				// Pass the disks belonging to the set.
+				s.disks = objAPI.serverPools[poolIdx].sets[setIdx].getDisks()
+				s.disksQuorum = objAPI.serverPools[poolIdx].sets[setIdx].defaultRQuorum()
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Matching pool %s, set %s not found", humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1)))
 			}
 		}
 	}
@@ -623,7 +628,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		}
 
 		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
-		if !ok || len(f.disks) == 0 {
+		if !ok || len(f.disks) == 0 || f.disksQuorum == 0 {
 			break
 		}
 
@@ -645,8 +650,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		// This means that the next run will not look for it.
 		// How to resolve results.
 		resolver := metadataResolutionParams{
-			dirQuorum: getReadQuorum(len(f.disks)),
-			objQuorum: getReadQuorum(len(f.disks)),
+			dirQuorum: f.disksQuorum,
+			objQuorum: f.disksQuorum,
 			bucket:    "",
 			strict:    false,
 		}
@@ -676,8 +681,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				path:           prefix,
 				recursive:      true,
 				reportNotFound: true,
-				minDisks:       len(f.disks), // We want full consistency.
-				// Weird, maybe transient error.
+				minDisks:       f.disksQuorum,
 				agreed: func(entry metaCacheEntry) {
 					if f.dataUsageScannerDebug {
 						console.Debugf(healObjectsPrefix+" got agreement: %v\n", entry.name)

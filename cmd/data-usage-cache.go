@@ -225,7 +225,6 @@ type dataUsageEntryV6 struct {
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntry
-	Disks []string
 }
 
 //msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6
@@ -234,35 +233,30 @@ type dataUsageCache struct {
 // dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV2
 }
 
 // dataUsageCacheV3 contains a cache of data usage entries version 3.
 type dataUsageCacheV3 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV3
 }
 
 // dataUsageCacheV4 contains a cache of data usage entries version 4.
 type dataUsageCacheV4 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV4
 }
 
 // dataUsageCacheV5 contains a cache of data usage entries version 5.
 type dataUsageCacheV5 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV5
 }
 
 // dataUsageCacheV6 contains a cache of data usage entries version 6.
 type dataUsageCacheV6 struct {
 	Info  dataUsageCacheInfo
-	Disks []string
 	Cache map[string]dataUsageEntryV6
 }
 
@@ -1037,7 +1031,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		d.Info = dold.Info
-		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			d.Cache[k] = dataUsageEntry{
@@ -1061,7 +1054,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		d.Info = dold.Info
-		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			due := dataUsageEntry{
@@ -1101,7 +1093,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		d.Info = dold.Info
-		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			due := dataUsageEntry{
@@ -1153,7 +1144,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		d.Info = dold.Info
-		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			due := dataUsageEntry{
@@ -1205,7 +1195,6 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			return err
 		}
 		d.Info = dold.Info
-		d.Disks = dold.Disks
 		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
 		for k, v := range dold.Cache {
 			var replicationStats *replicationAllStats

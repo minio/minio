@@ -357,23 +357,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 		return nil
 	}
 
-	// Collect disks for healing.
-	allDisks := er.getDisks()
-	allDiskIDs := make([]string, 0, len(allDisks))
-	for _, disk := range allDisks {
-		if disk == OfflineDisk {
-			// its possible that disk is OfflineDisk
-			continue
-		}
-		id, _ := disk.GetDiskID()
-		if id == "" {
-			// its possible that disk is unformatted
-			// or just went offline
-			continue
-		}
-		allDiskIDs = append(allDiskIDs, id)
-	}
-
 	// Load bucket totals
 	oldCache := dataUsageCache{}
 	if err := oldCache.load(ctx, er, dataUsageCacheName); err != nil {
@@ -479,7 +462,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				}
 				cache.Info.BloomFilter = bloom
 				cache.Info.SkipHealing = healing
-				cache.Disks = allDiskIDs
 				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
 					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
