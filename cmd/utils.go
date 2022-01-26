@@ -113,10 +113,6 @@ func path2BucketObject(s string) (bucket, prefix string) {
 	return path2BucketObjectWithBasePath("", s)
 }
 
-func getReadQuorum(drive int) int {
-	return drive - getDefaultParityBlocks(drive)
-}
-
 func getWriteQuorum(drive int) int {
 	parity := getDefaultParityBlocks(drive)
 	quorum := drive - parity
