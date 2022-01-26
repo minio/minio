@@ -540,7 +540,7 @@ func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSetti
 	s := madmin.IDPSettings{}
 	s.LDAP = madmin.LDAPSettings{
 		IsLDAPEnabled:          globalLDAPConfig.Enabled,
-		LDAPUserDNSearchBase:   globalLDAPConfig.UserDNSearchBaseDN,
+		LDAPUserDNSearchBase:   globalLDAPConfig.UserDNSearchBaseDistName,
 		LDAPUserDNSearchFilter: globalLDAPConfig.UserDNSearchFilter,
 		LDAPGroupSearchBase:    globalLDAPConfig.GroupSearchBaseDistName,
 		LDAPGroupSearchFilter:  globalLDAPConfig.GroupSearchFilter,
