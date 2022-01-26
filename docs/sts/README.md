@@ -35,16 +35,26 @@ In this document we will explain in detail on how to configure all the prerequis
 > NOTE: If you are interested in AssumeRole API only, skip to [here](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md)
 
 ### Prerequisites
-- [Configuring keycloak](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md)
+- [Configuring keycloak](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md) or [Configuring Casdoor](https://github.com/minio/minio/blob/master/docs/sts/casdoor.md)
 - [Configuring etcd (optional needed only in gateway or federation mode)](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
 
-### Setup MinIO with Keycloak
+### Setup MinIO with Identity Provider
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use MinIO STS API and MinIO server to use these credentials to perform object API operations.
 
+#### KeyCloak
 ```
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+minio server /mnt/data
+```
+
+#### Casdoor
+```
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
+export MINIO_IDENTITY_OPENID_CONFIG_URL=http://CASDOOR_ENDPOINT/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
 ```
