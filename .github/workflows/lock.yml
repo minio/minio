@@ -22,4 +22,4 @@ jobs:
           exclude-any-issue-labels: 'do-not-close'
           issue-lock-reason: 'resolved'
           process-only: 'issues'
-          log-output: false
+          log-output: true
