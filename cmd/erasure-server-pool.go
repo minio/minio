@@ -619,12 +619,6 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 				return
 			case v := <-updateCloser:
 				update()
-				// Enforce quotas when all is done.
-				if firstErr == nil {
-					for _, b := range allBuckets {
-						enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
-					}
-				}
 				close(v)
 				return
 			case <-updateTicker.C:

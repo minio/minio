@@ -577,6 +577,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize site replication manager.
 	globalSiteReplicationSys.Init(GlobalContext, newObject)
 
+	// Initialize quota manager.
+	globalBucketQuotaSys.Init(newObject)
+
 	// Initialize users credentials and policies in background right after config has initialized.
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalNotificationSys, globalRefreshIAMInterval)
 
