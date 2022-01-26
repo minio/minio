@@ -136,6 +136,282 @@ func (z AccElem) Msgsize() (s int) {
 
 // DecodeMsg implements msgp.Decodable
 func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != uint32(sizeLastElemMarker) {
+		err = msgp.ArrayError{Wanted: uint32(sizeLastElemMarker), Got: zb0001}
+		return
+	}
+	for za0001 := range z {
+		var field []byte
+		_ = field
+		var zb0002 uint32
+		zb0002, err = dc.ReadMapHeader()
+		if err != nil {
+			err = msgp.WrapError(err, za0001)
+			return
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, err = dc.ReadMapKeyPtr()
+			if err != nil {
+				err = msgp.WrapError(err, za0001)
+				return
+			}
+			switch msgp.UnsafeString(field) {
+			case "Totals":
+				var zb0003 uint32
+				zb0003, err = dc.ReadArrayHeader()
+				if err != nil {
+					err = msgp.WrapError(err, za0001, "Totals")
+					return
+				}
+				if zb0003 != uint32(60) {
+					err = msgp.ArrayError{Wanted: uint32(60), Got: zb0003}
+					return
+				}
+				for za0002 := range z[za0001].Totals {
+					var zb0004 uint32
+					zb0004, err = dc.ReadMapHeader()
+					if err != nil {
+						err = msgp.WrapError(err, za0001, "Totals", za0002)
+						return
+					}
+					for zb0004 > 0 {
+						zb0004--
+						field, err = dc.ReadMapKeyPtr()
+						if err != nil {
+							err = msgp.WrapError(err, za0001, "Totals", za0002)
+							return
+						}
+						switch msgp.UnsafeString(field) {
+						case "Total":
+							z[za0001].Totals[za0002].Total, err = dc.ReadInt64()
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
+								return
+							}
+						case "N":
+							z[za0001].Totals[za0002].N, err = dc.ReadInt64()
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "N")
+								return
+							}
+						default:
+							err = dc.Skip()
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002)
+								return
+							}
+						}
+					}
+				}
+			case "LastSec":
+				z[za0001].LastSec, err = dc.ReadInt64()
+				if err != nil {
+					err = msgp.WrapError(err, za0001, "LastSec")
+					return
+				}
+			default:
+				err = dc.Skip()
+				if err != nil {
+					err = msgp.WrapError(err, za0001)
+					return
+				}
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteArrayHeader(uint32(sizeLastElemMarker))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for za0001 := range z {
+		// map header, size 2
+		// write "Totals"
+		err = en.Append(0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteArrayHeader(uint32(60))
+		if err != nil {
+			err = msgp.WrapError(err, za0001, "Totals")
+			return
+		}
+		for za0002 := range z[za0001].Totals {
+			// map header, size 2
+			// write "Total"
+			err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt64(z[za0001].Totals[za0002].Total)
+			if err != nil {
+				err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
+				return
+			}
+			// write "N"
+			err = en.Append(0xa1, 0x4e)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt64(z[za0001].Totals[za0002].N)
+			if err != nil {
+				err = msgp.WrapError(err, za0001, "Totals", za0002, "N")
+				return
+			}
+		}
+		// write "LastSec"
+		err = en.Append(0xa7, 0x4c, 0x61, 0x73, 0x74, 0x53, 0x65, 0x63)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z[za0001].LastSec)
+		if err != nil {
+			err = msgp.WrapError(err, za0001, "LastSec")
+			return
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendArrayHeader(o, uint32(sizeLastElemMarker))
+	for za0001 := range z {
+		// map header, size 2
+		// string "Totals"
+		o = append(o, 0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
+		o = msgp.AppendArrayHeader(o, uint32(60))
+		for za0002 := range z[za0001].Totals {
+			// map header, size 2
+			// string "Total"
+			o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+			o = msgp.AppendInt64(o, z[za0001].Totals[za0002].Total)
+			// string "N"
+			o = append(o, 0xa1, 0x4e)
+			o = msgp.AppendInt64(o, z[za0001].Totals[za0002].N)
+		}
+		// string "LastSec"
+		o = append(o, 0xa7, 0x4c, 0x61, 0x73, 0x74, 0x53, 0x65, 0x63)
+		o = msgp.AppendInt64(o, z[za0001].LastSec)
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != uint32(sizeLastElemMarker) {
+		err = msgp.ArrayError{Wanted: uint32(sizeLastElemMarker), Got: zb0001}
+		return
+	}
+	for za0001 := range z {
+		var field []byte
+		_ = field
+		var zb0002 uint32
+		zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, za0001)
+			return
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err, za0001)
+				return
+			}
+			switch msgp.UnsafeString(field) {
+			case "Totals":
+				var zb0003 uint32
+				zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, za0001, "Totals")
+					return
+				}
+				if zb0003 != uint32(60) {
+					err = msgp.ArrayError{Wanted: uint32(60), Got: zb0003}
+					return
+				}
+				for za0002 := range z[za0001].Totals {
+					var zb0004 uint32
+					zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, za0001, "Totals", za0002)
+						return
+					}
+					for zb0004 > 0 {
+						zb0004--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, za0001, "Totals", za0002)
+							return
+						}
+						switch msgp.UnsafeString(field) {
+						case "Total":
+							z[za0001].Totals[za0002].Total, bts, err = msgp.ReadInt64Bytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
+								return
+							}
+						case "N":
+							z[za0001].Totals[za0002].N, bts, err = msgp.ReadInt64Bytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "N")
+								return
+							}
+						default:
+							bts, err = msgp.Skip(bts)
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002)
+								return
+							}
+						}
+					}
+				}
+			case "LastSec":
+				z[za0001].LastSec, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, za0001, "LastSec")
+					return
+				}
+			default:
+				bts, err = msgp.Skip(bts)
+				if err != nil {
+					err = msgp.WrapError(err, za0001)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *LastMinuteLatencies) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (sizeLastElemMarker * (16 + (60 * (9 + msgp.Int64Size + msgp.Int64Size)) + msgp.Int64Size))
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *lastMinuteLatency) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -165,48 +441,36 @@ func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 			for za0001 := range z.Totals {
 				var zb0003 uint32
-				zb0003, err = dc.ReadArrayHeader()
+				zb0003, err = dc.ReadMapHeader()
 				if err != nil {
 					err = msgp.WrapError(err, "Totals", za0001)
 					return
 				}
-				if zb0003 != uint32(sizeLastElemMarker) {
-					err = msgp.ArrayError{Wanted: uint32(sizeLastElemMarker), Got: zb0003}
-					return
-				}
-				for za0002 := range z.Totals[za0001] {
-					var zb0004 uint32
-					zb0004, err = dc.ReadMapHeader()
+				for zb0003 > 0 {
+					zb0003--
+					field, err = dc.ReadMapKeyPtr()
 					if err != nil {
-						err = msgp.WrapError(err, "Totals", za0001, za0002)
+						err = msgp.WrapError(err, "Totals", za0001)
 						return
 					}
-					for zb0004 > 0 {
-						zb0004--
-						field, err = dc.ReadMapKeyPtr()
+					switch msgp.UnsafeString(field) {
+					case "Total":
+						z.Totals[za0001].Total, err = dc.ReadInt64()
 						if err != nil {
-							err = msgp.WrapError(err, "Totals", za0001, za0002)
+							err = msgp.WrapError(err, "Totals", za0001, "Total")
 							return
 						}
-						switch msgp.UnsafeString(field) {
-						case "Total":
-							z.Totals[za0001][za0002].Total, err = dc.ReadInt64()
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002, "Total")
-								return
-							}
-						case "N":
-							z.Totals[za0001][za0002].N, err = dc.ReadInt64()
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002, "N")
-								return
-							}
-						default:
-							err = dc.Skip()
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002)
-								return
-							}
+					case "N":
+						z.Totals[za0001].N, err = dc.ReadInt64()
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001, "N")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001)
+							return
 						}
 					}
 				}
@@ -229,7 +493,7 @@ func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *lastMinuteLatency) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
 	// write "Totals"
 	err = en.Append(0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
@@ -242,33 +506,26 @@ func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for za0001 := range z.Totals {
-		err = en.WriteArrayHeader(uint32(sizeLastElemMarker))
+		// map header, size 2
+		// write "Total"
+		err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 		if err != nil {
-			err = msgp.WrapError(err, "Totals", za0001)
 			return
 		}
-		for za0002 := range z.Totals[za0001] {
-			// map header, size 2
-			// write "Total"
-			err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
-			if err != nil {
-				return
-			}
-			err = en.WriteInt64(z.Totals[za0001][za0002].Total)
-			if err != nil {
-				err = msgp.WrapError(err, "Totals", za0001, za0002, "Total")
-				return
-			}
-			// write "N"
-			err = en.Append(0xa1, 0x4e)
-			if err != nil {
-				return
-			}
-			err = en.WriteInt64(z.Totals[za0001][za0002].N)
-			if err != nil {
-				err = msgp.WrapError(err, "Totals", za0001, za0002, "N")
-				return
-			}
+		err = en.WriteInt64(z.Totals[za0001].Total)
+		if err != nil {
+			err = msgp.WrapError(err, "Totals", za0001, "Total")
+			return
+		}
+		// write "N"
+		err = en.Append(0xa1, 0x4e)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.Totals[za0001].N)
+		if err != nil {
+			err = msgp.WrapError(err, "Totals", za0001, "N")
+			return
 		}
 	}
 	// write "LastSec"
@@ -285,23 +542,20 @@ func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *lastMinuteLatency) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "Totals"
 	o = append(o, 0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(60))
 	for za0001 := range z.Totals {
-		o = msgp.AppendArrayHeader(o, uint32(sizeLastElemMarker))
-		for za0002 := range z.Totals[za0001] {
-			// map header, size 2
-			// string "Total"
-			o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
-			o = msgp.AppendInt64(o, z.Totals[za0001][za0002].Total)
-			// string "N"
-			o = append(o, 0xa1, 0x4e)
-			o = msgp.AppendInt64(o, z.Totals[za0001][za0002].N)
-		}
+		// map header, size 2
+		// string "Total"
+		o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+		o = msgp.AppendInt64(o, z.Totals[za0001].Total)
+		// string "N"
+		o = append(o, 0xa1, 0x4e)
+		o = msgp.AppendInt64(o, z.Totals[za0001].N)
 	}
 	// string "LastSec"
 	o = append(o, 0xa7, 0x4c, 0x61, 0x73, 0x74, 0x53, 0x65, 0x63)
@@ -310,7 +564,7 @@ func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *lastMinuteLatency) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -340,48 +594,36 @@ func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			for za0001 := range z.Totals {
 				var zb0003 uint32
-				zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Totals", za0001)
 					return
 				}
-				if zb0003 != uint32(sizeLastElemMarker) {
-					err = msgp.ArrayError{Wanted: uint32(sizeLastElemMarker), Got: zb0003}
-					return
-				}
-				for za0002 := range z.Totals[za0001] {
-					var zb0004 uint32
-					zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Totals", za0001, za0002)
+						err = msgp.WrapError(err, "Totals", za0001)
 						return
 					}
-					for zb0004 > 0 {
-						zb0004--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
+					switch msgp.UnsafeString(field) {
+					case "Total":
+						z.Totals[za0001].Total, bts, err = msgp.ReadInt64Bytes(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Totals", za0001, za0002)
+							err = msgp.WrapError(err, "Totals", za0001, "Total")
 							return
 						}
-						switch msgp.UnsafeString(field) {
-						case "Total":
-							z.Totals[za0001][za0002].Total, bts, err = msgp.ReadInt64Bytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002, "Total")
-								return
-							}
-						case "N":
-							z.Totals[za0001][za0002].N, bts, err = msgp.ReadInt64Bytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002, "N")
-								return
-							}
-						default:
-							bts, err = msgp.Skip(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Totals", za0001, za0002)
-								return
-							}
+					case "N":
+						z.Totals[za0001].N, bts, err = msgp.ReadInt64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001, "N")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001)
+							return
 						}
 					}
 				}
@@ -405,7 +647,7 @@ func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LastMinuteLatencies) Msgsize() (s int) {
-	s = 1 + 7 + msgp.ArrayHeaderSize + (60 * (sizeLastElemMarker * (9 + msgp.Int64Size + msgp.Int64Size))) + 8 + msgp.Int64Size
+func (z *lastMinuteLatency) Msgsize() (s int) {
+	s = 1 + 7 + msgp.ArrayHeaderSize + (60 * (9 + msgp.Int64Size + msgp.Int64Size)) + 8 + msgp.Int64Size
 	return
 }

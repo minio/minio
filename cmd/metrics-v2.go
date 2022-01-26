@@ -70,6 +70,7 @@ func init() {
 
 	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
 		getNodeHealthMetrics(),
+		getLocalDiskStorageMetrics(),
 		getCacheMetrics(),
 		getHTTPMetrics(),
 		getNetworkMetrics(),
@@ -156,6 +157,8 @@ const (
 	usedBytes       MetricName = "used_bytes"
 	writeBytes      MetricName = "write_bytes"
 	wcharBytes      MetricName = "wchar_bytes"
+
+	apiLatencyMicroSec MetricName = "latency_us"
 
 	usagePercent MetricName = "update_percent"
 
@@ -311,6 +314,16 @@ func getClusterCapacityUsageFreeBytesMD() MetricDescription {
 		Subsystem: capacityUsableSubsystem,
 		Name:      freeBytes,
 		Help:      "Total free usable capacity online in the cluster.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeDiskAPILatencyMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      apiLatencyMicroSec,
+		Help:      "Average last minute latency in µs for disk API storage operations.",
 		Type:      gaugeMetric,
 	}
 }
@@ -1583,6 +1596,35 @@ func getLocalStorageMetrics() *MetricsGroup {
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
 			})
+
+		}
+		return
+	})
+	return mg
+}
+
+func getLocalDiskStorageMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 3 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil || globalIsGateway {
+			return
+		}
+
+		metrics = make([]Metric, 0, 50)
+		storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+		for _, disk := range storageInfo.Disks {
+			for apiName, latency := range disk.Metrics.APILatencies {
+				val := latency.(uint64)
+				metrics = append(metrics, Metric{
+					Description:    getNodeDiskAPILatencyMD(),
+					Value:          float64(val / 1000),
+					VariableLabels: map[string]string{"disk": disk.DrivePath, "api": "storage." + apiName},
+				})
+			}
 		}
 		return
 	})

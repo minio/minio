@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/VividCortex/ewma"
 	"github.com/minio/madmin-go"
 )
 
@@ -71,18 +70,18 @@ type xlStorageDiskIDCheck struct {
 	// please use `fieldalignment ./...` to check
 	// if your changes are not causing any problems.
 	storage      StorageAPI
-	apiLatencies [storageMetricLast]ewma.MovingAverage
+	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
 	diskID       string
 	apiCalls     [storageMetricLast]uint64
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	diskMetric := DiskMetrics{
-		APILatencies: make(map[string]string),
+		APILatencies: make(map[string]uint64),
 		APICalls:     make(map[string]uint64),
 	}
 	for i, v := range p.apiLatencies {
-		diskMetric.APILatencies[storageMetric(i).String()] = time.Duration(v.Value()).String()
+		diskMetric.APILatencies[storageMetric(i).String()] = v.value()
 	}
 	for i := range p.apiCalls {
 		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
@@ -90,28 +89,21 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	return diskMetric
 }
 
-type lockedSimpleEWMA struct {
-	sync.RWMutex
-	*ewma.SimpleEWMA
+type lockedLastMinuteLatency struct {
+	sync.Mutex
+	lastMinuteLatency
 }
 
-func (e *lockedSimpleEWMA) Add(value float64) {
+func (e *lockedLastMinuteLatency) add(value time.Duration) {
 	e.Lock()
 	defer e.Unlock()
-	e.SimpleEWMA.Add(value)
+	e.lastMinuteLatency.add(value)
 }
 
-func (e *lockedSimpleEWMA) Set(value float64) {
+func (e *lockedLastMinuteLatency) value() uint64 {
 	e.Lock()
 	defer e.Unlock()
-
-	e.SimpleEWMA.Set(value)
-}
-
-func (e *lockedSimpleEWMA) Value() float64 {
-	e.RLock()
-	defer e.RUnlock()
-	return e.SimpleEWMA.Value()
+	return e.lastMinuteLatency.getAvgData().avg()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
@@ -119,9 +111,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
 		storage: storage,
 	}
 	for i := range xl.apiLatencies[:] {
-		xl.apiLatencies[i] = &lockedSimpleEWMA{
-			SimpleEWMA: new(ewma.SimpleEWMA),
-		}
+		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
 	}
 	return &xl
 }
@@ -582,7 +572,7 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 		duration := time.Since(startTime)
 
 		atomic.AddUint64(&p.apiCalls[s], 1)
-		p.apiLatencies[s].Add(float64(duration))
+		p.apiLatencies[s].add(duration)
 
 		if trace {
 			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " ")))
