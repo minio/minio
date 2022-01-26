@@ -44,9 +44,9 @@ var (
 		},
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
-			Description: `Base LDAP DN to search for user DN`,
+			Description: `";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"`,
 			Optional:    true,
-			Type:        "string",
+			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         UserDNSearchFilter,

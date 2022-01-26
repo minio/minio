@@ -51,8 +51,9 @@ type Config struct {
 	ServerAddr string `json:"serverAddr"`
 
 	// User DN search parameters
-	UserDNSearchBaseDN string `json:"userDNSearchBaseDN"`
-	UserDNSearchFilter string `json:"userDNSearchFilter"`
+	UserDNSearchBaseDistName  string   `json:"userDNSearchBaseDN"`
+	UserDNSearchBaseDistNames []string `json:"-"`
+	UserDNSearchFilter        string   `json:"userDNSearchFilter"`
 
 	// Group search parameters
 	GroupSearchBaseDistName  string   `json:"groupSearchBaseDN"`
@@ -187,25 +188,32 @@ func (l *Config) lookupBind(conn *ldap.Conn) error {
 // search result in at most one result.
 func (l *Config) lookupUserDN(conn *ldap.Conn, username string) (string, error) {
 	filter := strings.ReplaceAll(l.UserDNSearchFilter, "%s", ldap.EscapeFilter(username))
-	searchRequest := ldap.NewSearchRequest(
-		l.UserDNSearchBaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		filter,
-		[]string{}, // only need DN, so no pass no attributes here
-		nil,
-	)
+	var foundDistNames []string
+	for _, userSearchBase := range l.UserDNSearchBaseDistNames {
+		searchRequest := ldap.NewSearchRequest(
+			userSearchBase,
+			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+			filter,
+			[]string{}, // only need DN, so no pass no attributes here
+			nil,
+		)
 
-	searchResult, err := conn.Search(searchRequest)
-	if err != nil {
-		return "", err
+		searchResult, err := conn.Search(searchRequest)
+		if err != nil {
+			return "", err
+		}
+
+		for _, entry := range searchResult.Entries {
+			foundDistNames = append(foundDistNames, entry.DN)
+		}
 	}
-	if len(searchResult.Entries) == 0 {
+	if len(foundDistNames) == 0 {
 		return "", fmt.Errorf("User DN for %s not found", username)
 	}
-	if len(searchResult.Entries) != 1 {
+	if len(foundDistNames) != 1 {
 		return "", fmt.Errorf("Multiple DNs for %s found - please fix the search filter", username)
 	}
-	return searchResult.Entries[0].DN, nil
+	return foundDistNames[0], nil
 }
 
 func (l *Config) searchForUserGroups(conn *ldap.Conn, username, bindDN string) ([]string, error) {
@@ -375,7 +383,12 @@ func (l Config) testConnection() error {
 
 // IsLDAPUserDN determines if the given string could be a user DN from LDAP.
 func (l Config) IsLDAPUserDN(user string) bool {
-	return strings.HasSuffix(user, ","+l.UserDNSearchBaseDN)
+	for _, baseDN := range l.UserDNSearchBaseDistNames {
+		if strings.HasSuffix(user, ","+baseDN) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetNonEligibleUserDistNames - find user accounts (DNs) that are no longer
@@ -505,21 +518,22 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	if lookupBindDN != "" {
 		l.LookupBindDN = lookupBindDN
 		l.LookupBindPassword = lookupBindPassword
-
-		// User DN search configuration
-		userDNSearchBaseDN := env.Get(EnvUserDNSearchBaseDN, kvs.Get(UserDNSearchBaseDN))
-		userDNSearchFilter := env.Get(EnvUserDNSearchFilter, kvs.Get(UserDNSearchFilter))
-		if userDNSearchFilter == "" || userDNSearchBaseDN == "" {
-			return l, errors.New("In lookup bind mode, userDN search base DN and userDN search filter are both required")
-		}
-		l.UserDNSearchBaseDN = userDNSearchBaseDN
-		l.UserDNSearchFilter = userDNSearchFilter
 	}
 
 	// Test connection to LDAP server.
 	if err := l.testConnection(); err != nil {
 		return l, fmt.Errorf("Connection test for LDAP server failed: %w", err)
 	}
+
+	// User DN search configuration
+	userDNSearchBaseDN := env.Get(EnvUserDNSearchBaseDN, kvs.Get(UserDNSearchBaseDN))
+	userDNSearchFilter := env.Get(EnvUserDNSearchFilter, kvs.Get(UserDNSearchFilter))
+	if userDNSearchFilter == "" || userDNSearchBaseDN == "" {
+		return l, errors.New("UserDN search base DN and UserDN search filter are both required")
+	}
+	l.UserDNSearchBaseDistName = userDNSearchBaseDN
+	l.UserDNSearchBaseDistNames = strings.Split(userDNSearchBaseDN, dnDelimiter)
+	l.UserDNSearchFilter = userDNSearchFilter
 
 	// Group search params configuration
 	grpSearchFilter := env.Get(EnvGroupSearchFilter, kvs.Get(GroupSearchFilter))
