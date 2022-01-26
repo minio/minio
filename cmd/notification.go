@@ -1630,3 +1630,31 @@ func (sys *NotificationSys) ReloadSiteReplicationConfig(ctx context.Context) []e
 	wg.Wait()
 	return errs
 }
+
+// GetLastDayTierStats fetches per-tier stats of the last 24hrs from all peers
+func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) dailyAllTierStats {
+	errs := make([]error, len(sys.allPeerClients))
+	lastDayStats := make([]dailyAllTierStats, len(sys.allPeerClients))
+	var wg sync.WaitGroup
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			lastDayStats[index], errs[index] = sys.peerClients[index].GetLastDayTierStats(ctx)
+		}(index)
+	}
+
+	wg.Wait()
+	merged := globalTransitionState.getDailyAllTierStats()
+	for i, stat := range lastDayStats {
+		if errs[i] != nil {
+			logger.LogIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]))
+			continue
+		}
+		merged.merge(stat)
+	}
+	return merged
+}

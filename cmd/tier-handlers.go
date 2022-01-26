@@ -227,7 +227,11 @@ func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	data, err := json.Marshal(dui.tierStats())
+	tierStats := dui.tierStats()
+	dailyStats := globalNotificationSys.GetLastDayTierStats(ctx)
+	tierStats = dailyStats.addToTierInfo(tierStats)
+
+	data, err := json.Marshal(tierStats)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
