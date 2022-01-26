@@ -1153,7 +1153,7 @@ func (c *cacheObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err == nil {
 		// fill cache in the background
 		go func() {
-			_, err := dcache.CompleteMultipartUpload(GlobalContext, bucket, object, uploadID, uploadedParts, oi, opts)
+			_, err := dcache.CompleteMultipartUpload(bgContext(ctx), bucket, object, uploadID, uploadedParts, oi, opts)
 			if err != nil {
 				// fill cache in the background
 				bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
