@@ -322,11 +322,10 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 		}
 		idx := 0
 		for {
-			mapID := formatUUID(args.UID, idx)
 			lris, ok := l.lockMap[resource]
 			if !ok {
 				// Inconsistent. Delete UID.
-				delete(l.lockUID, mapID)
+				delete(l.lockUID, formatUUID(args.UID, idx))
 				return idx > 0, nil
 			}
 			for i := range lris {
@@ -335,7 +334,7 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 				}
 			}
 			idx++
-			resource, ok = l.lockUID[mapID]
+			resource, ok = l.lockUID[formatUUID(args.UID, idx)]
 			if !ok {
 				// No more resources for UID, but we did update at least one.
 				return true, nil
