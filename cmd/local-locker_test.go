@@ -272,7 +272,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 				if locks > 1000 && readers > 1 {
 					continue
 				}
-				if testing.Short() && locks > 10 {
+				if testing.Short() && readers > 10 {
 					continue
 				}
 				t.Run(fmt.Sprintf("%d-read", readers), func(t *testing.T) {
