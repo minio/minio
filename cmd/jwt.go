@@ -132,13 +132,13 @@ func authenticateURL(accessKey, secretKey string) (string, error) {
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
+func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, bool, error) {
 	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return nil, false, errNoAuthToken
+			return nil, nil, false, errNoAuthToken
 		}
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	claims := xjwt.NewMapClaims()
 	if err := xjwt.ParseWithClaims(token, claims, func(claims *xjwt.MapClaims) ([]byte, error) {
@@ -151,20 +151,21 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 		}
 		return []byte(cred.SecretKey), nil
 	}); err != nil {
-		return claims, false, errAuthentication
+		return claims, nil, false, errAuthentication
 	}
 	owner := true
+	var groups []string
 	if globalActiveCred.AccessKey != claims.AccessKey {
 		// Check if the access key is part of users credentials.
 		ucred, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
 		if !ok {
-			return nil, false, errInvalidAccessKeyID
+			return nil, nil, false, errInvalidAccessKeyID
 		}
 
 		// get embedded claims
 		eclaims, s3Err := checkClaimsFromToken(req, ucred)
 		if s3Err != ErrNone {
-			return nil, false, errAuthentication
+			return nil, nil, false, errAuthentication
 		}
 
 		for k, v := range eclaims {
@@ -177,9 +178,11 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 		} else {
 			owner = globalActiveCred.AccessKey == ucred.ParentUser
 		}
+
+		groups = ucred.Groups
 	}
 
-	return claims, owner, nil
+	return claims, groups, owner, nil
 }
 
 // newCachedAuthToken returns a token that is cached up to 15 seconds.

@@ -951,6 +951,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// explicit permissions for the user.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
 		Action:          iampolicy.PutObjectAction,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
 		BucketName:      bucket,
