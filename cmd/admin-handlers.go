@@ -978,8 +978,7 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	deleteBucket := func() {
-		loc := pathJoin(minioMetaSpeedTestBucket, minioMetaSpeedTestBucketPrefix)
-		objectAPI.DeleteBucket(context.Background(), loc, DeleteBucketOptions{
+		objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, "speedtest"), DeleteBucketOptions{
 			Force:      true,
 			NoRecreate: true,
 		})

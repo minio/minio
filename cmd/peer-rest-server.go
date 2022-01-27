@@ -1168,7 +1168,6 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	var totalBytesWritten uint64
 	var totalBytesRead uint64
 
-	bucket := minioMetaSpeedTestBucket
 	objCountPerThread := make([]uint64, concurrent)
 	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
 	defer uploadsCancel()
@@ -1178,7 +1177,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		uploadsCancel()
 	}()
 
-	objNamePrefix := minioMetaSpeedTestBucketPrefix + uuid.New().String()
+	objNamePrefix := "speedtest/objects/" + uuid.New().String()
 
 	wg.Add(concurrent)
 	for i := 0; i < concurrent; i++ {
@@ -1198,7 +1197,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 					return
 				}
 				reader := NewPutObjReader(hashReader)
-				objInfo, err := objAPI.PutObject(uploadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
+				objInfo, err := objAPI.PutObject(uploadsCtx, minioMetaBucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{
 					UserDefined: map[string]string{
 						xhttp.AmzStorageClass: storageClass,
@@ -1245,7 +1244,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				if objCountPerThread[i] == j {
 					j = 0
 				}
-				r, err := objAPI.GetObjectNInfo(downloadsCtx, bucket, fmt.Sprintf("%s.%d.%d",
+				r, err := objAPI.GetObjectNInfo(downloadsCtx, minioMetaBucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
 				if err != nil {
 					if !contextCanceled(downloadsCtx) {
