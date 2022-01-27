@@ -262,14 +262,17 @@ func TestLocalLockerUnlock(t *testing.T) {
 func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
 	// Numbers of unique locks
-	for _, locks := range []int{100, 10000, 1e6} {
+	for _, locks := range []int{100, 1000, 1e6} {
 		if testing.Short() && locks > 100 {
 			continue
 		}
 		t.Run(fmt.Sprintf("%d-locks", locks), func(t *testing.T) {
 			// Number of readers per lock...
-			for _, readers := range []int{1, 100, 1000} {
-				if locks > 10000 && readers > 1 {
+			for _, readers := range []int{1, 10, 100} {
+				if locks > 1000 && readers > 1 {
+					continue
+				}
+				if testing.Short() && locks > 10 {
 					continue
 				}
 				t.Run(fmt.Sprintf("%d-read", readers), func(t *testing.T) {
