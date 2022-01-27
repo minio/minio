@@ -19,9 +19,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio/internal/dsync"
 )
 
@@ -252,5 +256,91 @@ func TestLocalLockerUnlock(t *testing.T) {
 	}
 	if len(l.lockUID) != 0 {
 		t.Fatalf("lockUID len, got %d, want %d + %d", len(l.lockUID), 0, 0)
+	}
+}
+
+func Test_localLocker_expireOldLocksExpire(t *testing.T) {
+	rng := rand.New(rand.NewSource(0))
+	// Numbers of unique locks
+	for _, locks := range []int{100, 1000, 1e6} {
+		if testing.Short() && locks > 100 {
+			continue
+		}
+		t.Run(fmt.Sprintf("%d-locks", locks), func(t *testing.T) {
+			// Number of readers per lock...
+			for _, readers := range []int{1, 10, 100} {
+				if locks > 1000 && readers > 1 {
+					continue
+				}
+				if testing.Short() && readers > 10 {
+					continue
+				}
+				t.Run(fmt.Sprintf("%d-read", readers), func(t *testing.T) {
+					l := newLocker()
+					for i := 0; i < locks; i++ {
+						var tmp [16]byte
+						rng.Read(tmp[:])
+						res := []string{hex.EncodeToString(tmp[:])}
+
+						for i := 0; i < readers; i++ {
+							rng.Read(tmp[:])
+							ok, err := l.RLock(context.Background(), dsync.LockArgs{
+								UID:       uuid.NewString(),
+								Resources: res,
+								Source:    hex.EncodeToString(tmp[:8]),
+								Owner:     hex.EncodeToString(tmp[8:]),
+								Quorum:    0,
+							})
+							if !ok || err != nil {
+								t.Fatal("failed:", err, ok)
+							}
+						}
+					}
+					start := time.Now()
+					l.expireOldLocks(time.Hour)
+					t.Logf("Scan Took: %v. Left: %d/%d", time.Since(start).Round(time.Millisecond), len(l.lockUID), len(l.lockMap))
+					if len(l.lockMap) != locks {
+						t.Fatalf("objects deleted, want %d != got %d", locks, len(l.lockMap))
+					}
+					if len(l.lockUID) != locks*readers {
+						t.Fatalf("objects deleted, want %d != got %d", locks*readers, len(l.lockUID))
+					}
+
+					// Expire 50%
+					expired := time.Now().Add(-time.Hour * 2)
+					for _, v := range l.lockMap {
+						for i := range v {
+							if rng.Intn(2) == 0 {
+								v[i].TimeLastRefresh = expired
+							}
+						}
+					}
+					start = time.Now()
+					l.expireOldLocks(time.Hour)
+					t.Logf("Expire 50%% took: %v. Left: %d/%d", time.Since(start).Round(time.Millisecond), len(l.lockUID), len(l.lockMap))
+
+					if len(l.lockUID) == locks*readers {
+						t.Fatalf("objects uids all remain, unlikely")
+					}
+					if len(l.lockMap) == 0 {
+						t.Fatalf("objects all deleted, 0 remains")
+					}
+					if len(l.lockUID) == 0 {
+						t.Fatalf("objects uids all deleted, 0 remains")
+					}
+
+					start = time.Now()
+					l.expireOldLocks(-time.Minute)
+					t.Logf("Expire rest took: %v. Left: %d/%d", time.Since(start).Round(time.Millisecond), len(l.lockUID), len(l.lockMap))
+
+					if len(l.lockMap) != 0 {
+						t.Fatalf("objects not deleted, want %d != got %d", 0, len(l.lockMap))
+					}
+					if len(l.lockUID) != 0 {
+						t.Fatalf("objects not deleted, want %d != got %d", 0, len(l.lockUID))
+					}
+				})
+			}
+		})
 	}
 }
