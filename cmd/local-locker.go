@@ -349,25 +349,29 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	for k := range l.lockMap {
-		found := false
-		// Since we mutate the value, remove one per loop.
-		for {
-			lris, ok := l.lockMap[k]
-			if !ok {
-				break
-			}
-			for _, lri := range lris {
-				if time.Since(lri.TimeLastRefresh) > interval {
-					l.removeEntry(lri.Name, dsync.LockArgs{Owner: lri.Owner, UID: lri.UID}, &lris)
-					found = true
+	for k, lris := range l.lockMap {
+		modified := false
+		for i := 0; i < len(lris); {
+			lri := &lris[i]
+			if time.Since(lri.TimeLastRefresh) > interval {
+				delete(l.lockUID, formatUUID(lri.UID, lri.idx))
+				if len(lris) == 1 {
+					// Remove the write lock.
+					delete(l.lockMap, lri.Name)
+					modified = false
 					break
 				}
+				modified = true
+				// Remove the appropriate lock.
+				lris = append(lris[:i], lris[i+1:]...)
+				// Check same i
+			} else {
+				// Move to next
+				i++
 			}
-			// We did not find any more to expire.
-			if !found {
-				break
-			}
+		}
+		if modified {
+			l.lockMap[k] = lris
 		}
 	}
 }
