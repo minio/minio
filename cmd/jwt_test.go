@@ -149,7 +149,7 @@ func TestWebRequestAuthenticate(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, _, gotErr := webRequestAuthenticate(testCase.req)
+		_, _, _, gotErr := webRequestAuthenticate(testCase.req)
 		if testCase.expectedErr != gotErr {
 			t.Errorf("Test %d, expected err %s, got %s", i+1, testCase.expectedErr, gotErr)
 		}

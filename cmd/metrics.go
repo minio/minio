@@ -674,7 +674,7 @@ func metricsHandler() http.Handler {
 // AuthMiddleware checks if the bearer token is valid and authorized.
 func AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, owner, authErr := webRequestAuthenticate(r)
+		claims, groups, owner, authErr := webRequestAuthenticate(r)
 		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
 			w.WriteHeader(http.StatusForbidden)
 			return
@@ -682,6 +682,7 @@ func AuthMiddleware(h http.Handler) http.Handler {
 		// For authenticated users apply IAM policy.
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     claims.AccessKey,
+			Groups:          groups,
 			Action:          iampolicy.PrometheusAdminAction,
 			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
