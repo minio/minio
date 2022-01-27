@@ -289,7 +289,7 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 			if poolIdx < len(objAPI.serverPools) && setIdx < len(objAPI.serverPools[poolIdx].sets) {
 				// Pass the disks belonging to the set.
 				s.disks = objAPI.serverPools[poolIdx].sets[setIdx].getDisks()
-				s.disksQuorum = objAPI.serverPools[poolIdx].sets[setIdx].defaultRQuorum()
+				s.disksQuorum = len(s.disks) / 2
 			} else {
 				logger.LogIf(ctx, fmt.Errorf("Matching pool %s, set %s not found", humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1)))
 			}

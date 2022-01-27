@@ -1037,7 +1037,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		// class for objects which have reduced quorum
 		// storage class only needs to be honored for
 		// Read() requests alone which we already do.
-		writeQuorums[i] = er.defaultWQuorum()
+		writeQuorums[i] = len(storageDisks)/2 + 1
 	}
 
 	versionsMap := make(map[string]FileInfoVersions, len(objects))
@@ -1153,9 +1153,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName)
 		}
 
-		if errs[objIndex] == nil {
-			defer NSUpdated(bucket, objects[objIndex].ObjectName)
-		}
+		defer NSUpdated(bucket, objects[objIndex].ObjectName)
 	}
 
 	// Check failed deletes across multiple objects

@@ -542,13 +542,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
-	if askDisks == -1 || er.setDriveCount == 4 {
-		askDisks = len(disks) // with 'strict' quorum list on all online disks.
-		listingQuorum = er.defaultRQuorum()
-	}
-	if askDisks == 0 {
-		askDisks = globalAPIConfig.getListQuorum()
-		listingQuorum = askDisks
+	if askDisks <= 0 || er.setDriveCount == 4 {
+		askDisks = len(disks)          // with 'strict' quorum list on all online disks.
+		listingQuorum = len(disks) / 2 // keep this such that we can list all objects with different quorum ratio.
 	}
 	if askDisks > 0 && len(disks) > askDisks {
 		rand.Shuffle(len(disks), func(i, j int) {
