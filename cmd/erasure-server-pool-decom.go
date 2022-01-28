@@ -682,8 +682,8 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 		// How to resolve partial results.
 		resolver := metadataResolutionParams{
-			dirQuorum: set.defaultRQuorum(),
-			objQuorum: set.defaultRQuorum(),
+			dirQuorum: len(disks) / 2, // make sure to capture all quorum ratios
+			objQuorum: len(disks) / 2, // make sure to capture all quorum ratios
 			bucket:    bName,
 		}
 
@@ -692,7 +692,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			bucket:         bName,
 			recursive:      true,
 			forwardTo:      forwardTo,
-			minDisks:       len(disks),
+			minDisks:       len(disks) / 2, // to capture all quorum ratios
 			reportNotFound: false,
 			agreed:         decommissionEntry,
 			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
