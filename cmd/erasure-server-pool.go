@@ -1666,7 +1666,13 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							cancel()
 							return
 						}
-
+						if opts.WalkAscending {
+							for i := len(fivs.Versions) - 1; i >= 0; i-- {
+								version := fivs.Versions[i]
+								results <- version.ToObjectInfo(bucket, version.Name)
+							}
+							return
+						}
 						for _, version := range fivs.Versions {
 							results <- version.ToObjectInfo(bucket, version.Name)
 						}

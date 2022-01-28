@@ -577,6 +577,8 @@ func serverMain(ctx *cli.Context) {
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to heal: %w", err))
 		}
+		// initialize replication resync state.
+		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Populate existing buckets to the etcd backend
 		if globalDNSConfig != nil {

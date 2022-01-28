@@ -343,6 +343,9 @@ func registerAPIRouter(router *mux.Router) {
 		// ListenNotification
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listennotification", maxClients(gz(httpTraceAll(api.ListenNotificationHandler))))).Queries("events", "{events:.*}")
+		// ResetBucketReplicationStatus - MinIO extension API
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("resetbucketreplicationstatus", maxClients(gz(httpTraceAll(api.ResetBucketReplicationStatusHandler))))).Queries("replication-reset-status", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -417,9 +420,10 @@ func registerAPIRouter(router *mux.Router) {
 		// PutBucketNotification
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketnotification", maxClients(gz(httpTraceAll(api.PutBucketNotificationHandler))))).Queries("notification", "")
-		// ResetBucketReplicationState - MinIO extension API
+		// ResetBucketReplicationStart - MinIO extension API
 		router.Methods(http.MethodPut).HandlerFunc(
-			collectAPIStats("resetbucketreplicationstate", maxClients(gz(httpTraceAll(api.ResetBucketReplicationStateHandler))))).Queries("replication-reset", "")
+			collectAPIStats("resetbucketreplicationstart", maxClients(gz(httpTraceAll(api.ResetBucketReplicationStartHandler))))).Queries("replication-reset", "")
+
 		// PutBucket
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucket", maxClients(gz(httpTraceAll(api.PutBucketHandler)))))
