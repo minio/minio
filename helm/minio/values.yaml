@@ -245,6 +245,59 @@ resources:
   requests:
     memory: 16Gi
 
+## List of policies to be created after minio install
+##
+## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
+## you can define additional policies with custom supported actions and resources
+policies: []
+# - name: writeexamplepolicy
+#   statements:
+#     - resources: 
+#         - 'arn:aws:s3:::example2'
+#         - 'arn:aws:s3:::example3'
+#       actions:
+#         - "s3:AbortMultipartUpload"
+#         - "s3:GetObject"
+#         - "s3:DeleteObject"
+#         - "s3:PutObject"
+#         - "s3:ListMultipartUploadParts"
+#     - resources: 
+#         - 'arn:aws:s3:::example4'
+#       actions:
+#         - "s3:CreateBucket"
+#         - "s3:DeleteBucket"
+#         - "s3:GetBucketLocation"
+#         - "s3:ListBucket"
+#         - "s3:ListBucketMultipartUploads"
+# - name: readonlyexample2policy
+#   statements:
+#     - resources: 
+#         - 'arn:aws:s3:::example2'
+#         - 'arn:aws:s3:::example3'
+#       actions:
+#         - "s3:GetObject"
+#     - resources: 
+#         - 'arn:aws:s3:::example4'
+#       actions:
+#         - "s3:GetBucketLocation"
+#         - "s3:ListBucket"
+#         - "s3:ListBucketMultipartUploads"
+## Additional Annotations for the Kubernetes Job makePolicyJob
+makePolicyJob:
+  podAnnotations:
+  annotations:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 ## List of users to be created after minio install
 ##
 users:
@@ -256,6 +309,11 @@ users:
   - accessKey: console
     secretKey: console123
     policy: consoleAdmin
+  # Or you can refer to specific secret
+  #- accessKey: externalSecret
+  #  existingSecret: my-secret
+  #  existingSecretKey: password
+  #  policy: readonly
 
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
