@@ -132,24 +132,23 @@ func registerSTSRouter(router *mux.Router) {
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, isErrCodeSTS bool, stsErr STSErrorCode) {
-	switch getRequestAuthType(r) {
-	default:
+	if !isRequestSignatureV4(r) {
 		return user, true, ErrSTSAccessDenied
-	case authTypeSigned:
-		s3Err := isReqAuthenticated(ctx, r, globalSite.Region, serviceSTS)
-		if s3Err != ErrNone {
-			return user, false, STSErrorCode(s3Err)
-		}
+	}
 
-		user, _, s3Err = getReqAccessKeyV4(r, globalSite.Region, serviceSTS)
-		if s3Err != ErrNone {
-			return user, false, STSErrorCode(s3Err)
-		}
+	s3Err := isReqAuthenticated(ctx, r, globalSite.Region, serviceSTS)
+	if s3Err != ErrNone {
+		return user, false, STSErrorCode(s3Err)
+	}
 
-		// Temporary credentials or Service accounts cannot generate further temporary credentials.
-		if user.IsTemp() || user.IsServiceAccount() {
-			return user, true, ErrSTSAccessDenied
-		}
+	user, _, s3Err = getReqAccessKeyV4(r, globalSite.Region, serviceSTS)
+	if s3Err != ErrNone {
+		return user, false, STSErrorCode(s3Err)
+	}
+
+	// Temporary credentials or Service accounts cannot generate further temporary credentials.
+	if user.IsTemp() || user.IsServiceAccount() {
+		return user, true, ErrSTSAccessDenied
 	}
 
 	// Session tokens are not allowed in STS AssumeRole requests.
@@ -178,11 +177,11 @@ func parseForm(r *http.Request) error {
 func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRole")
 
+	// Check auth here (otherwise r.Form will have unexpected values from
+	// the call to `parseForm` below), but return failure only after we are
+	// able to validate that it is a valid STS request, so that we are able
+	// to send an appropriate audit log.
 	user, isErrCodeSTS, stsErr := checkAssumeRoleAuth(ctx, r)
-	if stsErr != ErrSTSNone {
-		writeSTSErrorResponse(ctx, w, isErrCodeSTS, stsErr, nil)
-		return
-	}
 
 	if err := parseForm(r); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
@@ -204,6 +203,13 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	ctx = newContext(r, w, action)
 	defer logger.AuditLog(ctx, w, r, nil)
+
+	// Validate the authentication result here so that failures will be
+	// audit-logged.
+	if stsErr != ErrSTSNone {
+		writeSTSErrorResponse(ctx, w, isErrCodeSTS, stsErr, nil)
+		return
+	}
 
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
