@@ -338,8 +338,9 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 	if objectAPI == nil {
 		return
 	}
+	opts := getSRStatusOptions(r)
 
-	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI)
+	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -362,7 +363,8 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 		return
 	}
 
-	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI)
+	opts := getSRStatusOptions(r)
+	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -427,4 +429,15 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+}
+
+func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
+	q := r.Form
+	opts.Buckets = q.Get("buckets") == "true"
+	opts.Policies = q.Get("policies") == "true"
+	opts.Groups = q.Get("groups") == "true"
+	opts.Users = q.Get("users") == "true"
+	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
+	opts.EntityValue = q.Get("entityvalue")
+	return
 }
