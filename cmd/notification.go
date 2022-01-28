@@ -1611,6 +1611,39 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
 	return results
 }
 
+// DriveSpeedTest - Drive performance information
+func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) chan madmin.DriveSpeedTestResult {
+	ch := make(chan madmin.DriveSpeedTestResult)
+	var wg sync.WaitGroup
+
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			defer wg.Done()
+			resp, err := client.DriveSpeedTest(ctx, opts)
+			if err != nil {
+				resp.Error = err.Error()
+			}
+
+			ch <- resp
+
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, err)
+		}(client)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	return ch
+}
+
 // ReloadSiteReplicationConfig - tells all peer minio nodes to reload the
 // site-replication configuration.
 func (sys *NotificationSys) ReloadSiteReplicationConfig(ctx context.Context) []error {

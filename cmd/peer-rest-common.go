@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v19" // Add getlastdaytierstats
+	peerRESTVersion       = "v20" // Add drivespeedtest
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -66,6 +66,7 @@ const (
 	peerRESTMethodGetPeerMetrics              = "/peermetrics"
 	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
 	peerRESTMethodSpeedtest                   = "/speedtest"
+	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
 	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
 	peerRESTMethodReloadPoolMeta              = "/reloadpoolmeta"
 	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
