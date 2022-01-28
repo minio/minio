@@ -82,7 +82,7 @@ func RegisterNotificationTargets(ctx context.Context, cfg config.Config, transpo
 		for _, targetID := range targetIDs {
 			if !targetList.Exists(targetID) {
 				return nil, config.Errorf(
-					"Unable to disable configured targets '%v'",
+					"Unable to disable currently configured targets '%v'",
 					targetID)
 			}
 		}
