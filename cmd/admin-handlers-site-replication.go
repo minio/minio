@@ -339,7 +339,14 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 	opts := getSRStatusOptions(r)
-
+	// default options to all if status options are unset for backward compatibility
+	var dfltOpts madmin.SRStatusOptions
+	if opts == dfltOpts {
+		opts.Buckets = true
+		opts.Users = true
+		opts.Policies = true
+		opts.Groups = true
+	}
 	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
