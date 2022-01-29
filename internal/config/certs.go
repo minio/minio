@@ -85,6 +85,9 @@ func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	if len(rest) > 0 {
 		return tls.Certificate{}, ErrSSLUnexpectedData(nil).Msg("The private key contains additional data")
 	}
+	if key == nil {
+		return tls.Certificate{}, ErrSSLUnexpectedData(nil).Msg("The private key is not readable")
+	}
 	if x509.IsEncryptedPEMBlock(key) {
 		password := env.Get(EnvCertPassword, "")
 		if len(password) == 0 {
