@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -1614,9 +1615,15 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 			return
 		}
 
-		metrics = make([]Metric, 0, 50)
 		storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+		if storageInfo.Backend.Type == madmin.FS {
+			return
+		}
+		metrics = make([]Metric, 0, 50)
 		for _, disk := range storageInfo.Disks {
+			if disk.Metrics == nil {
+				continue
+			}
 			for apiName, latency := range disk.Metrics.APILatencies {
 				val := latency.(uint64)
 				metrics = append(metrics, Metric{
