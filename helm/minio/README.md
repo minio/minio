@@ -201,7 +201,7 @@ Create policies after install
 Install the chart, specifying the policies you want to create after install:
 
 ```bash
-helm install --set policies[0].name=mypolicy,policies[0].statements[0].resources[0]='bucket1',policies[0].statements[0].actions[0]='s3:ListBucket',policies[0].statements[0].actions[1]='s3:GetObject' minio/minio
+helm install --set policies[0].name=mypolicy,policies[0].statements[0].resources[0]='arn:aws:s3:::bucket1',policies[0].statements[0].actions[0]='s3:ListBucket',policies[0].statements[0].actions[1]='s3:GetObject' minio/minio
 ```
 
 Description of the configuration parameters used above -
@@ -224,7 +224,7 @@ Description of the configuration parameters used above -
 - `users[].accessKey` - accessKey of user
 - `users[].secretKey` - secretKey of usersecretRef
 - `users[].existingSecret` - secret name that contains the secretKey of user
-- `users[].existingSecretKey` - key in existingSecret secret containing the secretKey
+- `users[].existingSecretKey` - data key in existingSecret secret containing the secretKey
 - `users[].policy` - name of the policy to assign to user
 
 Uninstalling the Chart
