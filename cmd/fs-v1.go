@@ -1260,9 +1260,23 @@ func (fs *FSObjects) ListObjectVersions(ctx context.Context, bucket, prefix, mar
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
-func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
-		fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	// listObjects may in rare cases not be able to find any valid results.
+	// Therefore, it cannot set a NextMarker.
+	// In that case we retry the operation, but we add a
+	// max limit, so we never end up in an infinite loop.
+	tries := 50
+	for {
+		loi, err = listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
+			fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+		if err != nil {
+			return loi, err
+		}
+		if !loi.IsTruncated || loi.NextMarker != "" || tries == 0 {
+			return loi, nil
+		}
+		tries--
+	}
 }
 
 // GetObjectTags - get object tags from an existing object
