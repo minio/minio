@@ -32,7 +32,7 @@ type BucketQuotaSys struct {
 }
 
 // Get - Get quota configuration.
-func (sys *BucketQuotaSys) Get(bucketName string) (*madmin.BucketQuota, error) {
+func (sys *BucketQuotaSys) Get(ctx context.Context, bucketName string) (*madmin.BucketQuota, error) {
 	if globalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
@@ -41,7 +41,7 @@ func (sys *BucketQuotaSys) Get(bucketName string) (*madmin.BucketQuota, error) {
 		return &madmin.BucketQuota{}, nil
 	}
 
-	return globalBucketMetadataSys.GetQuotaConfig(bucketName)
+	return globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
 }
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys
@@ -95,7 +95,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 		return nil
 	}
 
-	q, err := sys.Get(bucket)
+	q, err := sys.Get(ctx, bucket)
 	if err != nil {
 		return err
 	}

@@ -160,7 +160,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucketName, bucketNotificationConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucketName, bucketNotificationConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

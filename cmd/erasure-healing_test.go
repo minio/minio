@@ -368,7 +368,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	orgDisks := append([]StorageAPI{}, disks...)
 
 	// Enable versioning.
-	globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
+	globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
 
 	_, err = objLayer.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{
 		Versioned: true,

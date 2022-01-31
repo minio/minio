@@ -117,6 +117,7 @@ const (
 	softwareSubsystem         MetricSubsystem = "software"
 	sysCallSubsystem          MetricSubsystem = "syscall"
 	usageSubsystem            MetricSubsystem = "usage"
+	quotaSubsystem            MetricSubsystem = "quota"
 	ilmSubsystem              MetricSubsystem = "ilm"
 	scannerSubsystem          MetricSubsystem = "scanner"
 )
@@ -405,6 +406,16 @@ func getUsageLastScanActivityMD() MetricDescription {
 		Subsystem: usageSubsystem,
 		Name:      lastActivityTime,
 		Help:      "Time elapsed (in nano seconds) since last scan activity. This is set to 0 until first scan cycle",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageQuotaTotalBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: quotaSubsystem,
+		Name:      totalBytes,
+		Help:      "Total bucket quota size in bytes",
 		Type:      gaugeMetric,
 	}
 }
@@ -1502,6 +1513,8 @@ func getBucketUsageMetrics() *MetricsGroup {
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
 			stats := getLatestReplicationStats(bucket, usage)
 
+			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
+
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageTotalBytesMD(),
 				Value:          float64(usage.Size),
@@ -1519,6 +1532,14 @@ func getBucketUsageMetrics() *MetricsGroup {
 				Value:          float64(stats.ReplicaSize),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
+
+			if quota != nil && quota.Quota > 0 {
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageQuotaTotalBytesMD(),
+					Value:          float64(quota.Quota),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+			}
 
 			if stats.hasReplicationUsage() {
 				for arn, stat := range stats.Stats {
