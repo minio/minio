@@ -46,7 +46,6 @@ type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	VersionSuspended     bool      // indicates if the bucket was previously versioned but is currently suspended.
 	Versioned            bool      // indicates if the bucket is versioned
-	WalkVersions         bool      // indicates if the we are interested in walking versions
 	VersionID            string    // Specifies the versionID which needs to be overwritten or read
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
