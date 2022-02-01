@@ -250,6 +250,9 @@ resources:
 ## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
 ## you can define additional policies with custom supported actions and resources
 policies: []
+## writeexamplepolicy policy grants creation or deletion of buckets with name 
+## starting with example. In addition, grants objects write permissions on buckets starting with
+## example.
 # - name: writeexamplepolicy
 #   statements:
 #     - resources: 
@@ -268,7 +271,9 @@ policies: []
 #         - "s3:GetBucketLocation"
 #         - "s3:ListBucket"
 #         - "s3:ListBucketMultipartUploads"
-# - name: readonlyexample2policy
+## readonlyexamplepolicy policy grants access to buckets with name starting with example. 
+## In addition, grants objects read permissions on buckets starting with example.
+# - name: readonlyexamplepolicy
 #   statements:
 #     - resources: 
 #         - 'arn:aws:s3:::example*/*'
