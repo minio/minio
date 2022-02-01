@@ -6,11 +6,6 @@
 {{- range $i, $statement := .statements }}
     {
       "Effect": "Allow",
-      "Principal": {
-        "AWS": [
-          "*"
-        ]
-      },
       "Action": [
 "{{ $statement.actions | join "\",\n\"" }}"
       ],

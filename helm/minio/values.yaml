@@ -253,8 +253,7 @@ policies: []
 # - name: writeexamplepolicy
 #   statements:
 #     - resources: 
-#         - 'arn:aws:s3:::example2'
-#         - 'arn:aws:s3:::example3'
+#         - 'arn:aws:s3:::example*/*'
 #       actions:
 #         - "s3:AbortMultipartUpload"
 #         - "s3:GetObject"
@@ -262,7 +261,7 @@ policies: []
 #         - "s3:PutObject"
 #         - "s3:ListMultipartUploadParts"
 #     - resources: 
-#         - 'arn:aws:s3:::example4'
+#         - 'arn:aws:s3:::example*'
 #       actions:
 #         - "s3:CreateBucket"
 #         - "s3:DeleteBucket"
@@ -272,12 +271,11 @@ policies: []
 # - name: readonlyexample2policy
 #   statements:
 #     - resources: 
-#         - 'arn:aws:s3:::example2'
-#         - 'arn:aws:s3:::example3'
+#         - 'arn:aws:s3:::example*/*'
 #       actions:
 #         - "s3:GetObject"
 #     - resources: 
-#         - 'arn:aws:s3:::example4'
+#         - 'arn:aws:s3:::example*'
 #       actions:
 #         - "s3:GetBucketLocation"
 #         - "s3:ListBucket"
