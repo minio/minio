@@ -477,22 +477,6 @@ func (f *fileScorer) trimQueue() {
 	}
 }
 
-// fileObjInfos returns all queued file object infos
-func (f *fileScorer) fileObjInfos() []ObjectInfo {
-	res := make([]ObjectInfo, 0, f.queue.Len())
-	e := f.queue.Front()
-	for e != nil {
-		qfile := e.Value.(queuedFile)
-		res = append(res, ObjectInfo{
-			Name:      qfile.name,
-			Size:      int64(qfile.size),
-			VersionID: qfile.versionID,
-		})
-		e = e.Next()
-	}
-	return res
-}
-
 func (f *fileScorer) purgeFunc(p func(qfile queuedFile)) {
 	e := f.queue.Front()
 	for e != nil {

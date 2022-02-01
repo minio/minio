@@ -103,7 +103,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -148,7 +148,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, nil); err != nil {
+	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
