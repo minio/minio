@@ -62,6 +62,7 @@ const (
 	SecretKey  = "secret_key"
 	License    = "license" // Deprecated Dec 2021
 	APIKey     = "api_key"
+	Proxy      = "proxy"
 )
 
 // Top level config constants.

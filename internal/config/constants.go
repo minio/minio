@@ -55,6 +55,7 @@ const (
 
 	EnvMinIOSubnetLicense      = "MINIO_SUBNET_LICENSE" // Deprecated Dec 2021
 	EnvMinIOSubnetAPIKey       = "MINIO_SUBNET_API_KEY"
+	EnvMinIOSubnetProxy        = "MINIO_SUBNET_PROXY"
 	EnvMinIOServerURL          = "MINIO_SERVER_URL"
 	EnvMinIOBrowserRedirectURL = "MINIO_BROWSER_REDIRECT_URL"
 	EnvRootDiskThresholdSize   = "MINIO_ROOTDISK_THRESHOLD_SIZE"
