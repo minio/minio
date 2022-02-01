@@ -1170,7 +1170,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			}
 
 			lcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
-			quota, _ := globalBucketQuotaSys.Get(bucket.Name)
+			quota, _ := globalBucketQuotaSys.Get(ctx, bucket.Name)
 			rcfg, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket.Name)
 			tcfg, _ := globalBucketMetadataSys.GetTaggingConfig(bucket.Name)
 

@@ -92,7 +92,7 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	}
 
 	// Store the bucket encryption configuration in the object layer
-	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -186,7 +186,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	}
 
 	// Delete bucket encryption config from object layer
-	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, nil); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

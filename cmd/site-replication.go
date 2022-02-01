@@ -809,7 +809,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 			if err != nil {
 				return err
 			}
-			if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
+			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
 				return err
 			}
 			targetARN = bucketTarget.Arn
@@ -908,7 +908,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		err = globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, replCfgData)
+		err = globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, replCfgData)
 		logger.LogIf(ctx, c.annotatePeerErr(peer.Name, "Error updating replication configuration", err))
 		return err
 	}
@@ -1217,7 +1217,7 @@ func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket
 			return wrapSRErr(err)
 		}
 
-		err = globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, configData)
+		err = globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData)
 		if err != nil {
 			return wrapSRErr(err)
 		}
@@ -1225,7 +1225,7 @@ func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket
 	}
 
 	// Delete the bucket policy
-	err := globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, nil)
+	err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1240,7 +1240,7 @@ func (c *SiteReplicationSys) PeerBucketTaggingHandler(ctx context.Context, bucke
 		if err != nil {
 			return wrapSRErr(err)
 		}
-		err = globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, configData)
+		err = globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData)
 		if err != nil {
 			return wrapSRErr(err)
 		}
@@ -1248,7 +1248,7 @@ func (c *SiteReplicationSys) PeerBucketTaggingHandler(ctx context.Context, bucke
 	}
 
 	// Delete the tags
-	err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, nil)
+	err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1263,7 +1263,7 @@ func (c *SiteReplicationSys) PeerBucketObjectLockConfigHandler(ctx context.Conte
 		if err != nil {
 			return wrapSRErr(err)
 		}
-		err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData)
+		err = globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData)
 		if err != nil {
 			return wrapSRErr(err)
 		}
@@ -1280,7 +1280,7 @@ func (c *SiteReplicationSys) PeerBucketSSEConfigHandler(ctx context.Context, buc
 		if err != nil {
 			return wrapSRErr(err)
 		}
-		err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, configData)
+		err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData)
 		if err != nil {
 			return wrapSRErr(err)
 		}
@@ -1288,7 +1288,7 @@ func (c *SiteReplicationSys) PeerBucketSSEConfigHandler(ctx context.Context, buc
 	}
 
 	// Delete sse config
-	err := globalBucketMetadataSys.Update(bucket, bucketSSEConfig, nil)
+	err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1303,7 +1303,7 @@ func (c *SiteReplicationSys) PeerBucketQuotaConfigHandler(ctx context.Context, b
 			return wrapSRErr(err)
 		}
 
-		if err = globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, quotaData); err != nil {
+		if err = globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, quotaData); err != nil {
 			return wrapSRErr(err)
 		}
 
@@ -1311,7 +1311,7 @@ func (c *SiteReplicationSys) PeerBucketQuotaConfigHandler(ctx context.Context, b
 	}
 
 	// Delete the bucket policy
-	err := globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, nil)
+	err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, nil)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1496,7 +1496,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			}
 		}
 
-		quotaConfig, err := globalBucketMetadataSys.GetQuotaConfig(bucket)
+		quotaConfig, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucket)
 		found = true
 		if _, ok := err.(BucketQuotaConfigNotFound); ok {
 			found = false
@@ -2608,7 +2608,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 
 			// Get quota config if present
-			quotaConfig, err := globalBucketMetadataSys.GetQuotaConfig(bucket)
+			quotaConfig, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucket)
 			found = true
 			if _, ok := err.(BucketQuotaConfigNotFound); ok {
 				found = false
