@@ -361,6 +361,10 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
+	if _, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
+		return err
+	}
+
 	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
 }
 
