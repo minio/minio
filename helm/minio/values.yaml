@@ -369,6 +369,27 @@ makeBucketJob:
   tolerations: []
   affinity: {}
 
+## List of command to run after minio install
+## NOTE: the mc command TARGET is always "myminio"
+customCommands:
+  # - command: "admin policy set myminio consoleAdmin group='cn=ops,cn=groups,dc=example,dc=com'"
+
+## Additional Annotations for the Kubernetes Job customCommandJob
+customCommandJob:
+  podAnnotations:
+  annotations:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed
 environment:
