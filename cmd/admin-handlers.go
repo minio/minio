@@ -275,6 +275,8 @@ type ServerConnStats struct {
 	Throughput       uint64 `json:"throughput,omitempty"`
 	S3InputBytes     uint64 `json:"transferredS3"`
 	S3OutputBytes    uint64 `json:"receivedS3"`
+	AdminInputBytes  uint64 `json:"transferredAdmin"`
+	AdminOutputBytes uint64 `json:"receivedAdmin"`
 }
 
 // ServerHTTPAPIStats holds total number of HTTP operations from/to the server,
