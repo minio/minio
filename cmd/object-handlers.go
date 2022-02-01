@@ -37,6 +37,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/gzhttp"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -567,6 +568,9 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+	if !globalAPIConfig.shouldGzipObjects() {
+		w.Header().Set(gzhttp.HeaderNoCompression, "true")
 	}
 
 	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(object, archivePattern) {

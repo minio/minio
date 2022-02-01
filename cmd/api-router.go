@@ -287,7 +287,7 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("getobjectlegalhold", maxClients(gz(httpTraceAll(api.GetObjectLegalHoldHandler))))).Queries("legal-hold", "")
 		// GetObject - note gzip compression is *not* added due to Range requests.
 		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
-			collectAPIStats("getobject", maxClients(httpTraceHdrs(api.GetObjectHandler))))
+			collectAPIStats("getobject", maxClients(gz(httpTraceHdrs(api.GetObjectHandler)))))
 		// CopyObject
 		router.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(
 			collectAPIStats("copyobject", maxClients(gz(httpTraceAll(api.CopyObjectHandler)))))
