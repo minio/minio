@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -933,12 +934,17 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 }
 
-// SpeedtestHandler - reports maximum speed of a cluster by performing PUT and
+// SpeedtestHandler - Deprecated. See ObjectSpeedtestHandler
+func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	a.ObjectSpeedtestHandler(w, r)
+}
+
+// ObjectSpeedtestHandler - reports maximum speed of a cluster by performing PUT and
 // GET operations on the server, supports auto tuning by default by automatically
 // increasing concurrency and stopping when we have reached the limits on the
 // system.
-func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SpeedtestHandler")
+func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ObjectSpeedtestHandler")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -1016,6 +1022,97 @@ func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Reques
 			w.(http.Flusher).Flush()
 		}
 	}
+}
+
+// NetSpeedtestHandler - reports maximum network throughput
+func (a adminAPIHandlers) NetSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "NetSpeedtestHandler")
+
+	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+}
+
+// DriveSpeedtestHandler - reports throughput of drives available in the cluster
+func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DriveSpeedtestHandler")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	// Freeze all incoming S3 API calls before running speedtest.
+	globalNotificationSys.ServiceFreeze(ctx, true)
+
+	// unfreeze all incoming S3 API calls after speedtest.
+	defer globalNotificationSys.ServiceFreeze(ctx, false)
+
+	serial := r.Form.Get("serial") == "true"
+	blockSizeStr := r.Form.Get("blocksize")
+	fileSizeStr := r.Form.Get("filesize")
+
+	blockSize, err := strconv.ParseUint(blockSizeStr, 10, 64)
+	if err != nil {
+		blockSize = 4 * humanize.MiByte // default value
+	}
+
+	fileSize, err := strconv.ParseUint(fileSizeStr, 10, 64)
+	if err != nil {
+		fileSize = 1 * humanize.GiByte // default value
+	}
+
+	opts := madmin.DriveSpeedTestOpts{
+		Serial:    serial,
+		BlockSize: blockSize,
+		FileSize:  fileSize,
+	}
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	enc := json.NewEncoder(w)
+	ch := globalNotificationSys.DriveSpeedTest(ctx, opts)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// local driveSpeedTest
+	go func() {
+		defer wg.Done()
+		enc.Encode(driveSpeedTest(ctx, opts))
+		if wf, ok := w.(http.Flusher); ok {
+			wf.Flush()
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			goto endloop
+		case <-keepAliveTicker.C:
+			// Write a blank entry to prevent client from disconnecting
+			if err := enc.Encode(madmin.DriveSpeedTestResult{}); err != nil {
+				goto endloop
+			}
+			w.(http.Flusher).Flush()
+		case result, ok := <-ch:
+			if !ok {
+				goto endloop
+			}
+			if err := enc.Encode(result); err != nil {
+				goto endloop
+			}
+			w.(http.Flusher).Flush()
+		}
+	}
+endloop:
+	wg.Wait()
 }
 
 // Admin API errors

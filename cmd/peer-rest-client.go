@@ -1067,6 +1067,35 @@ func (client *peerRESTClient) Speedtest(ctx context.Context, size,
 	return result, nil
 }
 
+func (client *peerRESTClient) DriveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) (madmin.DriveSpeedTestResult, error) {
+	queryVals := make(url.Values)
+	if opts.Serial {
+		queryVals.Set("serial", "true")
+	}
+	queryVals.Set("blocksize", strconv.FormatUint(opts.BlockSize, 10))
+	queryVals.Set("filesize", strconv.FormatUint(opts.FileSize, 10))
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDriveSpeedTest, queryVals, nil, -1)
+	if err != nil {
+		return madmin.DriveSpeedTestResult{}, err
+	}
+	defer http.DrainBody(respBody)
+	waitReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return madmin.DriveSpeedTestResult{}, err
+	}
+
+	var result madmin.DriveSpeedTestResult
+	err = gob.NewDecoder(waitReader).Decode(&result)
+	if err != nil {
+		return result, err
+	}
+	if result.Error != "" {
+		return result, errors.New(result.Error)
+	}
+	return result, nil
+}
+
 func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) error {
 	respBody, err := client.callWithContext(context.Background(), peerRESTMethodReloadSiteReplicationConfig, nil, nil, -1)
 	if err != nil {
