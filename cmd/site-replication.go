@@ -255,7 +255,7 @@ func (c *SiteReplicationSys) saveToDisk(ctx context.Context, state srState) erro
 	c.Lock()
 	defer c.Unlock()
 	c.state = state
-	c.enabled = true
+	c.enabled = len(c.state.Peers) != 0
 	return nil
 }
 
@@ -1846,6 +1846,196 @@ func (c *SiteReplicationSys) isEnabled() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.enabled
+}
+
+// RemovePeerCluster - removes one or more clusters from site replication configuration.
+func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) (st madmin.ReplicateRemoveStatus, err error) {
+	if !c.isEnabled() {
+		return st, errSRNotEnabled
+	}
+	info, err := c.GetClusterInfo(ctx)
+	if err != nil {
+		return st, errSRBackendIssue(err)
+	}
+	peerMap := make(map[string]madmin.PeerInfo)
+	var rmvEndpoints []string
+	siteNames := rreq.SiteNames
+	updatedPeers := make(map[string]madmin.PeerInfo)
+
+	for _, pi := range info.Sites {
+		updatedPeers[pi.DeploymentID] = pi
+		peerMap[pi.Name] = pi
+		if rreq.RemoveAll {
+			siteNames = append(siteNames, pi.Name)
+		}
+	}
+	for _, s := range siteNames {
+		info, ok := peerMap[s]
+		if !ok {
+			return st, errSRInvalidRequest(fmt.Errorf("Site %s not found in site replication configuration", s))
+		}
+		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
+		delete(updatedPeers, info.DeploymentID)
+	}
+	var wg sync.WaitGroup
+	errs := make(map[string]error, len(c.state.Peers))
+
+	for _, v := range info.Sites {
+		wg.Add(1)
+		if v.DeploymentID == globalDeploymentID {
+			go func() {
+				defer wg.Done()
+				err := c.RemoveRemoteTargetsForEndpoint(ctx, objectAPI, rmvEndpoints, false)
+				errs[globalDeploymentID] = err
+			}()
+			continue
+		}
+		go func(pi madmin.PeerInfo) {
+			defer wg.Done()
+			admClient, err := c.getAdminClient(ctx, pi.DeploymentID)
+			if err != nil {
+				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", pi.Name, err))
+				return
+			}
+			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
+				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
+				return
+			}
+		}(v)
+	}
+	wg.Wait()
+
+	for dID, err := range errs {
+		if err != nil {
+			return madmin.ReplicateRemoveStatus{
+				ErrDetail: err.Error(),
+				Status:    madmin.ReplicateRemoveStatusPartial,
+			}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", c.state.Peers[dID].Name, err))
+		}
+	}
+	// Update cluster state
+	var state srState
+	if len(updatedPeers) > 1 {
+		state = srState{
+			Name:                    info.Name,
+			Peers:                   updatedPeers,
+			ServiceAccountAccessKey: info.ServiceAccountAccessKey,
+		}
+	}
+	if err = c.saveToDisk(ctx, state); err != nil {
+		return madmin.ReplicateRemoveStatus{
+			Status:    madmin.ReplicateRemoveStatusPartial,
+			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
+		}, nil
+	}
+
+	return madmin.ReplicateRemoveStatus{
+		Status: madmin.ReplicateRemoveStatusSuccess,
+	}, nil
+}
+
+// InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
+// from the site replication configuration.
+func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) error {
+	ourName := ""
+	peerMap := make(map[string]madmin.PeerInfo)
+	updatedPeers := make(map[string]madmin.PeerInfo)
+	siteNames := rreq.SiteNames
+
+	for _, p := range c.state.Peers {
+		peerMap[p.Name] = p
+		if p.DeploymentID == globalDeploymentID {
+			ourName = p.Name
+		}
+		updatedPeers[p.DeploymentID] = p
+		if rreq.RemoveAll {
+			siteNames = append(siteNames, p.Name)
+		}
+	}
+	var rmvEndpoints []string
+	var unlinkSelf bool
+
+	for _, s := range siteNames {
+		info, ok := peerMap[s]
+		if !ok {
+			return fmt.Errorf("Site %s not found in site replication configuration", s)
+		}
+		if info.DeploymentID == globalDeploymentID {
+			unlinkSelf = true
+			continue
+		}
+		delete(updatedPeers, info.DeploymentID)
+		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
+	}
+	if err := c.RemoveRemoteTargetsForEndpoint(ctx, objectAPI, rmvEndpoints, unlinkSelf); err != nil {
+		return err
+	}
+	var state srState
+	if !unlinkSelf {
+		state = srState{
+			Name:                    c.state.Name,
+			Peers:                   updatedPeers,
+			ServiceAccountAccessKey: c.state.ServiceAccountAccessKey,
+		}
+	}
+
+	if err := c.saveToDisk(ctx, state); err != nil {
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+	}
+	return nil
+}
+
+// RemoveRemoteTargetsForEndpoint removes replication targets corresponding to endpoint
+func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context, objectAPI ObjectLayer, endpoints []string, unlinkSelf bool) (err error) {
+	targets := globalBucketTargetSys.ListTargets(ctx, "", string(madmin.ReplicationService))
+	m := make(map[string]madmin.BucketTarget)
+	for _, t := range targets {
+		for _, endpoint := range endpoints {
+			ep, _ := url.Parse(endpoint)
+			if t.Endpoint == ep.Host &&
+				t.Secure == (ep.Scheme == "https") &&
+				t.Type == madmin.ReplicationService {
+				m[t.Arn] = t
+			}
+		}
+		// all remote targets from self are to be delinked
+		if unlinkSelf {
+			m[t.Arn] = t
+		}
+	}
+	buckets, err := objectAPI.ListBuckets(ctx)
+	for _, b := range buckets {
+		config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, b.Name)
+		if err != nil {
+			return err
+		}
+		var nRules []sreplication.Rule
+		for _, r := range config.Rules {
+			if _, ok := m[r.Destination.Bucket]; !ok {
+				nRules = append(nRules, r)
+			}
+		}
+		if len(nRules) > 0 {
+			config.Rules = nRules
+			configData, err := xml.Marshal(config)
+			if err != nil {
+				return err
+			}
+			if err = globalBucketMetadataSys.Update(ctx, b.Name, bucketReplicationConfig, configData); err != nil {
+				return err
+			}
+		} else {
+			if err := globalBucketMetadataSys.Update(ctx, b.Name, bucketReplicationConfig, nil); err != nil {
+				return err
+			}
+		}
+	}
+	for arn, t := range m {
+		if err := globalBucketTargetSys.RemoveTarget(ctx, t.SourceBucket, arn); err != nil {
+			return err
+		}
+	}
+	return
 }
 
 // Other helpers
