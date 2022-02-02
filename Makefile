@@ -106,11 +106,11 @@ docker-hotfix-push: docker-hotfix
 
 docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix tags
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) --build-arg RELEASE=$(VERSION) . -f Dockerfile.hotfix
+	@docker build --no-cache -t $(TAG) --build-arg RELEASE=$(VERSION) . -f Dockerfile.hotfix
 
 docker: build checks ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
-	@docker build -t $(TAG) . -f Dockerfile
+	@docker build --no-cache -t $(TAG) . -f Dockerfile
 
 install: build ## builds minio and installs it to $GOPATH/bin.
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
