@@ -22,6 +22,8 @@ export GO111MODULE=on
 export GOGC=25
 export ENABLE_ADMIN=1
 
+export MINIO_CI_CD=1
+
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" )
 

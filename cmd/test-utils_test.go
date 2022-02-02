@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 
 	resetTestGlobals()
 
-	os.Setenv("MINIO_CI_CD", "ci")
+	globalIsCICD = true
 
 	os.Exit(m.Run())
 }
