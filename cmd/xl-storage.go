@@ -1715,7 +1715,11 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
 		if !alignment || offset+length%xioutil.DirectioAlignSize != 0 {
 			// invalidate page-cache for unaligned reads.
-			disk.FadviseDontNeed(file)
+			if !globalAPIConfig.isDisableODirect() {
+				// skip removing from page-cache only
+				// if O_DIRECT was disabled.
+				disk.FadviseDontNeed(file)
+			}
 		}
 		return or.Close()
 	})}
