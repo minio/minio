@@ -1913,8 +1913,7 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 			}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", c.state.Peers[dID].Name, err))
 		}
 	}
-	// Other than handling existing buckets, we can now save the cluster
-	// replication configuration state.
+	// Update cluster state
 	var state srState
 	if len(updatedPeers) > 1 {
 		state = srState{
@@ -1923,7 +1922,6 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 			ServiceAccountAccessKey: info.ServiceAccountAccessKey,
 		}
 	}
-	// need to delete replication rule
 	if err = c.saveToDisk(ctx, state); err != nil {
 		return madmin.ReplicateRemoveStatus{
 			Status:    madmin.ReplicateRemoveStatusPartial,
