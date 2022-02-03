@@ -942,94 +942,109 @@ func getMinioProcMetrics() *MetricsGroup {
 			logger.LogOnceIf(ctx, err, nodeMetricNamespace)
 			return
 		}
-		var openFDs int
-		openFDs, err = p.FileDescriptorsLen()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, getMinioFDOpenMD())
-			return
-		}
-		l, err := p.Limits()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, getMinioFDLimitMD())
-			return
-		}
-		io, err := p.IO()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, ioSubsystem)
-			return
-		}
-		stat, err := p.Stat()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, processSubsystem)
-			return
-		}
-		startTime, err := stat.StartTime()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, startTime)
-			return
+
+		openFDs, _ := p.FileDescriptorsLen()
+		l, _ := p.Limits()
+		io, _ := p.IO()
+		stat, _ := p.Stat()
+		startTime, _ := stat.StartTime()
+
+		if openFDs > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioFDOpenMD(),
+					Value:       float64(openFDs),
+				},
+			)
 		}
 
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioFDOpenMD(),
-				Value:       float64(openFDs),
-			},
-		)
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioFDLimitMD(),
-				Value:       float64(l.OpenFiles),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessSysCallRMD(),
-				Value:       float64(io.SyscR),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessSysCallWMD(),
-				Value:       float64(io.SyscW),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOReadBytesMD(),
-				Value:       float64(io.ReadBytes),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOWriteBytesMD(),
-				Value:       float64(io.WriteBytes),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOReadCachedBytesMD(),
-				Value:       float64(io.RChar),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOWriteCachedBytesMD(),
-				Value:       float64(io.WChar),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessStartTimeMD(),
-				Value:       startTime,
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessUptimeMD(),
-				Value:       time.Since(globalBootTime).Seconds(),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessResidentMemory(),
-				Value:       float64(stat.ResidentMemory()),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessCPUTime(),
-				Value:       stat.CPUTime(),
-			})
+		if l.OpenFiles > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioFDLimitMD(),
+					Value:       float64(l.OpenFiles),
+				})
+		}
+
+		if io.SyscR > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessSysCallRMD(),
+					Value:       float64(io.SyscR),
+				})
+		}
+
+		if io.SyscW > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessSysCallWMD(),
+					Value:       float64(io.SyscW),
+				})
+		}
+
+		if io.ReadBytes > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOReadBytesMD(),
+					Value:       float64(io.ReadBytes),
+				})
+		}
+
+		if io.WriteBytes > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOWriteBytesMD(),
+					Value:       float64(io.WriteBytes),
+				})
+		}
+
+		if io.RChar > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOReadCachedBytesMD(),
+					Value:       float64(io.RChar),
+				})
+		}
+
+		if io.WChar > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOWriteCachedBytesMD(),
+					Value:       float64(io.WChar),
+				})
+		}
+
+		if startTime > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessStartTimeMD(),
+					Value:       startTime,
+				})
+		}
+
+		if !globalBootTime.IsZero() {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessUptimeMD(),
+					Value:       time.Since(globalBootTime).Seconds(),
+				})
+		}
+
+		if stat.ResidentMemory() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessResidentMemory(),
+					Value:       float64(stat.ResidentMemory()),
+				})
+		}
+
+		if stat.CPUTime() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessCPUTime(),
+					Value:       stat.CPUTime(),
+				})
+		}
 		return
 	})
 	return mg
