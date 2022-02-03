@@ -361,7 +361,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	return testServer
 }
@@ -1522,7 +1522,7 @@ func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string
 
 	initConfigSubsystem(ctx, obj)
 
-	globalIAMSys.Init(ctx, obj, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, obj, globalEtcdClient, 2*time.Second)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -1807,7 +1807,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			t.Fatal("Unexpected error", err)
 		}
 		initConfigSubsystem(ctx, objLayer)
-		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 		// Executing the object layer tests for single node setup.
 		objTest(objLayer, FSTestStr, t)
@@ -1832,7 +1832,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		}
 		setObjectLayer(objLayer)
 		initConfigSubsystem(ctx, objLayer)
-		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 		// Executing the object layer tests for Erasure.
 		objTest(objLayer, ErasureTestStr, t)
