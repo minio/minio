@@ -406,9 +406,25 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		return 0, 0, err
 	}
 
+	if latestFileInfo.Deleted {
+		// For delete markers do not use 'defaultParityCount' as it is not expected to be the case.
+		// Use maximum allowed read quorum instead, writeQuorum+1 is returned for compatibility sake
+		// but there are no callers that shall be using this.
+		readQuorum := len(partsMetaData) / 2
+		return readQuorum, readQuorum + 1, nil
+	}
+
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
 	if parityBlocks <= 0 {
 		parityBlocks = defaultParityCount
+	}
+
+	// For erasure code upgraded objects choose the parity
+	// blocks saved internally, instead of 'defaultParityCount'
+	if _, ok := latestFileInfo.Metadata[minIOErasureUpgraded]; ok {
+		if latestFileInfo.Erasure.ParityBlocks != 0 {
+			parityBlocks = latestFileInfo.Erasure.ParityBlocks
+		}
 	}
 
 	dataBlocks := latestFileInfo.Erasure.DataBlocks
