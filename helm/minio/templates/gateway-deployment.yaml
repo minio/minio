@@ -86,6 +86,10 @@ spec:
               subPath: "{{ .Values.persistence.subPath }}"
               {{- end }}
             {{- end }}
+            {{- if .Values.extraSecret }}
+            - name: extra-secret
+              mountPath: "/tmp/minio-config-env"
+            {{- end }}
             {{- include "minio.tlsKeysVolumeMount" . | indent 12 }}
           ports:
             - name: {{ $scheme }}
@@ -103,6 +107,10 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
+            {{- if .Values.extraSecret }}
+            - name: MINIO_CONFIG_ENV_FILE
+              value: "/tmp/minio-config-env/config.env"
+            {{- end}}
             {{- if eq .Values.gateway.type "gcs" }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/tmp/credentials/service-account-file.json"
@@ -161,5 +169,10 @@ spec:
         - name: minio-user
           secret:
             secretName: {{ template "minio.secretName" . }}
+        {{- if .Values.extraSecret }}
+        - name: extra-secret
+          secret:
+            secretName: {{ .Values.extraSecret }}
+        {{- end }}
         {{- include "minio.tlsKeysVolume" . | indent 8 }}
 {{- end }}
