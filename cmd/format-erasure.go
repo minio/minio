@@ -550,7 +550,7 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 
 // Get backend Erasure format in quorum `format.json`.
 func getFormatErasureInQuorum(formats []*formatErasureV3) (*formatErasureV3, error) {
-	formatCountMap := make(map[int]int)
+	formatCountMap := make(map[int]int, len(formats))
 	for _, format := range formats {
 		if format == nil {
 			continue
