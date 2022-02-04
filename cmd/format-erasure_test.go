@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -52,10 +54,6 @@ func TestFixFormatV3(t *testing.T) {
 		newFormat := format.Clone()
 		newFormat.Erasure.This = format.Erasure.Sets[0][j]
 		formats[j] = newFormat
-	}
-
-	if err = initErasureMetaVolumesInLocalDisks(storageDisks, formats); err != nil {
-		t.Fatal(err)
 	}
 
 	formats[1] = nil
@@ -339,6 +337,102 @@ func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 	}
 	if _, err = getFormatErasureInQuorum(formats); err == nil {
 		t.Fatal("Unexpected success")
+	}
+}
+
+// Get backend Erasure format in quorum `format.json`.
+func getFormatErasureInQuorumOld(formats []*formatErasureV3) (*formatErasureV3, error) {
+	formatHashes := make([]string, len(formats))
+	for i, format := range formats {
+		if format == nil {
+			continue
+		}
+		h := sha256.New()
+		for _, set := range format.Erasure.Sets {
+			for _, diskID := range set {
+				h.Write([]byte(diskID))
+			}
+		}
+		formatHashes[i] = hex.EncodeToString(h.Sum(nil))
+	}
+
+	formatCountMap := make(map[string]int)
+	for _, hash := range formatHashes {
+		if hash == "" {
+			continue
+		}
+		formatCountMap[hash]++
+	}
+
+	maxHash := ""
+	maxCount := 0
+	for hash, count := range formatCountMap {
+		if count > maxCount {
+			maxCount = count
+			maxHash = hash
+		}
+	}
+
+	if maxCount < len(formats)/2 {
+		return nil, errErasureReadQuorum
+	}
+
+	for i, hash := range formatHashes {
+		if hash == maxHash {
+			format := formats[i].Clone()
+			format.Erasure.This = ""
+			return format, nil
+		}
+	}
+
+	return nil, errErasureReadQuorum
+}
+
+func BenchmarkGetFormatErasureInQuorumOld(b *testing.B) {
+	setCount := 200
+	setDriveCount := 15
+
+	format := newFormatErasureV3(setCount, setDriveCount)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
+	formats := make([]*formatErasureV3, 15*200)
+
+	for i := 0; i < setCount; i++ {
+		for j := 0; j < setDriveCount; j++ {
+			newFormat := format.Clone()
+			newFormat.Erasure.This = format.Erasure.Sets[i][j]
+			formats[i*setDriveCount+j] = newFormat
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = getFormatErasureInQuorumOld(formats)
+	}
+}
+
+func BenchmarkGetFormatErasureInQuorum(b *testing.B) {
+	setCount := 200
+	setDriveCount := 15
+
+	format := newFormatErasureV3(setCount, setDriveCount)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
+	formats := make([]*formatErasureV3, 15*200)
+
+	for i := 0; i < setCount; i++ {
+		for j := 0; j < setDriveCount; j++ {
+			newFormat := format.Clone()
+			newFormat.Erasure.This = format.Erasure.Sets[i][j]
+			formats[i*setDriveCount+j] = newFormat
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = getFormatErasureInQuorum(formats)
 	}
 }
 

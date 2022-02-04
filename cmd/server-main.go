@@ -531,10 +531,24 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	if globalBrowserEnabled {
+		srv, err := initConsoleServer()
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize console service")
+		}
+
+		setConsoleSrv(srv)
+
+		go func() {
+			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
+		}()
+	}
+
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
+
 	logger.SetDeploymentID(globalDeploymentID)
 
 	// Enable background operations for erasure coding
@@ -622,19 +636,6 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.StrictS3Compat {
 		logStartupMessage(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
-	}
-
-	if globalBrowserEnabled {
-		srv, err := initConsoleServer()
-		if err != nil {
-			logger.FatalIf(err, "Unable to initialize console service")
-		}
-
-		setConsoleSrv(srv)
-
-		go func() {
-			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
-		}()
 	}
 
 	if serverDebugLog {

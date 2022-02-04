@@ -19,8 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -122,6 +120,13 @@ type formatErasureV3 struct {
 		// to pick the right set index for an object.
 		DistributionAlgo string `json:"distributionAlgo"`
 	} `json:"xl"`
+}
+
+func (f *formatErasureV3) Drives() (drives int) {
+	for _, set := range f.Erasure.Sets {
+		drives += len(set)
+	}
+	return drives
 }
 
 func (f *formatErasureV3) Clone() *formatErasureV3 {
@@ -545,43 +550,36 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 
 // Get backend Erasure format in quorum `format.json`.
 func getFormatErasureInQuorum(formats []*formatErasureV3) (*formatErasureV3, error) {
-	formatHashes := make([]string, len(formats))
-	for i, format := range formats {
+	formatCountMap := make(map[int]int, len(formats))
+	for _, format := range formats {
 		if format == nil {
 			continue
 		}
-		h := sha256.New()
-		for _, set := range format.Erasure.Sets {
-			for _, diskID := range set {
-				h.Write([]byte(diskID))
-			}
-		}
-		formatHashes[i] = hex.EncodeToString(h.Sum(nil))
+		formatCountMap[format.Drives()]++
 	}
 
-	formatCountMap := make(map[string]int)
-	for _, hash := range formatHashes {
-		if hash == "" {
-			continue
-		}
-		formatCountMap[hash]++
-	}
-
-	maxHash := ""
+	maxDrives := 0
 	maxCount := 0
-	for hash, count := range formatCountMap {
+	for drives, count := range formatCountMap {
 		if count > maxCount {
 			maxCount = count
-			maxHash = hash
+			maxDrives = drives
 		}
+	}
+
+	if maxDrives == 0 {
+		return nil, errErasureReadQuorum
 	}
 
 	if maxCount < len(formats)/2 {
 		return nil, errErasureReadQuorum
 	}
 
-	for i, hash := range formatHashes {
-		if hash == maxHash {
+	for i, format := range formats {
+		if format == nil {
+			continue
+		}
+		if format.Drives() == maxDrives {
 			format := formats[i].Clone()
 			format.Erasure.This = ""
 			return format, nil
@@ -622,43 +620,6 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 		}
 	}
 	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.Erasure.Sets)
-}
-
-// Initializes meta volume only on local storage disks.
-func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatErasureV3) error {
-	// Compute the local disks eligible for meta volumes (re)initialization
-	disksToInit := make([]StorageAPI, 0, len(storageDisks))
-	for index := range storageDisks {
-		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
-			// Ignore create meta volume on disks which are not found or not local.
-			continue
-		}
-		disksToInit = append(disksToInit, storageDisks[index])
-	}
-
-	// Initialize errs to collect errors inside go-routine.
-	g := errgroup.WithNErrs(len(disksToInit))
-
-	// Initialize all disks in parallel.
-	for index := range disksToInit {
-		// Initialize a new index variable in each loop so each
-		// goroutine will return its own instance of index variable.
-		index := index
-		g.Go(func() error {
-			return makeFormatErasureMetaVolumes(disksToInit[index])
-		}, index)
-	}
-
-	// Return upon first error.
-	for _, err := range g.Wait() {
-		if err == nil {
-			continue
-		}
-		return toObjectErr(err, minioMetaBucket)
-	}
-
-	// Return success here.
-	return nil
 }
 
 // saveFormatErasureAll - populates `format.json` on disks in its order.
