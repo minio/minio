@@ -49,7 +49,7 @@ require (
 	github.com/minio/dperf v0.2.1-0.20220126071331-eefa6468e289
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.14.0
-	github.com/minio/madmin-go v1.3.0
+	github.com/minio/madmin-go v1.3.1
 	github.com/minio/minio-go/v7 v7.0.21
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.15
