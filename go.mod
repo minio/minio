@@ -44,7 +44,7 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.14.3-0.20220203180435-297c980a8dea
+	github.com/minio/console v0.14.3-0.20220204064445-4e14ec2742b9
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.2.1-0.20220126071331-eefa6468e289
 	github.com/minio/highwayhash v1.0.2
@@ -104,7 +104,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/charmbracelet/bubbles v0.10.0 // indirect
 	github.com/charmbracelet/bubbletea v0.19.3 // indirect
-	github.com/charmbracelet/lipgloss v0.4.1-0.20220131213100-024177a6307a // indirect
+	github.com/charmbracelet/lipgloss v0.4.1-0.20220204041308-bf2912e703f6 // indirect
 	github.com/containerd/console v1.0.2 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
@@ -172,7 +172,7 @@ require (
 	github.com/minio/colorjson v1.0.1 // indirect
 	github.com/minio/direct-csi v1.3.5-0.20210601185811-f7776f7961bf // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220202181549-fd6d4702429c // indirect
+	github.com/minio/mc v0.0.0-20220204044644-e048c85d71a7 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/operator v0.0.0-20220110040724-a5d59a342b7f // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
@@ -180,7 +180,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20211018074035-2e021307bc4b // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
-	github.com/muesli/termenv v0.11.0 // indirect
+	github.com/muesli/termenv v0.11.1-0.20220204035834-5ac8409525e0 // indirect
 	github.com/nats-io/jwt/v2 v2.0.2 // indirect
 	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
