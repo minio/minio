@@ -315,6 +315,12 @@ environment:
   ## MINIO_SUBNET_LICENSE: "License key obtained from https://subnet.min.io"
   ## MINIO_BROWSER: "off"
 
+## The name of a secret in the same kubernetes namespace which contain secret values
+## This can be useful for LDAP password, etc
+## The key in the secret must be 'config.env'
+##
+# extraSecret: minio-extraenv
+
 networkPolicy:
   enabled: false
   allowExternal: true
