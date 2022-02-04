@@ -2418,6 +2418,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var parseRangeErr error
 	if rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange); rangeHeader != "" {
 		rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader)
+	} else {
+		// This check is to see if client specified a header but the value
+		// is empty for 'x-amz-copy-source-range'
+		_, ok := r.Header[xhttp.AmzCopySourceRange]
+		if ok {
+			parseRangeErr = errInvalidRange
+		}
 	}
 
 	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
