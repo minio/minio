@@ -531,19 +531,6 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if globalBrowserEnabled {
-		srv, err := initConsoleServer()
-		if err != nil {
-			logger.FatalIf(err, "Unable to initialize console service")
-		}
-
-		setConsoleSrv(srv)
-
-		go func() {
-			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
-		}()
-	}
-
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
@@ -574,6 +561,19 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		logger.LogIf(GlobalContext, err)
+	}
+
+	if globalBrowserEnabled {
+		srv, err := initConsoleServer()
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize console service")
+		}
+
+		setConsoleSrv(srv)
+
+		go func() {
+			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
+		}()
 	}
 
 	// Populate existing buckets to the etcd backend
