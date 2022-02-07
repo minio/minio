@@ -362,7 +362,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -455,7 +455,7 @@ func TestValidateAdminSignature(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, objLayer)
 

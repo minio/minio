@@ -673,8 +673,8 @@ func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
 	sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
-// Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
-func (sys *NotificationSys) Init(ctx context.Context, objAPI ObjectLayer) error {
+// InitBucketTargets - initializes notification system from notification.xml of all buckets.
+func (sys *NotificationSys) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
