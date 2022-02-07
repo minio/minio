@@ -284,6 +284,7 @@ type ServerHTTPAPIStats struct {
 // including their average execution time.
 type ServerHTTPStats struct {
 	S3RequestsInQueue      int32              `json:"s3RequestsInQueue"`
+	S3RequestsIncoming     uint64             `json:"s3RequestsIncoming"`
 	CurrentS3Requests      ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests        ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors          ServerHTTPAPIStats `json:"totalS3Errors"`

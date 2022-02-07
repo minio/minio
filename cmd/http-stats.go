@@ -143,6 +143,7 @@ type HTTPStats struct {
 	rejectedRequestsHeader  uint64
 	rejectedRequestsInvalid uint64
 	s3RequestsInQueue       int32
+	s3RequestsIncoming      uint64
 	currentS3Requests       HTTPAPIStats
 	totalS3Requests         HTTPAPIStats
 	totalS3Errors           HTTPAPIStats
@@ -153,9 +154,15 @@ func (st *HTTPStats) addRequestsInQueue(i int32) {
 	atomic.AddInt32(&st.s3RequestsInQueue, i)
 }
 
+func (st *HTTPStats) incS3RequestsIncoming() {
+	// Golang automatically resets to zero if this overflows
+	atomic.AddUint64(&st.s3RequestsIncoming, 1)
+}
+
 // Converts http stats into struct to be sent back to the client.
 func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
+	serverStats.S3RequestsIncoming = atomic.SwapUint64(&st.s3RequestsIncoming, 0)
 	serverStats.S3RequestsInQueue = atomic.LoadInt32(&st.s3RequestsInQueue)
 	serverStats.TotalS3RejectedAuth = atomic.LoadUint64(&st.rejectedRequestsAuth)
 	serverStats.TotalS3RejectedTime = atomic.LoadUint64(&st.rejectedRequestsTime)
