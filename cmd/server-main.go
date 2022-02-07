@@ -216,7 +216,7 @@ func serverHandleEnvVars() {
 
 var globalHealStateLK sync.RWMutex
 
-func newAllSubsystems() {
+func initAllSubsystems() {
 	if globalIsErasure {
 		globalHealStateLK.Lock()
 		// New global heal state
@@ -225,7 +225,7 @@ func newAllSubsystems() {
 		globalHealStateLK.Unlock()
 	}
 
-	// Create new notification system and initialize notification targets
+	// Create new notification system and initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
 	// Create new bucket metadata system.
@@ -421,7 +421,7 @@ func serverMain(ctx *cli.Context) {
 	initHelp()
 
 	// Initialize all sub-systems
-	newAllSubsystems()
+	initAllSubsystems()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
@@ -587,8 +587,8 @@ func serverMain(ctx *cli.Context) {
 		// Initialize bucket metadata sub-system.
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
 
-		// Initialize bucket notification sub-system.
-		globalNotificationSys.Init(GlobalContext, newObject)
+		// Initialize bucket notification targets.
+		globalNotificationSys.InitBucketTargets(GlobalContext, newObject)
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {

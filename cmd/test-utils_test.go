@@ -223,7 +223,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
-	newAllSubsystems()
+	initAllSubsystems()
 	return obj
 }
 
@@ -355,7 +355,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	globalEtcdClient = nil
 
@@ -1474,7 +1474,7 @@ func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerP
 		return nil, err
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	return z, nil
 }
@@ -1518,7 +1518,7 @@ func removeDiskN(disks []string, n int) {
 // initialies the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
-	newAllSubsystems()
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, obj)
 
@@ -1799,7 +1799,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		}
 		setObjectLayer(objLayer)
 
-		newAllSubsystems()
+		initAllSubsystems()
 
 		// initialize the server and obtain the credentials and root.
 		// credentials are necessary to sign the HTTP request.
@@ -1825,7 +1825,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			localMetacacheMgr.deleteAll()
 		}
 
-		newAllSubsystems()
+		initAllSubsystems()
 		objLayer, fsDirs, err := prepareErasureSets32(ctx)
 		if err != nil {
 			t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)

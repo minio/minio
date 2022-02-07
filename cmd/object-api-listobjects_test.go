@@ -1894,7 +1894,7 @@ func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	return obj
 }

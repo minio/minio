@@ -291,7 +291,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	newObject = NewGatewayLayerWithLocker(newObject)
 
 	// Calls all New() for all sub-systems.
-	newAllSubsystems()
+	initAllSubsystems()
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
@@ -307,7 +307,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		}
 		logger.FatalIf(globalBucketMetadataSys.Init(GlobalContext, buckets, newObject), "Unable to initialize bucket metadata")
 
-		logger.FatalIf(globalNotificationSys.Init(GlobalContext, newObject), "Unable to initialize notification system")
+		logger.FatalIf(globalNotificationSys.InitBucketTargets(GlobalContext, newObject), "Unable to initialize bucket targets for notification system")
 	}
 
 	if globalCacheConfig.Enabled {
