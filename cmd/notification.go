@@ -674,7 +674,7 @@ func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
 }
 
 // Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
-func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *NotificationSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}

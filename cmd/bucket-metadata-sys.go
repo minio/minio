@@ -434,6 +434,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 			_, _ = objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
 				// Ensure heal opts for bucket metadata be deep healed all the time.
 				ScanMode: madmin.HealDeepScan,
+				Recreate: true,
 			})
 			meta, err := loadBucketMetadata(ctx, objAPI, buckets[index].Name)
 			if err != nil {

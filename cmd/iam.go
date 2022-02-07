@@ -66,7 +66,6 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
-	notificationSys    *NotificationSys
 
 	usersSysType UsersSysType
 
@@ -198,12 +197,11 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 }
 
 // Init - initializes config system by reading entries from config/iam
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, nSys *NotificationSys, iamRefreshInterval time.Duration) {
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
 	sys.Lock()
 	defer sys.Unlock()
 
 	sys.iamRefreshInterval = iamRefreshInterval
-	sys.notificationSys = nSys
 
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
@@ -466,7 +464,7 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 	}
 
 	// Notify all other MinIO peers to delete policy
-	for _, nerr := range sys.notificationSys.DeletePolicy(policyName) {
+	for _, nerr := range globalNotificationSys.DeletePolicy(policyName) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -524,7 +522,7 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy
 
 	if !sys.HasWatcher() {
 		// Notify all other MinIO peers to reload policy
-		for _, nerr := range sys.notificationSys.LoadPolicy(policyName) {
+		for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -546,7 +544,7 @@ func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string, notifyPeers
 
 	// Notify all other MinIO peers to delete user.
 	if notifyPeers && !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.DeleteUser(accessKey) {
+		for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -572,7 +570,7 @@ func (sys *IAMSys) CurrentPolicies(policyName string) string {
 func (sys *IAMSys) notifyForUser(ctx context.Context, accessKey string, isTemp bool) {
 	// Notify all other MinIO peers to reload user.
 	if !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.LoadUser(accessKey, isTemp) {
+		for _, nerr := range globalNotificationSys.LoadUser(accessKey, isTemp) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -735,7 +733,7 @@ func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status m
 func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string) {
 	// Notify all other Minio peers to reload the service account
 	if !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.LoadServiceAccount(accessKey) {
+		for _, nerr := range globalNotificationSys.LoadServiceAccount(accessKey) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -940,7 +938,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, n
 	}
 
 	if notifyPeers && !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.DeleteServiceAccount(accessKey) {
+		for _, nerr := range globalNotificationSys.DeleteServiceAccount(accessKey) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -1149,7 +1147,7 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (cred auth.Cre
 // Notify all other MinIO peers to load group.
 func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
 	if !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.LoadGroup(group) {
+		for _, nerr := range globalNotificationSys.LoadGroup(group) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -1256,7 +1254,7 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup
 
 	// Notify all other MinIO peers to reload policy
 	if !sys.HasWatcher() {
-		for _, nerr := range sys.notificationSys.LoadPolicyMapping(name, isGroup) {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(name, isGroup) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
