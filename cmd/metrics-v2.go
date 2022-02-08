@@ -137,6 +137,7 @@ const (
 	limitTotal     MetricName = "limit_total"
 	missedTotal    MetricName = "missed_total"
 	waitingTotal   MetricName = "waiting_total"
+	incomingTotal  MetricName = "incoming_total"
 	objectTotal    MetricName = "object_total"
 	offlineTotal   MetricName = "offline_total"
 	onlineTotal    MetricName = "online_total"
@@ -566,6 +567,16 @@ func getS3RequestsInQueueMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      waitingTotal,
 		Help:      "Number of S3 requests in the waiting queue",
+		Type:      gaugeMetric,
+	}
+}
+
+func getIncomingS3RequestsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      incomingTotal,
+		Help:      "Volatile number of total incoming S3 requests",
 		Type:      gaugeMetric,
 	}
 }
@@ -1435,6 +1446,11 @@ func getHTTPMetrics() *MetricsGroup {
 			Description: getS3RequestsInQueueMD(),
 			Value:       float64(httpStats.S3RequestsInQueue),
 		})
+		metrics = append(metrics, Metric{
+			Description: getIncomingS3RequestsMD(),
+			Value:       float64(httpStats.S3RequestsIncoming),
+		})
+
 		for api, value := range httpStats.CurrentS3Requests.APIStats {
 			metrics = append(metrics, Metric{
 				Description:    getS3RequestsInFlightMD(),
