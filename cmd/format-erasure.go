@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -550,40 +551,56 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 
 // Get backend Erasure format in quorum `format.json`.
 func getFormatErasureInQuorum(formats []*formatErasureV3) (*formatErasureV3, error) {
-	formatCountMap := make(map[int]int, len(formats))
-	for _, format := range formats {
-		if format == nil {
-			continue
-		}
-		formatCountMap[format.Drives()]++
-	}
+	var (
+		formatCountMap = make(map[string]int)
+		formatQuorum   = len(formats)/2 + 1
+		maxCount       = 0
+		maxIndex       = -1
 
-	maxDrives := 0
-	maxCount := 0
-	for drives, count := range formatCountMap {
-		if count > maxCount {
-			maxCount = count
-			maxDrives = drives
-		}
-	}
+		diskIDsConcat bytes.Buffer
+	)
 
-	if maxDrives == 0 {
-		return nil, errErasureReadQuorum
-	}
-
-	if maxCount < len(formats)/2 {
-		return nil, errErasureReadQuorum
+	// Optimize memory allocation when concatenating disks IDs since
+	// the total size of the concateenation can be predicated
+	if len(formats) > 0 && len(formats[0].Erasure.Sets) > 0 && len(formats[0].Erasure.Sets[0]) > 0 {
+		diskIDsConcatLen := len(formats[0].Erasure.Sets) *
+			len(formats[0].Erasure.Sets[0]) *
+			len(formats[0].Erasure.Sets[0][0])
+		diskIDsConcat.Grow(diskIDsConcatLen)
 	}
 
 	for i, format := range formats {
 		if format == nil {
 			continue
 		}
-		if format.Drives() == maxDrives {
-			format := formats[i].Clone()
-			format.Erasure.This = ""
-			return format, nil
+
+		// Concatenate all disks hashes
+		diskIDsConcat.Reset()
+		for _, set := range format.Erasure.Sets {
+			for _, diskID := range set {
+				diskIDsConcat.WriteString(diskID)
+			}
 		}
+		hash := diskIDsConcat.String()
+
+		formatCountMap[hash]++
+		count := formatCountMap[hash]
+
+		if count > maxCount {
+			maxCount = count
+			maxIndex = i
+		}
+
+		if count >= formatQuorum {
+			// Early exit since we already reached quorum
+			break
+		}
+	}
+
+	if maxIndex >= 0 {
+		format := formats[maxIndex].Clone()
+		format.Erasure.This = ""
+		return format, nil
 	}
 
 	return nil, errErasureReadQuorum
