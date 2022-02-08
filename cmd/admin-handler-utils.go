@@ -30,6 +30,10 @@ import (
 )
 
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, actions ...iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
+	return validateAdminReqWithConds(ctx, w, r, actions, nil)
+}
+
+func validateAdminReqWithConds(ctx context.Context, w http.ResponseWriter, r *http.Request, actions []iampolicy.AdminAction, conds map[string][]string) (ObjectLayer, auth.Credentials) {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil || globalNotificationSys == nil {
@@ -39,7 +43,7 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 
 	for _, action := range actions {
 		// Validate request signature.
-		cred, adminAPIErr := checkAdminRequestAuth(ctx, r, action, "")
+		cred, adminAPIErr := checkAdminRequestAuth(ctx, r, action, conds, "")
 		if adminAPIErr != ErrNone {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 			return nil, cred

@@ -515,7 +515,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -620,7 +620,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -1205,7 +1205,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -2041,7 +2041,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.BandwidthMonitorAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.BandwidthMonitorAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -2101,7 +2101,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ServerInfoAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ServerInfoAdminAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -2301,7 +2301,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	ctx := newContext(r, w, "InspectData")
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.InspectDataAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.InspectDataAction, nil, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return

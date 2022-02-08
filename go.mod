@@ -242,3 +242,5 @@ require (
 )
 
 replace github.com/gomodule/redigo v2.0.0+incompatible => github.com/gomodule/redigo v1.8.5
+
+replace github.com/minio/pkg => ../pkg/

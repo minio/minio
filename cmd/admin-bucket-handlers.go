@@ -27,6 +27,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy/condition"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
@@ -145,8 +146,13 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	requiredAction := []iampolicy.AdminAction{iampolicy.SetBucketTargetAction}
+	conds := map[string][]string{
+		condition.AdminBucket.String(): {bucket},
+	}
+
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReqWithConds(ctx, w, r, requiredAction, conds)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -273,8 +279,14 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
+
+	requiredAction := []iampolicy.AdminAction{iampolicy.GetBucketTargetAction}
+	conds := map[string][]string{
+		condition.AdminBucket.String(): {bucket},
+	}
+
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketTargetAction)
+	objectAPI, _ := validateAdminReqWithConds(ctx, w, r, requiredAction, conds)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
@@ -313,8 +325,14 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
+
+	requiredAction := []iampolicy.AdminAction{iampolicy.SetBucketTargetAction}
+	conds := map[string][]string{
+		condition.AdminBucket.String(): {bucket},
+	}
+
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReqWithConds(ctx, w, r, requiredAction, conds)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
