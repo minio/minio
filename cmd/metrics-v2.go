@@ -1655,7 +1655,7 @@ func getClusterTierMetrics() *MetricsGroup {
 			return
 		}
 		objLayer := newObjectLayerFn()
-		if objLayer == nil {
+		if objLayer == nil || globalIsGateway {
 			return
 		}
 
