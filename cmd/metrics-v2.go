@@ -48,6 +48,7 @@ func init() {
 		getMinioHealingMetrics(),
 		getNodeHealthMetrics(),
 		getClusterStorageMetrics(),
+		getClusterTierMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -181,6 +182,10 @@ const (
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
 	transitionPendingTasks MetricName = "transition_pending_tasks"
 	transitionActiveTasks  MetricName = "transition_active_tasks"
+
+	transitionedBytes    MetricName = "transitioned_bytes"
+	transitionedObjects  MetricName = "transitioned_objects"
+	transitionedVersions MetricName = "transitioned_versions"
 )
 
 const (
@@ -1605,9 +1610,86 @@ func getBucketUsageMetrics() *MetricsGroup {
 				HistogramBucketLabel: "range",
 				VariableLabels:       map[string]string{"bucket": bucket},
 			})
-
 		}
 		return
+	})
+	return mg
+}
+
+func getClusterTransitionedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedBytes,
+		Help:      "Total bytes transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTransitionedObjectsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedObjects,
+		Help:      "Total number of objects transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTransitionedVersionsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedVersions,
+		Help:      "Total number of versions transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTierMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		if globalTierConfigMgr.Empty() {
+			return
+		}
+		objLayer := newObjectLayerFn()
+		if objLayer == nil || globalIsGateway {
+			return
+		}
+
+		dui, err := loadDataUsageFromBackend(GlobalContext, objLayer)
+		if err != nil {
+			return
+		}
+		// data usage has not captured any data yet.
+		if dui.LastUpdate.IsZero() {
+			return
+		}
+
+		// e.g minio_cluster_ilm_transitioned_bytes{tier="S3TIER-1"}=136314880
+		//     minio_cluster_ilm_transitioned_objects{tier="S3TIER-1"}=1
+		//     minio_cluster_ilm_transitioned_versions{tier="S3TIER-1"}=3
+		for tier, st := range dui.TierStats.Tiers {
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedBytesMD(),
+				Value:          float64(st.TotalSize),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedObjectsMD(),
+				Value:          float64(st.NumObjects),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedVersionsMD(),
+				Value:          float64(st.NumVersions),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+		}
+
+		return metrics
 	})
 	return mg
 }
