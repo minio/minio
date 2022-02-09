@@ -335,7 +335,9 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 			pinfo := poolObjInfo{
 				PoolIndex: i,
 			}
-			opts.VersionID = "" // no need to check for specific versionId
+			// do not remove this check as it can lead to inconsistencies
+			// for all callers of bucket replication.
+			opts.VersionID = ""
 			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool, poolOpts[i])
@@ -353,13 +355,13 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 	})
 
 	for _, pinfo := range poolObjInfos {
-		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
-			return -1, pinfo.Err
-		}
-
 		// skip all objects from suspended pools for mutating calls.
 		if z.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
 			continue
+		}
+
+		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
+			return -1, pinfo.Err
 		}
 
 		if isErrObjectNotFound(pinfo.Err) {
