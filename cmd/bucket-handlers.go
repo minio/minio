@@ -1905,10 +1905,13 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 	globalReplicationPool.resyncState.RLock()
 	brs, ok := globalReplicationPool.resyncState.statusMap[bucket]
 	if !ok {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-			Bucket: bucket,
-			Err:    fmt.Errorf("No replication resync status available for %s", arn),
-		}), r.URL)
+		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
+		if err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
+				Bucket: bucket,
+				Err:    fmt.Errorf("No replication resync status available for %s", arn),
+			}), r.URL)
+		}
 		return
 	}
 

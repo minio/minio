@@ -1332,6 +1332,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	pool.ResizeWorkers(opts.Workers)
 	pool.ResizeFailedWorkers(opts.FailedWorkers)
 	go pool.AddExistingObjectReplicateWorker()
+	go pool.periodicResyncMetaSave(ctx, o)
 	return pool
 }
 
@@ -1872,6 +1873,45 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	return s
 }
 
+const resyncTimeInterval = time.Minute * 10
+
+// periodicResyncMetaSave saves in-memory resync meta stats to disk in periodic intervals
+func (p *ReplicationPool) periodicResyncMetaSave(ctx context.Context, objectAPI ObjectLayer) {
+	resyncTimer := time.NewTimer(resyncTimeInterval)
+	defer resyncTimer.Stop()
+
+	for {
+		select {
+		case <-resyncTimer.C:
+			resyncTimer.Reset(resyncTimeInterval)
+			now := UTCNow()
+			p.resyncState.RLock()
+			for bucket, brs := range p.resyncState.statusMap {
+				var updt bool
+				for _, st := range brs.TargetsMap {
+					// if resync in progress or just ended, needs to save to disk
+					if st.EndTime.Equal(timeSentinel) || now.Sub(st.EndTime) <= resyncTimeInterval {
+						updt = true
+						break
+					}
+				}
+				if updt {
+					brs.LastUpdate = now
+					if err := saveResyncStatus(ctx, bucket, brs, objectAPI); err != nil {
+						logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to disk for %s - %w", bucket, err))
+						continue
+					}
+				}
+			}
+			p.resyncState.RUnlock()
+		case <-ctx.Done():
+			// server could be restarting - need
+			// to exit immediately
+			return
+		}
+	}
+}
+
 // resyncBucket resyncs all qualifying objects as per replication rules for the target
 // ARN
 func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI ObjectLayer) {
@@ -1884,17 +1924,6 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		st.ResyncStatus = resyncStatus
 		m.TargetsMap[arn] = st
 		globalReplicationPool.resyncState.Unlock()
-
-		meta, err := loadBucketResyncMetadata(ctx, bucket, objectAPI)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Could not load resync metadata from disk for %s - %w", bucket, err))
-			return
-		}
-		meta.TargetsMap[arn] = st
-		if err = saveResyncStatus(ctx, bucket, meta, objectAPI); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to disk for %s - %w", bucket, err))
-			return
-		}
 	}()
 	// Allocate new results channel to receive ObjectInfo.
 	objInfoCh := make(chan ObjectInfo)
@@ -1903,8 +1932,11 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		logger.LogIf(ctx, fmt.Errorf("Replication resync of %s for arn %s failed with %w", bucket, arn, err))
 		return
 	}
-	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
-
+	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Replication resync of %s for arn %s failed  %w", bucket, arn, err))
+		return
+	}
 	rcfg := replicationConfig{
 		Config:  cfg,
 		remotes: tgts,
@@ -1924,7 +1956,6 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		return
 	}
 
-	var resyncCount int
 	// Walk through all object versions - note ascending order of walk needed to ensure delete marker replicated to
 	// target after object version is first created.
 	if err := objectAPI.Walk(ctx, bucket, "", objInfoCh, ObjectOptions{WalkAscending: true}); err != nil {
@@ -2000,21 +2031,6 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		}
 		m.TargetsMap[arn] = st
 		globalReplicationPool.resyncState.Unlock()
-		resyncCount++
-		if resyncCount%100 == 0 {
-			resyncCount = 0
-			// sync in-memory resync info to disk.
-			meta, err := loadBucketResyncMetadata(ctx, bucket, objectAPI)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Could not load resync metadata from disk for %s - %w", bucket, err))
-				return
-			}
-			meta.TargetsMap[arn] = st
-			if err = saveResyncStatus(ctx, bucket, meta, objectAPI); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to disk for %s - %w", bucket, err))
-				return
-			}
-		}
 	}
 	resyncStatus = ResyncCompleted
 }
@@ -2108,7 +2124,7 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 	for index := range buckets {
 		meta, err := loadBucketResyncMetadata(ctx, buckets[index].Name, objAPI)
 		if err != nil {
-			if !globalIsErasure && !globalIsDistErasure && errors.Is(err, errVolumeNotFound) {
+			if errors.Is(err, errVolumeNotFound) {
 				meta = newBucketResyncStatus(buckets[index].Name)
 			} else {
 				logger.LogIf(ctx, err)
