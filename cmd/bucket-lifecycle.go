@@ -693,9 +693,9 @@ func completedRestoreObj(expiry time.Time) restoreObjStatus {
 // String returns x-amz-restore compatible representation of r.
 func (r restoreObjStatus) String() string {
 	if r.Ongoing() {
-		return "ongoing-request=true"
+		return `ongoing-request="true"`
 	}
-	return fmt.Sprintf("ongoing-request=false, expiry-date=%s", r.expiry.Format(http.TimeFormat))
+	return fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`, r.expiry.Format(http.TimeFormat))
 }
 
 // Expiry returns expiry of restored object and true if restore-object has completed.
@@ -739,12 +739,11 @@ func parseRestoreObjStatus(restoreHdr string) (restoreObjStatus, error) {
 	}
 
 	switch progressTokens[1] {
-	case "true":
+	case "true", `"true"`: // true without double quotes is deprecated in Feb 2022
 		if len(tokens) == 1 {
 			return ongoingRestoreObj(), nil
 		}
-
-	case "false":
+	case "false", `"false"`: // false without double quotes is deprecated in Feb 2022
 		if len(tokens) != 2 {
 			return restoreObjStatus{}, errRestoreHDRMalformed
 		}
@@ -755,8 +754,7 @@ func parseRestoreObjStatus(restoreHdr string) (restoreObjStatus, error) {
 		if strings.TrimSpace(expiryTokens[0]) != "expiry-date" {
 			return restoreObjStatus{}, errRestoreHDRMalformed
 		}
-
-		expiry, err := time.Parse(http.TimeFormat, expiryTokens[1])
+		expiry, err := time.Parse(http.TimeFormat, strings.Trim(expiryTokens[1], `"`))
 		if err != nil {
 			return restoreObjStatus{}, errRestoreHDRMalformed
 		}
