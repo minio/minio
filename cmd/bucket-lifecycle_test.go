@@ -36,7 +36,7 @@ func TestParseRestoreObjStatus(t *testing.T) {
 	}{
 		{
 			// valid: represents a restored object, 'pending' expiry.
-			restoreHdr: "ongoing-request=false, expiry-date=Fri, 21 Dec 2012 00:00:00 GMT",
+			restoreHdr: `ongoing-request="false", expiry-date="Fri, 21 Dec 2012 00:00:00 GMT"`,
 			expectedStatus: restoreObjStatus{
 				ongoing: false,
 				expiry:  time.Date(2012, 12, 21, 0, 0, 0, 0, time.UTC),
@@ -45,7 +45,7 @@ func TestParseRestoreObjStatus(t *testing.T) {
 		},
 		{
 			// valid: represents an ongoing restore object request.
-			restoreHdr: "ongoing-request=true",
+			restoreHdr: `ongoing-request="true"`,
 			expectedStatus: restoreObjStatus{
 				ongoing: true,
 			},
@@ -53,13 +53,13 @@ func TestParseRestoreObjStatus(t *testing.T) {
 		},
 		{
 			// invalid; ongoing restore object request can't have expiry set on it.
-			restoreHdr:     "ongoing-request=true, expiry-date=Fri, 21 Dec 2012 00:00:00 GMT",
+			restoreHdr:     `ongoing-request="true", expiry-date="Fri, 21 Dec 2012 00:00:00 GMT"`,
 			expectedStatus: restoreObjStatus{},
 			expectedErr:    errRestoreHDRMalformed,
 		},
 		{
 			// invalid; completed restore object request must have expiry set on it.
-			restoreHdr:     "ongoing-request=false",
+			restoreHdr:     `ongoing-request="false"`,
 			expectedStatus: restoreObjStatus{},
 			expectedErr:    errRestoreHDRMalformed,
 		},
