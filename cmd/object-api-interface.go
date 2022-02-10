@@ -72,7 +72,8 @@ type ObjectOptions struct {
 	MaxParity bool
 
 	// Mutate set to 'true' if the call is namespace mutation call
-	Mutate bool
+	Mutate        bool
+	WalkAscending bool // return Walk results in ascending order of versions
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.

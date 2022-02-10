@@ -375,6 +375,7 @@ func deleteBucketMetadata(ctx context.Context, obj objectDeleter, bucket string)
 	metadataFiles := []string{
 		dataUsageCacheName,
 		bucketMetadataFile,
+		path.Join(replicationDir, resyncFileName),
 	}
 	for _, metaFile := range metadataFiles {
 		configFile := path.Join(bucketMetaPrefix, bucket, metaFile)

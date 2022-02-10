@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -576,8 +577,23 @@ type ResyncTargetsInfo struct {
 
 // ResyncTarget is a struct representing the Target reset ID where target is identified by its Arn
 type ResyncTarget struct {
-	Arn     string `json:"arn"`
-	ResetID string `json:"resetid"`
+	Arn       string    `json:"arn"`
+	ResetID   string    `json:"resetid"`
+	StartTime time.Time `json:"startTime"`
+	EndTime   time.Time `json:"endTime"`
+	// Status of resync operation
+	ResyncStatus string `json:"resyncStatus,omitempty"`
+	// Completed size in bytes
+	ReplicatedSize int64 `json:"completedReplicationSize"`
+	// Failed size in bytes
+	FailedSize int64 `json:"failedReplicationSize"`
+	// Total number of failed operations
+	FailedCount int64 `json:"failedReplicationCount"`
+	// Total number of failed operations
+	ReplicatedCount int64 `json:"replicationCount"`
+	// Last bucket/object replicated.
+	Bucket string `json:"bucket,omitempty"`
+	Object string `json:"object,omitempty"`
 }
 
 // VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
@@ -602,4 +618,84 @@ func (v VersionPurgeStatusType) Empty() bool {
 // Pending returns true if the version is pending purge.
 func (v VersionPurgeStatusType) Pending() bool {
 	return v == Pending || v == Failed
+}
+
+type replicationResyncState struct {
+	// map of bucket to their resync status
+	statusMap map[string]BucketReplicationResyncStatus
+	sync.RWMutex
+}
+
+const (
+	replicationDir      = "replication"
+	resyncFileName      = "resync.bin"
+	resyncMetaFormat    = 1
+	resyncMetaVersionV1 = 1
+	resyncMetaVersion   = resyncMetaVersionV1
+)
+
+// ResyncStatusType status of resync operation
+type ResyncStatusType int
+
+const (
+	// NoResync - no resync in progress
+	NoResync ResyncStatusType = iota
+	// ResyncStarted -  resync in progress
+	ResyncStarted
+	// ResyncCompleted -  resync finished
+	ResyncCompleted
+	// ResyncFailed -  resync failed
+	ResyncFailed
+)
+
+func (rt ResyncStatusType) String() string {
+	switch rt {
+	case ResyncStarted:
+		return "Ongoing"
+	case ResyncCompleted:
+		return "Completed"
+	case ResyncFailed:
+		return "Failed"
+	default:
+		return ""
+	}
+}
+
+// TargetReplicationResyncStatus status of resync of bucket for a specific target
+type TargetReplicationResyncStatus struct {
+	StartTime time.Time `json:"startTime" msg:"st"`
+	EndTime   time.Time `json:"endTime" msg:"et"`
+	// Resync ID assigned to this reset
+	ResyncID string `json:"resyncID" msg:"id"`
+	// ResyncBeforeDate - resync all objects created prior to this date
+	ResyncBeforeDate time.Time `json:"resyncBeforeDate" msg:"rdt"`
+	// Status of resync operation
+	ResyncStatus ResyncStatusType `json:"resyncStatus" msg:"rst"`
+	// Failed size in bytes
+	FailedSize int64 `json:"failedReplicationSize"  msg:"fs"`
+	// Total number of failed operations
+	FailedCount int64 `json:"failedReplicationCount"  msg:"frc"`
+	// Completed size in bytes
+	ReplicatedSize int64 `json:"completedReplicationSize"  msg:"rs"`
+	// Total number of failed operations
+	ReplicatedCount int64 `json:"replicationCount"  msg:"rrc"`
+	// Last bucket/object replicated.
+	Bucket string `json:"-" msg:"bkt"`
+	Object string `json:"-" msg:"obj"`
+}
+
+// BucketReplicationResyncStatus captures current replication resync status
+type BucketReplicationResyncStatus struct {
+	Version int `json:"version" msg:"v"`
+	// map of remote arn to their resync status for a bucket
+	TargetsMap map[string]TargetReplicationResyncStatus `json:"resyncMap,omitempty" msg:"brs"`
+	ID         int                                      `json:"id" msg:"id"`
+	LastUpdate time.Time                                `json:"lastUpdate" msg:"lu"`
+}
+
+func newBucketResyncStatus(bucket string) BucketReplicationResyncStatus {
+	return BucketReplicationResyncStatus{
+		TargetsMap: make(map[string]TargetReplicationResyncStatus),
+		Version:    resyncMetaVersion,
+	}
 }
