@@ -58,6 +58,8 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setRequestValidityHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
+	// Add bucket forwarding handler
+	setBucketForwardingHandler,
 	// Add new handlers here.
 }
 
@@ -87,10 +89,6 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add API router
 	registerAPIRouter(router)
 
-	// Enable bucket forwarding handler only if bucket federation is enabled.
-	if globalDNSConfig != nil && globalBucketFederation {
-		globalHandlers = append(globalHandlers, setBucketForwardingHandler)
-	}
 	router.Use(globalHandlers...)
 
 	return router, nil
