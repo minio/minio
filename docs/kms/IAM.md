@@ -1,12 +1,6 @@
 # KMS IAM/Config Encryption
 
-MinIO will soon release a change that re-works the encryption of IAM and
-configuration data. Currently, MinIO encrypts IAM data (user/temp. credentials,
-policies and other configuration data) with the cluster root credentials before
-storing it on the backend disks. After release `RELEASE.2021-04-22T15-44-28Z`
-onwards, MinIO will use the KMS provided keys to encrypt the IAM data instead
-of the cluster root credentials. If the KMS is not enabled, MinIO will store
-the IAM data as plain text in its backend.
+MinIO supports encrypting config, IAM assets with KMS provided keys. If the KMS is not enabled, MinIO will store the config, IAM data as plain text erasure coded in its backend.
 
 ### MinIO KMS Quick Start
 
