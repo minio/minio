@@ -574,18 +574,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger/audit targets: %w", err))
 	}
 
-	for _, l := range loggerCfg.HTTP {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			l.UserAgent = loggerUserAgent
-			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-			// Enable http logging
-			if err = logger.AddTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server logger HTTP target: %w", err))
-			}
-		}
-	}
-
 	for _, l := range loggerCfg.AuditWebhook {
 		if l.Enabled {
 			l.LogOnce = logger.LogOnceIf
