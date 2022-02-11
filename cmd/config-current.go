@@ -663,6 +663,24 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 		return fmt.Errorf("Unable to apply scanner config: %w", err)
 	}
 
+	// Logger webhook
+	loggerCfg, err := logger.LookupConfig(s)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+	}
+	userAgent := getUserAgent(getMinioMode())
+	for _, l := range loggerCfg.HTTP {
+		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = userAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+		}
+	}
+	err = logger.UpdateTargets(loggerCfg)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
+	}
+
 	// Apply configurations.
 	// We should not fail after this.
 	var setDriveCounts []int
