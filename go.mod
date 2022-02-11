@@ -27,7 +27,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/loads v0.21.0
-	github.com/go-sql-driver/mysql v1.5.0
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt/v4 v4.1.0
 	github.com/gomodule/redigo v1.8.8
 	github.com/google/uuid v1.3.0
@@ -41,7 +41,7 @@ require (
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.9.15
-	github.com/lib/pq v1.9.0
+	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
 	github.com/minio/console v0.14.5
@@ -62,7 +62,7 @@ require (
 	github.com/montanaflynn/stats v0.6.6
 	github.com/nats-io/nats-server/v2 v2.7.2
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
-	github.com/nats-io/stan.go v0.8.3
+	github.com/nats-io/stan.go v0.10.2
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8
 	github.com/philhofer/fwd v1.1.2-0.20210722190033-5c56ac6d0bb9
@@ -182,7 +182,7 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.11.1-0.20220204035834-5ac8409525e0 // indirect
 	github.com/nats-io/jwt/v2 v2.2.1-0.20220113022732-58e87895b296 // indirect
-	github.com/nats-io/nats-streaming-server v0.21.2 // indirect
+	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
