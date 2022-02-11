@@ -508,9 +508,18 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
 			// Reset for the next interval
 			timer.Reset(globalAPIConfig.getDeleteCleanupInterval())
 
+			var wg sync.WaitGroup
 			for _, set := range s.sets {
-				set.cleanupDeletedObjects(ctx)
+				wg.Add(1)
+				go func(set *erasureObjects) {
+					defer wg.Done()
+					if set == nil {
+						return
+					}
+					set.cleanupDeletedObjects(ctx)
+				}(set)
 			}
+			wg.Wait()
 		}
 	}
 }
@@ -527,9 +536,18 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 			// Reset for the next interval
 			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
 
+			var wg sync.WaitGroup
 			for _, set := range s.sets {
-				set.cleanupStaleUploads(ctx, globalAPIConfig.getStaleUploadsExpiry())
+				wg.Add(1)
+				go func(set *erasureObjects) {
+					defer wg.Done()
+					if set == nil {
+						return
+					}
+					set.cleanupStaleUploads(ctx, globalAPIConfig.getStaleUploadsExpiry())
+				}(set)
 			}
+			wg.Wait()
 		}
 	}
 }
