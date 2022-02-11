@@ -18,7 +18,7 @@ Independent of retention, an object can also be under legal hold. This effective
 WORM on a bucket is enabled by setting object lock configuration. This configuration is applied to existing and new objects in the bucket. Below is an example sets `Governance` mode and one day retention time from object creation time of all objects in `mybucket`.
 
 ```sh
-$ awscli s3api put-object-lock-configuration --bucket mybucket --object-lock-configuration 'ObjectLockEnabled=\"Enabled\",Rule={DefaultRetention={Mode=\"GOVERNANCE\",Days=1}}'
+awscli s3api put-object-lock-configuration --bucket mybucket --object-lock-configuration 'ObjectLockEnabled=\"Enabled\",Rule={DefaultRetention={Mode=\"GOVERNANCE\",Days=1}}'
 ```
 
 ### Set object lock
@@ -29,7 +29,7 @@ PutObject API allows setting per object retention mode and retention duration us
 aws s3api put-object --bucket testbucket --key lockme --object-lock-mode GOVERNANCE --object-lock-retain-until-date "2019-11-20"  --body /etc/issue
 ```
 
-See https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html for AWS S3 spec on object locking and permissions required for object retention and governance bypass overrides.
+See <https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html> for AWS S3 spec on object locking and permissions required for object retention and governance bypass overrides.
 
 ### Set legal hold on an object
 
@@ -39,9 +39,10 @@ PutObject API allows setting legal hold using `x-amz-object-lock-legal-hold` hea
 aws s3api put-object --bucket testbucket --key legalhold --object-lock-legal-hold-status ON --body /etc/issue
 ```
 
-See https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html for AWS S3 spec on object locking and permissions required for specifying legal hold.
+See <https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html> for AWS S3 spec on object locking and permissions required for specifying legal hold.
 
 ## Concepts
+
 - If an object is under legal hold, it cannot be deleted unless the legal hold is explicitly removed for the respective version id. DeleteObjectVersion() would fail otherwise.
 - In `Compliance` mode, objects cannot be deleted by anyone until retention period is expired for the respective version id. If user has requisite governance bypass permissions, an object's retention date can be extended in `Compliance` mode.
 - Once object lock configuration is set to a bucket

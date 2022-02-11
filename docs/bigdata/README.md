@@ -12,12 +12,12 @@ MinIO also supports multi-cluster, multi-site federation similar to AWS regions 
 
 ## **2. Prerequisites**
 
-*  Install Hortonworks Distribution using this [guide.](https://docs.hortonworks.com/HDPDocuments/Ambari-2.7.1.0/bk_ambari-installation/content/ch_Installing_Ambari.html)
-   *   [Setup Ambari](https://docs.hortonworks.com/HDPDocuments/Ambari-2.7.1.0/bk_ambari-installation/content/set_up_the_ambari_server.html) which automatically sets up YARN
-   *   [Installing Spark](https://docs.hortonworks.com/HDPDocuments/HDP3/HDP-3.0.1/installing-spark/content/installing_spark.html)
-*  Install MinIO Distributed Server using one of the guides below.
-   *   [Deployment based on Kubernetes](https://docs.min.io/docs/deploy-minio-on-kubernetes.html#minio-distributed-server-deployment)
-   *   [Deployment based on MinIO Helm Chart](https://github.com/helm/charts/tree/master/stable/minio)
+- Install Hortonworks Distribution using this [guide.](https://docs.hortonworks.com/HDPDocuments/Ambari-2.7.1.0/bk_ambari-installation/content/ch_Installing_Ambari.html)
+  - [Setup Ambari](https://docs.hortonworks.com/HDPDocuments/Ambari-2.7.1.0/bk_ambari-installation/content/set_up_the_ambari_server.html) which automatically sets up YARN
+  - [Installing Spark](https://docs.hortonworks.com/HDPDocuments/HDP3/HDP-3.0.1/installing-spark/content/installing_spark.html)
+- Install MinIO Distributed Server using one of the guides below.
+  - [Deployment based on Kubernetes](https://docs.min.io/docs/deploy-minio-on-kubernetes.html#minio-distributed-server-deployment)
+  - [Deployment based on MinIO Helm Chart](https://github.com/helm/charts/tree/master/stable/minio)
 
 ## **3. Configure Hadoop, Spark, Hive to use MinIO**
 
@@ -37,10 +37,10 @@ Navigate to **Custom core-site** to configure MinIO parameters for `_s3a_` conne
 
 ```
 sudo pip install yq
-alias kv-pairify='xq ".configuration[]" | jq ".[]" | jq -r ".name + \"=\" + .value"'
+alias kv-pairify='yq ".configuration[]" | jq ".[]" | jq -r ".name + \"=\" + .value"'
 ```
 
-Let's take for example a set of 12 compute nodes with an aggregate memory of *1.2TiB*, we need to do following settings for optimal results. Add the following optimal entries for _core-site.xml_ to configure _s3a_ with **MinIO**. Most important options here are
+Let's take for example a set of 12 compute nodes with an aggregate memory of _1.2TiB_, we need to do following settings for optimal results. Add the following optimal entries for _core-site.xml_ to configure _s3a_ with **MinIO**. Most important options here are
 
 ```
 cat ${HADOOP_CONF_DIR}/core-site.xml | kv-pairify | grep "mapred"
@@ -56,7 +56,7 @@ mapreduce.task.io.sort.factor=999 # Threshold before writing to disk
 mapreduce.task.sort.spill.percent=0.9 # Minimum % before spilling to disk
 ```
 
-S3A is the connector to use S3 and other S3-compatible object stores such as MinIO. MapReduce workloads typically interact with object stores in the same way they do with HDFS. These workloads rely on HDFS atomic rename functionality to complete writing data to the datastore. Object storage operations are atomic by nature and they do not require/implement rename API. The default S3A committer emulates renames through copy and delete APIs. This interaction pattern causes significant loss of performance because of the write amplification. *Netflix*, for example, developed two new staging committers - the Directory staging committer and the Partitioned staging committer - to take full advantage of native object storage operations. These committers do not require rename operation. The two staging committers were evaluated, along with another new addition called the Magic committer for benchmarking.
+S3A is the connector to use S3 and other S3-compatible object stores such as MinIO. MapReduce workloads typically interact with object stores in the same way they do with HDFS. These workloads rely on HDFS atomic rename functionality to complete writing data to the datastore. Object storage operations are atomic by nature and they do not require/implement rename API. The default S3A committer emulates renames through copy and delete APIs. This interaction pattern causes significant loss of performance because of the write amplification. _Netflix_, for example, developed two new staging committers - the Directory staging committer and the Partitioned staging committer - to take full advantage of native object storage operations. These committers do not require rename operation. The two staging committers were evaluated, along with another new addition called the Magic committer for benchmarking.
 
 It was found that the directory staging committer was the fastest among the three, S3A connector should be configured with the following parameters for optimal results:
 
@@ -95,8 +95,8 @@ fs.s3a.threads.max=2048 # Maximum number of threads for S3A
 
 The rest of the other optimization options are discussed in the links below
 
-*  [https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html](https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html)
-*  [https://hadoop.apache.org/docs/r3.1.1/hadoop-aws/tools/hadoop-aws/committers.html](https://hadoop.apache.org/docs/r3.1.1/hadoop-aws/tools/hadoop-aws/committers.html)
+- [https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html](https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html)
+- [https://hadoop.apache.org/docs/r3.1.1/hadoop-aws/tools/hadoop-aws/committers.html](https://hadoop.apache.org/docs/r3.1.1/hadoop-aws/tools/hadoop-aws/committers.html)
 
 Once the config changes are applied, proceed to restart **Hadoop** services.
 
@@ -187,16 +187,16 @@ Test the Spark installation by running the following compute intensive example, 
 
 Follow these steps to run the Spark Pi example:
 
-*  Login as user **‘spark’**.
-*  When the job runs, the library can now use **MinIO** during intermediate processing.
-*  Navigate to a node with the Spark client and access the spark2-client directory:
+- Login as user **‘spark’**.
+- When the job runs, the library can now use **MinIO** during intermediate processing.
+- Navigate to a node with the Spark client and access the spark2-client directory:
 
 ```
 cd /usr/hdp/current/spark2-client
 su spark
 ```
 
-*  Run the Apache Spark Pi job in yarn-client mode, using code from **org.apache.spark**:
+- Run the Apache Spark Pi job in yarn-client mode, using code from **org.apache.spark**:
 
 ```
 ./bin/spark-submit --class org.apache.spark.examples.SparkPi \
@@ -223,9 +223,9 @@ WordCount is a simple program that counts how often a word occurs in a text file
 
 The following example submits WordCount code to the Scala shell. Select an input file for the Spark WordCount example. We can use any text file as input.
 
-*  Login as user **‘spark’**.
-*  When the job runs, the library can now use **MinIO** during intermediate processing.
-*  Navigate to a node with Spark client and access the spark2-client directory:
+- Login as user **‘spark’**.
+- When the job runs, the library can now use **MinIO** during intermediate processing.
+- Navigate to a node with Spark client and access the spark2-client directory:
 
 ```
 cd /usr/hdp/current/spark2-client
@@ -269,7 +269,7 @@ Type :help for more information.
 scala>
 ```
 
-*  At the _scala>_ prompt, submit the job by typing the following commands, Replace node names, file name, and file location with your values:
+- At the _scala>_ prompt, submit the job by typing the following commands, Replace node names, file name, and file location with your values:
 
 ```
 scala> val file = sc.textFile("s3a://testbucket/testdata")

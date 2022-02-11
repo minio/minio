@@ -1,6 +1,7 @@
 # AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 ## Introduction
+
 MinIO provides a custom STS API that allows integration with LDAP based corporate environments including Microsoft Active Directory. The MinIO server uses a separate LDAP service account to lookup user information. The login flow for a user is as follows:
 
 - User provides their AD/LDAP username and password to the STS API.
@@ -20,7 +21,6 @@ To ensure that changes in the LDAP directory are reflected in object storage acc
 - find accounts whose group memberships have changed; access policies available to a credential are updated to reflect the change, i.e. they will lose any privileges associated with a group they are removed from, and gain any privileges associated with a group they are added to.
 
 **Please note that when AD/LDAP is configured, MinIO will not support long term users defined internally.** Only AD/LDAP users (and the root user) are allowed. In addition to this, the server will not support operations on users or groups using `mc admin user` or `mc admin group` commands except `mc admin user info` and `mc admin group info` to list set policies for users and groups. This is because users and groups are defined externally in AD/LDAP.
-
 
 ## Configuring AD/LDAP on MinIO
 
@@ -116,7 +116,7 @@ export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 
 ### Variable substitution in configuration strings
 
-In the configuration variables, `%s` is substituted with the *username* from the STS request and `%d` is substituted with the *distinguished username (user DN)* of the LDAP user. Please see the following table for which configuration variables support these substitution variables:
+In the configuration variables, `%s` is substituted with the _username_ from the STS request and `%d` is substituted with the _distinguished username (user DN)_ of the LDAP user. Please see the following table for which configuration variables support these substitution variables:
 
 | Variable                                    | Supported substitutions |
 |---------------------------------------------|-------------------------|
@@ -146,62 +146,70 @@ mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=m
 ## API Request Parameters
 
 ### LDAPUsername
+
 Is AD/LDAP username to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
 
 | Params               | Value                                          |
 | :--                  | :--                                            |
-| *Type*               | *String*                                       |
-| *Length Constraints* | *Minimum length of 2. Maximum length of 2048.* |
-| *Required*           | *Yes*                                          |
-
+| _Type_               | _String_                                       |
+| _Length Constraints_ | _Minimum length of 2. Maximum length of 2048._ |
+| _Required_           | _Yes_                                          |
 
 ### LDAPPassword
+
 Is AD/LDAP username password to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
 
 | Params               | Value                                          |
 | :--                  | :--                                            |
-| *Type*               | *String*                                       |
-| *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
-| *Required*           | *Yes*                                          |
+| _Type_               | _String_                                       |
+| _Length Constraints_ | _Minimum length of 4. Maximum length of 2048._ |
+| _Required_           | _Yes_                                          |
 
 ### Version
+
 Indicates STS API version information, the only supported value is '2011-06-15'.  This value is borrowed from AWS STS API documentation for compatibility reasons.
 
 | Params     | Value    |
 | :--        | :--      |
-| *Type*     | *String* |
-| *Required* | *Yes*    |
+| _Type_     | _String_ |
+| _Required_ | _Yes_    |
 
 ### DurationSeconds
+
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 365 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params        | Value                                              |
 | :--           | :--                                                |
-| *Type*        | *Integer*                                          |
-| *Valid Range* | *Minimum value of 900. Maximum value of 31536000.* |
-| *Required*    | *No*                                               |
+| _Type_        | _Integer_                                          |
+| _Valid Range_ | _Minimum value of 900. Maximum value of 31536000._ |
+| _Required_    | _No_                                               |
 
 ### Policy
+
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
 | Params        | Value                                          |
 | :--           | :--                                            |
-| *Type*        | *String*                                       |
-| *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
-| *Required*    | *No*                                           |
+| _Type_        | _String_                                       |
+| _Valid Range_ | _Minimum length of 1. Maximum length of 2048._ |
+| _Required_    | _No_                                           |
 
 ### Response Elements
+
 XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)
 
 ### Errors
+
 XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
 
 ## Sample `POST` Request
+
 ```
 http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15&DurationSeconds=7200
 ```
 
 ## Sample Response
+
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <AssumeRoleWithLDAPIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -224,17 +232,20 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 ## Using LDAP STS API
 
 With multiple OU hierarchies for users, and multiple group search base DN's.
+
 ```
-$ export MINIO_ROOT_USER=minio
-$ export MINIO_ROOT_PASSWORD=minio123
-$ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-$ export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
-$ export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=groupOfNames)(member=%d))'
-$ minio server ~/test
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
+export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
+export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
+export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
+export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
+export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=groupOfNames)(member=%d))'
+minio server ~/test
 ```
+
 You can make sure it works appropriately using our [example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):
+
 ```
 $ go run ldap.go -u foouser -p foopassword
 
@@ -248,5 +259,6 @@ $ go run ldap.go -u foouser -p foopassword
 ```
 
 ## Explore Further
+
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
 - [The MinIO documentation website](https://docs.min.io)

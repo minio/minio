@@ -1,6 +1,6 @@
-## Erasure code sizing guide
+# Erasure code sizing guide
 
-### Toy Setups
+## Toy Setups
 
 Capacity constrained environments, MinIO will work but not recommended for production.
 
@@ -13,7 +13,7 @@ Capacity constrained environments, MinIO will work but not recommended for produ
 |       6 |                 1 |           6 |                       3 |                             3 |                              2 |
 |       7 |                 1 |           7 |                       3 |                             3 |                              3 |
 
-### Minimum System Configuration for Production
+## Minimum System Configuration for Production
 
 | servers | drives (per node) | stripe_size | parity chosen (default) | tolerance for reads (servers) | tolerance for writes (servers) |
 |--------:|------------------:|------------:|------------------------:|------------------------------:|-------------------------------:|
@@ -32,7 +32,7 @@ Capacity constrained environments, MinIO will work but not recommended for produ
 |      15 |                 2 |          15 |                       4 |                             4 |                              4 |
 |      16 |                 2 |          16 |                       4 |                             4 |                              4 |
 
-If one or more disks are offline at the start of a PutObject or NewMultipartUpload operation the object will have additional data 
+If one or more disks are offline at the start of a PutObject or NewMultipartUpload operation the object will have additional data
 protection bits added automatically to provide the regular safety for these objects up to 50% of the number of disks.
 This will allow normal write operations to take place on systems that exceed the write tolerance.
 

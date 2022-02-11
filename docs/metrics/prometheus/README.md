@@ -6,20 +6,8 @@ Prometheus offers a multi-dimensional data model with time series data identifie
 
 MinIO exports Prometheus compatible data by default as an authorized endpoint at `/minio/v2/metrics/cluster`. Users looking to monitor their MinIO instances can point Prometheus configuration to scrape data from this endpoint. This document explains how to setup Prometheus and configure it to scrape data from MinIO servers.
 
-**Table of Contents**
-
-- [Prerequisites](#prerequisites)
-    - [1. Download Prometheus](#1-download-prometheus)
-    - [2. Configure authentication type for Prometheus metrics](#2-configure-authentication-type-for-prometheus-metrics)
-    - [3. Configuring Prometheus](#3-configuring-prometheus)
-        - [3.1 Authenticated Prometheus config](#31-authenticated-prometheus-config)
-        - [3.2 Public Prometheus config](#32-public-prometheus-config)
-    - [4. Update `scrape_configs` section in prometheus.yml](#4-update-scrapeconfigs-section-in-prometheusyml)
-    - [5. Start Prometheus](#5-start-prometheus)
-    - [6. Configure Grafana](#6-configure-grafana)
-- [List of metrics exposed by MinIO](#list-of-metrics-exposed-by-minio)
-
 ## Prerequisites
+
 To get started with MinIO, refer [MinIO QuickStart Document](https://docs.min.io/docs/minio-quickstart-guide).
 Follow below steps to get started with MinIO monitoring using Prometheus.
 
@@ -80,6 +68,7 @@ If Prometheus endpoint authentication type is set to `public`. Following prometh
 This can be collected from any server once per collection.
 
 ##### Cluster
+
 ```yaml
 scrape_configs:
 - job_name: minio-job
@@ -90,7 +79,9 @@ scrape_configs:
 ```
 
 ##### Node (optional)
+
 Optionally you can also collect per node metrics. This needs to be done on a per server instance.
+
 ```yaml
 scrape_configs:
 - job_name: minio-job

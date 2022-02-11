@@ -1,12 +1,19 @@
 # MinIO HDFS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+
 MinIO HDFS gateway adds Amazon S3 API support to Hadoop HDFS filesystem. Applications can use both the S3 and file APIs concurrently without requiring any data migration. Since the gateway is stateless and shared-nothing, you may elastically provision as many MinIO instances as needed to distribute the load.
 
 > NOTE: Intention of this gateway implementation it to make it easy to migrate your existing data on HDFS clusters to MinIO clusters using standard tools like `mc` or `aws-cli`, if the goal is to use HDFS perpetually we recommend that HDFS should be used directly for all write operations.
 
+## Support
+
+Gateway implementations are frozen and are not accepting any new features. Please reports any bugs at <https://github.com/minio/minio/issues> . If you are an existing customer please login to <https://subnet.min.io> for production support.
+
 ## Run MinIO Gateway for HDFS Storage
 
 ### Using Binary
+
 Namenode information is obtained by reading `core-site.xml` automatically from your hadoop environment variables *$HADOOP_HOME*
+
 ```
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
@@ -14,6 +21,7 @@ minio gateway hdfs
 ```
 
 You can also override the namenode endpoint as shown below.
+
 ```
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
@@ -21,7 +29,9 @@ minio gateway hdfs hdfs://namenode:8200
 ```
 
 ### Using Docker
+
 Using docker is experimental, most Hadoop environments are not dockerized and may require additional steps in getting this to work properly. You are better off just using the binary in this situation.
+
 ```
 podman run \
  -p 9000:9000 \
@@ -46,12 +56,14 @@ To enable kerberos authentication, you need to set `hadoop.security.authenticati
 ```
 
 MinIO will load `krb5.conf` from environment variable `KRB5_CONFIG` or default location `/etc/krb5.conf`.
+
 ```sh
 export KRB5_CONFIG=/path/to/krb5.conf
 ```
 
 If you want MinIO to use ccache for authentication, set environment variable `KRB5CCNAME` to the credential cache file path,
 or MinIO will use the default location `/tmp/krb5cc_%{uid}`.
+
 ```sh
 export KRB5CCNAME=/path/to/krb5cc
 ```
@@ -71,7 +83,8 @@ export KRB5REALM=REALM.COM
 ```
 
 ## Test using MinIO Console
-*MinIO gateway* comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+
+*MinIO gateway* comes with an embedded web based object browser. Point your web browser to <http://127.0.0.1:9000> to ensure that your server has started successfully.
 
 | Dashboard                                                                                   | Creating a bucket                                                                           |
 | -------------                                                                               | -------------                                                                               |
@@ -97,7 +110,9 @@ mc ls myhdfs
 ```
 
 ### Known limitations
+
 Gateway inherits the following limitations of HDFS storage layer:
+
 - No bucket policy support (HDFS has no such concept)
 - No bucket notification APIs are not supported (HDFS has no support for fsnotify)
 - No server side encryption support (Intentionally not implemented)
@@ -105,6 +120,7 @@ Gateway inherits the following limitations of HDFS storage layer:
 - Concurrent multipart operations are not supported (HDFS lacks safe locking support, or poorly implemented)
 
 ## Explore Further
+
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
 - [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)

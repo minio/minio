@@ -1,14 +1,15 @@
-*Federation feature is deprecated and should be avoided for future deployments*
+# Federation Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) *Federation feature is deprecated and should be avoided for future deployments*
 
-# Federation Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 This document explains how to configure MinIO with `Bucket lookup from DNS` style federation.
 
 ## Get started
 
 ### 1. Prerequisites
+
 Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
 
 ### 2. Run MinIO in federated mode
+
 Bucket lookup from DNS federation requires two dependencies
 
 - etcd (for bucket DNS service records)
@@ -38,8 +39,6 @@ and `bucket2.domain.com`.
 This is comma separated list of IP addresses to which buckets created on this MinIO instance will resolve to. For example,
 a bucket `bucket1` created on current MinIO instance will be accessible as `bucket1.domain.com`, and the DNS entry for
 `bucket1.domain.com` will point to IP address set in `MINIO_PUBLIC_IPS`.
-
-*Note*
 
 - This field is mandatory for standalone and erasure code MinIO server deployments, to enable federated mode.
 - This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of

@@ -7,8 +7,8 @@ MinIO is a cloud-native application designed to scale in a sustainable manner in
 | [`Kubernetes`](https://docs.min.io/docs/deploy-minio-on-kubernetes)                                |
 | [`Docker Compose`](https://docs.min.io/docs/deploy-minio-on-docker-compose) (only for test setups) |
 
-
 ## Why is MinIO cloud-native?
+
 The term cloud-native revolves around the idea of applications deployed as micro services, that scale well. It is not about just retrofitting monolithic applications onto modern container based compute environment. A cloud-native application is portable and resilient by design, and can scale horizontally by simply replicating. Modern orchestration platforms like Kubernetes, DC/OS make replicating and managing containers in huge clusters easier than ever.
 
 While containers provide isolated application execution environment, orchestration platforms allow seamless scaling by helping replicate and manage containers. MinIO extends this by adding isolated storage environment for each tenant.

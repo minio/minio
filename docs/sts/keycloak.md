@@ -5,9 +5,10 @@ Keycloak is an open source Identity and Access Management solution aimed at mode
 ## Prerequisites
 
 Configure and install keycloak server by following [Keycloak Installation Guide](https://www.keycloak.org/docs/latest/server_installation/#installing-the-software).
-For a quick installation, docker-compose reference configs are also available on the [Keycloak GitHub](https://github.com/keycloak/keycloak-containers/tree/main/docker-compose-examples). 
+For a quick installation, docker-compose reference configs are also available on the [Keycloak GitHub](https://github.com/keycloak/keycloak-containers/tree/main/docker-compose-examples).
 
 ### Configure Keycloak Realm
+
 - Go to Clients
   - Click on account
     - Settings
@@ -38,9 +39,10 @@ For a quick installation, docker-compose reference configs are also available on
     - `Claim JSON Type` is `string`
   - Save
 
-- Open http://localhost:8080/auth/realms/{your-realm-name}/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
+- Open <http://localhost:8080/auth/realms/{your-realm-name}/.well-known/openid-configuration> to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
 
 ### Enable Keycloak Admin REST API support
+
 Before being able to authenticate against the Admin REST API using a client_id and a client_secret you need to make sure the client is configured as it follows:
 
 - `account` client_id is a confidential client that belongs to the realm `{realm}`
@@ -77,13 +79,15 @@ curl \
 ```
 
 ### Configure MinIO
+
 ```
-$ export MINIO_ROOT_USER=minio
-$ export MINIO_ROOT_PASSWORD=minio123
-$ minio server /mnt/export
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
+minio server /mnt/export
 ```
 
 Here are all the available options to configure OpenID connect
+
 ```
 mc admin config set myminio/ identity_openid
 
@@ -100,6 +104,7 @@ comment       (sentence)  optionally add a comment to this setting
 ```
 
 and ENV based options
+
 ```
 mc admin config set myminio/ identity_openid --env
 
@@ -116,17 +121,21 @@ MINIO_IDENTITY_OPENID_COMMENT       (sentence)  optionally add a comment to this
 ```
 
 Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
+
 ```
 ~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/{your-realm-name}/.well-known/openid-configuration" client_id="account"
 ```
+
 > NOTE: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
 
 Once successfully set restart the MinIO instance.
+
 ```
 mc admin service restart myminio
 ```
 
 ### Using WebIdentiy API
+
 Client ID can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/minio/clients). If you have followed the above steps docs, the default Client ID will be `account`.
 
 ```
@@ -156,7 +165,7 @@ These credentials can now be used to perform MinIO API operations.
 
 ### Using MinIO Console
 
-- Open MinIO URL on the browser, lets say http://localhost:9000/
+- Open MinIO URL on the browser, lets say <http://localhost:9000/>
 - Click on `Login with SSO`
 - User will be redirected to the Keycloak user login page, upon successful login the user will be redirected to MinIO page and logged in automatically,
   the user should see now the buckets and objects they have access to.

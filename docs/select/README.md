@@ -1,17 +1,18 @@
 # Select API Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
 Traditional retrieval of objects is always as whole entities, i.e GetObject for a 5 GiB object, will always return 5 GiB of data. S3 Select API allows us to retrieve a subset of data by using simple SQL expressions. By using Select API to retrieve only the data needed by the application, drastic performance improvements can be achieved.
 
 You can use the Select API to query objects with following features:
 
-- Objects must be in CSV, JSON, or Parquet(*) format. 
+- Objects must be in CSV, JSON, or Parquet(*) format.
 - UTF-8 is the only encoding type the Select API supports.
-- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP, BZIP2, [ZSTD](https://facebook.github.io/zstd/), and streaming formats of [LZ4](https://lz4.github.io/lz4/), [S2](https://github.com/klauspost/compress/tree/master/s2#s2-compression) and [SNAPPY](http://google.github.io/snappy/). 
+- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP, BZIP2, [ZSTD](https://facebook.github.io/zstd/), and streaming formats of [LZ4](https://lz4.github.io/lz4/), [S2](https://github.com/klauspost/compress/tree/master/s2#s2-compression) and [SNAPPY](http://google.github.io/snappy/).
 - Parquet API supports columnar compression for  using GZIP, Snappy, LZ4. Whole object compression is not supported for Parquet objects.
 - Server-side encryption - The Select API supports querying objects that are protected with server-side encryption.
 
 Type inference and automatic conversion of values is performed based on the context when the value is un-typed (such as when reading CSV data). If present, the CAST function overrides automatic conversion.
 
-The [mc sql](https://docs.min.io/docs/minio-client-complete-guide.html#sql) command can be used for executing queries using the command line. 
+The [mc sql](https://docs.min.io/docs/minio-client-complete-guide.html#sql) command can be used for executing queries using the command line.
 
 (*) Parquet is disabled on the MinIO server by default. See below how to enable it.
 
@@ -22,17 +23,20 @@ Parquet is DISABLED by default since hostile crafted input can easily crash the 
 If you are in a controlled environment where it is safe to assume no hostile content can be uploaded to your cluster you can safely enable Parquet.
 To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 
-# Example using Python API 
+# Example using Python API
 
 ## 1. Prerequisites
+
 - Install MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
 - Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 
 ## 2. Install boto3
+
 Install `aws-sdk-python` from AWS SDK for Python official docs [here](https://aws.amazon.com/sdk-for-python/)
 
 ## 3. Example
+
 As an example, let us take a gzip compressed CSV file. Without S3 Select, we would need to download, decompress and process the entire CSV to get the data you needed. With Select API, can use a simple SQL expression to return only the data from the CSV you’re interested in, instead of retrieving the entire object. Following Python example shows how to retrieve the first column `Location` from an object containing data in CSV format.
 
 Please replace ``endpoint_url``,``aws_access_key_id``, ``aws_secret_access_key``, ``Bucket`` and ``Key`` with your local setup in this ``select.py`` file.
@@ -74,15 +78,18 @@ for event in r['Payload']:
 ```
 
 ## 4. Run the Program
+
 Upload a sample dataset to MinIO using the following commands.
+
 ```sh
-$ curl "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv" > TotalPopulation.csv
-$ mc mb myminio/mycsvbucket
-$ gzip TotalPopulation.csv
-$ mc cp TotalPopulation.csv.gz myminio/mycsvbucket/sampledata/
+curl "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv" > TotalPopulation.csv
+mc mb myminio/mycsvbucket
+gzip TotalPopulation.csv
+mc cp TotalPopulation.csv.gz myminio/mycsvbucket/sampledata/
 ```
 
 Now let us proceed to run our select example to query for `Location` which matches `United States`.
+
 ```sh
 $ python3 select.py
 840,United States of America,2,Medium,1950,1950.5,79233.218,79571.179,158804.395
@@ -105,6 +112,7 @@ Stats details bytesProcessed:
 For a more detailed SELECT SQL reference, please see [here](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html)
 
 ## 5. Explore Further
+
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [Use `mc sql` with MinIO Server](https://docs.min.io/docs/minio-client-complete-guide.html#sql)
 - [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
@@ -113,6 +121,7 @@ For a more detailed SELECT SQL reference, please see [here](https://docs.aws.ama
 - [The MinIO documentation website](https://docs.min.io)
 
 ## 6. Implementation Status
+
 - Full AWS S3 [SELECT SQL](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html) syntax is supported.
 - All [operators](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-operators.html) are supported.
 - All aggregation, conditional, type-conversion and string functions are supported.
