@@ -23,6 +23,7 @@ time="2020-07-12T20:45:50Z" level=info msg="listening (http) on 0.0.0.0:5556"
 ```
 
 ### Configure MinIO server with Dex
+
 ```
 ~ export MINIO_IDENTITY_OPENID_CLAIM_NAME=name
 ~ export MINIO_IDENTITY_OPENID_CONFIG_URL=http://127.0.0.1:5556/dex/.well-known/openid-configuration
@@ -42,6 +43,7 @@ time="2020-07-12T20:45:50Z" level=info msg="listening (http) on 0.0.0.0:5556"
 ```
 
 Contents of `allaccess.json`
+
 ```json
 {
   "Version": "2012-10-17",
@@ -59,7 +61,8 @@ Contents of `allaccess.json`
 }
 ```
 
-### Visit http://localhost:8080
+### Visit <http://localhost:8080>
+
 You will be redirected to dex login screen - click "Login with email", enter username password
 > username: admin@example.com
 > password: password
@@ -67,25 +70,27 @@ You will be redirected to dex login screen - click "Login with email", enter use
 and then click "Grant access"
 
 On the browser now you shall see the list of buckets output, along with your temporary credentials obtained from MinIO.
+
 ```
 {
-	"buckets": [
-		"dl.minio.equipment",
-		"dl.minio.service-fulfillment",
-		"testbucket"
-	],
-	"credentials": {
-		"AccessKeyID": "Q31CVS1PSCJ4OTK2YVEM",
-		"SecretAccessKey": "rmDEOKARqKYmEyjWGhmhLpzcncyu7Jf8aZ9bjDic",
-		"SessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJRMzFDVlMxUFNDSjRPVEsyWVZFTSIsImF0X2hhc2giOiI4amItZFE2OXRtZEVueUZaMUttNWhnIiwiYXVkIjoiZXhhbXBsZS1hcHAiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImV4cCI6IjE1OTQ2MDAxODIiLCJpYXQiOjE1OTQ1ODkzODQsImlzcyI6Imh0dHA6Ly8xMjcuMC4wLjE6NTU1Ni9kZXgiLCJuYW1lIjoiYWRtaW4iLCJzdWIiOiJDaVF3T0dFNE5qZzBZaTFrWWpnNExUUmlOek10T1RCaE9TMHpZMlF4TmpZeFpqVTBOallTQld4dlkyRnMifQ.nrbzIJz99Om7TvJ04jnSTmhvlM7aR9hMM1Aqjp2ONJ1UKYCvegBLrTu6cYR968_OpmnAGJ8vkd7sIjUjtR4zbw",
-		"SignerType": 1
-	}
+ "buckets": [
+  "dl.minio.equipment",
+  "dl.minio.service-fulfillment",
+  "testbucket"
+ ],
+ "credentials": {
+  "AccessKeyID": "Q31CVS1PSCJ4OTK2YVEM",
+  "SecretAccessKey": "rmDEOKARqKYmEyjWGhmhLpzcncyu7Jf8aZ9bjDic",
+  "SessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJRMzFDVlMxUFNDSjRPVEsyWVZFTSIsImF0X2hhc2giOiI4amItZFE2OXRtZEVueUZaMUttNWhnIiwiYXVkIjoiZXhhbXBsZS1hcHAiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImV4cCI6IjE1OTQ2MDAxODIiLCJpYXQiOjE1OTQ1ODkzODQsImlzcyI6Imh0dHA6Ly8xMjcuMC4wLjE6NTU1Ni9kZXgiLCJuYW1lIjoiYWRtaW4iLCJzdWIiOiJDaVF3T0dFNE5qZzBZaTFrWWpnNExUUmlOek10T1RCaE9TMHpZMlF4TmpZeFpqVTBOallTQld4dlkyRnMifQ.nrbzIJz99Om7TvJ04jnSTmhvlM7aR9hMM1Aqjp2ONJ1UKYCvegBLrTu6cYR968_OpmnAGJ8vkd7sIjUjtR4zbw",
+  "SignerType": 1
+ }
 }
 ```
 
 Now you have successfully configured Dex IdP with MinIO.
 
 > NOTE: Dex supports groups with external connectors so you can use `groups` as policy claim instead of `name`.
+
 ```
 export MINIO_IDENTITY_OPENID_CLAIM_NAME=groups
 ```

@@ -10,7 +10,9 @@ Returns a set of temporary security credentials that you can use to access MinIO
 The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 365 days.
 
 ## API Request Parameters
+
 ### Version
+
 Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
 
 | Params     | Value    |
@@ -19,9 +21,11 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 | *Required* | *Yes*    |
 
 ### AUTHPARAMS
+
 Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
 
 ### DurationSeconds
+
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 365 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params        | Value                                              |
@@ -31,6 +35,7 @@ The duration, in seconds. The value can range from 900 seconds (15 minutes) up t
 | *Required*    | *No*                                               |
 
 ### Policy
+
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
 | Params        | Value                                          |
@@ -40,17 +45,21 @@ An IAM policy in JSON format that you want to use as an inline session policy. T
 | *Required*    | *No*                                           |
 
 ### Response Elements
+
 XML response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_ResponseElements)
 
 ### Errors
+
 XML error response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
 
 ## Sample `POST` Request
+
 ```
 http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Policy={"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}&AUTHPARAMS
 ```
 
 ## Sample Response
+
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -73,15 +82,17 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 ```
 
 ## Using AssumeRole API
+
 ```
-$ export MINIO_ROOT_USER=minio
-$ export MINIO_ROOT_PASSWORD=minio123
-$ minio server ~/test
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
+minio server ~/test
 ```
 
 Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
 
 ### Testing an example with awscli tool
+
 > Use the same username and password created in the previous steps.
 
 ```
@@ -112,7 +123,6 @@ $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --po
 
 The included program in this directory can also be used for testing:
 
-
 ``` shell
 $ go run assume-role.go -u foobar -p foo12345 -d
 Only displaying credentials:
@@ -123,5 +133,6 @@ SessionToken: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiIyN1lEUllFT
 ```
 
 ## Explore Further
+
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
 - [The MinIO documentation website](https://docs.min.io)

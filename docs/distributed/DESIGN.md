@@ -1,7 +1,9 @@
 # Distributed Server Design Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
 This document explains the design, architecture and advanced use cases of the MinIO distributed server.
 
 ## Command-line
+
 ```
 NAME:
   minio server - start object storage server
@@ -22,6 +24,7 @@ DIR:
 ## Common usage
 
 Standalone erasure coded configuration with 4 sets with 16 disks each.
+
 ```
 minio server dir{1...64}
 ```
@@ -44,7 +47,7 @@ Expansion of ellipses and choice of erasure sets based on this expansion is an a
 
 - Choice of erasure set size is automatic based on the number of disks available, let's say for example if there are 32 servers and 32 disks which is a total of 1024 disks. In this scenario 16 becomes the erasure set size. This is decided based on the greatest common divisor (GCD) of acceptable erasure set sizes ranging from *4 to 16*.
 
-- *If total disks has many common divisors the algorithm chooses the minimum amounts of erasure sets possible for a erasure set size of any N*.  In the example with 1024 disks - 4, 8, 16 are GCD factors. With 16 disks we get a total of 64 possible sets, with 8 disks we get a total of 128 possible sets, with 4 disks we get a total of 256 possible sets. So algorithm automatically chooses 64 sets, which is *16 * 64 = 1024* disks in total.
+- *If total disks has many common divisors the algorithm chooses the minimum amounts of erasure sets possible for a erasure set size of any N*.  In the example with 1024 disks - 4, 8, 16 are GCD factors. With 16 disks we get a total of 64 possible sets, with 8 disks we get a total of 128 possible sets, with 4 disks we get a total of 256 possible sets. So algorithm automatically chooses 64 sets, which is *16* 64 = 1024* disks in total.
 
 - *If total number of nodes are of odd number then GCD algorithm provides affinity towards odd number erasure sets to provide for uniform distribution across nodes*. This is to ensure that same number of disks are pariticipating in any erasure set. For example if you have 2 nodes with 180 drives then GCD is 15 but this would lead to uneven distribution, one of the nodes would participate more drives. To avoid this the affinity is given towards nodes which leads to next best GCD factor of 12 which provides uniform distribution.
 
@@ -55,6 +58,7 @@ minio server http://host{1...2}/export{1...8}
 ```
 
 Expected expansion
+
 ```
 > http://host1/export1
 > http://host2/export1
@@ -77,6 +81,7 @@ Expected expansion
 *A noticeable trait of this expansion is that it chooses unique hosts such the setup provides maximum protection and availability.*
 
 - Choosing an erasure set for the object is decided during `PutObject()`, object names are used to find the right erasure set using the following pseudo code.
+
 ```go
 // hashes the key returning an integer.
 func sipHashMod(key string, cardinality int, id [16]byte) int {
@@ -88,6 +93,7 @@ func sipHashMod(key string, cardinality int, id [16]byte) int {
         return int(sip.Sum64() % uint64(cardinality))
 }
 ```
+
 Input for the key is the object name specified in `PutObject()`, returns a unique index. This index is one of the erasure sets where the object will reside. This function is a consistent hash for a given object name i.e for a given object name the index returned is always the same.
 
 - Write and Read quorum are required to be satisfied only across the erasure set for an object. Healing is also done per object within the erasure set which contains the object.
@@ -96,7 +102,7 @@ Input for the key is the object name specified in `PutObject()`, returns a uniqu
 
 - MinIO also supports expansion of existing clusters in server pools. Each pool is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used pool to place new objects.
 
-__There are no limits on how many server pools can be combined__
+### There are no limits on how many server pools can be combined
 
 ```
 minio server http://host{1...32}/export{1...32} http://host{1...12}/export{1...12}
@@ -112,6 +118,7 @@ In above example there are two server pools
 Refer to the sizing guide with details on the default parity count chosen for different erasure stripe sizes [here](https://github.com/minio/minio/blob/master/docs/distributed/SIZING.md)
 
 MinIO places new objects in server pools based on proportionate free space, per pool. Following pseudo code demonstrates this behavior.
+
 ```go
 func getAvailablePoolIdx(ctx context.Context) int {
         serverPools := z.getServerPoolsAvailableSpace(ctx)
@@ -135,21 +142,25 @@ func getAvailablePoolIdx(ctx context.Context) int {
 ### Advanced use cases with multiple ellipses
 
 Standalone erasure coded configuration with 4 sets with 16 disks each, which spawns disks across controllers.
+
 ```
 minio server /mnt/controller{1...4}/data{1...16}
 ```
 
 Standalone erasure coded configuration with 16 sets, 16 disks per set, across mounts and controllers.
+
 ```
 minio server /mnt{1...4}/controller{1...4}/data{1...16}
 ```
 
 Distributed erasure coded configuration with 2 sets, 16 disks per set across hosts.
+
 ```
 minio server http://host{1...32}/disk1
 ```
 
 Distributed erasure coded configuration with rack level redundancy 32 sets in total, 16 disks per set.
+
 ```
 minio server http://rack{1...4}-host{1...8}.example.net/export{1...16}
 ```

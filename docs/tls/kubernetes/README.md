@@ -16,8 +16,8 @@ For testing purposes, here is [how to create self-signed certificates](https://g
 
 ## 2. Create Kubernetes secret
 
-[Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret) are intended to hold sensitive information. 
-We'll use secrets to hold the TLS certificate and key. To create a secret, update the paths to `private.key` and `public.crt` 
+[Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret) are intended to hold sensitive information.
+We'll use secrets to hold the TLS certificate and key. To create a secret, update the paths to `private.key` and `public.crt`
 below.
 
 Then type
@@ -26,7 +26,7 @@ Then type
 kubectl create secret generic tls-ssl-minio --from-file=path/to/private.key --from-file=path/to/public.crt
 ```
 
-Cross check if the secret is created successfully using 
+Cross check if the secret is created successfully using
 
 ```sh
 kubectl get secrets
@@ -67,5 +67,5 @@ Here the name of `volumeMount` should match the name of `volume` created previou
 the MinIO server's config sub-directory that is used to store certificates. By default, the location is
 `/<user-running-minio>/.minio/certs`.
 
-*Tip*: In a standard Kubernetes configuration, this will be `/root/.minio/certs`. Kubernetes will mount the secrets volume read-only, 
+*Tip*: In a standard Kubernetes configuration, this will be `/root/.minio/certs`. Kubernetes will mount the secrets volume read-only,
 so avoid setting `mountPath` to a path that MinIO server expects to write to.

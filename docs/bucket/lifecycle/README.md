@@ -3,6 +3,7 @@
 Enable object lifecycle configuration on buckets to setup automatic deletion of objects after a specified number of days or a specified date.
 
 ## 1. Prerequisites
+
 - Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
 - Install `mc` - [mc Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide.html)
 
@@ -45,6 +46,7 @@ Lifecycle configuration imported successfully to `play/testbucket`.
 ```
 
 - List the current settings
+
 ```
 $ mc ilm ls play/testbucket
      ID     |  Prefix  |  Enabled   | Expiry |  Date/Days   |  Transition  |    Date/Days     |  Storage-Class   |       Tags
@@ -64,6 +66,7 @@ This will only work with a versioned bucket, take a look at [Bucket Versioning G
 A non-current object version is a version which is not the latest for a given object. It is possible to set up an automatic removal of non-current versions when a version becomes older than a given number of days.
 
 e.g., To scan objects stored under `user-uploads/` prefix and remove versions older than one year.
+
 ```
 {
     "Rules": [
@@ -81,12 +84,12 @@ e.g., To scan objects stored under `user-uploads/` prefix and remove versions ol
 }
 ```
 
-
 ### 3.2 Automatic removal of noncurrent versions keeping only most recent ones after noncurrent days
 
 It is possible to configure automatic removal of older noncurrent versions keeping only the most recent `N` using `NewerNoncurrentVersions`.
 
 e.g, To remove noncurrent versions of all objects keeping the most recent 5 noncurrent versions under the prefix `user-uploads/` 30 days after they become noncurrent ,
+
 ```
 {
     "Rules": [
@@ -126,6 +129,7 @@ of objects under the prefix `user-uploads/` as soon as there are more than `N` n
     ]
 }
 ```
+
 Note: This rule has an implicit zero NoncurrentDays, which makes the expiry of those 'extra' noncurrent versions immediate.
 
 ### 3.3 Automatic removal of delete markers with no other versions
@@ -145,6 +149,7 @@ When an object has only one version as a delete marker, the latter can be automa
     ]
 }
 ```
+
 ## 4. Enable ILM transition feature
 
 In Erasure mode, MinIO supports tiering to public cloud providers such as GCS, AWS and Azure as well as to other MinIO clusters via the ILM transition feature. This will allow transitioning of older objects to a different cluster or the public cloud by setting up transition rules in the bucket lifecycle configuration. This feature enables applications to optimize storage costs by moving less frequently accessed data to a cheaper storage without compromising accessibility of data.
@@ -156,14 +161,17 @@ To transition objects in a bucket to a destination bucket on a different cluster
 ```
  mc admin tier add azure source AZURETIER --endpoint https://blob.core.windows.net --access-key AZURE_ACCOUNT_NAME --secret-key AZURE_ACCOUNT_KEY  --bucket azurebucket --prefix testprefix1/
 ```
+
 > The admin user running this command needs the "admin:SetTier" and "admin:ListTier" permissions if not running as root.
 
 Using above tier, set up a lifecycle rule with transition:
+
 ```
  mc ilm add --expiry-days 365 --transition-days 45 --storage-class "AZURETIER" myminio/srcbucket
 ```
 
 Note: In the case of S3, it is possible to create a tier from MinIO running in EC2 to S3 using AWS role attached to EC2 as credentials instead of accesskey/secretkey:
+
 ```
 mc admin tier add s3 source S3TIER --bucket s3bucket --prefix testprefix/ --use-aws-role
 ```
@@ -177,10 +185,12 @@ aws s3api restore-object --bucket srcbucket \
 ```
 
 ### 4.1 Monitoring transition events
+
 `s3:ObjectTransition:Complete` and `s3:ObjectTransition:Failed` events can be used to monitor transition events between the source cluster and transition tier. To watch lifecycle events, you can enable bucket notification on the source bucket with `mc event add`  and specify `--event ilm` flag.
 
 Note that transition event notification is a MinIO extension.
 
 ## Explore Further
+
 - [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
 - [Object Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html)
