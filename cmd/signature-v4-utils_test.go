@@ -42,11 +42,11 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	req, err := newTestRequest(http.MethodGet, "http://example.com:9000/bucket/object", 0, nil)
 	if err != nil {

@@ -368,7 +368,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	orgDisks := append([]StorageAPI{}, disks...)
 
 	// Enable versioning.
-	globalBucketMetadataSys.Update(bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
+	globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, []byte(`<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`))
 
 	_, err = objLayer.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{
 		Versioned: true,
@@ -1043,10 +1043,14 @@ func TestHealObjectErasure(t *testing.T) {
 	z.serverPools[0].erasureDisksMu.Unlock()
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealDeepScan})
-	// since majority of xl.meta's are not available, object quorum can't be read properly and error will be errErasureReadQuorum
-	if _, ok := err.(InsufficientReadQuorum); !ok {
-		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
+	_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{
+		ScanMode: madmin.HealDeepScan,
+	})
+	// since majority of xl.meta's are not available, object quorum
+	// can't be read properly will be deleted automatically and
+	// err is nil
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

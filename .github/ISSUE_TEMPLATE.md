@@ -8,8 +8,10 @@ assignees: ''
 ---
 
 ## NOTE
-If this case is urgent, please subscribe to [Subnet](https://min.io/pricing) so that our 24/7 support team may help you faster.
+All GitHub issues are addressed on a best-effort basis at MinIO's sole discretion. There are no Service Level Agreements (SLA) or Objectives (SLO). Remember our [Code of Conduct](https://github.com/minio/minio/blob/master/code_of_conduct.md) when engaging with MinIO Engineers and the larger community.
 
+For urgent issues (e.g. production down, etc.), subscribe to [SUBNET](https://min.io/pricing?jmp=github) for direct to engineering support.
+ 
 <!--- Provide a general summary of the issue in the Title above -->
 
 ## Expected Behavior

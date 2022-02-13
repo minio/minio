@@ -253,18 +253,6 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 	}
 }
 
-// SiteReplicationDisable - PUT /minio/admin/v3/site-replication/disable
-func (a adminAPIHandlers) SiteReplicationDisable(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationDisable")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationDisableAction)
-	if objectAPI == nil {
-		return
-	}
-}
-
 // SiteReplicationInfo - GET /minio/admin/v3/site-replication/info
 func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SiteReplicationInfo")
@@ -313,7 +301,6 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 			Code:  ErrSiteReplicationInvalidRequest,
 		}
 	}
-
 	if encryptionKey != "" {
 		data, err = madmin.DecryptData(encryptionKey, bytes.NewReader(data))
 		if err != nil {
@@ -324,7 +311,6 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 			}
 		}
 	}
-
 	return json.Unmarshal(data, v)
 }
 
@@ -338,8 +324,16 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 	if objectAPI == nil {
 		return
 	}
-
-	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI)
+	opts := getSRStatusOptions(r)
+	// default options to all if status options are unset for backward compatibility
+	var dfltOpts madmin.SRStatusOptions
+	if opts == dfltOpts {
+		opts.Buckets = true
+		opts.Users = true
+		opts.Policies = true
+		opts.Groups = true
+	}
+	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -362,7 +356,8 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 		return
 	}
 
-	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI)
+	opts := getSRStatusOptions(r)
+	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -423,6 +418,73 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := globalSiteReplicationSys.PeerEditReq(ctx, pi); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
+	q := r.Form
+	opts.Buckets = q.Get("buckets") == "true"
+	opts.Policies = q.Get("policies") == "true"
+	opts.Groups = q.Get("groups") == "true"
+	opts.Users = q.Get("users") == "true"
+	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
+	opts.EntityValue = q.Get("entityvalue")
+	return
+}
+
+// SiteReplicationRemove - PUT /minio/admin/v3/site-replication/remove
+func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationRemove")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
+	if objectAPI == nil {
+		return
+	}
+	var rreq madmin.SRRemoveReq
+	err := parseJSONBody(ctx, r.Body, &rreq, "")
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	status, err := globalSiteReplicationSys.RemovePeerCluster(ctx, objectAPI, rreq)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	body, err := json.Marshal(status)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, body)
+}
+
+// SRPeerRemove - PUT /minio/admin/v3/site-replication/peer/remove
+//
+// used internally to tell current cluster to update endpoint for peer
+func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SRPeerRemove")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var req madmin.SRRemoveReq
+	if err := parseJSONBody(ctx, r.Body, &req, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.InternalRemoveReq(ctx, objectAPI, req); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

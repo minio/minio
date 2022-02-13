@@ -213,25 +213,21 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	}
 
 	var rootDisk bool
-	if globalIsCICD {
-		rootDisk = true
+	if globalRootDiskThreshold > 0 {
+		// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
+		// this disk is a root disk.
+		info, err := disk.GetInfo(path)
+		if err != nil {
+			return nil, err
+		}
+
+		// treat those disks with size less than or equal to the
+		// threshold as rootDisks.
+		rootDisk = info.Total <= globalRootDiskThreshold
 	} else {
 		rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
 		if err != nil {
 			return nil, err
-		}
-		if !rootDisk && globalRootDiskThreshold > 0 {
-			// If for some reason we couldn't detect the root disk
-			// use - MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
-			// this disk is a root disk.
-			info, err := disk.GetInfo(path)
-			if err != nil {
-				return nil, err
-			}
-
-			// treat those disks with size less than or equal to the
-			// threshold as rootDisks.
-			rootDisk = info.Total <= globalRootDiskThreshold
 		}
 	}
 
@@ -1715,7 +1711,11 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
 		if !alignment || offset+length%xioutil.DirectioAlignSize != 0 {
 			// invalidate page-cache for unaligned reads.
-			disk.FadviseDontNeed(file)
+			if !globalAPIConfig.isDisableODirect() {
+				// skip removing from page-cache only
+				// if O_DIRECT was disabled.
+				disk.FadviseDontNeed(file)
+			}
 		}
 		return or.Close()
 	})}

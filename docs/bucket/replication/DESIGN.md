@@ -3,9 +3,11 @@
 This document explains the design approach of server side bucket replication. If you're looking to get started with replication, we suggest you go through the [Bucket replication guide](https://github.com/minio/minio/blob/master/docs/bucket/replication/README.md) first.
 
 ## Overview
+
 Replication relies on immutability provided by versioning to sync objects between the configured source and replication target. Replication results in the object data, metadata, last modification time and version ID all being identical between the source and target. Thus version ordering is automatically guaranteed on the source and target clusters.
 
 ### Replication of object version and metadata
+
 If an object meets replication rules as set in the replication configuration, `X-Amz-Replication-Status` is first set to `PENDING` as the PUT operation completes and replication is queued (unless synchronous replication is in place). After replication is performed, the metadata on the source object version changes to `COMPLETED` or `FAILED` depending on whether replication succeeded. The object version on the target shows `X-Amz-Replication-Status` of `REPLICA`
 
 All replication failures are picked up by the scanner which runs at a one minute frequency, each time scanning upto a sixteenth of the namespace. Object versions marked `PENDING` or `FAILED` are re-queued for replication.
@@ -36,14 +38,18 @@ An additional header `X-Minio-Replication-Delete-Status` is returned which would
 Note that synchronous replication, i.e. when remote target is configured with --sync mode in `mc admin bucket remote add` does not apply to `DELETE` operations. The version being deleted on the source cluster needs to maintain state and ensure that the operation is mirrored to the target cluster prior to completing on the source object version. Since this needs to account for the target cluster availability and the need to serialize concurrent DELETE operations on different versions of the same object during multi DELETE operations, the current implementation queues the `DELETE` operations in both sync and async modes.
 
 ### Existing object replication
+
 Existing object replication works similar to regular replication. Objects qualifying for existing object replication are detected when scanner runs, and will be replicated if existing object replication is enabled and applicable replication rules are satisfied. Because replication depends on the immutability of versions, only pre-existing objects created while versioning was enabled can be replicated. Even if replication rules are disabled and re-enabled later, the objects created during the interim will be synced as the scanner queues them. For saving iops, objects qualifying for
 existing object replication are not marked as `PENDING` prior to replication.
 
 Note that objects with `null` versions, i.e. objects created prior to enabling versioning break the immutability guarantees provided by versioning. When existing object replication is enabled, these objects will be replicated as `null` versions to the remote targets provided they are not present on the target or if `null` version of object on source is newer than the `null` version of object on target.
 
-If the remote site is fully lost and objects previously replicated need to be re-synced, the `mc replicate resync` command with optional flag of `--older-than` needs to be used to trigger re-syncing of previously replicated objects. This command generates a ResetID which is a unique UUID saved to the remote target config along with the applicable date(defaults to time of initiating the reset). All objects created prior to this date are eligible for re-replication if existing object replication is enabled for the replication rule the object satisfies. At the time of completion of replication, `X-Minio-Replication-Reset-Status` is set in the metadata with the timestamp of replication and ResetID. For saving iops, the objects which are re-replicated are not first set to `PENDING` state.
+If the remote site is fully lost and objects previously replicated need to be re-synced, the `mc replicate resync start` command with optional flag of `--older-than` needs to be used to trigger re-syncing of previously replicated objects. This command generates a ResetID which is a unique UUID saved to the remote target config along with the applicable date(defaults to time of initiating the reset). All objects created prior to this date are eligible for re-replication if existing object replication is enabled for the replication rule the object satisfies. At the time of completion of replication, `x-minio-internal-replication-reset-arn:<arn>` is set in the metadata with the timestamp of replication and ResetID. For saving iops, the objects which are re-replicated are not first set to `PENDING` state.
+
+This is a slower operation that does not use replication queues and is designed to walk the namespace and replicate objects one at a time so as not to impede server load. Ideally, resync should not be initiated for multiple buckets simultaneously - progress of the syncing can be monitored by looking at `mc replicate resync status alias/bucket --remote-bucket <arn>`. In the event that resync operation failed to replicate some versions, they would be picked up by the healing mechanism in-built as part of the scanner. If the resync operation reports a failed status or in the event of a cluster restart while resync is in progress, a fresh `resync start` can be issued - this will replicate previously unsynced content at the cost of additional overhead in additional metadata updates.
 
 ### Multi destination replication
+
 The replication design for multiple sites works in a similar manner as described above for two site scenario. However there are some
 important exceptions.
 
@@ -90,8 +96,11 @@ If 3 or more targets are participating in active-active replication, the replica
     },
 ...
 ```
+
 ### Additional replication metadata for DeleteMarker
 
+```
+...
  {
       "DelObj": {
       "ID": "u8H5pYQFRMKgkIgkpSKIkQ==",
@@ -122,6 +131,30 @@ If 3 or more targets are participating in active-active replication, the replica
 }
 ```
 
+### Additional Metadata for object replication resync - on source
+
+```
+...
+  "MetaSys": {
+    ...
+    "x-minio-internal-replication-reset-arn:minio:replication::af470089-d354-4473-934c-9e1f52f6da89:bucket": "TW9uLCAwNyBGZWIgMjAyMiAyMDowMzo0MCBHTVQ7ZGMxMWQzNDgtMTAwMS00ODA3LWFhNjEtOGY2MmFiNWQ5ZjU2",
+    ...
+  },
+...
+```
+
+### Additional Metadata for resync replication of delete-markers - on source
+
+```
+...
+  "MetaSys": {
+    "x-minio-internal-replication-reset-arn:minio:replication::af470089-d354-4473-934c-9e1f52f6da89:bucket": "TW9uLCAwNyBGZWIgMjAyMiAyMDowMzo0MCBHTVQ7ZGMxMWQzNDgtMTAwMS00ODA3LWFhNjEtOGY2MmFiNWQ5ZjU2",
+  ...
+  }
+...
+```
+
 ## Explore Further
+
 - [MinIO Bucket Versioning Implementation](https://docs.minio.io/docs/minio-bucket-versioning-guide.html)
 - [MinIO Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide.html)

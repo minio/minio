@@ -2,23 +2,13 @@
 
 ## Configuration Directory
 
-Till MinIO release `RELEASE.2018-08-02T23-11-36Z`, MinIO server configuration file (`config.json`) was stored in the configuration directory specified by `--config-dir` or defaulted to `${HOME}/.minio`. However from releases after `RELEASE.2018-08-18T03-49-57Z`, the configuration file (only), has been migrated to the storage backend (storage backend is the directory passed to MinIO server while starting the server).
-
-You can specify the location of your existing config using `--config-dir`, MinIO will migrate the `config.json` to your backend storage. Your current `config.json` will be renamed upon successful migration as `config.json.deprecated` in your current `--config-dir`. All your existing configurations are honored after this migration.
-
-Additionally `--config-dir` is now a legacy option which will is scheduled for removal in future, so please update your local startup, ansible scripts accordingly.
-
-```sh
-minio server /data
-```
-
-MinIO also encrypts all the config, IAM and policies content if KMS is configured. Please refer to how to encrypt your config and IAM credentials [here](https://github.com/minio/minio/blob/master/docs/kms/IAM.md)
+MinIO stores all its config as part of the server deployment, config is erasure coded on MinIO. On a fresh deployment MinIO automatically generates a new `config` and this config is available to be configured via `mc admin config` command. MinIO also encrypts all the config, IAM and policies content if KMS is configured. Please refer to how to encrypt your config and IAM credentials [here](https://github.com/minio/minio/blob/master/docs/kms/IAM.md)
 
 ### Certificate Directory
 
-TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS certificates by default are expected to be stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
-Following is the directory structure for MinIO server with TLS certificates.
+Following is a sample directory structure for MinIO server with TLS certificates.
 
 ```sh
 $ mc tree --files ~/.minio
@@ -32,7 +22,8 @@ $ mc tree --files ~/.minio
 You can provide a custom certs directory using `--certs-dir` command line option.
 
 #### Credentials
-On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. Using the combination of these two values MinIO encrypts the config stored at the backend.
+
+On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`.
 
 ```sh
 export MINIO_ROOT_USER=minio
@@ -41,6 +32,7 @@ minio server /data
 ```
 
 #### Site
+
 ```
 KEY:
 site  label the server and its location
@@ -52,6 +44,7 @@ comment  (sentence)  optionally add a comment to this setting
 ```
 
 or environment variables
+
 ```
 KEY:
 site  label the server and its location
@@ -71,6 +64,7 @@ minio server /data
 ```
 
 ### Storage Class
+
 By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in MinIO server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
 ```
@@ -84,6 +78,7 @@ comment   (sentence)  optionally add a comment to this setting
 ```
 
 or environment variables
+
 ```
 KEY:
 storage_class  define object level redundancy
@@ -95,6 +90,7 @@ MINIO_STORAGE_CLASS_COMMENT   (sentence)  optionally add a comment to this setti
 ```
 
 ### Cache
+
 MinIO provides caching storage tier for primarily gateway deployments, allowing you to cache content for faster reads, cost savings on repeated downloads from the cloud.
 
 ```
@@ -111,6 +107,7 @@ comment  (sentence)  optionally add a comment to this setting
 ```
 
 or environment variables
+
 ```
 KEY:
 cache  add caching storage tier
@@ -125,7 +122,8 @@ MINIO_CACHE_COMMENT  (sentence)  optionally add a comment to this setting
 ```
 
 #### Etcd
-MinIO supports storing encrypted IAM assets and bucket DNS records on etcd.
+
+MinIO supports storing encrypted IAM assets in etcd, if KMS is configured. Please refer to how to encrypt your config and IAM credentials [here](https://github.com/minio/minio/blob/master/docs/kms/IAM.md)
 
 > NOTE: if *path_prefix* is set then MinIO will not federate your buckets, namespaced IAM assets are assumed as isolated tenants, only buckets are considered globally unique but performing a lookup with a *bucket* which belongs to a different tenant will fail unlike federated setups where MinIO would port-forward and route the request to relevant cluster accordingly. This is a special feature, federated deployments should not need to set *path_prefix*.
 
@@ -143,6 +141,7 @@ comment          (sentence)  optionally add a comment to this setting
 ```
 
 or environment variables
+
 ```
 KEY:
 etcd  federate multiple clusters for IAM and Bucket DNS
@@ -157,6 +156,7 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
 ### API
+
 By default, there is no limitation on the number of concurrent requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
 
 ```
@@ -180,6 +180,7 @@ MINIO_API_REMOTE_TRANSPORT_DEADLINE  (duration)  set the deadline for API reques
 ```
 
 #### Notifications
+
 Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://docs.min.io/docs/minio-bucket-notification-guide.html)
 
 ```
@@ -196,14 +197,17 @@ notify_redis          publish bucket notifications to Redis datastores
 ```
 
 ### Accessing configuration
+
 All configuration changes can be made using [`mc admin config` get/set/reset/export/import commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md).
 
 #### List all config keys available
+
 ```
 ~ mc admin config set myminio/
 ```
 
 #### Obtain help for each key
+
 ```
 ~ mc admin config set myminio/ <key>
 ```
@@ -225,6 +229,7 @@ comment          (sentence)  optionally add a comment to this setting
 ```
 
 To get ENV equivalent for each config args use `--env` flag
+
 ```
 ~ mc admin config set play/ etcd --env
 KEY:
@@ -321,7 +326,7 @@ minio server /data
 
 ### Domain
 
-By default, MinIO supports path-style requests that are of the format http://mydomain.com/bucket/object. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
+By default, MinIO supports path-style requests that are of the format <http://mydomain.com/bucket/object>. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
 Example:
 
 ```sh
@@ -330,11 +335,13 @@ minio server /data
 ```
 
 For advanced use cases `MINIO_DOMAIN` environment variable supports multiple-domains with comma separated values.
+
 ```sh
 export MINIO_DOMAIN=sub1.mydomain.com,sub2.mydomain.com
 minio server /data
 ```
 
 ## Explore Further
+
 * [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
 * [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)

@@ -371,7 +371,8 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+		if globalDNSConfig == nil || !globalBucketFederation ||
+			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 			h.ServeHTTP(w, r)
 			return

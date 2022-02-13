@@ -1301,7 +1301,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
-
+	globalReplicationPool.deleteResyncMetadata(ctx, bucket)
 	// Call site replication hook.
 	if err := globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1368,7 +1368,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1473,7 +1473,7 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1555,7 +1555,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, nil); err != nil {
+	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1629,7 +1629,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if err = globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1708,7 +1708,7 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
 		return
 	}
-	if err := globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, nil); err != nil {
+	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1760,12 +1760,13 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	}
 }
 
-// ResetBucketReplicationStateHandler - starts a replication reset for all objects in a bucket which
+// ResetBucketReplicationStartHandler - starts a replication reset for all objects in a bucket which
 // qualify for replication and re-sync the object(s) to target, provided ExistingObjectReplication is
 // enabled for the qualifying rule. This API is a MinIO only extension provided for situations where
-// remote target is entirely lost,and previously replicated objects need to be re-synced.
-func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ResetBucketReplicationState")
+// remote target is entirely lost,and previously replicated objects need to be re-synced. If resync is
+// already in progress it returns an error
+func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ResetBucketReplicationStart")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
@@ -1789,6 +1790,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 			}), r.URL)
 		}
 	}
+	resetBeforeDate := UTCNow().AddDate(0, 0, -1*int(days/24))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1825,7 +1827,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 	if len(tgtArns) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
 			Bucket: bucket,
-			Err:    fmt.Errorf("Remote target ARN %s missing/not eligible for replication resync", arn),
+			Err:    fmt.Errorf("Remote target ARN %s missing or ineligible for replication resync", arn),
 		}), r.URL)
 		return
 	}
@@ -1849,22 +1851,90 @@ func (api objectAPIHandlers) ResetBucketReplicationStateHandler(w http.ResponseW
 		default:
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		}
+	}
+	if err := startReplicationResync(ctx, bucket, arn, resetID, resetBeforeDate, objectAPI); err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
+			Bucket: bucket,
+			Err:    err,
+		}), r.URL)
 		return
 	}
-	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+
+	data, err := json.Marshal(rinfo)
 	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	// Write success response.
+	writeSuccessResponseJSON(w, data)
+}
+
+// ResetBucketReplicationStatusHandler - returns the status of replication reset.
+// This API is a MinIO only extension
+func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ResetBucketReplicationStatus")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	arn := r.URL.Query().Get("arn")
+	var err error
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.ResetBucketReplicationStateAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	tgtBytes, err := json.Marshal(&targets)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
-		return
-	}
-	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
+
+	if _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
+	globalReplicationPool.resyncState.RLock()
+	brs, ok := globalReplicationPool.resyncState.statusMap[bucket]
+	if !ok {
+		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
+		if err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
+				Bucket: bucket,
+				Err:    fmt.Errorf("No replication resync status available for %s", arn),
+			}), r.URL)
+		}
+		return
+	}
+
+	var rinfo ResyncTargetsInfo
+	for tarn, st := range brs.TargetsMap {
+		if arn != "" && tarn != arn {
+			continue
+		}
+		rinfo.Targets = append(rinfo.Targets, ResyncTarget{
+			Arn:             tarn,
+			ResetID:         st.ResyncID,
+			StartTime:       st.StartTime,
+			EndTime:         st.EndTime,
+			ResyncStatus:    st.ResyncStatus.String(),
+			ReplicatedSize:  st.ReplicatedSize,
+			ReplicatedCount: st.ReplicatedCount,
+			FailedSize:      st.FailedSize,
+			FailedCount:     st.FailedCount,
+			Bucket:          st.Bucket,
+			Object:          st.Object,
+		})
+	}
+	globalReplicationPool.resyncState.RUnlock()
 	data, err := json.Marshal(rinfo)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

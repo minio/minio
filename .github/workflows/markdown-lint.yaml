@@ -1,0 +1,25 @@
+name: Markdown Linter
+
+on:
+  pull_request:
+    branches:
+    - master
+
+# This ensures that previous jobs for the PR are canceled when the PR is
+# updated.
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint all docs
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Lint all docs
+      run: |
+        npm install -g markdownlint-cli
+        markdownlint --fix '**/*.md' --disable MD013 MD025 MD040 MD024

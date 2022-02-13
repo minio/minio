@@ -74,11 +74,11 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 
 	globalEndpoints = mustGetPoolEndpoints(erasureDirs...)
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()

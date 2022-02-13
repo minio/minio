@@ -1,14 +1,8 @@
 # KMS IAM/Config Encryption
 
-MinIO will soon release a change that re-works the encryption of IAM and
-configuration data. Currently, MinIO encrypts IAM data (user/temp. credentials,
-policies and other configuration data) with the cluster root credentials before
-storing it on the backend disks. After release `RELEASE.2021-04-22T15-44-28Z`
-onwards, MinIO will use the KMS provided keys to encrypt the IAM data instead
-of the cluster root credentials. If the KMS is not enabled, MinIO will store
-the IAM data as plain text in its backend.
+MinIO supports encrypting config, IAM assets with KMS provided keys. If the KMS is not enabled, MinIO will store the config, IAM data as plain text erasure coded in its backend.
 
-### MinIO KMS Quick Start
+## MinIO KMS Quick Start
 
 MinIO supports two ways of encrypting IAM and configuration data.
 You can either use KES - together with an external KMS - or, much simpler,
@@ -18,36 +12,42 @@ to set it up refer to our [KMS Guide](https://github.com/minio/minio/blob/master
 Instead of configuring an external KMS you can start with a single key by
 setting the env. variable `MINIO_KMS_SECRET_KEY`. It expects the following
 format:
+
 ```sh
 MINIO_KMS_SECRET_KEY=<key-name>:<base64-value>
 ```
 
 First generate a 256 bit random key via:
+
 ```sh
 $ cat /dev/urandom | head -c 32 | base64 -
 OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
 ```
 
 Now, you can set `MINIO_KMS_SECRET_KEY` like this:
+
 ```sh
 export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
 ```
+
 > You can choose an arbitrary name for the key - instead of `my-minio-key`.
 > Please note that loosing the `MINIO_KMS_SECRET_KEY` will cause data loss
 > since you will not be able to decrypt the IAM/configuration data anymore.
-For distributed MinIO deployments, specify the *same* `MINIO_KMS_SECRET_KEY` for each MinIO server process. 
+For distributed MinIO deployments, specify the *same* `MINIO_KMS_SECRET_KEY` for each MinIO server process.
 
 At any point in time you can switch from `MINIO_KMS_SECRET_KEY` to a full KMS
 deployment. You just need to import the generated key into KES - for example via
 the KES CLI once you have successfully setup KES:
+
 ```sh
 kes key create my-minio-key OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
 ```
-- For instructions on setting up KES, see the [KES Getting Started guide](https://github.com/minio/kes/wiki/Getting-Started) 
+
+- For instructions on setting up KES, see the [KES Getting Started guide](https://github.com/minio/kes/wiki/Getting-Started)
 
 - For instructions on using KES for encrypting the MinIO backend, follow the [KMS Quick Start](https://github.com/minio/minio/tree/master/docs/kms). The SSE-S3 configuration setup also supports MinIO KMS backend encryption.
 
-### FAQ
+## FAQ
 
 > Why is this change needed?
 
@@ -57,13 +57,14 @@ Now, MinIO encrypts IAM / configuration and S3 objects with a KMS, if present. T
 change unified the key-management aspect within MinIO.
 
 The unified KMS-based approach has several advantages:
- - Key management is now centralized. There is one way to change or rotate encryption keys.
+
+- Key management is now centralized. There is one way to change or rotate encryption keys.
    There used to be two different mechanisms - one for regular S3 objects and one for IAM data.
- - Reduced server startup time. For IAM encryption with the root credentials, MinIO had
+- Reduced server startup time. For IAM encryption with the root credentials, MinIO had
    to use a memory-hard function (Argon2) that (on purpose) consumes a lot of memory and CPU.
    The new KMS-based approach can use a key derivation function that is orders of magnitudes
    cheaper w.r.t. memory and CPU.
- - Root credentials can now be changed easily. Before, a two-step process was required to
+- Root credentials can now be changed easily. Before, a two-step process was required to
    change the cluster root credentials since they were used to en/decrypt the IAM data.
    So, both - the old and new credentials - had to be present at the same time during a rotation
    and the old credentials had to be removed once the rotation completed. This process is now gone.

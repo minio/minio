@@ -251,6 +251,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
+	// Enable bucket forwarding handler only if bucket federation is enabled.
+	if globalDNSConfig != nil && globalBucketFederation {
+		globalHandlers = append(globalHandlers, setBucketForwardingHandler)
+	}
+
 	// Use all the middlewares
 	router.Use(globalHandlers...)
 
@@ -291,22 +296,24 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	newObject = NewGatewayLayerWithLocker(newObject)
 
 	// Calls all New() for all sub-systems.
-	newAllSubsystems()
+	initAllSubsystems()
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+
 	if gatewayName == NASBackendGateway {
 		buckets, err := newObject.ListBuckets(GlobalContext)
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}
-		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
-	}
+		logger.FatalIf(globalBucketMetadataSys.Init(GlobalContext, buckets, newObject), "Unable to initialize bucket metadata")
 
-	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalNotificationSys, globalRefreshIAMInterval)
+		logger.FatalIf(globalNotificationSys.InitBucketTargets(GlobalContext, newObject), "Unable to initialize bucket targets for notification system")
+	}
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.

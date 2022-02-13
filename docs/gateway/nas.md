@@ -2,6 +2,10 @@
 
 MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple minio instances on the same shared NAS volume as a distributed object gateway.
 
+## Support
+
+Gateway implementations are frozen and are not accepting any new features. Please reports any bugs at <https://github.com/minio/minio/issues> . If you are an existing customer please login to <https://subnet.min.io> for production support.
+
 ## Run MinIO Gateway for NAS Storage
 
 ### Using Docker
@@ -29,7 +33,7 @@ minio gateway nas /shared/nasvol
 
 ## Test using MinIO Console
 
-MinIO Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+MinIO Gateway comes with an embedded web based object browser. Point your web browser to <http://127.0.0.1:9000> to ensure that your server has started successfully.
 
 | Dashboard                                                                                   | Creating a bucket                                                                           |
 | -------------                                                                               | -------------                                                                               |
@@ -96,12 +100,14 @@ NAS gateway implementation allows symlinks on regular files,
   - Delete of actual file automatically makes symlink'ed file invisible, dangling symlinks won't be visible.
 
 #### Caveats
+
 - Disallows follow of directory symlinks to avoid security issues, and leaving them as is on namespace makes them very inconsistent.
 - Dangling symlinks are ignored automatically.
 
 *Directory symlinks is not and will not be supported as there are no safe ways to handle them.*
 
 ## Explore Further
+
 - [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
 - [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)

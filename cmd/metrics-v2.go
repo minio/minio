@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,6 +48,7 @@ func init() {
 		getMinioHealingMetrics(),
 		getNodeHealthMetrics(),
 		getClusterStorageMetrics(),
+		getClusterTierMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -116,6 +118,7 @@ const (
 	softwareSubsystem         MetricSubsystem = "software"
 	sysCallSubsystem          MetricSubsystem = "syscall"
 	usageSubsystem            MetricSubsystem = "usage"
+	quotaSubsystem            MetricSubsystem = "quota"
 	ilmSubsystem              MetricSubsystem = "ilm"
 	scannerSubsystem          MetricSubsystem = "scanner"
 )
@@ -135,6 +138,7 @@ const (
 	limitTotal     MetricName = "limit_total"
 	missedTotal    MetricName = "missed_total"
 	waitingTotal   MetricName = "waiting_total"
+	incomingTotal  MetricName = "incoming_total"
 	objectTotal    MetricName = "object_total"
 	offlineTotal   MetricName = "offline_total"
 	onlineTotal    MetricName = "online_total"
@@ -178,6 +182,10 @@ const (
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
 	transitionPendingTasks MetricName = "transition_pending_tasks"
 	transitionActiveTasks  MetricName = "transition_active_tasks"
+
+	transitionedBytes    MetricName = "transitioned_bytes"
+	transitionedObjects  MetricName = "transitioned_objects"
+	transitionedVersions MetricName = "transitioned_versions"
 )
 
 const (
@@ -408,6 +416,16 @@ func getUsageLastScanActivityMD() MetricDescription {
 	}
 }
 
+func getBucketUsageQuotaTotalBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: quotaSubsystem,
+		Name:      totalBytes,
+		Help:      "Total bucket quota size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -554,6 +572,16 @@ func getS3RequestsInQueueMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      waitingTotal,
 		Help:      "Number of S3 requests in the waiting queue",
+		Type:      gaugeMetric,
+	}
+}
+
+func getIncomingS3RequestsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      incomingTotal,
+		Help:      "Volatile number of total incoming S3 requests",
 		Type:      gaugeMetric,
 	}
 }
@@ -930,94 +958,109 @@ func getMinioProcMetrics() *MetricsGroup {
 			logger.LogOnceIf(ctx, err, nodeMetricNamespace)
 			return
 		}
-		var openFDs int
-		openFDs, err = p.FileDescriptorsLen()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, getMinioFDOpenMD())
-			return
-		}
-		l, err := p.Limits()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, getMinioFDLimitMD())
-			return
-		}
-		io, err := p.IO()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, ioSubsystem)
-			return
-		}
-		stat, err := p.Stat()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, processSubsystem)
-			return
-		}
-		startTime, err := stat.StartTime()
-		if err != nil {
-			logger.LogOnceIf(ctx, err, startTime)
-			return
+
+		openFDs, _ := p.FileDescriptorsLen()
+		l, _ := p.Limits()
+		io, _ := p.IO()
+		stat, _ := p.Stat()
+		startTime, _ := stat.StartTime()
+
+		if openFDs > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioFDOpenMD(),
+					Value:       float64(openFDs),
+				},
+			)
 		}
 
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioFDOpenMD(),
-				Value:       float64(openFDs),
-			},
-		)
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioFDLimitMD(),
-				Value:       float64(l.OpenFiles),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessSysCallRMD(),
-				Value:       float64(io.SyscR),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessSysCallWMD(),
-				Value:       float64(io.SyscW),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOReadBytesMD(),
-				Value:       float64(io.ReadBytes),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOWriteBytesMD(),
-				Value:       float64(io.WriteBytes),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOReadCachedBytesMD(),
-				Value:       float64(io.RChar),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinioProcessIOWriteCachedBytesMD(),
-				Value:       float64(io.WChar),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessStartTimeMD(),
-				Value:       startTime,
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessUptimeMD(),
-				Value:       time.Since(globalBootTime).Seconds(),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessResidentMemory(),
-				Value:       float64(stat.ResidentMemory()),
-			})
-		metrics = append(metrics,
-			Metric{
-				Description: getMinIOProcessCPUTime(),
-				Value:       stat.CPUTime(),
-			})
+		if l.OpenFiles > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioFDLimitMD(),
+					Value:       float64(l.OpenFiles),
+				})
+		}
+
+		if io.SyscR > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessSysCallRMD(),
+					Value:       float64(io.SyscR),
+				})
+		}
+
+		if io.SyscW > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessSysCallWMD(),
+					Value:       float64(io.SyscW),
+				})
+		}
+
+		if io.ReadBytes > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOReadBytesMD(),
+					Value:       float64(io.ReadBytes),
+				})
+		}
+
+		if io.WriteBytes > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOWriteBytesMD(),
+					Value:       float64(io.WriteBytes),
+				})
+		}
+
+		if io.RChar > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOReadCachedBytesMD(),
+					Value:       float64(io.RChar),
+				})
+		}
+
+		if io.WChar > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinioProcessIOWriteCachedBytesMD(),
+					Value:       float64(io.WChar),
+				})
+		}
+
+		if startTime > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessStartTimeMD(),
+					Value:       startTime,
+				})
+		}
+
+		if !globalBootTime.IsZero() {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessUptimeMD(),
+					Value:       time.Since(globalBootTime).Seconds(),
+				})
+		}
+
+		if stat.ResidentMemory() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessResidentMemory(),
+					Value:       float64(stat.ResidentMemory()),
+				})
+		}
+
+		if stat.CPUTime() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessCPUTime(),
+					Value:       stat.CPUTime(),
+				})
+		}
 		return
 	})
 	return mg
@@ -1408,6 +1451,11 @@ func getHTTPMetrics() *MetricsGroup {
 			Description: getS3RequestsInQueueMD(),
 			Value:       float64(httpStats.S3RequestsInQueue),
 		})
+		metrics = append(metrics, Metric{
+			Description: getIncomingS3RequestsMD(),
+			Value:       float64(httpStats.S3RequestsIncoming),
+		})
+
 		for api, value := range httpStats.CurrentS3Requests.APIStats {
 			metrics = append(metrics, Metric{
 				Description:    getS3RequestsInFlightMD(),
@@ -1501,6 +1549,8 @@ func getBucketUsageMetrics() *MetricsGroup {
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
 			stats := getLatestReplicationStats(bucket, usage)
 
+			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
+
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageTotalBytesMD(),
 				Value:          float64(usage.Size),
@@ -1518,6 +1568,14 @@ func getBucketUsageMetrics() *MetricsGroup {
 				Value:          float64(stats.ReplicaSize),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
+
+			if quota != nil && quota.Quota > 0 {
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageQuotaTotalBytesMD(),
+					Value:          float64(quota.Quota),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+			}
 
 			if stats.hasReplicationUsage() {
 				for arn, stat := range stats.Stats {
@@ -1552,9 +1610,86 @@ func getBucketUsageMetrics() *MetricsGroup {
 				HistogramBucketLabel: "range",
 				VariableLabels:       map[string]string{"bucket": bucket},
 			})
-
 		}
 		return
+	})
+	return mg
+}
+
+func getClusterTransitionedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedBytes,
+		Help:      "Total bytes transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTransitionedObjectsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedObjects,
+		Help:      "Total number of objects transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTransitionedVersionsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionedVersions,
+		Help:      "Total number of versions transitioned to a tier",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterTierMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		if globalTierConfigMgr.Empty() {
+			return
+		}
+		objLayer := newObjectLayerFn()
+		if objLayer == nil || globalIsGateway {
+			return
+		}
+
+		dui, err := loadDataUsageFromBackend(GlobalContext, objLayer)
+		if err != nil {
+			return
+		}
+		// data usage has not captured any data yet.
+		if dui.LastUpdate.IsZero() {
+			return
+		}
+
+		// e.g minio_cluster_ilm_transitioned_bytes{tier="S3TIER-1"}=136314880
+		//     minio_cluster_ilm_transitioned_objects{tier="S3TIER-1"}=1
+		//     minio_cluster_ilm_transitioned_versions{tier="S3TIER-1"}=3
+		for tier, st := range dui.TierStats.Tiers {
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedBytesMD(),
+				Value:          float64(st.TotalSize),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedObjectsMD(),
+				Value:          float64(st.NumObjects),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterTransitionedVersionsMD(),
+				Value:          float64(st.NumVersions),
+				VariableLabels: map[string]string{"tier": tier},
+			})
+		}
+
+		return metrics
 	})
 	return mg
 }
@@ -1614,9 +1749,15 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 			return
 		}
 
-		metrics = make([]Metric, 0, 50)
 		storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+		if storageInfo.Backend.Type == madmin.FS {
+			return
+		}
+		metrics = make([]Metric, 0, 50)
 		for _, disk := range storageInfo.Disks {
+			if disk.Metrics == nil {
+				continue
+			}
 			for apiName, latency := range disk.Metrics.APILatencies {
 				val := latency.(uint64)
 				metrics = append(metrics, Metric{

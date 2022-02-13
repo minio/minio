@@ -81,6 +81,10 @@ spec:
               subPath: "{{ .Values.persistence.subPath }}"
               {{- end }}
             {{- end }}
+            {{- if .Values.extraSecret }}
+            - name: extra-secret
+              mountPath: "/tmp/minio-config-env"
+            {{- end }}
             {{- include "minio.tlsKeysVolumeMount" . | indent 12 }}
           ports:
             - name: {{ $scheme }}
@@ -98,6 +102,10 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
+            {{- if .Values.extraSecret }}
+            - name: MINIO_CONFIG_ENV_FILE
+              value: "/tmp/minio-config-env/config.env"
+            {{- end}}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
@@ -148,6 +156,11 @@ spec:
             claimName: {{ .Values.persistence.existingClaim | default (include "minio.fullname" .) }}
         {{- else }}
           emptyDir: {}
+        {{- end }}
+        {{- if .Values.extraSecret }}
+        - name: extra-secret
+          secret:
+            secretName: {{ .Values.extraSecret }}
         {{- end }}
         - name: minio-user
           secret:

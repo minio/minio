@@ -1,4 +1,5 @@
 # Introduction
+
 This document outlines how to make hotfix binaries and containers for MinIO?. The main focus in this article is about how to backport patches to a specific branch and finally building binaries/containers.
 
 ## Pre-pre requisite
@@ -7,6 +8,7 @@ This document outlines how to make hotfix binaries and containers for MinIO?. Th
 - A working knowledge of AWS S3 API behaviors and corner cases.
 
 ## Pre-requisite for backporting any fixes
+
 Fixes that are allowed a backport must satisfy any of the following criteria's:
 
 - A fix must not be a feature, for example.
@@ -50,16 +52,20 @@ Date:   Sat Jun 15 11:27:17 2019 -0700
 - There is always a possibility of a fix that is new, it is advised that the developer must make sure that the fix is sent upstream, reviewed and merged to the master branch.
 
 ## Creating a hotfix branch
+
 Customers in MinIO are allowed LTS on any release they choose to standardize. Production setups seldom change and require maintenance. Hotfix branches are such maintenance branches that allow customers to operate a production cluster without drastic changes to their deployment.
 
 ## Backporting a fix
+
 Developer is advised to clone the MinIO source and checkout the MinIO release tag customer is currently on.
+
 ```
 λ git checkout RELEASE.2021-04-22T15-44-28Z
 ```
 
 Create a branch and proceed to push the branch **upstream**
 > (upstream here points to git@github.com:minio/minio.git)
+
 ```
 λ git branch -m RELEASE.2021-04-22T15-44-28Z.hotfix
 λ git push -u upstream RELEASE.2021-04-22T15-44-28Z.hotfix
@@ -87,16 +93,19 @@ Date:   Mon Nov 8 08:41:27 2021 -0800
 Once the **patch** is successfully applied, developer must run tests to alidate the fix that was backported by running following tests, locally.
 
 Unit tests
+
 ```
 λ make test
 ```
 
 Verify different type of MinIO deployments work
+
 ```
 λ make verify
 ```
 
 Verify if healing and replacing a drive works
+
 ```
 λ make verify-healing
 ```
@@ -104,17 +113,19 @@ Verify if healing and replacing a drive works
 At this point in time the backport is ready to be submitted as a pull request to the relevant branch. A pull request is recommended to ensure [mint](http://github.com/minio/mint) tests are validated. Pull request also ensures code-reviews for the backports incase of any unforeseen regressions.
 
 ### Building a hotfix binary and container
-To add a hotfix tag to the binary version and embed the relevant
-`commit-id` following build helpers are available
+
+To add a hotfix tag to the binary version and embed the relevant `commit-id` following build helpers are available
 
 #### Builds the hotfix binary
+
 ```
 λ CRED_DIR=/media/builder/minio make hotfix
 ```
 
 #### Builds the hotfix container
+
 ```
 λ CRED_DIR=/media/builder/minio make docker-hotfix
 ```
 
-Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to https://dl.minio.io/server/minio/hotfixes/archive/
+Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to <https://dl.minio.io/server/minio/hotfixes/archive/>

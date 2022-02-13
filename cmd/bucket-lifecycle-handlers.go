@@ -91,7 +91,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucket, bucketLifecycleConfig, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -168,7 +168,7 @@ func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(bucket, bucketLifecycleConfig, nil); err != nil {
+	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

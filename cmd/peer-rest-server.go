@@ -1343,6 +1343,45 @@ func (s *peerRESTServer) GetLastDayTierStatsHandler(w http.ResponseWriter, r *ht
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(result))
 }
 
+func (s *peerRESTServer) DriveSpeedTestHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	serial := r.Form.Get("serial") == "true"
+	blockSizeStr := r.Form.Get("blocksize")
+	fileSizeStr := r.Form.Get("filesize")
+
+	blockSize, err := strconv.ParseUint(blockSizeStr, 10, 64)
+	if err != nil {
+		blockSize = 4 * humanize.MiByte // default value
+	}
+
+	fileSize, err := strconv.ParseUint(fileSizeStr, 10, 64)
+	if err != nil {
+		fileSize = 1 * humanize.GiByte // default value
+	}
+
+	opts := madmin.DriveSpeedTestOpts{
+		Serial:    serial,
+		BlockSize: blockSize,
+		FileSize:  fileSize,
+	}
+
+	done := keepHTTPResponseAlive(w)
+	result := driveSpeedTest(r.Context(), opts)
+	done(nil)
+
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
+}
+
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
@@ -1389,6 +1428,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedtest).HandlerFunc(httpTraceHdrs(server.SpeedtestHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDriveSpeedTest).HandlerFunc(httpTraceHdrs(server.DriveSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadSiteReplicationConfig).HandlerFunc(httpTraceHdrs(server.ReloadSiteReplicationConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadPoolMeta).HandlerFunc(httpTraceHdrs(server.ReloadPoolMetaHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(httpTraceHdrs(server.GetLastDayTierStatsHandler))

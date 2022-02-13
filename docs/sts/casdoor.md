@@ -5,9 +5,10 @@ Casdoor is a UI-first centralized authentication / Single-Sign-On (SSO) platform
 ## Prerequisites
 
 Configure and install casdoor server by following [Casdoor Server Installation](https://casdoor.org/docs/basic/server-installation).
-For a quick installation, docker-compose reference configs are also available on the [Casdoor Try with Docker](https://casdoor.org/docs/basic/try-with-docker). 
+For a quick installation, docker-compose reference configs are also available on the [Casdoor Try with Docker](https://casdoor.org/docs/basic/try-with-docker).
 
 ### Configure Casdoor
+
 - Go to Applications
   - Create or use an existing Casdoor application
   - Edit the application
@@ -23,13 +24,15 @@ For a quick installation, docker-compose reference configs are also available on
 - Open your favorite browser and visit: **http://`CASDOOR_ENDPOINT`/.well-known/openid-configuration**, you will see the OIDC configure of Casdoor.
 
 ### Configure MinIO
+
 ```
-$ export MINIO_ROOT_USER=minio
-$ export MINIO_ROOT_PASSWORD=minio123
-$ minio server /mnt/export
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
+minio server /mnt/export
 ```
 
 Here are all the available options to configure OpenID connect
+
 ```
 mc admin config set myminio/ identity_openid
 
@@ -46,6 +49,7 @@ comment       (sentence)  optionally add a comment to this setting
 ```
 
 and ENV based options
+
 ```
 mc admin config set myminio/ identity_openid --env
 
@@ -62,17 +66,21 @@ MINIO_IDENTITY_OPENID_COMMENT       (sentence)  optionally add a comment to this
 ```
 
 Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
+
 ```
 ~ mc admin config set myminio identity_openid config_url="http://CASDOOR_ENDPOINT/.well-known/openid-configuration" client_id=<client id> client_secret=<client secret> claim_name="tag"
 ```
+
 > NOTE: As MinIO needs to use a claim attribute in JWT for its policy, you should configure it in casdoor as well. Currently, casdoor uses `tag` as a workaround for configuring MinIO's policy.
 
 Once successfully set restart the MinIO instance.
+
 ```
 mc admin service restart myminio
 ```
 
 ### Using WebIdentiy API
+
 On another terminal run `web-identity.go` a sample client application which obtains JWT id_tokens from an identity provider, in our case its Keycloak. Uses the returned id_token response to get new temporary credentials from the MinIO server using the STS API call `AssumeRoleWithWebIdentity`.
 
 ```
@@ -96,7 +104,7 @@ This will open the login page of Casdoor, upon successful login, STS credentials
 
 ### Using MinIO Console
 
-- Open MinIO URL on the browser, lets say http://localhost:9000/
+- Open MinIO URL on the browser, lets say <http://localhost:9000/>
 - Click on `Login with SSO`
 - User will be redirected to the Casdoor user login page, upon successful login the user will be redirected to MinIO page and logged in automatically,
   the user should see now the buckets and objects they have access to.

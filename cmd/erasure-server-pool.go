@@ -335,7 +335,9 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 			pinfo := poolObjInfo{
 				PoolIndex: i,
 			}
-			opts.VersionID = "" // no need to check for specific versionId
+			// do not remove this check as it can lead to inconsistencies
+			// for all callers of bucket replication.
+			opts.VersionID = ""
 			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool, poolOpts[i])
@@ -353,13 +355,13 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 	})
 
 	for _, pinfo := range poolObjInfos {
-		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
-			return -1, pinfo.Err
-		}
-
 		// skip all objects from suspended pools for mutating calls.
 		if z.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
 			continue
+		}
+
+		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
+			return -1, pinfo.Err
 		}
 
 		if isErrObjectNotFound(pinfo.Err) {
@@ -619,12 +621,6 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 				return
 			case v := <-updateCloser:
 				update()
-				// Enforce quotas when all is done.
-				if firstErr == nil {
-					for _, b := range allBuckets {
-						enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
-					}
-				}
 				close(v)
 				return
 			case <-updateTicker.C:
@@ -1672,7 +1668,13 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							cancel()
 							return
 						}
-
+						if opts.WalkAscending {
+							for i := len(fivs.Versions) - 1; i >= 0; i-- {
+								version := fivs.Versions[i]
+								results <- version.ToObjectInfo(bucket, version.Name)
+							}
+							return
+						}
 						for _, version := range fivs.Versions {
 							results <- version.ToObjectInfo(bucket, version.Name)
 						}

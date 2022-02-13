@@ -397,6 +397,29 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
+func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
+	var err error
+	m, ok := isObjectDangling(metaArr, errs, dataErrs)
+	if ok {
+		err = errFileNotFound
+		if opts.VersionID != "" {
+			err = errFileVersionNotFound
+		}
+		defer NSUpdated(bucket, object)
+
+		if opts.VersionID != "" {
+			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
+				VersionID: opts.VersionID,
+			}, false)
+		} else {
+			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
+				VersionID: m.VersionID,
+			}, false)
+		}
+	}
+	return m, err
+}
+
 func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions, readData bool) (fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI, err error) {
 	disks := er.getDisks()
 
@@ -405,27 +428,20 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		return fi, nil, nil, err
+		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
+			if derr != nil {
+				err = derr
+			}
+		}
+		return fi, nil, nil, toObjectErr(err, bucket, object)
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		if errors.Is(reducedErr, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			// Skip buckets that live at `.minio.sys` bucket.
-			if _, ok := isObjectDangling(metaArr, errs, nil); ok {
-				reducedErr = errFileNotFound
-				if opts.VersionID != "" {
-					reducedErr = errFileVersionNotFound
-				}
-				// Remove the dangling object only when:
-				//  - This is a non versioned bucket
-				//  - This is a versioned bucket and the version ID is passed, the reason
-				//    is that we cannot fetch the ID of the latest version when we don't trust xl.meta
-				if !opts.Versioned || opts.VersionID != "" {
-					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
-						Name:      object,
-						VersionID: opts.VersionID,
-					}, false)
-				}
+			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
+			if derr != nil {
+				err = derr
 			}
 		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)

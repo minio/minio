@@ -362,14 +362,14 @@ func TestIsReqAuthenticated(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
@@ -455,11 +455,11 @@ func TestValidateAdminSignature(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	newAllSubsystems()
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, globalNotificationSys, 2*time.Second)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	creds, err := auth.CreateCredentials("admin", "mypassword")
 	if err != nil {

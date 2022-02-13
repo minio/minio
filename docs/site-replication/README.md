@@ -1,4 +1,5 @@
 # Automatic Site Replication
+
 This feature allows multiple independent MinIO sites (or clusters) that are using the same external IDentity Provider (IDP) to be configured as replicas. In this situation the set of replica sites are referred to as peer sites or just sites. When site-replication is enabled on a set of sites, the following changes are replicated to all other sites:
 
 - Creation and deletion of buckets and objects
@@ -31,27 +32,27 @@ The following Bucket features will **not be replicated**, is designed to differ 
 - Configure an alias in `mc` for each of the sites. For example if you have three MinIO sites, you may run:
 
 ```sh
-$ mc alias set minio1 https://minio1.example.com:9000 adminuser adminpassword
-$ mc alias set minio2 https://minio2.example.com:9000 adminuser adminpassword
-$ mc alias set minio3 https://minio3.example.com:9000 adminuser adminpassword
+mc alias set minio1 https://minio1.example.com:9000 adminuser adminpassword
+mc alias set minio2 https://minio2.example.com:9000 adminuser adminpassword
+mc alias set minio3 https://minio3.example.com:9000 adminuser adminpassword
 ```
 
 or
 
 ```sh
-$ export MC_HOST_minio1=https://adminuser:adminpassword@minio1.example.com
-$ export MC_HOST_minio2=https://adminuser:adminpassword@minio2.example.com
-$ export MC_HOST_minio3=https://adminuser:adminpassword@minio3.example.com
+export MC_HOST_minio1=https://adminuser:adminpassword@minio1.example.com
+export MC_HOST_minio2=https://adminuser:adminpassword@minio2.example.com
+export MC_HOST_minio3=https://adminuser:adminpassword@minio3.example.com
 ```
 
 - Add site replication configuration with:
 
 ```sh
-$ mc admin replicate add minio1 minio2 minio3
+mc admin replicate add minio1 minio2 minio3
 ```
 
 - Once the above command returns success, you may query site replication configuration with:
 
 ```sh
-$ mc admin replicate info minio1
+mc admin replicate info minio1
 ```

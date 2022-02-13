@@ -1897,6 +1897,17 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
+		// Test case - 16,  Test case with ivalid byte range empty value.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
+			copySourceRange:  "empty",
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
 	}
 
 	for i, testCase := range testCases {
@@ -1920,7 +1931,11 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
 		}
 		if testCase.copySourceRange != "" {
-			req.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
+			if testCase.copySourceRange == "empty" {
+				req.Header.Set("X-Amz-Copy-Source-Range", "") // specifically test for S3 errors in this scenario.
+			} else {
+				req.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
+			}
 		}
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.

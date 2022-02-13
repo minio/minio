@@ -25,6 +25,7 @@ catch() {
 catch
 
 set -e
+export MINIO_CI_CD=1
 export MINIO_BROWSER=off
 export MINIO_ROOT_USER="minio"
 export MINIO_ROOT_PASSWORD="minio123"

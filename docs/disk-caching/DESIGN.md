@@ -40,7 +40,9 @@ minio gateway s3 https://s3.amazonaws.com
 ```
 
 ### Run MinIO gateway with cache on Docker Container
+
 ### Stable
+
 Cache drives need to have `strictatime` or `relatime` enabled for disk caching feature. In this example, mount the xfs file system on /mnt/cache with `strictatime` or `relatime` enabled.
 
 ```sh
@@ -48,21 +50,25 @@ truncate -s 4G /tmp/data
 ```
 
 ### Build xfs filesystem on /tmp/data
+
 ```
 mkfs.xfs /tmp/data
 ```
 
 ### Create mount dir
+
 ```
 sudo mkdir /mnt/cache  #
 ```
 
-### Mount xfs on /mnt/cache with atime.
+### Mount xfs on /mnt/cache with atime
+
 ```
 sudo mount -o relatime /tmp/data /mnt/cache
 ```
 
 ### Start using the cached drive with S3 gateway
+
 ```
 podman run --net=host -e MINIO_ROOT_USER={s3-access-key} -e MINIO_ROOT_PASSWORD={s3-secret-key} \
     -e MINIO_CACHE_DRIVES=/cache -e MINIO_CACHE_QUOTA=99 -e MINIO_CACHE_AFTER=0 \

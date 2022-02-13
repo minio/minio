@@ -173,7 +173,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 // connect to list of endpoints and load all Erasure disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
+func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 
@@ -185,7 +185,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	for i, err := range errs {
 		if err != nil {
-			if err == errDiskNotFound && retryCount >= 5 {
+			if err == errDiskNotFound && verboseLogging {
 				logger.Error("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
 			} else {
 				logger.Error("Unable to use the drive %s: %v", endpoints[i], err)
@@ -202,7 +202,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
-		if sErr != errUnformattedDisk && sErr != errDiskNotFound && retryCount >= 5 {
+		if sErr != errUnformattedDisk && sErr != errDiskNotFound && verboseLogging {
 			if sErr != nil {
 				logger.Error("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
 			}
@@ -307,7 +307,8 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 	}
 
 	var tries int
-	storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+	var verboseLogging bool
+	storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 	if err == nil {
 		return storageDisks, format, nil
 	}
@@ -315,23 +316,29 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 	tries++ // tried already once
 
 	// Wait on each try for an update.
-	ticker := time.NewTicker(250 * time.Millisecond)
+	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+			// Only log once every 10 iterations, then reset the tries count.
+			verboseLogging = tries >= 10
+			if verboseLogging {
+				tries = 1
+			}
+
+			storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 			if err != nil {
 				tries++
 				switch err {
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.
-					logger.Info("Waiting for the first server to format the disks.")
+					logger.Info("Waiting for the first server to format the disks (elapsed %s)\n", getElapsedTime())
 					continue
 				case errFirstDiskWait:
 					// Fresh setup, wait for other servers to come up.
-					logger.Info("Waiting for all other servers to be online to format the disks.")
+					logger.Info("Waiting for all other servers to be online to format the disks (elapses %s)\n", getElapsedTime())
 					continue
 				case errErasureReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.

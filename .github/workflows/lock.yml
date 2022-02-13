@@ -18,8 +18,7 @@ jobs:
       - uses: dessant/lock-threads@v3
         with:
           github-token: ${{ github.token }}
-          issue-inactive-days: '730'
+          issue-inactive-days: '365'
           exclude-any-issue-labels: 'do-not-close'
           issue-lock-reason: 'resolved'
-          process-only: 'issues'
           log-output: true

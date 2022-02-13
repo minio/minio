@@ -1,7 +1,8 @@
-## MinIO Server Limits Per Tenant
+# MinIO Server Limits Per Tenant
+
 For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.x or later, Ubuntu 18.04 LTS or later. These operating systems package the latest 'xfsprogs' that support large scale deployments.
 
-### Erasure Code (Multiple Drives / Servers)
+## Erasure Code (Multiple Drives / Servers)
 
 | Item                                                            | Specification |
 |:----------------------------------------------------------------|:--------------|
@@ -15,7 +16,7 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 | Read quorum                                                     | N/2           |
 | Write quorum                                                    | N/2+1         |
 
-### Limits of S3 API
+## Limits of S3 API
 
 | Item                                                                            | Specification                                 |
 |:--------------------------------------------------------------------------------|:----------------------------------------------|
@@ -33,10 +34,11 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 | Maximum length for object names                                                 | 1024                                          |
 | Maximum length for '/' separated object name segment                            | 255                                           |
 
-### List of Amazon S3 API's not supported on MinIO
+## List of Amazon S3 API's not supported on MinIO
+
 We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [GitHub issue](https://github.com/minio/minio/issues).
 
-#### List of Amazon S3 Bucket API's not supported on MinIO
+### List of Amazon S3 Bucket API's not supported on MinIO
 
 - BucketACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
@@ -44,11 +46,11 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 - BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.min.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment
 
-#### List of Amazon S3 Object API's not supported on MinIO
+### List of Amazon S3 Object API's not supported on MinIO
 
 - ObjectACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 
-### Object name restrictions on MinIO
+## Object name restrictions on MinIO
 
 - Object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special charaters. **This list is non exhaustive, it depends on the operating system and filesystem under use - please consult your operating system vendor**. MinIO recommends using Linux based deployments for production workloads.
 - Objects should not have conflicting objects as parents, applications using this behavior should change their behavior and use proper unique keys, for example situations such as following conflicting key patterns are not supported.

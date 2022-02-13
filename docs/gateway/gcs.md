@@ -2,13 +2,14 @@
 
 MinIO GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
 
-- [Run MinIO Gateway for GCS](#run-minio-gateway-for-gcs)
-- [Test Using MinIO Console](#test-using-minio-browser)
-- [Test Using MinIO Client](#test-using-minio-client)
+## Support
+
+Gateway implementations are frozen and are not accepting any new features. Please reports any bugs at <https://github.com/minio/minio/issues> . If you are an existing customer please login to <https://subnet.min.io> for production support.
 
 ## 1. Run MinIO Gateway for GCS
 
 ### 1.1 Create a Service Account key for GCS and get the Credentials File
+
 1. Navigate to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
 2. Select a project or create a new project. Note the project ID.
 3. Select the **Create credentials** dropdown on the **Credentials** page, and click **Service account key**.
@@ -20,6 +21,7 @@ MinIO GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3
 **Note:** For alternate ways to set up *Application Default Credentials*, see [Setting Up Authentication for Server to Server Production Applications](https://developers.google.com/identity/protocols/application-default-credentials).
 
 ### 1.2 Run MinIO GCS Gateway Using Docker
+
 ```sh
 podman run \
  -p 9000:9000 \
@@ -43,7 +45,7 @@ minio gateway gcs yourprojectid
 
 ## 2. Test Using MinIO Console
 
-MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+MinIO Gateway comes with an embedded web-based object browser that outputs content to <http://127.0.0.1:9000>. To test that MinIO Gateway is running, open a web browser, navigate to <http://127.0.0.1:9000>, and ensure that the object browser is displayed.
 
 | Dashboard                                                                                   | Creating a bucket                                                                           |
 | -------------                                                                               | -------------                                                                               |
@@ -78,6 +80,7 @@ A response similar to this one should be displayed:
 ```
 
 ### 3.3 Known limitations
+
 MinIO Gateway has the following limitations when used with GCS:
 
 * It only supports read-only and write-only bucket policies at the bucket level; all other variations will return `API Not implemented`.
@@ -88,6 +91,7 @@ Other limitations:
 * Bucket notification APIs are not supported.
 
 ## 4. Explore Further
-- [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
-- [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
-- [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)
+
+* [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
+* [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
+* [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)

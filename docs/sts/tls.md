@@ -1,6 +1,7 @@
 # AssumeRoleWithCertificate [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 ## Introduction
+
 MinIO provides a custom STS API that allows authentication with client X.509 / TLS certificates.
 
 A major advantage of certificate-based authentication compared to other STS authentication methods, like OpenID Connect or LDAP/AD, is that client authentication works without any additional/external component that must be constantly available. Therefore, certificate-based authentication may provide better availability / lower operational complexity.
@@ -17,11 +18,13 @@ MINIO_IDENTITY_TLS_SKIP_VERIFY  (on|off)    trust client certificates without ve
 ```
 
 The MinIO TLS STS API is disabled by default. However, it can be *enabled* by setting environment variable:
+
 ```
 export MINIO_IDENTITY_TLS_ENABLE=on
 ```
 
 ## Example
+
 MinIO exposes a custom S3 STS API endpoint as `Action=AssumeRoleWithCertificate`. A client has to send an HTTP `POST` request to `https://<host>:<port>?Action=AssumeRoleWithCertificate&Version=2011-06-15`. Since the authentication and authorization happens via X.509 certificates the client has to send the request over **TLS** and has to provide
 a client certificate.
 
@@ -55,6 +58,7 @@ A client can request temp. S3 credentials via the STS API. It can authenticate v
 In case of certificate-based authentication, MinIO has to map the client-provided certificate to an S3 policy. MinIO does this via the subject common name field of the X.509 certificate. So, MinIO will associate a certificate with a subject `CN = foobar` to a S3 policy named `foobar`.
 
 The following self-signed certificate is issued for `consoleAdmin`. So, MinIO would associate it with the pre-defined `consoleAdmin` policy.
+
 ```
 Certificate:
     Data:
@@ -87,6 +91,7 @@ Certificate:
          7d:ab:b8:e9:75:ec:b4:39:fb:c8:cf:53:16:5b:1f:15:b6:7f:
          5a:d1:35:2d:fc:31:3a:10:e7:0c
 ```
+
 > Observe the `Subject: CN = consoleAdmin` field.
 
 Also, note that the certificate has to contain the `Extended Key Usage: TLS Web Client Authentication`. Otherwise, MinIO would not accept the certificate as client certificate.
@@ -106,7 +111,7 @@ Further, the temp. S3 credentials will never out-live the client certificate. Fo
 
 *Applications that use direct S3 API will work fine, however interactive users uploading content using (when POSTing to the presigned URL an app generates) a popup becomes visible on browser to provide client certs, you would have to manually cancel and continue. This may be annoying to use but there is no workaround for now.*
 
-
 ## Explore Further
+
 - [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
 - [The MinIO documentation website](https://docs.min.io)

@@ -235,6 +235,8 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		globalHTTPStats.incS3RequestsIncoming()
+
 		if val := globalServiceFreeze.Load(); val != nil {
 			if unlock, ok := val.(chan struct{}); ok && unlock != nil {
 				// Wait until unfrozen.

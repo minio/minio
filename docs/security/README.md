@@ -3,6 +3,7 @@
 ## Server-Side Encryption
 
 MinIO supports two different types of server-side encryption ([SSE](#sse)):
+
 - **SSE-C**: The MinIO server en/decrypts an object with a secret key provided by the S3 client as part of the HTTP request headers. Therefore, [SSE-C](#ssec) requires TLS/HTTPS.
 - **SSE-S3**: The MinIO server en/decrypts an object with a secret key managed by a KMS. Therefore, MinIO requires a valid KMS configuration for [SSE-S3](#sses3).
 
@@ -29,6 +30,8 @@ To summarize for any encrypted object there exists (at least) three different ke
 
 The MinIO server uses an authenticated encryption scheme ([AEAD](#aead)) to en/decrypt and authenticate the object content. The AEAD is combined with some state to build a *Secure Channel*. A *Secure Channel* is a cryptographic construction that ensures confidentiality and integrity of the processed data. In particular the *Secure Channel* splits the plaintext content into fixed size chunks and en/decrypts each chunk separately using an unique key-nonce combination.
 
+##### Figure 1 - Secure Channel construction
+
 ```
 plaintext   := chunk_0          ||       chunk_1          ||       chunk_2          ||       ...
                  |                         |                         |
@@ -38,7 +41,6 @@ plaintext   := chunk_0          ||       chunk_1          ||       chunk_2      
                  |                         |                         |
 ciphertext  := sealed_chunk_0   ||       sealed_chunk_1   ||       sealed_chunk_2   ||       ...
 ```
-<center>Figure 1 - Secure Channel construction</center>
 
 In case of a S3 multi-part operation each part is en/decrypted with the scheme shown in Figure 1. However, for each part an unique secret key is derived from the OEK and the part number using a PRF. So in case of multi-part not the OEK but the output of `PRF(OEK, part_id)` is used as secret key.
 
@@ -46,8 +48,8 @@ In case of a S3 multi-part operation each part is en/decrypted with the scheme s
 
 The SSE schemes described in [Secret Keys](#Secret-Keys) and [Content Encryption](#Content-Encryption) are generic over the cryptographic primitives. However, the MinIO server uses the following cryptographic primitive implementations:
 
- - [PRF](#prf): HMAC-SHA-256
- - [AEAD](#aead): AES-256-GCM if the CPU supports AES-NI, ChaCha20-Poly1305 otherwise. More specifically AES-256-GCM is only selected for X86-64 CPUs with AES-NI extension.
+- [PRF](#prf): HMAC-SHA-256
+- [AEAD](#aead): AES-256-GCM if the CPU supports AES-NI, ChaCha20-Poly1305 otherwise. More specifically AES-256-GCM is only selected for X86-64 CPUs with AES-NI extension.
 
 Further any secret key (apart from the KMS-generated ones) is 256 bits long. The KMS-generated keys may be 256 bits but this depends on the KMS capabilities and configuration.
 
@@ -67,8 +69,8 @@ MinIO does not assume or require that the client-provided key is unique. It may 
 
 S3 clients can change the client-provided key of an existing object. Therefore an S3 client must perform a S3 COPY operation where the copy source and destination are equal. Further the COPY request headers must contain the current and the new client key:
 
- - `X-Amz-Server-Side-Encryption-Customer-Key`: Base64 encoded new key.
- - `X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key`: Base64 encoded current key.
+- `X-Amz-Server-Side-Encryption-Customer-Key`: Base64 encoded new key.
+- `X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key`: Base64 encoded current key.
 
 Such a special COPY request is also known as S3 SSE-C key rotation.
 
@@ -84,6 +86,8 @@ server only assumes that the KMS provides two services:
 More details about supported KMS implementations and configuration can be found at the [KMS guide](https://github.com/minio/minio/blob/master/docs/kms/README.md).
 
 The MinIO server requests a new data key from the KMS for each uploaded object and uses that data key as EK. Additionally it stores the encrypted form of the data key and the master key ID as part of the object metadata. The plain data only resides in RAM during the en/decryption process. The MinIO server does not store any SSE-related key at the KMS. Instead the KMS is treated as trusted component that performs key sealing/unsealing operations to build a key hierarchy:
+
+#### Figure 2 - KMS key hierarchy
 
 ```
                                                           CMK (master key)
@@ -110,12 +114,12 @@ The MinIO server requests a new data key from the KMS for each uploaded object a
                     | object_metadata_1 |               | object_metadata_2 |
                     +-------------------+               +-------------------+
 ```
-<center>Figure 2 - KMS key hierarchy</center>
-
 
 #### Key rotation - Basic Operation
 
 The MinIO server supports key rotation for SSE-S3 encrypted objects. The minio server decrypts the OEK using the current encrypted data key and the master key ID of the object metadata. If this succeeds, the server requests a new data key from the KMS using the master key ID of the **current MinIO KMS configuration** and re-wraps the *OEK* with a new *KEK* derived from the new data key / EK:
+
+##### Figure 3 - KMS data key rotation
 
 ```
               object metadata                                         KMS
@@ -153,7 +157,6 @@ The MinIO server supports key rotation for SSE-S3 encrypted objects. The minio s
 4)  Derive a new KEK from the new data key and re-encrypt the OEK with it.
 5)  Store the encrypted OEK encrypted data key and master key ID in object metadata.
  ```
-<center>Figure 3 - KMS data key rotation</center>
 
 Only the root/admin user can perform an SSE-S3 key rotation using the Admin-API via [mc](https://github.com/minio/mc). For more details about how to perform key management operations using the CLI refer to [mc admin guide](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md) or run `mc admin kms key`.
 
@@ -167,13 +170,13 @@ The MinIO server requires an available KMS to en/decrypt SSE-S3 encrypted object
 
 ## Acronyms
 
-- <a name="aead"></a>**AEAD**: Authenticated Encryption with Associated Data
-- <a name="csprng"></a>**CSPRNG**: Cryptographically Secure Pseudo Random Number Generator
-- <a name="ek"></a>**EK**: External Key
-- <a name="iv"></a>**IV**: Initialization Vector
-- <a name="kek"></a>**KEK**: Key Encryption Key
-- <a name="oek"></a>**OEK**: Object Encryption Key
-- <a name="prf"></a>**PRF**: Pseudo Random Function
-- <a name="sse"></a>**SSE**: Server-Side Encryption
-- <a name="ssec"></a>**SSE-C**: Server-Side Encryption with client-provided Keys
-- <a name="sses3"></a>**SSE-S3**: Server-Side Encryption with a KMS
+- **AEAD**: Authenticated Encryption with Associated Data
+- **CSPRNG**: Cryptographically Secure Pseudo Random Number Generator
+- **EK**: External Key
+- **IV**: Initialization Vector
+- **KEK**: Key Encryption Key
+- **OEK**: Object Encryption Key
+- **PRF**: Pseudo Random Function
+- **SSE**: Server-Side Encryption
+- **SSE-C**: Server-Side Encryption with client-provided Keys
+- **SSE-S3**: Server-Side Encryption with a KMS

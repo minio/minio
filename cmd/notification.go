@@ -563,6 +563,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
+	globalNotificationSys.RemoveNotification(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}
@@ -672,8 +673,8 @@ func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
 	sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
-// Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
-func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+// InitBucketTargets - initializes notification system from notification.xml of all buckets.
+func (sys *NotificationSys) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -1609,6 +1610,39 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
 	wg.Wait()
 
 	return results
+}
+
+// DriveSpeedTest - Drive performance information
+func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) chan madmin.DriveSpeedTestResult {
+	ch := make(chan madmin.DriveSpeedTestResult)
+	var wg sync.WaitGroup
+
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			defer wg.Done()
+			resp, err := client.DriveSpeedTest(ctx, opts)
+			if err != nil {
+				resp.Error = err.Error()
+			}
+
+			ch <- resp
+
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, err)
+		}(client)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	return ch
 }
 
 // ReloadSiteReplicationConfig - tells all peer minio nodes to reload the

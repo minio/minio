@@ -1,19 +1,24 @@
 # MinIO Logging Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
 This document explains how to configure MinIO server to log to different logging targets.
 
 ## Log Targets
+
 MinIO supports currently two target types
 
 - console
 - http
 
-### Console Target
+### Logging Console Target
+
 Console target is on always and cannot be disabled.
 
-### HTTP Target
+### Logging HTTP Target
+
 HTTP target logs to a generic HTTP endpoint in JSON format and is not enabled by default. To enable HTTP target logging you would have to update your MinIO server configuration using `mc admin config set` command.
 
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
+
 ```
 mc admin config get myminio/ logger_webhook
 logger_webhook:name1 auth_token="" endpoint=""
@@ -27,6 +32,7 @@ mc admin service restart myminio
 NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL format, please change this accordingly as per your configuration.
 
 MinIO also honors environment variable for HTTP target logging as shown below, this setting will override the endpoint settings in the MinIO server config.
+
 ```
 export MINIO_LOGGER_WEBHOOK_ENABLE_target1="on"
 export MINIO_LOGGER_WEBHOOK_AUTH_TOKEN_target1="token"
@@ -35,9 +41,11 @@ minio server /mnt/data
 ```
 
 ## Audit Targets
+
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 
-### HTTP Target
+### Audit HTTP Target
+
 ```
 mc admin config get myminio/ audit_webhook
 audit_webhook:name1 enable=off endpoint= auth_token= client_cert= client_key=
@@ -51,6 +59,7 @@ mc admin service restart myminio
 NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL format, please change this accordingly as per your configuration.
 
 MinIO also honors environment variable for HTTP target Audit logging as shown below, this setting will override the endpoint settings in the MinIO server config.
+
 ```
 export MINIO_AUDIT_WEBHOOK_ENABLE_target1="on"
 export MINIO_AUDIT_WEBHOOK_AUTH_TOKEN_target1="token"
@@ -63,11 +72,12 @@ minio server /mnt/data
 Setting this environment variable automatically enables audit logging to the HTTP target. The audit logging is in JSON format as described below.
 
 NOTE:
+
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
 - Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
-   - Pool number the object operation was performed on.
-   - Set number the object operation was performed on.
-   - The list of disks participating in this operation belong to the set.
+  - Pool number the object operation was performed on.
+  - Set number the object operation was performed on.
+  - The list of disks participating in this operation belong to the set.
 
 ```json
 {
@@ -131,7 +141,9 @@ NOTE:
 ```
 
 ### Kafka Target
+
 Assuming that you already have Apache Kafka configured and running.
+
 ```
 mc admin config set myminio/ audit_kafka
 KEY:
@@ -154,6 +166,7 @@ comment          (sentence)  optionally add a comment to this setting
 ```
 
 Configure MinIO to send audit logs to locally running Kafka brokers
+
 ```
 mc admin config set myminio/ audit_kafka:target1 brokers=localhost:29092 topic=auditlog
 mc admin service restart myminio/
@@ -201,12 +214,14 @@ minio server /mnt/data
 Setting this environment variable automatically enables audit logging to the Kafka target. The audit logging is in JSON format as described below.
 
 NOTE:
+
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
 - Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
-   - Pool number the object operation was performed on.
-   - Set number the object operation was performed on.
-   - The list of disks participating in this operation belong to the set.
+  - Pool number the object operation was performed on.
+  - Set number the object operation was performed on.
+  - The list of disks participating in this operation belong to the set.
 
 ## Explore Further
-* [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
-* [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)
+
+- [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
+- [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)
