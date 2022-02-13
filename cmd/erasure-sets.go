@@ -1226,24 +1226,6 @@ func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs 
 	return beforeDrives
 }
 
-// If it is a single node Erasure and all disks are root disks, it is most likely a test setup, else it is a production setup.
-// On a test setup we allow creation of format.json on root disks to help with dev/testing.
-func isTestSetup(infos []DiskInfo, errs []error) bool {
-	if globalIsCICD {
-		return true
-	}
-	rootDiskCount := 0
-	for i := range errs {
-		if errs[i] == nil || errs[i] == errUnformattedDisk {
-			if infos[i].RootDisk {
-				rootDiskCount++
-			}
-		}
-	}
-	// It is a test setup if all disks are root disks in quorum.
-	return rootDiskCount >= len(infos)/2+1
-}
-
 func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -1267,20 +1249,18 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 // Mark root disks as down so as not to heal them.
 func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 	if globalIsCICD {
+		// Do nothing
 		return
 	}
-	var infos []DiskInfo
-	infos, errs = getHealDiskInfos(storageDisks, errs)
-	if !isTestSetup(infos, errs) {
-		for i := range storageDisks {
-			if storageDisks[i] != nil && infos[i].RootDisk {
-				// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
-				// defective drive we should not heal a path on the root disk.
-				logger.Info("Disk `%s` the same as the system root disk.\n"+
-					"Disk will not be used. Please supply a separate disk and restart the server.",
-					storageDisks[i].String())
-				storageDisks[i] = nil
-			}
+	infos, _ := getHealDiskInfos(storageDisks, errs)
+	for i := range storageDisks {
+		if storageDisks[i] != nil && infos[i].RootDisk {
+			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
+			// defective drive we should not heal a path on the root disk.
+			logger.Info("Disk `%s` the same as the system root disk.\n"+
+				"Disk will not be used. Please supply a separate disk and restart the server.",
+				storageDisks[i].String())
+			storageDisks[i] = nil
 		}
 	}
 }

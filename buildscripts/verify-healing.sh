@@ -17,6 +17,7 @@ function start_minio_3_node() {
     export MINIO_ROOT_USER=minio
     export MINIO_ROOT_PASSWORD=minio123
     export MINIO_ERASURE_SET_DRIVE_COUNT=6
+    export MINIO_CI_CD=1
 
     start_port=$2
     args=""
