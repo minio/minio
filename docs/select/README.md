@@ -23,19 +23,19 @@ Parquet is DISABLED by default since hostile crafted input can easily crash the 
 If you are in a controlled environment where it is safe to assume no hostile content can be uploaded to your cluster you can safely enable Parquet.
 To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 
-# Example using Python API
+## Example using Python API
 
-## 1. Prerequisites
+### 1. Prerequisites
 
 - Install MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
 - Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 
-## 2. Install boto3
+### 2. Install boto3
 
 Install `aws-sdk-python` from AWS SDK for Python official docs [here](https://aws.amazon.com/sdk-for-python/)
 
-## 3. Example
+### 3. Example
 
 As an example, let us take a gzip compressed CSV file. Without S3 Select, we would need to download, decompress and process the entire CSV to get the data you needed. With Select API, can use a simple SQL expression to return only the data from the CSV you’re interested in, instead of retrieving the entire object. Following Python example shows how to retrieve the first column `Location` from an object containing data in CSV format.
 

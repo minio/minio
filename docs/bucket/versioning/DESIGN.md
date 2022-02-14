@@ -124,7 +124,7 @@ const (
 The "Metadata" section contains a single version, encoded in similar fashion as each version in the `Versions` array
 of the previous version.
 
-# Inline Data
+## Inline Data
 
 Inline data is optional. If no inline data is present, it is encoded as 0 bytes.
 

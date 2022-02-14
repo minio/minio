@@ -78,7 +78,7 @@ it is randomized which cluster might provision the bucket.
 
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the MinIO endpoints.
 
-# Explore Further
+## Explore Further
 
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)

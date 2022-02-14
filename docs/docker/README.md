@@ -63,7 +63,7 @@ Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/
 
 To override MinIO's auto-generated keys, you may pass secret and access keys explicitly as environment variables. MinIO server also allows regular strings as access and secret keys.
 
-#### GNU/Linux and macOS
+#### GNU/Linux and macOS (custom access and secret keys)
 
 ```sh
 docker run \
@@ -76,7 +76,7 @@ docker run \
   quay.io/minio/minio server /data --console-address ":9001"
 ```
 
-#### Windows
+#### Windows (custom access and secret keys)
 
 ```powershell
 docker run \
@@ -93,7 +93,7 @@ docker run \
 
 Docker provides standardized mechanisms to run docker containers as non-root users.
 
-#### GNU/Linux and macOS
+#### GNU/Linux and macOS (regular user)
 
 On Linux and macOS you can use `--user` to run the container as regular user.
 
@@ -112,7 +112,7 @@ docker run \
   quay.io/minio/minio server /data
 ```
 
-#### Windows
+#### Windows (regular user)
 
 On windows you would need to use [Docker integrated windows authentication](https://success.docker.com/article/modernizing-traditional-dot-net-applications#integratedwindowsauthentication) and [Create a container with Active Directory Support](https://blogs.msdn.microsoft.com/containerstuff/2017/01/30/create-a-container-with-active-directory-support/)
 

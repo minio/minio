@@ -203,6 +203,7 @@ Description of the configuration parameters used above -
 - `policies[].statements[].actions[]` - list of actions granted
 
 ### Create user after install
+
 Install the chart, specifying the users you want to create after install:
 
 ```bash

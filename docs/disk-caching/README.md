@@ -36,7 +36,7 @@ In the example above this means that  `MINIO_CACHE_WATERMARK_LOW` is effectively
 
 To test this setup, access the MinIO gateway via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from all the MinIO endpoints.
 
-# Explore Further
+## Explore Further
 
 - [Disk cache design](https://github.com/minio/minio/blob/master/docs/disk-caching/DESIGN.md)
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)

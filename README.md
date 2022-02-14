@@ -8,7 +8,7 @@ MinIO is a High Performance Object Storage released under GNU Affero General Pub
 
 This README provides quickstart instructions on running MinIO on bare metal hardware, including container-based installations. For Kubernetes environments, use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md).
 
-# Container Installation
+## Container Installation
 
 Use the following commands to run a standalone MinIO server as a container.
 
@@ -17,7 +17,7 @@ require distributed deploying MinIO with Erasure Coding. For extended developmen
 with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html)
 for more complete documentation.
 
-## Stable
+### Stable
 
 Run the following command to run the latest stable image of MinIO as a container using an ephemeral data volume:
 
@@ -36,13 +36,13 @@ see <https://docs.min.io/docs/> and click **MinIO SDKs** in the navigation to vi
 
 > NOTE: To deploy MinIO on with persistent storage, you must map local persistent directories from the host OS to the container using the `podman -v` option. For example, `-v /mnt/data:/data` maps the host OS drive at `/mnt/data` to `/data` on the container.
 
-# macOS
+## macOS
 
 Use the following commands to run a standalone MinIO server on macOS.
 
 Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically, with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html) for more complete documentation.
 
-## Homebrew (recommended)
+### Homebrew (recommended)
 
 Run the following command to install the latest stable MinIO package using [Homebrew](https://brew.sh/). Replace ``/data`` with the path to the drive or directory in which you want MinIO to store data.
 
@@ -62,7 +62,7 @@ The MinIO deployment starts using default root credentials `minioadmin:minioadmi
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers, see <https://docs.min.io/docs/> and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
-## Binary Download
+### Binary Download
 
 Use the following command to download and run a standalone MinIO server on macOS. Replace ``/data`` with the path to the drive or directory in which you want MinIO to store data.
 
@@ -76,7 +76,7 @@ The MinIO deployment starts using default root credentials `minioadmin:minioadmi
 
 You can also connect using any S3-compatible tool, such as the MinIO Client `mc` commandline tool. See [Test using MinIO Client `mc`](#test-using-minio-client-mc) for more information on using the `mc` commandline tool. For application developers, see <https://docs.min.io/docs/> and click **MinIO SDKs** in the navigation to view MinIO SDKs for supported languages.
 
-# GNU/Linux
+## GNU/Linux
 
 Use the following command to run a standalone MinIO server on Linux hosts running 64-bit Intel/AMD architectures. Replace ``/data`` with the path to the drive or directory in which you want MinIO to store data.
 
@@ -103,7 +103,7 @@ You can also connect using any S3-compatible tool, such as the MinIO Client `mc`
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically, with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html) for more complete documentation.
 
-# Microsoft Windows
+## Microsoft Windows
 
 To run MinIO on 64-bit Windows hosts, download the MinIO executable from the following URL:
 
@@ -123,7 +123,7 @@ You can also connect using any S3-compatible tool, such as the MinIO Client `mc`
 
 > NOTE: Standalone MinIO servers are best suited for early development and evaluation. Certain features such as versioning, object locking, and bucket replication require distributed deploying MinIO with Erasure Coding. For extended development and production, deploy MinIO with Erasure Coding enabled - specifically, with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html) for more complete documentation.
 
-# Install from Source
+## Install from Source
 
 Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.17](https://golang.org/dl/#stable)
 
@@ -139,9 +139,9 @@ You can also connect using any S3-compatible tool, such as the MinIO Client `mc`
 
 MinIO strongly recommends *against* using compiled-from-source MinIO servers for production environments.
 
-# Deployment Recommendations
+## Deployment Recommendations
 
-## Allow port access for Firewalls
+### Allow port access for Firewalls
 
 By default MinIO uses the port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port.
 
@@ -202,9 +202,9 @@ When deployed on a single drive, MinIO server lets clients access any pre-existi
 
 The above statement is also valid for all gateway backends.
 
-# Test MinIO Connectivity
+## Test MinIO Connectivity
 
-## Test using MinIO Console
+### Test using MinIO Console
 
 MinIO Server comes with an embedded web based object browser. Point your web browser to <http://127.0.0.1:9000> to ensure your server has started successfully.
 
@@ -230,7 +230,7 @@ For example: `export MINIO_SERVER_URL="https://minio.example.net"`
 
 `mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. Follow the MinIO Client [Quickstart Guide](https://docs.min.io/docs/minio-client-quickstart-guide) for further instructions.
 
-# Upgrading MinIO
+## Upgrading MinIO
 
 Upgrades require zero downtime in MinIO, all upgrades are non-disruptive, all transactions on MinIO are atomic. So upgrading all the servers simultaneously is the recommended way to upgrade MinIO.
 
@@ -246,7 +246,7 @@ mc admin update <minio alias, e.g., myminio>
 
 - For RPM/DEB installations, upgrade packages **parallelly** on all servers. Once upgraded, perform `systemctl restart minio` across all nodes in **parallel**. RPM/DEB based installations are usually automated using [`ansible`](https://github.com/minio/ansible-minio).
 
-## Upgrade Checklist
+### Upgrade Checklist
 
 - Test all upgrades in a lower environment (DEV, QA, UAT) before applying to production. Performing blind upgrades in production environments carries significant risk.
 - Read the release notes for the targeted MinIO release *before* performing any installation, there is no forced requirement to upgrade to latest releases every week. If it has a bug fix you are looking for then yes, else avoid actively upgrading a running production system.
@@ -254,7 +254,7 @@ mc admin update <minio alias, e.g., myminio>
 - `mc admin update` is not supported in kubernetes/container environments, container environments provide their own mechanisms for container updates.
 - **We do not recommend upgrading one MinIO server at a time, the product is designed to support parallel upgrades please follow our recommended guidelines.**
 
-# Explore Further
+## Explore Further
 
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
@@ -263,11 +263,11 @@ mc admin update <minio alias, e.g., myminio>
 - [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
 - [The MinIO documentation website](https://docs.min.io)
 
-# Contribute to MinIO Project
+## Contribute to MinIO Project
 
 Please follow MinIO [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
 
-# License
+## License
 
 - MinIO source is licensed under the GNU AGPLv3 license that can be found in the [LICENSE](https://github.com/minio/minio/blob/master/LICENSE) file.
 - MinIO [Documentation](https://github.com/minio/minio/tree/master/docs) © 2021 by MinIO, Inc is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
