@@ -13,3 +13,9 @@ data:
 {{ include (print $.Template.BasePath "/_helper_create_bucket.txt") . | indent 4 }}
   add-user: |-
 {{ include (print $.Template.BasePath "/_helper_create_user.txt") . | indent 4 }}
+  add-policy: |-
+{{ include (print $.Template.BasePath "/_helper_create_policy.txt") . | indent 4 }}
+{{- range .Values.policies }}
+  {{ .name }}.json: |-
+{{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
+{{ end }}

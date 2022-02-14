@@ -1,18 +1,18 @@
-{{- if .Values.users }}
+{{- if .Values.policies }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ template "minio.fullname" . }}-make-user-job
+  name: {{ template "minio.fullname" . }}-make-policies-job
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ template "minio.name" . }}-make-user-job
+    app: {{ template "minio.name" . }}-make-policies-job
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
-{{- with .Values.makeUserJob.annotations }}
+{{- with .Values.makePolicyJob.annotations }}
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:
@@ -24,30 +24,30 @@ spec:
 {{- if .Values.podLabels }}
 {{ toYaml .Values.podLabels | indent 8 }}
 {{- end }}
-{{- if .Values.makeUserJob.podAnnotations }}
+{{- if .Values.makePolicyJob.podAnnotations }}
       annotations:
-{{ toYaml .Values.makeUserJob.podAnnotations | indent 8 }}
+{{ toYaml .Values.makePolicyJob.podAnnotations | indent 8 }}
 {{- end }}
     spec:
       restartPolicy: OnFailure
 {{- include "minio.imagePullSecrets" . | indent 6 }}
 {{- if .Values.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.makeUserJob.nodeSelector | indent 8 }}
+{{ toYaml .Values.makePolicyJob.nodeSelector | indent 8 }}
 {{- end }}
-{{- with .Values.makeUserJob.affinity }}
+{{- with .Values.makePolicyJob.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- with .Values.makeUserJob.tolerations }}
+{{- with .Values.makePolicyJob.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- if .Values.makeUserJob.securityContext.enabled }}
+{{- if .Values.makePolicyJob.securityContext.enabled }}
       securityContext:
-        runAsUser: {{ .Values.makeUserJob.securityContext.runAsUser }}
-        runAsGroup: {{ .Values.makeUserJob.securityContext.runAsGroup }}
-        fsGroup: {{ .Values.makeUserJob.securityContext.fsGroup }}
+        runAsUser: {{ .Values.makePolicyJob.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.makePolicyJob.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.makePolicyJob.securityContext.fsGroup }}
 {{- end }}
       volumes:
         - name: minio-configuration
@@ -57,15 +57,6 @@ spec:
                 name: {{ template "minio.fullname" . }}
             - secret:
                 name: {{ template "minio.secretName" . }}
-            {{- range .Values.users }}
-            {{- if .existingSecret }}
-            - secret:
-                name: {{ .existingSecret }}
-                items:
-                  - key: {{ .existingSecretKey }}
-                    path: secrets/{{ .accessKey }}
-            {{- end }}
-            {{- end }}
         {{- if .Values.tls.enabled }}
         - name: cert-secret-volume-mc
           secret:
@@ -78,7 +69,7 @@ spec:
       - name: minio-mc
         image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
         imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
-        command: ["/bin/sh", "/config/add-user"]
+        command: ["/bin/sh", "/config/add-policy"]
         env:
           - name: MINIO_ENDPOINT
             value: {{ template "minio.fullname" . }}
@@ -92,5 +83,5 @@ spec:
             mountPath: {{ .Values.configPathmc }}certs
           {{ end }}
         resources:
-{{ toYaml .Values.makeUserJob.resources | indent 10 }}
+{{ toYaml .Values.makePolicyJob.resources | indent 10 }}
 {{- end }}

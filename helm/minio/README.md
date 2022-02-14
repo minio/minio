@@ -188,6 +188,35 @@ Description of the configuration parameters used above -
 - `buckets[].policy` - can be one of none|download|upload|public
 - `buckets[].purge` - purge if bucket exists already
 
+33# Create policies after install
+Install the chart, specifying the policies you want to create after install:
+
+```bash
+helm install --set policies[0].name=mypolicy,policies[0].statements[0].resources[0]='arn:aws:s3:::bucket1',policies[0].statements[0].actions[0]='s3:ListBucket',policies[0].statements[0].actions[1]='s3:GetObject' minio/minio
+```
+
+Description of the configuration parameters used above -
+
+- `policies[].name` - name of the policy to create, must be a string with length > 0
+- `policies[].statements[]` - list of statements, includes actions and resources
+- `policies[].statements[].resources[]` - list of resources that applies the statement
+- `policies[].statements[].actions[]` - list of actions granted
+
+### Create user after install
+Install the chart, specifying the users you want to create after install:
+
+```bash
+helm install --set users[0].accessKey=accessKey,users[0].secretKey=secretKey,users[0].policy=none,users[1].accessKey=accessKey2,users[1].secretRef=existingSecret,users[1].secretKey=password,users[1].policy=none minio/minio
+```
+
+Description of the configuration parameters used above -
+
+- `users[].accessKey` - accessKey of user
+- `users[].secretKey` - secretKey of usersecretRef
+- `users[].existingSecret` - secret name that contains the secretKey of user
+- `users[].existingSecretKey` - data key in existingSecret secret containing the secretKey
+- `users[].policy` - name of the policy to assign to user
+
 ## Uninstalling the Chart
 
 Assuming your release is named as `my-release`, delete it using the command:

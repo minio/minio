@@ -17,7 +17,7 @@ connectToMinio() {
   ACCESS=$(cat /config/rootUser) ; SECRET=$(cat /config/rootPassword) ;
   set +e ; # The connections to minio are allowed to fail.
   echo "Connecting to MinIO server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT" ;
-  MC_COMMAND="${MC} config host add myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
+  MC_COMMAND="${MC} alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
   $MC_COMMAND ;
   STATUS=$? ;
   until [ $STATUS = 0 ]
@@ -35,36 +35,26 @@ connectToMinio() {
   return 0
 }
 
-# checkUserExists ($username)
-# Check if the user exists, by using the exit code of `mc admin user info`
-checkUserExists() {
-  USER=$1
-  CMD=$(${MC} admin user info myminio $USER > /dev/null 2>&1)
+# checkPolicyExists ($policy)
+# Check if the policy exists, by using the exit code of `mc admin policy info`
+checkPolicyExists() {
+  POLICY=$1
+  CMD=$(${MC} admin policy info myminio $POLICY > /dev/null 2>&1)
   return $?
 }
 
-# createUser ($username, $password, $policy)
-createUser() {
-  USER=$1
-  PASS=$2
-  POLICY=$3
+# createPolicy($name)
+createPolicy () {
+  NAME=$1
 
-  # Create the user if it does not exist
-  if ! checkUserExists $USER ; then
-    echo "Creating user '$USER'"
-    ${MC} admin user add myminio $USER $PASS
+  # Create the name if it does not exist
+  if ! checkPolicyExists $NAME ; then
+    echo "Creating policy '$NAME'"
   else
-    echo "User '$USER' already exists."
+    echo "Policy '$NAME' already exists."
   fi
+  ${MC} admin policy add myminio $NAME /config/$NAME.json
 
-
-  # set policy for user
-  if [ ! -z $POLICY -a $POLICY != " " ] ; then
-      echo "Adding policy '$POLICY' for '$USER'"
-      ${MC} admin policy set myminio $POLICY user=$USER
-  else
-      echo "User '$USER' has no policy attached."
-  fi
 }
 
 # Try connecting to MinIO instance
@@ -75,13 +65,9 @@ scheme=http
 {{- end }}
 connectToMinio $scheme
 
-{{ if .Values.users }}
-# Create the users
-{{- range .Values.users }}
-{{- if .existingSecret }}
-createUser {{ .accessKey }} $(cat /config/secrets/{{ .accessKey }}) {{ .policy }}
-{{ else }}
-createUser {{ .accessKey }} {{ .secretKey }} {{ .policy }}
-{{- end }}
+{{ if .Values.policies }}
+# Create the policies
+{{- range .Values.policies }}
+createPolicy {{ .name }}
 {{- end }}
 {{- end }}
