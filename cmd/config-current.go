@@ -657,11 +657,12 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 		logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 	}
 	userAgent := getUserAgent(getMinioMode())
-	for _, l := range loggerCfg.HTTP {
+	for n, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			l.LogOnce = logger.LogOnceIf
 			l.UserAgent = userAgent
 			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+			loggerCfg.HTTP[n] = l
 		}
 	}
 	err = logger.UpdateTargets(loggerCfg)
