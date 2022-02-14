@@ -22,4 +22,4 @@ jobs:
     - name: Lint all docs
       run: |
         npm install -g markdownlint-cli
-        markdownlint --fix '**/*.md' --disable MD013 MD025 MD040 MD024
+        markdownlint --fix '**/*.md' --disable MD013 MD040

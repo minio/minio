@@ -12,7 +12,7 @@ MinIO shared mode is developed to solve several real world use cases, without an
 
 With a proxy running in front of multiple, shared mode MinIO servers, it is very easy to create a Highly Available, load balanced, AWS S3 compatible storage system.
 
-# Get started
+## Get started
 
 If you're aware of stand-alone MinIO set up, the installation and running remains the same.
 
