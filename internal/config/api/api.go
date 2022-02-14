@@ -44,6 +44,7 @@ const (
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
+	apiGzipObjects                 = "gzip_objects"
 
 	EnvAPIRequestsMax              = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline         = "MINIO_API_REQUESTS_DEADLINE"
@@ -61,6 +62,7 @@ const (
 	EnvAPIDeleteCleanupInterval       = "MINIO_API_DELETE_CLEANUP_INTERVAL"
 	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
+	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 )
 
 // Deprecated key and ENVs
@@ -124,6 +126,10 @@ var (
 			Key:   apiDisableODirect,
 			Value: "off",
 		},
+		config.KV{
+			Key:   apiGzipObjects,
+			Value: "off",
+		},
 	}
 )
 
@@ -142,6 +148,7 @@ type Config struct {
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
 	DisableODirect              bool          `json:"disable_odirect"`
+	GzipObjects                 bool          `json:"gzip_objects"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -263,6 +270,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
 
+	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+
 	return Config{
 		RequestsMax:                 requestsMax,
 		RequestsDeadline:            requestsDeadline,
@@ -277,5 +286,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		StaleUploadsExpiry:          staleUploadsExpiry,
 		DeleteCleanupInterval:       deleteCleanupInterval,
 		DisableODirect:              disableODirect,
+		GzipObjects:                 gzipObjects,
 	}, nil
 }
