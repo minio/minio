@@ -109,7 +109,7 @@ docker run \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
   -v ${HOME}/data:/data \
-  quay.io/minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 #### Windows (regular user)
@@ -127,7 +127,7 @@ docker run \
   -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
-  quay.io/minio/minio server /data
+  quay.io/minio/minio server /data --console-address ":9001"
 ```
 
 ### MinIO Custom Access and Secret Keys using Docker secrets
