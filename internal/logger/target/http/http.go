@@ -58,6 +58,9 @@ type Target struct {
 	// Channel of log entries
 	logCh chan interface{}
 
+	// Cancellation function for the target
+	CancelFn context.CancelFunc
+
 	config Config
 }
 
@@ -121,54 +124,62 @@ func acceptedResponseStatusCode(code int) bool {
 }
 
 func (h *Target) startHTTPLogger() {
+	ctx, cancelFn := context.WithCancel(context.Background())
 	// Create a routine which sends json logs received
 	// from an internal channel.
 	go func() {
-		for entry := range h.logCh {
-			logJSON, err := json.Marshal(&entry)
-			if err != nil {
-				continue
-			}
+		for {
+			select {
+			case <-ctx.Done():
+				close(h.logCh)
+				return
+			case entry := <-h.logCh:
+				logJSON, err := json.Marshal(&entry)
+				if err != nil {
+					continue
+				}
 
-			ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-				h.config.Endpoint, bytes.NewReader(logJSON))
-			if err != nil {
-				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+				ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+					h.config.Endpoint, bytes.NewReader(logJSON))
+				if err != nil {
+					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+					cancel()
+					continue
+				}
+				req.Header.Set(xhttp.ContentType, "application/json")
+
+				// Set user-agent to indicate MinIO release
+				// version to the configured log endpoint
+				req.Header.Set("User-Agent", h.config.UserAgent)
+
+				if h.config.AuthToken != "" {
+					req.Header.Set("Authorization", h.config.AuthToken)
+				}
+
+				client := http.Client{Transport: h.config.Transport}
+				resp, err := client.Do(req)
 				cancel()
-				continue
-			}
-			req.Header.Set(xhttp.ContentType, "application/json")
+				if err != nil {
+					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+					continue
+				}
 
-			// Set user-agent to indicate MinIO release
-			// version to the configured log endpoint
-			req.Header.Set("User-Agent", h.config.UserAgent)
+				// Drain any response.
+				xhttp.DrainBody(resp.Body)
 
-			if h.config.AuthToken != "" {
-				req.Header.Set("Authorization", h.config.AuthToken)
-			}
-
-			client := http.Client{Transport: h.config.Transport}
-			resp, err := client.Do(req)
-			cancel()
-			if err != nil {
-				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
-				continue
-			}
-
-			// Drain any response.
-			xhttp.DrainBody(resp.Body)
-
-			if !acceptedResponseStatusCode(resp.StatusCode) {
-				switch resp.StatusCode {
-				case http.StatusForbidden:
-					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
-				default:
-					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status), h.config.Endpoint)
+				if !acceptedResponseStatusCode(resp.StatusCode) {
+					switch resp.StatusCode {
+					case http.StatusForbidden:
+						h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
+					default:
+						h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status), h.config.Endpoint)
+					}
 				}
 			}
 		}
 	}()
+	h.CancelFn = cancelFn
 }
 
 // New initializes a new logger target which
@@ -193,4 +204,9 @@ func (h *Target) Send(entry interface{}, errKind string) error {
 	}
 
 	return nil
+}
+
+// Cancel - cancels the target
+func (h *Target) Cancel() {
+	h.CancelFn()
 }

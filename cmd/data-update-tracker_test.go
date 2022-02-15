@@ -55,6 +55,9 @@ func (t *testingLogger) Init() error {
 	return nil
 }
 
+func (t *testingLogger) Cancel() {
+}
+
 func (t *testingLogger) Send(entry interface{}, errKind string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

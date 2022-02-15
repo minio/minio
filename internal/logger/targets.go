@@ -31,6 +31,7 @@ type Target interface {
 	String() string
 	Endpoint() string
 	Init() error
+	Cancel()
 	Send(entry interface{}, errKind string) error
 }
 
@@ -111,18 +112,31 @@ func AddTarget(t Target) error {
 	return nil
 }
 
-// UpdateTargets swaps targets with newly loaded ones from the cfg
-func UpdateTargets(cfg Config) error {
-	updated := []Target{}
+func cancelAllTargets() {
+	for _, tgt := range Targets() {
+		tgt.Cancel()
+	}
+}
 
+func initTargets(cfg Config) (tgts []Target, err error) {
 	for _, l := range cfg.HTTP {
 		if l.Enabled {
 			t := http.New(l)
-			if err := t.Init(); err != nil {
-				return err
+			if err = t.Init(); err != nil {
+				return tgts, err
 			}
-			updated = append(updated, t)
+			tgts = append(tgts, t)
 		}
+	}
+	return tgts, err
+}
+
+// UpdateTargets swaps targets with newly loaded ones from the cfg
+func UpdateTargets(cfg Config) error {
+	cancelAllTargets() // cancel running targets
+	updated, err := initTargets(cfg)
+	if err != nil {
+		return err
 	}
 
 	swapMu.Lock()

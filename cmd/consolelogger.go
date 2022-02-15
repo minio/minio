@@ -150,6 +150,10 @@ func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	return
 }
 
+// Cancel - cancels the target
+func (sys *HTTPConsoleLoggerSys) Cancel() {
+}
+
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
