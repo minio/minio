@@ -106,6 +106,10 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 		return err
 	}
 
+	if err := os.MkdirAll(pathJoin(metaTmpPath, bgAppendsDirName), 0o777); err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(pathJoin(fsPath, dataUsageBucket), 0o777); err != nil {
 		return err
 	}
