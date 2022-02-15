@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -257,9 +256,8 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 
 	if len(s.formatData) == 0 { // Unformatted disk check if O_DIRECT is supported.
 		// Check if backend is writable and supports O_DIRECT
-		var rnd [32]byte
-		_, _ = rand.Read(rnd[:])
-		filePath := pathJoin(s.diskPath, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
+		uuid := mustGetUUID()
+		filePath := pathJoin(s.diskPath, ".writable-check-"+uuid+".tmp")
 		w, err := s.openFileDirect(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 		if err != nil {
 			return s, err
@@ -272,7 +270,7 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 			}
 			return s, err
 		}
-		Remove(filePath)
+		renameAll(filePath, pathJoin(s.diskPath, minioMetaTmpDeletedBucket, uuid))
 
 		// Create all necessary bucket folders if possible.
 		if err = makeFormatErasureMetaVolumes(s); err != nil {

@@ -98,12 +98,7 @@ func formatErasureCleanupTmp(diskPath string) {
 			err))
 	}
 
-	if err := renameAll(tmpOld, pathJoin(diskPath, minioMetaTmpDeletedBucket, tmpID)); err != nil && !errors.Is(err, errFileNotFound) {
-		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
-			pathJoin(diskPath, minioMetaTmpBucket),
-			tmpOld,
-			osErrToFileErr(err)))
-	}
+	go removeAll(tmpOld)
 
 	// Renames and schedules for purging all bucket metacache.
 	renameAllBucketMetacache(diskPath)
