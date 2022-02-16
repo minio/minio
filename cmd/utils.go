@@ -44,6 +44,7 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/dustin/go-humanize"
+	"github.com/felixge/fgprof"
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
@@ -313,6 +314,41 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		prof.stopFn = func() ([]byte, error) {
 			pprof.StopCPUProfile()
 			err := f.Close()
+			if err != nil {
+				return nil, err
+			}
+			defer os.RemoveAll(dirPath)
+			return ioutil.ReadFile(fn)
+		}
+		// TODO(klauspost): Replace with madmin.ProfilerCPUIO on next update.
+	case "cpuio":
+		// at 10k or more goroutines fgprof is likely to become
+		// unable to maintain its sampling rate and to significantly
+		// degrade the performance of your application
+		// https://github.com/felixge/fgprof#fgprof
+		if n := runtime.NumGoroutine(); n > 10000 && !globalIsCICD {
+			return nil, fmt.Errorf("unable to perform CPU IO profile with %d goroutines", n)
+		}
+		dirPath, err := ioutil.TempDir("", "profile")
+		if err != nil {
+			return nil, err
+		}
+		fn := filepath.Join(dirPath, "cpuio.out")
+		f, err := os.Create(fn)
+		if err != nil {
+			return nil, err
+		}
+		stop := fgprof.Start(f, fgprof.FormatPprof)
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			return nil, err
+		}
+		prof.stopFn = func() ([]byte, error) {
+			err := stop()
+			if err != nil {
+				return nil, err
+			}
+			err = f.Close()
 			if err != nil {
 				return nil, err
 			}
