@@ -221,17 +221,18 @@ func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
 			var err error
 			if tier, err = transitionObject(ctx, objectAPI, oi); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w", oi.Bucket, oi.Name, oi.VersionID, err))
+			} else {
+				ts := tierStats{
+					TotalSize:   uint64(oi.Size),
+					NumVersions: 1,
+				}
+				if oi.IsLatest {
+					ts.NumObjects = 1
+				}
+				t.addLastDayStats(tier, ts)
 			}
 			atomic.AddInt32(&t.activeTasks, -1)
 
-			ts := tierStats{
-				TotalSize:   uint64(oi.Size),
-				NumVersions: 1,
-			}
-			if oi.IsLatest {
-				ts.NumObjects = 1
-			}
-			t.addLastDayStats(tier, ts)
 		}
 	}
 }
