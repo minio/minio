@@ -1531,16 +1531,21 @@ func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	go globalReplicationStats.loadInitialReplicationMetrics(ctx)
 }
 
+type proxyResult struct {
+	Proxy bool
+	Err   error
+}
+
 // get Reader from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy bool) {
-	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, opts, proxyTargets)
-	if !proxy {
-		return nil, false
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
+	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
+	if !proxy.Proxy {
+		return nil, proxy, nil
 	}
-	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
+	fn, _, _, err := NewGetObjectReader(nil, oi, opts)
 	if err != nil {
-		return nil, false
+		return nil, proxy, err
 	}
 	gopts := miniogo.GetObjectOptions{
 		VersionID:            opts.VersionID,
@@ -1548,30 +1553,40 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 		Internal: miniogo.AdvancedGetOptions{
 			ReplicationProxyRequest: "true",
 		},
+		PartNumber: opts.PartNumber,
 	}
 	// get correct offsets for encrypted object
-	if off >= 0 && length >= 0 {
-		if err := gopts.SetRange(off, off+length-1); err != nil {
-			return nil, false
+	if rs != nil {
+		h, err := rs.ToHeader()
+		if err != nil {
+			return nil, proxy, err
 		}
+		gopts.Set(xhttp.Range, h)
 	}
 	// Make sure to match ETag when proxying.
 	if err = gopts.SetMatchETag(oi.ETag); err != nil {
-		return nil, false
+		return nil, proxy, err
 	}
 	c := miniogo.Core{Client: tgt.Client}
-	obj, _, _, err := c.GetObject(ctx, bucket, object, gopts)
+	obj, _, h, err := c.GetObject(ctx, bucket, object, gopts)
 	if err != nil {
-		return nil, false
+		return nil, proxy, err
 	}
 	closeReader := func() { obj.Close() }
-
 	reader, err := fn(obj, h, closeReader)
 	if err != nil {
-		return nil, false
+		return nil, proxy, err
 	}
 	reader.ObjInfo = oi.Clone()
-	return reader, true
+	if rs != nil {
+		contentSize, err := parseSizeFromContentRange(h)
+		if err != nil {
+			return nil, proxy, err
+		}
+		reader.ObjInfo.Size = contentSize
+	}
+
+	return reader, proxyResult{Proxy: true}, nil
 }
 
 func getproxyTargets(ctx context.Context, bucket, object string, opts ObjectOptions) (tgts *madmin.BucketTargets) {
@@ -1590,11 +1605,11 @@ func getproxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	return tgts
 }
 
-func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgt *TargetClient, oi ObjectInfo, proxy bool) {
+func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgt *TargetClient, oi ObjectInfo, proxy proxyResult) {
 	// this option is set when active-active replication is in place between site A -> B,
 	// and site B does not have the object yet.
 	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
-		return nil, oi, false
+		return nil, oi, proxy
 	}
 	for _, t := range proxyTargets.Targets {
 		tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, t.Arn)
@@ -1612,9 +1627,22 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "true",
 			},
+			PartNumber: opts.PartNumber,
 		}
+		if rs != nil {
+			h, err := rs.ToHeader()
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Invalid range header for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
+				continue
+			}
+			gopts.Set(xhttp.Range, h)
+		}
+
 		objInfo, err := tgt.StatObject(ctx, t.TargetBucket, object, gopts)
 		if err != nil {
+			if isErrInvalidRange(ErrorRespToObjectError(err, bucket, object)) {
+				return nil, oi, proxyResult{Err: err}
+			}
 			continue
 		}
 
@@ -1645,15 +1673,15 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		if ok {
 			oi.ContentEncoding = ce
 		}
-		return tgt, oi, true
+		return tgt, oi, proxyResult{Proxy: true}
 	}
-	return nil, oi, false
+	return nil, oi, proxy
 }
 
 // get object info from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyHeadToReplicationTarget(ctx context.Context, bucket, object string, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (oi ObjectInfo, proxy bool) {
-	_, oi, proxy = proxyHeadToRepTarget(ctx, bucket, object, opts, proxyTargets)
+func proxyHeadToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (oi ObjectInfo, proxy proxyResult) {
+	_, oi, proxy = proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
 	return oi, proxy
 }
 

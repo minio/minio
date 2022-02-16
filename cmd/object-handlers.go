@@ -412,18 +412,26 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	if err != nil {
 		var (
 			reader *GetObjectReader
-			proxy  bool
+			proxy  proxyResult
 		)
 		proxytgts := getproxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
 			// proxy to replication target if active-active replication is in place.
-			reader, proxy = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
-			if reader != nil && proxy {
+			reader, proxy, err = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
+			if err != nil && !isErrObjectNotFound(ErrorRespToObjectError(err, bucket, object)) &&
+				!isErrVersionNotFound(ErrorRespToObjectError(err, bucket, object)) {
+				logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
+			}
+			if reader != nil && proxy.Proxy && err == nil {
 				gr = reader
 			}
 		}
-		if reader == nil || !proxy {
+		if reader == nil || !proxy.Proxy {
 			if isErrPreconditionFailed(err) {
+				return
+			}
+			if proxy.Err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
 				return
 			}
 			if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
@@ -631,22 +639,28 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
+	// Get request range.
+	var rs *HTTPRangeSpec
+	rangeHeader := r.Header.Get(xhttp.Range)
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		var (
-			proxy bool
+			proxy proxyResult
 			oi    ObjectInfo
 		)
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getproxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
-			oi, proxy = proxyHeadToReplicationTarget(ctx, bucket, object, opts, proxytgts)
-			if proxy {
+			if rangeHeader != "" {
+				rs, _ = parseRequestRangeSpec(rangeHeader)
+			}
+			oi, proxy = proxyHeadToReplicationTarget(ctx, bucket, object, rs, opts, proxytgts)
+			if proxy.Proxy {
 				objInfo = oi
 			}
 		}
-		if !proxy {
+		if !proxy.Proxy {
 			if globalBucketVersioningSys.Enabled(bucket) {
 				switch {
 				case !objInfo.VersionPurgeStatus.Empty():
@@ -703,9 +717,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		return
 	}
 
-	// Get request range.
-	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		// Both 'Range' and 'partNumber' cannot be specified at the same time
 		if opts.PartNumber > 0 {
