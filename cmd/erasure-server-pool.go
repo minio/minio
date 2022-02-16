@@ -1848,7 +1848,15 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		}
 		wg.Wait()
 	}()
-	return <-errCh
+	var err error
+	for e := range errCh {
+		// Save first non-nil error.
+		if e != nil && err != nil {
+			err = e
+			cancel()
+		}
+	}
+	return err
 }
 
 func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
