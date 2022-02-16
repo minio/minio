@@ -48,18 +48,21 @@ var (
 			Type:        "string",
 			Description: "[DEPRECATED use api_key] Subnet license token for the cluster",
 			Optional:    true,
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.APIKey,
 			Type:        "string",
 			Description: "Subnet api key for the cluster",
 			Optional:    true,
+			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.Proxy,
 			Type:        "string",
 			Description: "HTTP(S) proxy URL to use for connecting to SUBNET",
 			Optional:    true,
+			Sensitive:   true,
 		},
 	}
 )
