@@ -25,6 +25,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.13.0
+	github.com/felixge/fgprof v0.9.2
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/loads v0.21.0
 	github.com/go-sql-driver/mysql v1.6.0
@@ -44,7 +45,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.43
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.14.6
+	github.com/minio/console v0.14.7
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.2.1-0.20220126071331-eefa6468e289
 	github.com/minio/highwayhash v1.0.2
@@ -116,7 +117,6 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/felixge/fgprof v0.9.2 // indirect
 	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
