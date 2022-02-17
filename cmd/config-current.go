@@ -574,18 +574,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger/audit targets: %w", err))
 	}
 
-	for _, l := range loggerCfg.HTTP {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			l.UserAgent = loggerUserAgent
-			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-			// Enable http logging
-			if err = logger.AddTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server logger HTTP target: %w", err))
-			}
-		}
-	}
-
 	for _, l := range loggerCfg.AuditWebhook {
 		if l.Enabled {
 			l.LogOnce = logger.LogOnceIf
@@ -661,6 +649,25 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
 	if err != nil {
 		return fmt.Errorf("Unable to apply scanner config: %w", err)
+	}
+
+	// Logger webhook
+	loggerCfg, err := logger.LookupConfig(s)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+	}
+	userAgent := getUserAgent(getMinioMode())
+	for n, l := range loggerCfg.HTTP {
+		if l.Enabled {
+			l.LogOnce = logger.LogOnceIf
+			l.UserAgent = userAgent
+			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+			loggerCfg.HTTP[n] = l
+		}
+	}
+	err = logger.UpdateTargets(loggerCfg)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
 	}
 
 	// Apply configurations.

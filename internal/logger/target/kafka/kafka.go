@@ -197,6 +197,10 @@ func (h *Target) Init() error {
 	return nil
 }
 
+// Cancel - cancels the target
+func (h *Target) Cancel() {
+}
+
 // New initializes a new logger target which
 // sends log over http to the specified endpoint
 func New(config Config) *Target {

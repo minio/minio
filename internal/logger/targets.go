@@ -20,6 +20,8 @@ package logger
 import (
 	"sync"
 	"sync/atomic"
+
+	"github.com/minio/minio/internal/logger/target/http"
 )
 
 // Target is the entity that we will receive
@@ -29,6 +31,7 @@ type Target interface {
 	String() string
 	Endpoint() string
 	Init() error
+	Cancel()
 	Send(entry interface{}, errKind string) error
 }
 
@@ -106,5 +109,39 @@ func AddTarget(t Target) error {
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	swapMu.Unlock()
 
+	return nil
+}
+
+func cancelAllTargets() {
+	for _, tgt := range targets {
+		tgt.Cancel()
+	}
+}
+
+func initTargets(cfg Config) (tgts []Target, err error) {
+	for _, l := range cfg.HTTP {
+		if l.Enabled {
+			t := http.New(l)
+			if err = t.Init(); err != nil {
+				return tgts, err
+			}
+			tgts = append(tgts, t)
+		}
+	}
+	return tgts, err
+}
+
+// UpdateTargets swaps targets with newly loaded ones from the cfg
+func UpdateTargets(cfg Config) error {
+	updated, err := initTargets(cfg)
+	if err != nil {
+		return err
+	}
+
+	swapMu.Lock()
+	atomic.StoreInt32(&nTargets, int32(len(updated)))
+	cancelAllTargets() // cancel running targets
+	targets = updated
+	swapMu.Unlock()
 	return nil
 }
