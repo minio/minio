@@ -113,7 +113,7 @@ func AddTarget(t Target) error {
 }
 
 func cancelAllTargets() {
-	for _, tgt := range Targets() {
+	for _, tgt := range targets {
 		tgt.Cancel()
 	}
 }
@@ -133,13 +133,13 @@ func initTargets(cfg Config) (tgts []Target, err error) {
 
 // UpdateTargets swaps targets with newly loaded ones from the cfg
 func UpdateTargets(cfg Config) error {
-	cancelAllTargets() // cancel running targets
 	updated, err := initTargets(cfg)
 	if err != nil {
 		return err
 	}
 
 	swapMu.Lock()
+	cancelAllTargets() // cancel running targets
 	targets = updated
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	swapMu.Unlock()
