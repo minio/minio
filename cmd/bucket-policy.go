@@ -63,6 +63,7 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 func NewPolicySys() *PolicySys {
 	return &PolicySys{}
 }
+
 func getConditionValuesWithTags(r *http.Request, lc string, username string, claims map[string]interface{}, tags *tags.Tags) map[string][]string {
 	args := getConditionValues(r, lc, username, claims)
 	// Object tag value injection
