@@ -50,7 +50,8 @@ type setInfo struct {
 // mrfState sncapsulates all the information
 // related to the global background MRF.
 type mrfState struct {
-	ready int32
+	ready int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	_     int32 // For 64 bits alignment
 
 	ctx       context.Context
 	objectAPI ObjectLayer

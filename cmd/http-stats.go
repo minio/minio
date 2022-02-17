@@ -138,12 +138,13 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
+	s3RequestsInQueue       int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	_                       int32 // For 64 bits alignment
+	s3RequestsIncoming      uint64
 	rejectedRequestsAuth    uint64
 	rejectedRequestsTime    uint64
 	rejectedRequestsHeader  uint64
 	rejectedRequestsInvalid uint64
-	s3RequestsInQueue       int32
-	s3RequestsIncoming      uint64
 	currentS3Requests       HTTPAPIStats
 	totalS3Requests         HTTPAPIStats
 	totalS3Errors           HTTPAPIStats
