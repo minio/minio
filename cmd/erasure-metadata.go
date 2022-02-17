@@ -477,6 +477,18 @@ func (fi *FileInfo) TierFreeVersion() bool {
 	return ok
 }
 
+// IsRestoreObjReq returns true if fi corresponds to a RestoreObject request.
+func (fi *FileInfo) IsRestoreObjReq() bool {
+	if restoreHdr, ok := fi.Metadata[xhttp.AmzRestore]; ok {
+		if restoreStatus, err := parseRestoreObjStatus(restoreHdr); err == nil {
+			if !restoreStatus.Ongoing() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // VersionPurgeStatus returns overall version purge status for this object version across targets
 func (fi *FileInfo) VersionPurgeStatus() VersionPurgeStatusType {
 	return fi.ReplicationState.CompositeVersionPurgeStatus()
