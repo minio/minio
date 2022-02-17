@@ -139,9 +139,9 @@ func UpdateTargets(cfg Config) error {
 	}
 
 	swapMu.Lock()
+	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	cancelAllTargets() // cancel running targets
 	targets = updated
-	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	swapMu.Unlock()
 	return nil
 }
