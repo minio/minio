@@ -24,6 +24,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"sync"
+	"sync/atomic"
 
 	sarama "github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
@@ -34,6 +36,9 @@ import (
 
 // Target - Kafka target.
 type Target struct {
+	status int32
+	wg     sync.WaitGroup
+
 	// Channel of log entries
 	logCh chan interface{}
 
@@ -55,30 +60,37 @@ func (h *Target) Send(entry interface{}, errKind string) error {
 	return nil
 }
 
+func (h *Target) logEntry(entry interface{}) {
+	h.wg.Add(1)
+	defer h.wg.Done()
+
+	logJSON, err := json.Marshal(&entry)
+	if err != nil {
+		return
+	}
+
+	ae, ok := entry.(audit.Entry)
+	if ok {
+		msg := sarama.ProducerMessage{
+			Topic: h.kconfig.Topic,
+			Key:   sarama.StringEncoder(ae.RequestID),
+			Value: sarama.ByteEncoder(logJSON),
+		}
+
+		_, _, err = h.producer.SendMessage(&msg)
+		if err != nil {
+			h.kconfig.LogOnce(context.Background(), err, h.kconfig.Topic)
+			return
+		}
+	}
+}
+
 func (h *Target) startKakfaLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
 	go func() {
 		for entry := range h.logCh {
-			logJSON, err := json.Marshal(&entry)
-			if err != nil {
-				continue
-			}
-
-			ae, ok := entry.(audit.Entry)
-			if ok {
-				msg := sarama.ProducerMessage{
-					Topic: h.kconfig.Topic,
-					Key:   sarama.StringEncoder(ae.RequestID),
-					Value: sarama.ByteEncoder(logJSON),
-				}
-
-				_, _, err = h.producer.SendMessage(&msg)
-				if err != nil {
-					h.kconfig.LogOnce(context.Background(), err, h.kconfig.Topic)
-					continue
-				}
-			}
+			h.logEntry(entry)
 		}
 	}()
 }
@@ -193,12 +205,17 @@ func (h *Target) Init() error {
 
 	h.producer = producer
 
+	h.status = 1
 	go h.startKakfaLogger()
 	return nil
 }
 
 // Cancel - cancels the target
 func (h *Target) Cancel() {
+	if atomic.CompareAndSwapInt32(&h.status, 1, 0) {
+		close(h.logCh)
+	}
+	h.wg.Wait()
 }
 
 // New initializes a new logger target which

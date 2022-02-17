@@ -44,8 +44,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/target/http"
-	"github.com/minio/minio/internal/logger/target/kafka"
 	"github.com/minio/pkg/env"
 )
 
@@ -566,36 +564,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
 
-	// Load logger targets based on user's configuration
-	loggerUserAgent := getUserAgent(getMinioMode())
-
-	loggerCfg, err := logger.LookupConfig(s)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger/audit targets: %w", err))
-	}
-
-	for _, l := range loggerCfg.AuditWebhook {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			l.UserAgent = loggerUserAgent
-			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-			// Enable http audit logging
-			if err = logger.AddAuditTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit HTTP target: %w", err))
-			}
-		}
-	}
-
-	for _, l := range loggerCfg.AuditKafka {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			// Enable Kafka audit logging
-			if err = logger.AddAuditTarget(kafka.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit Kafka target: %w", err))
-			}
-		}
-	}
-
 	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
@@ -673,6 +641,35 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		err = logger.UpdateTargets(loggerCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
+		}
+	case config.AuditWebhookSubSys:
+		// TODO: When loading all subsystems, LookupConfig will get executed twice
+		// as it is done in the LoggerWebhookSubSys case also. Need to find a way to
+		// avoid this
+		loggerCfg, err := logger.LookupConfig(s)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+		}
+		userAgent := getUserAgent(getMinioMode())
+		for n, l := range loggerCfg.AuditWebhook {
+			if l.Enabled {
+				l.LogOnce = logger.LogOnceIf
+				l.UserAgent = userAgent
+				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+				loggerCfg.AuditWebhook[n] = l
+			}
+		}
+
+		for n, l := range loggerCfg.AuditKafka {
+			if l.Enabled {
+				l.LogOnce = logger.LogOnceIf
+				loggerCfg.AuditKafka[n] = l
+			}
+		}
+
+		err = logger.UpdateAuditTargets(loggerCfg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook config: %w", err))
 		}
 	}
 	globalServerConfigMu.Lock()

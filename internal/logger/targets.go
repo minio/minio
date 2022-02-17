@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/minio/minio/internal/logger/target/http"
+	"github.com/minio/minio/internal/logger/target/kafka"
 )
 
 // Target is the entity that we will receive
@@ -80,22 +81,6 @@ var (
 	nAuditTargets int32 // atomic count of len(auditTargets)
 )
 
-// AddAuditTarget adds a new audit logger target to the
-// list of enabled loggers
-func AddAuditTarget(t Target) error {
-	if err := t.Init(); err != nil {
-		return err
-	}
-
-	swapMu.Lock()
-	updated := append(make([]Target, 0, len(auditTargets)+1), auditTargets...)
-	updated = append(updated, t)
-	auditTargets = updated
-	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
-	swapMu.Unlock()
-	return nil
-}
-
 // AddTarget adds a new logger target to the
 // list of enabled loggers
 func AddTarget(t Target) error {
@@ -118,8 +103,8 @@ func cancelAllTargets() {
 	}
 }
 
-func initTargets(cfg Config) (tgts []Target, err error) {
-	for _, l := range cfg.HTTP {
+func initHttpTargets(cfgMap map[string]http.Config) (tgts []Target, err error) {
+	for _, l := range cfgMap {
 		if l.Enabled {
 			t := http.New(l)
 			if err = t.Init(); err != nil {
@@ -129,6 +114,23 @@ func initTargets(cfg Config) (tgts []Target, err error) {
 		}
 	}
 	return tgts, err
+}
+
+func initKafkaTargets(cfgMap map[string]kafka.Config) (tgts []Target, err error) {
+	for _, l := range cfgMap {
+		if l.Enabled {
+			t := kafka.New(l)
+			if err = t.Init(); err != nil {
+				return tgts, err
+			}
+			tgts = append(tgts, t)
+		}
+	}
+	return tgts, err
+}
+
+func initTargets(cfg Config) (tgts []Target, err error) {
+	return initHttpTargets(cfg.HTTP)
 }
 
 // UpdateTargets swaps targets with newly loaded ones from the cfg
@@ -149,6 +151,39 @@ func UpdateTargets(cfg Config) error {
 	}
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	cancelAllTargets() // cancel running targets
+	targets = updated
+	swapMu.Unlock()
+	return nil
+}
+
+func cancelAllAuditTargets() {
+	for _, tgt := range auditTargets {
+		tgt.Cancel()
+	}
+}
+
+func initAuditTargets(cfg Config) (tgts []Target, err error) {
+	tgts, err = initHttpTargets(cfg.AuditWebhook)
+	if err != nil {
+		return tgts, err
+	}
+	ktgts, err := initKafkaTargets(cfg.AuditKafka)
+	if err != nil {
+		return tgts, err
+	}
+	return append(tgts, ktgts...), err
+}
+
+// UpdateAuditTargets swaps targets with newly loaded ones from the cfg
+func UpdateAuditTargets(cfg Config) error {
+	updated, err := initAuditTargets(cfg)
+	if err != nil {
+		return err
+	}
+
+	swapMu.Lock()
+	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
+	cancelAllAuditTargets() // cancel running targets
 	targets = updated
 	swapMu.Unlock()
 	return nil
