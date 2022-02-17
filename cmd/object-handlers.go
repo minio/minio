@@ -600,8 +600,13 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+	objAPI := api.ObjectAPI()
+	tags, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+	if s3Error := checkRequestAuthTypeAndTagCondition(ctx, r, policy.GetObjectAction, bucket, object, tags); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
