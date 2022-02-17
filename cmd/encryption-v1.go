@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/minio/kes"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/fips"
 	xhttp "github.com/minio/minio/internal/http"
@@ -46,6 +47,7 @@ var (
 	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
 	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
+	errKMSKeyNotFound       = errors.New("Invalid KMS keyId")
 	// Additional MinIO errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 	// error returned when invalid encryption parameters are specified
@@ -262,6 +264,9 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 		}
 		key, err := GlobalKMS.GenerateKey(keyID, kmsCtx)
 		if err != nil {
+			if errors.Is(err, kes.ErrKeyNotFound) {
+				return crypto.ObjectKey{}, errKMSKeyNotFound
+			}
 			return crypto.ObjectKey{}, err
 		}
 

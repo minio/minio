@@ -212,6 +212,7 @@ const (
 	ErrInvalidSSECustomerParameters
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
+	ErrKMSKeyNotFoundException
 
 	ErrNoAccessKey
 	ErrInvalidToken
@@ -1127,6 +1128,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Server side encryption specified but KMS is not configured",
 		HTTPStatusCode: http.StatusNotImplemented,
 	},
+	ErrKMSKeyNotFoundException: {
+		Code:           "KMS.NotFoundException",
+		Description:    "Invalid keyId",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrNoAccessKey: {
 		Code:           "AccessDenied",
 		Description:    "No AWSAccessKey was presented",
@@ -1912,6 +1918,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrIncompatibleEncryptionMethod
 	case errKMSNotConfigured:
 		apiErr = ErrKMSNotConfigured
+	case errKMSKeyNotFound:
+		apiErr = ErrKMSKeyNotFoundException
+
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
