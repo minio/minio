@@ -129,7 +129,7 @@ func (sys *HTTPConsoleLoggerSys) Endpoint() string {
 
 // String - stringer function for interface compatibility
 func (sys *HTTPConsoleLoggerSys) String() string {
-	return "console+http"
+	return logger.ConsoleLoggerTgt
 }
 
 // Content returns the console stdout log
