@@ -29,6 +29,9 @@ import (
 	c "github.com/minio/pkg/console"
 )
 
+// ConsoleLoggerTgt is a stringified value to represent console logging
+const ConsoleLoggerTgt = "console+http"
+
 // Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
 type Logger interface {
 	json(msg string, args ...interface{})

@@ -139,6 +139,14 @@ func UpdateTargets(cfg Config) error {
 	}
 
 	swapMu.Lock()
+	for _, tgt := range targets {
+		// Preserve console target when dynamically updating
+		// other HTTP targets, console target is always present.
+		if tgt.String() == ConsoleLoggerTgt {
+			updated = append(updated, tgt)
+			break
+		}
+	}
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	cancelAllTargets() // cancel running targets
 	targets = updated
