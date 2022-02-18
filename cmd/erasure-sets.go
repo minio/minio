@@ -93,44 +93,6 @@ type erasureSets struct {
 	deploymentID     [16]byte
 
 	disksStorageInfoCache timedValue
-
-	lastConnectDisksOpTime time.Time
-}
-
-// Return false if endpoint is not connected or has been reconnected after last check
-func isEndpointConnectionStable(diskMap map[Endpoint]StorageAPI, endpoint Endpoint, lastCheck time.Time) bool {
-	disk := diskMap[endpoint]
-	if disk == nil {
-		return false
-	}
-	if !disk.IsOnline() {
-		return false
-	}
-	if !lastCheck.IsZero() && disk.LastConn().After(lastCheck) {
-		return false
-	}
-	return true
-}
-
-func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
-	diskMap := make(map[Endpoint]StorageAPI)
-
-	s.erasureDisksMu.RLock()
-	defer s.erasureDisksMu.RUnlock()
-
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.setDriveCount; j++ {
-			disk := s.erasureDisks[i][j]
-			if disk == OfflineDisk {
-				continue
-			}
-			if !disk.IsOnline() {
-				continue
-			}
-			diskMap[disk.Endpoint()] = disk
-		}
-	}
-	return diskMap
 }
 
 // Initializes a new StorageAPI from the endpoint argument, returns
@@ -145,7 +107,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	if err != nil {
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO())
-			if derr != nil && info.RootDisk {
+			if derr != nil && info.RootDisk && !globalIsCICD {
 				return nil, nil, fmt.Errorf("Disk: %s is a root disk", disk)
 			}
 		}
@@ -201,76 +163,86 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.Erasure.This)
 }
 
+func (s *erasureSets) reconnectEndpoint(endpoint Endpoint) {
+	disk, format, err := connectEndpoint(endpoint)
+	if err != nil {
+		if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
+			globalBackgroundHealState.pushHealLocalDisks(endpoint)
+			logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
+		} else {
+			printEndpointError(endpoint, err, true)
+		}
+		return
+	}
+
+	if disk.IsLocal() && disk.Healing() != nil {
+		globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
+		logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
+	}
+
+	setIndex, diskIndex, err := findDiskIndex(s.format, format)
+	if err != nil {
+		printEndpointError(endpoint, err, false)
+		disk.Close()
+		return
+	}
+
+	if !reflect.DeepEqual(endpoint, disk.Endpoint()) {
+		err = fmt.Errorf("Detected unexpected disk ordering refusing to use the disk: expecting %s, found %s, refusing to use the disk",
+			endpoint, disk.Endpoint())
+		printEndpointError(endpoint, err, false)
+		disk.Close()
+		return
+	}
+
+	s.erasureDisksMu.Lock()
+	{
+		if s.erasureDisks[setIndex][diskIndex] != nil {
+			s.erasureDisks[setIndex][diskIndex].Close()
+		}
+
+		if !disk.IsLocal() {
+			// Enable healthcheck disk for remote endpoint.
+			disk, err = newStorageAPI(endpoint)
+			if err != nil {
+				printEndpointError(endpoint, err, false)
+				s.erasureDisksMu.Unlock()
+				return
+			}
+		}
+
+		disk.SetDiskID(format.Erasure.This)
+		s.erasureDisks[setIndex][diskIndex] = disk
+		disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
+	}
+	s.erasureDisksMu.Unlock()
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {
-	defer func() {
-		s.lastConnectDisksOpTime = time.Now()
-	}()
-
-	var wg sync.WaitGroup
 	setsJustConnected := make([]bool, s.setCount)
-	diskMap := s.getDiskMap()
-	for _, endpoint := range s.endpoints.Endpoints {
-		if isEndpointConnectionStable(diskMap, endpoint, s.lastConnectDisksOpTime) {
+	var wg sync.WaitGroup
+	for _, set := range s.sets {
+		if set == nil {
 			continue
 		}
-		wg.Add(1)
-		go func(endpoint Endpoint) {
-			defer wg.Done()
-			disk, format, err := connectEndpoint(endpoint)
-			if err != nil {
-				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
-					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
-				} else {
-					printEndpointError(endpoint, err, true)
-				}
-				return
-			}
-			if disk.IsLocal() && disk.Healing() != nil {
-				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
-				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
-			}
-			s.erasureDisksMu.RLock()
-			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			s.erasureDisksMu.RUnlock()
-			if err != nil {
-				printEndpointError(endpoint, err, false)
-				disk.Close()
-				return
-			}
 
-			s.erasureDisksMu.Lock()
-			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
-				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
-					err = fmt.Errorf("Detected unexpected disk ordering refusing to use the disk: expecting %s, found %s, refusing to use the disk",
-						currentDisk.Endpoint(), disk.Endpoint())
-					printEndpointError(endpoint, err, false)
-					disk.Close()
-					s.erasureDisksMu.Unlock()
-					return
-				}
-				s.erasureDisks[setIndex][diskIndex].Close()
-			}
-			if disk.IsLocal() {
-				disk.SetDiskID(format.Erasure.This)
-				s.erasureDisks[setIndex][diskIndex] = disk
-			} else {
-				// Enable healthcheck disk for remote endpoint.
-				disk, err = newStorageAPI(endpoint)
-				if err != nil {
-					printEndpointError(endpoint, err, false)
-					s.erasureDisksMu.Unlock()
-					return
-				}
-				disk.SetDiskID(format.Erasure.This)
-				s.erasureDisks[setIndex][diskIndex] = disk
-			}
-			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			setsJustConnected[setIndex] = true
-			s.erasureDisksMu.Unlock()
-		}(endpoint)
+		mrf, endpoints := set.getCurrentStatus()
+		setsJustConnected[set.setIndex] = mrf
+
+		// No endpoints have disconnected, no need to re-load.
+		if len(endpoints) == 0 {
+			continue
+		}
+
+		for _, endpoint := range endpoints {
+			wg.Add(1)
+			go func(endpoint Endpoint) {
+				defer wg.Done()
+				s.reconnectEndpoint(endpoint)
+			}(endpoint)
+		}
 	}
 
 	wg.Wait()
@@ -1288,6 +1260,13 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, err
 	}
 
+	if !reflect.DeepEqual(s.format, refFormat) {
+		// Format is corrupted and unrecognized by the running instance.
+		logger.LogIf(ctx, fmt.Errorf("Unable to heal the newly replaced drives due to format.json inconsistencies, please engage MinIO support for further assistance: %w",
+			errCorruptedFormat))
+		return res, errCorruptedFormat
+	}
+
 	// Prepare heal-result
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
@@ -1360,9 +1339,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				s.erasureDisks[m][n] = storageDisks[index]
 			}
 		}
-
-		// Replace reference format with what was loaded from disks.
-		s.format = refFormat
 
 		s.erasureDisksMu.Unlock()
 	}

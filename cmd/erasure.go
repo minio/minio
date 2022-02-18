@@ -70,6 +70,8 @@ type erasureObjects struct {
 	bpOld *bpool.BytePoolCap
 
 	deletedCleanupSleeper *dynamicSleeper
+
+	lastCheck time.Time
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -272,6 +274,32 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []e
 	}
 
 	return getStorageInfo(localDisks, localEndpoints)
+}
+
+func (er erasureObjects) getCurrentStatus() (mrf bool, reconEndpoints []Endpoint) {
+	endpoints := er.getEndpoints()
+
+	if er.lastCheck.IsZero() {
+		// First time, initialize it.
+		er.lastCheck = UTCNow()
+	}
+
+	for index, disk := range er.getDisks() {
+		if disk != nil && disk.IsOnline() {
+			if !mrf {
+				// Disk has reconnected and is online, this is a good time to trigger MRF.
+				mrf = disk.LastConn().After(er.lastCheck)
+			}
+			continue
+		}
+
+		// disk is definitely offline
+		reconEndpoints = append(reconEndpoints, endpoints[index])
+	}
+
+	er.lastCheck = UTCNow()
+
+	return mrf, reconEndpoints
 }
 
 func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {
