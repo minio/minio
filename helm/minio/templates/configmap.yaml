@@ -19,3 +19,5 @@ data:
   {{ .name }}.json: |-
 {{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
 {{ end }}
+  custom-command: |-
+{{ include (print $.Template.BasePath "/_helper_custom_command.txt") . | indent 4 }}
