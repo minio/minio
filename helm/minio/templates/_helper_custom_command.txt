@@ -17,7 +17,7 @@ connectToMinio() {
   ACCESS=$(cat /config/rootUser) ; SECRET=$(cat /config/rootPassword) ;
   set +e ; # The connections to minio are allowed to fail.
   echo "Connecting to MinIO server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT" ;
-  MC_COMMAND="${MC} config host add myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
+  MC_COMMAND="${MC} alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
   $MC_COMMAND ;
   STATUS=$? ;
   until [ $STATUS = 0 ]
