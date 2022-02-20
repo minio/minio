@@ -64,6 +64,12 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	subSys, _, _, err := config.GetSubSys(string(kvBytes))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	cfg, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -74,7 +80,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	if err = validateConfig(cfg, ""); err != nil {
+	if err = validateConfig(cfg, subSys); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -84,15 +90,16 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	dynamic := config.SubSystemsDynamic.Contains(string(kvBytes))
+	dynamic := config.SubSystemsDynamic.Contains(subSys)
 	if dynamic {
-		applyDynamic(ctx, objectAPI, cfg, r, w)
+		applyDynamic(ctx, objectAPI, cfg, subSys, r, w)
 	}
 }
 
-func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config, r *http.Request, w http.ResponseWriter) {
+func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config, subSys string,
+	r *http.Request, w http.ResponseWriter) {
 	// Apply dynamic values.
-	if err := applyDynamicConfig(GlobalContext, objectAPI, cfg); err != nil {
+	if err := applyDynamicConfigForSubSys(GlobalContext, objectAPI, cfg, subSys); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -162,7 +169,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if dynamic {
-		applyDynamic(ctx, objectAPI, cfg, r, w)
+		applyDynamic(ctx, objectAPI, cfg, subSys, r, w)
 	}
 	writeSuccessResponseHeadersOnly(w)
 }
