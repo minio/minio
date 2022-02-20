@@ -15,8 +15,9 @@ data:
 {{ include (print $.Template.BasePath "/_helper_create_user.txt") . | indent 4 }}
   add-policy: |-
 {{ include (print $.Template.BasePath "/_helper_create_policy.txt") . | indent 4 }}
-{{- range .Values.policies }}
-  {{ .name }}.json: |-
+{{- range $idx, $policy := .Values.policies }}
+  # {{ $policy.name }}
+  policy_{{ $idx }}.json: |-
 {{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
 {{ end }}
   custom-command: |-

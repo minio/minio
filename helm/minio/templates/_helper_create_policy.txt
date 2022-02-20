@@ -43,17 +43,19 @@ checkPolicyExists() {
   return $?
 }
 
-# createPolicy($name)
+# createPolicy($name, $filename)
 createPolicy () {
   NAME=$1
+  FILENAME=$2
 
   # Create the name if it does not exist
+  echo "Checking policy: $NAME (in /config/$FILENAME.json)"
   if ! checkPolicyExists $NAME ; then
     echo "Creating policy '$NAME'"
   else
     echo "Policy '$NAME' already exists."
   fi
-  ${MC} admin policy add myminio $NAME /config/$NAME.json
+  ${MC} admin policy add myminio $NAME /config/$FILENAME.json
 
 }
 
@@ -67,7 +69,7 @@ connectToMinio $scheme
 
 {{ if .Values.policies }}
 # Create the policies
-{{- range .Values.policies }}
-createPolicy {{ .name }}
+{{- range $idx, $policy := .Values.policies }}
+createPolicy {{ $policy.name }} policy_{{ $idx }}
 {{- end }}
 {{- end }}
