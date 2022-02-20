@@ -8,10 +8,10 @@
       "Effect": "Allow",
       "Action": [
 "{{ $statement.actions | join "\",\n\"" }}"
-      ],
+      ]{{ if $statement.resources }},
       "Resource": [
 "{{ $statement.resources | join "\",\n\"" }}"
-      ]
+      ]{{ end }}
     }{{ if lt $i $statements_length }},{{end }}
 {{- end }}
   ]
