@@ -189,7 +189,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	// Check environment variables parameters
-	requestsMax, err := strconv.Atoi(env.Get(EnvAPIRequestsMax, kvs.Get(apiRequestsMax)))
+	requestsMax, err := strconv.Atoi(env.Get(EnvAPIRequestsMax, kvs.GetWithDefault(apiRequestsMax, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
@@ -198,31 +198,31 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, errors.New("invalid API max requests value")
 	}
 
-	requestsDeadline, err := time.ParseDuration(env.Get(EnvAPIRequestsDeadline, kvs.Get(apiRequestsDeadline)))
+	requestsDeadline, err := time.ParseDuration(env.Get(EnvAPIRequestsDeadline, kvs.GetWithDefault(apiRequestsDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
 
-	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.Get(apiClusterDeadline)))
+	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.GetWithDefault(apiClusterDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
 
-	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.Get(apiRemoteTransportDeadline)))
+	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
 
-	listQuorum := env.Get(EnvAPIListQuorum, kvs.Get(apiListQuorum))
+	listQuorum := env.Get(EnvAPIListQuorum, kvs.GetWithDefault(apiListQuorum, DefaultKVS))
 	switch listQuorum {
 	case "strict", "optimal", "reduced", "disk":
 	default:
 		return cfg, errors.New("invalid value for list strict quorum")
 	}
 
-	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.Get(apiReplicationWorkers)))
+	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.GetWithDefault(apiReplicationWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
@@ -231,7 +231,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication workers should be 1")
 	}
 
-	replicationFailedWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationFailedWorkers, kvs.Get(apiReplicationFailedWorkers)))
+	replicationFailedWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationFailedWorkers, kvs.GetWithDefault(apiReplicationFailedWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
@@ -240,7 +240,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication failed workers should be 1")
 	}
 
-	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.Get(apiTransitionWorkers)))
+	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
@@ -250,7 +250,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 
 	v := env.Get(EnvAPIDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
 	if v == "" {
-		v = env.Get(EnvDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
+		v = env.Get(EnvDeleteCleanupInterval, kvs.GetWithDefault(apiDeleteCleanupInterval, DefaultKVS))
 	}
 
 	deleteCleanupInterval, err := time.ParseDuration(v)
@@ -258,12 +258,12 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
-	staleUploadsCleanupInterval, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsCleanupInterval, kvs.Get(apiStaleUploadsCleanupInterval)))
+	staleUploadsCleanupInterval, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsCleanupInterval, kvs.GetWithDefault(apiStaleUploadsCleanupInterval, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
 
-	staleUploadsExpiry, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsExpiry, kvs.Get(apiStaleUploadsExpiry)))
+	staleUploadsExpiry, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsExpiry, kvs.GetWithDefault(apiStaleUploadsExpiry, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
