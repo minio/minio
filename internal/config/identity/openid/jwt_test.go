@@ -27,6 +27,7 @@ import (
 	"time"
 
 	jwtg "github.com/golang-jwt/jwt/v4"
+	"github.com/minio/minio/internal/config"
 	jwtm "github.com/minio/minio/internal/jwt"
 	xnet "github.com/minio/pkg/net"
 )
@@ -228,5 +229,29 @@ func TestExpCorrect(t *testing.T) {
 	})
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestKeycloakProviderInitialization(t *testing.T) {
+	testConfig := Config{
+		DiscoveryDoc: DiscoveryDoc{
+			TokenEndpoint: "http://keycloak.test/token/endpoint",
+		},
+	}
+	testKvs := config.KVS{}
+	testKvs.Set(Vendor, "keycloak")
+	testKvs.Set(KeyCloakRealm, "TestRealm")
+	testKvs.Set(KeyCloakAdminURL, "http://keycloak.test/auth/admin")
+
+	if testConfig.provider != nil {
+		t.Errorf("Empty config cannot have any provider!")
+	}
+
+	if err := testConfig.InitializeProvider(testKvs); err != nil {
+		t.Error(err)
+	}
+
+	if testConfig.provider == nil {
+		t.Errorf("keycloak provider must be initialized!")
 	}
 }
