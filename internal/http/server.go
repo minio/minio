@@ -33,6 +33,12 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
+// GlobalMinIOVersion - is sent in the header to all http targets
+var GlobalMinIOVersion string
+
+// GlobalDeploymentID - is sent in the header to all http targets
+var GlobalDeploymentID string
+
 const (
 	serverShutdownPoll = 500 * time.Millisecond
 
@@ -195,4 +201,14 @@ func NewServer(addrs []string) *Server {
 	// This is not configurable for now.
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
 	return httpServer
+}
+
+// SetMinIOVersion -- MinIO version from the main package is set here
+func SetMinIOVersion(minioVer string) {
+	GlobalMinIOVersion = minioVer
+}
+
+// SetDeploymentID -- Deployment Id from the main package is set here
+func SetDeploymentID(deploymentID string) {
+	GlobalDeploymentID = deploymentID
 }

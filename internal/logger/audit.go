@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzhttp"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/message/audit"
 )
 
@@ -146,7 +147,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 		}
 		r = &audit.Entry{
 			Version:      audit.Version,
-			DeploymentID: globalDeploymentID,
+			DeploymentID: xhttp.GlobalDeploymentID,
 			Time:         time.Now().UTC(),
 		}
 		SetAuditEntry(ctx, r)
@@ -170,7 +171,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			return
 		}
 
-		entry = audit.ToEntry(w, r, reqClaims, globalDeploymentID)
+		entry = audit.ToEntry(w, r, reqClaims, xhttp.GlobalDeploymentID)
 		// indicates all requests for this API call are inbound
 		entry.Trigger = "incoming"
 

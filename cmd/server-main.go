@@ -493,7 +493,8 @@ func serverMain(ctx *cli.Context) {
 		logFatalErrs(err, Endpoint{}, true)
 	}
 
-	logger.SetDeploymentID(globalDeploymentID)
+	xhttp.SetDeploymentID(globalDeploymentID)
+	xhttp.SetMinIOVersion(Version)
 
 	// Enable background operations for erasure coding
 	if globalIsErasure {
