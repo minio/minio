@@ -97,21 +97,6 @@ type erasureSets struct {
 	lastConnectDisksOpTime time.Time
 }
 
-// Return false if endpoint is not connected or has been reconnected after last check
-func isEndpointConnectionStable(diskMap map[Endpoint]StorageAPI, endpoint Endpoint, lastCheck time.Time) bool {
-	disk := diskMap[endpoint]
-	if disk == nil {
-		return false
-	}
-	if !disk.IsOnline() {
-		return false
-	}
-	if !lastCheck.IsZero() && disk.LastConn().After(lastCheck) {
-		return false
-	}
-	return true
-}
-
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 	diskMap := make(map[Endpoint]StorageAPI)
 
@@ -209,12 +194,26 @@ func (s *erasureSets) connectDisks() {
 	}()
 
 	var wg sync.WaitGroup
-	setsJustConnected := make([]bool, s.setCount)
 	diskMap := s.getDiskMap()
+	setsJustConnected := make([]bool, s.setCount)
 	for _, endpoint := range s.endpoints.Endpoints {
-		if isEndpointConnectionStable(diskMap, endpoint, s.lastConnectDisksOpTime) {
-			continue
+		cdisk := diskMap[endpoint]
+		if cdisk != nil && cdisk.IsOnline() {
+			if s.lastConnectDisksOpTime.IsZero() {
+				continue
+			}
+
+			// An online-disk means its a valid disk but it may be a re-connected disk
+			// we verify that here based on LastConn(), however we make sure to avoid
+			// putting it back into the s.erasureDisks by re-placing the disk again.
+			_, setIndex, _ := cdisk.GetDiskLoc()
+			if setIndex != -1 {
+				// Recently disconnected disks must go to MRF
+				setsJustConnected[setIndex] = cdisk.LastConn().After(s.lastConnectDisksOpTime)
+				continue
+			}
 		}
+
 		wg.Add(1)
 		go func(endpoint Endpoint) {
 			defer wg.Done()
@@ -268,7 +267,7 @@ func (s *erasureSets) connectDisks() {
 				s.erasureDisks[setIndex][diskIndex] = disk
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			setsJustConnected[setIndex] = true
+			setsJustConnected[setIndex] = true // disk just went online we treat it is as MRF event
 			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
