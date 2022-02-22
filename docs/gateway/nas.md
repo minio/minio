@@ -1,4 +1,6 @@
-# MinIO NAS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# MinIO NAS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) 
+
+> NAS gateway is deprecated and will be removed in future, no more fresh deployments are supported.
 
 MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple minio instances on the same shared NAS volume as a distributed object gateway.
 

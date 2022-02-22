@@ -127,20 +127,11 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 		meta.QuotaConfigJSON = configData
 		meta.QuotaConfigUpdatedAt = UTCNow()
 	case objectLockConfig:
-		if !globalIsErasure && !globalIsDistErasure {
-			return NotImplemented{}
-		}
 		meta.ObjectLockConfigXML = configData
 		meta.ObjectLockConfigUpdatedAt = UTCNow()
 	case bucketVersioningConfig:
-		if !globalIsErasure && !globalIsDistErasure {
-			return NotImplemented{}
-		}
 		meta.VersioningConfigXML = configData
 	case bucketReplicationConfig:
-		if !globalIsErasure && !globalIsDistErasure {
-			return NotImplemented{}
-		}
 		meta.ReplicationConfigXML = configData
 		meta.ReplicationConfigUpdatedAt = UTCNow()
 	case bucketTargetsFile:

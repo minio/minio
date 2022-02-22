@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -32,6 +33,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
@@ -292,6 +294,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		SecretKey: globalActiveCred.SecretKey,
 	})
 	if err != nil {
+		if errors.Is(err, errFreshDisk) {
+			err = config.ErrInvalidFSValue(err)
+		}
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 	newObject = NewGatewayLayerWithLocker(newObject)

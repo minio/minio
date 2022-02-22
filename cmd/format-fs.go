@@ -240,6 +240,9 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 		if err != nil {
 			return nil, err
 		}
+		if formatBackend == formatBackendErasureSingle {
+			return nil, errFreshDisk
+		}
 		if formatBackend != formatBackendFS {
 			return nil, fmt.Errorf(`%s file: expected format-type: %s, found: %s`, formatConfigFile, formatBackendFS, formatBackend)
 		}
@@ -318,6 +321,10 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 	if err != nil {
 		rlk.Close()
 		return err
+	}
+	if formatBackend == formatBackendErasureSingle {
+		rlk.Close()
+		return errFreshDisk
 	}
 	if formatBackend != formatBackendFS {
 		rlk.Close()

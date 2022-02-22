@@ -132,7 +132,7 @@ func nodeHealthMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects healing specific metrics for MinIO instance in Prometheus specific format
 // and sends to given channel
 func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
-	if !globalIsErasure {
+	if globalIsGateway {
 		return
 	}
 	bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)

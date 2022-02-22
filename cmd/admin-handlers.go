@@ -805,8 +805,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this setup has an erasure coded backend.
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -998,7 +997,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Check if this setup has an erasure coded backend.
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -1078,7 +1077,7 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1228,7 +1227,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}

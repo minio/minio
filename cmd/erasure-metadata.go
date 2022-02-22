@@ -99,7 +99,7 @@ func (fi FileInfo) IsValid() bool {
 		fi.Erasure.Index <= dataBlocks+parityBlocks &&
 		len(fi.Erasure.Distribution) == (dataBlocks+parityBlocks))
 	return ((dataBlocks >= parityBlocks) &&
-		(dataBlocks != 0) && (parityBlocks != 0) &&
+		(dataBlocks > 0) && (parityBlocks >= 0) &&
 		correctIndexes)
 }
 
@@ -284,7 +284,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 
 func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
 	// with less quorum return error.
-	if quorum < 2 {
+	if quorum < 1 {
 		return FileInfo{}, errErasureReadQuorum
 	}
 	metaHashes := make([]string, len(metaArr))
@@ -398,6 +398,10 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
+	if defaultParityCount == 0 {
+		return 1, 1, nil
+	}
+
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
 	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {

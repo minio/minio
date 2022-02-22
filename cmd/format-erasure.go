@@ -40,6 +40,9 @@ const (
 	// Represents Erasure backend.
 	formatBackendErasure = "xl"
 
+	// Represents Erasure backend - single drive
+	formatBackendErasureSingle = "xl-single"
+
 	// formatErasureV1.Erasure.Version - version '1'.
 	formatErasureVersionV1 = "1"
 
@@ -146,6 +149,9 @@ func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 	format := &formatErasureV3{}
 	format.Version = formatMetaVersionV1
 	format.Format = formatBackendErasure
+	if setLen == 1 {
+		format.Format = formatBackendErasureSingle
+	}
 	format.ID = mustGetUUID()
 	format.Erasure.Version = formatErasureVersionV3
 	format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgoV3
@@ -170,8 +176,8 @@ func formatGetBackendErasureVersion(b []byte) (string, error) {
 	if meta.Version != formatMetaVersionV1 {
 		return "", fmt.Errorf(`format.Version expected: %s, got: %s`, formatMetaVersionV1, meta.Version)
 	}
-	if meta.Format != formatBackendErasure {
-		return "", fmt.Errorf(`found backend type %s, expected %s`, meta.Format, formatBackendErasure)
+	if meta.Format != formatBackendErasure && meta.Format != formatBackendErasureSingle {
+		return "", fmt.Errorf(`found backend type %s, expected %s or %s`, meta.Format, formatBackendErasure, formatBackendErasureSingle)
 	}
 	// Erasure backend found, proceed to detect version.
 	format := &formatErasureVersionDetect{}
@@ -291,7 +297,7 @@ func formatErasureMigrateV2ToV3(data []byte, export, version string) ([]byte, er
 func countErrs(errs []error, err error) int {
 	i := 0
 	for _, err1 := range errs {
-		if err1 == err {
+		if err1 == err || errors.Is(err1, err) {
 			i++
 		}
 	}
@@ -410,7 +416,7 @@ func checkFormatErasureValue(formatErasure *formatErasureV3, disk StorageAPI) er
 	if formatErasure.Version != formatMetaVersionV1 {
 		return fmt.Errorf("Unsupported version of backend format [%s] found on %s", formatErasure.Version, disk)
 	}
-	if formatErasure.Format != formatBackendErasure {
+	if formatErasure.Format != formatBackendErasure && formatErasure.Format != formatBackendErasureSingle {
 		return fmt.Errorf("Unsupported backend format [%s] found on %s", formatErasure.Format, disk)
 	}
 	if formatErasure.Erasure.Version != formatErasureVersionV3 {
@@ -643,7 +649,7 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 }
 
 // relinquishes the underlying connection for all storage disks.
-func closeStorageDisks(storageDisks []StorageAPI) {
+func closeStorageDisks(storageDisks ...StorageAPI) {
 	var wg sync.WaitGroup
 	for _, disk := range storageDisks {
 		if disk == nil {

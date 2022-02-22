@@ -150,13 +150,13 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
-			closeStorageDisks(storageDisks)
+			closeStorageDisks(storageDisks...)
 		}
 	}(storageDisks)
 
 	for i, err := range errs {
-		if err != nil {
-			if err == errDiskNotFound && verboseLogging {
+		if err != nil && !errors.Is(err, errXLBackend) {
+			if errors.Is(err, errDiskNotFound) && verboseLogging {
 				logger.Error("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
 			} else {
 				logger.Error("Unable to use the drive %s: %v", endpoints[i], err)
@@ -173,7 +173,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
-		if sErr != errUnformattedDisk && sErr != errDiskNotFound && verboseLogging {
+		if !errors.Is(sErr, errUnformattedDisk) && !errors.Is(sErr, errDiskNotFound) && verboseLogging {
 			if sErr != nil {
 				logger.Error("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
 			}

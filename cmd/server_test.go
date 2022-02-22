@@ -39,7 +39,7 @@ import (
 	"github.com/minio/pkg/bucket/policy"
 )
 
-// API suite container common to both FS and Erasure.
+// API suite container common to both ErasureSD and Erasure.
 type TestSuiteCommon struct {
 	serverType string
 	testServer TestServer
@@ -122,12 +122,12 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 
 func TestServerSuite(t *testing.T) {
 	testCases := []*TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend with signature v2.
-		{serverType: "FS", signer: signerV2},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on ErasureSD backend with signature v4.
+		{serverType: "ErasureSD", signer: signerV4},
+		// Init and run test on ErasureSD backend with signature v2.
+		{serverType: "ErasureSD", signer: signerV2},
+		// Init and run test on ErasureSD backend, with tls enabled.
+		{serverType: "ErasureSD", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
 		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.

@@ -231,10 +231,10 @@ func TestCreateEndpoints(t *testing.T) {
 	}{
 		{"localhost", [][]string{}, "", Endpoints{}, -1, fmt.Errorf("address localhost: missing port in address")},
 
-		// FS Setup
+		// Erasure Single Drive
 		{"localhost:9000", [][]string{{"http://localhost/d1"}}, "", Endpoints{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
-		{":443", [][]string{{"/d1"}}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, FSSetupType, nil},
-		{"localhost:10000", [][]string{{"/d1"}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, FSSetupType, nil},
+		{":443", [][]string{{"/d1"}}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
+		{"localhost:10000", [][]string{{"/d1"}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
 		{"localhost:9000", [][]string{{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}}, "", Endpoints{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
 
 		// Erasure Setup with PathEndpointType

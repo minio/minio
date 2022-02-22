@@ -340,7 +340,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 // healObject heals given object path in deep to fix bitrot.
 func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 	// Get background heal sequence to send elements to heal
+	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+	globalHealStateLK.Unlock()
 	if ok {
 		bgSeq.queueHealTask(healSource{
 			bucket:    bucket,

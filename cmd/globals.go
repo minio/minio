@@ -74,6 +74,7 @@ const (
 	globalWindowsOSName            = "windows"
 	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
+	globalMinioModeErasureSD       = "mode-server-xl-single"
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
 	globalMinioModeGatewayPrefix   = "mode-gateway-"
@@ -140,6 +141,9 @@ var (
 
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsErasure = false
+
+	// Indicates if the running minio server is in single drive XL mode.
+	globalIsErasureSD = false
 
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false

@@ -309,7 +309,7 @@ Example: The following settings will increase the heal operation speed by allowi
 
 Once set the healer settings are automatically applied without the need for server restarts.
 
-> NOTE: Healing is not supported for gateway and single drive mode.
+> NOTE: Healing is not supported for Gateway deployments.
 
 ## Environment only settings (not in config)
 

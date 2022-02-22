@@ -314,18 +314,20 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	refreshInterval := sys.iamRefreshInterval
+
 	// Set up polling for expired accounts and credentials purging.
 	switch {
 	case sys.openIDConfig.ProviderEnabled():
 		go func() {
-			timer := time.NewTimer(sys.iamRefreshInterval)
+			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
 			for {
 				select {
 				case <-timer.C:
 					sys.purgeExpiredCredentialsForExternalSSO(ctx)
 
-					timer.Reset(sys.iamRefreshInterval)
+					timer.Reset(refreshInterval)
 				case <-ctx.Done():
 					return
 				}
@@ -333,7 +335,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		}()
 	case sys.ldapConfig.Enabled:
 		go func() {
-			timer := time.NewTimer(sys.iamRefreshInterval)
+			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
 
 			for {
@@ -342,7 +344,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 					sys.purgeExpiredCredentialsForLDAP(ctx)
 					sys.updateGroupMembershipsForLDAP(ctx)
 
-					timer.Reset(sys.iamRefreshInterval)
+					timer.Reset(refreshInterval)
 				case <-ctx.Done():
 					return
 				}
@@ -717,7 +719,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 		return errServerNotInitialized
 	}
 
-	if globalAuthZPlugin != nil {
+	if newGlobalAuthZPluginFn() != nil {
 		// If OPA is set, we do not need to set a policy mapping.
 		policyName = ""
 	}
@@ -1690,8 +1692,8 @@ func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
-	if globalAuthZPlugin != nil {
-		ok, err := globalAuthZPlugin.IsAllowed(args)
+	if authz := newGlobalAuthZPluginFn(); authz != nil {
+		ok, err := authz.IsAllowed(args)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 		}

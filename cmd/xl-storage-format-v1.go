@@ -53,7 +53,7 @@ func isXLMetaFormatValid(version, format string) bool {
 // Verifies if the backend format metadata is sane by validating
 // the ErasureInfo, i.e. data and parity blocks.
 func isXLMetaErasureInfoValid(data, parity int) bool {
-	return ((data >= parity) && (data != 0) && (parity != 0))
+	return ((data >= parity) && (data > 0) && (parity >= 0))
 }
 
 //go:generate msgp -file=$GOFILE -unexported
