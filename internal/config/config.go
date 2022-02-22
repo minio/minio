@@ -813,18 +813,16 @@ func GetSubSys(s string) (subSys string, inputs []string, tgt string, e error) {
 		return subSys, inputs, tgt, Errorf("input arguments cannot be empty")
 	}
 	inputs = strings.SplitN(s, KvSpaceSeparator, 2)
-	if len(inputs) <= 1 {
-		return subSys, inputs, tgt, Errorf("invalid number of arguments '%s'", s)
-	}
-	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
-	if len(subSystemValue) == 0 {
-		return subSys, inputs, tgt, Errorf("invalid number of arguments %s", s)
-	}
 
-	if !SubSystems.Contains(subSystemValue[0]) {
+	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
+	subSys = subSystemValue[0]
+	if !SubSystems.Contains(subSys) {
 		return subSys, inputs, tgt, Errorf("unknown sub-system %s", s)
 	}
-	subSys = subSystemValue[0]
+
+	if len(inputs) == 1 {
+		return subSys, inputs, tgt, nil
+	}
 
 	if SubSystemsSingleTargets.Contains(subSystemValue[0]) && len(subSystemValue) == 2 {
 		return subSys, inputs, tgt, Errorf("sub-system '%s' only supports single target", subSystemValue[0])

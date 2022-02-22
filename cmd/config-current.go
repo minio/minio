@@ -616,84 +616,80 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 }
 
-// applyDynamicConfig will apply dynamic config values.
-// Dynamic systems should be in config.SubSystemsDynamic as well.
-func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config) error {
-	// Read all dynamic configs.
-	// API
-	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
-	}
-
-	// Compression
-	cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-	if err != nil {
-		return fmt.Errorf("Unable to setup Compression: %w", err)
-	}
-
-	// Validate if the object layer supports compression.
-	if objAPI != nil {
-		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
-			return fmt.Errorf("Backend does not support compression")
+func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s config.Config, subSys string) error {
+	switch subSys {
+	case config.APISubSys:
+		apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+		}
+		var setDriveCounts []int
+		if objAPI != nil {
+			setDriveCounts = objAPI.SetDriveCounts()
+		}
+		globalAPIConfig.init(apiConfig, setDriveCounts)
+	case config.CompressionSubSys:
+		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to setup Compression: %w", err)
+		}
+		// Validate if the object layer supports compression.
+		if objAPI != nil {
+			if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
+				return fmt.Errorf("Backend does not support compression")
+			}
+		}
+		globalCompressConfigMu.Lock()
+		globalCompressConfig = cmpCfg
+		globalCompressConfigMu.Unlock()
+	case config.HealSubSys:
+		healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply heal config: %w", err)
+		}
+		globalHealConfig.Update(healCfg)
+	case config.ScannerSubSys:
+		scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply scanner config: %w", err)
+		}
+		// update dynamic scanner values.
+		scannerCycle.Update(scannerCfg.Cycle)
+		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
+	case config.LoggerWebhookSubSys:
+		loggerCfg, err := logger.LookupConfig(s)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+		}
+		userAgent := getUserAgent(getMinioMode())
+		for n, l := range loggerCfg.HTTP {
+			if l.Enabled {
+				l.LogOnce = logger.LogOnceIf
+				l.UserAgent = userAgent
+				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+				loggerCfg.HTTP[n] = l
+			}
+		}
+		err = logger.UpdateTargets(loggerCfg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
 		}
 	}
-
-	// Heal
-	healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
-	if err != nil {
-		return fmt.Errorf("Unable to apply heal config: %w", err)
-	}
-
-	// Scanner
-	scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
-	if err != nil {
-		return fmt.Errorf("Unable to apply scanner config: %w", err)
-	}
-
-	// Logger webhook
-	loggerCfg, err := logger.LookupConfig(s)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
-	}
-	userAgent := getUserAgent(getMinioMode())
-	for n, l := range loggerCfg.HTTP {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			l.UserAgent = userAgent
-			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-			loggerCfg.HTTP[n] = l
-		}
-	}
-	err = logger.UpdateTargets(loggerCfg)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
-	}
-
-	// Apply configurations.
-	// We should not fail after this.
-	var setDriveCounts []int
-	if objAPI != nil {
-		setDriveCounts = objAPI.SetDriveCounts()
-	}
-	globalAPIConfig.init(apiConfig, setDriveCounts)
-
-	globalCompressConfigMu.Lock()
-	globalCompressConfig = cmpCfg
-	globalCompressConfigMu.Unlock()
-
-	globalHealConfig.Update(healCfg)
-
-	// update dynamic scanner values.
-	scannerCycle.Update(scannerCfg.Cycle)
-	logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
-
-	// Update all dynamic config values in memory.
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 	if globalServerConfig != nil {
-		for k := range config.SubSystemsDynamic {
-			globalServerConfig[k] = s[k]
+		globalServerConfig[subSys] = s[subSys]
+	}
+	return nil
+}
+
+// applyDynamicConfig will apply dynamic config values.
+// Dynamic systems should be in config.SubSystemsDynamic as well.
+func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config) error {
+	for subSys := range config.SubSystemsDynamic {
+		err := applyDynamicConfigForSubSys(ctx, objAPI, s, subSys)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
