@@ -191,6 +191,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/tier").HandlerFunc(gz(httpTraceHdrs(adminAPI.AddTierHandler)))
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/tier/{tier}").HandlerFunc(gz(httpTraceHdrs(adminAPI.EditTierHandler)))
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/tier").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListTierHandler)))
+			adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/tier/{tier}").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveTierHandler)))
 
 			// Tier stats
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/tier-stats").HandlerFunc(gz(httpTraceHdrs(adminAPI.TierStatsHandler)))

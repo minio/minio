@@ -182,6 +182,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusConflict,
 			}
+		case errors.Is(err, errTierBackendNotEmpty):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierBackendNotEmpty",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case errors.Is(err, errTierInsufficientCreds):
 			apiErr = APIError{
 				Code:           "XMinioAdminTierInsufficientCreds",
