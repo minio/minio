@@ -21,14 +21,22 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+// getRemoteTierTargetInstanceTransport contains a singleton roundtripper.
+var (
+	getRemoteTierTargetInstanceTransport     http.RoundTripper
+	getRemoteTierTargetInstanceTransportOnce sync.Once
 )
 
 type warmBackendS3 struct {
@@ -109,13 +117,13 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	} else {
 		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
 	}
-	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
+	getRemoteTierTargetInstanceTransportOnce.Do(func() {
+		getRemoteTierTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
 	})
 	opts := &minio.Options{
 		Creds:     creds,
 		Secure:    u.Scheme == "https",
-		Transport: getRemoteTargetInstanceTransport,
+		Transport: getRemoteTierTargetInstanceTransport,
 	}
 	client, err := minio.New(u.Host, opts)
 	if err != nil {

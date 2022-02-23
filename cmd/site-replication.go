@@ -20,13 +20,11 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"reflect"
 	"sort"
@@ -2040,26 +2038,13 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 
 // Other helpers
 
-// newRemoteClusterHTTPTransport returns a new http configuration
-// used while communicating with the remote cluster.
-func newRemoteClusterHTTPTransport() *http.Transport {
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{
-			RootCAs:            globalRootCAs,
-			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-		},
-	}
-	return tr
-}
-
 func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient, error) {
 	epURL, _ := url.Parse(endpoint)
 	client, err := madmin.New(epURL.Host, accessKey, secretKey, epURL.Scheme == "https")
 	if err != nil {
 		return nil, err
 	}
-	client.SetCustomTransport(newRemoteClusterHTTPTransport())
+	client.SetCustomTransport(NewRemoteTargetHTTPTransport())
 	return client, nil
 }
 
@@ -2071,7 +2056,7 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 	return minioClient.New(ep.Host, &minioClient.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",
-		Transport: newRemoteClusterHTTPTransport(),
+		Transport: NewRemoteTargetHTTPTransport(),
 	})
 }
 
