@@ -33,11 +33,13 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
-// GlobalMinIOVersion - is sent in the header to all http targets
-var GlobalMinIOVersion string
+var (
+	// GlobalMinIOVersion - is sent in the header to all http targets
+	GlobalMinIOVersion string
 
-// GlobalDeploymentID - is sent in the header to all http targets
-var GlobalDeploymentID string
+	// GlobalDeploymentID - is sent in the header to all http targets
+	GlobalDeploymentID string
+)
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
