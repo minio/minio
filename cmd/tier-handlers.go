@@ -242,6 +242,32 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessNoContent(w)
 }
 
+func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "VerifyTier")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	tier := vars["tier"]
+	if err := globalTierConfigMgr.Verify(ctx, tier); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessNoContent(w)
+}
+
 func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "TierStats")
 

@@ -136,6 +136,16 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 	return nil
 }
 
+// Verify verifies if tier's config is valid by performing all supported
+// operations on the corresponding warmbackend.
+func (config *TierConfigMgr) Verify(ctx context.Context, tier string) error {
+	d, err := config.getDriver(tier)
+	if err != nil {
+		return err
+	}
+	return checkWarmBackend(ctx, d)
+}
+
 // Empty returns if tier targets are empty
 func (config *TierConfigMgr) Empty() bool {
 	return len(config.ListTiers()) == 0
