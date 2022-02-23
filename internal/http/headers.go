@@ -191,3 +191,9 @@ const (
 
 	UploadID = "uploadId"
 )
+
+// http headers sent to webhook targets
+const (
+	// Reports the version of MinIO server
+	MinIOVersion = "x-minio-version"
+)

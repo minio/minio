@@ -144,6 +144,8 @@ func (h *Target) logEntry(entry interface{}) {
 		return
 	}
 	req.Header.Set(xhttp.ContentType, "application/json")
+	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
+	req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
 
 	// Set user-agent to indicate MinIO release
 	// version to the configured log endpoint
