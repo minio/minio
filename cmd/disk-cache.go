@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -602,7 +601,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 			continue
 		}
 		if err := checkAtimeSupport(dir); err != nil {
-			return nil, false, errors.New("Atime support required for disk caching")
+			return nil, false, fmt.Errorf("Atime support required for disk caching, atime check failed with %w", err)
 		}
 
 		cache, err := newDiskCache(ctx, dir, config)
