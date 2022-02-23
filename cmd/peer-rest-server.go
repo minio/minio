@@ -1169,6 +1169,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	var totalBytesRead uint64
 
 	objCountPerThread := make([]uint64, concurrent)
+
 	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
 	defer uploadsCancel()
 
@@ -1187,10 +1188,9 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				hashReader, err := hash.NewReader(newRandomReader(size),
 					int64(size), "", "", int64(size))
 				if err != nil {
-					if !contextCanceled(uploadsCtx) {
+					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
 							retError = err.Error()
-							logger.LogIf(ctx, err)
 						})
 					}
 					uploadsCancel()
@@ -1202,12 +1202,13 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 					UserDefined: map[string]string{
 						xhttp.AmzStorageClass: storageClass,
 					},
+					Speedtest: true,
 				})
 				if err != nil {
-					if !contextCanceled(uploadsCtx) {
+					objCountPerThread[i]--
+					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
 							retError = err.Error()
-							logger.LogIf(ctx, err)
 						})
 					}
 					uploadsCancel()
@@ -1247,10 +1248,12 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				r, err := objAPI.GetObjectNInfo(downloadsCtx, minioMetaBucket, fmt.Sprintf("%s.%d.%d",
 					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
 				if err != nil {
-					if !contextCanceled(downloadsCtx) {
+					if isErrObjectNotFound(err) {
+						continue
+					}
+					if !contextCanceled(downloadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
 							retError = err.Error()
-							logger.LogIf(ctx, err)
 						})
 					}
 					downloadsCancel()
@@ -1265,10 +1268,9 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 					atomic.AddUint64(&totalBytesRead, uint64(n))
 				}
 				if err != nil {
-					if !contextCanceled(downloadsCtx) {
+					if !contextCanceled(downloadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
 							retError = err.Error()
-							logger.LogIf(ctx, err)
 						})
 					}
 					downloadsCancel()

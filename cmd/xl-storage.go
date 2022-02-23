@@ -2279,7 +2279,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// Any failed rename calls un-roll previous transaction.
 				s.deleteFile(dstVolumeDir, legacyDataPath, true)
 			}
-			return err
+			return osErrToFileErr(err)
 		}
 
 		// renameAll only for objects that have xl.meta not saved inline.
