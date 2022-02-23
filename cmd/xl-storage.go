@@ -212,21 +212,23 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	}
 
 	var rootDisk bool
-	if globalRootDiskThreshold > 0 {
-		// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
-		// this disk is a root disk.
-		info, err := disk.GetInfo(path)
-		if err != nil {
-			return nil, err
-		}
+	if !globalIsCICD {
+		if globalRootDiskThreshold > 0 {
+			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
+			// this disk is a root disk.
+			info, err := disk.GetInfo(path)
+			if err != nil {
+				return nil, err
+			}
 
-		// treat those disks with size less than or equal to the
-		// threshold as rootDisks.
-		rootDisk = info.Total <= globalRootDiskThreshold
-	} else {
-		rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
-		if err != nil {
-			return nil, err
+			// treat those disks with size less than or equal to the
+			// threshold as rootDisks.
+			rootDisk = info.Total <= globalRootDiskThreshold
+		} else {
+			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
