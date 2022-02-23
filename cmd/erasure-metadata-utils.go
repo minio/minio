@@ -67,6 +67,9 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 // values of maximally occurring errors validated against a generic
 // quorum number that can be read or write quorum depending on usage.
 func reduceQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, quorum int, quorumErr error) error {
+	if contextCanceled(ctx) {
+		return context.Canceled
+	}
 	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
 	if maxCount >= quorum {
 		return maxErr

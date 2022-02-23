@@ -574,7 +574,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	// Wait for all renames to finish.
 	errs := g.Wait()
 
-	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
+	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	return evalDisks(disks, errs), err
@@ -1001,14 +1001,18 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 	}
 
-	// Whether a disk was initially or becomes offline
-	// during this upload, send it to the MRF list.
-	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
-			continue
+	// For speedtest objects do not attempt to heal them.
+	if !opts.Speedtest {
+		// Whether a disk was initially or becomes offline
+		// during this upload, send it to the MRF list.
+		for i := 0; i < len(onlineDisks); i++ {
+			if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+				continue
+			}
+
+			er.addPartial(bucket, object, fi.VersionID, fi.Size)
+			break
 		}
-		er.addPartial(bucket, object, fi.VersionID, fi.Size)
-		break
 	}
 
 	fi.ReplicationState = opts.PutReplicationState()
