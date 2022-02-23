@@ -40,6 +40,7 @@ var (
 	errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
 	errTierBackendInUse      = errors.New("remote tier backend already in use")
 	errTierTypeUnsupported   = errors.New("unsupported tier type")
+	errTierBackendNotEmpty   = errors.New("remote tier not empty")
 )
 
 const (
@@ -114,6 +115,35 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 	config.drivercache[tierName] = d
 
 	return nil
+}
+
+// Remove removes tier if it is empty.
+func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
+	d, err := config.getDriver(tier)
+	if err != nil {
+		return err
+	}
+	if inuse, err := d.InUse(ctx); err != nil {
+		return err
+	} else if inuse {
+		return errTierBackendNotEmpty
+	} else {
+		config.Lock()
+		delete(config.Tiers, tier)
+		delete(config.drivercache, tier)
+		config.Unlock()
+	}
+	return nil
+}
+
+// Verify verifies if tier's config is valid by performing all supported
+// operations on the corresponding warmbackend.
+func (config *TierConfigMgr) Verify(ctx context.Context, tier string) error {
+	d, err := config.getDriver(tier)
+	if err != nil {
+		return err
+	}
+	return checkWarmBackend(ctx, d)
 }
 
 // Empty returns if tier targets are empty
