@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -33,6 +33,9 @@ import (
 	"github.com/minio/minio/internal/logger/message/audit"
 	xnet "github.com/minio/pkg/net"
 )
+
+// KAFKA - the string returned as endpoint of kafka targets
+const KAFKA = "kafka"
 
 // Target - Kafka target.
 type Target struct {
@@ -137,12 +140,12 @@ func (k Config) pingBrokers() error {
 
 // Endpoint - return kafka target
 func (h *Target) Endpoint() string {
-	return "kafka"
+	return KAFKA
 }
 
 // String - kafka string
 func (h *Target) String() string {
-	return "kafka"
+	return KAFKA
 }
 
 // Init initialize kafka target

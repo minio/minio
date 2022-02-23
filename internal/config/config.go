@@ -168,6 +168,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	SubnetSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
+	AuditKafkaSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.

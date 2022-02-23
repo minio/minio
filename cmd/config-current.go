@@ -351,12 +351,6 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	}
 
-	if config.LoggerSubSystems.Contains(subSys) {
-		if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
-			return err
-		}
-	}
-
 	if config.NotifySubSystems.Contains(subSys) {
 		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys); err != nil {
 			return err
@@ -625,7 +619,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		scannerCycle.Update(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
-		loggerCfg, err := logger.LookupConfig(s)
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
@@ -643,12 +637,9 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
 		}
 	case config.AuditWebhookSubSys:
-		// TODO: When loading all subsystems, LookupConfig will get executed twice
-		// as it is done in the LoggerWebhookSubSys case also. Need to find a way to
-		// avoid this
-		loggerCfg, err := logger.LookupConfig(s)
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
 		}
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.AuditWebhook {
@@ -660,16 +651,24 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			}
 		}
 
+		err = logger.UpdateAuditWebhookTargets(loggerCfg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %w", err))
+		}
+	case config.AuditKafkaSubSys:
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
+		}
 		for n, l := range loggerCfg.AuditKafka {
 			if l.Enabled {
 				l.LogOnce = logger.LogOnceIf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-
-		err = logger.UpdateAuditTargets(loggerCfg)
+		err = logger.UpdateAuditKafkaTargets(loggerCfg)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook config: %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
 		}
 	}
 	globalServerConfigMu.Lock()
