@@ -664,7 +664,7 @@ func handleCommonEnvVars() {
 		globalRootDiskThreshold = size
 	}
 
-	globalIsCICD = env.Get("MINIO_CI_CD", "") != ""
+	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {
