@@ -358,7 +358,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	}
 
 	// Iterate over all logger targets to send the log entry
-	for _, t := range Targets() {
+	for _, t := range HTTPTargets() {
 		if err := t.Send(entry, entry.LogKind); err != nil {
 			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Logger target (%v): %v", entry, t, err), entry.LogKind)
 		}

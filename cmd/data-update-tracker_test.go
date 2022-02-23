@@ -76,7 +76,7 @@ func (t *testingLogger) Send(entry interface{}, errKind string) error {
 
 func addTestingLogging(t testLoggerI) func() {
 	tl := &testingLogger{t: t}
-	logger.AddTarget(tl)
+	logger.AddHTTPTarget(tl)
 	return func() {
 		tl.mu.Lock()
 		defer tl.mu.Unlock()

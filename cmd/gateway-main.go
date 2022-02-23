@@ -176,7 +176,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddTarget(globalConsoleSys)
+	logger.AddHTTPTarget(globalConsoleSys)
 
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)

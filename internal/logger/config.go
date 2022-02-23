@@ -621,6 +621,7 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 	return cfg, nil
 }
 
+// LookupConfigForSubSys - lookup logger config, override with ENVs if set, for the given sub-system
 func LookupConfigForSubSys(scfg config.Config, subSys string) (cfg Config, err error) {
 	switch subSys {
 	case config.LoggerWebhookSubSys:
