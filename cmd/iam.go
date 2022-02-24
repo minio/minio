@@ -1003,7 +1003,7 @@ func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secre
 func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var expiredUsers []string
-	for _, parentUser := range parentUsers {
+	for parentUser, expiredUser := range parentUsers {
 		u, err := globalOpenIDConfig.LookupUser(parentUser)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
@@ -1012,7 +1012,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 		// If user is set to "disabled", we will remove them
 		// subsequently.
 		if !u.Enabled {
-			expiredUsers = append(expiredUsers, parentUser)
+			expiredUsers = append(expiredUsers, expiredUser)
 		}
 	}
 
@@ -1025,12 +1025,12 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
-	for _, parentUser := range parentUsers {
+	for parentUser, expiredUser := range parentUsers {
 		if !globalLDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
-		allDistNames = append(allDistNames, parentUser)
+		allDistNames = append(allDistNames, expiredUser)
 	}
 
 	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(allDistNames)
