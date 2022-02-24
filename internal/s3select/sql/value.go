@@ -405,7 +405,6 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 	if !isValidComparisonOperator(op) {
 		return false, errArithInvalidOperator
 	}
-	fmt.Println("a:", a.GetTypeString(), op, "v:", v.GetTypeString())
 	switch op {
 	case opIs:
 		if a.IsNull() {
