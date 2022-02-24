@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 )
@@ -83,11 +84,12 @@ func (k *KeycloakProvider) LoginWithClientID(clientID, clientSecret string) erro
 
 // LookupUser lookup user by their userid.
 func (k *KeycloakProvider) LookupUser(userid string) (User, error) {
-	lookupUserID := k.adminURL + "/realms" + k.realm + "/users/" + userid
-	req, err := http.NewRequest(http.MethodGet, lookupUserID, nil)
+	req, err := http.NewRequest(http.MethodGet, k.adminURL, nil)
 	if err != nil {
 		return User{}, err
 	}
+	req.URL.Path = path.Join(req.URL.Path, "realms", k.realm, "users", userid)
+
 	k.Lock()
 	accessToken := k.accessToken
 	k.Unlock()
