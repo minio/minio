@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/bcicen/jstream"
 	"github.com/minio/simdjson-go"
@@ -134,7 +135,7 @@ func (e *ConditionOperand) evalNode(r Record, tableAlias string) (*Value, error)
 			return nil, cmpRErr
 		}
 
-		b, err := opVal.compareOp(e.ConditionRHS.Compare.Operator, cmpRight)
+		b, err := opVal.compareOp(strings.ToUpper(e.ConditionRHS.Compare.Operator), cmpRight)
 		return FromBool(b), err
 
 	case e.ConditionRHS.Between != nil:
