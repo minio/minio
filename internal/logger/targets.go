@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 
 	"github.com/minio/minio/internal/logger/target/http"
+	"github.com/minio/minio/internal/logger/target/kafka"
+	"github.com/minio/minio/internal/logger/target/types"
 )
 
 // Target is the entity that we will receive
@@ -33,28 +35,29 @@ type Target interface {
 	Init() error
 	Cancel()
 	Send(entry interface{}, errKind string) error
+	Type() types.TargetType
 }
 
 var (
 	// swapMu must be held while reading slice info or swapping targets or auditTargets.
 	swapMu sync.Mutex
 
-	// targets is the set of enabled loggers.
+	// systemTargets is the set of enabled loggers.
 	// Must be immutable at all times.
 	// Can be swapped to another while holding swapMu
-	targets  = []Target{}
-	nTargets int32 // atomic count of len(targets)
+	systemTargets = []Target{}
+	nTargets      int32 // atomic count of len(targets)
 )
 
-// Targets returns active targets.
+// SystemTargets returns active targets.
 // Returned slice may not be modified in any way.
-func Targets() []Target {
+func SystemTargets() []Target {
 	if atomic.LoadInt32(&nTargets) == 0 {
 		// Lock free if none...
 		return nil
 	}
 	swapMu.Lock()
-	res := targets
+	res := systemTargets
 	swapMu.Unlock()
 	return res
 }
@@ -80,46 +83,30 @@ var (
 	nAuditTargets int32 // atomic count of len(auditTargets)
 )
 
-// AddAuditTarget adds a new audit logger target to the
+// AddSystemTarget adds a new logger target to the
 // list of enabled loggers
-func AddAuditTarget(t Target) error {
-	if err := t.Init(); err != nil {
-		return err
-	}
-
-	swapMu.Lock()
-	updated := append(make([]Target, 0, len(auditTargets)+1), auditTargets...)
-	updated = append(updated, t)
-	auditTargets = updated
-	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
-	swapMu.Unlock()
-	return nil
-}
-
-// AddTarget adds a new logger target to the
-// list of enabled loggers
-func AddTarget(t Target) error {
+func AddSystemTarget(t Target) error {
 	if err := t.Init(); err != nil {
 		return err
 	}
 	swapMu.Lock()
-	updated := append(make([]Target, 0, len(targets)+1), targets...)
+	updated := append(make([]Target, 0, len(systemTargets)+1), systemTargets...)
 	updated = append(updated, t)
-	targets = updated
+	systemTargets = updated
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	swapMu.Unlock()
 
 	return nil
 }
 
-func cancelAllTargets() {
-	for _, tgt := range targets {
+func cancelAllSystemTargets() {
+	for _, tgt := range systemTargets {
 		tgt.Cancel()
 	}
 }
 
-func initTargets(cfg Config) (tgts []Target, err error) {
-	for _, l := range cfg.HTTP {
+func initSystemTargets(cfgMap map[string]http.Config) (tgts []Target, err error) {
+	for _, l := range cfgMap {
 		if l.Enabled {
 			t := http.New(l)
 			if err = t.Init(); err != nil {
@@ -131,25 +118,90 @@ func initTargets(cfg Config) (tgts []Target, err error) {
 	return tgts, err
 }
 
-// UpdateTargets swaps targets with newly loaded ones from the cfg
-func UpdateTargets(cfg Config) error {
-	updated, err := initTargets(cfg)
+func initKafkaTargets(cfgMap map[string]kafka.Config) (tgts []Target, err error) {
+	for _, l := range cfgMap {
+		if l.Enabled {
+			t := kafka.New(l)
+			if err = t.Init(); err != nil {
+				return tgts, err
+			}
+			tgts = append(tgts, t)
+		}
+	}
+	return tgts, err
+}
+
+// UpdateSystemTargets swaps targets with newly loaded ones from the cfg
+func UpdateSystemTargets(cfg Config) error {
+	updated, err := initSystemTargets(cfg.HTTP)
 	if err != nil {
 		return err
 	}
 
 	swapMu.Lock()
-	for _, tgt := range targets {
+	for _, tgt := range systemTargets {
 		// Preserve console target when dynamically updating
 		// other HTTP targets, console target is always present.
-		if tgt.String() == ConsoleLoggerTgt {
+		if tgt.Type() == types.TargetConsole {
 			updated = append(updated, tgt)
 			break
 		}
 	}
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
-	cancelAllTargets() // cancel running targets
-	targets = updated
+	cancelAllSystemTargets() // cancel running targets
+	systemTargets = updated
+	swapMu.Unlock()
+	return nil
+}
+
+func cancelAuditTargetType(t types.TargetType) {
+	for _, tgt := range auditTargets {
+		if tgt.Type() == t {
+			tgt.Cancel()
+		}
+	}
+}
+
+func existingAuditTargets(t types.TargetType) []Target {
+	tgts := make([]Target, 0, len(auditTargets))
+	for _, tgt := range auditTargets {
+		if tgt.Type() == t {
+			tgts = append(tgts, tgt)
+		}
+	}
+	return tgts
+}
+
+// UpdateAuditWebhookTargets swaps audit webhook targets with newly loaded ones from the cfg
+func UpdateAuditWebhookTargets(cfg Config) error {
+	updated, err := initSystemTargets(cfg.AuditWebhook)
+	if err != nil {
+		return err
+	}
+	// retain kafka targets
+	updated = append(existingAuditTargets(types.TargetKafka), updated...)
+
+	swapMu.Lock()
+	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
+	cancelAuditTargetType(types.TargetHTTP) // cancel running targets
+	auditTargets = updated
+	swapMu.Unlock()
+	return nil
+}
+
+// UpdateAuditKafkaTargets swaps audit kafka targets with newly loaded ones from the cfg
+func UpdateAuditKafkaTargets(cfg Config) error {
+	updated, err := initKafkaTargets(cfg.AuditKafka)
+	if err != nil {
+		return err
+	}
+	// retain HTTP targets
+	updated = append(existingAuditTargets(types.TargetHTTP), updated...)
+
+	swapMu.Lock()
+	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
+	cancelAuditTargetType(types.TargetKafka) // cancel running targets
+	auditTargets = updated
 	swapMu.Unlock()
 	return nil
 }

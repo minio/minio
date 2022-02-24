@@ -30,6 +30,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger/target/types"
 )
 
 // Timeout for the webhook http call
@@ -221,4 +222,9 @@ func (h *Target) Cancel() {
 		close(h.logCh)
 	}
 	h.wg.Wait()
+}
+
+// Type - returns type of the target
+func (h *Target) Type() types.TargetType {
+	return types.TargetHTTP
 }
