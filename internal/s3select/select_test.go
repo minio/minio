@@ -474,6 +474,13 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"Id":1,"Name":"Anshu","Address":"Templestowe","Car":"Jeep"}`,
 			withJSON:   `{ "person": [ { "Id": 1, "Name": "Anshu", "Address": "Templestowe", "Car": "Jeep" }, { "Id": 2, "Name": "Ben Mostafa", "Address": "Las Vegas", "Car": "Mustang" }, { "Id": 3, "Name": "Rohan Wood", "Address": "Wooddon", "Car": "VW" } ] }`,
 		},
+		{
+			name:       "lower-case-is",
+			query:      `select * from s3object[*] as s where s.request.header['User-Agent'] is not null`,
+			wantResult: `{"request":{"uri":"/1","header":{"User-Agent":"test"}}}`,
+			withJSON: `{"request":{"uri":"/1","header":{"User-Agent":"test"}}}
+{"request":{"uri":"/2","header":{}}}`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
