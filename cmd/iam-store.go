@@ -1450,11 +1450,11 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 
 // GetAllParentUsers - returns all distinct "parent-users" associated with STS or service
 // credentials.
-func (store *IAMStoreSys) GetAllParentUsers() []string {
+func (store *IAMStoreSys) GetAllParentUsers() map[string]string {
 	cache := store.rlock()
 	defer store.runlock()
 
-	res := set.NewStringSet()
+	res := map[string]string{}
 	for _, cred := range cache.iamUsersMap {
 		if cred.IsServiceAccount() || cred.IsTemp() {
 			parentUser := cred.ParentUser
@@ -1470,11 +1470,13 @@ func (store *IAMStoreSys) GetAllParentUsers() []string {
 					}
 				}
 			}
-			res.Add(parentUser)
+			if _, ok := res[parentUser]; !ok {
+				res[parentUser] = cred.ParentUser
+			}
 		}
 	}
 
-	return res.ToSlice()
+	return res
 }
 
 // SetUserStatus - sets current user status.
