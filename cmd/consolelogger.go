@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/logger/target/console"
+	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/pubsub"
 	xnet "github.com/minio/pkg/net"
 )
@@ -152,6 +153,11 @@ func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 
 // Cancel - cancels the target
 func (sys *HTTPConsoleLoggerSys) Cancel() {
+}
+
+// Type - returns type of the target
+func (sys *HTTPConsoleLoggerSys) Type() types.TargetType {
+	return types.TargetConsole
 }
 
 // Send log message 'e' to console and publish to console

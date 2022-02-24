@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/minio/internal/logger/target/types"
 )
 
 type testLoggerI interface {
@@ -56,6 +57,10 @@ func (t *testingLogger) Init() error {
 }
 
 func (t *testingLogger) Cancel() {
+}
+
+func (t *testingLogger) Type() types.TargetType {
+	return types.TargetHTTP
 }
 
 func (t *testingLogger) Send(entry interface{}, errKind string) error {

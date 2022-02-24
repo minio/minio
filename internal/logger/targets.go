@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/minio/internal/logger/target/http"
 	"github.com/minio/minio/internal/logger/target/kafka"
+	"github.com/minio/minio/internal/logger/target/types"
 )
 
 // Target is the entity that we will receive
@@ -34,6 +35,7 @@ type Target interface {
 	Init() error
 	Cancel()
 	Send(entry interface{}, errKind string) error
+	Type() types.TargetType
 }
 
 var (
@@ -140,7 +142,7 @@ func UpdateSystemTargets(cfg Config) error {
 	for _, tgt := range systemTargets {
 		// Preserve console target when dynamically updating
 		// other HTTP targets, console target is always present.
-		if tgt.String() == ConsoleLoggerTgt {
+		if tgt.Type() == types.TargetConsole {
 			updated = append(updated, tgt)
 			break
 		}
@@ -152,40 +154,22 @@ func UpdateSystemTargets(cfg Config) error {
 	return nil
 }
 
-func cancelAuditWebhookTargets() {
+func cancelAuditTargetType(t types.TargetType) {
 	for _, tgt := range auditTargets {
-		if tgt.Endpoint() != kafka.NAME {
+		if tgt.Type() == t {
 			tgt.Cancel()
 		}
 	}
 }
 
-func cancelAuditKafkaTargets() {
+func existingAuditTargets(t types.TargetType) []Target {
+	tgts := make([]Target, 0, len(auditTargets))
 	for _, tgt := range auditTargets {
-		if tgt.Endpoint() == kafka.NAME {
-			tgt.Cancel()
+		if tgt.Type() == t {
+			tgts = append(tgts, tgt)
 		}
 	}
-}
-
-func existingAuditWebhookTargets() []Target {
-	awTgts := []Target{}
-	for _, tgt := range auditTargets {
-		if tgt.Endpoint() != kafka.NAME {
-			awTgts = append(awTgts, tgt)
-		}
-	}
-	return awTgts
-}
-
-func existingAuditKafkaTargets() []Target {
-	akTgts := []Target{}
-	for _, tgt := range auditTargets {
-		if tgt.Endpoint() == "kafka" {
-			akTgts = append(akTgts, tgt)
-		}
-	}
-	return akTgts
+	return tgts
 }
 
 // UpdateAuditWebhookTargets swaps audit webhook targets with newly loaded ones from the cfg
@@ -194,11 +178,12 @@ func UpdateAuditWebhookTargets(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	updated = append(existingAuditKafkaTargets(), updated...)
+	// retain kafka targets
+	updated = append(existingAuditTargets(types.TargetKafka), updated...)
 
 	swapMu.Lock()
 	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
-	cancelAuditWebhookTargets() // cancel running targets
+	cancelAuditTargetType(types.TargetHTTP) // cancel running targets
 	auditTargets = updated
 	swapMu.Unlock()
 	return nil
@@ -210,11 +195,12 @@ func UpdateAuditKafkaTargets(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	updated = append(existingAuditWebhookTargets(), updated...)
+	// retain HTTP targets
+	updated = append(existingAuditTargets(types.TargetHTTP), updated...)
 
 	swapMu.Lock()
 	atomic.StoreInt32(&nAuditTargets, int32(len(updated)))
-	cancelAuditKafkaTargets() // cancel running targets
+	cancelAuditTargetType(types.TargetKafka) // cancel running targets
 	auditTargets = updated
 	swapMu.Unlock()
 	return nil

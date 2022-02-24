@@ -31,11 +31,9 @@ import (
 	saramatls "github.com/Shopify/sarama/tools/tls"
 
 	"github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/minio/internal/logger/target/types"
 	xnet "github.com/minio/pkg/net"
 )
-
-// NAME - the string returned as endpoint of kafka targets
-const NAME = "kafka"
 
 // Target - Kafka target.
 type Target struct {
@@ -140,12 +138,12 @@ func (k Config) pingBrokers() error {
 
 // Endpoint - return kafka target
 func (h *Target) Endpoint() string {
-	return NAME
+	return "kafka"
 }
 
 // String - kafka string
 func (h *Target) String() string {
-	return NAME
+	return "kafka"
 }
 
 // Init initialize kafka target
@@ -229,4 +227,9 @@ func New(config Config) *Target {
 		kconfig: config,
 	}
 	return target
+}
+
+// Type - returns type of the target
+func (h *Target) Type() types.TargetType {
+	return types.TargetKafka
 }
