@@ -77,7 +77,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
-		logger.AddHTTPTarget(sys)
+		logger.AddSystemTarget(sys)
 	}
 
 	cnt := 0

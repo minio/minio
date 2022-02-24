@@ -632,7 +632,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.HTTP[n] = l
 			}
 		}
-		err = logger.UpdateHTTPTargets(loggerCfg)
+		err = logger.UpdateSystemTargets(loggerCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
 		}

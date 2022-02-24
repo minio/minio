@@ -34,8 +34,8 @@ import (
 	xnet "github.com/minio/pkg/net"
 )
 
-// KAFKA - the string returned as endpoint of kafka targets
-const KAFKA = "kafka"
+// NAME - the string returned as endpoint of kafka targets
+const NAME = "kafka"
 
 // Target - Kafka target.
 type Target struct {
@@ -140,12 +140,12 @@ func (k Config) pingBrokers() error {
 
 // Endpoint - return kafka target
 func (h *Target) Endpoint() string {
-	return KAFKA
+	return NAME
 }
 
 // String - kafka string
 func (h *Target) String() string {
-	return KAFKA
+	return NAME
 }
 
 // Init initialize kafka target
