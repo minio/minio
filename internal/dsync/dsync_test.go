@@ -34,7 +34,6 @@ const (
 	testDrwMutexUnlockCallTimeout      = 250 * time.Millisecond
 	testDrwMutexForceUnlockCallTimeout = 250 * time.Millisecond
 	testDrwMutexRefreshInterval        = 100 * time.Millisecond
-	testLockRetryInterval              = 1 * time.Second
 )
 
 // TestMain initializes the testing framework
