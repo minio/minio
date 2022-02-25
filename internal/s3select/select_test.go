@@ -556,6 +556,14 @@ func TestJSONQueries(t *testing.T) {
 			withJSON: `{"request":{"uri":"/1","header":{"User-Agent":"test"}}}
 {"request":{"uri":"/2","header":null}}`,
 		},
+		{
+			name:  "is-missing-select",
+			query: `select s.request.header['User-Agent'] as h from s3object[*] as s`,
+			wantResult: `{"h":"test"}
+{}`,
+			withJSON: `{"request":{"uri":"/1","header":{"User-Agent":"test"}}}
+{"request":{"uri":"/2","header":{}}}`,
+		},
 	}
 
 	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
