@@ -37,8 +37,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.13.6
-	github.com/klauspost/cpuid/v2 v2.0.9
+	github.com/klauspost/compress v1.14.4
+	github.com/klauspost/cpuid/v2 v2.0.11
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.9.15
@@ -56,7 +56,7 @@ require (
 	github.com/minio/pkg v1.1.16
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
-	github.com/minio/simdjson-go v0.2.1
+	github.com/minio/simdjson-go v0.4.2
 	github.com/minio/sio v0.3.0
 	github.com/minio/zipindex v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
