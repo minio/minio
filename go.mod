@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	cloud.google.com/go/storage v1.10.0
-	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Shopify/sarama v1.30.0
 	github.com/alecthomas/participle v0.2.1
@@ -96,6 +95,7 @@ require (
 	cloud.google.com/go v0.100.2 // indirect
 	cloud.google.com/go/compute v0.1.0 // indirect
 	cloud.google.com/go/iam v0.2.0 // indirect
+	github.com/Azure/azure-pipeline-go v0.2.2 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect

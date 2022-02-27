@@ -49,5 +49,5 @@ func TestPrintGatewayStartupMessage(t *testing.T) {
 	}
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
-	printGatewayStartupMessage(apiEndpoints, "azure")
+	printGatewayStartupMessage(apiEndpoints, "s3")
 }

@@ -118,7 +118,7 @@ even if compression is enabled for all types.
 
 ### 5. Notes
 
-- MinIO does not support compression for Gateway (Azure/GCS/NAS) implementations.
+- MinIO does not support compression for Gateway implementations.
 
 ## To test the setup
 

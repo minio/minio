@@ -22,9 +22,6 @@ import (
 	// NAS
 	_ "github.com/minio/minio/cmd/gateway/nas"
 
-	// Azure
-	_ "github.com/minio/minio/cmd/gateway/azure"
-
 	// S3
 	_ "github.com/minio/minio/cmd/gateway/s3"
 	// gateway functionality is frozen, no new gateways are being implemented
