@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"syscall"
 	"time"
@@ -90,11 +91,11 @@ func IsConnRefusedErr(err error) bool {
 
 // IsConnResetErr - Checks for connection reset errors.
 func IsConnResetErr(err error) bool {
-	if strings.Contains(err.Error(), "connection reset by peer") {
-		return true
+	operr, ok := err.(*net.OpError)
+	if !ok {
+		return false
 	}
-	// incase if error message is wrapped.
-	return errors.Is(err, syscall.ECONNRESET)
+	return errors.Is(operr, syscall.ECONNRESET)
 }
 
 // sendEvents - Reads events from the store and re-plays.

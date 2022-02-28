@@ -21,6 +21,7 @@
 package cmd
 
 import (
+	"errors"
 	"io"
 	"os"
 	"syscall"
@@ -49,11 +50,11 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 		// Read up to max number of entries.
 		fis, err := d.Readdir(maxEntries)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			err = osErrToFileErr(err)
-			if err == errFileNotFound {
+			if errors.Is(err, errFileNotFound) {
 				return nil
 			}
 			return err
@@ -77,7 +78,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 					continue
 				}
 			}
-			if err = filter(fi.Name(), fi.Mode()); err == errDoneForNow {
+			if err = filter(fi.Name(), fi.Mode()); errors.Is(err, errDoneForNow) {
 				// filtering requested to return by caller.
 				return nil
 			}
@@ -106,7 +107,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		// Read up to max number of entries.
 		fis, err := d.Readdir(maxEntries)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, osErrToFileErr(err)
