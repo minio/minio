@@ -428,7 +428,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	}
 
 	// Check if the current bucket has replication configuration
-	if rcfg, err := globalBucketMetadataSys.GetReplicationConfig(ctx, cache.Info.Name); err == nil {
+	if rcfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, cache.Info.Name); err == nil {
 		if rcfg.HasActiveRules("", true) {
 			tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, cache.Info.Name)
 			if err == nil {

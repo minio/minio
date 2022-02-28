@@ -127,27 +127,30 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 type UserIdentity struct {
 	Version     int              `json:"version"`
 	Credentials auth.Credentials `json:"credentials"`
+	UpdatedAt   time.Time        `json:"updatedAt,omitempty"`
 }
 
 func newUserIdentity(cred auth.Credentials) UserIdentity {
-	return UserIdentity{Version: 1, Credentials: cred}
+	return UserIdentity{Version: 1, Credentials: cred, UpdatedAt: UTCNow()}
 }
 
 // GroupInfo contains info about a group
 type GroupInfo struct {
-	Version int      `json:"version"`
-	Status  string   `json:"status"`
-	Members []string `json:"members"`
+	Version   int       `json:"version"`
+	Status    string    `json:"status"`
+	Members   []string  `json:"members"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
 func newGroupInfo(members []string) GroupInfo {
-	return GroupInfo{Version: 1, Status: statusEnabled, Members: members}
+	return GroupInfo{Version: 1, Status: statusEnabled, Members: members, UpdatedAt: UTCNow()}
 }
 
 // MappedPolicy represents a policy name mapped to a user or group
 type MappedPolicy struct {
-	Version  int    `json:"version"`
-	Policies string `json:"policy"`
+	Version   int       `json:"version"`
+	Policies  string    `json:"policy"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
 // converts a mapped policy into a slice of distinct policies
@@ -168,7 +171,7 @@ func (mp MappedPolicy) policySet() set.StringSet {
 }
 
 func newMappedPolicy(policy string) MappedPolicy {
-	return MappedPolicy{Version: 1, Policies: policy}
+	return MappedPolicy{Version: 1, Policies: policy, UpdatedAt: UTCNow()}
 }
 
 // PolicyDoc represents an IAM policy with some metadata.
@@ -314,26 +317,26 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
-func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]string, error) {
+func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]string, time.Time, error) {
 	if isGroup {
 		if mode == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
-				return nil, errNoSuchGroup
+				return nil, time.Time{}, errNoSuchGroup
 			}
 
 			// Group is disabled, so we return no policy - this
 			// ensures the request is denied.
 			if g.Status == statusDisabled {
-				return nil, nil
+				return nil, time.Time{}, nil
 			}
 		}
 
-		return c.iamGroupPolicyMap[name].toSlice(), nil
+		return c.iamGroupPolicyMap[name].toSlice(), c.iamGroupPolicyMap[name].UpdatedAt, nil
 	}
 
 	if name == globalActiveCred.AccessKey {
-		return []string{"consoleAdmin"}, nil
+		return []string{"consoleAdmin"}, time.Time{}, nil
 	}
 
 	// When looking for a user's policies, we also check if the user
@@ -342,7 +345,7 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 	u, ok := c.iamUsersMap[name]
 	if ok {
 		if !u.IsValid() {
-			return nil, nil
+			return nil, time.Time{}, nil
 		}
 		parentName = u.ParentUser
 	}
@@ -353,7 +356,7 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 		if parentName == globalActiveCred.AccessKey && u.IsServiceAccount() {
 			// even if this is set, the claims present in the service
 			// accounts apply the final permissions if any.
-			return []string{"consoleAdmin"}, nil
+			return []string{"consoleAdmin"}, mp.UpdatedAt, nil
 		}
 		if parentName != "" {
 			mp = c.iamUserPolicyMap[parentName]
@@ -373,7 +376,7 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 		policies = append(policies, c.iamGroupPolicyMap[group].toSlice()...)
 	}
 
-	return policies, nil
+	return policies, mp.UpdatedAt, nil
 }
 
 // IAMStorageAPI defines an interface for the IAM persistence layer
@@ -572,14 +575,14 @@ func (store *IAMStoreSys) PolicyDBGet(name string, isGroup bool, groups ...strin
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, err := cache.policyDBGet(store.getUsersSysType(), name, isGroup)
+	policies, _, err := cache.policyDBGet(store.getUsersSysType(), name, isGroup)
 	if err != nil {
 		return nil, err
 	}
 
 	if !isGroup {
 		for _, group := range groups {
-			ps, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+			ps, _, err := cache.policyDBGet(store.getUsersSysType(), group, true)
 			if err != nil {
 				return nil, err
 			}
@@ -755,7 +758,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	cache := store.rlock()
 	defer store.runlock()
 
-	ps, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+	ps, updatedAt, err := cache.policyDBGet(store.getUsersSysType(), group, true)
 	if err != nil {
 		return gd, err
 	}
@@ -764,8 +767,9 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 
 	if store.getUsersSysType() != MinIOUsersSysType {
 		return madmin.GroupDesc{
-			Name:   group,
-			Policy: policy,
+			Name:      group,
+			Policy:    policy,
+			UpdatedAt: updatedAt,
 		}, nil
 	}
 
@@ -775,10 +779,11 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	}
 
 	return madmin.GroupDesc{
-		Name:    group,
-		Status:  gi.Status,
-		Members: gi.Members,
-		Policy:  policy,
+		Name:      group,
+		Status:    gi.Status,
+		Members:   gi.Members,
+		Policy:    policy,
+		UpdatedAt: gi.UpdatedAt,
 	}, nil
 }
 
@@ -1082,6 +1087,33 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 	return ret, nil
 }
 
+// ListPolicyDocs - fetches all policy docs from storage and updates cache as well.
+// If bucketName is non-empty, returns policy docs matching the bucket.
+func (store *IAMStoreSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	cache := store.lock()
+	defer store.unlock()
+
+	m := map[string]PolicyDoc{}
+	err := store.loadPolicyDocs(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sets default canned policies
+	setDefaultCannedPolicies(m)
+
+	cache.iamPolicyDocsMap = m
+
+	ret := map[string]PolicyDoc{}
+	for k, v := range m {
+		if bucketName == "" || v.Policy.MatchResource(bucketName) {
+			ret[k] = v
+		}
+	}
+
+	return ret, nil
+}
+
 // helper function - does not take locks.
 func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, iampolicy.Policy) {
 	var policies []string
@@ -1177,7 +1209,8 @@ func (store *IAMStoreSys) GetUsers() map[string]madmin.UserInfo {
 				}
 				return madmin.AccountDisabled
 			}(),
-			MemberOf: cache.iamUserGroupMemberships[k].ToSlice(),
+			MemberOf:  cache.iamUserGroupMemberships[k].ToSlice(),
+			UpdatedAt: cache.iamUserPolicyMap[k].UpdatedAt,
 		}
 	}
 
@@ -1222,6 +1255,7 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 		return madmin.UserInfo{
 			PolicyName: mappedPolicy.Policies,
 			MemberOf:   groups,
+			UpdatedAt:  mappedPolicy.UpdatedAt,
 		}, nil
 	}
 
@@ -1242,7 +1276,8 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 			}
 			return madmin.AccountDisabled
 		}(),
-		MemberOf: cache.iamUserGroupMemberships[name].ToSlice(),
+		MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
+		UpdatedAt: cache.iamUserPolicyMap[name].UpdatedAt,
 	}, nil
 }
 

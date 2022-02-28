@@ -527,7 +527,6 @@ func (sys *IAMSys) InfoPolicy(policyName string) (*madmin.PolicyInfo, error) {
 	return &madmin.PolicyInfo{
 		PolicyName: policyName,
 		Policy:     pdata,
-		CreateDate: d.CreateDate,
 		UpdateDate: d.UpdateDate,
 	}, nil
 }
@@ -544,6 +543,17 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// ListPolicyDocs - lists all canned policy docs.
+func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	<-sys.configLoaded
+
+	return sys.store.ListPolicyDocs(ctx, bucketName)
 }
 
 // SetPolicy - sets a new named policy.

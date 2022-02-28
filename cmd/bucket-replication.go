@@ -81,7 +81,8 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 		return rc, BucketReplicationConfigNotFound{Bucket: bucketName}
 	}
 
-	return globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
+	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
+	return rCfg, err
 }
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
