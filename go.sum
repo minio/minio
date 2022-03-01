@@ -139,6 +139,8 @@ github.com/bits-and-blooms/bitset v1.2.0/go.mod h1:gIdJ4wp64HaoK2YrL1Q5/N7Y16edY
 github.com/bits-and-blooms/bloom/v3 v3.0.1 h1:Inlf0YXbgehxVjMPmCGv86iMCKMGPPrPSHtBF5yRHwA=
 github.com/bits-and-blooms/bloom/v3 v3.0.1/go.mod h1:MC8muvBzzPOFsrcdND/A7kU7kMhkqb9KI70JlZCP+C8=
 github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
+github.com/briandowns/spinner v1.18.1 h1:yhQmQtM1zsqFsouh09Bk/jCjd50pC3EOGsh28gLVvwY=
+github.com/briandowns/spinner v1.18.1/go.mod h1:mQak9GHqbspjC/5iUx3qMlIho8xBS/ppAL/hX5SmPJU=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/cenkalti/backoff/v3 v3.0.0/go.mod h1:cIeZDE3IrqwwJl6VUwCN6trj1oXrTS4rc0ij+ULvLYs=
@@ -657,8 +659,6 @@ github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182aff
 github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369/go.mod h1:BSXmuO+STAnVfrANrmjBb36TMTDstsz7MSK+HVaYKv4=
 github.com/miekg/dns v1.1.46 h1:uzwpxRtSVxtcIZmz/4Uz6/Rn7G11DvsaslXoy5LxQio=
 github.com/miekg/dns v1.1.46/go.mod h1:e3IlAVfNqAllflbibAZEWOXOQ+Ynzk/dDozDxY7XnME=
-github.com/minio/argon2 v1.0.0 h1:cLB/fl0EeBqiDYhsIzIPTdLZhCykRrvdx3Eu3E5oqsE=
-github.com/minio/argon2 v1.0.0/go.mod h1:XtOGJ7MjwUJDPtCqqrisx5QwVB/jDx+adQHigJVsQHQ=
 github.com/minio/cli v1.22.0 h1:VTQm7lmXm3quxO917X3p+el1l0Ca5X3S4PM2ruUYO68=
 github.com/minio/cli v1.22.0/go.mod h1:bYxnK0uS629N3Bq+AOZZ+6lwF77Sodk4+UL9vNuXhOY=
 github.com/minio/colorjson v1.0.1 h1:+hvfP8C1iMB95AT+ZFDRE+Knn9QPd9lg0CRJY9DRpos=
@@ -676,10 +676,10 @@ github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/kes v0.19.0 h1:rKzkDXT4ay7FBW34KgXK+y85bie4x4Oiq29ONRuMzh0=
 github.com/minio/kes v0.19.0/go.mod h1:e9YGKbwFCV7LbqNPMfZBazfNUsFGJ5LG4plSeWL8mmg=
-github.com/minio/madmin-go v1.3.6 h1:lgAIfOI1xB+K2JFx5JqxklLS0SE7ya3qZIi1qmwjHNE=
-github.com/minio/madmin-go v1.3.6/go.mod h1:vGKGboQgGIWx4DuDUaXixjlIEZOCIp6ivJkQoiVaACc=
-github.com/minio/mc v0.0.0-20220302011226-f13defa54577 h1:ZWkSq/Ofoz7fX4syAscCg66Ie6oV5plYFTXAieYRRDg=
-github.com/minio/mc v0.0.0-20220302011226-f13defa54577/go.mod h1:lomZcm7bdn9Og7UBKBqu//8YPmWAhhMNlnkIAHmwcS8=
+github.com/minio/madmin-go v1.3.11 h1:Cj02kzG2SD1pnZW2n1joe00yqb6NFE40Jt2gp+5mWFQ=
+github.com/minio/madmin-go v1.3.11/go.mod h1:ez87VmMtsxP7DRxjKJKD4RDNW+nhO2QF9KSzwxBDQ98=
+github.com/minio/mc v0.0.0-20220407151251-dbc09a8bf054 h1:Od5VqIS3Z0U2A3tiyLyfEtBcby3Jx/8BSFj7U+K85E4=
+github.com/minio/mc v0.0.0-20220407151251-dbc09a8bf054/go.mod h1:PIQHcb4uOctKyL/y78tVvC0PCSk6q9UavbSkIAB2/FQ=
 github.com/minio/md5-simd v1.1.0/go.mod h1:XpBqgZULrMYD3R+M28PcmP0CkI7PEMzB3U77ZrKZ0Gw=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
 github.com/minio/md5-simd v1.1.2/go.mod h1:MzdKDxYpY2BT9XQFocsiZf/NKVtR7nkE4RoEpN+20RM=
