@@ -52,12 +52,12 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 				}
 			}
 			// Key not found - return nil result
-			return nil, false, nil
+			return Missing{}, false, nil
 		case simdjson.Object:
 			elem := kvs.FindKey(key, nil)
 			if elem == nil {
 				// Key not found - return nil result
-				return nil, false, nil
+				return Missing{}, false, nil
 			}
 			val, err := IterToValue(elem.Iter)
 			if err != nil {

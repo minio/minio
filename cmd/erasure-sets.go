@@ -279,7 +279,7 @@ func (s *erasureSets) connectDisks() {
 			if !justConnected {
 				continue
 			}
-			globalMRFState.newSetReconnected(setIndex, s.poolIndex)
+			globalMRFState.newSetReconnected(s.poolIndex, setIndex)
 		}
 	}()
 }
