@@ -44,8 +44,7 @@ func newBgHealSequence() *healSequence {
 
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum
-		Remove:   healDeleteDangling,
-		ScanMode: globalHealConfig.ScanMode(),
+		Remove: healDeleteDangling,
 	}
 
 	return &healSequence{
@@ -165,7 +164,7 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 // healErasureSet lists and heals all objects in a specific erasure set
 func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, tracker *healingTracker) error {
 	bgSeq := mustGetHealSequence(ctx)
-	scanMode := globalHealConfig.ScanMode()
+	scanMode := madmin.HealNormalScan
 
 	// Make sure to copy since `buckets slice`
 	// is modified in place by tracker.
