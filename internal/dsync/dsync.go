@@ -22,4 +22,7 @@ package dsync
 type Dsync struct {
 	// List of rest client objects, one per lock server.
 	GetLockers func() ([]NetLocker, string)
+
+	// Timeouts to apply.
+	Timeouts Timeouts
 }
