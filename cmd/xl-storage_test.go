@@ -1884,7 +1884,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	if err := storage.WriteAll(context.Background(), volName, fileName, data); err != nil {
 		t.Fatal(err)
 	}
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size, algo, hashBytes, 0); err != nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size, algo, hashBytes, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1894,12 +1894,12 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	}
 
 	// Check if VerifyFile reports the incorrect file length (the correct length is `size+1`)
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size, algo, hashBytes, 0); err == nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
 	// Check if bitrot fails
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size+1, algo, hashBytes, 0); err == nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size+1, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
@@ -1928,7 +1928,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.(io.Closer).Close()
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size, algo, nil, shardSize); err != nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size, algo, nil, shardSize); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1943,10 +1943,10 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size, algo, nil, shardSize); err == nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
-	if err := storage.storage.(*xlStorage).bitrotVerify(pathJoin(path, volName, fileName), size+1, algo, nil, shardSize); err == nil {
+	if err := storage.storage.bitrotVerify(context.Background(), pathJoin(path, volName, fileName), size+1, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 }

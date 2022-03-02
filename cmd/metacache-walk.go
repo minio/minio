@@ -138,6 +138,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Forward some errors?
 			return nil
 		}
+		diskHealthCheckOK(ctx, err)
 		if len(entries) == 0 {
 			return nil
 		}
@@ -179,6 +180,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				s.walkReadMu.Lock()
 				meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, current, entry))
 				s.walkReadMu.Unlock()
+				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
@@ -196,6 +198,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				s.walkReadMu.Lock()
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				s.walkReadMu.Unlock()
+				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
@@ -257,6 +260,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			s.walkReadMu.Lock()
 			meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 			s.walkReadMu.Unlock()
+			diskHealthCheckOK(ctx, err)
 			switch {
 			case err == nil:
 				// It was an object
@@ -266,6 +270,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				out <- meta
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
+				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
 					out <- meta
@@ -303,16 +308,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	return scanDir(opts.BaseDir)
 }
 
-func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
-	defer p.updateStorageMetrics(storageMetricWalkDir, opts.Bucket, opts.BaseDir)()
-
-	if contextCanceled(ctx) {
-		return ctx.Err()
-	}
-
-	if err := p.checkDiskStale(); err != nil {
+func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWalkDir, opts.Bucket, opts.BaseDir)
+	if err != nil {
 		return err
 	}
+	defer done(&err)
 
 	return p.storage.WalkDir(ctx, opts, wr)
 }
