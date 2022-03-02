@@ -132,7 +132,7 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 	if err != nil {
 		return false
 	}
-	return storedDiskID == p.diskID
+	return storedDiskID == p.diskID && p.health.isOnline()
 }
 
 func (p *xlStorageDiskIDCheck) LastConn() time.Time {
