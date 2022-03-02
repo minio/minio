@@ -46,7 +46,8 @@ var (
 const (
 	tierConfigFile    = "tier-config.bin"
 	tierConfigFormat  = 1
-	tierConfigVersion = 1
+	tierConfigVersion = 2
+	tierConfigVer1    = 1 // tier-config v1
 
 	minioHotTier = "STANDARD"
 )
@@ -204,6 +205,12 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 			return errTierInsufficientCreds
 		}
 		cfg.GCS.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
+	case madmin.MinIO:
+		if creds.AccessKey == "" || creds.SecretKey == "" {
+			return errTierInsufficientCreds
+		}
+		cfg.MinIO.AccessKey = creds.AccessKey
+		cfg.MinIO.SecretKey = creds.SecretKey
 	}
 
 	d, err := newWarmBackend(ctx, cfg)
@@ -380,17 +387,25 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 	default:
 		return nil, fmt.Errorf("tierConfigInit: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
 	}
+
+	cfg := NewTierConfigMgr()
 	switch binary.LittleEndian.Uint16(data[2:4]) {
+	case tierConfigVer1:
+		var cfgMgr1 tierConfigMgrV1
+		if _, decErr := cfgMgr1.UnmarshalMsg(data[4:]); decErr != nil {
+			return nil, err
+		}
+		for tier, cfgv1 := range cfgMgr1.Tiers {
+			cfg.Tiers[tier] = cfgv1.migrate()
+		}
 	case tierConfigVersion:
+		if _, decErr := cfg.UnmarshalMsg(data[4:]); decErr != nil {
+			return nil, decErr
+		}
 	default:
 		return nil, fmt.Errorf("tierConfigInit: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
 	}
 
-	cfg := NewTierConfigMgr()
-	_, decErr := cfg.UnmarshalMsg(data[4:])
-	if decErr != nil {
-		return nil, decErr
-	}
 	return cfg, nil
 }
 
