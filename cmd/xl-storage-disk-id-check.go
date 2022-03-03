@@ -642,7 +642,7 @@ func (p *xlStorageDiskIDCheck) waitForToken(ctx context.Context) (err error) {
 		atomic.AddInt32(&p.health.blocked, -1)
 	}()
 	// Avoid stampeding herd...
-	ticker := time.NewTicker(5*time.Second + time.Duration(rand.Intn(int(5*time.Second))))
+	ticker := time.NewTicker(5*time.Second + time.Duration(rand.Int63n(int64(5*time.Second))))
 	defer ticker.Stop()
 	for {
 		err = p.checkHealth(ctx)
@@ -666,8 +666,8 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	if atomic.LoadInt32(&p.health.status) == diskHealthOffline {
 		return errFaultyDisk
 	}
-	// Check if there is tokens.
-	if len(p.health.tokens) < cap(p.health.tokens) {
+	// Check if there are tokens.
+	if len(p.health.tokens) > 0 {
 		return nil
 	}
 
