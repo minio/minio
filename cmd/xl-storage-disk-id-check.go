@@ -23,12 +23,13 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 )
@@ -511,10 +512,21 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 const (
 	diskHealthOK = iota
 	diskHealthOffline
-
-	// diskMaxConcurrent is the maximum number of running concurrent operations.
-	diskMaxConcurrent = 50
 )
+
+// diskMaxConcurrent is the maximum number of running concurrent operations
+// for local and (incoming) remote disk ops respectively.
+var diskMaxConcurrent = 50
+
+func init() {
+	if s, ok := os.LookupEnv("_MINIO_DISK_MAX_CONCURRENT"); ok && s != "" {
+		var err error
+		diskMaxConcurrent, err = strconv.Atoi(s)
+		if err != nil {
+			logger.Fatal(err, "invalid _MINIO_DISK_MAX_CONCURRENT value")
+		}
+	}
+}
 
 type diskHealthTracker struct {
 	// atomic time of last success
@@ -708,12 +720,12 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
+	fn := mustGetUUID()
 	for range t.C {
 		if len(p.health.tokens) == 0 {
 			// Queue is still full, no need to check.
 			continue
 		}
-		fn := uuid.New().String()
 		err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, []byte{10000: 42})
 		if err != nil {
 			continue
