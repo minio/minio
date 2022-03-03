@@ -138,6 +138,12 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config,
 				}
 				_ = newTarget.Close()
 			}
+			if err = targetList.Add(newTarget); err != nil {
+				logger.LogIf(context.Background(), err)
+				if returnOnTargetError {
+					return targetsOffline, err
+				}
+			}
 		}
 	case config.NotifyESSubSys:
 		esTargets, err := GetNotifyES(cfg[config.NotifyESSubSys], transport)
