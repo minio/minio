@@ -330,8 +330,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		default:
 			tracker.bucketDone(bucket)
 			logger.LogIf(ctx, tracker.update(ctx))
-			logger.Info("Healing bucket %s content on %s erasure set complete",
-				bucket, humanize.Ordinal(tracker.SetIndex+1))
 		}
 	}
 	tracker.Object = ""

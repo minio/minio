@@ -44,7 +44,8 @@ func setMaxResources() (err error) {
 	}
 
 	if maxLimit < 4096 && runtime.GOOS != globalWindowsOSName {
-		logger.Info("WARNING: maximum file descriptor limit %d is too low for production servers. At least 4096 is recommended. Fix with \"ulimit -n 4096\"", maxLimit)
+		logger.Info("WARNING: maximum file descriptor limit %d is too low for production servers. At least 4096 is recommended. Fix with \"ulimit -n 4096\"",
+			maxLimit)
 	}
 
 	if err = sys.SetMaxOpenFileLimit(maxLimit, maxLimit); err != nil {

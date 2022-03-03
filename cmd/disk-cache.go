@@ -614,7 +614,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 }
 
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
-	logStartupMessage(color.Blue("Cache migration initiated ...."))
+	logger.Info(color.Blue("Cache migration initiated ...."))
 
 	g := errgroup.WithNErrs(len(c.cache))
 	for index, dc := range c.cache {
@@ -643,7 +643,7 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 
 	// update migration status
 	c.migrating = false
-	logStartupMessage(color.Blue("Cache migration completed successfully."))
+	logger.Info(color.Blue("Cache migration completed successfully."))
 }
 
 // PutObject - caches the uploaded object for single Put operations

@@ -529,7 +529,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	if globalSTSTLSConfig.InsecureSkipVerify {
-		logger.Info("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify)
+		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],

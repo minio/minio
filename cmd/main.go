@@ -44,7 +44,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.BoolFlag{
 		Name:  "quiet",
-		Usage: "disable startup information",
+		Usage: "disable startup and info messages",
 	},
 	cli.BoolFlag{
 		Name:  "anonymous",
@@ -52,7 +52,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.BoolFlag{
 		Name:  "json",
-		Usage: "output server logs and startup information in json format",
+		Usage: "output logs in JSON format",
 	},
 	// Deprecated flag, so its hidden now, existing deployments will keep working.
 	cli.BoolFlag{
