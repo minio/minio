@@ -22,7 +22,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/minio/kes"
+	"github.com/minio/minio/internal/kms"
+
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
@@ -144,7 +145,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    "The policy cannot be removed, as it is in use",
 				HTTPStatusCode: http.StatusBadRequest,
 			}
-		case errors.Is(err, kes.ErrKeyExists):
+		case kms.KeyExists(err):
 			apiErr = APIError{
 				Code:           "XMinioKMSKeyExists",
 				Description:    err.Error(),
