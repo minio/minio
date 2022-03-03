@@ -74,7 +74,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		if err != nil {
 			return err
 		}
-		logger.Info("Attempting to re-encrypt IAM users and policies on etcd with %q (%s)", stat.DefaultKey, stat.Name)
+		logger.Info(fmt.Sprintf("Attempting to re-encrypt IAM users and policies on etcd with %q (%s)", stat.DefaultKey, stat.Name))
 	}
 
 	listCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
@@ -143,7 +143,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 		if err != nil {
 			return err
 		}
-		logger.Info("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name)
+		logger.Info(fmt.Sprintf("Attempting to re-encrypt config, IAM users and policies on MinIO with %q (%s)", stat.DefaultKey, stat.Name))
 	}
 
 	var marker string

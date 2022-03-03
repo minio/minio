@@ -206,7 +206,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 		for _, clnt := range clnts {
 			if err := clnt.Verify(ctx, srcCfg); err != nil {
 				if !isNetworkError(err) {
-					logger.Info(fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err).Error())
+					logger.LogIf(ctx, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err))
 				}
 				offlineEndpoints = append(offlineEndpoints, clnt.String())
 				continue

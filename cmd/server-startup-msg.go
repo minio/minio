@@ -45,9 +45,9 @@ func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
 // Prints the formatted startup message.
 func printStartupMessage(apiEndpoints []string, err error) {
 	if err != nil {
-		logStartupMessage(color.RedBold("Server startup failed with '%v'", err))
-		logStartupMessage(color.RedBold("Not all features may be available on this server"))
-		logStartupMessage(color.RedBold("Please use 'mc admin' commands to further investigate this issue"))
+		if globalConsoleSys != nil {
+			globalConsoleSys.Send(fmt.Sprintf("Server startup failed with '%v', some features may be missing", err), string(logger.All))
+		}
 	}
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
@@ -76,7 +76,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	if globalMinioConsolePortAuto && globalBrowserEnabled {
 		msg := fmt.Sprintf("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
 			globalMinioConsolePort)
-		logStartupMessage(color.RedBold(msg))
+		logger.Info(color.RedBold(msg))
 	}
 }
 
@@ -131,29 +131,29 @@ func printServerCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logStartupMessage(color.Blue("API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logStartupMessage(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+	logger.Info(color.Blue("API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
+	if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
+		logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 		if region != "" {
-			logStartupMessage(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
+			logger.Info(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
 		}
 	}
 	printEventNotifiers()
 
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
-		logStartupMessage(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
-		if color.IsTerminal() && !globalCLIContext.Anonymous {
-			logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-			logStartupMessage(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		logger.Info(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
+		if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
+			logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 		}
 	}
 }
 
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	logStartupMessage(color.Blue("\nDocumentation: ") + "https://docs.min.io")
+	logger.Info(color.Blue("\nDocumentation: ") + "https://docs.min.io")
 }
 
 // Prints bucket notification configurations.
@@ -172,7 +172,7 @@ func printEventNotifiers() {
 		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
 	}
 
-	logStartupMessage(arnMsg)
+	logger.Info(arnMsg)
 }
 
 // Prints startup message for command line access. Prints link to our documentation
@@ -185,15 +185,15 @@ func printCLIAccessMsg(endPoint string, alias string) {
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		logStartupMessage(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
+		logger.Info(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
 			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
-			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		} else {
 			mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
-			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		}
 	}
 }
@@ -220,10 +220,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
 	if msg := getStorageInfoMsg(storageInfo); msg != "" {
-		if globalCLIContext.Quiet {
-			logger.Info(msg)
-		}
-		logStartupMessage(msg)
+		logger.Info(msg)
 	}
 }
 
@@ -231,5 +228,5 @@ func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
 		humanize.IBytes(storageInfo.Free),
 		humanize.IBytes(storageInfo.Total))
-	logStartupMessage(msg)
+	logger.Info(msg)
 }

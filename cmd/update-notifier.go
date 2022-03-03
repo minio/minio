@@ -41,6 +41,10 @@ func prepareUpdateMessage(downloadURL string, older time.Duration) string {
 	t := time.Time{}
 	newerThan := humanize.RelTime(t, t.Add(older), "ago", "")
 
+	if globalCLIContext.JSON {
+		return fmt.Sprintf("You are running an older version of MinIO released %s, update: %s", newerThan, downloadURL)
+	}
+
 	// Return the nicely colored and formatted update message.
 	return colorizeUpdateMessage(downloadURL, newerThan)
 }

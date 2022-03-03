@@ -377,7 +377,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	// TODO: remove the following line by June 1st.
-	logStartupMessage(
+	logger.Info(
 		color.RedBold(`
 ===================================================================================
 **** WARNING: MinIO Gateway will be removed by June 1st from MinIO repository *****

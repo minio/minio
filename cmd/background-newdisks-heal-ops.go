@@ -263,7 +263,7 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 
 	if drivesToHeal := globalBackgroundHealState.healDriveCount(); drivesToHeal > 0 {
-		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content...",
+		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content - use 'mc admin heal alias/ --verbose' to check the status",
 			drivesToHeal, defaultMonitorNewDiskInterval))
 
 		// Heal any disk format and metadata early, if possible.
@@ -333,7 +333,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 				// Ensure that reformatting disks is finished
 				bgSeq.queueHealTask(healSource{bucket: nopHeal}, madmin.HealItemMetadata)
 
-				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
+				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal - 'mc admin heal alias/ --verbose' to check the status.",
 					len(healDisks)))
 
 				erasureSetInPoolDisksToHeal = make([]map[int][]StorageAPI, len(z.serverPools))
@@ -404,13 +404,15 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 					go func(setIndex int, disks []StorageAPI) {
 						defer wg.Done()
 						for _, disk := range disks {
-							logger.Info("Healing disk '%v' on %s pool", disk, humanize.Ordinal(i+1))
+							if serverDebugLog {
+								logger.Info("Healing disk '%v' on %s pool", disk, humanize.Ordinal(i+1))
+							}
 
 							// So someone changed the drives underneath, healing tracker missing.
 							tracker, err := loadHealingTracker(ctx, disk)
 							if err != nil {
-								logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool",
-									disk, humanize.Ordinal(i+1))
+								logger.LogIf(ctx, fmt.Errorf("Healing tracker missing on '%s', disk was swapped again on %s pool: %w",
+									disk, humanize.Ordinal(i+1), err))
 								tracker = newHealingTracker(disk)
 							}
 
@@ -438,12 +440,14 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								continue
 							}
 
-							logger.Info("Healing disk '%s' on %s pool, %s set complete", disk,
-								humanize.Ordinal(i+1), humanize.Ordinal(setIndex+1))
-							logger.Info("Summary:\n")
-							tracker.printTo(os.Stdout)
+							if serverDebugLog {
+								logger.Info("Healing disk '%s' on %s pool, %s set complete", disk,
+									humanize.Ordinal(i+1), humanize.Ordinal(setIndex+1))
+								logger.Info("Summary:\n")
+								tracker.printTo(os.Stdout)
+								logger.Info("\n")
+							}
 							logger.LogIf(ctx, tracker.delete(ctx))
-							logger.Info("\n")
 
 							// Only upon success pop the healed disk.
 							globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())
