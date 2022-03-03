@@ -317,13 +317,6 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 		return err
 	}
 	defer done(&err)
-	if contextCanceled(ctx) {
-		return ctx.Err()
-	}
-
-	if err := p.checkDiskStale(); err != nil {
-		return err
-	}
 
 	return p.storage.CreateFile(ctx, volume, path, size, reader)
 }
@@ -520,7 +513,7 @@ const (
 	diskHealthOffline
 
 	// diskMaxConcurrent is the maximum number of running concurrent operations.
-	diskMaxConcurrent = 100
+	diskMaxConcurrent = 50
 )
 
 type diskHealthTracker struct {
@@ -580,7 +573,12 @@ func (h *healthDiskCtxValue) logSuccess() {
 // Can be reused.
 var noopDoneFunc = func(_ *error) {}
 
-// TrackDiskHealth for this
+// TrackDiskHealth for this request.
+// When a non-nil error is returned 'done' MUST be called
+// with the status of the response, if it corresponds to disk health.
+// If the pointer sent to done is non-nil AND the error
+// is either nil or io.EOF the disk is considered good.
+// So if unsure if the disk status is ok, return nil as a parameter to done.
 // Shadowing will work as long as return error is named: https://go.dev/play/p/sauq86SsTN2
 func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMetric, paths ...string) (c context.Context, done func(*error), err error) {
 	done = noopDoneFunc
@@ -619,17 +617,28 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	atomic.StoreInt64(&p.health.lastStarted, time.Now().UnixNano())
 	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess})
 	si := p.updateStorageMetrics(s, paths...)
-
+	t := time.Now()
+	var once sync.Once
 	return ctx, func(errp *error) {
-		p.health.tokens <- struct{}{}
-		if errp != nil {
-			err := *errp
-			if err != nil && !errors.Is(err, io.EOF) {
-				return
+		once.Do(func() {
+			if false {
+				var ers string
+				if errp != nil {
+					err := *errp
+					ers = fmt.Sprint(err)
+				}
+				fmt.Println(time.Now().Format(time.RFC3339), "op", s, "took", time.Since(t), "result:", ers, "disk:", p.storage.String(), "path:", strings.Join(paths, "/"))
 			}
-		}
-		si(errp)
-		p.health.logSuccess()
+			p.health.tokens <- struct{}{}
+			if errp != nil {
+				err := *errp
+				if err != nil && !errors.Is(err, io.EOF) {
+					return
+				}
+				p.health.logSuccess()
+			}
+			si(errp)
+		})
 	}, nil
 }
 
@@ -671,17 +680,20 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 		return nil
 	}
 
+	const maxTimeSinceLastSuccess = 30 * time.Second
+	const minTimeSinceLastOpStarted = 15 * time.Second
+
 	// To avoid stampeding herd (100s of simultaneous starting requests)
 	// there must be a delay between the last started request and now
 	// for the last lastSuccess to be useful.
 	t := time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastStarted)))
-	if t < time.Second {
+	if t < minTimeSinceLastOpStarted {
 		return nil
 	}
 
 	// If also more than 15 seconds since last success, take disk offline.
 	t = time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess)))
-	if t > 15*time.Second {
+	if t > maxTimeSinceLastSuccess {
 		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthOffline) {
 			logger.LogAlwaysIf(ctx, fmt.Errorf("taking disk %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
 			go p.monitorDiskStatus()
@@ -697,14 +709,22 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	for range t.C {
+		if len(p.health.tokens) == 0 {
+			// Queue is still full, no need to check.
+			continue
+		}
 		fn := uuid.New().String()
 		err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, []byte{10000: 42})
 		if err != nil {
 			continue
 		}
 		b, err := p.storage.ReadAll(context.Background(), minioMetaTmpBucket, fn)
-		if err == nil && len(b) == 10000 {
-			logger.Info("able to read+write, bringing disk %s online.", p.storage.String())
+		if err != nil || len(b) != 10001 {
+			continue
+		}
+		err = p.storage.Delete(context.Background(), minioMetaTmpBucket, fn, false)
+		if err == nil {
+			logger.Info("Able to read+write, bringing disk %s online.", p.storage.String())
 			atomic.StoreInt32(&p.health.status, diskHealthOK)
 			return
 		}
