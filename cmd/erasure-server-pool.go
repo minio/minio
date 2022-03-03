@@ -671,7 +671,9 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 		if err != nil {
 			if _, ok := err.(BucketExists); !ok {
 				// Delete created buckets, ignoring errors.
-				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: true, NoRecreate: true})
+				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
+					Force: false, NoRecreate: true,
+				})
 			}
 			return err
 		}
