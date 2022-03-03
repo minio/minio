@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"net/http"
 	"time"
 
 	"github.com/minio/kes"
@@ -140,11 +139,4 @@ func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]
 		return nil, err
 	}
 	return c.client.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
-}
-
-// KeyExists returns if key exists on KMS based on the provided error type
-func KeyExists(err error) bool {
-	// legacyKeyExists will be used to maintain compatibility with KES versions older than v0.18.0
-	legacyKeyExists := kes.NewError(http.StatusBadRequest, "key does already exist")
-	return errors.Is(err, kes.ErrKeyExists) || errors.Is(err, legacyKeyExists)
 }
