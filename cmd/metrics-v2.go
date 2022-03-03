@@ -1668,28 +1668,7 @@ func getClusterTierMetrics() *MetricsGroup {
 			return
 		}
 
-		// e.g minio_cluster_ilm_transitioned_bytes{tier="S3TIER-1"}=136314880
-		//     minio_cluster_ilm_transitioned_objects{tier="S3TIER-1"}=1
-		//     minio_cluster_ilm_transitioned_versions{tier="S3TIER-1"}=3
-		for tier, st := range dui.TierStats.Tiers {
-			metrics = append(metrics, Metric{
-				Description:    getClusterTransitionedBytesMD(),
-				Value:          float64(st.TotalSize),
-				VariableLabels: map[string]string{"tier": tier},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getClusterTransitionedObjectsMD(),
-				Value:          float64(st.NumObjects),
-				VariableLabels: map[string]string{"tier": tier},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getClusterTransitionedVersionsMD(),
-				Value:          float64(st.NumVersions),
-				VariableLabels: map[string]string{"tier": tier},
-			})
-		}
-
-		return metrics
+		return dui.tierMetrics()
 	})
 	return mg
 }
