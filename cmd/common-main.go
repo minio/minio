@@ -903,6 +903,9 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 	}
 	secureConn = true
 
+	// Certs might be symlinks, reload them every 10 seconds.
+	manager.UpdateReloadDuration(10 * time.Second)
+
 	// syscall.SIGHUP to reload the certs.
 	manager.ReloadOnSignal(syscall.SIGHUP)
 

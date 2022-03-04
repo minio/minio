@@ -633,6 +633,7 @@ func NewGatewayHTTPTransportWithClientCerts(clientCert, clientKey string) *http.
 				err.Error()))
 		}
 		if c != nil {
+			c.UpdateReloadDuration(10 * time.Second)
 			c.ReloadOnSignal(syscall.SIGHUP) // allow reloads upon SIGHUP
 			transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
 		}
