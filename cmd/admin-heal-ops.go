@@ -700,8 +700,9 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
+	} else {
+		task.opts.ScanMode = globalHealConfig.ScanMode()
 	}
-	task.opts.ScanMode = globalHealConfig.ScanMode()
 
 	h.mutex.Lock()
 	h.scannedItemsMap[healType]++

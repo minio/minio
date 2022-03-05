@@ -126,6 +126,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
+		// Empty values for object lock and retention can be skipped.
+		if v == "" && equals(k, xhttp.AmzObjectLockMode, xhttp.AmzObjectLockRetainUntilDate) {
+			continue
+		}
+
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			// values to client.

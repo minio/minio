@@ -221,7 +221,6 @@ func (s *erasureSets) connectDisks() {
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
 				} else {
 					printEndpointError(endpoint, err, true)
 				}
@@ -229,7 +228,6 @@ func (s *erasureSets) connectDisks() {
 			}
 			if disk.IsLocal() && disk.Healing() != nil {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
-				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
 			}
 			s.erasureDisksMu.RLock()
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
@@ -279,7 +277,7 @@ func (s *erasureSets) connectDisks() {
 			if !justConnected {
 				continue
 			}
-			globalMRFState.newSetReconnected(setIndex, s.poolIndex)
+			globalMRFState.newSetReconnected(s.poolIndex, setIndex)
 		}
 	}()
 }
@@ -1256,9 +1254,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 		if storageDisks[i] != nil && infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
-			logger.Info("Disk `%s` the same as the system root disk.\n"+
-				"Disk will not be used. Please supply a separate disk and restart the server.",
-				storageDisks[i].String())
+			logger.LogIf(GlobalContext, fmt.Errorf("Disk `%s` is part of root disk, will not be used", storageDisks[i]))
 			storageDisks[i] = nil
 		}
 	}

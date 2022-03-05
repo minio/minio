@@ -83,7 +83,10 @@ func commonTime(modTimes []time.Time) (modTime time.Time) {
 }
 
 // Beginning of unix time is treated as sentinel value here.
-var timeSentinel = time.Unix(0, 0).UTC()
+var (
+	timeSentinel     = time.Unix(0, 0).UTC()
+	timeSentinel1970 = time.Unix(0, 1).UTC() // 1970 used for special cases when xlmeta.version == 0
+)
 
 // Boot modTimes up to disk count, setting the value to time sentinel.
 func bootModtimes(diskCount int) []time.Time {

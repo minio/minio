@@ -28,6 +28,14 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	testDrwMutexAcquireTimeout         = 250 * time.Millisecond
+	testDrwMutexRefreshCallTimeout     = 250 * time.Millisecond
+	testDrwMutexUnlockCallTimeout      = 250 * time.Millisecond
+	testDrwMutexForceUnlockCallTimeout = 250 * time.Millisecond
+	testDrwMutexRefreshInterval        = 100 * time.Millisecond
+)
+
 // TestMain initializes the testing framework
 func TestMain(m *testing.M) {
 	startLockServers()
@@ -40,6 +48,12 @@ func TestMain(m *testing.M) {
 
 	ds = &Dsync{
 		GetLockers: func() ([]NetLocker, string) { return clnts, uuid.New().String() },
+		Timeouts: Timeouts{
+			Acquire:         testDrwMutexAcquireTimeout,
+			RefreshCall:     testDrwMutexRefreshCallTimeout,
+			UnlockCall:      testDrwMutexUnlockCallTimeout,
+			ForceUnlockCall: testDrwMutexForceUnlockCallTimeout,
+		},
 	}
 
 	code := m.Run()
@@ -53,7 +67,7 @@ func TestSimpleLock(t *testing.T) {
 	dm.Lock(id, source)
 
 	// fmt.Println("Lock acquired, waiting...")
-	time.Sleep(2500 * time.Millisecond)
+	time.Sleep(testDrwMutexRefreshCallTimeout)
 
 	dm.Unlock()
 }
@@ -91,7 +105,7 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 
 	// Release lock after 10 seconds
 	go func() {
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * testDrwMutexAcquireTimeout)
 		// fmt.Println("Unlocking dm1")
 
 		dm1st.Unlock()
@@ -100,7 +114,7 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 	dm2nd.Lock(id, source)
 
 	// fmt.Printf("2nd lock obtained after 1st lock is released\n")
-	time.Sleep(2500 * time.Millisecond)
+	time.Sleep(testDrwMutexRefreshCallTimeout * 2)
 
 	dm2nd.Unlock()
 }
@@ -112,14 +126,17 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 	dm3rd := NewDRWMutex(ds, "aap")
 
 	dm1st.Lock(id, source)
-
+	started := time.Now()
+	var expect time.Duration
 	// Release lock after 10 seconds
 	go func() {
-		time.Sleep(10 * time.Second)
+		// TOTAL
+		time.Sleep(2 * testDrwMutexAcquireTimeout)
 		// fmt.Println("Unlocking dm1")
 
 		dm1st.Unlock()
 	}()
+	expect += 2 * testDrwMutexAcquireTimeout
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -131,7 +148,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 
 		// Release lock after 10 seconds
 		go func() {
-			time.Sleep(2500 * time.Millisecond)
+			time.Sleep(2 * testDrwMutexAcquireTimeout)
 			// fmt.Println("Unlocking dm2")
 
 			dm2nd.Unlock()
@@ -140,10 +157,11 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 		dm3rd.Lock(id, source)
 
 		// fmt.Printf("3rd lock obtained after 1st & 2nd locks are released\n")
-		time.Sleep(2500 * time.Millisecond)
+		time.Sleep(testDrwMutexRefreshCallTimeout)
 
 		dm3rd.Unlock()
 	}()
+	expect += 2*testDrwMutexAcquireTimeout + testDrwMutexRefreshCallTimeout
 
 	go func() {
 		defer wg.Done()
@@ -152,7 +170,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 
 		// Release lock after 10 seconds
 		go func() {
-			time.Sleep(2500 * time.Millisecond)
+			time.Sleep(2 * testDrwMutexAcquireTimeout)
 			// fmt.Println("Unlocking dm3")
 
 			dm3rd.Unlock()
@@ -161,12 +179,19 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 		dm2nd.Lock(id, source)
 
 		// fmt.Printf("2nd lock obtained after 1st & 3rd locks are released\n")
-		time.Sleep(2500 * time.Millisecond)
+		time.Sleep(testDrwMutexRefreshCallTimeout)
 
 		dm2nd.Unlock()
 	}()
+	expect += 2*testDrwMutexAcquireTimeout + testDrwMutexRefreshCallTimeout
 
 	wg.Wait()
+	// We expect at least 3 x 2 x testDrwMutexAcquireTimeout to have passed
+	elapsed := time.Since(started)
+	if elapsed < expect {
+		t.Errorf("expected at least %v time have passed, however %v passed", expect, elapsed)
+	}
+	t.Logf("expected at least %v time have passed, %v passed", expect, elapsed)
 }
 
 // Test two locks for different resources, both succeed
@@ -176,14 +201,8 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 
 	dm1.Lock(id, source)
 	dm2.Lock(id, source)
-
-	// fmt.Println("Both locks acquired, waiting...")
-	time.Sleep(2500 * time.Millisecond)
-
 	dm1.Unlock()
 	dm2.Unlock()
-
-	time.Sleep(10 * time.Millisecond)
 }
 
 // Test refreshing lock - refresh should always return true
@@ -194,22 +213,19 @@ func TestSuccessfulLockRefresh(t *testing.T) {
 	}
 
 	dm := NewDRWMutex(ds, "aap")
-	contextCanceled := make(chan struct{})
+	dm.refreshInterval = testDrwMutexRefreshInterval
 
-	ctx, cl := context.WithCancel(context.Background())
-	cancel := func() {
-		cl()
-		close(contextCanceled)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
 
 	if !dm.GetLock(ctx, cancel, id, source, Options{Timeout: 5 * time.Minute}) {
 		t.Fatal("GetLock() should be successful")
 	}
 
-	timer := time.NewTimer(drwMutexRefreshInterval * 2)
+	// Make it run twice.
+	timer := time.NewTimer(testDrwMutexRefreshInterval * 2)
 
 	select {
-	case <-contextCanceled:
+	case <-ctx.Done():
 		t.Fatal("Lock context canceled which is not expected")
 	case <-timer.C:
 	}
@@ -231,6 +247,7 @@ func TestFailedRefreshLock(t *testing.T) {
 	}
 
 	dm := NewDRWMutex(ds, "aap")
+	dm.refreshInterval = 500 * time.Millisecond
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -261,14 +278,14 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 	}
 
 	dm := NewDRWMutex(ds, "aap")
-
+	dm.refreshInterval = testDrwMutexUnlockCallTimeout
 	if !dm.GetLock(context.Background(), nil, id, source, Options{Timeout: 5 * time.Minute}) {
 		t.Fatal("GetLock() should be successful")
 	}
 
 	// Add delay to lock server responses to ensure that lock does not timeout
 	for i := range lockServers {
-		lockServers[i].setResponseDelay(2 * drwMutexUnlockCallTimeout)
+		lockServers[i].setResponseDelay(5 * testDrwMutexUnlockCallTimeout)
 		defer lockServers[i].setResponseDelay(0)
 	}
 
@@ -278,7 +295,7 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 		unlockReturned <- struct{}{}
 	}()
 
-	timer := time.NewTimer(2 * drwMutexUnlockCallTimeout)
+	timer := time.NewTimer(2 * testDrwMutexUnlockCallTimeout)
 	defer timer.Stop()
 
 	select {

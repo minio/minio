@@ -47,13 +47,13 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	// fmt.Println("2nd read lock acquired, waiting...")
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(2 * testDrwMutexAcquireTimeout)
 		drwm.RUnlock()
 		// fmt.Println("1st read lock released, waiting...")
 	}()
 
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * testDrwMutexAcquireTimeout)
 		drwm.RUnlock()
 		// fmt.Println("2nd read lock released, waiting...")
 	}()
@@ -63,7 +63,7 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	locked = drwm.GetLock(ctx3, cancel3, id, source, Options{Timeout: duration})
 	if locked {
 		// fmt.Println("Write lock acquired, waiting...")
-		time.Sleep(time.Second)
+		time.Sleep(testDrwMutexAcquireTimeout)
 
 		drwm.Unlock()
 	}
@@ -72,7 +72,7 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 }
 
 func TestSimpleWriteLockAcquired(t *testing.T) {
-	locked := testSimpleWriteLock(t, 5*time.Second)
+	locked := testSimpleWriteLock(t, 10*testDrwMutexAcquireTimeout)
 
 	expected := true
 	if locked != expected {
@@ -81,7 +81,7 @@ func TestSimpleWriteLockAcquired(t *testing.T) {
 }
 
 func TestSimpleWriteLockTimedOut(t *testing.T) {
-	locked := testSimpleWriteLock(t, time.Second)
+	locked := testSimpleWriteLock(t, testDrwMutexAcquireTimeout)
 
 	expected := false
 	if locked != expected {
@@ -99,7 +99,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	}
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * testDrwMutexAcquireTimeout)
 		drwm.Unlock()
 		// fmt.Println("Initial write lock released, waiting...")
 	}()
@@ -109,7 +109,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	locked = drwm.GetLock(ctx2, cancel2, id, source, Options{Timeout: duration})
 	if locked {
 		// fmt.Println("2nd write lock acquired, waiting...")
-		time.Sleep(time.Second)
+		time.Sleep(testDrwMutexAcquireTimeout)
 
 		drwm.Unlock()
 	}
@@ -118,7 +118,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 }
 
 func TestDualWriteLockAcquired(t *testing.T) {
-	locked := testDualWriteLock(t, 5*time.Second)
+	locked := testDualWriteLock(t, 10*testDrwMutexAcquireTimeout)
 
 	expected := true
 	if locked != expected {
@@ -127,7 +127,7 @@ func TestDualWriteLockAcquired(t *testing.T) {
 }
 
 func TestDualWriteLockTimedOut(t *testing.T) {
-	locked := testDualWriteLock(t, time.Second)
+	locked := testDualWriteLock(t, testDrwMutexAcquireTimeout)
 
 	expected := false
 	if locked != expected {
@@ -214,25 +214,27 @@ func writer(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) 
 }
 
 // Borrowed from rwmutex_test.go
-func HammerRWMutex(gomaxprocs, numReaders, numIterations int) {
-	runtime.GOMAXPROCS(gomaxprocs)
-	// Number of active readers + 10000 * number of active writers.
-	var activity int32
-	rwm := NewDRWMutex(ds, "test")
-	cdone := make(chan bool)
-	go writer(rwm, numIterations, &activity, cdone)
-	var i int
-	for i = 0; i < numReaders/2; i++ {
-		go reader(rwm, numIterations, &activity, cdone)
-	}
-	go writer(rwm, numIterations, &activity, cdone)
-	for ; i < numReaders; i++ {
-		go reader(rwm, numIterations, &activity, cdone)
-	}
-	// Wait for the 2 writers and all readers to finish.
-	for i := 0; i < 2+numReaders; i++ {
-		<-cdone
-	}
+func hammerRWMutex(t *testing.T, gomaxprocs, numReaders, numIterations int) {
+	t.Run(fmt.Sprintf("%d-%d-%d", gomaxprocs, numReaders, numIterations), func(t *testing.T) {
+		runtime.GOMAXPROCS(gomaxprocs)
+		// Number of active readers + 10000 * number of active writers.
+		var activity int32
+		rwm := NewDRWMutex(ds, "test")
+		cdone := make(chan bool)
+		go writer(rwm, numIterations, &activity, cdone)
+		var i int
+		for i = 0; i < numReaders/2; i++ {
+			go reader(rwm, numIterations, &activity, cdone)
+		}
+		go writer(rwm, numIterations, &activity, cdone)
+		for ; i < numReaders; i++ {
+			go reader(rwm, numIterations, &activity, cdone)
+		}
+		// Wait for the 2 writers and all readers to finish.
+		for i := 0; i < 2+numReaders; i++ {
+			<-cdone
+		}
+	})
 }
 
 // Borrowed from rwmutex_test.go
@@ -242,16 +244,16 @@ func TestRWMutex(t *testing.T) {
 	if testing.Short() {
 		n = 5
 	}
-	HammerRWMutex(1, 1, n)
-	HammerRWMutex(1, 3, n)
-	HammerRWMutex(1, 10, n)
-	HammerRWMutex(4, 1, n)
-	HammerRWMutex(4, 3, n)
-	HammerRWMutex(4, 10, n)
-	HammerRWMutex(10, 1, n)
-	HammerRWMutex(10, 3, n)
-	HammerRWMutex(10, 10, n)
-	HammerRWMutex(10, 5, n)
+	hammerRWMutex(t, 1, 1, n)
+	hammerRWMutex(t, 1, 3, n)
+	hammerRWMutex(t, 1, 10, n)
+	hammerRWMutex(t, 4, 1, n)
+	hammerRWMutex(t, 4, 3, n)
+	hammerRWMutex(t, 4, 10, n)
+	hammerRWMutex(t, 10, 1, n)
+	hammerRWMutex(t, 10, 3, n)
+	hammerRWMutex(t, 10, 10, n)
+	hammerRWMutex(t, 10, 5, n)
 }
 
 // Borrowed from rwmutex_test.go
@@ -267,12 +269,13 @@ func TestUnlockPanic(t *testing.T) {
 
 // Borrowed from rwmutex_test.go
 func TestUnlockPanic2(t *testing.T) {
+	mu := NewDRWMutex(ds, "test-unlock-panic-2")
 	defer func() {
 		if recover() == nil {
 			t.Fatalf("unlock of unlocked RWMutex did not panic")
 		}
+		mu.RUnlock() // Unlock, so -test.count > 1 works
 	}()
-	mu := NewDRWMutex(ds, "test-unlock-panic-2")
 	mu.RLock(id, source)
 	mu.Unlock()
 }
@@ -290,12 +293,13 @@ func TestRUnlockPanic(t *testing.T) {
 
 // Borrowed from rwmutex_test.go
 func TestRUnlockPanic2(t *testing.T) {
+	mu := NewDRWMutex(ds, "test-runlock-panic-2")
 	defer func() {
 		if recover() == nil {
 			t.Fatalf("read unlock of unlocked RWMutex did not panic")
 		}
+		mu.Unlock() // Unlock, so -test.count > 1 works
 	}()
-	mu := NewDRWMutex(ds, "test-runlock-panic-2")
 	mu.Lock(id, source)
 	mu.RUnlock()
 }

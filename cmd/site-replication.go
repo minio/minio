@@ -189,7 +189,7 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 	c.RLock()
 	defer c.RUnlock()
 	if c.enabled {
-		logger.Info("Cluster Replication initialized.")
+		logger.Info("Cluster replication initialized")
 	}
 
 	return err

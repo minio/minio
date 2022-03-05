@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -252,16 +253,17 @@ func (c *diskCache) diskUsageLow() bool {
 // Returns if the disk usage reaches  or exceeds configured cache quota when size is added.
 // If current usage without size exceeds high watermark a GC is automatically queued.
 func (c *diskCache) diskSpaceAvailable(size int64) bool {
+	reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+
 	gcTriggerPct := c.quotaPct * c.highWatermark / 100
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
 	if di.Total == 0 {
-		logger.Info("diskCache: Received 0 total disk size")
+		logger.LogIf(ctx, errors.New("diskCache: Received 0 total disk size"))
 		return false
 	}
 	usedPercent := float64(di.Used) * 100 / float64(di.Total)

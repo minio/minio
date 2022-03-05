@@ -44,8 +44,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/target/http"
-	"github.com/minio/minio/internal/logger/target/kafka"
 	"github.com/minio/pkg/env"
 )
 
@@ -353,12 +351,6 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	}
 
-	if config.LoggerSubSystems.Contains(subSys) {
-		if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
-			return err
-		}
-	}
-
 	if config.NotifySubSystems.Contains(subSys) {
 		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys); err != nil {
 			return err
@@ -537,7 +529,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	if globalSTSTLSConfig.InsecureSkipVerify {
-		logger.Info("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify)
+		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
@@ -564,36 +556,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
-	}
-
-	// Load logger targets based on user's configuration
-	loggerUserAgent := getUserAgent(getMinioMode())
-
-	loggerCfg, err := logger.LookupConfig(s)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger/audit targets: %w", err))
-	}
-
-	for _, l := range loggerCfg.AuditWebhook {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			l.UserAgent = loggerUserAgent
-			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-			// Enable http audit logging
-			if err = logger.AddAuditTarget(http.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit HTTP target: %w", err))
-			}
-		}
-	}
-
-	for _, l := range loggerCfg.AuditKafka {
-		if l.Enabled {
-			l.LogOnce = logger.LogOnceIf
-			// Enable Kafka audit logging
-			if err = logger.AddAuditTarget(kafka.New(l)); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server audit Kafka target: %w", err))
-			}
-		}
 	}
 
 	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
@@ -657,7 +619,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		scannerCycle.Update(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
-		loggerCfg, err := logger.LookupConfig(s)
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
@@ -670,9 +632,43 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.HTTP[n] = l
 			}
 		}
-		err = logger.UpdateTargets(loggerCfg)
+		err = logger.UpdateSystemTargets(loggerCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
+		}
+	case config.AuditWebhookSubSys:
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
+		}
+		userAgent := getUserAgent(getMinioMode())
+		for n, l := range loggerCfg.AuditWebhook {
+			if l.Enabled {
+				l.LogOnce = logger.LogOnceIf
+				l.UserAgent = userAgent
+				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+				loggerCfg.AuditWebhook[n] = l
+			}
+		}
+
+		err = logger.UpdateAuditWebhookTargets(loggerCfg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %w", err))
+		}
+	case config.AuditKafkaSubSys:
+		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
+		}
+		for n, l := range loggerCfg.AuditKafka {
+			if l.Enabled {
+				l.LogOnce = logger.LogOnceIf
+				loggerCfg.AuditKafka[n] = l
+			}
+		}
+		err = logger.UpdateAuditKafkaTargets(loggerCfg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
 		}
 	}
 	globalServerConfigMu.Lock()

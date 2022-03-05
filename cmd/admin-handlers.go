@@ -23,6 +23,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -982,6 +983,31 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		duration = time.Second * 10
+	}
+
+	// ignores any errors here.
+	storageInfo, _ := objectAPI.StorageInfo(ctx)
+	capacityNeeded := uint64(concurrent * size)
+	capacity := uint64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo))
+
+	if capacity < capacityNeeded {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
+			Code: "XMinioSpeedtestInsufficientCapacity",
+			Message: fmt.Sprintf("not enough usable space available to perform speedtest - expected %s, got %s",
+				humanize.IBytes(capacityNeeded), humanize.IBytes(capacity)),
+			StatusCode: http.StatusInsufficientStorage,
+		}), r.URL)
+		return
+	}
+
+	// Verify if we can employ autotune without running out of capacity,
+	// if we do run out of capacity, make sure to turn-off autotuning
+	// in such situations.
+	newConcurrent := concurrent + (concurrent+1)/2
+	autoTunedCapacityNeeded := uint64(newConcurrent * size)
+	if autotune && capacity < autoTunedCapacityNeeded {
+		// Turn-off auto-tuning if next possible concurrency would reach beyond disk capacity.
+		autotune = false
 	}
 
 	deleteBucket := func() {
@@ -2222,7 +2248,7 @@ func fetchKMSStatus() madmin.KMS {
 func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 	var loggerInfo []madmin.Logger
 	var auditloggerInfo []madmin.Audit
-	for _, target := range logger.Targets() {
+	for _, target := range logger.SystemTargets() {
 		if target.Endpoint() != "" {
 			tgt := target.String()
 			err := checkConnection(target.Endpoint(), 15*time.Second)
@@ -2402,7 +2428,9 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		}
 		return nil
 	})
-	logger.LogIf(ctx, err)
+	if !errors.Is(err, errFileNotFound) {
+		logger.LogIf(ctx, err)
+	}
 }
 
 func createHostAnonymizerForFSMode() map[string]string {

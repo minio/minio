@@ -169,7 +169,6 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 }
 
 func (i infoMsg) quiet(msg string, args ...interface{}) {
-	i.pretty(msg, args...)
 }
 
 func (i infoMsg) pretty(msg string, args ...interface{}) {
@@ -221,23 +220,4 @@ func Error(msg string, data ...interface{}) {
 // Info :
 func Info(msg string, data ...interface{}) {
 	consoleLog(info, msg, data...)
-}
-
-var startupMessage startUpMsg
-
-type startUpMsg struct{}
-
-func (s startUpMsg) json(msg string, args ...interface{}) {
-}
-
-func (s startUpMsg) quiet(msg string, args ...interface{}) {
-}
-
-func (s startUpMsg) pretty(msg string, args ...interface{}) {
-	c.Printf(msg, args...)
-}
-
-// StartupMessage :
-func StartupMessage(msg string, data ...interface{}) {
-	consoleLog(startupMessage, msg, data...)
 }

@@ -343,10 +343,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				switch {
 				case errors.Is(err, errFileNotFound):
 					scan = madmin.HealNormalScan
-					logger.Info("Healing required, triggering async heal missing shards for %s", pathJoin(bucket, object, fi.VersionID))
 				case errors.Is(err, errFileCorrupt):
 					scan = madmin.HealDeepScan
-					logger.Info("Healing required, triggering async heal bitrot for %s", pathJoin(bucket, object, fi.VersionID))
 				}
 				switch scan {
 				case madmin.HealNormalScan, madmin.HealDeepScan:

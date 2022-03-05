@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,14 +15,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dsync
+package types
 
-// Dsync represents dsync client object which is initialized with
-// authenticated clients, used to initiate lock REST calls.
-type Dsync struct {
-	// List of rest client objects, one per lock server.
-	GetLockers func() ([]NetLocker, string)
+// TargetType indicates type of the target e.g. console, http, kafka
+type TargetType uint8
 
-	// Timeouts to apply.
-	Timeouts Timeouts
-}
+// Constants for target types
+const (
+	_ TargetType = iota
+	TargetConsole
+	TargetHTTP
+	TargetKafka
+)

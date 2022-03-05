@@ -327,7 +327,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	logStartupMessage(prepareUpdateMessage("\nRun `mc admin update`", lrTime.Sub(crTime)))
+	logger.Info(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
@@ -762,7 +762,7 @@ func handleCommonEnvVars() {
 				"         Please use %s and %s",
 				config.EnvAccessKey, config.EnvSecretKey,
 				config.EnvRootUser, config.EnvRootPassword)
-			logStartupMessage(color.RedBold(msg))
+			logger.Info(color.RedBold(msg))
 		}
 		globalActiveCred = cred
 	}
@@ -825,13 +825,6 @@ func handleCommonEnvVars() {
 		}
 		GlobalKMS = KMS
 	}
-}
-
-func logStartupMessage(msg string) {
-	if globalConsoleSys != nil {
-		globalConsoleSys.Send(msg, string(logger.All))
-	}
-	logger.StartupMessage(msg)
 }
 
 func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
@@ -909,6 +902,9 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		}
 	}
 	secureConn = true
+
+	// Certs might be symlinks, reload them every 10 seconds.
+	manager.UpdateReloadDuration(10 * time.Second)
 
 	// syscall.SIGHUP to reload the certs.
 	manager.ReloadOnSignal(syscall.SIGHUP)

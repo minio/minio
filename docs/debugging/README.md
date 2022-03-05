@@ -30,18 +30,18 @@ mc admin trace --all --verbose myminio
 
 ## Subnet Health
 
-Subnet Health diagnostics help ensure that the underlying infrastructure that runs MinIO is configured correctly, and is functioning properly. This test is one-shot long running one, that is recommended to be run as soon as the cluster is first provisioned, and each time a failure scenario is encountered. Note that the test incurs majority of the available resources on the system. Care must be taken when using this to debug failure scenario, so as to prevent larger outages. Health tests can be triggered using `mc admin subnet health` command.
+Subnet Health diagnostics help ensure that the underlying infrastructure that runs MinIO is configured correctly, and is functioning properly. This test is one-shot long running one, that is recommended to be run as soon as the cluster is first provisioned, and each time a failure scenario is encountered. Note that the test incurs majority of the available resources on the system. Care must be taken when using this to debug failure scenario, so as to prevent larger outages. Health tests can be triggered using `mc support diagnostics` command.
 
 Example:
 
 ```sh
-minio server /data
+minio server /data{1...4}
 ```
 
 The command takes no flags
 
 ```sh
-mc admin subnet health myminio
+mc support diagnostics myminio/
 ```
 
 The output printed will be of the form
@@ -84,14 +84,14 @@ Executing `xl-meta` will look for an `xl.meta` in the current folder and decode 
 
 ### Remotely Inspecting backend data
 
-`mc admin inspect` allows collecting files based on *path* from all backend drives. Matching files will be collected in a zip file with their respective host+drive+path. A MinIO host from October 2021 or later is required for full functionality. Syntax is `mc admin inspect ALIAS/path/to/files`. This can for example be used to collect `xl.meta` from objects that are misbehaving. To collect `xl.meta` from a specific object, for example placed at `ALIAS/bucket/path/to/file.txt` append `/xl.meta`, for instance `mc admin inspect ALIAS/bucket/path/to/file.txt/xl.meta`. All files can be collected, so this can also be used to retrieve `part.*` files, etc.
+`mc support inspect` allows collecting files based on *path* from all backend drives. Matching files will be collected in a zip file with their respective host+drive+path. A MinIO host from October 2021 or later is required for full functionality. Syntax is `mc support inspect ALIAS/path/to/files`. This can for example be used to collect `xl.meta` from objects that are misbehaving. To collect `xl.meta` from a specific object, for example placed at `ALIAS/bucket/path/to/file.txt` append `/xl.meta`, for instance `mc support inspect ALIAS/bucket/path/to/file.txt/xl.meta`. All files can be collected, so this can also be used to retrieve `part.*` files, etc.
 
-Wildcards can be used, for example `mc admin inspect ALIAS/bucket/path/**/xl.meta` will collect all `xl.meta` recursively. `mc admin inspect ALIAS/bucket/path/to/file.txt/*/part.*` will collect parts for all versions for the object located at `bucket/path/to/file.txt`.
+Wildcards can be used, for example `mc support inspect ALIAS/bucket/path/**/xl.meta` will collect all `xl.meta` recursively. `mc support inspect ALIAS/bucket/path/to/file.txt/*/part.*` will collect parts for all versions for the object located at `bucket/path/to/file.txt`.
 
 `xl-meta` accepts zip files as input and will output all `xl.meta` files found within the archive. For example:
 
 ```
-$ mc admin inspect play/test123/test*/xl.meta
+$ mc support inspect play/test123/test*/xl.meta
 mc: File data successfully downloaded as inspect.6f96b336.zip
 $ xl-meta inspect.6f96b336.zip
 {
@@ -105,7 +105,7 @@ $ xl-meta inspect.6f96b336.zip
 Optionally `--encrypt` can be specified. This will output an encrypted file and a decryption key:
 
 ```
-$ mc admin inspect --encrypt play/test123/test*/*/part.*
+$ mc support inspect --encrypt play/test123/test*/*/part.*
 mc: Encrypted file data successfully downloaded as inspect.ad2b43d8.enc
 mc: Decryption key: ad2b43d847fdb14e54c5836200177f7158b3f745433525f5d23c0e0208e50c9948540b54
 
