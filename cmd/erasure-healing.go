@@ -931,5 +931,12 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	}
 
 	// Heal the object.
-	return er.healObject(healCtx, bucket, object, versionID, opts)
+	hr, err = er.healObject(healCtx, bucket, object, versionID, opts)
+	if errors.Is(err, errFileCorrupt) && opts.ScanMode != madmin.HealDeepScan {
+		// Instead of returning an error when a bitrot error is detected
+		// during a normal heal scan, heal again with bitrot flag enabled.
+		opts.ScanMode = madmin.HealDeepScan
+		hr, err = er.healObject(healCtx, bucket, object, versionID, opts)
+	}
+	return hr, err
 }
