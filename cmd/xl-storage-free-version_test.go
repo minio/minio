@@ -102,7 +102,7 @@ func TestFreeVersion(t *testing.T) {
 	tierfi.TransitionedObjName = mustGetUUID()
 	tierfi.TransitionTier = "MINIOTIER-1"
 	var err error
-	_, _, err = xl.DeleteVersion(tierfi)
+	_, err = xl.DeleteVersion(tierfi)
 	fatalErr(err)
 	report()
 
@@ -124,7 +124,7 @@ func TestFreeVersion(t *testing.T) {
 	newtierfi.TransitionStatus = ""
 	newtierfi.SetTierFreeVersionID(fvIDs[1])
 	report()
-	_, _, err = xl.DeleteVersion(newtierfi)
+	_, err = xl.DeleteVersion(newtierfi)
 	report()
 	fatalErr(err)
 
@@ -141,7 +141,7 @@ func TestFreeVersion(t *testing.T) {
 	freefi := newtierfi
 	for _, fvID := range fvIDs {
 		freefi.VersionID = fvID
-		_, _, err = xl.DeleteVersion(freefi)
+		_, err = xl.DeleteVersion(freefi)
 		fatalErr(err)
 	}
 	report()

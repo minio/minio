@@ -23,6 +23,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -2427,7 +2428,9 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		}
 		return nil
 	})
-	logger.LogIf(ctx, err)
+	if !errors.Is(err, errFileNotFound) {
+		logger.LogIf(ctx, err)
+	}
 }
 
 func createHostAnonymizerForFSMode() map[string]string {

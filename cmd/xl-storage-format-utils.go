@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"errors"
+
 	"github.com/zeebo/xxh3"
 )
 
@@ -57,7 +59,19 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 		}
 		versions, err = xlMeta.ListVersions(volume, path)
 	}
-	if err != nil || len(versions) == 0 {
+	if err == nil && len(versions) == 0 {
+		// This special case is needed to handle len(xlMeta.versions) == 0
+		versions = []FileInfo{
+			{
+				Volume:   volume,
+				Name:     path,
+				Deleted:  true,
+				IsLatest: true,
+				ModTime:  timeSentinel1970,
+			},
+		}
+	}
+	if err != nil {
 		return FileInfoVersions{}, err
 	}
 
@@ -76,10 +90,32 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	if buf, data := isIndexedMetaV2(xlMetaBuf); buf != nil {
 		inData = data
 		fi, err = buf.ToFileInfo(volume, path, versionID)
+		if len(buf) != 0 && errors.Is(err, errFileNotFound) {
+			// This special case is needed to handle len(xlMeta.versions) == 0
+			return FileInfo{
+				Volume:    volume,
+				Name:      path,
+				VersionID: versionID,
+				Deleted:   true,
+				IsLatest:  true,
+				ModTime:   timeSentinel1970,
+			}, nil
+		}
 	} else {
 		var xlMeta xlMetaV2
 		if err := xlMeta.LoadOrConvert(xlMetaBuf); err != nil {
 			return FileInfo{}, err
+		}
+		if len(xlMeta.versions) == 0 {
+			// This special case is needed to handle len(xlMeta.versions) == 0
+			return FileInfo{
+				Volume:    volume,
+				Name:      path,
+				VersionID: versionID,
+				Deleted:   true,
+				IsLatest:  true,
+				ModTime:   timeSentinel1970,
+			}, nil
 		}
 		inData = xlMeta.data
 		fi, err = xlMeta.ToFileInfo(volume, path, versionID)
