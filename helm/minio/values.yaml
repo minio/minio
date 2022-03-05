@@ -37,6 +37,12 @@ additionalLabels: []
 ## Additional annotations to include with deployment or statefulset
 additionalAnnotations: []
 
+## Typically the deployment/statefulset includes checksums of secrets/config,
+## So that when these change on a subsequent helm install, the deployment/statefulset 
+## is restarted. This can result in unnecessary restarts under GitOps tooling such as 
+## flux, so set to "true" to disable this behaviour.
+ignoreChartChecksums: false
+
 ## Additional arguments to pass to minio binary
 extraArgs: []
 
