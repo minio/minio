@@ -366,7 +366,7 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 	count := len(testCases)
 	for i := 4; i < len(testCases); i++ {
 		tc := testCases[i]
-		dataDir, _, err := xl.DeleteVersion(fileInfos[i])
+		dataDir, err := xl.DeleteVersion(fileInfos[i])
 		failOnErr(count+1, err)
 		if dataDir != tc.expectedDataDir {
 			t.Fatalf("Expected %s but got %s", tc.expectedDataDir, dataDir)

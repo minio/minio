@@ -880,22 +880,15 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
-	var (
-		dataDir     string
-		lastVersion bool
-		updated     bool
-	)
-
 	for _, fi := range fis {
-		dataDir, lastVersion, err = xlMeta.DeleteVersion(fi)
+		dataDir, err := xlMeta.DeleteVersion(fi)
 		if err != nil {
 			if !fi.Deleted && (err == errFileNotFound || err == errFileVersionNotFound) {
-				// Ignore these since
+				// Ignore these since they do not exist
 				continue
 			}
 			return err
 		}
-		updated = true
 		if dataDir != "" {
 			versionID := fi.VersionID
 			if versionID == "" {
@@ -918,11 +911,8 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		}
 	}
 
+	lastVersion := len(xlMeta.versions) == 0
 	if !lastVersion {
-		if !updated {
-			return nil
-		}
-
 		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
@@ -933,12 +923,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	}
 
 	// Move xl.meta to trash
-	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
-	if err = checkPathLength(filePath); err != nil {
-		return err
-	}
-
-	err = s.moveToTrash(filePath, false)
+	err = s.moveToTrash(pathJoin(volumeDir, path, xlStorageFormatFile), false)
 	if err == nil || err == errFileNotFound {
 		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false)
 	}
@@ -1021,7 +1006,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	dataDir, lastVersion, err := xlMeta.DeleteVersion(fi)
+	dataDir, err := xlMeta.DeleteVersion(fi)
 	if err != nil {
 		return err
 	}
@@ -1046,7 +1031,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		}
 	}
 
-	if !lastVersion {
+	if len(xlMeta.versions) != 0 {
 		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {

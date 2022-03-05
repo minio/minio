@@ -7,9 +7,9 @@ x-minio-common: &minio-common
   expose:
     - "9000"
     - "9001"
-  environment:
-    MINIO_ROOT_USER: minio
-    MINIO_ROOT_PASSWORD: minio123
+  # environment:
+    # MINIO_ROOT_USER: minioadmin
+    # MINIO_ROOT_PASSWORD: minioadmin
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
     interval: 30s
