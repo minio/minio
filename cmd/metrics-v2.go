@@ -1664,7 +1664,7 @@ func getClusterTierMetrics() *MetricsGroup {
 			return
 		}
 		// data usage has not captured any tier stats yet.
-		if dui.TiersStats == nil {
+		if dui.TierStats == nil {
 			return
 		}
 
