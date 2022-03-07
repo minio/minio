@@ -450,14 +450,17 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Expected versions 1, got %d", fileInfoPreHeal.NumVersions)
 	}
 
+	ch := make(chan struct{})
 	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
 		func(bucket, object, vid string) error {
 			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+			close(ch)
 			return err
 		}); err != nil {
 		t.Fatal(err)
 	}
 
+	<-ch
 	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
