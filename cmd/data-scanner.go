@@ -615,7 +615,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						into.addChild(h)
 						continue
 					}
-					folder.objectHealProbDiv = dataUsageUpdateDirCycles
+					folder.objectHealProbDiv = f.healFolderInclude
 				}
 			}
 			scanFolder(folder)
