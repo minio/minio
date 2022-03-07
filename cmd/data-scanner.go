@@ -403,7 +403,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		if filter != nil && ok && existing.Compacted {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
-				if f.healObjectSelect == 0 || !thisHash.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
+				if f.healObjectSelect == 0 || !thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healFolderInclude/folder.objectHealProbDiv) {
 					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					f.updateCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					if f.dataUsageScannerDebug {
@@ -482,7 +482,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				debug:       f.dataUsageScannerDebug,
 				lifeCycle:   activeLifeCycle,
 				replication: replicationCfg,
-				heal:        thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
+				heal:        thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
 			// if the drive belongs to an erasure set
 			// that is already being healed, skip the
@@ -609,13 +609,13 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// and the entry itself is compacted.
 			if !into.Compacted && f.oldCache.isCompacted(h) {
 				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-					if f.healObjectSelect == 0 || !h.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
+					if f.healObjectSelect == 0 || !h.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healFolderInclude/folder.objectHealProbDiv) {
 						// Transfer and add as child...
 						f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
 						into.addChild(h)
 						continue
 					}
-					folder.objectHealProbDiv = dataUsageUpdateDirCycles
+					folder.objectHealProbDiv = f.healFolderInclude
 				}
 			}
 			scanFolder(folder)
