@@ -1663,8 +1663,8 @@ func getClusterTierMetrics() *MetricsGroup {
 		if err != nil {
 			return
 		}
-		// data usage has not captured any data yet.
-		if dui.LastUpdate.IsZero() {
+		// data usage has not captured any tier stats yet.
+		if dui.TierStats == nil {
 			return
 		}
 
