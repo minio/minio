@@ -661,6 +661,9 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
+			if z.IsSuspended(index) {
+				return nil
+			}
 			return z.serverPools[index].MakeBucketWithLocation(ctx, bucket, opts)
 		}, index)
 	}
@@ -672,7 +675,8 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 			if _, ok := err.(BucketExists); !ok {
 				// Delete created buckets, ignoring errors.
 				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
-					Force: false, NoRecreate: true,
+					Force:      false,
+					NoRecreate: true,
 				})
 			}
 			return err
@@ -1478,6 +1482,9 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
+			if z.IsSuspended(index) {
+				return nil
+			}
 			return z.serverPools[index].DeleteBucket(ctx, bucket, opts)
 		}, index)
 	}

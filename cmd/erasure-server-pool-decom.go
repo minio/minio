@@ -593,7 +593,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				return
 			}
 
-			// We need a reversed order for Decommissioning,
+			// We need a reversed order for decommissioning,
 			// to create the appropriate stack.
 			versionsSorter(fivs.Versions).reverse()
 
@@ -952,6 +952,18 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 					Err: fmt.Sprintf("Bucket is part of transitioned tier %s: decommission is not allowed in Tier'd setups", bucket.Name),
 				}
 			}
+		}
+	}
+
+	// Create .minio.sys/conifg, .minio.sys/buckets paths if missing,
+	// this code is present to avoid any missing meta buckets on other
+	// pools.
+	for _, metaBucket := range []string{
+		pathJoin(minioMetaBucket, minioConfigPrefix),
+		pathJoin(minioMetaBucket, bucketMetaPrefix),
+	} {
+		if err = z.MakeBucketWithLocation(ctx, metaBucket, BucketOptions{}); err != nil {
+			return err
 		}
 	}
 
