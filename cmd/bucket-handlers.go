@@ -1270,6 +1270,17 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 				return
 			}
+			rcfg, err := getReplicationConfig(ctx, bucket)
+			switch {
+			case err != nil:
+				if _, ok := err.(BucketReplicationConfigNotFound); !ok {
+					writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+					return
+				}
+			case rcfg.HasActiveRules("", true):
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+				return
+			}
 		}
 	}
 
