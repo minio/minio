@@ -701,3 +701,7 @@ func isErrMethodNotAllowed(err error) bool {
 	var methodNotAllowed MethodNotAllowed
 	return errors.As(err, &methodNotAllowed)
 }
+
+func isErrInvalidRange(err error) bool {
+	return errors.As(err, &errInvalidRange)
+}

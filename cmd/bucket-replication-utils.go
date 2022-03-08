@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 //go:generate msgp -file=$GOFILE
@@ -698,4 +700,27 @@ func newBucketResyncStatus(bucket string) BucketReplicationResyncStatus {
 		TargetsMap: make(map[string]TargetReplicationResyncStatus),
 		Version:    resyncMetaVersion,
 	}
+}
+
+var contentRangeRegexp = regexp.MustCompile(`bytes ([0-9]+)-([0-9]+)/([0-9]+|\\*)`)
+
+// parse size from content-range header
+func parseSizeFromContentRange(h http.Header) (sz int64, err error) {
+	cr := h.Get(xhttp.ContentRange)
+	if cr == "" {
+		return sz, fmt.Errorf("Content-Range not set")
+	}
+	parts := contentRangeRegexp.FindStringSubmatch(cr)
+	if len(parts) != 4 {
+		return sz, fmt.Errorf("invalid Content-Range header %s", cr)
+	}
+	if parts[3] == "*" {
+		return -1, nil
+	}
+	var usz uint64
+	usz, err = strconv.ParseUint(parts[3], 10, 64)
+	if err != nil {
+		return sz, err
+	}
+	return int64(usz), nil
 }

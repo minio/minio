@@ -174,3 +174,26 @@ func (h *HTTPRangeSpec) String(resourceSize int64) string {
 	}
 	return fmt.Sprintf("%d-%d", off, off+length-1)
 }
+
+// ToHeader returns the Range header value.
+func (h *HTTPRangeSpec) ToHeader() (string, error) {
+	if h == nil {
+		return "", nil
+	}
+	start := strconv.Itoa(int(h.Start))
+	end := strconv.Itoa(int(h.End))
+	switch {
+	case h.Start >= 0 && h.End >= 0:
+		if h.Start > h.End {
+			return "", errInvalidRange
+		}
+	case h.IsSuffixLength:
+		end = strconv.Itoa(int(h.Start * -1))
+		start = ""
+	case h.Start > -1:
+		end = ""
+	default:
+		return "", fmt.Errorf("does not have valid range value")
+	}
+	return fmt.Sprintf("bytes=%s-%s", start, end), nil
+}
