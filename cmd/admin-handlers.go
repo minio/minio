@@ -978,7 +978,6 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	if err := enc.Encode(madmin.NetperfResult{NodeResults: results}); err != nil {
 		return
 	}
-	w.(http.Flusher).Flush()
 }
 
 // SpeedtestHandler - Deprecated. See ObjectSpeedtestHandler
