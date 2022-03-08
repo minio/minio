@@ -382,6 +382,13 @@ func TestHealingDanglingObject(t *testing.T) {
 		copy(disks, newDisks)
 		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Unlock()
 	}
+	getDisk := func(n int) StorageAPI {
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Lock()
+		disk := disks[n]
+		objLayer.(*erasureServerPools).serverPools[0].erasureDisksMu.Unlock()
+		return disk
+	}
+
 	// Remove 4 disks.
 	setDisks(nil, nil, nil, nil)
 
@@ -440,8 +447,8 @@ func TestHealingDanglingObject(t *testing.T) {
 	}
 
 	setDisks(orgDisks[:4]...)
-
-	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	disk := getDisk(0)
+	fileInfoPreHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +465,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	disk = getDisk(0)
+	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +496,8 @@ func TestHealingDanglingObject(t *testing.T) {
 
 	setDisks(orgDisks[:4]...)
 
-	fileInfoPreHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	disk = getDisk(0)
+	fileInfoPreHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +514,8 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err = disks[0].ReadVersion(context.Background(), bucket, object, "", false)
+	disk = getDisk(0)
+	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

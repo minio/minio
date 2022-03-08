@@ -389,11 +389,11 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 // firstFound returns the first found and the number of set entries.
 func (m metaCacheEntries) firstFound() (first *metaCacheEntry, n int) {
-	for _, entry := range m {
+	for i, entry := range m {
 		if entry.name != "" {
 			n++
 			if first == nil {
-				first = &entry
+				first = &m[i]
 			}
 		}
 	}
