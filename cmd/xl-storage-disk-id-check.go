@@ -133,7 +133,7 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 	if err != nil {
 		return false
 	}
-	return storedDiskID == p.diskID && p.health.isOnline()
+	return storedDiskID == p.diskID
 }
 
 func (p *xlStorageDiskIDCheck) LastConn() time.Time {
@@ -511,7 +511,7 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 
 const (
 	diskHealthOK = iota
-	diskHealthOffline
+	diskHealthFaulty
 )
 
 // diskMaxConcurrent is the maximum number of running concurrent operations
@@ -564,11 +564,6 @@ func (d *diskHealthTracker) logSuccess() {
 	atomic.StoreInt64(&d.lastSuccess, time.Now().UnixNano())
 }
 
-// logSuccess will update the last successful operation time.
-func (d *diskHealthTracker) isOnline() bool {
-	return atomic.LoadInt32(&d.status) == diskHealthOK
-}
-
 type (
 	healthDiskCtxKey   struct{}
 	healthDiskCtxValue struct {
@@ -597,11 +592,15 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	if contextCanceled(ctx) {
 		return ctx, done, ctx.Err()
 	}
-	// Return early if disk is offline.
-	if atomic.LoadInt32(&p.health.status) == diskHealthOffline {
+
+	// Return early if disk is faulty already.
+	if atomic.LoadInt32(&p.health.status) == diskHealthFaulty {
 		return ctx, done, errFaultyDisk
 	}
 
+	// Verify if the disk is not stale
+	// - missing format.json (unformatted drive)
+	// - format.json is valid but invalid 'uuid'
 	if err = p.checkDiskStale(); err != nil {
 		return ctx, done, err
 	}
@@ -684,7 +683,7 @@ func (p *xlStorageDiskIDCheck) waitForToken(ctx context.Context) (err error) {
 // checkHealth should only be called when tokens have run out.
 // This will check if disk should be taken offline.
 func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
-	if atomic.LoadInt32(&p.health.status) == diskHealthOffline {
+	if atomic.LoadInt32(&p.health.status) == diskHealthFaulty {
 		return errFaultyDisk
 	}
 	// Check if there are tokens.
@@ -706,7 +705,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	// If also more than 15 seconds since last success, take disk offline.
 	t = time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess)))
 	if t > maxTimeSinceLastSuccess {
-		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthOffline) {
+		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
 			logger.LogAlwaysIf(ctx, fmt.Errorf("taking disk %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
 			go p.monitorDiskStatus()
 		}

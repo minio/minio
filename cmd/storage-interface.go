@@ -29,17 +29,40 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
-	IsOnline() bool      // Returns true if disk is online.
-	LastConn() time.Time // Returns the last time this disk (re)-connected
 
+	// Returns true if disk is online and its valid i.e valid format.json.
+	// This has nothing to do with if the drive is hung or not responding.
+	// For that individual storage API calls will fail properly. The purpose
+	// of this function is to know if the "drive" has "format.json" or not
+	// if it has a "format.json" then is it correct "format.json" or not.
+	IsOnline() bool
+
+	// Returns the last time this disk (re)-connected
+	LastConn() time.Time
+
+	// Indicates if disk is local or not.
 	IsLocal() bool
-	Hostname() string   // Returns host name if remote host.
-	Endpoint() Endpoint // Returns endpoint.
 
+	// Returns hostname if disk is remote.
+	Hostname() string
+
+	// Returns the entire endpoint.
+	Endpoint() Endpoint
+
+	// Close the disk, mark it purposefully closed, only implemented for remote disks.
 	Close() error
+
+	// Returns the unique 'uuid' of this disk.
 	GetDiskID() (string, error)
+
+	// Set a unique 'uuid' for this disk, only used when
+	// disk is replaced and formatted.
 	SetDiskID(id string)
-	Healing() *healingTracker // Returns nil if disk is not healing.
+
+	// Returns healing information for a newly replaced disk,
+	// returns 'nil' once healing is complete or if the disk
+	// has never been replaced.
+	Healing() *healingTracker
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
 	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error)
