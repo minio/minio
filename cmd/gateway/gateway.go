@@ -31,6 +31,9 @@ import (
 	// HDFS
 	_ "github.com/minio/minio/cmd/gateway/hdfs"
 
+	//juicefs
+	_ "github.com/minio/minio/cmd/gateway/juicefs"
+
 	// GCS (use only if you must, GCS already supports S3 API)
 	_ "github.com/minio/minio/cmd/gateway/gcs"
 	// gateway functionality is frozen, no new gateways are being implemented
