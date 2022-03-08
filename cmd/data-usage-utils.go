@@ -92,32 +92,37 @@ type DataUsageInfo struct {
 }
 
 func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
-	if globalTierConfigMgr.Empty() {
+	if dui.TierStats == nil {
 		return nil
 	}
 
-	ts := make(map[string]madmin.TierStats)
-	// Add configured remote tiers
-	for tier := range globalTierConfigMgr.Tiers {
-		ts[tier] = madmin.TierStats{}
+	cfgs := globalTierConfigMgr.ListTiers()
+	if len(cfgs) == 0 {
+		return nil
 	}
+
+	ts := make(map[string]madmin.TierStats, len(cfgs)+1)
+	infos := make([]madmin.TierInfo, 0, len(ts))
+
 	// Add STANDARD (hot-tier)
 	ts[minioHotTier] = madmin.TierStats{}
+	infos = append(infos, madmin.TierInfo{
+		Name: minioHotTier,
+		Type: "internal",
+	})
+	// Add configured remote tiers
+	for _, cfg := range cfgs {
+		ts[cfg.Name] = madmin.TierStats{}
+		infos = append(infos, madmin.TierInfo{
+			Name: cfg.Name,
+			Type: cfg.Type.String(),
+		})
+	}
 
 	ts = dui.TierStats.adminStats(ts)
-	infos := make([]madmin.TierInfo, 0, len(ts))
-	for tier, st := range ts {
-		var tierType string
-		if tier == minioHotTier {
-			tierType = "internal"
-		} else {
-			tierType = globalTierConfigMgr.Tiers[tier].Type.String()
-		}
-		infos = append(infos, madmin.TierInfo{
-			Name:  tier,
-			Type:  tierType,
-			Stats: st,
-		})
+	for i := range infos {
+		info := infos[i]
+		infos[i].Stats = ts[info.Name]
 	}
 
 	sort.Slice(infos, func(i, j int) bool {
@@ -130,4 +135,32 @@ func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
 		return infos[i].Name < infos[j].Name
 	})
 	return infos
+}
+
+func (dui DataUsageInfo) tierMetrics() (metrics []Metric) {
+	if dui.TierStats == nil {
+		return nil
+	}
+	// e.g minio_cluster_ilm_transitioned_bytes{tier="S3TIER-1"}=136314880
+	//     minio_cluster_ilm_transitioned_objects{tier="S3TIER-1"}=1
+	//     minio_cluster_ilm_transitioned_versions{tier="S3TIER-1"}=3
+	for tier, st := range dui.TierStats.Tiers {
+		metrics = append(metrics, Metric{
+			Description:    getClusterTransitionedBytesMD(),
+			Value:          float64(st.TotalSize),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+		metrics = append(metrics, Metric{
+			Description:    getClusterTransitionedObjectsMD(),
+			Value:          float64(st.NumObjects),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+		metrics = append(metrics, Metric{
+			Description:    getClusterTransitionedVersionsMD(),
+			Value:          float64(st.NumVersions),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+	}
+
+	return metrics
 }
