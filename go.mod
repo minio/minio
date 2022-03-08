@@ -45,7 +45,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.15.0
+	github.com/minio/console v0.15.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.3.2
 	github.com/minio/highwayhash v1.0.2
@@ -121,7 +121,6 @@ require (
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
-	github.com/go-logr/logr v1.2.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/analysis v0.21.2 // indirect
 	github.com/go-openapi/errors v0.20.2 // indirect
@@ -139,12 +138,9 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/go-cmp v0.5.7 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
-	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
@@ -176,7 +172,6 @@ require (
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20220204044644-e048c85d71a7 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/operator v0.0.0-20220110040724-a5d59a342b7f // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -189,8 +184,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.16.0 // indirect
 	github.com/pkg/profile v1.6.0 // indirect
 	github.com/pkg/xattr v0.4.4 // indirect
 	github.com/posener/complete v1.2.3 // indirect
@@ -228,19 +221,7 @@ require (
 	google.golang.org/grpc v1.44.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
-	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.66.3 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	k8s.io/api v0.23.3 // indirect
-	k8s.io/apimachinery v0.23.3 // indirect
-	k8s.io/client-go v0.23.3 // indirect
-	k8s.io/klog/v2 v2.40.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
-	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
 	maze.io/x/duration v0.0.0-20160924141736-faac084b6075 // indirect
-	sigs.k8s.io/controller-runtime v0.8.0 // indirect
-	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
-	sigs.k8s.io/yaml v1.2.0 // indirect
 )
