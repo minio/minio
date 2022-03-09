@@ -223,6 +223,12 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 			return info, errDiskNotFound
 		}
 	}
+
+	if p.health.isFaulty() {
+		// if disk is already faulty return faulty for 'mc admin info' output and prometheus alerts.
+		return info, errFaultyDisk
+	}
+
 	return info, nil
 }
 
@@ -562,6 +568,10 @@ func newDiskHealthTracker() *diskHealthTracker {
 // logSuccess will update the last successful operation time.
 func (d *diskHealthTracker) logSuccess() {
 	atomic.StoreInt64(&d.lastSuccess, time.Now().UnixNano())
+}
+
+func (d *diskHealthTracker) isFaulty() bool {
+	return atomic.LoadInt32(&d.status) == diskHealthFaulty
 }
 
 type (
