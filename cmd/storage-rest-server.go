@@ -52,7 +52,7 @@ var errDiskStale = errors.New("disk stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	storage *xlStorage
+	storage *xlStorageDiskIDCheck
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -1233,7 +1233,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			endpoint := storage.Endpoint()
 
-			server := &storageRESTServer{storage: storage}
+			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage)}
+			server.storage.SetDiskID(storage.diskID)
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
