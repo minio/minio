@@ -277,14 +277,6 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
-	if err := bgSeq.healDiskMeta(objAPI); err != nil {
-		if newObjectLayerFn() != nil {
-			// log only in situations, when object layer
-			// has fully initialized.
-			logger.LogIf(bgSeq.ctx, err)
-		}
-	}
-
 	go monitorLocalDisksAndHeal(ctx, z, bgSeq)
 }
 
