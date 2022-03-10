@@ -189,28 +189,17 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
-	}
-
-	getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
-		isSuffixLength := false
-		if offset < 0 {
-			isSuffixLength = true
+	} else {
+		// Take read lock on object, here so subsequent lower-level
+		// calls do not need to.
+		lock := objectAPI.NewNSLock(bucket, object)
+		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
 		}
-
-		if length > 0 {
-			length--
-		}
-
-		rs := &HTTPRangeSpec{
-			IsSuffixLength: isSuffixLength,
-			Start:          offset,
-			End:            offset + length,
-		}
-		if length == -1 {
-			rs.End = -1
-		}
-
-		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
+		ctx = lkctx.Context()
+		defer lock.RUnlock(lkctx.Cancel)
 	}
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
@@ -241,6 +230,24 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 	}
 
+	actualSize, err := objInfo.GetActualSize()
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	objectRSC := s3select.NewObjectReadSeekCloser(
+		func(offset int64) (io.ReadCloser, error) {
+			rs := &HTTPRangeSpec{
+				IsSuffixLength: false,
+				Start:          offset,
+				End:            -1,
+			}
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, noLock, opts)
+		},
+		actualSize,
+	)
+
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
@@ -261,7 +268,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 	defer s3Select.Close()
 
-	if err = s3Select.Open(getObject); err != nil {
+	if err = s3Select.Open(objectRSC); err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
 			encodedErrorResponse := encodeResponse(APIErrorResponse{
 				Code:       serr.ErrorCode(),
@@ -4191,23 +4198,26 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 	go func() {
 		rctx := GlobalContext
 		if !rreq.SelectParameters.IsEmpty() {
-			getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
-				isSuffixLength := false
-				if offset < 0 {
-					isSuffixLength = true
-				}
-
-				rs := &HTTPRangeSpec{
-					IsSuffixLength: isSuffixLength,
-					Start:          offset,
-					End:            offset + length,
-				}
-
-				return getTransitionedObjectReader(rctx, bucket, object, rs, r.Header, objInfo, ObjectOptions{
-					VersionID: objInfo.VersionID,
-				})
+			actualSize, err := objInfo.GetActualSize()
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
 			}
-			if err = rreq.SelectParameters.Open(getObject); err != nil {
+
+			objectRSC := s3select.NewObjectReadSeekCloser(
+				func(offset int64) (io.ReadCloser, error) {
+					rs := &HTTPRangeSpec{
+						IsSuffixLength: false,
+						Start:          offset,
+						End:            -1,
+					}
+					return getTransitionedObjectReader(rctx, bucket, object, rs, r.Header,
+						objInfo, ObjectOptions{VersionID: objInfo.VersionID})
+				},
+				actualSize,
+			)
+
+			if err = rreq.SelectParameters.Open(objectRSC); err != nil {
 				if serr, ok := err.(s3select.SelectError); ok {
 					encodedErrorResponse := encodeResponse(APIErrorResponse{
 						Code:       serr.ErrorCode(),
