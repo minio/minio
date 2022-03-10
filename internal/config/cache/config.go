@@ -20,10 +20,12 @@ package cache
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/disk"
 	"github.com/minio/pkg/ellipses"
 )
 
@@ -115,10 +117,19 @@ func parseCacheDrives(drives string) ([]string, error) {
 			endpoints = append(endpoints, d)
 		}
 	}
-
+	isCICD := os.Getenv("MINIO_CI_CD") != "" || os.Getenv("CI") != ""
 	for _, d := range endpoints {
 		if !filepath.IsAbs(d) {
 			return nil, config.ErrInvalidCacheDrivesValue(nil).Msg("cache dir should be absolute path: %s", d)
+		}
+		if !isCICD {
+			rootDsk, err := disk.IsRootDisk(d, "/")
+			if err != nil {
+				return nil, config.ErrInvalidCacheDrivesValue(nil).Msg("Invalid cache dir %s err : %s", d, err.Error())
+			}
+			if rootDsk {
+				return nil, config.ErrInvalidCacheDrivesValue(nil).Msg("cache dir cannot be part of root disk: %s", d)
+			}
 		}
 	}
 	return endpoints, nil
