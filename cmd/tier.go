@@ -46,8 +46,7 @@ var (
 const (
 	tierConfigFile    = "tier-config.bin"
 	tierConfigFormat  = 1
-	tierConfigVersion = 2
-	tierConfigVer1    = 1 // tier-config v1
+	tierConfigVersion = 1
 
 	minioHotTier = "STANDARD"
 )
@@ -382,28 +381,20 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 	}
 
 	// Read header
-	switch binary.LittleEndian.Uint16(data[0:2]) {
+	switch format := binary.LittleEndian.Uint16(data[0:2]); format {
 	case tierConfigFormat:
 	default:
-		return nil, fmt.Errorf("tierConfigInit: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
+		return nil, fmt.Errorf("tierConfigInit: unknown format: %d", format)
 	}
 
 	cfg := NewTierConfigMgr()
-	switch binary.LittleEndian.Uint16(data[2:4]) {
-	case tierConfigVer1:
-		var cfgMgr1 tierConfigMgrV1
-		if _, decErr := cfgMgr1.UnmarshalMsg(data[4:]); decErr != nil {
-			return nil, err
-		}
-		for tier, cfgv1 := range cfgMgr1.Tiers {
-			cfg.Tiers[tier] = cfgv1.migrate()
-		}
+	switch version := binary.LittleEndian.Uint16(data[2:4]); version {
 	case tierConfigVersion:
 		if _, decErr := cfg.UnmarshalMsg(data[4:]); decErr != nil {
 			return nil, decErr
 		}
 	default:
-		return nil, fmt.Errorf("tierConfigInit: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
+		return nil, fmt.Errorf("tierConfigInit: unknown version: %d", version)
 	}
 
 	return cfg, nil
