@@ -31,7 +31,6 @@ var (
 		config.HelpKV{
 			Key:         LookupBindDN,
 			Description: `DN for LDAP read-only service account used to perform DN and group lookups`,
-			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
 		},
@@ -45,13 +44,11 @@ var (
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
 			Description: `";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"`,
-			Optional:    true,
 			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         UserDNSearchFilter,
 			Description: `Search filter to lookup user DN`,
-			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
