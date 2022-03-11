@@ -31,6 +31,7 @@ import (
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/disk"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -594,12 +595,23 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
+	var warningMsg string
 	for i, dir := range config.Drives {
 		// skip diskCache creation for cache drives missing a format.json
 		if formats[i] == nil {
 			caches = append(caches, nil)
 			continue
 		}
+		if !globalIsCICD && len(warningMsg) == 0 {
+			rootDsk, err := disk.IsRootDisk(dir, "/")
+			if err != nil {
+				warningMsg = fmt.Sprintf("Invalid cache dir %s err : %s", dir, err.Error())
+			}
+			if rootDsk {
+				warningMsg = fmt.Sprintf("cache dir cannot be part of root disk: %s", dir)
+			}
+		}
+
 		if err := checkAtimeSupport(dir); err != nil {
 			return nil, false, fmt.Errorf("Atime support required for disk caching, atime check failed with %w", err)
 		}
@@ -609,6 +621,9 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 			return nil, false, err
 		}
 		caches = append(caches, cache)
+	}
+	if warningMsg != "" {
+		logger.Info(color.Yellow(fmt.Sprintf("WARNING: Usage of root disk for disk caching is deprecated: %s", warningMsg)))
 	}
 	return caches, migrating, nil
 }
