@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	etcd "go.etcd.io/etcd/client/v3"
@@ -799,14 +800,17 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
-	var cred auth.Credentials
-
+	var accessKey, secretKey string
 	var err error
 	if len(opts.accessKey) > 0 {
-		cred, err = auth.CreateNewCredentialsWithMetadata(opts.accessKey, opts.secretKey, m, globalActiveCred.SecretKey)
+		accessKey, secretKey = opts.accessKey, opts.secretKey
 	} else {
-		cred, err = auth.GetNewCredentialsWithMetadata(m, globalActiveCred.SecretKey)
+		accessKey, secretKey, err = auth.GenerateCredentials()
+		if err != nil {
+			return auth.Credentials{}, err
+		}
 	}
+	cred, err := auth.CreateNewCredentialsWithMetadata(accessKey, secretKey, m, secretKey)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
@@ -880,9 +884,12 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (aut
 
 	var embeddedPolicy *iampolicy.Policy
 
-	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, sa.SecretKey)
 	if err != nil {
-		return auth.Credentials{}, nil, err
+		jwtClaims, err = auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+		if err != nil {
+			return auth.Credentials{}, nil, err
+		}
 	}
 	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
 	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
@@ -915,9 +922,12 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 		return nil, errNoSuchServiceAccount
 	}
 
-	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+	jwtClaims, err := auth.ExtractClaims(sa.SessionToken, sa.SecretKey)
 	if err != nil {
-		return nil, err
+		jwtClaims, err = auth.ExtractClaims(sa.SessionToken, globalActiveCred.SecretKey)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return jwtClaims.Map(), nil
 }
@@ -1063,12 +1073,28 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 		if _, ok := parentUserToCredsMap[cred.ParentUser]; !ok {
 			// Try to find the ldapUsername for this
 			// parentUser by extracting JWT claims
-			jwtClaims, err := auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
-			if err != nil {
-				// skip this cred - session token seems
-				// invalid
+			var (
+				jwtClaims *jwt.MapClaims
+				err       error
+			)
+
+			if cred.SessionToken == "" {
 				continue
 			}
+
+			if cred.IsServiceAccount() {
+				jwtClaims, err = auth.ExtractClaims(cred.SessionToken, cred.SecretKey)
+				if err != nil {
+					jwtClaims, err = auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
+				}
+			} else {
+				jwtClaims, err = auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
+			}
+			if err != nil {
+				// skip this cred - session token seems invalid
+				continue
+			}
+
 			ldapUsername, ok := jwtClaims.Lookup(ldapUserN)
 			if !ok {
 				// skip this cred - we dont have the

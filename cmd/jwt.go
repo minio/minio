@@ -132,7 +132,7 @@ func authenticateURL(accessKey, secretKey string) (string, error) {
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, bool, error) {
+func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, bool, error) {
 	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {

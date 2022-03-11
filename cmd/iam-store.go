@@ -1456,13 +1456,28 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]string {
 
 	res := map[string]string{}
 	for _, cred := range cache.iamUsersMap {
-		if cred.IsServiceAccount() || cred.IsTemp() {
+		if (cred.IsServiceAccount() || cred.IsTemp()) && cred.SessionToken != "" {
 			parentUser := cred.ParentUser
-			if cred.SessionToken != "" {
-				claims, err := getClaimsFromToken(cred.SessionToken)
+
+			var (
+				err    error
+				claims map[string]interface{}
+			)
+
+			if cred.IsServiceAccount() {
+				claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, cred.SecretKey)
 				if err != nil {
-					continue
+					claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
 				}
+			} else if cred.IsTemp() {
+				claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
+			}
+
+			if err != nil {
+				continue
+			}
+
+			if len(claims) > 0 {
 				if v, ok := claims[subClaim]; ok {
 					subFromToken, ok := v.(string)
 					if ok {
@@ -1470,6 +1485,11 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]string {
 					}
 				}
 			}
+
+			if parentUser == "" {
+				continue
+			}
+
 			if _, ok := res[parentUser]; !ok {
 				res[parentUser] = cred.ParentUser
 			}
@@ -1561,6 +1581,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		return errNoSuchServiceAccount
 	}
 
+	currentSecretKey := cr.SecretKey
 	if opts.secretKey != "" {
 		if !auth.IsSecretKeyValid(opts.secretKey) {
 			return auth.ErrInvalidSecretKeyLength
@@ -1582,20 +1603,21 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		return errors.New("unknown account status value")
 	}
 
-	if opts.sessionPolicy != nil {
-		m, err := getClaimsFromToken(cr.SessionToken)
-		if err != nil {
-			return fmt.Errorf("unable to get svc acc claims: %v", err)
-		}
+	m, err := getClaimsFromTokenWithSecret(cr.SessionToken, currentSecretKey)
+	if err != nil {
+		return fmt.Errorf("unable to get svc acc claims: %v", err)
+	}
 
-		err = opts.sessionPolicy.Validate()
-		if err != nil {
+	if opts.sessionPolicy != nil {
+		if err := opts.sessionPolicy.Validate(); err != nil {
 			return err
 		}
+
 		policyBuf, err := json.Marshal(opts.sessionPolicy)
 		if err != nil {
 			return err
 		}
+
 		if len(policyBuf) > 16*humanize.KiByte {
 			return fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
@@ -1603,10 +1625,11 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		// Overwrite session policy claims.
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = "embedded-policy"
-		cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, globalActiveCred.SecretKey)
-		if err != nil {
-			return err
-		}
+	}
+
+	cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, cr.SecretKey)
+	if err != nil {
+		return err
 	}
 
 	u := newUserIdentity(cr)

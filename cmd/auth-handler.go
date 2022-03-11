@@ -197,13 +197,7 @@ func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
 	return claims
 }
 
-// Fetch claims in the security token returned by the client.
-func getClaimsFromToken(token string) (map[string]interface{}, error) {
-	if token == "" {
-		claims := xjwt.NewMapClaims()
-		return claims.Map(), nil
-	}
-
+func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{}, error) {
 	// JWT token for x-amz-security-token is signed with admin
 	// secret key, temporary credentials become invalid if
 	// server admin credentials change. This is done to ensure
@@ -212,9 +206,15 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 	// hijacking the policies. We need to make sure that this is
 	// based an admin credential such that token cannot be decoded
 	// on the client side and is treated like an opaque value.
-	claims, err := auth.ExtractClaims(token, globalActiveCred.SecretKey)
+	claims, err := auth.ExtractClaims(token, secret)
 	if err != nil {
-		return nil, errAuthentication
+		if subtle.ConstantTimeCompare([]byte(secret), []byte(globalActiveCred.SecretKey)) == 1 {
+			return nil, errAuthentication
+		}
+		claims, err = auth.ExtractClaims(token, globalActiveCred.SecretKey)
+		if err != nil {
+			return nil, errAuthentication
+		}
 	}
 
 	// If OPA is set, return without any further checks.
@@ -241,23 +241,50 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 	return claims.Map(), nil
 }
 
+// Fetch claims in the security token returned by the client.
+func getClaimsFromToken(token string) (map[string]interface{}, error) {
+	return getClaimsFromTokenWithSecret(token, globalActiveCred.SecretKey)
+}
+
 // Fetch claims in the security token returned by the client and validate the token.
 func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
 	token := getSessionToken(r)
 	if token != "" && cred.AccessKey == "" {
+		// x-amz-security-token is not allowed for anonymous access.
 		return nil, ErrNoAccessKey
 	}
-	if cred.IsServiceAccount() && token == "" {
-		token = cred.SessionToken
-	}
-	if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+
+	if token == "" && cred.IsTemp() {
+		// Temporary credentials should always have x-amz-security-token
 		return nil, ErrInvalidToken
 	}
-	claims, err := getClaimsFromToken(token)
-	if err != nil {
-		return nil, toAPIErrorCode(r.Context(), err)
+
+	if token != "" && !cred.IsTemp() {
+		// x-amz-security-token should not present for static credentials.
+		return nil, ErrInvalidToken
 	}
-	return claims, ErrNone
+
+	if cred.IsTemp() && subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+		// validate token for temporary credentials only.
+		return nil, ErrInvalidToken
+	}
+
+	secret := globalActiveCred.SecretKey
+	if cred.IsServiceAccount() {
+		token = cred.SessionToken
+		secret = cred.SecretKey
+	}
+
+	if token != "" {
+		claims, err := getClaimsFromTokenWithSecret(token, secret)
+		if err != nil {
+			return nil, toAPIErrorCode(r.Context(), err)
+		}
+		return claims, ErrNone
+	}
+
+	claims := xjwt.NewMapClaims()
+	return claims.Map(), ErrNone
 }
 
 // Check request auth type verifies the incoming http request
