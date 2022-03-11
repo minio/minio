@@ -46,7 +46,8 @@ var (
 const (
 	tierConfigFile    = "tier-config.bin"
 	tierConfigFormat  = 1
-	tierConfigVersion = 1
+	tierConfigV1      = 1
+	tierConfigVersion = 2
 
 	minioHotTier = "STANDARD"
 )
@@ -389,7 +390,7 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 
 	cfg := NewTierConfigMgr()
 	switch version := binary.LittleEndian.Uint16(data[2:4]); version {
-	case tierConfigVersion:
+	case tierConfigV1, tierConfigVersion:
 		if _, decErr := cfg.UnmarshalMsg(data[4:]); decErr != nil {
 			return nil, decErr
 		}
