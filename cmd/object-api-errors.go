@@ -703,5 +703,6 @@ func isErrMethodNotAllowed(err error) bool {
 }
 
 func isErrInvalidRange(err error) bool {
-	return errors.As(err, &errInvalidRange)
+	_, ok := err.(InvalidRange)
+	return ok
 }
