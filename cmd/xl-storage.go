@@ -49,11 +49,12 @@ import (
 
 const (
 	nullVersionID = "null"
-	// Really large streams threshold per shard.
-	reallyLargeFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
+	// Largest streams threshold per shard.
+	largestFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
 
 	// Small file threshold below which data accompanies metadata from storage layer.
 	smallFileThreshold = 128 * humanize.KiByte // Optimized for NVMe/SSDs
+
 	// For hardrives it is possible to set this to a lower value to avoid any
 	// spike in latency. But currently we are simply keeping it optimal for SSDs.
 
@@ -1786,8 +1787,8 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	}()
 
 	var bufp *[]byte
-	if fileSize > 0 && fileSize >= reallyLargeFileThreshold {
-		// use a larger 4MiB buffer for really large streams.
+	if fileSize > 0 && fileSize >= largestFileThreshold {
+		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
 	} else {

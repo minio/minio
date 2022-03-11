@@ -448,6 +448,11 @@ func serverMain(ctx *cli.Context) {
 	// Set system resources to maximum.
 	setMaxResources()
 
+	// Verify kernel release and version.
+	if oldLinux() {
+		logger.Info(color.RedBold("WARNING: Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
+	}
+
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {

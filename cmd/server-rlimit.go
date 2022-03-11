@@ -21,9 +21,27 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/minio/minio/internal/kernel"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sys"
 )
+
+func oldLinux() bool {
+	currentKernel, err := kernel.CurrentVersion()
+	if err != nil {
+		// Could not probe the kernel version
+		return false
+	}
+
+	if currentKernel == 0 {
+		// We could not get any valid value return false
+		return false
+	}
+
+	// legacy linux indicator for printing warnings
+	// about older Linux kernels and Go runtime.
+	return currentKernel < kernel.Version(4, 0, 0)
+}
 
 func setMaxResources() (err error) {
 	// Set the Go runtime max threads threshold to 90% of kernel setting.
