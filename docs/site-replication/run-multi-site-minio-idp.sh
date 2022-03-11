@@ -173,6 +173,17 @@ if [ $? -ne 0 ]; then
     exit_1;
 fi
 
+err_minio2=$(./mc stat minio2/newbucket/xxx --json | jq -r .error.cause.message)
+if [ $? -ne 0 ]; then
+    echo "expecting object to be missing. exiting.."
+    exit_1;
+fi
+
+if [ "${err_minio2}" != "Object does not exist" ]; then
+    echo "expected to see Object does not exist error, exiting..."
+    exit_1;
+fi
+
 ./mc cp README.md minio2/newbucket/
 
 sleep 5
