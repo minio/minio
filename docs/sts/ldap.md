@@ -34,17 +34,17 @@ KEY:
 identity_ldap  enable LDAP SSO support
 
 ARGS:
-MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e.g. "myldapserver.com:636"
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
-MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
-MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
-MINIO_IDENTITY_LDAP_COMMENT                 (sentence)  optionally add a comment to this setting
+MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN*          (string)    DN for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD     (string)    Password for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN*  (list)      ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER*   (string)    Search filter to lookup user DN
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER      (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN     (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY          (on|off)    trust server TLS without verification, defaults to "off" (verify)
+MINIO_IDENTITY_LDAP_SERVER_INSECURE          (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
+MINIO_IDENTITY_LDAP_SERVER_STARTTLS          (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
+MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a comment to this setting
 ```
 
 ### LDAP server connectivity
@@ -69,8 +69,8 @@ If a self-signed certificate is being used, the certificate can be added to MinI
 A low-privilege read-only LDAP service account is configured in the MinIO server by providing the account's Distinguished Name (DN) and password. This service account is used to perform directory lookups as needed.
 
 ```
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN*          (string)    DN for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD     (string)    Password for LDAP read-only service account used to perform DN and group lookups
 ```
 
 If you set an empty lookup bind password, the lookup bind will use the unauthenticated authentication mechanism, as described in [RFC 4513 Section 5.1.2](https://tools.ietf.org/html/rfc4513#section-5.1.2).
@@ -80,8 +80,8 @@ If you set an empty lookup bind password, the lookup bind will use the unauthent
 When a user provides their LDAP credentials, MinIO runs a lookup query to find the user's Distinguished Name (DN). The search filter and base DN used in this lookup query are configured via the following variables:
 
 ```
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search for user DN
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN*  (list)      ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER*   (string)    Search filter to lookup user DN
 ```
 
 The search filter must use the LDAP username to find the user DN. This is done via [variable substitution](#variable-substitution-in-configuration-strings).
