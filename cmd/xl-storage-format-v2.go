@@ -658,7 +658,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 	buf := metaDataPoolGet()[:initial]
 	_, err := io.ReadFull(r, buf)
 	if err != nil {
-		return nil, fmt.Errorf("readXLMetaNoData.ReadFull: %w", err)
+		return nil, fmt.Errorf("readXLMetaNoData(io.ReadFull): %w", err)
 	}
 	readMore := func(n int64) error {
 		has := int64(len(buf))
@@ -679,9 +679,9 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				// Returned if we read nothing.
-				return fmt.Errorf("readXLMetaNoData.readMore: %w", io.ErrUnexpectedEOF)
+				err = io.ErrUnexpectedEOF
 			}
-			return fmt.Errorf("readXLMetaNoData.readMore: %w", err)
+			return fmt.Errorf("readXLMetaNoData(readMore): %w", err)
 		}
 		return nil
 	}
@@ -699,7 +699,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		case 1, 2, 3:
 			sz, tmp, err := msgp.ReadBytesHeader(tmp)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("readXLMetaNoData(read_meta): uknown metadata version %w", err)
 			}
 			want := int64(sz) + int64(len(buf)-len(tmp))
 
@@ -720,10 +720,14 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 				return nil, err
 			}
 
+			if int64(len(buf)) < want {
+				return nil, fmt.Errorf("buffer shorter than expected (buflen: %d, want: %d): %w", len(buf), want, errFileCorrupt)
+			}
+
 			tmp = buf[want:]
 			_, after, err := msgp.ReadUint32Bytes(tmp)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("readXLMetaNoData(read_meta): unknown metadata version %w", err)
 			}
 			want += int64(len(tmp) - len(after))
 
