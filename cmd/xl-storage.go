@@ -398,6 +398,9 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 		}
 	}
 	buf, err := readXLMetaNoData(f, stat.Size())
+	if err != nil {
+		return nil, stat.ModTime().UTC(), fmt.Errorf("%w -> %s", err, itemPath)
+	}
 	return buf, stat.ModTime().UTC(), err
 }
 

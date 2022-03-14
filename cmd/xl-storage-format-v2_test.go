@@ -18,10 +18,13 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"testing"
 	"time"
@@ -33,6 +36,29 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 )
+
+func TestReadXLMetaNoData(t *testing.T) {
+	f, err := os.Open("testdata/xl.meta-corrupt.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(bufio.NewReader(f))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = readXLMetaNoData(bytes.NewReader(buf), int64(len(buf)))
+	if err == nil {
+		t.Fatal("expected error but returned success")
+	}
+}
 
 func TestXLV2FormatData(t *testing.T) {
 	failOnErr := func(err error) {
