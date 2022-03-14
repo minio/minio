@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-03-11T23-57-45Z
+  tag: RELEASE.2022-03-14T18-25-24Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
