@@ -962,8 +962,11 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 		pathJoin(minioMetaBucket, minioConfigPrefix),
 		pathJoin(minioMetaBucket, bucketMetaPrefix),
 	} {
+		var bucketExists BucketExists
 		if err = z.MakeBucketWithLocation(ctx, metaBucket, BucketOptions{}); err != nil {
-			return err
+			if !errors.As(err, &bucketExists) {
+				return err
+			}
 		}
 	}
 

@@ -39,8 +39,10 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 	defer NSUpdated(bucket, slashSeparator)
 
 	// Verify if bucket is valid.
-	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
-		return BucketNameInvalid{Bucket: bucket}
+	if !isMinioMetaBucketName(bucket) {
+		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
+			return BucketNameInvalid{Bucket: bucket}
+		}
 	}
 
 	storageDisks := er.getDisks()
