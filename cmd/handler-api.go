@@ -246,10 +246,12 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		globalHTTPStats.incS3RequestsIncoming()
 
-		if val := globalServiceFreeze.Load(); val != nil {
-			if unlock, ok := val.(chan struct{}); ok && unlock != nil {
-				// Wait until unfrozen.
-				<-unlock
+		if r.Header.Get(globalObjectPerfUserMetadata) == "" {
+			if val := globalServiceFreeze.Load(); val != nil {
+				if unlock, ok := val.(chan struct{}); ok && unlock != nil {
+					// Wait until unfrozen.
+					<-unlock
+				}
 			}
 		}
 
