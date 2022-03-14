@@ -17,6 +17,7 @@ spec:
   ingress:
     - ports:
         - port: {{ .Values.service.port }}
+        - port: {{ .Values.consoleService.port }}
       {{- if not .Values.networkPolicy.allowExternal }}
       from:
         - podSelector:
