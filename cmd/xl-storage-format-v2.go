@@ -595,9 +595,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		}
 	}
 	fi.ReplicationState = getInternalReplicationState(fi.Metadata)
-	if !fi.VersionPurgeStatus().Empty() {
-		fi.Deleted = true
-	}
+	fi.Deleted = !fi.VersionPurgeStatus().Empty()
 	replStatus := fi.ReplicationState.CompositeReplicationStatus()
 	if replStatus != "" {
 		fi.Metadata[xhttp.AmzBucketReplicationStatus] = string(replStatus)

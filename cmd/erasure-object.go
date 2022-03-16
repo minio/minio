@@ -204,14 +204,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		}
 	}
 
-	if !fi.VersionPurgeStatus().Empty() {
-		if opts.VersionID != "" {
-			// Make sure to return object info to provide extra information.
-			return nil, toObjectErr(errMethodNotAllowed, bucket, object)
-		}
-		return nil, toObjectErr(errFileNotFound, bucket, object)
-	}
-
 	objInfo := fi.ToObjectInfo(bucket, object)
 	if objInfo.DeleteMarker {
 		if opts.VersionID == "" {
@@ -501,14 +493,6 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
-	if !fi.VersionPurgeStatus().Empty() {
-		if opts.VersionID != "" {
-			// Make sure to return object info to provide extra information.
-			return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
-		}
-		return objInfo, toObjectErr(errFileNotFound, bucket, object)
-	}
-
 	if fi.Deleted {
 		if opts.VersionID == "" || opts.DeleteMarker {
 			return objInfo, toObjectErr(errFileNotFound, bucket, object)
