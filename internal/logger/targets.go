@@ -46,7 +46,11 @@ var (
 	// Must be immutable at all times.
 	// Can be swapped to another while holding swapMu
 	systemTargets = []Target{}
-	nTargets      int32 // atomic count of len(targets)
+
+	// This is always set represent /dev/console target
+	consoleTgt Target
+
+	nTargets int32 // atomic count of len(targets)
 )
 
 // SystemTargets returns active targets.
@@ -90,6 +94,11 @@ func AddSystemTarget(t Target) error {
 		return err
 	}
 	swapMu.Lock()
+	if consoleTgt == nil {
+		if t.Type() == types.TargetConsole {
+			consoleTgt = t
+		}
+	}
 	updated := append(make([]Target, 0, len(systemTargets)+1), systemTargets...)
 	updated = append(updated, t)
 	systemTargets = updated
