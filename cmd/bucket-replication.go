@@ -425,7 +425,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		wg.Add(1)
 		go func(index int, tgt *TargetClient) {
 			defer wg.Done()
-			rinfo := replicateDeleteToTarget(ctx, dobj, objectAPI, tgt)
+			rinfo := replicateDeleteToTarget(ctx, dobj, tgt)
 			rinfos.Targets[index] = rinfo
 		}(idx, tgt)
 	}
@@ -482,7 +482,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	}
 }
 
-func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationInfo, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
+func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationInfo, tgt *TargetClient) (rinfo replicatedTargetInfo) {
 	versionID := dobj.DeleteMarkerVersionID
 	if versionID == "" {
 		versionID = dobj.VersionID

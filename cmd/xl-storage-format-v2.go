@@ -595,6 +595,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		}
 	}
 	fi.ReplicationState = getInternalReplicationState(fi.Metadata)
+	fi.Deleted = !fi.VersionPurgeStatus().Empty()
 	replStatus := fi.ReplicationState.CompositeReplicationStatus()
 	if replStatus != "" {
 		fi.Metadata[xhttp.AmzBucketReplicationStatus] = string(replStatus)
@@ -1281,7 +1282,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 					ver.ObjectV2.MetaSys[k] = []byte(v)
 				}
 				err = x.setIdx(i, *ver)
-				return "", err
+				return uuid.UUID(ver.ObjectV2.DataDir).String(), err
 			}
 		}
 	}
