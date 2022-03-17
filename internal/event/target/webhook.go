@@ -228,8 +228,6 @@ func (target *WebhookTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *WebhookTarget) Close() error {
-	// Close idle connection with "keep-alive" states
-	target.httpClient.CloseIdleConnections()
 	return nil
 }
 

@@ -50,7 +50,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			}
 			_, present := network[nodeName]
 			if !present {
-				if err := isServerResolvable(endpoint, 2*time.Second); err == nil {
+				if err := isServerResolvable(endpoint, 5*time.Second); err == nil {
 					network[nodeName] = string(madmin.ItemOnline)
 				} else {
 					network[nodeName] = string(madmin.ItemOffline)

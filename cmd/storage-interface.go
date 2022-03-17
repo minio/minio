@@ -63,7 +63,6 @@ type StorageAPI interface {
 	// returns 'nil' once healing is complete or if the disk
 	// has never been replaced.
 	Healing() *healingTracker
-
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
 	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error)
 
