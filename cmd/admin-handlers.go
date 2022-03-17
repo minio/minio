@@ -1054,15 +1054,8 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		autotune = false
 	}
 
-	err = objectAPI.MakeBucketWithLocation(ctx, globalObjectPerfBucket, BucketOptions{})
-	if _, ok := err.(BucketExists); !ok {
-		// Only BucketExists error can be ignored.
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
 	deleteBucket := func() {
-		objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
+		objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, "speedtest"), DeleteBucketOptions{
 			Force:      true,
 			NoRecreate: true,
 		})
