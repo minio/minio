@@ -110,7 +110,7 @@ export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN='cn=admin,dc=min,dc=io'
 export MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD=admin
 export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN='ou=hwengg,dc=min,dc=io'
-export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER='(uid=%s,cn=accounts,dc=min,dc=io)'
+export MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER='(uid=%s)'
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
 
