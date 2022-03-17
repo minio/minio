@@ -155,7 +155,6 @@ func (c *OperatorDNS) DeleteRecord(record SrvRecord) error {
 
 // Close closes the internal http client
 func (c *OperatorDNS) Close() error {
-	c.httpClient.CloseIdleConnections()
 	return nil
 }
 

@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -121,31 +120,9 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 		Path:   pathJoin(healthCheckPathPrefix, healthCheckLivenessPath),
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsTLS {
-		tlsConfig = &tls.Config{
-			RootCAs: globalRootCAs,
-		}
-	}
-
 	httpClient := &http.Client{
-		Transport:
-		// For more details about various values used here refer
-		// https://golang.org/pkg/net/http/#Transport documentation
-		&http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           xhttp.NewCustomDialContext(3 * time.Second),
-			ResponseHeaderTimeout: 3 * time.Second,
-			TLSHandshakeTimeout:   3 * time.Second,
-			ExpectContinueTimeout: 3 * time.Second,
-			TLSClientConfig:       tlsConfig,
-			// Go net/http automatically unzip if content-type is
-			// gzip disable this feature, as we are always interested
-			// in raw stream.
-			DisableCompression: true,
-		},
+		Transport: globalInternodeTransport,
 	}
-	defer httpClient.CloseIdleConnections()
 
 	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
 
