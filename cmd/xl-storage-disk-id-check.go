@@ -71,14 +71,11 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
-	// fields position optimized for memory please
-	// do not re-order them, if you add new fields
-	// please use `fieldalignment ./...` to check
-	// if your changes are not causing any problems.
-	storage      *xlStorage
+	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
+	apiCalls     [storageMetricLast]uint64
 	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
 	diskID       string
-	apiCalls     [storageMetricLast]uint64
+	storage      *xlStorage
 	health       *diskHealthTracker
 }
 
