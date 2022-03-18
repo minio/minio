@@ -562,6 +562,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	}
 
 	ctxDone := ctx.Done()
+	sendAgreed := func(entry metaCacheEntry) {
+		select {
+		case <-ctxDone:
+		case results <- entry:
+		}
+	}
+
 	return listPathRaw(ctx, listPathRawOptions{
 		disks:         disks,
 		fallbackDisks: fallbackDisks,
@@ -571,20 +578,14 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		filterPrefix:  o.FilterPrefix,
 		minDisks:      listingQuorum,
 		forwardTo:     o.Marker,
-		agreed: func(entry metaCacheEntry) {
-			select {
-			case <-ctxDone:
-			case results <- entry:
-			}
-		},
+		agreed:        sendAgreed,
 		partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
-			// Results Disagree :-(
+			if nAgreed < listingQuorum {
+				return
+			}
 			entry, ok := entries.resolve(&resolver)
 			if ok {
-				select {
-				case <-ctxDone:
-				case results <- *entry:
-				}
+				sendAgreed(*entry)
 			}
 		},
 	})
