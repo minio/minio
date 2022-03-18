@@ -2903,12 +2903,20 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	etag := partInfo.ETag
-	switch kind, encrypted := crypto.IsEncrypted(mi.UserDefined); {
-	case encrypted:
+	if kind, encrypted := crypto.IsEncrypted(mi.UserDefined); encrypted {
 		switch kind {
+		case crypto.S3KMS:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, mi.KMSKeyID())
+			if kmsCtx, ok := mi.UserDefined[crypto.MetaContext]; ok {
+				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+			}
+			if len(etag) >= 32 && strings.Count(etag, "-") != 1 {
+				etag = etag[len(etag)-32:]
+			}
 		case crypto.S3:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			etag = tryDecryptETag(objectEncryptionKey[:], etag, false)
+			etag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: etag})
 		case crypto.SSEC:
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
@@ -3175,66 +3183,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	var objectEncryptionKey []byte
-	var isEncrypted, ssec bool
-	if objectAPI.IsEncryptionSupported() {
-		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
-			var key []byte
-			isEncrypted = true
-			ssec = crypto.SSEC.IsEncrypted(mi.UserDefined)
-			if crypto.S3.IsEncrypted(mi.UserDefined) {
-				// Calculating object encryption key
-				objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, mi.UserDefined)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-			}
-		}
-	}
-
-	partsMap := make(map[string]PartInfo)
-	if isEncrypted {
-		maxParts := 10000
-		listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, maxParts, ObjectOptions{})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		for _, part := range listPartsInfo.Parts {
-			partsMap[strconv.Itoa(part.PartNumber)] = part
-		}
-	}
-
-	// Complete parts.
-	completeParts := make([]CompletePart, 0, len(complMultipartUpload.Parts))
-	originalCompleteParts := make([]CompletePart, 0, len(complMultipartUpload.Parts))
-	for _, part := range complMultipartUpload.Parts {
-		part.ETag = canonicalizeETag(part.ETag)
-		originalCompleteParts = append(originalCompleteParts, part)
-		if isEncrypted {
-			// ETag is stored in the backend in encrypted form. Validate client sent ETag with
-			// decrypted ETag.
-			if bkPartInfo, ok := partsMap[strconv.Itoa(part.PartNumber)]; ok {
-				bkETag := tryDecryptETag(objectEncryptionKey, bkPartInfo.ETag, ssec)
-				if bkETag != part.ETag {
-					writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPart), r.URL)
-					return
-				}
-				part.ETag = bkPartInfo.ETag
-			}
-		}
-		completeParts = append(completeParts, part)
-	}
-
-	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5 := getCompleteMultipartMD5(originalCompleteParts)
-
 	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
 	if api.CacheAPI() != nil {
 		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
@@ -3277,14 +3225,68 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	// preserve ETag if set, or set from parts.
-	if _, ok := opts.UserDefined["etag"]; !ok {
-		opts.UserDefined["etag"] = s3MD5
+	// First, we compute the ETag of the multipart object.
+	// The ETag of a multi-part object is always:
+	//   ETag := MD5(ETag_p1, ETag_p2, ...)+"-N"   (N being the number of parts)
+	//
+	// This is independent of encryption. An encrypted multipart
+	// object also has an ETag that is the MD5 of its part ETags.
+	// The fact the in case of encryption the ETag of a part is
+	// not the MD5 of the part content does not change that.
+	var completeETags []etag.ETag
+	for _, part := range complMultipartUpload.Parts {
+		ETag, err := etag.Parse(part.ETag)
+		if err != nil {
+			continue
+		}
+		completeETags = append(completeETags, ETag)
+	}
+	multipartETag := etag.Multipart(completeETags...)
+	opts.UserDefined["etag"] = multipartETag.String()
+
+	// However, in case of encryption, the persisted part ETags don't match
+	// what we have sent to the client during PutObjectPart. The reason is
+	// that ETags are encrypted. Hence, the client will send a list of complete
+	// part ETags of which non can match the ETag of any part. For example
+	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
+	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
+	//
+	// Therefore, we adjust all ETags sent by the client to match what is stored
+	// on the backend.
+	if objectAPI.IsEncryptionSupported() {
+		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
+			const MaxParts = 10000
+			listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, MaxParts, ObjectOptions{})
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			sort.Slice(listPartsInfo.Parts, func(i, j int) bool {
+				return listPartsInfo.Parts[i].PartNumber < listPartsInfo.Parts[j].PartNumber
+			})
+			sort.Slice(complMultipartUpload.Parts, func(i, j int) bool {
+				return complMultipartUpload.Parts[i].PartNumber < complMultipartUpload.Parts[j].PartNumber
+			})
+			for i := range listPartsInfo.Parts {
+				for j := range complMultipartUpload.Parts {
+					if listPartsInfo.Parts[i].PartNumber == complMultipartUpload.Parts[j].PartNumber {
+						complMultipartUpload.Parts[j].ETag = listPartsInfo.Parts[i].ETag
+						continue
+					}
+				}
+			}
+		}
 	}
 
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(w)
-	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
+	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.
 	headerWritten := <-completeDoneCh
