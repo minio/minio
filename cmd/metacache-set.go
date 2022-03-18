@@ -789,14 +789,30 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	fallback := func(err error) bool {
+	// Keep track of fallback disks
+	var fdMu sync.Mutex
+	fds := opts.fallbackDisks
+	fallback := func(err error) StorageAPI {
 		switch err.(type) {
 		case StorageErr:
-			// all supported disk errors
-			// attempt a fallback.
-			return true
+			// Attempt to grab a fallback disk
+			fdMu.Lock()
+			defer fdMu.Unlock()
+			if len(fds) == 0 {
+				return nil
+			}
+			fdsCopy := fds
+			for _, fd := range fdsCopy {
+				// Grab a fallback disk
+				fds = fds[1:]
+				if fd != nil {
+					return fd
+				}
+			}
 		}
-		return false
+		// Either no more disks for fallback or
+		// not a storage error.
+		return nil
 	}
 	askDisks := len(disks)
 	readers := make([]*metacacheReader, askDisks)
@@ -825,25 +841,20 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			}
 
 			// fallback only when set.
-			if len(opts.fallbackDisks) > 0 && fallback(werr) {
+			for fd := fallback(werr); fd != nil; {
 				// This fallback is only set when
 				// askDisks is less than total
 				// number of disks per set.
-				for _, fd := range opts.fallbackDisks {
-					if fd == nil {
-						continue
-					}
-					werr = fd.WalkDir(ctx, WalkDirOptions{
-						Bucket:         opts.bucket,
-						BaseDir:        opts.path,
-						Recursive:      opts.recursive,
-						ReportNotFound: opts.reportNotFound,
-						FilterPrefix:   opts.filterPrefix,
-						ForwardTo:      opts.forwardTo,
-					}, w)
-					if werr == nil {
-						break
-					}
+				werr = fd.WalkDir(ctx, WalkDirOptions{
+					Bucket:         opts.bucket,
+					BaseDir:        opts.path,
+					Recursive:      opts.recursive,
+					ReportNotFound: opts.reportNotFound,
+					FilterPrefix:   opts.filterPrefix,
+					ForwardTo:      opts.forwardTo,
+				}, w)
+				if werr == nil {
+					break
 				}
 			}
 			w.CloseWithError(werr)
