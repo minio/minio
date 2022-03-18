@@ -27,6 +27,10 @@ import (
 	"github.com/minio/kes"
 )
 
+const (
+	tlsClientSessionCacheSize = 100
+)
+
 // Config contains various KMS-related configuration
 // parameters - like KMS endpoints or authentication
 // credentials.
@@ -59,9 +63,10 @@ func NewWithConfig(config Config) (KMS, error) {
 	copy(endpoints, config.Endpoints)
 
 	client := kes.NewClientWithConfig("", &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		Certificates: []tls.Certificate{config.Certificate},
-		RootCAs:      config.RootCAs,
+		MinVersion:         tls.VersionTLS12,
+		Certificates:       []tls.Certificate{config.Certificate},
+		RootCAs:            config.RootCAs,
+		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	})
 	client.Endpoints = endpoints
 	return &kesClient{
