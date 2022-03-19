@@ -71,11 +71,19 @@ const (
 )
 
 // KMSKeyID returns in AWS compatible KMS KeyID() format.
-func (o ObjectInfo) KMSKeyID() string {
-	if len(o.UserDefined) == 0 {
+func (o *ObjectInfo) KMSKeyID() string { return kmsKeyIDFromMetadata(o.UserDefined) }
+
+// KMSKeyID returns in AWS compatible KMS KeyID() format.
+func (o *MultipartInfo) KMSKeyID() string { return kmsKeyIDFromMetadata(o.UserDefined) }
+
+// kmsKeyIDFromMetadata returns any AWS S3 KMS key ID in the
+// metadata, if any. It returns an empty ID if no key ID is
+// present.
+func kmsKeyIDFromMetadata(metadata map[string]string) string {
+	if len(metadata) == 0 {
 		return ""
 	}
-	kmsID, ok := o.UserDefined[crypto.MetaKeyID]
+	kmsID, ok := metadata[crypto.MetaKeyID]
 	if !ok {
 		return ""
 	}
