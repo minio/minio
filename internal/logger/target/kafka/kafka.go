@@ -27,7 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	sarama "github.com/Shopify/sarama"
+	"github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
 
 	"github.com/minio/minio/internal/logger/message/audit"
@@ -62,9 +62,6 @@ func (h *Target) Send(entry interface{}, errKind string) error {
 }
 
 func (h *Target) logEntry(entry interface{}) {
-	h.wg.Add(1)
-	defer h.wg.Done()
-
 	logJSON, err := json.Marshal(&entry)
 	if err != nil {
 		return
@@ -90,6 +87,8 @@ func (h *Target) startKakfaLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
 	go func() {
+		h.wg.Add(1)
+		defer h.wg.Done()
 		for entry := range h.logCh {
 			h.logEntry(entry)
 		}
