@@ -100,12 +100,16 @@ func init() {
 		PersistOnFailure: false,
 	}
 
+	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
+
+	containers := IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile()
+
 	// Call to refresh will refresh names in cache. If you pass true, it will also
 	// remove cached names not looked up since the last call to Refresh. It is a good idea
 	// to call this method on a regular interval.
 	go func() {
 		var t *time.Ticker
-		if IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile() {
+		if containers {
 			t = time.NewTicker(1 * time.Minute)
 		} else {
 			t = time.NewTicker(10 * time.Minute)
@@ -663,8 +667,6 @@ func handleCommonEnvVars() {
 		}
 		globalRootDiskThreshold = size
 	}
-
-	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {
