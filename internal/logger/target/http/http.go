@@ -128,9 +128,6 @@ func acceptedResponseStatusCode(code int) bool {
 }
 
 func (h *Target) logEntry(entry interface{}) {
-	h.wg.Add(1)
-	defer h.wg.Done()
-
 	logJSON, err := json.Marshal(&entry)
 	if err != nil {
 		return
@@ -181,6 +178,8 @@ func (h *Target) startHTTPLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
 	go func() {
+		h.wg.Add(1)
+		defer h.wg.Done()
 		for entry := range h.logCh {
 			h.logEntry(entry)
 		}
