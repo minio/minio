@@ -477,7 +477,7 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 				case errDecommissionAlreadyRunning:
 					fallthrough
 				case nil:
-					go z.doDecommissionInRoutine(ctx, pool.ID)
+					z.doDecommissionInRoutine(ctx, pool.ID)
 				default:
 					logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
 				}
