@@ -128,7 +128,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			if !configRetriableErrors(err) {
 				logger.Fatal(err, "Unable to initialize backend")
 			}
-			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+			retry := time.Duration(r.Float64() * float64(5*time.Second))
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
+			time.Sleep(retry)
 			continue
 		}
 		break

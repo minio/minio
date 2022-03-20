@@ -472,13 +472,16 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 		// '-1' as argument to decommission multiple pools at a time
 		// but this is not a priority at the moment.
 		for _, pool := range meta.returnResumablePools(1) {
-			err := z.Decommission(ctx, pool.ID)
-			switch err {
-			case errDecommissionAlreadyRunning:
-				fallthrough
-			case nil:
-				go z.doDecommissionInRoutine(ctx, pool.ID)
-			}
+			go func(pool PoolStatus) {
+				switch err := z.Decommission(ctx, pool.ID); err {
+				case errDecommissionAlreadyRunning:
+					fallthrough
+				case nil:
+					z.doDecommissionInRoutine(ctx, pool.ID)
+				default:
+					logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+				}
+			}(pool)
 		}
 		z.poolMeta = meta
 
