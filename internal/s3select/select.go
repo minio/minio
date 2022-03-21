@@ -290,7 +290,6 @@ type S3Select struct {
 	statement      *sql.SelectStatement
 	progressReader *progressReader
 	recordReader   recordReader
-	close          func() error
 }
 
 var legacyXMLName = "SelectObjectContentRequest"
@@ -383,7 +382,9 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 
 		s3Select.recordReader, err = csv.NewReader(s3Select.progressReader, &s3Select.Input.CSVArgs)
 		if err != nil {
-			rc.Close()
+			// Close all reader resources opened so far.
+			s3Select.progressReader.Close()
+
 			var stErr bzip2.StructuralError
 			if errors.As(err, &stErr) {
 				return errInvalidCompression(err, s3Select.Input.CompressionType)
@@ -402,7 +403,6 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 			}
 			return err
 		}
-		s3Select.close = rc.Close
 		return nil
 	case jsonFormat:
 		rc, err := getReader(offset, end)
@@ -426,7 +426,6 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}
 
-		s3Select.close = rc.Close
 		return nil
 	case parquetFormat:
 		if !strings.EqualFold(os.Getenv("MINIO_API_SELECT_PARQUET"), "on") {
@@ -494,12 +493,6 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 
 // Evaluate - filters and sends records read from opened reader as per select statement to http response writer.
 func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
-	defer func() {
-		if s3Select.close != nil {
-			s3Select.close()
-		}
-	}()
-
 	getProgressFunc := s3Select.getProgress
 	if !s3Select.Progress.Enabled {
 		getProgressFunc = nil
