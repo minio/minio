@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -1684,7 +1684,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		logger.LogIf(ctx, enc.Encode(healthInfo))
 	}
 
-	deadline := 1 * time.Hour
+	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
+	if query.Get("perfnet") != "" || query.Get("perfdrive") != "" {
+		deadline = 1 * time.Hour
+	}
 	if dstr := r.Form.Get("deadline"); dstr != "" {
 		var err error
 		deadline, err = time.ParseDuration(dstr)
