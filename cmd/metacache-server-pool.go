@@ -354,9 +354,11 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	return nil
 }
 
-// filterLifeCycle will filter out objects if the most recent version should be deleted by lifecycle.
+// filterLifeCycle will filter out objects if the most recent
+// version should be deleted by lifecycle.
 // out will be closed when there are no more results.
-// When 'in' is closed or the context is canceled the function closes out and exits.
+// When 'in' is closed or the context is canceled the
+// function closes 'out' and exits.
 func filterLifeCycle(ctx context.Context, bucket string, lc *lifecycle.Lifecycle, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
 	defer close(out)
 	for {
