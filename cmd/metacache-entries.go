@@ -498,7 +498,7 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 	return versions
 }
 
-// fileInfoVersions converts the metadata to FileInfoVersions where possible.
+// fileInfos converts the metadata to ObjectInfo where possible.
 // Metadata that cannot be decoded is skipped.
 func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (objects []ObjectInfo) {
 	objects = make([]ObjectInfo, 0, m.len())
