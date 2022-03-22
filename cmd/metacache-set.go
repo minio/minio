@@ -189,7 +189,11 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 		}
 		if resCh != nil {
 			resErr = io.EOF
-			resCh <- results
+			select {
+			case <-ctx.Done():
+				// Nobody wants it.
+			case resCh <- results:
+			}
 		}
 	}()
 	return func() (metaCacheEntriesSorted, error) {
