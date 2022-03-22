@@ -28,6 +28,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -451,6 +452,12 @@ func serverMain(ctx *cli.Context) {
 	// Verify kernel release and version.
 	if oldLinux() {
 		logger.Info(color.RedBold("WARNING: Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
+	}
+
+	maxProcs := runtime.GOMAXPROCS(0)
+	cpuProcs := runtime.NumCPU()
+	if maxProcs < cpuProcs {
+		logger.Info(color.RedBold("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	// Configure server.
