@@ -32,6 +32,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -96,6 +97,11 @@ type listPathOptions struct {
 
 	// pool and set of where the cache is located.
 	pool, set int
+
+	// lcFilter performs filtering based on lifecycle.
+	// This will filter out objects if the most recent version should be deleted by lifecycle.
+	// Is not transferred across request calls.
+	lcFilter *lifecycle.Lifecycle
 }
 
 func init() {
