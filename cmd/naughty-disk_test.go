@@ -281,6 +281,13 @@ func (d *naughtyDisk) ReadAll(ctx context.Context, volume string, path string) (
 	return d.disk.ReadAll(ctx, volume, path)
 }
 
+func (d *naughtyDisk) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	if err := d.calcError(); err != nil {
+		return rf, err
+	}
+	return d.disk.ReadXL(ctx, volume, path, readData)
+}
+
 func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
 	if err := d.calcError(); err != nil {
 		return err

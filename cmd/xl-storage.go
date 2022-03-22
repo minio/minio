@@ -1226,6 +1226,60 @@ func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
 	return nil
 }
 
+func (s *xlStorage) readRaw(ctx context.Context, volumeDir, filePath string, readData bool) (buf []byte, dmTime time.Time, err error) {
+	if readData {
+		buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFile))
+	} else {
+		buf, dmTime, err = s.readMetadataWithDMTime(ctx, pathJoin(filePath, xlStorageFormatFile))
+		if err != nil {
+			if osIsNotExist(err) {
+				if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
+					return nil, time.Time{}, errVolumeNotFound
+				}
+			}
+			err = osErrToFileErr(err)
+		}
+	}
+
+	if err != nil {
+		if err == errFileNotFound {
+			buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFileV1))
+			if err != nil {
+				return nil, time.Time{}, err
+			}
+		} else {
+			return nil, time.Time{}, err
+		}
+	}
+
+	if len(buf) == 0 {
+		return nil, time.Time{}, errFileNotFound
+	}
+
+	return buf, dmTime, nil
+}
+
+// ReadXL reads from path/xl.meta, does not interpret the data it read. This
+// is a raw call equivalent of ReadVersion().
+func (s *xlStorage) ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error) {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return RawFileInfo{}, err
+	}
+
+	// Validate file path length, before reading.
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return RawFileInfo{}, err
+	}
+
+	buf, dmTime, err := s.readRaw(ctx, volumeDir, filePath, readData)
+	return RawFileInfo{
+		Buf:       buf,
+		DiskMTime: dmTime,
+	}, err
+}
+
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
 // for all objects less than `32KiB` this call returns data as well
 // along with metadata.
@@ -1240,44 +1294,14 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, err
 	}
 
-	var buf []byte
-	var dmTime time.Time
-	if readData {
-		buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFile))
-	} else {
-		buf, dmTime, err = s.readMetadataWithDMTime(ctx, pathJoin(filePath, xlStorageFormatFile))
-		if err != nil {
-			if osIsNotExist(err) {
-				if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
-					return fi, errVolumeNotFound
-				}
-			}
-			err = osErrToFileErr(err)
-		}
-	}
-
+	buf, dmTime, err := s.readRaw(ctx, volumeDir, filePath, readData)
 	if err != nil {
 		if err == errFileNotFound {
-			buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFileV1))
-			if err != nil {
-				if err == errFileNotFound {
-					if versionID != "" {
-						return fi, errFileVersionNotFound
-					}
-					return fi, errFileNotFound
-				}
-				return fi, err
+			if versionID != "" {
+				return fi, errFileVersionNotFound
 			}
-		} else {
-			return fi, err
 		}
-	}
-
-	if len(buf) == 0 {
-		if versionID != "" {
-			return fi, errFileVersionNotFound
-		}
-		return fi, errFileNotFound
+		return fi, err
 	}
 
 	fi, err = getFileInfo(buf, volume, path, versionID, readData)
@@ -1404,12 +1428,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 	return buf, stat.ModTime().UTC(), osErrToFileErr(err)
 }
 
-// ReadAll reads from r until an error or EOF and returns the data it read.
-// A successful call returns err == nil, not err == EOF. Because ReadAll is
-// defined to read from src until EOF, it does not treat an EOF from Read
-// as an error to be reported.
-// This API is meant to be used on files which have small memory footprint, do
-// not use this on large files as it would cause server to crash.
+// ReadAll is a raw call, reads content at any path and returns the buffer.
 func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {
 	// Specific optimization to avoid re-read from the drives for `format.json`
 	// in-case the caller is a network operation.

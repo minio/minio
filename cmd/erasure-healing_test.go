@@ -758,8 +758,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 			t.Fatalf("Failed to getLatestFileInfo - %v", err)
 		}
 
+		fi.DiskMTime = time.Time{}
+		nfi.DiskMTime = time.Time{}
 		if !reflect.DeepEqual(fi, nfi) {
-			t.Fatalf("FileInfo not equal after healing")
+			t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
 		}
 
 		err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
@@ -784,8 +786,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 			t.Fatalf("Failed to getLatestFileInfo - %v", err)
 		}
 
+		fi.DiskMTime = time.Time{}
+		nfi.DiskMTime = time.Time{}
 		if !reflect.DeepEqual(fi, nfi) {
-			t.Fatalf("FileInfo not equal after healing")
+			t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
 		}
 
 		// Test 4: checks if HealObject returns an error when xl.meta is not found
@@ -904,6 +908,8 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
 
+	fi.DiskMTime = time.Time{}
+	nfi1.DiskMTime = time.Time{}
 	if !reflect.DeepEqual(fi, nfi1) {
 		t.Fatalf("FileInfo not equal after healing")
 	}
@@ -925,6 +931,8 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
 
+	fi.DiskMTime = time.Time{}
+	nfi2.DiskMTime = time.Time{}
 	if !reflect.DeepEqual(fi, nfi2) {
 		t.Fatalf("FileInfo not equal after healing")
 	}

@@ -47,3 +47,4 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make verify-healing
+          make verify-healing-inconsistent-versions
