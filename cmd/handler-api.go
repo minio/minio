@@ -127,7 +127,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		}
 	}
 
-	if cap(t.requestsPool) < apiRequestsMaxPerNode {
+	if cap(t.requestsPool) != apiRequestsMaxPerNode {
 		// Only replace if needed.
 		// Existing requests will use the previous limit,
 		// but new requests will use the new limit.
