@@ -101,27 +101,6 @@ func newApp(name string) *cli.App {
 		commandsTree.Insert(command.Name)
 	}
 
-	findClosestCommands := func(command string) []string {
-		var closestCommands []string
-		closestCommands = append(closestCommands, commandsTree.PrefixMatch(command)...)
-
-		sort.Strings(closestCommands)
-		// Suggest other close commands - allow missed, wrongly added and
-		// even transposed characters
-		for _, value := range commandsTree.Walk(commandsTree.Root()) {
-			if sort.SearchStrings(closestCommands, value) < len(closestCommands) {
-				continue
-			}
-			// 2 is arbitrary and represents the max
-			// allowed number of typed errors
-			if words.DamerauLevenshteinDistance(command, value) < 2 {
-				closestCommands = append(closestCommands, value)
-			}
-		}
-
-		return closestCommands
-	}
-
 	// Register all commands.
 	registerCommand(serverCmd)
 	registerCommand(gatewayCmd)
@@ -144,10 +123,30 @@ func newApp(name string) *cli.App {
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
 		console.Printf("‘%s’ is not a minio sub-command. See ‘minio --help’.\n", command)
-		closestCommands := findClosestCommands(command)
+
+		closestCommands := func(command string) []string {
+			var closestCommands []string
+			closestCommands = append(closestCommands, commandsTree.PrefixMatch(command)...)
+
+			sort.Strings(closestCommands)
+			// Suggest other close commands - allow missed, wrongly added and
+			// even transposed characters
+			for _, value := range commandsTree.Walk(commandsTree.Root()) {
+				if sort.SearchStrings(closestCommands, value) < len(closestCommands) {
+					continue
+				}
+				// 2 is arbitrary and represents the max
+				// allowed number of typed errors
+				if words.DamerauLevenshteinDistance(command, value) < 2 {
+					closestCommands = append(closestCommands, value)
+				}
+			}
+
+			return closestCommands
+		}(command)
+
 		if len(closestCommands) > 0 {
-			console.Println()
-			console.Println("Did you mean one of these?")
+			console.Printf("\r\nDid you mean one of these?\r\n")
 			for _, cmd := range closestCommands {
 				console.Printf("\t‘%s’\n", cmd)
 			}
