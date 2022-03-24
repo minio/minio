@@ -660,6 +660,9 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
+	globalMinioOwnerID = env.Get(config.EnvMinioOwnerId, globalMinioDefaultOwnerID)
+	globalMinioOwnerDisplayName = env.Get(config.EnvMinioOwnerDisplayName, globalMinioDefaultOwnerDisplayName)
+
 	if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
 		size, err := humanize.ParseBytes(rootDiskSize)
 		if err != nil {

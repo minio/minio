@@ -74,4 +74,7 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
+
+	EnvMinioOwnerId          = "MINIO_OWNER_ID"
+	EnvMinioOwnerDisplayName = "MINIO_OWNER_DISPLAY_NAME"
 )

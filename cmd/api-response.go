@@ -418,8 +418,8 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	listbuckets := make([]Bucket, 0, len(buckets))
 	data := ListBucketsResponse{}
 	owner := Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: "minio",
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerDisplayName,
 	}
 
 	for _, bucket := range buckets {
@@ -439,8 +439,8 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
 	owner := Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: "minio",
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerDisplayName,
 	}
 	data := ListVersionsResponse{}
 
@@ -497,8 +497,8 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
 	owner := Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: "minio",
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerDisplayName,
 	}
 	data := ListObjectsResponse{}
 
@@ -546,8 +546,8 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
 	owner := Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: "minio",
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerDisplayName,
 	}
 	data := ListObjectsV2Response{}
 
@@ -662,12 +662,12 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 
 	// Dumb values not meaningful
 	listPartsResponse.Initiator = Initiator{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: globalMinioDefaultOwnerID,
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerID,
 	}
 	listPartsResponse.Owner = Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: globalMinioDefaultOwnerID,
+		ID:          globalMinioOwnerID,
+		DisplayName: globalMinioOwnerID,
 	}
 
 	listPartsResponse.MaxParts = partsInfo.MaxParts
