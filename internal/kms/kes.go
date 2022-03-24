@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/minio/kes"
@@ -69,15 +70,30 @@ func NewWithConfig(config Config) (KMS, error) {
 		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	})
 	client.Endpoints = endpoints
+
+	var bulkAvailable bool
+	_, policy, err := client.DescribeSelf(context.Background())
+	if err == nil {
+		const BulkAPI = "/v1/key/bulk/decrypt/"
+		for _, allow := range policy.Allow {
+			if strings.HasPrefix(allow, BulkAPI) {
+				bulkAvailable = true
+				break
+			}
+		}
+	}
 	return &kesClient{
-		client:       client,
-		defaultKeyID: config.DefaultKeyID,
+		client:        client,
+		defaultKeyID:  config.DefaultKeyID,
+		bulkAvailable: bulkAvailable,
 	}, nil
 }
 
 type kesClient struct {
 	defaultKeyID string
 	client       *kes.Client
+
+	bulkAvailable bool
 }
 
 var _ KMS = (*kesClient)(nil) // compiler check
@@ -144,4 +160,39 @@ func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]
 		return nil, err
 	}
 	return c.client.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
+}
+
+func (c *kesClient) DecryptAll(keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
+	if c.bulkAvailable {
+		CCPs := make([]kes.CCP, 0, len(ciphertexts))
+		for i := range ciphertexts {
+			bCtx, err := contexts[i].MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			CCPs = append(CCPs, kes.CCP{
+				Ciphertext: ciphertexts[i],
+				Context:    bCtx,
+			})
+		}
+		PCPs, err := c.client.DecryptAll(context.Background(), keyID, CCPs...)
+		if err != nil {
+			return nil, err
+		}
+		plaintexts := make([][]byte, 0, len(PCPs))
+		for _, p := range PCPs {
+			plaintexts = append(plaintexts, p.Plaintext)
+		}
+		return plaintexts, nil
+	}
+
+	plaintexts := make([][]byte, 0, len(ciphertexts))
+	for i := range ciphertexts {
+		plaintext, err := c.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		if err != nil {
+			return nil, err
+		}
+		plaintexts = append(plaintexts, plaintext)
+	}
+	return plaintexts, nil
 }

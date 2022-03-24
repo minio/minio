@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -39,6 +40,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 	"github.com/minio/sio"
 )
 
@@ -80,6 +82,7 @@ func (o *MultipartInfo) KMSKeyID() string { return kmsKeyIDFromMetadata(o.UserDe
 // metadata, if any. It returns an empty ID if no key ID is
 // present.
 func kmsKeyIDFromMetadata(metadata map[string]string) string {
+	const ARNPrefix = "arn:aws:kms:"
 	if len(metadata) == 0 {
 		return ""
 	}
@@ -87,10 +90,82 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 	if !ok {
 		return ""
 	}
-	if strings.HasPrefix(kmsID, "arn:aws:kms:") {
+	if strings.HasPrefix(kmsID, ARNPrefix) {
 		return kmsID
 	}
-	return "arn:aws:kms:" + kmsID
+	return ARNPrefix + kmsID
+}
+
+// DecryptETags dectypts all ObjectInfo ETags, if encrypted, using the KMS.
+func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error {
+	// First, we check whether all objects are encrypted using SSE-S3.
+	// We only need to decrypt the ETag in case of SSE-S3.
+	for _, object := range objects {
+		kind, ok := crypto.IsEncrypted(object.UserDefined)
+		if !ok || kind != crypto.S3 || strings.ToLower(env.Get("MINIO_DEBUG_KMS_KES_BULK_API", "off")) != "on" {
+			// TODO: make the bulk decryption API generally available.
+			for i := range objects {
+				size, err := objects[i].GetActualSize()
+				if err != nil {
+					return err
+				}
+				objects[i].Size = size
+				objects[i].ETag = objects[i].GetActualETag(nil)
+			}
+			return nil
+		}
+	}
+
+	// Now, decrypt all ETags using the a specialized bulk decryption API, if available.
+	metadata := make([]map[string]string, 0, len(objects))
+	buckets := make([]string, 0, len(objects))
+	names := make([]string, 0, len(objects))
+	for _, object := range objects {
+		metadata = append(metadata, object.UserDefined)
+		buckets = append(buckets, object.Bucket)
+		names = append(names, object.Name)
+	}
+
+	const BatchSize = 500 // We still perform the decryption in batches since KES may not accept arbitrary many ciphertexts
+	keys := make([]crypto.ObjectKey, 0, len(objects))
+	for len(metadata) > 0 {
+		if len(metadata) > BatchSize {
+			k, err := crypto.S3.UnsealObjectKeys(KMS, metadata[:BatchSize], buckets[:BatchSize], names[:BatchSize])
+			if err != nil {
+				return err
+			}
+			for i := range k {
+				keys = append(keys, k[i])
+			}
+			metadata, buckets, names = metadata[BatchSize:], buckets[BatchSize:], names[BatchSize:]
+		} else {
+			k, err := crypto.S3.UnsealObjectKeys(KMS, metadata, buckets, names)
+			if err != nil {
+				return err
+			}
+			for i := range k {
+				keys = append(keys, k[i])
+			}
+			break
+		}
+	}
+	for i := range objects {
+		size, err := objects[i].GetActualSize()
+		if err != nil {
+			return err
+		}
+		etag, err := hex.DecodeString(objects[i].ETag)
+		if err != nil {
+			return err
+		}
+		etag, err = keys[i].UnsealETag(etag)
+		if err != nil {
+			return err
+		}
+		objects[i].Size = size
+		objects[i].ETag = hex.EncodeToString(etag)
+	}
+	return nil
 }
 
 // isMultipart returns true if the current object is
