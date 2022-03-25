@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"crypto/subtle"
@@ -2429,8 +2430,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	// of profiling data of all nodes
 	zipWriter := zip.NewWriter(encw)
 	defer zipWriter.Close()
-
-	err = o.GetRawData(ctx, volume, file, func(r io.Reader, host, disk, filename string, si StatInfo) error {
+	rawDataFn := func(r io.Reader, host, disk, filename string, si StatInfo) error {
 		// Prefix host+disk
 		filename = path.Join(host, disk, filename)
 		if si.Dir {
@@ -2463,8 +2463,24 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			logger.LogIf(ctx, err)
 		}
 		return nil
-	})
+	}
+	err = o.GetRawData(ctx, volume, file, rawDataFn)
 	if !errors.Is(err, errFileNotFound) {
+		logger.LogIf(ctx, err)
+	}
+
+	// save the format.json as part of inspect by default
+	if volume != minioMetaBucket && file != formatConfigFile {
+		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
+	}
+	if !errors.Is(err, errFileNotFound) {
+		logger.LogIf(ctx, err)
+	}
+	// save args passed to inspect command
+	inspectArgs := fmt.Sprintf("inspect path: %s%s%s\n", volume, slashSeparator, file)
+	if err = rawDataFn(bytes.NewReader([]byte(inspectArgs)), "", "", "inspect-input.txt", StatInfo{
+		Size: int64(len(inspectArgs)),
+	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
 }
