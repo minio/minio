@@ -300,6 +300,8 @@ func configRetriableErrors(err error) bool {
 }
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
+	t1 := time.Now()
+
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
 
@@ -352,7 +354,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
-					logger.Info("All MinIO sub-systems initialized successfully")
+					logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
 				}
 				return nil
 			}
