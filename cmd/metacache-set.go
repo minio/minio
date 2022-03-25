@@ -65,10 +65,8 @@ type listPathOptions struct {
 	// Limit the number of results.
 	Limit int
 
-	// The number of disks to ask. Special values:
-	// 0 uses default number of disks.
-	// -1 use at least 50% of disks or at least the default number.
-	AskDisks int
+	// The number of disks to ask.
+	AskDisks string
 
 	// InclDeleted will keep all entries where latest version is a delete marker.
 	InclDeleted bool
@@ -541,19 +539,38 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	}
 }
 
+// getListQuorum interprets list quorum values and returns appropriate
+// acceptable quorum expected for list operations
+func getListQuorum(quorum string, driveCount int) int {
+	switch quorum {
+	case "disk":
+		// smallest possible value, generally meant for testing.
+		return 1
+	case "reduced":
+		return 2
+	case "strict":
+		return -1
+	}
+	// Defaults to (driveCount+1)/2 drives per set, defaults to "optimal" value
+	if driveCount > 0 {
+		return (driveCount + 1) / 2
+	} // "3" otherwise.
+	return 3
+}
+
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) (err error) {
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
-	askDisks := o.AskDisks
-	listingQuorum := o.AskDisks - 1
+	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
+	listingQuorum := askDisks - 1
 	disks := er.getDisks()
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
 	if askDisks <= 0 || er.setDriveCount == 4 {
-		askDisks = len(disks)                // with 'strict' quorum list on all online disks.
+		askDisks = len(disks)                // with 'strict' quorum list on all drives.
 		listingQuorum = (len(disks) + 1) / 2 // keep this such that we can list all objects with different quorum ratio.
 	}
 	if askDisks > 0 && len(disks) > askDisks {
@@ -815,7 +832,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			for _, fd := range fdsCopy {
 				// Grab a fallback disk
 				fds = fds[1:]
-				if fd != nil {
+				if fd != nil && fd.IsOnline() {
 					return fd
 				}
 			}
