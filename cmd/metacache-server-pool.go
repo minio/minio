@@ -111,7 +111,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.ID != "" && !o.Transient {
 		// Create or ping with handout...
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+		rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		var c *metacache
@@ -199,7 +199,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		}
 		entries.truncate(0)
 		go func() {
-			rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+			rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 			if rpc != nil {
 				ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 				defer cancel()
@@ -415,7 +415,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	filteredResults := o.gatherResults(ctx, outCh)
 
 	mc := o.newMetacache()
-	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: *o}
+	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix)), o: *o}
 
 	// Save listing...
 	go func() {

@@ -361,7 +361,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 
 	for {
 		if contextCanceled(ctx) {
