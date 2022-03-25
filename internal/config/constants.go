@@ -75,6 +75,6 @@ const (
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
 
-	EnvOwnerId          = "MINIO_OWNER_ID"
+	EnvOwnerID          = "MINIO_OWNER_ID"
 	EnvOwnerDisplayName = "MINIO_OWNER_DISPLAY_NAME"
 )

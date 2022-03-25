@@ -348,12 +348,14 @@ var (
 	globalRootDiskThreshold uint64
 
 	// Used for collecting stats for netperf
+
 	globalNetPerfMinDuration = time.Second * 10
 	globalNetPerfRX          netPerfRX
 
 	//Use to set custom owner id and display name
 	globalOwnerID          = globalMinioDefaultOwnerID
 	globalOwnerDisplayName = globalMinioDefaultOwnerDisplayName
+
 	// Add new variable global values here.
 )
 
