@@ -45,7 +45,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.15.4
+	github.com/minio/console v0.15.6
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.3.4
 	github.com/minio/highwayhash v1.0.2
@@ -96,9 +96,6 @@ require (
 
 require (
 	cloud.google.com/go/iam v0.2.0 // indirect
-	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
-	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
-	golang.org/x/tools v0.1.8 // indirect
 )
