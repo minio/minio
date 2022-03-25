@@ -571,6 +571,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		bucket:    o.Bucket,
 	}
 
+	// Maximum versions requested for "latest" object
+	// resolution on versioned buckets, this is to be only
+	// used when o.Versioned is false
+	if !o.Versioned {
+		resolver.requestedVersions = 1
+	}
+
 	ctxDone := ctx.Done()
 	return listPathRaw(ctx, listPathRawOptions{
 		disks:         disks,

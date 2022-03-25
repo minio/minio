@@ -281,10 +281,16 @@ func (m metaCacheEntries) shallowClone() metaCacheEntries {
 }
 
 type metadataResolutionParams struct {
-	dirQuorum int    // Number if disks needed for a directory to 'exist'.
-	objQuorum int    // Number of disks needed for an object to 'exist'.
-	bucket    string // Name of the bucket. Used for generating cached fileinfo.
-	strict    bool   // Versions must match exactly, including all metadata.
+	dirQuorum int // Number if disks needed for a directory to 'exist'.
+	objQuorum int // Number of disks needed for an object to 'exist'.
+
+	// An optimization request only an 'n' amount of versions from xl.meta
+	// to avoid resolving all versions to figure out the latest 'version'
+	// for ListObjects, ListObjectsV2
+	requestedVersions int
+
+	bucket string // Name of the bucket. Used for generating cached fileinfo.
+	strict bool   // Versions must match exactly, including all metadata.
 
 	// Reusable slice for resolution
 	candidates [][]xlMetaV2ShallowVersion
@@ -372,7 +378,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		reusable: true,
 		cached:   &xlMetaV2{metaV: selected.cached.metaV},
 	}
-	selected.cached.versions = mergeXLV2Versions(r.objQuorum, r.strict, r.candidates...)
+	selected.cached.versions = mergeXLV2Versions(r.objQuorum, r.strict, r.requestedVersions, r.candidates...)
 	if len(selected.cached.versions) == 0 {
 		return nil, false
 	}

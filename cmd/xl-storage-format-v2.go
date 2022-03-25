@@ -1691,7 +1691,7 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 // Quorum must be the minimum number of matching metadata files.
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type
-func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
+func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions ...[]xlMetaV2ShallowVersion) (merged []xlMetaV2ShallowVersion) {
 	if quorum <= 0 {
 		quorum = 1
 	}
@@ -1707,6 +1707,8 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 	}
 	// Shallow copy input
 	versions = append(make([][]xlMetaV2ShallowVersion, 0, len(versions)), versions...)
+
+	var nVersions int // captures all non-free versions
 
 	// Our result
 	merged = make([]xlMetaV2ShallowVersion, 0, len(versions[0]))
@@ -1744,6 +1746,12 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			latest = tops[0]
 			latestCount = len(tops)
 			merged = append(merged, latest)
+
+			// Calculate latest 'n' non-free versions.
+			if !latest.header.FreeVersion() {
+				nVersions++
+			}
+
 		} else {
 			// Find latest.
 			for i, ver := range tops {
@@ -1807,6 +1815,11 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 			}
 			if latestCount >= quorum {
 				merged = append(merged, latest)
+
+				// Calculate latest 'n' non-free versions.
+				if !latest.header.FreeVersion() {
+					nVersions++
+				}
 			}
 		}
 
@@ -1840,7 +1853,13 @@ func mergeXLV2Versions(quorum int, strict bool, versions ...[]xlMetaV2ShallowVer
 				break
 			}
 		}
+
+		if requestedVersions > 0 && requestedVersions == nVersions {
+			merged = append(merged, versions[0]...)
+			break
+		}
 	}
+
 	// Sanity check. Enable if duplicates show up.
 	if false {
 		found := make(map[[16]byte]struct{})
