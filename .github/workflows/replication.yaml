@@ -22,9 +22,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
+          check-latest: true
       - uses: actions/cache@v2
         with:
           path: |

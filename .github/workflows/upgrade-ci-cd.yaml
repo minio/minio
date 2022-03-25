@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
-
+          check-latest: true
       - name: Start upgrade tests
         run: |
           make test-upgrade
