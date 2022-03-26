@@ -18,6 +18,7 @@
 package log
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -37,11 +38,21 @@ type Args struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
+// KeyVal - appended to ReqInfo.Tags
+type KeyVal struct {
+	Key string
+	Val interface{}
+}
+
+func (kv KeyVal) String() string {
+	return fmt.Sprintf("%s=%v", kv.Key, kv.Val)
+}
+
 // Trace - defines the trace.
 type Trace struct {
-	Message   string                 `json:"message,omitempty"`
-	Source    []string               `json:"source,omitempty"`
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Message   string   `json:"message,omitempty"`
+	Source    []string `json:"source,omitempty"`
+	Variables []KeyVal `json:"variables,omitempty"`
 }
 
 // API - defines the api type and its args.

@@ -301,11 +301,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		API = req.API
 	}
 
-	kv := req.GetTags()
-	tags := make(map[string]interface{}, len(kv))
-	for _, entry := range kv {
-		tags[entry.Key] = entry.Val
-	}
+	tags := req.GetTags()
 
 	// Get full stack trace
 	trace := getTrace(3)
@@ -343,18 +339,22 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 			},
 		},
 		Trace: &log.Trace{
-			Message:   message,
-			Source:    trace,
-			Variables: tags,
+			Message: message,
+			Source:  trace,
 		},
 	}
 
-	if anonFlag {
+	if !anonFlag {
+		variables := make([]log.KeyVal, 0, len(tags))
+		for _, tag := range tags {
+			variables = append(variables, log.KeyVal(tag))
+		}
+		entry.Trace.Variables = variables
+	} else {
 		entry.API.Args.Bucket = hashString(entry.API.Args.Bucket)
 		entry.API.Args.Object = hashString(entry.API.Args.Object)
 		entry.RemoteHost = hashString(entry.RemoteHost)
 		entry.Trace.Message = reflect.TypeOf(err).String()
-		entry.Trace.Variables = make(map[string]interface{})
 	}
 
 	// Iterate over all logger targets to send the log entry

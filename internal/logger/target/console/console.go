@@ -72,12 +72,12 @@ func (c *Target) Send(e interface{}, logKind string) error {
 	}
 
 	tagString := ""
-	for key, value := range entry.Trace.Variables {
-		if value != "" {
+	for _, kv := range entry.Trace.Variables {
+		if kvStr := kv.String(); kvStr != "" {
 			if tagString != "" {
 				tagString += ", "
 			}
-			tagString += fmt.Sprintf("%s=%v", key, value)
+			tagString += kvStr
 		}
 	}
 
