@@ -432,48 +432,56 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	cache := store.lock()
 	defer store.unlock()
 
-	if err := store.loadPolicyDocs(ctx, newCache.iamPolicyDocsMap); err != nil {
-		return err
-	}
-
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(newCache.iamPolicyDocsMap)
-
-	if store.getUsersSysType() == MinIOUsersSysType {
-		if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
+	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
+		err := iamOS.loadAllFromObjStore(ctx, newCache)
+		if err != nil {
 			return err
 		}
-		if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
+	} else {
+
+		if err := store.loadPolicyDocs(ctx, newCache.iamPolicyDocsMap); err != nil {
 			return err
 		}
-	}
 
-	// load polices mapped to users
-	if err := store.loadMappedPolicies(ctx, regUser, false, newCache.iamUserPolicyMap); err != nil {
-		return err
-	}
+		// Sets default canned policies, if none are set.
+		setDefaultCannedPolicies(newCache.iamPolicyDocsMap)
 
-	// load policies mapped to groups
-	if err := store.loadMappedPolicies(ctx, regUser, true, newCache.iamGroupPolicyMap); err != nil {
-		return err
-	}
+		if store.getUsersSysType() == MinIOUsersSysType {
+			if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
+				return err
+			}
+			if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
+				return err
+			}
+		}
 
-	// load service accounts
-	if err := store.loadUsers(ctx, svcUser, newCache.iamUsersMap); err != nil {
-		return err
-	}
+		// load polices mapped to users
+		if err := store.loadMappedPolicies(ctx, regUser, false, newCache.iamUserPolicyMap); err != nil {
+			return err
+		}
 
-	// load STS temp users
-	if err := store.loadUsers(ctx, stsUser, newCache.iamUsersMap); err != nil {
-		return err
-	}
+		// load policies mapped to groups
+		if err := store.loadMappedPolicies(ctx, regUser, true, newCache.iamGroupPolicyMap); err != nil {
+			return err
+		}
 
-	// load STS policy mappings
-	if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamUserPolicyMap); err != nil {
-		return err
-	}
+		// load service accounts
+		if err := store.loadUsers(ctx, svcUser, newCache.iamUsersMap); err != nil {
+			return err
+		}
 
-	newCache.buildUserGroupMemberships()
+		// load STS temp users
+		if err := store.loadUsers(ctx, stsUser, newCache.iamUsersMap); err != nil {
+			return err
+		}
+
+		// load STS policy mappings
+		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamUserPolicyMap); err != nil {
+			return err
+		}
+
+		newCache.buildUserGroupMemberships()
+	}
 
 	cache.iamGroupPolicyMap = newCache.iamGroupPolicyMap
 	cache.iamGroupsMap = newCache.iamGroupsMap
