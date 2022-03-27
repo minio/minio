@@ -96,6 +96,10 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 // from the metadata using KMS and returns the decrypted object
 // key.
 func (s3 ssekms) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	if KMS == nil {
+		return key, Errorf("KMS not configured")
+	}
+
 	keyID, kmsKey, sealedKey, ctx, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
