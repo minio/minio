@@ -429,9 +429,6 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	newCache := newIamCache()
 
-	cache := store.lock()
-	defer store.unlock()
-
 	if err := store.loadPolicyDocs(ctx, newCache.iamPolicyDocsMap); err != nil {
 		return err
 	}
@@ -474,6 +471,9 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	}
 
 	newCache.buildUserGroupMemberships()
+
+	cache := store.lock()
+	defer store.unlock()
 
 	cache.iamGroupPolicyMap = newCache.iamGroupPolicyMap
 	cache.iamGroupsMap = newCache.iamGroupsMap
