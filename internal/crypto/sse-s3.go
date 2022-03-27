@@ -72,6 +72,9 @@ func (sses3) IsEncrypted(metadata map[string]string) bool {
 // from the metadata using KMS and returns the decrypted object
 // key.
 func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	if KMS == nil {
+		return key, Errorf("KMS not configured")
+	}
 	keyID, kmsKey, sealedKey, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
@@ -90,6 +93,10 @@ func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket,
 //
 // The metadata, buckets and objects slices must have the same length.
 func (s3 sses3) UnsealObjectKeys(KMS kms.KMS, metadata []map[string]string, buckets, objects []string) ([]ObjectKey, error) {
+	if KMS == nil {
+		return nil, Errorf("KMS not configured")
+	}
+
 	if len(metadata) != len(buckets) || len(metadata) != len(objects) {
 		return nil, Errorf("invalid metadata/object count: %d != %d != %d", len(metadata), len(buckets), len(objects))
 	}
