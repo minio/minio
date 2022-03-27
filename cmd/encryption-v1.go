@@ -163,6 +163,8 @@ func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo, batchS
 			if err != nil {
 				return err
 			}
+			objects[i].Size = size
+
 			ETag, err := etag.Parse(objects[i].ETag)
 			if err != nil {
 				return err
@@ -173,7 +175,6 @@ func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo, batchS
 					return err
 				}
 				ETag = etag.ETag(tag)
-				objects[i].Size = size
 				objects[i].ETag = ETag.String()
 			}
 		}
