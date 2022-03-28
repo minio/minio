@@ -102,7 +102,7 @@ const (
 	GlobalStaleUploadsCleanupInterval = time.Hour * 6 // 6 hrs.
 
 	// Refresh interval to update in-memory iam config cache.
-	globalRefreshIAMInterval = 5 * time.Minute
+	globalRefreshIAMInterval = 30 * time.Minute
 
 	// Limit of location constraint XML for unauthenticated PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte

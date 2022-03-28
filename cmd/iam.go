@@ -333,6 +333,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	sys.printIAMRoles()
+
+	logger.Info("Finished loading IAM sub-system.")
 }
 
 // Prints IAM role ARNs.
@@ -366,7 +368,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 		for event := range ch {
 			// we simply log errors
 			err := sys.loadWatchedEvent(ctx, event)
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, fmt.Errorf("Failure in loading watch event: %v", err))
 		}
 		return
 	}
@@ -378,7 +380,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if err := sys.Load(ctx); err != nil {
-				logger.LogIf(ctx, err)
+				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM: %v", err))
 			}
 		case <-ctx.Done():
 			return
