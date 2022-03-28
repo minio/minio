@@ -60,7 +60,7 @@ spec:
             {{- range .Values.users }}
             {{- if .existingSecret }}
             - secret:
-                name: {{ .existingSecret }}
+                name: {{ tpl .existingSecret $ }}
                 items:
                   - key: {{ .existingSecretKey }}
                     path: secrets/{{ .accessKey }}
