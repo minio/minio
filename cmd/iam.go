@@ -316,7 +316,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	// Start watching changes to storage.
-	go sys.watch(ctx)
+	go sys.watch(ctx, objAPI)
 
 	// Load RoleARN
 	if roleARN, rolePolicy, enabled := globalOpenIDConfig.GetRoleInfo(); enabled {
@@ -361,7 +361,7 @@ func (sys *IAMSys) HasWatcher() bool {
 	return sys.store.HasWatcher()
 }
 
-func (sys *IAMSys) watch(ctx context.Context) {
+func (sys *IAMSys) watch(ctx context.Context, objAPI ObjectLayer) {
 	watcher, ok := sys.store.IAMStorageAPI.(iamStorageWatcher)
 	if ok {
 		ch := watcher.watch(ctx, iamConfigPrefix)
@@ -374,18 +374,71 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	}
 
 	// Fall back to loading all items periodically
-	ticker := time.NewTicker(sys.iamRefreshInterval)
-	defer ticker.Stop()
+
+	// allocate dynamic timeout once before the loop
+	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 	for {
-		select {
-		case <-ticker.C:
-			if err := sys.Load(ctx); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM: %v", err))
+		// we are calling this function directly (so we can use defer
+		// calls and cleanup easily).
+		func() {
+			nCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+			// If we get this lock we will hold it and send IAM
+			// updates via peer calls.
+			watcherLock := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam-refresh.lock")
+			lkctx, err := watcherLock.GetLock(nCtx, iamLockTimeout)
+			if err != nil {
+				// Sleep for a random interval at most 5 seconds.
+				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+				return
 			}
-		case <-ctx.Done():
-			return
-		}
+			// Got the lock!
+			defer watcherLock.Unlock(lkctx.Cancel)
+
+			// Periodically refresh IAM and notify all peers.
+			ticker := time.NewTicker(sys.iamRefreshInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := sys.Load(nCtx); err != nil {
+						logger.LogIf(nCtx, fmt.Errorf("Failure in periodic refresh for IAM: %v", err))
+						return
+					}
+
+					// Notify all other MinIO peers to load
+					// IAM cache.
+					allErrs := globalNotificationSys.LoadIAMRefreshData(sys.store.CloneCache())
+					errCount := 0
+					for _, nerr := range allErrs {
+						if nerr.Err != nil {
+							errCount++
+							logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+							logger.LogIf(ctx, nerr.Err)
+						}
+					}
+
+					// If we failed to notify a majority of
+					// the nodes, we release the lock and
+					// continue.
+					if errCount*2 >= len(allErrs) {
+						logger.LogIf(ctx, fmt.Errorf("Notified only %d of %d nodes, releasing IAM refresh lock", errCount, len(allErrs)))
+						return
+					}
+
+				case <-nCtx.Done():
+					return
+				}
+			}
+		}()
 	}
+}
+
+// LoadIAMRefreshData - updates the IAM cache from peer notified data.
+func (sys *IAMSys) LoadIAMRefreshData(ctx context.Context, newCache *IAMCache) error {
+	return sys.store.LoadIAMRefreshData(ctx, newCache)
 }
 
 func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (err error) {

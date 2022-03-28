@@ -26,29 +26,29 @@ import (
 
 type iamDummyStore struct {
 	sync.RWMutex
-	*iamCache
+	*IAMCache
 	usersSysType UsersSysType
 }
 
 func newIAMDummyStore(usersSysType UsersSysType) *iamDummyStore {
 	return &iamDummyStore{
-		iamCache:     newIamCache(),
+		IAMCache:     newIamCache(),
 		usersSysType: usersSysType,
 	}
 }
 
-func (ids *iamDummyStore) rlock() *iamCache {
+func (ids *iamDummyStore) rlock() *IAMCache {
 	ids.RLock()
-	return ids.iamCache
+	return ids.IAMCache
 }
 
 func (ids *iamDummyStore) runlock() {
 	ids.RUnlock()
 }
 
-func (ids *iamDummyStore) lock() *iamCache {
+func (ids *iamDummyStore) lock() *IAMCache {
 	ids.Lock()
-	return ids.iamCache
+	return ids.IAMCache
 }
 
 func (ids *iamDummyStore) unlock() {
@@ -64,7 +64,7 @@ func (ids *iamDummyStore) migrateBackendFormat(context.Context) error {
 }
 
 func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
-	v, ok := ids.iamPolicyDocsMap[policy]
+	v, ok := ids.PolicyDocsMap[policy]
 	if !ok {
 		return errNoSuchPolicy
 	}
@@ -73,30 +73,30 @@ func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m ma
 }
 
 func (ids *iamDummyStore) loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error {
-	for k, v := range ids.iamPolicyDocsMap {
+	for k, v := range ids.PolicyDocsMap {
 		m[k] = v
 	}
 	return nil
 }
 
 func (ids *iamDummyStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error {
-	u, ok := ids.iamUsersMap[user]
+	u, ok := ids.UsersMap[user]
 	if !ok {
 		return errNoSuchUser
 	}
-	ids.iamUsersMap[user] = u
+	ids.UsersMap[user] = u
 	return nil
 }
 
 func (ids *iamDummyStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
-	for k, v := range ids.iamUsersMap {
+	for k, v := range ids.UsersMap {
 		m[k] = v
 	}
 	return nil
 }
 
 func (ids *iamDummyStore) loadGroup(ctx context.Context, group string, m map[string]GroupInfo) error {
-	g, ok := ids.iamGroupsMap[group]
+	g, ok := ids.GroupsMap[group]
 	if !ok {
 		return errNoSuchGroup
 	}
@@ -105,7 +105,7 @@ func (ids *iamDummyStore) loadGroup(ctx context.Context, group string, m map[str
 }
 
 func (ids *iamDummyStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
-	for k, v := range ids.iamGroupsMap {
+	for k, v := range ids.GroupsMap {
 		m[k] = v
 	}
 	return nil
@@ -113,13 +113,13 @@ func (ids *iamDummyStore) loadGroups(ctx context.Context, m map[string]GroupInfo
 
 func (ids *iamDummyStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
 	if isGroup {
-		g, ok := ids.iamGroupPolicyMap[name]
+		g, ok := ids.GroupPolicyMap[name]
 		if !ok {
 			return errNoSuchPolicy
 		}
 		m[name] = g
 	} else {
-		u, ok := ids.iamUserPolicyMap[name]
+		u, ok := ids.UserPolicyMap[name]
 		if !ok {
 			return errNoSuchPolicy
 		}
@@ -130,11 +130,11 @@ func (ids *iamDummyStore) loadMappedPolicy(ctx context.Context, name string, use
 
 func (ids *iamDummyStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
 	if !isGroup {
-		for k, v := range ids.iamUserPolicyMap {
+		for k, v := range ids.UserPolicyMap {
 			m[k] = v
 		}
 	} else {
-		for k, v := range ids.iamGroupPolicyMap {
+		for k, v := range ids.GroupPolicyMap {
 			m[k] = v
 		}
 	}

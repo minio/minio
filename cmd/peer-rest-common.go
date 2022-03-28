@@ -53,6 +53,7 @@ const (
 	peerRESTMethodLoadPolicyMapping           = "/loadpolicymapping"
 	peerRESTMethodDeletePolicy                = "/deletepolicy"
 	peerRESTMethodLoadGroup                   = "/loadgroup"
+	peerRESTMethodLoadIAMRefreshData          = "/loadiamrefreshdata"
 	peerRESTMethodStartProfiling              = "/startprofiling"
 	peerRESTMethodDownloadProfilingData       = "/downloadprofilingdata"
 	peerRESTMethodCycleBloom                  = "/cyclebloom"

@@ -260,6 +260,21 @@ func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationP
 	return ng.Wait()
 }
 
+// LoadIAMRefreshData - sends IAM refresh data to all peers.
+func (sys *NotificationSys) LoadIAMRefreshData(c *IAMCache) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.LoadIAMRefreshData(c)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // BackgroundHealStatus - returns background heal status of all peers
 func (sys *NotificationSys) BackgroundHealStatus() ([]madmin.BgHealState, []NotificationPeerErr) {
 	ng := WithNPeers(len(sys.peerClients))

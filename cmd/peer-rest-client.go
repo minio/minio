@@ -660,6 +660,22 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
+// LoadIAMRefreshData - send iam refresh command to peers.
+func (client *peerRESTClient) LoadIAMRefreshData(c *IAMCache) error {
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(c)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodLoadIAMRefreshData, nil, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 type serverUpdateInfo struct {
 	URL         *url.URL
 	Sha256Sum   []byte

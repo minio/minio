@@ -61,7 +61,7 @@ func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
 type IAMEtcdStore struct {
 	sync.RWMutex
 
-	*iamCache
+	*IAMCache
 
 	usersSysType UsersSysType
 
@@ -70,24 +70,24 @@ type IAMEtcdStore struct {
 
 func newIAMEtcdStore(client *etcd.Client, usersSysType UsersSysType) *IAMEtcdStore {
 	return &IAMEtcdStore{
-		iamCache:     newIamCache(),
+		IAMCache:     newIamCache(),
 		client:       client,
 		usersSysType: usersSysType,
 	}
 }
 
-func (ies *IAMEtcdStore) rlock() *iamCache {
+func (ies *IAMEtcdStore) rlock() *IAMCache {
 	ies.RLock()
-	return ies.iamCache
+	return ies.IAMCache
 }
 
 func (ies *IAMEtcdStore) runlock() {
 	ies.RUnlock()
 }
 
-func (ies *IAMEtcdStore) lock() *iamCache {
+func (ies *IAMEtcdStore) lock() *IAMCache {
 	ies.Lock()
-	return ies.iamCache
+	return ies.IAMCache
 }
 
 func (ies *IAMEtcdStore) unlock() {

@@ -269,6 +269,35 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// LoadIAMRefreshDataHandler - loads IAM refresh data.
+func (s *peerRESTServer) LoadIAMRefreshDataHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	ctx := newContext(r, w, "LoadIAMRefreshData")
+
+	cache := IAMCache{}
+	err := gob.NewDecoder(r.Body).Decode(&cache)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	if err := globalIAMSys.LoadIAMRefreshData(r.Context(), &cache); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Error loading IAM Refresh data: %v", err))
+		s.writeErrorResponse(w, err)
+		return
+	}
+}
+
 // StartProfilingHandler - Issues the start profiling command.
 func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1313,6 +1342,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser, peerRESTUserTemp)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadServiceAccount).HandlerFunc(httpTraceAll(server.LoadServiceAccountHandler)).Queries(restQueries(peerRESTUser)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadGroup).HandlerFunc(httpTraceAll(server.LoadGroupHandler)).Queries(restQueries(peerRESTGroup)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadIAMRefreshData).HandlerFunc(httpTraceAll(server.LoadIAMRefreshDataHandler))
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProfilingDataHandler))
