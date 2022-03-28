@@ -820,6 +820,11 @@ func (z *erasureServerPools) getLatestObjectInfoWithIdx(ctx context.Context, buc
 			// should be returned upwards.
 			return res.oi, res.zIdx, err
 		}
+		// When its a delete marker and versionID is empty
+		// we should simply return the error right away.
+		if res.oi.DeleteMarker && opts.VersionID == "" {
+			return res.oi, res.zIdx, err
+		}
 	}
 
 	object = decodeDirObject(object)
