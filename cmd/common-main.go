@@ -24,6 +24,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -798,7 +799,29 @@ func handleCommonEnvVars() {
 				endpoints = append(endpoints, strings.Join(lbls, ""))
 			}
 		}
-		certificate, err := tls.LoadX509KeyPair(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""))
+		// Manually load the certificate and private key into memory.
+		// We need to check whether the private key is encrypted, and
+		// if so, decrypt it using the user-provided password.
+		certBytes, err := os.ReadFile(env.Get(config.EnvKESClientCert, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to load KES client certificate as specified by the shell environment")
+		}
+		keyBytes, err := os.ReadFile(env.Get(config.EnvKESClientKey, ""))
+		if err != nil {
+			logger.Fatal(err, "Unable to load KES client private key as specified by the shell environment")
+		}
+		privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
+		if len(rest) != 0 {
+			logger.Fatal(errors.New("private key contains additional data"), "Unable to load KES client private key as specified by the shell environment")
+		}
+		if x509.IsEncryptedPEMBlock(privateKeyPEM) {
+			keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
+			if err != nil {
+				logger.Fatal(err, "Unable to decrypt KES client private key as specified by the shell environment")
+			}
+			keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
+		}
+		certificate, err := tls.X509KeyPair(certBytes, keyBytes)
 		if err != nil {
 			logger.Fatal(err, "Unable to load KES client certificate as specified by the shell environment")
 		}
