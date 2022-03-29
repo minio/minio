@@ -1651,11 +1651,11 @@ func getClusterTierMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		if globalTierConfigMgr.Empty() {
-			return
-		}
 		objLayer := newObjectLayerFn()
 		if objLayer == nil || globalIsGateway {
+			return
+		}
+		if globalTierConfigMgr.Empty() {
 			return
 		}
 
