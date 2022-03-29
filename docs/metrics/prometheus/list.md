@@ -55,7 +55,7 @@ These metrics can be from any MinIO server once per collection.
 | `minio_s3_requests_error_total`              | Total number S3 requests with errors                                                                                |
 | `minio_s3_requests_inflight_total`           | Total number of S3 requests currently in flight                                                                     |
 | `minio_s3_requests_total`                    | Total number S3 requests                                                                                            |
-| `minio_s3_time_ttbf_seconds_distribution`    | Distribution of the time to first byte across API calls.                                                            |
+| `minio_s3_time_ttfb_seconds_distribution`    | Distribution of the time to first byte across API calls.                                                            |
 | `minio_s3_traffic_received_bytes`            | Total number of s3 bytes received.                                                                                  |
 | `minio_s3_traffic_sent_bytes`                | Total number of s3 bytes sent                                                                                       |
 | `minio_software_commit_info`                 | Git commit hash for the MinIO release.                                                                              |
