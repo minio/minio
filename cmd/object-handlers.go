@@ -416,16 +416,17 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		var (
 			reader *GetObjectReader
 			proxy  proxyResult
+			perr   error
 		)
 		proxytgts := getproxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
 			// proxy to replication target if active-active replication is in place.
-			reader, proxy, err = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
-			if err != nil && !isErrObjectNotFound(ErrorRespToObjectError(err, bucket, object)) &&
-				!isErrVersionNotFound(ErrorRespToObjectError(err, bucket, object)) {
-				logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
+			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
+			if perr != nil && !isErrObjectNotFound(ErrorRespToObjectError(perr, bucket, object)) &&
+				!isErrVersionNotFound(ErrorRespToObjectError(perr, bucket, object)) {
+				logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 			}
-			if reader != nil && proxy.Proxy && err == nil {
+			if reader != nil && proxy.Proxy && perr == nil {
 				gr = reader
 			}
 		}
