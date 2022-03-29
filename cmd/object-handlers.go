@@ -3024,34 +3024,29 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	var ssec bool
-	if _, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
-		var key []byte
-		if crypto.SSEC.IsEncrypted(listPartsInfo.UserDefined) {
-			ssec = true
-		}
+	// We have to adjust the size of encrypted parts since encrypted parts
+	// are slightly larger due to encryption overhead.
+	// Further, we have to adjust the ETags of parts when using SSE-S3.
+	// Due to AWS S3, SSE-S3 encrypted parts return the plaintext ETag
+	// being the content MD5 of that particular part. This is not the
+	// case for SSE-C and SSE-KMS objects.
+	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
 		var objectEncryptionKey []byte
-		if crypto.S3.IsEncrypted(listPartsInfo.UserDefined) {
-			// Calculating object encryption key
-			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, listPartsInfo.UserDefined)
+		if kind == crypto.S3 {
+			objectEncryptionKey, err = decryptObjectInfo(nil, bucket, object, listPartsInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
 		}
-		for i := range listPartsInfo.Parts {
-			curp := listPartsInfo.Parts[i]
-			curp.ETag = tryDecryptETag(objectEncryptionKey, curp.ETag, ssec)
-			if !ssec {
-				var partSize uint64
-				partSize, err = sio.DecryptedSize(uint64(curp.Size))
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-				curp.Size = int64(partSize)
+		for i, p := range listPartsInfo.Parts {
+			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind != crypto.S3)
+			size, err := sio.DecryptedSize(uint64(p.Size))
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
 			}
-			listPartsInfo.Parts[i] = curp
+			listPartsInfo.Parts[i].Size = int64(size)
 		}
 	}
 
