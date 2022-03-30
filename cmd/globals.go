@@ -102,7 +102,7 @@ const (
 	GlobalStaleUploadsCleanupInterval = time.Hour * 6 // 6 hrs.
 
 	// Refresh interval to update in-memory iam config cache.
-	globalRefreshIAMInterval = 5 * time.Minute
+	globalRefreshIAMInterval = 30 * time.Minute
 
 	// Limit of location constraint XML for unauthenticated PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
@@ -190,7 +190,7 @@ var (
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig = apiConfig{listQuorum: 3}
+	globalAPIConfig = apiConfig{listQuorum: "strict"}
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config

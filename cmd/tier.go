@@ -148,6 +148,9 @@ func (config *TierConfigMgr) Verify(ctx context.Context, tier string) error {
 
 // Empty returns if tier targets are empty
 func (config *TierConfigMgr) Empty() bool {
+	if config == nil {
+		return true
+	}
 	return len(config.ListTiers()) == 0
 }
 

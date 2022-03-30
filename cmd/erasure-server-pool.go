@@ -33,6 +33,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -128,7 +129,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			if !configRetriableErrors(err) {
 				logger.Fatal(err, "Unable to initialize backend")
 			}
-			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+			retry := time.Duration(r.Float64() * float64(5*time.Second))
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
+			time.Sleep(retry)
 			continue
 		}
 		break
@@ -817,6 +820,11 @@ func (z *erasureServerPools) getLatestObjectInfoWithIdx(ctx context.Context, buc
 			// should be returned upwards.
 			return res.oi, res.zIdx, err
 		}
+		// When its a delete marker and versionID is empty
+		// we should simply return the error right away.
+		if res.oi.DeleteMarker && opts.VersionID == "" {
+			return res.oi, res.zIdx, err
+		}
 	}
 
 	object = decodeDirObject(object)
@@ -1150,6 +1158,14 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
 
+	// Automatically remove the object/version is an expiry lifecycle rule can be applied
+	lc, _ := globalLifecycleSys.Get(bucket)
+	if lc != nil {
+		if !lc.HasActiveRules(prefix, true) {
+			lc = nil
+		}
+	}
+
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
 		// - Cohesity
@@ -1160,6 +1176,13 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		// to avoid the need for ListObjects().
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
+			if lc != nil {
+				action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+				switch action {
+				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+					return loi, nil
+				}
+			}
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
@@ -1174,6 +1197,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
+
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {

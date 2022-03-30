@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/minio/kes"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/fips"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
@@ -80,6 +82,7 @@ func (o *MultipartInfo) KMSKeyID() string { return kmsKeyIDFromMetadata(o.UserDe
 // metadata, if any. It returns an empty ID if no key ID is
 // present.
 func kmsKeyIDFromMetadata(metadata map[string]string) string {
+	const ARNPrefix = "arn:aws:kms:"
 	if len(metadata) == 0 {
 		return ""
 	}
@@ -87,10 +90,113 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 	if !ok {
 		return ""
 	}
-	if strings.HasPrefix(kmsID, "arn:aws:kms:") {
+	if strings.HasPrefix(kmsID, ARNPrefix) {
 		return kmsID
 	}
-	return "arn:aws:kms:" + kmsID
+	return ARNPrefix + kmsID
+}
+
+// DecryptETags dectypts all ObjectInfo ETags, if encrypted, using the KMS.
+func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo, batchSize int) error {
+	var (
+		metadata = make([]map[string]string, 0, batchSize)
+		buckets  = make([]string, 0, batchSize)
+		names    = make([]string, 0, batchSize)
+	)
+	for len(objects) > 0 {
+		var N int
+		if len(objects) < batchSize {
+			N = len(objects)
+		} else {
+			N = batchSize
+		}
+
+		// We have to conntect the KMS only if there is at least
+		// one SSE-S3 single-part object. SSE-C and SSE-KMS objects
+		// don't return the plaintext MD5 ETag and the ETag of
+		// SSE-S3 multipart objects is not encrypted.
+		// Therefore, we can skip the expensive KMS calls whenever
+		// there is no single-part SSE-S3 object entirely.
+		var containsSSES3SinglePart bool
+		for _, object := range objects[:N] {
+			if kind, ok := crypto.IsEncrypted(object.UserDefined); ok && kind == crypto.S3 && !crypto.IsMultiPart(object.UserDefined) {
+				containsSSES3SinglePart = true
+				break
+			}
+		}
+		if !containsSSES3SinglePart {
+			for i := range objects[:N] {
+				size, err := objects[i].GetActualSize()
+				if err != nil {
+					return err
+				}
+				objects[i].Size = size
+				objects[i].ETag = objects[i].GetActualETag(nil)
+			}
+			objects = objects[N:]
+			continue
+		}
+
+		// Now, there are some SSE-S3 single-part objects.
+		// We only request the decryption keys for them.
+		// We don't want to get the decryption keys for multipart
+		// or non-SSE-S3 objects.
+		//
+		// Therefore, we keep a map of indicies to remember which
+		// object was an SSE-S3 single-part object.
+		// Then we request the decryption keys for these objects.
+		// Finally, we decrypt the ETags of these objects using
+		// the decryption keys.
+		// However, we must also adjust the size and ETags of all
+		// objects (not just the SSE-S3 single part objects).
+		// For example, the ETag of SSE-KMS objects are random values
+		// and the size of an SSE-KMS object must be adjusted as well.
+		SSES3Objects := make(map[int]bool, 10)
+		metadata = metadata[:0:N]
+		buckets = buckets[:0:N]
+		names = names[:0:N]
+		for i, object := range objects[:N] {
+			if kind, ok := crypto.IsEncrypted(object.UserDefined); ok && kind == crypto.S3 && !crypto.IsMultiPart(object.UserDefined) {
+				metadata = append(metadata, object.UserDefined)
+				buckets = append(buckets, object.Bucket)
+				names = append(names, object.Name)
+
+				SSES3Objects[i] = true
+			}
+		}
+		keys, err := crypto.S3.UnsealObjectKeys(KMS, metadata, buckets, names)
+		if err != nil {
+			return err
+		}
+		var keyIndex int
+		for i := range objects[:N] {
+			size, err := objects[i].GetActualSize()
+			if err != nil {
+				return err
+			}
+			objects[i].Size = size
+
+			if !SSES3Objects[i] {
+				objects[i].ETag = objects[i].GetActualETag(nil)
+			} else {
+				ETag, err := etag.Parse(objects[i].ETag)
+				if err != nil {
+					return err
+				}
+				if ETag.IsEncrypted() {
+					tag, err := keys[keyIndex].UnsealETag(ETag)
+					if err != nil {
+						return err
+					}
+					ETag = etag.ETag(tag)
+					objects[i].ETag = ETag.String()
+				}
+				keyIndex++
+			}
+		}
+		objects = objects[N:]
+	}
+	return nil
 }
 
 // isMultipart returns true if the current object is

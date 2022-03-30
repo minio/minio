@@ -162,22 +162,6 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &aux)
 }
 
-// GetListQuorum interprets list quorum values and returns appropriate
-// acceptable quorum expected for list operations
-func (sCfg Config) GetListQuorum() int {
-	switch sCfg.ListQuorum {
-	case "reduced":
-		return 2
-	case "disk":
-		// smallest possible value, generally meant for testing.
-		return 1
-	case "strict":
-		return -1
-	}
-	// Defaults to 3 drives per set, defaults to "optimal" value
-	return 3
-}
-
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	// remove this since we have removed this already.

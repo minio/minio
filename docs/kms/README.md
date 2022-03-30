@@ -120,6 +120,20 @@ Encrypted :
   X-Amz-Server-Side-Encryption: AES256
 ```
 
+## Encrypted Private Key
+
+MinIO supports encrypted KES client private keys. Therefore, you can use
+an password-protected private keys for `MINIO_KMS_KES_KEY_FILE`. 
+
+When using password-protected private keys for accessing KES you need to
+provide the password via:
+```
+export MINIO_KMS_KES_KEY_PASSWORD=<your-password>
+``` 
+
+Note that MinIO only supports encrypted private keys - not encrypted certificates.
+Certificates are no secrets and sent in plaintext as part of the TLS handshake.
+
 ## Explore Further
 
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)

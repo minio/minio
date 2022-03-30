@@ -224,6 +224,18 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 	return plaintext, nil
 }
 
+func (kms secretKey) DecryptAll(keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
+	plaintexts := make([][]byte, 0, len(ciphertexts))
+	for i := range ciphertexts {
+		plaintext, err := kms.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		if err != nil {
+			return nil, err
+		}
+		plaintexts = append(plaintexts, plaintext)
+	}
+	return plaintexts, nil
+}
+
 type encryptedKey struct {
 	Algorithm string `json:"aead"`
 	IV        []byte `json:"iv"`

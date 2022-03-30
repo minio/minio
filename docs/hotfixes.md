@@ -88,9 +88,9 @@ Date:   Mon Nov 8 08:41:27 2021 -0800
 λ git cherry-pick 4f3317effea38c203c358af9cb5ce3c0e4173976
 ```
 
-*A self contained **patch** usually applies fine on the hotfix branch during backports as long it is self contained. There are situations however this may lead to conflicts and the patch will not cleanly apply. Conflicts might be trivial which can be resolved easily, when conflicts seem to be non-trivial or touches the part of the code-base the developer is not aware of - to get additional clarity reaching out of #hack on MinIOHQ slack channel is advised.*
+*A self contained **patch** usually applies fine on the hotfix branch during backports as long it is self contained. There are situations however this may lead to conflicts and the patch will not cleanly apply. Conflicts might be trivial which can be resolved easily, when conflicts seem to be non-trivial or touches the part of the code-base the developer is not confident - to get additional clarity reach out to #hack on MinIOHQ slack channel. Hasty changes must be avoided, minor fixes and logs may be added to hotfix branches but this should not be followed as practice.*
 
-Once the **patch** is successfully applied, developer must run tests to alidate the fix that was backported by running following tests, locally.
+Once the **patch** is successfully applied, developer must run tests to validate the fix that was backported by running following tests, locally.
 
 Unit tests
 
@@ -116,16 +116,16 @@ At this point in time the backport is ready to be submitted as a pull request to
 
 To add a hotfix tag to the binary version and embed the relevant `commit-id` following build helpers are available
 
-#### Builds the hotfix binary
+#### Builds the hotfix binary and uploads to https;//dl.min.io
 
 ```
-λ CRED_DIR=/media/builder/minio make hotfix
+λ CRED_DIR=/media/builder/minio make hotfix-push
 ```
 
-#### Builds the hotfix container
+#### Builds the hotfix container and pushes to docker.io/minio/minio
 
 ```
-λ CRED_DIR=/media/builder/minio make docker-hotfix
+λ CRED_DIR=/media/builder/minio make docker-hotfix-push
 ```
 
 Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to <https://dl.minio.io/server/minio/hotfixes/archive/>

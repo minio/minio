@@ -28,6 +28,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -299,6 +300,8 @@ func configRetriableErrors(err error) bool {
 }
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
+	t1 := time.Now()
+
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
 
@@ -351,7 +354,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
-					logger.Info("All MinIO sub-systems initialized successfully")
+					logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
 				}
 				return nil
 			}
@@ -451,6 +454,12 @@ func serverMain(ctx *cli.Context) {
 	// Verify kernel release and version.
 	if oldLinux() {
 		logger.Info(color.RedBold("WARNING: Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
+	}
+
+	maxProcs := runtime.GOMAXPROCS(0)
+	cpuProcs := runtime.NumCPU()
+	if maxProcs < cpuProcs {
+		logger.Info(color.RedBold("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	// Configure server.

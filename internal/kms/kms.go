@@ -20,8 +20,10 @@ package kms
 import (
 	"encoding"
 	"encoding/json"
+	"strconv"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/pkg/env"
 )
 
 // KMS is the generic interface that abstracts over
@@ -51,6 +53,23 @@ type KMS interface {
 	// by the key ID. The context must match the context value
 	// used to generate the ciphertext.
 	DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error)
+
+	// DecryptAll decrypts all ciphertexts with the key referenced
+	// by the key ID. The contexts must match the context value
+	// used to generate the ciphertexts.
+	DecryptAll(keyID string, ciphertext [][]byte, context []Context) ([][]byte, error)
+}
+
+// BatchSize returns the size of the batches that should be used during
+// KES bulk decryption API calls.
+func BatchSize() int {
+	const DefaultBatchSize = 500
+	v := env.Get("MINIO_KMS_KES_BULK_API_BATCH_SIZE", strconv.Itoa(DefaultBatchSize))
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultBatchSize
+	}
+	return n
 }
 
 // Status describes the current state of a KMS.

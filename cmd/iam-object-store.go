@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 	"sync"
@@ -402,6 +403,136 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 			return err
 		}
 	}
+	return nil
+}
+
+var (
+	usersListKey                   = "/users/"
+	svcAccListKey                  = "/service-accounts/"
+	groupsListKey                  = "/groups/"
+	policiesListKey                = "/policies/"
+	stsListKey                     = "/sts/"
+	policyDBUsersListKey           = "/policydb/users/"
+	policyDBSTSUsersListKey        = "/policydb/sts-users/"
+	policyDBServiceAccountsListKey = "/policydb/service-accounts/"
+	policyDBGroupsListKey          = "/policydb/groups/"
+
+	allListKeys = []string{
+		usersListKey,
+		svcAccListKey,
+		groupsListKey,
+		policiesListKey,
+		stsListKey,
+		policyDBUsersListKey,
+		policyDBSTSUsersListKey,
+		policyDBServiceAccountsListKey,
+		policyDBGroupsListKey,
+	}
+)
+
+func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
+	res := make(map[string][]string)
+
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix) {
+		if item.Err != nil {
+			return nil, item.Err
+		}
+
+		found := false
+		for _, listKey := range allListKeys {
+			if strings.HasPrefix(item.Item, listKey) {
+				found = true
+				name := strings.TrimPrefix(item.Item, listKey)
+				res[listKey] = append(res[listKey], name)
+				break
+			}
+		}
+
+		if !found && !(item.Item == "config/config.json" || item.Item == "/format.json") {
+			logger.LogIf(ctx, fmt.Errorf("unknown type of IAM file listed: %v", item.Item))
+		}
+	}
+	return res, nil
+}
+
+// Assumes cache is locked by caller.
+func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
+	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Loads things in the same order as `LoadIAMCache()`
+
+	policiesList := listedConfigItems[policiesListKey]
+	for _, item := range policiesList {
+		policyName := path.Dir(item)
+		if err := iamOS.loadPolicyDoc(ctx, policyName, cache.iamPolicyDocsMap); err != nil && err != errNoSuchPolicy {
+			return err
+		}
+	}
+	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
+
+	if iamOS.usersSysType == MinIOUsersSysType {
+
+		regUsersList := listedConfigItems[usersListKey]
+		for _, item := range regUsersList {
+			userName := path.Dir(item)
+			if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+				return err
+			}
+		}
+
+		groupsList := listedConfigItems[groupsListKey]
+		for _, item := range groupsList {
+			group := path.Dir(item)
+			if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
+				return err
+			}
+		}
+	}
+
+	userPolicyMappingsList := listedConfigItems[policyDBUsersListKey]
+	for _, item := range userPolicyMappingsList {
+		userName := strings.TrimSuffix(item, ".json")
+		if err := iamOS.loadMappedPolicy(ctx, userName, regUser, false, cache.iamUserPolicyMap); err != nil && err != errNoSuchPolicy {
+			return err
+		}
+	}
+
+	groupPolicyMappingsList := listedConfigItems[policyDBGroupsListKey]
+	for _, item := range groupPolicyMappingsList {
+		groupName := strings.TrimSuffix(item, ".json")
+		if err := iamOS.loadMappedPolicy(ctx, groupName, regUser, true, cache.iamGroupPolicyMap); err != nil && err != errNoSuchPolicy {
+			return err
+		}
+	}
+
+	svcAccList := listedConfigItems[svcAccListKey]
+	for _, item := range svcAccList {
+		userName := path.Dir(item)
+		if err := iamOS.loadUser(ctx, userName, svcUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+			return err
+		}
+	}
+
+	stsUsersList := listedConfigItems[stsListKey]
+	for _, item := range stsUsersList {
+		userName := path.Dir(item)
+		if err := iamOS.loadUser(ctx, userName, stsUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+			return err
+		}
+	}
+
+	stsPolicyMappingsList := listedConfigItems[policyDBSTSUsersListKey]
+	for _, item := range stsPolicyMappingsList {
+		stsName := strings.TrimSuffix(item, ".json")
+		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamUserPolicyMap); err != nil && err != errNoSuchPolicy {
+			return err
+		}
+	}
+
+	cache.buildUserGroupMemberships()
 	return nil
 }
 

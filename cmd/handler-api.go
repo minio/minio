@@ -38,7 +38,7 @@ type apiConfig struct {
 	requestsDeadline time.Duration
 	requestsPool     chan struct{}
 	clusterDeadline  time.Duration
-	listQuorum       int
+	listQuorum       string
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
 	totalDriveCount          int
@@ -127,7 +127,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		}
 	}
 
-	if cap(t.requestsPool) < apiRequestsMaxPerNode {
+	if cap(t.requestsPool) != apiRequestsMaxPerNode {
 		// Only replace if needed.
 		// Existing requests will use the previous limit,
 		// but new requests will use the new limit.
@@ -136,7 +136,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
 	}
 	t.requestsDeadline = cfg.RequestsDeadline
-	t.listQuorum = cfg.GetListQuorum()
+	t.listQuorum = cfg.ListQuorum
 	if globalReplicationPool != nil &&
 		cfg.ReplicationWorkers != t.replicationWorkers {
 		globalReplicationPool.ResizeFailedWorkers(cfg.ReplicationFailedWorkers)
@@ -170,7 +170,7 @@ func (t *apiConfig) shouldGzipObjects() bool {
 	return t.gzipObjects
 }
 
-func (t *apiConfig) getListQuorum() int {
+func (t *apiConfig) getListQuorum() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 

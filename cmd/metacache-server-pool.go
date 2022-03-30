@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -110,7 +111,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
 	if o.ID != "" && !o.Transient {
 		// Create or ping with handout...
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+		rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		var c *metacache
@@ -198,7 +199,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		}
 		entries.truncate(0)
 		go func() {
-			rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+			rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 			if rpc != nil {
 				ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 				defer cancel()
@@ -289,6 +290,14 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 	mu.Unlock()
 
+	// Do lifecycle filtering.
+	if o.lcFilter != nil {
+		filterIn := make(chan metaCacheEntry, 10)
+		go filterLifeCycle(ctx, o.Bucket, o.lcFilter, filterIn, results)
+		// Replace results.
+		results = filterIn
+	}
+
 	// Gather results to a single channel.
 	err := mergeEntryChannels(ctx, inputs, results, func(existing, other *metaCacheEntry) (replace bool) {
 		// Pick object over directory
@@ -298,21 +307,20 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		if !existing.isDir() && other.isDir() {
 			return false
 		}
-
-		eFIV, err := existing.fileInfo(o.Bucket)
+		eMeta, err := existing.xlmeta()
 		if err != nil {
 			return true
 		}
-		oFIV, err := other.fileInfo(o.Bucket)
+		oMeta, err := other.xlmeta()
 		if err != nil {
 			return false
 		}
 		// Replace if modtime is newer
-		if !oFIV.ModTime.Equal(eFIV.ModTime) {
-			return oFIV.ModTime.After(eFIV.ModTime)
+		if !oMeta.latestModtime().Equal(oMeta.latestModtime()) {
+			return oMeta.latestModtime().After(eMeta.latestModtime())
 		}
 		// Use NumVersions as a final tiebreaker.
-		return oFIV.NumVersions > eFIV.NumVersions
+		return len(oMeta.versions) > len(eMeta.versions)
 	})
 
 	cancelList()
@@ -346,6 +354,44 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	return nil
 }
 
+// filterLifeCycle will filter out objects if the most recent
+// version should be deleted by lifecycle.
+// out will be closed when there are no more results.
+// When 'in' is closed or the context is canceled the
+// function closes 'out' and exits.
+func filterLifeCycle(ctx context.Context, bucket string, lc *lifecycle.Lifecycle, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
+	defer close(out)
+	for {
+		var obj metaCacheEntry
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return
+		case obj, ok = <-in:
+			if !ok {
+				return
+			}
+		}
+
+		fi, err := obj.fileInfo(bucket)
+		if err != nil {
+			continue
+		}
+		objInfo := fi.ToObjectInfo(bucket, obj.name)
+		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		switch action {
+		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+			// Skip this entry.
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case out <- obj:
+		}
+	}
+}
+
 func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	// Use ID as the object name...
 	o.pool = z.getAvailablePoolIdx(ctx, minioMetaBucket, o.ID, 10<<20)
@@ -369,7 +415,7 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	filteredResults := o.gatherResults(ctx, outCh)
 
 	mc := o.newMetacache()
-	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(o.Bucket), o: *o}
+	meta := metaCacheRPC{meta: &mc, cancel: cancel, rpc: globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix)), o: *o}
 
 	// Save listing...
 	go func() {

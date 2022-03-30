@@ -32,6 +32,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -64,10 +65,8 @@ type listPathOptions struct {
 	// Limit the number of results.
 	Limit int
 
-	// The number of disks to ask. Special values:
-	// 0 uses default number of disks.
-	// -1 use at least 50% of disks or at least the default number.
-	AskDisks int
+	// The number of disks to ask.
+	AskDisks string
 
 	// InclDeleted will keep all entries where latest version is a delete marker.
 	InclDeleted bool
@@ -96,6 +95,11 @@ type listPathOptions struct {
 
 	// pool and set of where the cache is located.
 	pool, set int
+
+	// lcFilter performs filtering based on lifecycle.
+	// This will filter out objects if the most recent version should be deleted by lifecycle.
+	// Is not transferred across request calls.
+	lcFilter *lifecycle.Lifecycle
 }
 
 func init() {
@@ -189,7 +193,11 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 		}
 		if resCh != nil {
 			resErr = io.EOF
-			resCh <- results
+			select {
+			case <-ctx.Done():
+				// Nobody wants it.
+			case resCh <- results:
+			}
 		}
 	}()
 	return func() (metaCacheEntriesSorted, error) {
@@ -351,7 +359,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 
 	for {
 		if contextCanceled(ctx) {
@@ -531,20 +539,39 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	}
 }
 
+// getListQuorum interprets list quorum values and returns appropriate
+// acceptable quorum expected for list operations
+func getListQuorum(quorum string, driveCount int) int {
+	switch quorum {
+	case "disk":
+		// smallest possible value, generally meant for testing.
+		return 1
+	case "reduced":
+		return 2
+	case "strict":
+		return -1
+	}
+	// Defaults to (driveCount+1)/2 drives per set, defaults to "optimal" value
+	if driveCount > 0 {
+		return (driveCount + 1) / 2
+	} // "3" otherwise.
+	return 3
+}
+
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) (err error) {
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
-	askDisks := o.AskDisks
-	listingQuorum := o.AskDisks - 1
+	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
+	listingQuorum := askDisks - 1
 	disks := er.getDisks()
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
 	if askDisks <= 0 || er.setDriveCount == 4 {
-		askDisks = len(disks)          // with 'strict' quorum list on all online disks.
-		listingQuorum = len(disks) / 2 // keep this such that we can list all objects with different quorum ratio.
+		askDisks = len(disks)                // with 'strict' quorum list on all drives.
+		listingQuorum = (len(disks) + 1) / 2 // keep this such that we can list all objects with different quorum ratio.
 	}
 	if askDisks > 0 && len(disks) > askDisks {
 		rand.Shuffle(len(disks), func(i, j int) {
@@ -559,6 +586,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		dirQuorum: listingQuorum,
 		objQuorum: listingQuorum,
 		bucket:    o.Bucket,
+	}
+
+	// Maximum versions requested for "latest" object
+	// resolution on versioned buckets, this is to be only
+	// used when o.Versioned is false
+	if !o.Versioned {
+		resolver.requestedVersions = 1
 	}
 
 	ctxDone := ctx.Done()
@@ -805,7 +839,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			for _, fd := range fdsCopy {
 				// Grab a fallback disk
 				fds = fds[1:]
-				if fd != nil {
+				if fd != nil && fd.IsOnline() {
 					return fd
 				}
 			}

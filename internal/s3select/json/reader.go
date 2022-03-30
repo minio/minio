@@ -18,7 +18,6 @@
 package json
 
 import (
-	"errors"
 	"io"
 	"sync"
 
@@ -90,45 +89,31 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
 	}
 }
 
-// syncReadCloser will wrap a readcloser and make it safe to call Close
-// while reads are running.
-// All read errors are also postponed until Close is called and
-// io.EOF is returned instead.
+// syncReadCloser will wrap a readcloser and make it safe to call Close while
+// reads are running.
 type syncReadCloser struct {
-	rc    io.ReadCloser
-	errMu sync.Mutex
-	err   error
+	rc io.ReadCloser
+	mu sync.Mutex
 }
 
 func (pr *syncReadCloser) Read(p []byte) (n int, err error) {
 	// This ensures that Close will block until Read has completed.
 	// This allows another goroutine to close the reader.
-	pr.errMu.Lock()
-	defer pr.errMu.Unlock()
-	if pr.err != nil {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	if pr.rc == nil {
 		return 0, io.EOF
 	}
-	n, pr.err = pr.rc.Read(p)
-	if pr.err != nil {
-		// Translate any error into io.EOF, so we don't crash:
-		// https://github.com/bcicen/jstream/blob/master/scanner.go#L48
-		return n, io.EOF
-	}
-
-	return n, nil
+	return pr.rc.Read(p)
 }
 
-var errClosed = errors.New("read after close")
-
 func (pr *syncReadCloser) Close() error {
-	pr.errMu.Lock()
-	defer pr.errMu.Unlock()
-	if pr.err == errClosed {
-		return nil
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	if pr.rc != nil {
+		err := pr.rc.Close()
+		pr.rc = nil
+		return err
 	}
-	if pr.err != nil {
-		return pr.err
-	}
-	pr.err = errClosed
-	return pr.rc.Close()
+	return nil
 }
