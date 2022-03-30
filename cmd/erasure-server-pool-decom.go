@@ -804,13 +804,7 @@ func (z *erasureServerPools) getDecommissionPoolSpaceInfo(idx int) (pi poolSpace
 	if idx+1 > len(z.serverPools) {
 		return pi, errInvalidArgument
 	}
-	info, errs := z.serverPools[idx].StorageInfo(context.Background())
-	for _, err := range errs {
-		if err != nil {
-			return pi, errInvalidArgument
-		}
-	}
-	info.Backend = z.BackendInfo()
+	info, _ := z.serverPools[idx].StorageInfo(context.Background())
 	for _, disk := range info.Disks {
 		if disk.Healing {
 			return pi, decomError{
