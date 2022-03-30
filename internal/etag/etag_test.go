@@ -213,6 +213,29 @@ func TestIsEncrypted(t *testing.T) {
 	}
 }
 
+var formatTests = []struct {
+	ETag    string
+	AWSETag string
+}{
+	{ETag: "3b83ef96387f14655fc854ddc3c6bd57", AWSETag: "3b83ef96387f14655fc854ddc3c6bd57"},                                                                 // 0
+	{ETag: "7b976cc68452e003eec7cb0eb631a19a-1", AWSETag: "7b976cc68452e003eec7cb0eb631a19a-1"},                                                             // 1
+	{ETag: "a7d414b9133d6483d9a1c4e04e856e3b-2", AWSETag: "a7d414b9133d6483d9a1c4e04e856e3b-2"},                                                             // 2
+	{ETag: "7b976cc68452e003eec7cb0eb631a19a-10000", AWSETag: "7b976cc68452e003eec7cb0eb631a19a-10000"},                                                     // 3
+	{ETag: "20000f00db2d90a7b40782d4cff2b41a7799fc1e7ead25972db65150118dfbe2ba76a3c002da28f85c840cd2001a28a9", AWSETag: "ba76a3c002da28f85c840cd2001a28a9"}, // 4
+}
+
+func TestFormat(t *testing.T) {
+	for i, test := range formatTests {
+		tag, err := Parse(test.ETag)
+		if err != nil {
+			t.Fatalf("Test %d: failed to parse ETag: %v", i, err)
+		}
+		if s := tag.Format().String(); s != test.AWSETag {
+			t.Fatalf("Test %d: got '%v' - want '%v'", i, s, test.AWSETag)
+		}
+	}
+}
+
 var fromContentMD5Tests = []struct {
 	Header     http.Header
 	ETag       ETag
@@ -242,6 +265,45 @@ func TestFromContentMD5(t *testing.T) {
 			if !Equal(ETag, test.ETag) {
 				t.Fatalf("Test %d: got %q - want %q", i, ETag, test.ETag)
 			}
+		}
+	}
+}
+
+var decryptTests = []struct {
+	Key       []byte
+	ETag      ETag
+	Plaintext ETag
+}{
+	{ // 0
+		Key:       make([]byte, 32),
+		ETag:      must("3b83ef96387f14655fc854ddc3c6bd57"),
+		Plaintext: must("3b83ef96387f14655fc854ddc3c6bd57"),
+	},
+	{ // 1
+		Key:       make([]byte, 32),
+		ETag:      must("7b976cc68452e003eec7cb0eb631a19a-1"),
+		Plaintext: must("7b976cc68452e003eec7cb0eb631a19a-1"),
+	},
+	{ // 2
+		Key:       make([]byte, 32),
+		ETag:      must("7b976cc68452e003eec7cb0eb631a19a-10000"),
+		Plaintext: must("7b976cc68452e003eec7cb0eb631a19a-10000"),
+	},
+	{ // 3
+		Key:       make([]byte, 32),
+		ETag:      must("20000f00f2cc184414bc982927ec56abb7e18426faa205558982e9a8125c1370a9cf5754406e428b3343f21ee1125965"),
+		Plaintext: must("6d6cdccb9a7498c871bde8eab2f49141"),
+	},
+}
+
+func TestDecrypt(t *testing.T) {
+	for i, test := range decryptTests {
+		etag, err := Decrypt(test.Key, test.ETag)
+		if err != nil {
+			t.Fatalf("Test %d: failed to decrypt ETag: %v", i, err)
+		}
+		if !Equal(etag, test.Plaintext) {
+			t.Fatalf("Test %d: got '%v' - want '%v'", i, etag, test.Plaintext)
 		}
 	}
 }
