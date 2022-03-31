@@ -199,6 +199,8 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	iamInitStart := time.Now()
+
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -269,6 +271,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	iamLoadStart := time.Now()
+
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx); err != nil {
@@ -334,7 +338,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	sys.printIAMRoles()
 
-	logger.Info("Finished loading IAM sub-system.")
+	now := time.Now()
+	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs to load data).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
 }
 
 // Prints IAM role ARNs.
@@ -373,15 +378,25 @@ func (sys *IAMSys) watch(ctx context.Context) {
 		return
 	}
 
+	var maxRefreshDurationSecondsForLog float64 = 10
+
 	// Fall back to loading all items periodically
 	ticker := time.NewTicker(sys.iamRefreshInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			refreshStart := time.Now()
 			if err := sys.Load(ctx); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM: %v", err))
+				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
+			} else {
+				took := time.Since(refreshStart).Seconds()
+				if took > maxRefreshDurationSecondsForLog {
+					// Log if we took a lot of time to load.
+					logger.Info("IAM refresh took %.2fs", took)
+				}
 			}
+
 		case <-ctx.Done():
 			return
 		}
