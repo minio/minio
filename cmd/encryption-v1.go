@@ -96,102 +96,104 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 	return ARNPrefix + kmsID
 }
 
-// DecryptETags dectypts all ObjectInfo ETags, if encrypted, using the KMS.
-func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo, batchSize int) error {
+// DecryptETags decryptes the ETag of all ObjectInfos using the KMS.
+//
+// It adjusts the size of all encrypted objects since encrypted
+// objects are slightly larger due to encryption overhead.
+// Further, it decrypts all single-part SSE-S3 encrypted objects
+// and formats ETags of SSE-C / SSE-KMS encrypted objects to
+// be AWS S3 compliant.
+//
+// DecryptETags uses a KMS bulk decryption API, if available, which
+// is more efficient than decrypting ETags sequentually.
+func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error {
+	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
-		metadata = make([]map[string]string, 0, batchSize)
-		buckets  = make([]string, 0, batchSize)
-		names    = make([]string, 0, batchSize)
+		metadata = make([]map[string]string, 0, BatchSize)
+		buckets  = make([]string, 0, BatchSize)
+		names    = make([]string, 0, BatchSize)
 	)
 	for len(objects) > 0 {
-		var N int
-		if len(objects) < batchSize {
+		N := BatchSize
+		if len(objects) < BatchSize {
 			N = len(objects)
-		} else {
-			N = batchSize
 		}
+		batch := objects[:N]
 
-		// We have to conntect the KMS only if there is at least
-		// one SSE-S3 single-part object. SSE-C and SSE-KMS objects
-		// don't return the plaintext MD5 ETag and the ETag of
-		// SSE-S3 multipart objects is not encrypted.
-		// Therefore, we can skip the expensive KMS calls whenever
-		// there is no single-part SSE-S3 object entirely.
-		var containsSSES3SinglePart bool
-		for _, object := range objects[:N] {
+		// We have to decrypt only ETags of SSE-S3 single-part
+		// objects.
+		// Therefore, we remember which objects (there index)
+		// in the current batch are single-part SSE-S3 objects.
+		metadata = metadata[:0:N]
+		buckets = buckets[:0:N]
+		names = names[:0:N]
+		SSES3SinglePartObjects := make(map[int]bool)
+		for i, object := range batch {
 			if kind, ok := crypto.IsEncrypted(object.UserDefined); ok && kind == crypto.S3 && !crypto.IsMultiPart(object.UserDefined) {
-				containsSSES3SinglePart = true
-				break
+				SSES3SinglePartObjects[i] = true
+
+				metadata = append(metadata, object.UserDefined)
+				buckets = append(buckets, object.Bucket)
+				names = append(names, object.Name)
 			}
 		}
-		if !containsSSES3SinglePart {
-			for i := range objects[:N] {
-				size, err := objects[i].GetActualSize()
+
+		// If there are no SSE-S3 single-part objects
+		// we can skip the decryption process. However,
+		// we still have to adjust the size and ETag
+		// of SSE-C and SSE-KMS objects.
+		if len(SSES3SinglePartObjects) == 0 {
+			for i := range batch {
+				size, err := batch[i].GetActualSize()
 				if err != nil {
 					return err
 				}
-				objects[i].Size = size
-				objects[i].ETag = objects[i].GetActualETag(nil)
+				batch[i].Size = size
+
+				if _, ok := crypto.IsEncrypted(batch[i].UserDefined); ok {
+					ETag, err := etag.Parse(batch[i].ETag)
+					if err != nil {
+						return err
+					}
+					batch[i].ETag = ETag.Format().String()
+				}
 			}
 			objects = objects[N:]
 			continue
 		}
 
-		// Now, there are some SSE-S3 single-part objects.
-		// We only request the decryption keys for them.
-		// We don't want to get the decryption keys for multipart
-		// or non-SSE-S3 objects.
-		//
-		// Therefore, we keep a map of indicies to remember which
-		// object was an SSE-S3 single-part object.
-		// Then we request the decryption keys for these objects.
-		// Finally, we decrypt the ETags of these objects using
-		// the decryption keys.
-		// However, we must also adjust the size and ETags of all
-		// objects (not just the SSE-S3 single part objects).
-		// For example, the ETag of SSE-KMS objects are random values
-		// and the size of an SSE-KMS object must be adjusted as well.
-		SSES3Objects := make(map[int]bool, 10)
-		metadata = metadata[:0:N]
-		buckets = buckets[:0:N]
-		names = names[:0:N]
-		for i, object := range objects[:N] {
-			if kind, ok := crypto.IsEncrypted(object.UserDefined); ok && kind == crypto.S3 && !crypto.IsMultiPart(object.UserDefined) {
-				metadata = append(metadata, object.UserDefined)
-				buckets = append(buckets, object.Bucket)
-				names = append(names, object.Name)
-
-				SSES3Objects[i] = true
-			}
-		}
-		keys, err := crypto.S3.UnsealObjectKeys(KMS, metadata, buckets, names)
+		// There is at least one SSE-S3 single-part object.
+		// For all SSE-S3 single-part objects we have to
+		// fetch their decryption keys. We do this using
+		// a Bulk-Decryption API call, if available.
+		keys, err := crypto.S3.UnsealObjectKeys(ctx, KMS, metadata, buckets, names)
 		if err != nil {
 			return err
 		}
-		var keyIndex int
-		for i := range objects[:N] {
-			size, err := objects[i].GetActualSize()
+
+		// Now, we have to decrypt the ETags of SSE-S3 single-part
+		// objects and adjust the size and ETags of all encrypted
+		// objects.
+		for i := range batch {
+			size, err := batch[i].GetActualSize()
 			if err != nil {
 				return err
 			}
-			objects[i].Size = size
+			batch[i].Size = size
 
-			if !SSES3Objects[i] {
-				objects[i].ETag = objects[i].GetActualETag(nil)
-			} else {
-				ETag, err := etag.Parse(objects[i].ETag)
+			if _, ok := crypto.IsEncrypted(batch[i].UserDefined); ok {
+				ETag, err := etag.Parse(batch[i].ETag)
 				if err != nil {
 					return err
 				}
-				if ETag.IsEncrypted() {
-					tag, err := keys[keyIndex].UnsealETag(ETag)
+				if SSES3SinglePartObjects[i] && ETag.IsEncrypted() {
+					ETag, err = etag.Decrypt(keys[0][:], ETag)
 					if err != nil {
 						return err
 					}
-					ETag = etag.ETag(tag)
-					objects[i].ETag = ETag.String()
+					keys = keys[1:]
 				}
-				keyIndex++
+				batch[i].ETag = ETag.Format().String()
 			}
 		}
 		objects = objects[N:]
