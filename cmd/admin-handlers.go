@@ -2477,9 +2477,16 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		logger.LogIf(ctx, err)
 	}
 	// save args passed to inspect command
-	inspectArgs := fmt.Sprintf("inspect path: %s%s%s\n", volume, slashSeparator, file)
-	if err = rawDataFn(bytes.NewReader([]byte(inspectArgs)), "", "", "inspect-input.txt", StatInfo{
-		Size: int64(len(inspectArgs)),
+	inspectArgs := []string{fmt.Sprintf(" Inspect path: %s%s%s\n", volume, slashSeparator, file)}
+	cmdLine := []string{"Server command line args: "}
+	for _, pool := range globalEndpoints {
+		cmdLine = append(cmdLine, pool.CmdLine)
+	}
+	cmdLine = append(cmdLine, "\n")
+	inspectArgs = append(inspectArgs, cmdLine...)
+	inspectArgsBytes := []byte(strings.Join(inspectArgs, " "))
+	if err = rawDataFn(bytes.NewReader(inspectArgsBytes), "", "", "inspect-input.txt", StatInfo{
+		Size: int64(len(inspectArgsBytes)),
 	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
