@@ -102,6 +102,3 @@ var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, plea
 
 // error returned when upload id not found
 var errUploadIDNotFound = errors.New("Specified Upload ID is not found")
-
-// error returned in IAM subsystem when IAM sub-system is initialize failed.
-var errIAMInitializeFailed = errors.New("IAM sub-system is initialize failed")
