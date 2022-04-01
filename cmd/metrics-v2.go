@@ -62,6 +62,7 @@ func init() {
 		getS3TTFBMetric(),
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
+		getIAMNodeMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -121,6 +122,7 @@ const (
 	quotaSubsystem            MetricSubsystem = "quota"
 	ilmSubsystem              MetricSubsystem = "ilm"
 	scannerSubsystem          MetricSubsystem = "scanner"
+	iamSubsystem              MetricSubsystem = "iam"
 )
 
 // MetricName are the individual names for the metric.
@@ -1260,6 +1262,62 @@ func getScannerNodeMetrics() *MetricsGroup {
 				},
 				Value: float64(v),
 			})
+		}
+		return metrics
+	})
+	return mg
+}
+
+func getIAMNodeMetrics() *MetricsGroup {
+	mg := &MetricsGroup{}
+	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
+		lastSyncTime := atomic.LoadUint64(&globalIAMSys.LastRefreshTimeUnixNano)
+		var sinceLastSyncMillis uint64
+		if lastSyncTime != 0 {
+			sinceLastSyncMillis = (uint64(time.Now().UnixNano()) - lastSyncTime) / uint64(time.Millisecond)
+		}
+
+		metrics = []Metric{
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "last_sync_duration_millis",
+					Help:      "Last successful IAM data sync duration in milliseconds",
+					Type:      gaugeMetric,
+				},
+				Value: float64(atomic.LoadUint64(&globalIAMSys.LastRefreshDurationMilliseconds)),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "since_last_sync_millis",
+					Help:      "Time (in milliseconds) since last successful IAM data sync. This is set to 0 until the first sync after server start.",
+					Type:      gaugeMetric,
+				},
+				Value: float64(sinceLastSyncMillis),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "sync_successes",
+					Help:      "Number of successful IAM data syncs since server start.",
+					Type:      counterMetric,
+				},
+				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshSuccesses)),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "sync_failures",
+					Help:      "Number of failed IAM data syncs since server start.",
+					Type:      counterMetric,
+				},
+				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshFailures)),
+			},
 		}
 		return metrics
 	})
