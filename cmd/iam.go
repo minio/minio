@@ -32,7 +32,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -526,7 +525,7 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 	case <-sys.configLoaded:
 		return sys.store.ListPolicies(ctx, bucketName)
 	default:
-		return nil, errIAMInitializeFailed
+		return nil, errIAMNotInitialized
 	}
 }
 
@@ -669,7 +668,7 @@ func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, e
 	case <-sys.configLoaded:
 		return sys.store.GetBucketUsers(bucket)
 	default:
-		return nil, errIAMInitializeFailed
+		return nil, errIAMNotInitialized
 	}
 }
 
@@ -682,7 +681,7 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	case <-sys.configLoaded:
 		return sys.store.GetUsers(), nil
 	default:
-		return nil, errIAMInitializeFailed
+		return nil, errIAMNotInitialized
 	}
 }
 
@@ -883,7 +882,7 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	case <-sys.configLoaded:
 		return sys.store.ListServiceAccounts(ctx, accessKey)
 	default:
-		return nil, errIAMInitializeFailed
+		return nil, errIAMNotInitialized
 	}
 }
 
@@ -1289,7 +1288,7 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	case <-sys.configLoaded:
 		return sys.store.ListGroups(ctx)
 	default:
-		return nil, errIAMInitializeFailed
+		return nil, errIAMNotInitialized
 	}
 
 }
