@@ -25,7 +25,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio/cmd"
-
 	"io"
 	"net/http"
 	"os"
@@ -51,13 +50,72 @@ var logger = utils.GetLogger("juicefs")
 
 func init() {
 	const juicefsGatewayTemplate = `juicefs gateway template`
-	fmt.Println("juicefs init")
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               minio.JuiceFSGateway,
 		Usage:              "JuiceFS Distributed File System (JuiceFS)",
 		Action:             juicefsGatewayMain,
 		CustomHelpTemplate: juicefsGatewayTemplate,
 		HideHelpCommand:    true,
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name:  "multi-buckets",
+				Usage: "use top level of directories as buckets (default: false)",
+			},
+			cli.BoolFlag{
+				Name:  "keep-etag",
+				Usage: "keep the ETag for uploaded objects (default: false)",
+			},
+
+			cli.StringFlag{
+				Name:  "metrics",
+				Usage: "address to export metrics (default: \"127.0.0.1:9567\")",
+				Value: "127.0.0.1:9567",
+			},
+			cli.BoolFlag{
+				Name:  "writeback",
+				Usage: "upload objects in background (default: false)",
+			},
+			cli.DurationFlag{
+				Name:  "upload-delay",
+				Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
+			},
+			cli.StringFlag{
+				Name:  "access-log",
+				Usage: "path for JuiceFS access log",
+			},
+			cli.Float64Flag{
+				Name:  "attr-cache",
+				Value: 1.0,
+				Usage: "attributes cache timeout in seconds",
+			},
+			cli.Float64Flag{
+				Name:  "entry-cache",
+				Usage: "file entry cache timeout in seconds",
+			},
+			cli.Float64Flag{
+				Name:  "dir-entry-cache",
+				Value: 1.0,
+				Usage: "dir entry cache timeout in seconds",
+			},
+			cli.DurationFlag{
+				Name:  "backup-meta",
+				Value: time.Hour,
+				Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
+			},
+			cli.BoolFlag{
+				Name:  "no-bgjob",
+				Usage: "disable background jobs (clean-up, backup, etc.)",
+			},
+			cli.Float64Flag{
+				Name:  "open-cache",
+				Value: 0.0,
+				Usage: "open files cache timeout in seconds (0 means disable this feature)",
+			},
+			cli.StringFlag{
+				Name:  "subdir",
+				Usage: "mount a sub-directory as root",
+			},
+		},
 	})
 }
 

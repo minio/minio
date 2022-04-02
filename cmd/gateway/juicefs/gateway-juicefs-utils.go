@@ -50,7 +50,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
-		MaxDeletes: c.Int("max-deletes"),
 	}
 }
 
@@ -76,7 +75,6 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 
 func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer, registry *prometheus.Registry) string {
 	var ip, port string
-	//default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
 	if err != nil {
 		logger.Fatalf("metrics format error: %v", err)
