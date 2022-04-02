@@ -522,9 +522,12 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListPolicies(ctx, bucketName)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicies(ctx, bucketName)
+	default:
+		return nil, errIAMNotInitialized
+	}
 }
 
 // SetPolicy - sets a new named policy.
@@ -662,9 +665,12 @@ func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, e
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.GetBucketUsers(bucket)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetBucketUsers(bucket)
+	default:
+		return nil, errIAMNotInitialized
+	}
 }
 
 // ListUsers - list all users.
@@ -672,10 +678,12 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
-
-	<-sys.configLoaded
-
-	return sys.store.GetUsers(), nil
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetUsers(), nil
+	default:
+		return nil, errIAMNotInitialized
+	}
 }
 
 // IsTempUser - returns if given key is a temporary user.
@@ -871,9 +879,12 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListServiceAccounts(ctx, accessKey)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListServiceAccounts(ctx, accessKey)
+	default:
+		return nil, errIAMNotInitialized
+	}
 }
 
 // GetServiceAccount - wrapper method to get information about a service account
@@ -1273,9 +1284,14 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
 
-	return sys.store.ListGroups(ctx)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListGroups(ctx)
+	default:
+		return nil, errIAMNotInitialized
+	}
+
 }
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.
