@@ -108,7 +108,9 @@ package etag
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -116,6 +118,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/minio/minio/internal/fips"
+	"github.com/minio/sio"
 )
 
 // ETag is a single S3 ETag.
@@ -186,6 +191,47 @@ func (e ETag) Parts() int {
 		panic(err) // malformed ETag
 	}
 	return parts
+}
+
+// Format returns an ETag that is formatted as specified
+// by AWS S3.
+//
+// An AWS S3 ETag is 16 bytes long and, in case of a multipart
+// upload, has a `-N` suffix encoding the number of object parts.
+// An ETag is not AWS S3 compatible when encrypted. When sending
+// an ETag back to an S3 client it has to be formatted to be
+// AWS S3 compatible.
+//
+// Therefore, Format returns the last 16 bytes of an encrypted
+// ETag.
+//
+// In general, a caller has to distinguish the following cases:
+//  - The object is a multipart object. In this case,
+//    Format returns the ETag unmodified.
+//  - The object is a SSE-KMS or SSE-C encrypted single-
+//    part object. In this case, Format returns the last
+//    16 bytes of the encrypted ETag which will be a random
+//    value.
+//  - The object is a SSE-S3 encrypted single-part object.
+//    In this case, the caller has to decrypt the ETag first
+//    before calling Format.
+//    S3 clients expect that the ETag of an SSE-S3 encrypted
+//    single-part object is equal to the object's content MD5.
+//    Formatting the SSE-S3 ETag before decryption will result
+//    in a random-looking ETag which an S3 client will not accept.
+//
+// Hence, a caller has to check:
+//   if method == SSE-S3 {
+//      ETag, err := Decrypt(key, ETag)
+//      if err != nil {
+//      }
+//   }
+//   ETag = ETag.Format()
+func (e ETag) Format() ETag {
+	if !e.IsEncrypted() {
+		return e
+	}
+	return e[len(e)-16:]
 }
 
 var _ Tagger = ETag{} // compiler check
@@ -276,6 +322,31 @@ func Get(h http.Header) (ETag, error) {
 // Equal returns true if and only if the two ETags are
 // identical.
 func Equal(a, b ETag) bool { return bytes.Equal(a, b) }
+
+// Decrypt decrypts the ETag with the given key.
+//
+// If the ETag is not encrypted, Decrypt returns
+// the ETag unmodified.
+func Decrypt(key []byte, etag ETag) (ETag, error) {
+	const HMACContext = "SSE-etag"
+
+	if !etag.IsEncrypted() {
+		return etag, nil
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(HMACContext))
+	decryptionKey := mac.Sum(nil)
+
+	plaintext := make([]byte, 0, 16)
+	etag, err := sio.DecryptBuffer(plaintext, etag, sio.Config{
+		Key:          decryptionKey,
+		CipherSuites: fips.CipherSuitesDARE(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return etag, nil
+}
 
 // Parse parses s as an S3 ETag, returning the result.
 // The string can be an encrypted, singlepart
