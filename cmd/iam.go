@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -77,6 +78,12 @@ type IAMSys struct {
 
 	// configLoaded will be closed and remain so after first load.
 	configLoaded chan struct{}
+
+	// metrics
+	LastRefreshTimeUnixNano         uint64
+	LastRefreshDurationMilliseconds uint64
+	TotalRefreshSuccesses           uint64
+	TotalRefreshFailures            uint64
 }
 
 // IAMUserType represents a user type inside MinIO server
@@ -184,10 +191,17 @@ func (sys *IAMSys) Initialized() bool {
 
 // Load - loads all credentials, policies and policy mappings.
 func (sys *IAMSys) Load(ctx context.Context) error {
+	loadStartTime := time.Now()
 	err := sys.store.LoadIAMCache(ctx)
 	if err != nil {
+		atomic.AddUint64(&sys.TotalRefreshFailures, 1)
 		return err
 	}
+	loadDuration := time.Since(loadStartTime)
+
+	atomic.StoreUint64(&sys.LastRefreshDurationMilliseconds, uint64(loadDuration.Milliseconds()))
+	atomic.StoreUint64(&sys.LastRefreshTimeUnixNano, uint64(loadStartTime.Add(loadDuration).UnixNano()))
+	atomic.AddUint64(&sys.TotalRefreshSuccesses, 1)
 
 	select {
 	case <-sys.configLoaded:
