@@ -162,7 +162,7 @@ func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]
 	return c.client.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
 }
 
-func (c *kesClient) DecryptAll(keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
+func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
 	if c.bulkAvailable {
 		CCPs := make([]kes.CCP, 0, len(ciphertexts))
 		for i := range ciphertexts {
@@ -175,7 +175,7 @@ func (c *kesClient) DecryptAll(keyID string, ciphertexts [][]byte, contexts []Co
 				Context:    bCtx,
 			})
 		}
-		PCPs, err := c.client.DecryptAll(context.Background(), keyID, CCPs...)
+		PCPs, err := c.client.DecryptAll(ctx, keyID, CCPs...)
 		if err != nil {
 			return nil, err
 		}

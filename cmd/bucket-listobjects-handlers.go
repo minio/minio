@@ -19,12 +19,12 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 
 	"github.com/minio/pkg/bucket/policy"
@@ -100,7 +100,8 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if err = DecryptETags(ctx, GlobalKMS, listObjectVersionsInfo.Objects, kms.BatchSize()); err != nil {
+	if err = DecryptETags(ctx, GlobalKMS, listObjectVersionsInfo.Objects); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -165,7 +166,8 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects, kms.BatchSize()); err != nil {
+	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -243,7 +245,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects, kms.BatchSize()); err != nil {
+	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -343,7 +346,8 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err = DecryptETags(ctx, GlobalKMS, listObjectsInfo.Objects, kms.BatchSize()); err != nil {
+	if err = DecryptETags(ctx, GlobalKMS, listObjectsInfo.Objects); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

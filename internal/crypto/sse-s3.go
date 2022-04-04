@@ -92,7 +92,7 @@ func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket,
 // keys.
 //
 // The metadata, buckets and objects slices must have the same length.
-func (s3 sses3) UnsealObjectKeys(KMS kms.KMS, metadata []map[string]string, buckets, objects []string) ([]ObjectKey, error) {
+func (s3 sses3) UnsealObjectKeys(ctx context.Context, KMS kms.KMS, metadata []map[string]string, buckets, objects []string) ([]ObjectKey, error) {
 	if KMS == nil {
 		return nil, Errorf("KMS not configured")
 	}
@@ -124,7 +124,7 @@ func (s3 sses3) UnsealObjectKeys(KMS kms.KMS, metadata []map[string]string, buck
 		for i := range buckets {
 			contexts = append(contexts, kms.Context{buckets[i]: path.Join(buckets[i], objects[i])})
 		}
-		unsealKeys, err := KMS.DecryptAll(keyIDs[0], kmsKeys, contexts)
+		unsealKeys, err := KMS.DecryptAll(ctx, keyIDs[0], kmsKeys, contexts)
 		if err != nil {
 			return nil, err
 		}
