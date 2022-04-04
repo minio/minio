@@ -387,7 +387,9 @@ func (sys *IAMSys) watch(ctx context.Context) {
 		for event := range ch {
 			// we simply log errors
 			err := sys.loadWatchedEvent(ctx, event)
-			logger.LogIf(ctx, fmt.Errorf("Failure in loading watch event: %v", err))
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Failure in loading watch event: %v", err))
+			}
 		}
 		return
 	}
