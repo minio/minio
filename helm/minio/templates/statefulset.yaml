@@ -1,6 +1,7 @@
 {{- if eq .Values.mode "distributed" }}
 {{ $poolCount := .Values.pools | int }}
 {{ $nodeCount := .Values.replicas | int }}
+{{ $calculatedReplicas := mul $poolCount $nodeCount }}
 {{ $drivesPerNode := .Values.drivesPerNode | int }}
 {{ $scheme := "http" }}
 {{- if .Values.tls.enabled }}
@@ -56,7 +57,7 @@ spec:
     type: {{ .Values.StatefulSetUpdate.updateStrategy }}
   podManagementPolicy: "Parallel"
   serviceName: {{ template "minio.fullname" . }}-svc
-  replicas: {{ mul $poolCount $nodeCount }}
+  replicas: {{ $calculatedReplicas }}
   selector:
     matchLabels:
       app: {{ template "minio.name" . }}
@@ -167,6 +168,12 @@ spec:
     {{- with .Values.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if and (gt $calculatedReplicas 1) (ge .Capabilities.KubeVersion.Major "1") (ge .Capabilities.KubeVersion.Minor "19") }}
+    {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{ toYaml . | indent 8 }}
+    {{- end }}
     {{- end }}
       volumes:
         - name: minio-user
