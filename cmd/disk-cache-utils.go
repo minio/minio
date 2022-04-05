@@ -19,19 +19,17 @@ package cmd
 
 import (
 	"container/list"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/etag"
 )
 
 // CacheStatusType - whether the request was served from cache.
@@ -234,77 +232,85 @@ func isCacheEncrypted(meta map[string]string) bool {
 
 // decryptCacheObjectETag tries to decrypt the ETag saved in encrypted format using the cache KMS
 func decryptCacheObjectETag(info *ObjectInfo) error {
-	// Directories are never encrypted.
 	if info.IsDir {
-		return nil
+		return nil // Directories are never encrypted.
 	}
-	encrypted := crypto.S3.IsEncrypted(info.UserDefined) && isCacheEncrypted(info.UserDefined)
 
-	switch {
-	case encrypted:
-		if globalCacheKMS == nil {
-			return errKMSNotConfigured
+	// Depending on the SSE type we handle ETags slightly
+	// differently. ETags encrypted with SSE-S3 must be
+	// decrypted first, since the client expects that
+	// a single-part SSE-S3 ETag is equal to the content MD5.
+	//
+	// For all other SSE types, the ETag is not the content MD5.
+	// Therefore, we don't decrypt but only format it.
+	switch kind, ok := crypto.IsEncrypted(info.UserDefined); {
+	case ok && kind == crypto.S3 && isCacheEncrypted(info.UserDefined):
+		ETag, err := etag.Parse(info.ETag)
+		if err != nil {
+			return err
 		}
-		if len(info.Parts) > 0 { // multipart ETag is not encrypted since it is not md5sum
+		if !ETag.IsEncrypted() {
+			info.ETag = ETag.Format().String()
 			return nil
 		}
-		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(info.UserDefined)
-		if err != nil {
-			return err
-		}
-		extKey, err := globalCacheKMS.DecryptKey(keyID, kmsKey, kms.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
-		if err != nil {
-			return err
-		}
-		var objectKey crypto.ObjectKey
-		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), info.Bucket, info.Name); err != nil {
-			return err
-		}
-		etagStr := tryDecryptETag(objectKey[:], info.ETag, false)
-		// backend ETag was hex encoded before encrypting, so hex decode to get actual ETag
-		etag, err := hex.DecodeString(etagStr)
-		if err != nil {
-			return err
-		}
-		info.ETag = string(etag)
-		return nil
-	}
 
+		key, err := crypto.S3.UnsealObjectKey(globalCacheKMS, info.UserDefined, info.Bucket, info.Name)
+		if err != nil {
+			return err
+		}
+		ETag, err = etag.Decrypt(key[:], ETag)
+		if err != nil {
+			return err
+		}
+		info.ETag = ETag.Format().String()
+	case ok && (kind == crypto.S3KMS || kind == crypto.SSEC) && isCacheEncrypted(info.UserDefined):
+		ETag, err := etag.Parse(info.ETag)
+		if err != nil {
+			return err
+		}
+		info.ETag = ETag.Format().String()
+	}
 	return nil
 }
 
 // decryptCacheObjectETag tries to decrypt the ETag saved in encrypted format using the cache KMS
 func decryptCachePartETags(c *cacheMeta) ([]string, error) {
-	var partETags []string
-	encrypted := crypto.S3.IsEncrypted(c.Meta) && isCacheEncrypted(c.Meta)
-
-	switch {
-	case encrypted:
-		if globalCacheKMS == nil {
-			return partETags, errKMSNotConfigured
-		}
-		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(c.Meta)
+	// Depending on the SSE type we handle ETags slightly
+	// differently. ETags encrypted with SSE-S3 must be
+	// decrypted first, since the client expects that
+	// a single-part SSE-S3 ETag is equal to the content MD5.
+	//
+	// For all other SSE types, the ETag is not the content MD5.
+	// Therefore, we don't decrypt but only format it.
+	switch kind, ok := crypto.IsEncrypted(c.Meta); {
+	case ok && kind == crypto.S3 && isCacheEncrypted(c.Meta):
+		key, err := crypto.S3.UnsealObjectKey(globalCacheKMS, c.Meta, c.Bucket, c.Object)
 		if err != nil {
-			return partETags, err
+			return nil, err
 		}
-		extKey, err := globalCacheKMS.DecryptKey(keyID, kmsKey, kms.Context{c.Bucket: path.Join(c.Bucket, c.Object)})
-		if err != nil {
-			return partETags, err
-		}
-		var objectKey crypto.ObjectKey
-		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), c.Bucket, c.Object); err != nil {
-			return partETags, err
-		}
+		etags := make([]string, 0, len(c.PartETags))
 		for i := range c.PartETags {
-			etagStr := tryDecryptETag(objectKey[:], c.PartETags[i], false)
-			// backend ETag was hex encoded before encrypting, so hex decode to get actual ETag
-			etag, err := hex.DecodeString(etagStr)
+			ETag, err := etag.Parse(c.PartETags[i])
 			if err != nil {
-				return []string{}, err
+				return nil, err
 			}
-			partETags = append(partETags, string(etag))
+			ETag, err = etag.Decrypt(key[:], ETag)
+			if err != nil {
+				return nil, err
+			}
+			etags = append(etags, ETag.Format().String())
 		}
-		return partETags, nil
+		return etags, nil
+	case ok && (kind == crypto.S3KMS || kind == crypto.SSEC) && isCacheEncrypted(c.Meta):
+		etags := make([]string, 0, len(c.PartETags))
+		for i := range c.PartETags {
+			ETag, err := etag.Parse(c.PartETags[i])
+			if err != nil {
+				return nil, err
+			}
+			etags = append(etags, ETag.Format().String())
+		}
+		return etags, nil
 	default:
 		return c.PartETags, nil
 	}
