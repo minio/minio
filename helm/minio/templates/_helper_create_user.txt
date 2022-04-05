@@ -82,7 +82,7 @@ connectToMinio $scheme
 {{- if .existingSecret }}
 createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}) {{ .policy }}
 {{ else }}
-createUser {{ tpl .accessKey $global }} {{ tpl .accessKey $global }} {{ .policy }}
+createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }}
 {{- end }}
 {{- end }}
 {{- end }}
