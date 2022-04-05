@@ -1,3 +1,4 @@
+{{- $global := . -}}
 {{- if .Values.users }}
 apiVersion: batch/v1
 kind: Job
@@ -60,7 +61,7 @@ spec:
             {{- range .Values.users }}
             {{- if .existingSecret }}
             - secret:
-                name: {{ tpl .existingSecret $ }}
+                name: {{ tpl .existingSecret $global }}
                 items:
                   - key: {{ .existingSecretKey }}
                     path: secrets/{{ .accessKey }}
