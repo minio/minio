@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/erikdubbelboer/gspt"
+	"github.com/google/gops/agent"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
@@ -31,11 +32,14 @@ import (
 	"github.com/minio/cli"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -51,17 +55,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
-}
-
-func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
-	format, err := metaCli.Load(true)
-	if err != nil {
-		logger.Fatalf("load setting: %s", err)
-	}
-	if c.IsSet("bucket") {
-		format.Bucket = c.String("bucket")
-	}
-	return format
 }
 
 func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry) {
@@ -289,4 +282,221 @@ func removePassword(uri string) {
 		}
 	}
 	gspt.SetProcTitle(strings.Join(os.Args, " "))
+}
+
+func setup(c *cli.Context) {
+	if c.Bool("trace") {
+		utils.SetLogLevel(logrus.TraceLevel)
+	} else if c.Bool("verbose") {
+		utils.SetLogLevel(logrus.DebugLevel)
+	} else if c.Bool("quiet") {
+		utils.SetLogLevel(logrus.WarnLevel)
+	} else {
+		utils.SetLogLevel(logrus.InfoLevel)
+	}
+	if c.Bool("no-color") {
+		utils.DisableLogColor()
+	}
+
+	if !c.Bool("no-agent") {
+		go func() {
+			for port := 6060; port < 6100; port++ {
+				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			}
+		}()
+		go func() {
+			for port := 6070; port < 6100; port++ {
+				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			}
+		}()
+	}
+}
+
+func globalFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "verbose",
+			Usage: "enable debug log",
+		},
+		&cli.BoolFlag{
+			Name:  "trace",
+			Usage: "enable trace log",
+		},
+		&cli.BoolFlag{
+			Name:  "no-agent",
+			Usage: "disable pprof (:6060) and gops (:6070) agent",
+		},
+		&cli.BoolFlag{
+			Name:  "no-color",
+			Usage: "disable colors",
+		},
+	}
+}
+
+func clientFlags() []cli.Flag {
+	var defaultCacheDir = "/var/jfsCache"
+	switch runtime.GOOS {
+	case "darwin":
+		fallthrough
+	case "windows":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+			return nil
+		}
+		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
+	}
+	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "bucket",
+			Usage: "customized endpoint to access object store",
+		},
+		&cli.IntFlag{
+			Name:  "get-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to download an object",
+		},
+		&cli.IntFlag{
+			Name:  "put-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to upload an object",
+		},
+		&cli.IntFlag{
+			Name:  "io-retries",
+			Value: 10,
+			Usage: "number of retries after network failure",
+		},
+		&cli.IntFlag{
+			Name:  "max-uploads",
+			Value: 20,
+			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "max-deletes",
+			Value: 2,
+			Usage: "number of threads to delete objects",
+		},
+		&cli.IntFlag{
+			Name:  "buffer-size",
+			Value: 300,
+			Usage: "total read/write buffering in MB",
+		},
+		&cli.Int64Flag{
+			Name:  "upload-limit",
+			Value: 0,
+			Usage: "bandwidth limit for upload in Mbps",
+		},
+		&cli.Int64Flag{
+			Name:  "download-limit",
+			Value: 0,
+			Usage: "bandwidth limit for download in Mbps",
+		},
+
+		&cli.IntFlag{
+			Name:  "prefetch",
+			Value: 1,
+			Usage: "prefetch N blocks in parallel",
+		},
+		&cli.BoolFlag{
+			Name:  "writeback",
+			Usage: "upload objects in background",
+		},
+		&cli.DurationFlag{
+			Name:  "upload-delay",
+			Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
+		},
+		&cli.StringFlag{
+			Name:  "cache-dir",
+			Value: defaultCacheDir,
+			Usage: "directory paths of local cache, use colon to separate multiple paths",
+		},
+		&cli.IntFlag{
+			Name:  "cache-size",
+			Value: 100 << 10,
+			Usage: "size of cached objects in MiB",
+		},
+		&cli.Float64Flag{
+			Name:  "free-space-ratio",
+			Value: 0.1,
+			Usage: "min free space (ratio)",
+		},
+		&cli.BoolFlag{
+			Name:  "cache-partial-only",
+			Usage: "cache only random/small read",
+		},
+		&cli.DurationFlag{
+			Name:  "backup-meta",
+			Value: time.Hour,
+			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
+		},
+		&cli.DurationFlag{
+			Name:  "heartbeat",
+			Value: 12 * time.Second,
+			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
+		},
+		&cli.BoolFlag{
+			Name:  "read-only",
+			Usage: "allow lookup/read operations only",
+		},
+		&cli.BoolFlag{
+			Name:  "no-bgjob",
+			Usage: "disable background jobs (clean-up, backup, etc.)",
+		},
+		&cli.Float64Flag{
+			Name:  "open-cache",
+			Value: 0.0,
+			Usage: "open files cache timeout in seconds (0 means disable this feature)",
+		},
+		&cli.StringFlag{
+			Name:  "subdir",
+			Usage: "mount a sub-directory as root",
+		},
+	}
+}
+
+func shareInfoFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "metrics",
+			Value: "127.0.0.1:9567",
+			Usage: "address to export metrics",
+		},
+		&cli.StringFlag{
+			Name:  "consul",
+			Value: "127.0.0.1:8500",
+			Usage: "consul address to register",
+		},
+		&cli.BoolFlag{
+			Name:  "no-usage-report",
+			Usage: "do not send usage report",
+		},
+	}
+}
+
+func cacheFlags(defaultEntryCache float64) []cli.Flag {
+	return []cli.Flag{
+		&cli.Float64Flag{
+			Name:  "attr-cache",
+			Value: 1.0,
+			Usage: "attributes cache timeout in seconds",
+		},
+		&cli.Float64Flag{
+			Name:  "entry-cache",
+			Value: defaultEntryCache,
+			Usage: "file entry cache timeout in seconds",
+		},
+		&cli.Float64Flag{
+			Name:  "dir-entry-cache",
+			Value: 1.0,
+			Usage: "dir entry cache timeout in seconds",
+		},
+	}
+}
+
+func expandFlags(compoundFlags [][]cli.Flag) []cli.Flag {
+	var flags []cli.Flag
+	for _, flag := range compoundFlags {
+		flags = append(flags, flag...)
+	}
+	return flags
 }

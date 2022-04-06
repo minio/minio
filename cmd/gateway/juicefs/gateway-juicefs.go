@@ -19,7 +19,7 @@ package juicefs
 import (
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/fs" //nolint:gofumpt
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/minio/cli"
@@ -49,94 +49,98 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 func init() {
-	const juicefsGatewayTemplate = `juicefs gateway template`
+	const juicefsGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} Meta-URL 
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+Meta-URL:
+  JuiceFS meta engine address
+
+EXAMPLES:
+  1. Start minio gateway server for JuiceFS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}} redis://localhost:6379/1
+
+  2. Start minio gateway server for JuiceFS with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
+     {{.Prompt}} {{.HelpName}} redis://localhost:6379/1
+`
+
+	selfFlags := []cli.Flag{
+		&cli.StringFlag{
+			Name:  "access-log",
+			Usage: "path for JuiceFS access log",
+		},
+		&cli.BoolFlag{
+			Name:  "no-banner",
+			Usage: "disable MinIO startup information",
+		},
+		&cli.BoolFlag{
+			Name:  "multi-buckets",
+			Usage: "use top level of directories as buckets",
+		},
+		&cli.BoolFlag{
+			Name:  "keep-etag",
+			Usage: "keep the ETag for uploaded objects",
+		},
+		&cli.StringFlag{
+			Name:  "umask",
+			Value: "022",
+			Usage: "umask for new file in octal",
+		},
+	}
+
+	compoundFlags := [][]cli.Flag{
+		globalFlags(),
+		clientFlags(),
+		cacheFlags(0),
+		selfFlags,
+		shareInfoFlags(),
+	}
+
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               minio.JuiceFSGateway,
 		Usage:              "JuiceFS Distributed File System (JuiceFS)",
 		Action:             juicefsGatewayMain,
 		CustomHelpTemplate: juicefsGatewayTemplate,
 		HideHelpCommand:    true,
-		Flags: []cli.Flag{
-			cli.BoolFlag{
-				Name:  "multi-buckets",
-				Usage: "use top level of directories as buckets (default: false)",
-			},
-			cli.BoolFlag{
-				Name:  "keep-etag",
-				Usage: "keep the ETag for uploaded objects (default: false)",
-			},
-
-			cli.StringFlag{
-				Name:  "metrics",
-				Usage: "address to export metrics (default: \"127.0.0.1:9567\")",
-				Value: "127.0.0.1:9567",
-			},
-			cli.BoolFlag{
-				Name:  "writeback",
-				Usage: "upload objects in background (default: false)",
-			},
-			cli.DurationFlag{
-				Name:  "upload-delay",
-				Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
-			},
-			cli.StringFlag{
-				Name:  "access-log",
-				Usage: "path for JuiceFS access log",
-			},
-			cli.Float64Flag{
-				Name:  "attr-cache",
-				Value: 1.0,
-				Usage: "attributes cache timeout in seconds",
-			},
-			cli.Float64Flag{
-				Name:  "entry-cache",
-				Usage: "file entry cache timeout in seconds",
-			},
-			cli.Float64Flag{
-				Name:  "dir-entry-cache",
-				Value: 1.0,
-				Usage: "dir entry cache timeout in seconds",
-			},
-			cli.DurationFlag{
-				Name:  "backup-meta",
-				Value: time.Hour,
-				Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
-			},
-			cli.BoolFlag{
-				Name:  "no-bgjob",
-				Usage: "disable background jobs (clean-up, backup, etc.)",
-			},
-			cli.Float64Flag{
-				Name:  "open-cache",
-				Value: 0.0,
-				Usage: "open files cache timeout in seconds (0 means disable this feature)",
-			},
-			cli.StringFlag{
-				Name:  "subdir",
-				Usage: "mount a sub-directory as root",
-			},
-		},
+		Flags:              expandFlags(compoundFlags),
 	})
 }
 
-// Handler for 'minio gateway hdfs' command line.
 func juicefsGatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, minio.JuiceFSGateway, 1)
 	}
-
 	minio.StartGateway(ctx, &JfsObjects{ctx: ctx})
+}
+
+type Config struct {
+	MultiBucket bool
+	KeepEtag    bool
+	Mode        uint16
 }
 
 type JfsObjects struct {
 	ctx *cli.Context
 	minio.GatewayUnsupported
-	conf        *vfs.Config
-	fs          *fs.FileSystem
-	listPool    *minio.TreeWalkPool
-	multiBucket bool
-	keepEtag    bool
+	conf     *vfs.Config
+	fs       *fs.FileSystem
+	listPool *minio.TreeWalkPool
+	gConf    *Config
 }
 
 func (n *JfsObjects) Name() string {
@@ -144,6 +148,7 @@ func (n *JfsObjects) Name() string {
 }
 
 func (n *JfsObjects) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
+	setup(n.ctx)
 	addr := n.ctx.Args().Get(0)
 	removePassword(addr)
 	m, store, conf := initForSvc(n.ctx, "s3gateway", addr)
@@ -152,21 +157,14 @@ func (n *JfsObjects) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLaye
 	if err != nil {
 		panic(fmt.Errorf("initialize failed: %s", err))
 	}
+	umask, err := strconv.ParseUint(n.ctx.String("umask"), 8, 16)
+	if err != nil {
+		logger.Fatalf("invalid umask %s: %s", n.ctx.String("umask"), err)
+	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &JfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), multiBucket: n.ctx.Bool("multi-buckets"), keepEtag: n.ctx.Bool("keep-etag")}, nil
+	return &JfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: &Config{MultiBucket: n.ctx.Bool("multi-buckets"), KeepEtag: n.ctx.Bool("keep-etag"), Mode: uint16(0777 &^ umask)}}, nil
 }
 
-func (n *JfsObjects) DeleteBucket(ctx context.Context, bucket string, opts minio.DeleteBucketOptions) error {
-	if !n.isValidBucketName(bucket) {
-		return minio.BucketNameInvalid{Bucket: bucket}
-	}
-	if !n.multiBucket {
-		return minio.BucketNotEmpty{Bucket: bucket}
-	}
-	eno := n.fs.Delete(mctx, n.path(bucket))
-	return jfsToObjectErr(ctx, eno, bucket)
-	//todo: rmr
-}
 func (n *JfsObjects) IsCompressionSupported() bool {
 	return n.conf.Chunk.Compress != "" && n.conf.Chunk.Compress != "none"
 }
@@ -245,7 +243,7 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 
 // isValidBucketName verifies whether a bucket name is valid.
 func (n *JfsObjects) isValidBucketName(bucket string) bool {
-	if !n.multiBucket && bucket != n.conf.Format.Name {
+	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
 		return false
 	}
 	return s3utils.CheckValidBucketNameStrict(bucket) == nil
@@ -270,11 +268,22 @@ func (n *JfsObjects) ppath(bucket, uploadID, part string) string {
 	return n.tpath(bucket, "uploads", uploadID, part)
 }
 
+func (n *JfsObjects) DeleteBucket(ctx context.Context, bucket string, opts minio.DeleteBucketOptions) error {
+	if !n.isValidBucketName(bucket) {
+		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+	if !n.gConf.MultiBucket {
+		return minio.BucketNotEmpty{Bucket: bucket}
+	}
+	eno := n.fs.Delete(mctx, n.path(bucket))
+	return jfsToObjectErr(ctx, eno, bucket)
+}
+
 func (n *JfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if !n.multiBucket {
+	if !n.gConf.MultiBucket {
 		return nil
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0755)
@@ -304,7 +313,7 @@ func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 }
 
 func (n *JfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	if !n.multiBucket {
+	if !n.gConf.MultiBucket {
 		fi, eno := n.fs.Stat(mctx, "/")
 		if eno != 0 {
 			return nil, jfsToObjectErr(ctx, eno)
@@ -480,12 +489,14 @@ func (n *JfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 }
 
 func (n *JfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
-	for _, object := range objects {
-		_, err := n.DeleteObject(ctx, bucket, object.ObjectName, options)
-		if err == nil {
-			objs = append(objs, minio.DeletedObject{ObjectName: object.ObjectName})
-		} else {
-			errs = append(errs, err)
+	objs = make([]minio.DeletedObject, len(objects))
+	errs = make([]error, len(objects))
+	for idx, object := range objects {
+		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, options)
+		if errs[idx] == nil {
+			objs[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
 		}
 	}
 	return
@@ -560,7 +571,7 @@ func (n *JfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 
 	var etag []byte
-	if n.keepEtag {
+	if n.gConf.KeepEtag {
 		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
 		if len(etag) != 0 {
 			eno = n.fs.SetXattr(mctx, dst, s3Etag, etag, 0)
@@ -634,7 +645,7 @@ func (n *JfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		return
 	}
 	var etag []byte
-	if n.keepEtag {
+	if n.gConf.KeepEtag {
 		etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 	}
 	return minio.ObjectInfo{
@@ -674,7 +685,7 @@ func (n *JfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) e
 func (n *JfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
 	_ = n.mkdirAll(ctx, path.Dir(tmpname), 0755)
-	f, eno := n.fs.Create(mctx, tmpname, 0644)
+	f, eno := n.fs.Create(mctx, tmpname, n.gConf.Mode)
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmpname, eno)
 		err = eno
@@ -747,7 +758,7 @@ func (n *JfsObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 	etag := r.MD5CurrentHexString()
-	if n.keepEtag {
+	if n.gConf.KeepEtag {
 		eno = n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0)
 		if eno != 0 {
 			logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
@@ -925,7 +936,7 @@ func (n *JfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	tmp := n.ppath(bucket, uploadID, "complete")
 	_ = n.fs.Delete(mctx, tmp)
-	_, eno := n.fs.Create(mctx, tmp, 0755)
+	_, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("create complete: %s", err)
@@ -973,7 +984,7 @@ func (n *JfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
-	if n.keepEtag {
+	if n.gConf.KeepEtag {
 		eno = n.fs.SetXattr(mctx, name, s3Etag, []byte(s3MD5), 0)
 		if eno != 0 {
 			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", name, s3Etag, s3MD5, 0)
