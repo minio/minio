@@ -2448,6 +2448,10 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			// Not, set it to default.
 			si.Mode = 0o600
 		}
+		if si.ModTime.IsZero() {
+			// Set time to now.
+			si.ModTime = time.Now()
+		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
 			size:    si.Size,
