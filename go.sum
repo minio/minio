@@ -1081,6 +1081,8 @@ github.com/minio/colorjson v1.0.1 h1:+hvfP8C1iMB95AT+ZFDRE+Knn9QPd9lg0CRJY9DRpos
 github.com/minio/colorjson v1.0.1/go.mod h1:oPM3zQQY8Gz9NGtgvuBEjQ+gPZLKAGc7T+kjMlwtOgs=
 github.com/minio/console v0.15.8 h1:R4cuhOPRohmZPefPtutbowYLDBjnuEQWUaPkuuzy5WM=
 github.com/minio/console v0.15.8/go.mod h1:Ds9M8oikd0RyB/OFr1cpNaq+XS+YgIwImICqJPuPpSA=
+github.com/minio/console v0.15.9 h1:m84fb7x3AyNX3vHFARgWu1ezuTGWk9w430JYpsvLkAQ=
+github.com/minio/console v0.15.9/go.mod h1:CnsqAdriaSTO4lN1bnZibdVpRdLtWAmx/Gq73igaRzA=
 github.com/minio/csvparser v1.0.0 h1:xJEHcYK8ZAjeW4hNV9Zu30u+/2o4UyPnYgyjWp8b7ZU=
 github.com/minio/csvparser v1.0.0/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/dperf v0.3.4 h1:dD6CnaxA7JWm7+SpUniSsCeKURVk/9ww4nT9nJ3Vmc8=
