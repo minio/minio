@@ -1,0 +1,45 @@
+name: Mirror repo to S3
+
+on:
+  schedule:
+    # Runs everyday at 08:28 am
+    - cron: '28 8 * * *'
+  workflow_dispatch:
+  
+jobs:
+  s3Backup:
+    runs-on: docker-builds
+    steps:
+      - uses: actions/checkout@v1
+      
+      - name: Get info
+        id: get_info
+        run: |
+          GIT_COMMIT_DATE="$((`git log -n 1 --date-order --all | grep Date | awk '{ print $4 }'`))"
+          YESTERDAY_DATE="$((`date | awk '{ print $3 }'`-1))"
+          echo ::set-output name=GIT_COMMIT_DATE::${GIT_COMMIT_DATE}
+          echo ::set-output name=YESTERDAY_DATE::${YESTERDAY_DATE}
+          echo $GIT_COMMIT_DATE
+          echo $YESTERDAY_DATE
+          
+      - name: Create backup
+        if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
+        run: |
+          github-backup 0chain -P -t ${{ secrets.ACCESS_TOKEN }} --output-directory=/github-backup/zs3server --all -O -R zs3server
+          
+      - name: Create zip
+        if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
+        run: zip -r zs3server.zip /github-backup/zs3server
+        
+      - name: Set AWS credentials
+        if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+          
+      - name: Backup to s3
+        if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
+        run: |
+          aws s3 cp zs3server.zip s3://${{ secrets.MIRROR_TARGET }}/zs3server.zip
