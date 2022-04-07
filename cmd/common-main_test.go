@@ -134,6 +134,24 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			true,
 			nil,
 		},
+		{
+			`
+# MINIO_ROOT_USER=minioadmin
+# MINIO_ROOT_PASSWORD=minioadmin
+MINIO_ROOT_USER=minio
+MINIO_ROOT_PASSWORD=minio123`,
+			false,
+			[]envKV{
+				{
+					Key:   "MINIO_ROOT_USER",
+					Value: "minio",
+				},
+				{
+					Key:   "MINIO_ROOT_PASSWORD",
+					Value: "minio123",
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		testCase := testCase
@@ -153,6 +171,11 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			if err == nil && testCase.expectedErr {
 				t.Error(errors.New("expected error, found success"))
 			}
+
+			if len(ekvs) != len(testCase.expectedEkvs) {
+				t.Errorf("expected %v keys, got %v keys", len(testCase.expectedEkvs), len(ekvs))
+			}
+
 			if !reflect.DeepEqual(ekvs, testCase.expectedEkvs) {
 				t.Errorf("expected %v, got %v", testCase.expectedEkvs, ekvs)
 			}
