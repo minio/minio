@@ -60,6 +60,7 @@ type BucketUsageInfo struct {
 
 	ObjectsCount         uint64                           `json:"objectsCount"`
 	ObjectSizesHistogram map[string]uint64                `json:"objectsSizesHistogram"`
+	VersionsCount        uint64                           `json:"versionsCount"`
 	ReplicaSize          uint64                           `json:"objectReplicaTotalSize"`
 	ReplicationInfo      map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
 }
@@ -72,6 +73,9 @@ type DataUsageInfo struct {
 
 	// Objects total count across all buckets
 	ObjectsTotalCount uint64 `json:"objectsCount"`
+
+	// Objects total count across all buckets
+	VersionsTotalCount uint64 `json:"versionsCount"`
 
 	// Objects total size across all buckets
 	ObjectsTotalSize uint64                           `json:"objectsTotalSize"`

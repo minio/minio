@@ -498,7 +498,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
-			if !oi.DeleteMarker && sz == oi.Size {
+			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
 			}
 			sizeS.totalSize += sz
