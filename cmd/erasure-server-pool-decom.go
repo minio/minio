@@ -876,7 +876,9 @@ func (z *erasureServerPools) DecommissionCancel(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionCancel(idx) {
-		z.decommissionCancelers[idx]() // cancel any active thread.
+		if len(z.decommissionCancelers) >= idx {
+			z.decommissionCancelers[idx]() // cancel any active thread.
+		}
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
@@ -898,7 +900,9 @@ func (z *erasureServerPools) DecommissionFailed(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionFailed(idx) {
-		z.decommissionCancelers[idx]() // cancel any active thread.
+		if len(z.decommissionCancelers) >= idx {
+			z.decommissionCancelers[idx]() // cancel any active thread.
+		}
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
