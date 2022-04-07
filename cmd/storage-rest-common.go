@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v43" // Added DiskMTime field for FileInfo
+	storageRESTVersion       = "v44" // Added heal scan mode in NSScanner
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -79,4 +79,5 @@ const (
 	storageRESTDiskID         = "disk-id"
 	storageRESTForceDelete    = "force-delete"
 	storageRESTGlob           = "glob"
+	storageRESTScanMode       = "scan-mode"
 )
