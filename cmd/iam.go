@@ -525,8 +525,8 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 	select {
 	case <-sys.configLoaded:
 		return sys.store.ListPolicies(ctx, bucketName)
-	default:
-		return nil, errIAMNotInitialized
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -660,7 +660,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 }
 
 // ListBucketUsers - list all users who can access this 'bucket'
-func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListBucketUsers(ctx context.Context, bucket string) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -668,21 +668,21 @@ func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, e
 	select {
 	case <-sys.configLoaded:
 		return sys.store.GetBucketUsers(bucket)
-	default:
-		return nil, errIAMNotInitialized
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
 // ListUsers - list all users.
-func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListUsers(ctx context.Context) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 	select {
 	case <-sys.configLoaded:
 		return sys.store.GetUsers(), nil
-	default:
-		return nil, errIAMNotInitialized
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -882,8 +882,8 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	select {
 	case <-sys.configLoaded:
 		return sys.store.ListServiceAccounts(ctx, accessKey)
-	default:
-		return nil, errIAMNotInitialized
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -1284,12 +1284,11 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-
 	select {
 	case <-sys.configLoaded:
 		return sys.store.ListGroups(ctx)
-	default:
-		return nil, errIAMNotInitialized
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 }
