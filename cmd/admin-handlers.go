@@ -1663,7 +1663,14 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	query := r.Form
-	healthInfo := madmin.HealthInfo{Version: madmin.HealthInfoVersion}
+	healthInfo := madmin.HealthInfo{
+		Version: madmin.HealthInfoVersion,
+		Minio: madmin.MinioHealthInfo{
+			Info: madmin.MinioInfo{
+				DeploymentID: globalDeploymentID,
+			},
+		},
+	}
 	healthInfoCh := make(chan madmin.HealthInfo)
 
 	enc := json.NewEncoder(w)
@@ -1999,7 +2006,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	go func() {
 		defer close(healthInfoCh)
 
-		partialWrite(healthInfo) // Write first message with only version populated
+		partialWrite(healthInfo) // Write first message with only version and deployment id populated
 		getAndWriteCPUs()
 		getAndWritePartitions()
 		getAndWriteOSInfo()
@@ -2440,6 +2447,10 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		if si.Mode == 0 {
 			// Not, set it to default.
 			si.Mode = 0o600
+		}
+		if si.ModTime.IsZero() {
+			// Set time to now.
+			si.ModTime = time.Now()
 		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
