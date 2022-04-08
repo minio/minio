@@ -35,6 +35,8 @@ const (
 	dataUsageBloomName     = ".bloomcycle.bin"
 	dataUsageBloomNamePath = bucketMetaPrefix + SlashSeparator + dataUsageBloomName
 
+	backgroundHealInfoPath = bucketMetaPrefix + SlashSeparator + ".background-heal.json"
+
 	dataUsageCacheName = ".usage-cache.bin"
 )
 

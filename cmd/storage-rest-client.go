@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -207,12 +208,14 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
 	}()
+	vals := make(url.Values)
+	vals.Set(storageRESTScanMode, strconv.Itoa(int(scanMode)))
 	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
 	defer xhttp.DrainBody(respBody)
 	pr.CloseWithError(err)

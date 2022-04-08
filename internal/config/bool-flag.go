@@ -81,7 +81,7 @@ func ParseBool(str string) (bool, error) {
 	if strings.EqualFold(str, "disabled") {
 		return false, nil
 	}
-	return false, fmt.Errorf("ParseBool: parsing '%s': %s", str, strconv.ErrSyntax)
+	return false, fmt.Errorf("ParseBool: parsing '%s': %w", str, strconv.ErrSyntax)
 }
 
 // ParseBoolFlag - parses string into BoolFlag.

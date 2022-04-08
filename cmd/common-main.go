@@ -487,6 +487,13 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 	key := envTokens[0]
 	val := envTokens[1]
 
+	if strings.HasPrefix(key, "#") {
+		// Skip commented lines
+		return envKV{
+			Skip: true,
+		}, nil
+	}
+
 	// Remove quotes from the value if found
 	if len(val) >= 2 {
 		quote := val[0]

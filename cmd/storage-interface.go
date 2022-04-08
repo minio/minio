@@ -21,6 +21,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/minio/madmin-go"
 )
 
 // StorageAPI interface.
@@ -64,7 +66,7 @@ type StorageAPI interface {
 	// has never been replaced.
 	Healing() *healingTracker
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
-	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)
@@ -142,7 +144,7 @@ func (p *unrecognizedDisk) Healing() *healingTracker {
 	return nil
 }
 
-func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	return dataUsageCache{}, errDiskNotFound
 }
 
