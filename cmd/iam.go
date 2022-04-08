@@ -1305,7 +1305,6 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-
 }
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.
