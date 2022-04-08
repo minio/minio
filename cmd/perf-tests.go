@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,8 +32,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/hash"
-	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/pkg/randreader"
 )
 
@@ -61,6 +62,21 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	var totalBytesWritten uint64
 	var totalBytesRead uint64
 
+	region := globalSite.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+
+	client, err := minio.New(globalLocalNodeName, &minio.Options{
+		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
+		Secure:    globalIsTLS,
+		Transport: globalProxyTransport,
+		Region:    region,
+	})
+	if err != nil {
+		return SpeedtestResult{}, err
+	}
+
 	objCountPerThread := make([]uint64, concurrent)
 
 	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
@@ -71,15 +87,18 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		uploadsCancel()
 	}()
 
-	objNamePrefix := "speedtest/objects/" + uuid.New().String()
+	objNamePrefix := uuid.New().String() + "/"
+
+	userMetadata := make(map[string]string)
+	userMetadata[globalObjectPerfUserMetadata] = "true"
 
 	wg.Add(concurrent)
 	for i := 0; i < concurrent; i++ {
 		go func(i int) {
 			defer wg.Done()
 			for {
-				hashReader, err := hash.NewReader(newRandomReader(size),
-					int64(size), "", "", int64(size))
+				reader := newRandomReader(size)
+				info, err := client.PutObject(uploadsCtx, globalObjectPerfBucket, fmt.Sprintf("%s%d.%d", objNamePrefix, i, objCountPerThread[i]), reader, int64(size), minio.PutObjectOptions{UserMetadata: userMetadata, DisableMultipart: true}) // Bypass S3 API freeze
 				if err != nil {
 					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
@@ -89,25 +108,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 					uploadsCancel()
 					return
 				}
-				reader := NewPutObjReader(hashReader)
-				objInfo, err := objAPI.PutObject(uploadsCtx, minioMetaBucket, fmt.Sprintf("%s.%d.%d",
-					objNamePrefix, i, objCountPerThread[i]), reader, ObjectOptions{
-					UserDefined: map[string]string{
-						xhttp.AmzStorageClass: storageClass,
-					},
-					Speedtest: true,
-				})
-				if err != nil {
-					objCountPerThread[i]--
-					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
-						errOnce.Do(func() {
-							retError = err.Error()
-						})
-					}
-					uploadsCancel()
-					return
-				}
-				atomic.AddUint64(&totalBytesWritten, uint64(objInfo.Size))
+				atomic.AddUint64(&totalBytesWritten, uint64(info.Size))
 				objCountPerThread[i]++
 			}
 		}(i)
@@ -138,10 +139,12 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				if objCountPerThread[i] == j {
 					j = 0
 				}
-				r, err := objAPI.GetObjectNInfo(downloadsCtx, minioMetaBucket, fmt.Sprintf("%s.%d.%d",
-					objNamePrefix, i, j), nil, nil, noLock, ObjectOptions{})
+				opts := minio.GetObjectOptions{}
+				opts.Set(globalObjectPerfUserMetadata, "true") // Bypass S3 API freeze
+				r, err := client.GetObject(downloadsCtx, globalObjectPerfBucket, fmt.Sprintf("%s%d.%d", objNamePrefix, i, j), opts)
 				if err != nil {
-					if isErrObjectNotFound(err) {
+					errResp, ok := err.(minio.ErrorResponse)
+					if ok && errResp.StatusCode == http.StatusNotFound {
 						continue
 					}
 					if !contextCanceled(downloadsCtx) && !errors.Is(err, context.Canceled) {

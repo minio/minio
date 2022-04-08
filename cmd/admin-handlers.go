@@ -1004,6 +1004,8 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	var bucketExists bool
+
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
@@ -1054,13 +1056,25 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		autotune = false
 	}
 
+	err = objectAPI.MakeBucketWithLocation(ctx, globalObjectPerfBucket, BucketOptions{})
+	if err != nil {
+		if _, ok := err.(BucketExists); !ok {
+			// Only BucketExists error can be ignored.
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		bucketExists = true
+	}
+
 	deleteBucket := func() {
-		objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, "speedtest"), DeleteBucketOptions{
+		objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
 			Force:      true,
 			NoRecreate: true,
 		})
 	}
-	defer deleteBucket()
+	if !bucketExists {
+		defer deleteBucket()
+	}
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
