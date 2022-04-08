@@ -547,10 +547,12 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	c = Config{
 		RWMutex:            &sync.RWMutex{},
 		ClaimName:          env.Get(EnvIdentityOpenIDClaimName, kvs.Get(ClaimName)),
-		ClaimUserinfo:      env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == config.EnableOn,
+		ClaimUserinfo:      env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == config.EnableOn ||
+			env.Get(EnvIdentityOpenIDClaimUserInfo, kvs.Get(ClaimUserinfo)) == "true",
 		ClaimPrefix:        env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
 		RedirectURI:        env.Get(EnvIdentityOpenIDRedirectURI, kvs.Get(RedirectURI)),
-		RedirectURIDynamic: env.Get(EnvIdentityOpenIDRedirectURIDynamic, kvs.Get(RedirectURIDynamic)) == config.EnableOn,
+		RedirectURIDynamic: env.Get(EnvIdentityOpenIDRedirectURIDynamic, kvs.Get(RedirectURIDynamic)) == config.EnableOn ||
+			env.Get(EnvIdentityOpenIDRedirectURIDynamic, kvs.Get(RedirectURIDynamic)) == "true",
 		publicKeys:         make(map[string]crypto.PublicKey),
 		ClientID:           env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
 		ClientSecret:       env.Get(EnvIdentityOpenIDClientSecret, kvs.Get(ClientSecret)),
