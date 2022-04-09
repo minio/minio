@@ -65,6 +65,13 @@ const (
 
 // IAMSys - config system.
 type IAMSys struct {
+	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	// metrics
+	LastRefreshTimeUnixNano         uint64
+	LastRefreshDurationMilliseconds uint64
+	TotalRefreshSuccesses           uint64
+	TotalRefreshFailures            uint64
+
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
@@ -78,12 +85,6 @@ type IAMSys struct {
 
 	// configLoaded will be closed and remain so after first load.
 	configLoaded chan struct{}
-
-	// metrics
-	LastRefreshTimeUnixNano         uint64
-	LastRefreshDurationMilliseconds uint64
-	TotalRefreshSuccesses           uint64
-	TotalRefreshFailures            uint64
 }
 
 // IAMUserType represents a user type inside MinIO server
