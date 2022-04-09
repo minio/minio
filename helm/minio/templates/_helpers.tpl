@@ -205,7 +205,7 @@ otherwise it generates a random value.
   {{- if .Values.rootUser }}
     {{- .Values.rootUser | toString }}
   {{- else }}
-    {{- include "getValueFromSecret" (dict "Namespace" .Release.Namespace "Name" (include "minio.fullname" .) "Length" 20 "Key" "rootUser") }}
+    {{- include "minio.getValueFromSecret" (dict "Namespace" .Release.Namespace "Name" (include "minio.fullname" .) "Length" 20 "Key" "rootUser") }}
   {{- end }}
 {{- end -}}
 
@@ -213,6 +213,6 @@ otherwise it generates a random value.
   {{- if .Values.rootPassword }}
     {{- .Values.rootPassword | toString }}
   {{- else }}
-    {{- include "getValueFromSecret" (dict "Namespace" .Release.Namespace "Name" (include "minio.fullname" .) "Length" 40 "Key" "rootPassword") }}
+    {{- include "minio.getValueFromSecret" (dict "Namespace" .Release.Namespace "Name" (include "minio.fullname" .) "Length" 40 "Key" "rootPassword") }}
   {{- end }}
 {{- end -}}
