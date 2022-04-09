@@ -38,6 +38,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/disk"
@@ -409,7 +410,7 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 	return buf, err
 }
 
-func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	// Updates must be closed before we return.
 	defer close(updates)
 	var lc *lifecycle.Lifecycle
@@ -524,7 +525,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			item.applyTierObjSweep(ctx, objAPI, oi)
 		}
 		return sizeS, nil
-	})
+	}, scanMode)
 	if err != nil {
 		return dataUsageInfo, err
 	}

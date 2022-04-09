@@ -153,7 +153,7 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 
-func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	if contextCanceled(ctx) {
 		return dataUsageCache{}, ctx.Err()
 	}
@@ -161,7 +161,7 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err
 	}
-	return p.storage.NSScanner(ctx, cache, updates)
+	return p.storage.NSScanner(ctx, cache, updates, scanMode)
 }
 
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {

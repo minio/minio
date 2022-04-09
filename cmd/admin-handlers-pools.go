@@ -58,6 +58,16 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if ep := globalEndpoints[idx].Endpoints[0]; !ep.IsLocal {
+		for nodeIdx, proxyEp := range globalProxyEndpoints {
+			if proxyEp.Endpoint.Host == ep.Host {
+				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+					return
+				}
+			}
+		}
+	}
+
 	if err := pools.Decommission(r.Context(), idx); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -94,6 +104,16 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 		// We didn't find any matching pools, invalid input
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
 		return
+	}
+
+	if ep := globalEndpoints[idx].Endpoints[0]; !ep.IsLocal {
+		for nodeIdx, proxyEp := range globalProxyEndpoints {
+			if proxyEp.Endpoint.Host == ep.Host {
+				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+					return
+				}
+			}
+		}
 	}
 
 	if err := pools.DecommissionCancel(ctx, idx); err != nil {
