@@ -216,7 +216,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	}()
 	vals := make(url.Values)
 	vals.Set(storageRESTScanMode, strconv.Itoa(int(scanMode)))
-	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
+	respBody, err := client.call(ctx, storageRESTMethodNSScanner, vals, pr, -1)
 	defer xhttp.DrainBody(respBody)
 	pr.CloseWithError(err)
 	if err != nil {
