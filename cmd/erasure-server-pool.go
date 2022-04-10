@@ -1160,11 +1160,6 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	lc, _ := globalLifecycleSys.Get(bucket)
-	if lc != nil {
-		if !lc.HasActiveRules(prefix, true) {
-			lc = nil
-		}
-	}
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -1180,6 +1175,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 				action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+					fallthrough
+				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 					return loi, nil
 				}
 			}
@@ -1196,6 +1193,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
+		Lifecycle:   lc,
 	}
 
 	merged, err := z.listPath(ctx, &opts)
