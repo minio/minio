@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -103,6 +104,63 @@ func (s *safeDuration) Get() time.Duration {
 	return s.t
 }
 
+func getCycleScanMode(currentCycle, bitrotStartCycle uint64, bitrotStartTime time.Time) madmin.HealScanMode {
+	bitrotCycle := globalHealConfig.BitrotScanCycle()
+	switch bitrotCycle {
+	case -1:
+		return madmin.HealNormalScan
+	case 0:
+		return madmin.HealDeepScan
+	}
+
+	if currentCycle-bitrotStartCycle < healObjectSelectProb {
+		return madmin.HealDeepScan
+	}
+
+	if time.Since(bitrotStartTime) > bitrotCycle {
+		return madmin.HealDeepScan
+	}
+
+	return madmin.HealNormalScan
+}
+
+type backgroundHealInfo struct {
+	BitrotStartTime  time.Time           `json:"bitrotStartTime"`
+	BitrotStartCycle uint64              `json:"bitrotStartCycle"`
+	CurrentScanMode  madmin.HealScanMode `json:"currentScanMode"`
+}
+
+func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundHealInfo {
+	// Get last healing information
+	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
+	if err != nil {
+		if !errors.Is(err, errConfigNotFound) {
+			logger.LogIf(ctx, err)
+		}
+		return backgroundHealInfo{}
+	}
+	var info backgroundHealInfo
+	err = json.Unmarshal(buf, &info)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return backgroundHealInfo{}
+	}
+	return info
+}
+
+func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgroundHealInfo) {
+	b, err := json.Marshal(info)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+	// Get last healing information
+	err = saveConfig(ctx, objAPI, backgroundHealInfoPath, b)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+}
+
 // runDataScanner will start a data scanner.
 // The function will block until the context is canceled.
 // There should only ever be one scanner running per cluster.
@@ -145,12 +203,24 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				console.Debugln("starting scanner cycle")
 			}
 
+			bgHealInfo := readBackgroundHealInfo(ctx, objAPI)
+			scanMode := getCycleScanMode(nextBloomCycle, bgHealInfo.BitrotStartCycle, bgHealInfo.BitrotStartTime)
+			if bgHealInfo.CurrentScanMode != scanMode {
+				newHealInfo := bgHealInfo
+				newHealInfo.CurrentScanMode = scanMode
+				if scanMode == madmin.HealDeepScan {
+					newHealInfo.BitrotStartTime = time.Now().UTC()
+					newHealInfo.BitrotStartCycle = nextBloomCycle
+				}
+				saveBackgroundHealInfo(ctx, objAPI, newHealInfo)
+			}
+
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
-			err = objAPI.NSScanner(ctx, bf, results, uint32(nextBloomCycle))
+			err = objAPI.NSScanner(ctx, bf, results, uint32(nextBloomCycle), scanMode)
 			logger.LogIf(ctx, err)
 			if err == nil {
 				// Store new cycle...
@@ -182,6 +252,7 @@ type folderScanner struct {
 	dataUsageScannerDebug bool
 	healFolderInclude     uint32 // Include a clean folder one in n cycles.
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
+	scanMode              madmin.HealScanMode
 
 	disks       []StorageAPI
 	disksQuorum int
@@ -250,7 +321,7 @@ var globalScannerStats scannerStats
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	t := UTCNow()
 
 	logPrefix := color.Green("data-usage: ")
@@ -279,6 +350,7 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 		dataUsageScannerDebug: intDataUpdateTracker.debug,
 		healFolderInclude:     0,
 		healObjectSelect:      0,
+		scanMode:              scanMode,
 		updates:               cache.Info.updates,
 	}
 
@@ -482,12 +554,15 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				debug:       f.dataUsageScannerDebug,
 				lifeCycle:   activeLifeCycle,
 				replication: replicationCfg,
-				heal:        thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
+
+			item.heal.enabled = thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure
+			item.heal.bitrot = f.scanMode == madmin.HealDeepScan
+
 			// if the drive belongs to an erasure set
 			// that is already being healed, skip the
 			// healing attempt on this drive.
-			item.heal = item.heal && f.healObjectSelect > 0
+			item.heal.enabled = item.heal.enabled && f.healObjectSelect > 0
 
 			sz, err := f.getSize(item)
 			if err != nil {
@@ -821,8 +896,11 @@ type scannerItem struct {
 	replication replicationConfig
 	lifeCycle   *lifecycle.Lifecycle
 	Typ         fs.FileMode
-	heal        bool // Has the object been selected for heal check?
-	debug       bool
+	heal        struct {
+		enabled bool
+		bitrot  bool
+	} // Has the object been selected for heal check?
+	debug bool
 }
 
 type sizeSummary struct {
@@ -874,9 +952,13 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 			console.Debugf(applyActionsLogPrefix+" heal checking: %v/%v\n", i.bucket, i.objectPath())
 		}
 	}
+	scanMode := madmin.HealNormalScan
+	if i.heal.bitrot {
+		scanMode = madmin.HealDeepScan
+	}
 	healOpts := madmin.HealOpts{
 		Remove:   healDeleteDangling,
-		ScanMode: globalHealConfig.ScanMode(),
+		ScanMode: scanMode,
 	}
 	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
 	if err != nil && !errors.Is(err, NotImplemented{}) {
@@ -1040,7 +1122,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 	// from the current deployment, which means we don't have to call healing
 	// routine even if we are asked to do via heal flag.
 	if !applied {
-		if i.heal {
+		if i.heal.enabled {
 			size = i.applyHealing(ctx, o, oi)
 		}
 		// replicate only if lifecycle rules are not applied.

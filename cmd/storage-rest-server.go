@@ -40,6 +40,7 @@ import (
 
 	jwtreq "github.com/golang-jwt/jwt/v4/request"
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -179,10 +180,17 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	scanMode, err := strconv.Atoi(r.Form.Get(storageRESTScanMode))
+	if err != nil {
+		logger.LogIf(r.Context(), err)
+		s.writeErrorResponse(w, err)
+		return
+	}
+
 	setEventStreamHeaders(w)
 
 	var cache dataUsageCache
-	err := cache.deserialize(r.Body)
+	err = cache.deserialize(r.Body)
 	if err != nil {
 		logger.LogIf(r.Context(), err)
 		s.writeErrorResponse(w, err)
@@ -220,7 +228,7 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	}()
-	usageInfo, err := s.storage.NSScanner(ctx, cache, updates)
+	usageInfo, err := s.storage.NSScanner(ctx, cache, updates, madmin.HealScanMode(scanMode))
 	if err != nil {
 		respW.Flush()
 		resp.CloseWithError(err)

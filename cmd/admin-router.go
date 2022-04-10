@@ -84,10 +84,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/pools/cancel").HandlerFunc(gz(httpTraceAll(adminAPI.CancelDecommission))).Queries("pool", "{pool:.*}")
 		}
 
-		// Profiling operations
+		// Profiling operations - deprecated API
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/profiling/start").HandlerFunc(gz(httpTraceAll(adminAPI.StartProfilingHandler))).
 			Queries("profilerType", "{profilerType:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/profiling/download").HandlerFunc(gz(httpTraceAll(adminAPI.DownloadProfilingHandler)))
+		// Profiling operations
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/profile").HandlerFunc(gz(httpTraceAll(adminAPI.ProfileHandler)))
 
 		// Config KV operations.
 		if enableConfigOps {

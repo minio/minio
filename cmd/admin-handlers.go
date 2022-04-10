@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -500,7 +501,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 }
 
 // StartProfilingResult contains the status of the starting
-// profiling action in a given server
+// profiling action in a given server - deprecated API
 type StartProfilingResult struct {
 	NodeName string `json:"nodeName"`
 	Success  bool   `json:"success"`
@@ -594,6 +595,85 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	writeSuccessResponseJSON(w, startProfilingResultInBytes)
 }
 
+// ProfileHandler - POST /minio/admin/v3/profile/?profilerType={profilerType}
+// ----------
+// Enable server profiling
+func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "Profile")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	if globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	profileStr := r.Form.Get("profilerType")
+	profiles := strings.Split(profileStr, ",")
+	duration := time.Minute
+	if dstr := r.Form.Get("duration"); dstr != "" {
+		var err error
+		duration, err = time.ParseDuration(dstr)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+			return
+		}
+	}
+	// read request body
+	io.CopyN(ioutil.Discard, r.Body, 1)
+
+	globalProfilerMu.Lock()
+
+	if globalProfiler == nil {
+		globalProfiler = make(map[string]minioProfiler, 10)
+	}
+
+	// Stop profiler of all types if already running
+	for k, v := range globalProfiler {
+		v.Stop()
+		delete(globalProfiler, k)
+	}
+
+	// Start profiling on remote servers.
+	for _, profiler := range profiles {
+		globalNotificationSys.StartProfiling(profiler)
+
+		// Start profiling locally as well.
+		prof, err := startProfiler(profiler)
+		if err == nil {
+			globalProfiler[profiler] = prof
+		}
+	}
+	globalProfilerMu.Unlock()
+
+	timer := time.NewTimer(duration)
+	for {
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			for k, v := range globalProfiler {
+				v.Stop()
+				delete(globalProfiler, k)
+			}
+			return
+		case <-timer.C:
+			if !globalNotificationSys.DownloadProfilingData(ctx, w) {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminProfilerNotEnabled), r.URL)
+				return
+			}
+			return
+		}
+	}
+}
+
 // dummyFileInfo represents a dummy representation of a profile data file
 // present only in memory, it helps to generate the zip stream.
 type dummyFileInfo struct {
@@ -614,7 +694,7 @@ func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 
 // DownloadProfilingHandler - POST /minio/admin/v3/profiling/download
 // ----------
-// Download profiling information of all nodes in a zip format
+// Download profiling information of all nodes in a zip format - deprecated API
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DownloadProfiling")
 
@@ -1004,6 +1084,8 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	var bucketExists bool
+
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
@@ -1054,13 +1136,25 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		autotune = false
 	}
 
+	err = objectAPI.MakeBucketWithLocation(ctx, globalObjectPerfBucket, BucketOptions{})
+	if err != nil {
+		if _, ok := err.(BucketExists); !ok {
+			// Only BucketExists error can be ignored.
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		bucketExists = true
+	}
+
 	deleteBucket := func() {
-		objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, "speedtest"), DeleteBucketOptions{
+		objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
 			Force:      true,
 			NoRecreate: true,
 		})
 	}
-	defer deleteBucket()
+	if !bucketExists {
+		defer deleteBucket()
+	}
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
