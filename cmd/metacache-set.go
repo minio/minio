@@ -93,13 +93,13 @@ type listPathOptions struct {
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
 
-	// pool and set of where the cache is located.
-	pool, set int
-
-	// lcFilter performs filtering based on lifecycle.
+	// Lifecycle performs filtering based on lifecycle.
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
-	lcFilter *lifecycle.Lifecycle
+	Lifecycle *lifecycle.Lifecycle
+
+	// pool and set of where the cache is located.
+	pool, set int
 }
 
 func init() {

@@ -291,9 +291,9 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	mu.Unlock()
 
 	// Do lifecycle filtering.
-	if o.lcFilter != nil {
+	if o.Lifecycle != nil {
 		filterIn := make(chan metaCacheEntry, 10)
-		go filterLifeCycle(ctx, o.Bucket, o.lcFilter, filterIn, results)
+		go filterLifeCycle(ctx, o.Bucket, o.Lifecycle, filterIn, results)
 		// Replace results.
 		results = filterIn
 	}
@@ -381,6 +381,8 @@ func filterLifeCycle(ctx context.Context, bucket string, lc *lifecycle.Lifecycle
 		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+			fallthrough
+		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 			// Skip this entry.
 			continue
 		}
