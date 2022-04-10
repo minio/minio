@@ -1161,6 +1161,9 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	lc, _ := globalLifecycleSys.Get(bucket)
 
+	// Check if bucket is object locked.
+	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
 		// - Cohesity
@@ -1172,7 +1175,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
@@ -1194,6 +1197,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
 		Lifecycle:   lc,
+		Retention:   rcfg,
 	}
 
 	merged, err := z.listPath(ctx, &opts)

@@ -33,6 +33,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
@@ -1222,9 +1223,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	var lc *lifecycle.Lifecycle
+	var rcfg lock.Retention
 	if opts.Expiration.Expire {
 		// Check if the current bucket has a configured lifecycle policy
 		lc, _ = globalLifecycleSys.Get(bucket)
+		rcfg, _ = globalBucketObjectLockSys.Get(bucket)
 	}
 
 	// expiration attempted on a bucket with no lifecycle
@@ -1269,7 +1272,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	if opts.Expiration.Expire {
-		action := evalActionFromLifecycle(ctx, *lc, goi, false)
+		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
 		var isErr bool
 		switch action {
 		case lifecycle.NoneAction:
