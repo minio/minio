@@ -625,6 +625,9 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 6. Check that service account cannot be created for some other user.
+	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
 }
 
 // In this test, the parent users gets their permissions from a group, rather
@@ -725,6 +728,9 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 6. Check that service account cannot be created for some other user.
+	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
 }
 
 func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
@@ -979,6 +985,9 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 6. Check that service account cannot be created for some other user.
+	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
 }
 
 var testAppParams = OpenIDClientAppParams{

@@ -890,6 +890,9 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
+
+	// 6. Check that service account cannot be created for some other user.
+	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
 }
 
 func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
