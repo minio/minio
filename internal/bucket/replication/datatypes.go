@@ -29,6 +29,9 @@ const (
 	// Completed - replication completed ok.
 	Completed StatusType = "COMPLETED"
 
+	// CompletedLegacy was called "COMPLETE" incorrectly.
+	CompletedLegacy StatusType = "COMPLETE"
+
 	// Failed - replication failed.
 	Failed StatusType = "FAILED"
 

@@ -141,6 +141,8 @@ func newWarmBackend(ctx context.Context, tier madmin.TierConfig) (d WarmBackend,
 		d, err = newWarmBackendAzure(*tier.Azure)
 	case madmin.GCS:
 		d, err = newWarmBackendGCS(*tier.GCS)
+	case madmin.MinIO:
+		d, err = newWarmBackendMinIO(*tier.MinIO)
 	default:
 		return nil, errTierTypeUnsupported
 	}

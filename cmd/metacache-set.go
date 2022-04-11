@@ -33,6 +33,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -97,6 +98,9 @@ type listPathOptions struct {
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
 	Lifecycle *lifecycle.Lifecycle
+
+	// Retention configuration, needed to be passed along with lifecycle if set.
+	Retention lock.Retention
 
 	// pool and set of where the cache is located.
 	pool, set int

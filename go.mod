@@ -47,10 +47,10 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/console v0.15.10
 	github.com/minio/csvparser v1.0.0
-	github.com/minio/dperf v0.3.4
+	github.com/minio/dperf v0.3.5
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.0
-	github.com/minio/madmin-go v1.3.5
+	github.com/minio/madmin-go v1.3.6
 	github.com/minio/minio-go/v7 v7.0.23
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.20
@@ -118,6 +118,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
+	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
@@ -193,6 +194,7 @@ require (
 	github.com/rivo/tview v0.0.0-20220216162559-96063d6082f3 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.9.2 // indirect
+	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/tidwall/gjson v1.14.0 // indirect
@@ -207,13 +209,14 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
 	go.mongodb.org/mongo-driver v1.8.4 // indirect
 	go.opencensus.io v0.23.0 // indirect
+	go.uber.org/goleak v1.1.12 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/mod v0.4.2 // indirect
+	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2 // indirect
+	golang.org/x/tools v0.1.8 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220302033224-9aa15565e42a // indirect
