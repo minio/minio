@@ -464,7 +464,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+		action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
 		var success bool
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
@@ -686,7 +687,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+		action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
 		var success bool
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:

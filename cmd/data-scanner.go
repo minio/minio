@@ -38,6 +38,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/heal"
@@ -1131,7 +1132,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 	return size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo, debug bool) (action lifecycle.Action) {
 	action = lc.ComputeAction(obj.ToLifecycleOpts())
 	if debug {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
@@ -1147,18 +1148,15 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 		if obj.VersionID == "" {
 			return lifecycle.NoneAction
 		}
-		if rcfg, _ := globalBucketObjectLockSys.Get(obj.Bucket); rcfg.LockEnabled {
-			locked := enforceRetentionForDeletion(ctx, obj)
-			if locked {
-				if debug {
-					if obj.VersionID != "" {
-						console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", obj.Name, obj.VersionID)
-					} else {
-						console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
-					}
+		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
+			if debug {
+				if obj.VersionID != "" {
+					console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", obj.Name, obj.VersionID)
+				} else {
+					console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 				}
-				return lifecycle.NoneAction
 			}
+			return lifecycle.NoneAction
 		}
 	}
 
@@ -1277,32 +1275,31 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 		roi.OpType = replication.ExistingObjectReplicationType
 	}
 
-	if roi.TargetStatuses != nil {
-		if sizeS.replTargetStats == nil {
-			sizeS.replTargetStats = make(map[string]replTargetSizeSummary)
+	if sizeS.replTargetStats == nil && len(roi.TargetStatuses) > 0 {
+		sizeS.replTargetStats = make(map[string]replTargetSizeSummary)
+	}
+
+	for arn, tgtStatus := range roi.TargetStatuses {
+		tgtSizeS, ok := sizeS.replTargetStats[arn]
+		if !ok {
+			tgtSizeS = replTargetSizeSummary{}
 		}
-		for arn, tgtStatus := range roi.TargetStatuses {
-			tgtSizeS, ok := sizeS.replTargetStats[arn]
-			if !ok {
-				tgtSizeS = replTargetSizeSummary{}
-			}
-			switch tgtStatus {
-			case replication.Pending:
-				tgtSizeS.pendingCount++
-				tgtSizeS.pendingSize += oi.Size
-				sizeS.pendingCount++
-				sizeS.pendingSize += oi.Size
-			case replication.Failed:
-				tgtSizeS.failedSize += oi.Size
-				tgtSizeS.failedCount++
-				sizeS.failedSize += oi.Size
-				sizeS.failedCount++
-			case replication.Completed, "COMPLETE":
-				tgtSizeS.replicatedSize += oi.Size
-				sizeS.replicatedSize += oi.Size
-			}
-			sizeS.replTargetStats[arn] = tgtSizeS
+		switch tgtStatus {
+		case replication.Pending:
+			tgtSizeS.pendingCount++
+			tgtSizeS.pendingSize += oi.Size
+			sizeS.pendingCount++
+			sizeS.pendingSize += oi.Size
+		case replication.Failed:
+			tgtSizeS.failedSize += oi.Size
+			tgtSizeS.failedCount++
+			sizeS.failedSize += oi.Size
+			sizeS.failedCount++
+		case replication.Completed, replication.CompletedLegacy:
+			tgtSizeS.replicatedSize += oi.Size
+			sizeS.replicatedSize += oi.Size
 		}
+		sizeS.replTargetStats[arn] = tgtSizeS
 	}
 
 	switch oi.ReplicationStatus {
