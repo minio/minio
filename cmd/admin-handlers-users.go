@@ -605,7 +605,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			Claims:          claims,
-			DenyOnly:        true,
 		}) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
