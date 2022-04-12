@@ -984,20 +984,8 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	atomic.AddUint64(&globalScannerStats.ilmChecks, 1)
 	versionID := oi.VersionID
-	action := i.lifeCycle.ComputeAction(
-		lifecycle.ObjectOpts{
-			Name:             i.objectPath(),
-			UserTags:         oi.UserTags,
-			ModTime:          oi.ModTime,
-			VersionID:        oi.VersionID,
-			DeleteMarker:     oi.DeleteMarker,
-			IsLatest:         oi.IsLatest,
-			NumVersions:      oi.NumVersions,
-			SuccessorModTime: oi.SuccessorModTime,
-			RestoreOngoing:   oi.RestoreOngoing,
-			RestoreExpires:   oi.RestoreExpires,
-			TransitionStatus: oi.TransitionedObject.Status,
-		})
+	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
+	action := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi, false)
 	if i.debug {
 		if versionID != "" {
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, action)
