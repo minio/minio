@@ -156,11 +156,6 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 	return ch
 }
 
-// speedTest - Deprecated. See objectSpeedTest
-func speedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestResult {
-	return objectSpeedTest(ctx, opts)
-}
-
 func driveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) madmin.DriveSpeedTestResult {
 	perf := &dperf.DrivePerf{
 		Serial:    opts.Serial,
