@@ -341,7 +341,8 @@ func mustNewSignedEmptyMD5Request(method string, urlStr string, contentLength in
 }
 
 func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int64,
-	body io.ReadSeeker, t *testing.T) *http.Request {
+	body io.ReadSeeker, t *testing.T,
+) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	req.Header.Set("Content-Md5", "YWFhYWFhYWFhYWFhYWFhCg==")
 	cred := globalActiveCred

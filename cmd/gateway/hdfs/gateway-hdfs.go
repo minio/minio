@@ -536,7 +536,8 @@ func (n *hdfsObjects) deleteObject(basePath, deletePath string) error {
 
 // ListObjectsV2 lists all blobs in HDFS bucket filtered by prefix
 func (n *hdfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int,
-	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
+	fetchOwner bool, startAfter string,
+) (loi minio.ListObjectsV2Info, err error) {
 	// fetchOwner is not supported and unused.
 	marker := continuationToken
 	if marker == "" {
@@ -793,7 +794,8 @@ func (n *hdfsObjects) ListObjectParts(ctx context.Context, bucket, object, uploa
 }
 
 func (n *hdfsObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.PartInfo, error) {
+	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions,
+) (minio.PartInfo, error) {
 	return n.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 

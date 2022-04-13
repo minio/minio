@@ -1072,7 +1072,8 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 }
 
 func (a *azureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions,
+) (info minio.PartInfo, err error) {
 	return a.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 

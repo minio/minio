@@ -640,7 +640,8 @@ func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object str
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions,
+) (p minio.PartInfo, err error) {
 	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.PartInfo{}, minio.PreConditionFailed{}
 	}

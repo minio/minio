@@ -1608,7 +1608,8 @@ func (sys *NotificationSys) Netperf(ctx context.Context, duration time.Duration)
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
 func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
-	concurrent int, duration time.Duration, storageClass string) []SpeedtestResult {
+	concurrent int, duration time.Duration, storageClass string,
+) []SpeedtestResult {
 	length := len(sys.allPeerClients)
 	if length == 0 {
 		// For single node erasure setup.

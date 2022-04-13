@@ -1039,7 +1039,8 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 }
 
 func (client *peerRESTClient) Speedtest(ctx context.Context, size,
-	concurrent int, duration time.Duration, storageClass string) (SpeedtestResult, error) {
+	concurrent int, duration time.Duration, storageClass string,
+) (SpeedtestResult, error) {
 	values := make(url.Values)
 	values.Set(peerRESTSize, strconv.Itoa(size))
 	values.Set(peerRESTConcurrent, strconv.Itoa(concurrent))

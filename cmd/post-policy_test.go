@@ -581,7 +581,8 @@ func buildGenericPolicy(t time.Time, accessKey, region, bucketName, objectName s
 }
 
 func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string, region string,
-	t time.Time, policy []byte, addFormData map[string]string, corruptedB64 bool, corruptedMultipart bool) (*http.Request, error) {
+	t time.Time, policy []byte, addFormData map[string]string, corruptedB64 bool, corruptedMultipart bool,
+) (*http.Request, error) {
 	// Get the user credential.
 	credStr := getCredentialString(accessKey, region, t)
 
