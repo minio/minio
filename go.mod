@@ -50,7 +50,7 @@ require (
 	github.com/minio/dperf v0.3.5
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.0
-	github.com/minio/madmin-go v1.3.6
+	github.com/minio/madmin-go v1.3.11
 	github.com/minio/minio-go/v7 v7.0.23
 	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.20
@@ -105,6 +105,7 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
+	github.com/briandowns/spinner v1.18.1 // indirect
 	github.com/charmbracelet/bubbles v0.10.3 // indirect
 	github.com/charmbracelet/bubbletea v0.20.0 // indirect
 	github.com/charmbracelet/lipgloss v0.5.0 // indirect
@@ -167,10 +168,9 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
-	github.com/minio/argon2 v1.0.0 // indirect
 	github.com/minio/colorjson v1.0.1 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220302011226-f13defa54577 // indirect
+	github.com/minio/mc v0.0.0-20220407151251-dbc09a8bf054 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
