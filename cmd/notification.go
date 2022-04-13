@@ -1608,7 +1608,8 @@ func (sys *NotificationSys) Netperf(ctx context.Context, duration time.Duration)
 // Speedtest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
 func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
-	concurrent int, duration time.Duration, storageClass string) []SpeedtestResult {
+	concurrent int, duration time.Duration, storageClass string,
+) []SpeedtestResult {
 	length := len(sys.allPeerClients)
 	if length == 0 {
 		// For single node erasure setup.
@@ -1718,9 +1719,9 @@ func (sys *NotificationSys) ReloadSiteReplicationConfig(ctx context.Context) []e
 }
 
 // GetLastDayTierStats fetches per-tier stats of the last 24hrs from all peers
-func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) dailyAllTierStats {
+func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTierStats {
 	errs := make([]error, len(sys.allPeerClients))
-	lastDayStats := make([]dailyAllTierStats, len(sys.allPeerClients))
+	lastDayStats := make([]DailyAllTierStats, len(sys.allPeerClients))
 	var wg sync.WaitGroup
 	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {

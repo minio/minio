@@ -211,7 +211,8 @@ func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix stri
 
 // CopyObject copies a blob from source container to destination container.
 func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
-	srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+	srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions,
+) (objInfo ObjectInfo, err error) {
 	return objInfo, NotImplemented{}
 }
 

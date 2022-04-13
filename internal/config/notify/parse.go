@@ -114,7 +114,8 @@ func RegisterNotificationTargets(ctx context.Context, cfg config.Config, transpo
 
 func fetchSubSysTargets(ctx context.Context, cfg config.Config,
 	transport *http.Transport, test bool, returnOnTargetError bool,
-	subSys string, targetList *event.TargetList) (targetsOffline bool, err error) {
+	subSys string, targetList *event.TargetList,
+) (targetsOffline bool, err error) {
 	targetsOffline = false
 	if err := checkValidNotificationKeysForSubSys(subSys, cfg[subSys]); err != nil {
 		return targetsOffline, err
@@ -1479,7 +1480,8 @@ var (
 
 // GetNotifyWebhook - returns a map of registered notification 'webhook' targets
 func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transport) (
-	map[string]target.WebhookArgs, error) {
+	map[string]target.WebhookArgs, error,
+) {
 	webhookTargets := make(map[string]target.WebhookArgs)
 	for k, kv := range config.Merge(webhookKVS, target.EnvWebhookEnable, DefaultWebhookKVS) {
 		enableEnv := target.EnvWebhookEnable
