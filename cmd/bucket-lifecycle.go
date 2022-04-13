@@ -247,11 +247,11 @@ func (t *transitionState) addLastDayStats(tier string, ts tierStats) {
 	t.lastDayStats[tier].addStats(ts)
 }
 
-func (t *transitionState) getDailyAllTierStats() dailyAllTierStats {
+func (t *transitionState) getDailyAllTierStats() DailyAllTierStats {
 	t.lastDayMu.RLock()
 	defer t.lastDayMu.RUnlock()
 
-	res := make(dailyAllTierStats, len(t.lastDayStats))
+	res := make(DailyAllTierStats, len(t.lastDayStats))
 	for tier, st := range t.lastDayStats {
 		res[tier] = st.clone()
 	}

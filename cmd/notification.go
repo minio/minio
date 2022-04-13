@@ -1719,9 +1719,9 @@ func (sys *NotificationSys) ReloadSiteReplicationConfig(ctx context.Context) []e
 }
 
 // GetLastDayTierStats fetches per-tier stats of the last 24hrs from all peers
-func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) dailyAllTierStats {
+func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTierStats {
 	errs := make([]error, len(sys.allPeerClients))
-	lastDayStats := make([]dailyAllTierStats, len(sys.allPeerClients))
+	lastDayStats := make([]DailyAllTierStats, len(sys.allPeerClients))
 	var wg sync.WaitGroup
 	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {
