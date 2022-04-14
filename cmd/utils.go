@@ -699,7 +699,8 @@ func jsonLoad(r io.ReadSeeker, data interface{}) error {
 func jsonSave(f interface {
 	io.WriteSeeker
 	Truncate(int64) error
-}, data interface{}) error {
+}, data interface{},
+) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err

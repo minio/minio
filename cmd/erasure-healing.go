@@ -60,7 +60,8 @@ func (fi FileInfo) DataShardFixed() bool {
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
 func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (
-	result madmin.HealResultItem, err error) {
+	result madmin.HealResultItem, err error,
+) {
 	if !opts.DryRun {
 		defer NSUpdated(bucket, slashSeparator)
 	}

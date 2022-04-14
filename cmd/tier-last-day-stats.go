@@ -84,16 +84,16 @@ func (l lastDayTierStats) merge(m lastDayTierStats) (merged lastDayTierStats) {
 	return merged
 }
 
-// dailyAllTierStats is used to aggregate last day tier stats across MinIO servers
-type dailyAllTierStats map[string]lastDayTierStats
+// DailyAllTierStats is used to aggregate last day tier stats across MinIO servers
+type DailyAllTierStats map[string]lastDayTierStats
 
-func (l dailyAllTierStats) merge(m dailyAllTierStats) {
+func (l DailyAllTierStats) merge(m DailyAllTierStats) {
 	for tier, st := range m {
 		l[tier] = l[tier].merge(st)
 	}
 }
 
-func (l dailyAllTierStats) addToTierInfo(tierInfos []madmin.TierInfo) []madmin.TierInfo {
+func (l DailyAllTierStats) addToTierInfo(tierInfos []madmin.TierInfo) []madmin.TierInfo {
 	for i := range tierInfos {
 		var lst lastDayTierStats
 		var ok bool

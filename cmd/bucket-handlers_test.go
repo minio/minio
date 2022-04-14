@@ -36,7 +36,8 @@ func TestRemoveBucketHandler(t *testing.T) {
 }
 
 func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials auth.Credentials, t *testing.T) {
+	credentials auth.Credentials, t *testing.T,
+) {
 	_, err := obj.PutObject(GlobalContext, bucketName, "test-object", mustGetPutObjReader(t, bytes.NewReader([]byte{}), int64(0), "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), ObjectOptions{})
 	// if object upload fails stop the test.
 	if err != nil {
