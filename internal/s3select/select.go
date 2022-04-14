@@ -214,10 +214,10 @@ type RequestProgress struct {
 
 // ScanRange represents the ScanRange parameter.
 type ScanRange struct {
-	// Start if byte offset form the start off the file.
+	// Start is the byte offset to read from (from the start of the file).
 	Start *uint64 `xml:"Start"`
-	// End is the last byte that should be returned, if Start is set,
-	// or the offset from EOF to start reading if start is not present.
+	// End is the offset of the last byte that should be returned when Start
+	// is set, otherwise it is the offset from EOF to start reading.
 	End *uint64 `xml:"End"`
 }
 
@@ -362,21 +362,29 @@ func (s3Select *S3Select) getProgress() (bytesScanned, bytesProcessed int64) {
 
 // Open - opens S3 object by using callback for SQL selection query.
 // Currently CSV, JSON and Apache Parquet formats are supported.
-func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadCloser, error)) error {
-	offset, end, err := s3Select.ScanRange.StartLen()
+func (s3Select *S3Select) Open(rsc io.ReadSeekCloser) error {
+	offset, length, err := s3Select.ScanRange.StartLen()
 	if err != nil {
 		return err
 	}
+	seekDirection := io.SeekStart
+	if offset < 0 {
+		seekDirection = io.SeekEnd
+	}
 	switch s3Select.Input.format {
 	case csvFormat:
-		rc, err := getReader(offset, end)
+		_, err = rsc.Seek(offset, seekDirection)
 		if err != nil {
 			return err
+		}
+		var rc io.ReadCloser = rsc
+		if length != -1 {
+			rc = newLimitedReadCloser(rsc, length)
 		}
 
 		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
 		if err != nil {
-			rc.Close()
+			rsc.Close()
 			return err
 		}
 
@@ -405,14 +413,18 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		}
 		return nil
 	case jsonFormat:
-		rc, err := getReader(offset, end)
+		_, err = rsc.Seek(offset, seekDirection)
 		if err != nil {
 			return err
+		}
+		var rc io.ReadCloser = rsc
+		if length != -1 {
+			rc = newLimitedReadCloser(rsc, length)
 		}
 
 		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
 		if err != nil {
-			rc.Close()
+			rsc.Close()
 			return err
 		}
 
@@ -431,12 +443,12 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		if !strings.EqualFold(os.Getenv("MINIO_API_SELECT_PARQUET"), "on") {
 			return errors.New("parquet format parsing not enabled on server")
 		}
-		if offset != 0 || end != -1 {
+		if offset != 0 || length != -1 {
 			// Offsets do not make sense in parquet files.
 			return errors.New("parquet format does not support offsets")
 		}
 		var err error
-		s3Select.recordReader, err = parquet.NewReader(getReader, &s3Select.Input.ParquetArgs)
+		s3Select.recordReader, err = parquet.NewParquetReader(rsc, &s3Select.Input.ParquetArgs)
 		return err
 	}
 
@@ -656,4 +668,94 @@ func NewS3Select(r io.Reader) (*S3Select, error) {
 	}
 
 	return s3Select, nil
+}
+
+//////////////////
+// Helpers
+/////////////////
+
+// limitedReadCloser is like io.LimitedReader, but also implements io.Closer.
+type limitedReadCloser struct {
+	io.LimitedReader
+	io.Closer
+}
+
+func newLimitedReadCloser(r io.ReadCloser, n int64) *limitedReadCloser {
+	return &limitedReadCloser{
+		LimitedReader: io.LimitedReader{R: r, N: n},
+		Closer:        r,
+	}
+}
+
+// ObjectSegmentReaderFn is a function that returns a reader for a contiguous
+// suffix segment of an object starting at the given (non-negative) offset.
+type ObjectSegmentReaderFn func(offset int64) (io.ReadCloser, error)
+
+// ObjectReadSeekCloser implements ReadSeekCloser interface for reading objects.
+// It uses a function that returns a io.ReadCloser for the object.
+type ObjectReadSeekCloser struct {
+	segmentReader ObjectSegmentReaderFn
+
+	size   int64 // actual object size regardless of compression/encryption
+	offset int64
+	reader io.ReadCloser
+}
+
+// NewObjectReadSeekCloser creates a new ObjectReadSeekCloser.
+func NewObjectReadSeekCloser(segmentReader ObjectSegmentReaderFn, actualSize int64) *ObjectReadSeekCloser {
+	return &ObjectReadSeekCloser{
+		segmentReader: segmentReader,
+		size:          actualSize,
+		offset:        0,
+		reader:        nil,
+	}
+}
+
+// Seek call to implement io.Seeker
+func (rsc *ObjectReadSeekCloser) Seek(offset int64, whence int) (int64, error) {
+	// fmt.Printf("actual: %v offset: %v (%v) whence: %v\n", rsc.size, offset, rsc.offset, whence)
+	switch whence {
+	case io.SeekStart:
+		rsc.offset = offset
+	case io.SeekCurrent:
+		rsc.offset += offset
+	case io.SeekEnd:
+		rsc.offset = rsc.size + offset
+	}
+	if rsc.offset < 0 {
+		return rsc.offset, errors.New("seek to invalid negative offset")
+	}
+	if rsc.offset >= rsc.size {
+		return rsc.offset, errors.New("seek past end of object")
+	}
+	if rsc.reader != nil {
+		_ = rsc.reader.Close()
+		rsc.reader = nil
+	}
+	return rsc.offset, nil
+}
+
+// Read call to implement io.Reader
+func (rsc *ObjectReadSeekCloser) Read(p []byte) (n int, err error) {
+	if rsc.reader == nil {
+		rsc.reader, err = rsc.segmentReader(rsc.offset)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return rsc.reader.Read(p)
+}
+
+// Close call to implement io.Closer. Calling Read/Seek after Close reopens the
+// object for reading and a subsequent Close call is required to ensure
+// resources are freed.
+func (rsc *ObjectReadSeekCloser) Close() error {
+	if rsc.reader != nil {
+		err := rsc.reader.Close()
+		if err == nil {
+			rsc.reader = nil
+		}
+		return err
+	}
+	return nil
 }

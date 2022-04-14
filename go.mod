@@ -26,6 +26,7 @@ require (
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.13.0
 	github.com/felixge/fgprof v0.9.2
+	github.com/fraugster/parquet-go v0.10.0
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/loads v0.21.1
 	github.com/go-sql-driver/mysql v1.6.0
@@ -52,7 +53,6 @@ require (
 	github.com/minio/kes v0.19.0
 	github.com/minio/madmin-go v1.3.11
 	github.com/minio/minio-go/v7 v7.0.23
-	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.20
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
@@ -200,7 +200,6 @@ require (
 	github.com/tidwall/gjson v1.14.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tidwall/sjson v1.2.3 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/unrolled/secure v1.10.0 // indirect
