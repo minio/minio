@@ -26,6 +26,7 @@ require (
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.13.0
 	github.com/felixge/fgprof v0.9.2
+	github.com/fraugster/parquet-go v0.10.0
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/loads v0.21.1
 	github.com/go-sql-driver/mysql v1.6.0
@@ -45,14 +46,13 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.15.11
+	github.com/minio/console v0.15.13
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.3.5
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.0
 	github.com/minio/madmin-go v1.3.11
 	github.com/minio/minio-go/v7 v7.0.23
-	github.com/minio/parquet-go v1.1.0
 	github.com/minio/pkg v1.1.20
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
@@ -170,7 +170,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/minio/colorjson v1.0.1 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220407151251-dbc09a8bf054 // indirect
+	github.com/minio/mc v0.0.0-20220412070834-8df32e87d634 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -200,7 +200,6 @@ require (
 	github.com/tidwall/gjson v1.14.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tidwall/sjson v1.2.3 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/unrolled/secure v1.10.0 // indirect

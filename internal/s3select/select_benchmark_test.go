@@ -20,8 +20,6 @@ package s3select
 import (
 	"bytes"
 	"encoding/csv"
-	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -112,9 +110,7 @@ func benchmarkSelect(b *testing.B, count int, query string) {
 				b.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewReader(csvData)), nil
-			}); err != nil {
+			if err = s3Select.Open(newBytesRSC(csvData)); err != nil {
 				b.Fatal(err)
 			}
 
