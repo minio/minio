@@ -33,3 +33,5 @@ minio.RELEASE*
 mc
 nancy
 inspects/*
+.gitignore
+*.log
