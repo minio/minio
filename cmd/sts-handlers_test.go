@@ -476,8 +476,12 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	if err != nil {
 		c.Fatalf("list users should not fail: %v", err)
 	}
-	if len(usersList) > 0 {
-		c.Fatalf("expected listing to be empty: %v", usersList)
+	if len(usersList) != 1 {
+		c.Fatalf("expected user listing output: %v", usersList)
+	}
+	uinfo := usersList[userDN]
+	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
+		c.Fatalf("expected user listing content: %v", uinfo)
 	}
 
 	// Validate that the client from sts creds can access the bucket.

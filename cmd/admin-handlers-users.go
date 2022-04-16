@@ -130,6 +130,18 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add ldap users which have mapped policies if in LDAP mode
+	// FIXME(vadmeste): move this to policy info in the future
+	ldapUsers, err := globalIAMSys.ListLDAPUsers()
+	if err != nil && err != errIAMActionNotAllowed {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	for k, v := range ldapUsers {
+		allCredentials[k] = v
+	}
+
+	// Marshal the response
 	data, err := json.Marshal(allCredentials)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

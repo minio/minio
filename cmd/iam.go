@@ -694,6 +694,28 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	return sys.store.GetUsers(), nil
 }
 
+// ListLDAPUsers - list LDAP users which has
+func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
+	<-sys.configLoaded
+
+	ldapUsers := make(map[string]madmin.UserInfo)
+	for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+		ldapUsers[user] = madmin.UserInfo{
+			PolicyName: policy,
+			Status:     madmin.AccountEnabled,
+		}
+	}
+	return ldapUsers, nil
+}
+
 // IsTempUser - returns if given key is a temporary user.
 func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {

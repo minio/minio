@@ -1184,6 +1184,18 @@ func (store *IAMStoreSys) GetUsers() map[string]madmin.UserInfo {
 	return result
 }
 
+// GetUsersWithMappedPolicies - safely returns the name of access keys with associated policies
+func (store *IAMStoreSys) GetUsersWithMappedPolicies() map[string]string {
+	cache := store.rlock()
+	defer store.runlock()
+
+	result := make(map[string]string)
+	for k, v := range cache.iamUserPolicyMap {
+		result[k] = v.Policies
+	}
+	return result
+}
+
 // GetUserInfo - get info on a user.
 func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	if name == "" {
