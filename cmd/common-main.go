@@ -177,6 +177,13 @@ func minioConfigToConsoleFeatures() {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
+	// pass the console subpath configuration
+	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
+		subPath := subPathFromRedirectURL(value)
+		if subPath != "" {
+			os.Setenv("CONSOLE_SUBPATH", subPathFromRedirectURL(value))
+		}
+	}
 	// Enable if prometheus URL is set.
 	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
@@ -981,4 +988,17 @@ func (a bgCtx) Deadline() (deadline time.Time, ok bool) {
 
 func (a bgCtx) Value(key interface{}) interface{} {
 	return a.parent.Value(key)
+}
+
+func subPathFromRedirectURL(redirectURL string) string {
+	u, err := url.Parse(redirectURL)
+	if err != nil {
+		return ""
+	}
+	// ensure the subpath ends with slash
+	subPath := u.Path
+	if subPath != "" && !strings.HasSuffix(subPath, "/") {
+		subPath = fmt.Sprintf("%s/", subPath)
+	}
+	return subPath
 }
