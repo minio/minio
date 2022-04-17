@@ -177,6 +177,10 @@ func minioConfigToConsoleFeatures() {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
+	// pass the console subpath configuration
+	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
+		os.Setenv("CONSOLE_SUBPATH", pathJoin(globalBrowserRedirectURL.Path, SlashSeparator))
+	}
 	// Enable if prometheus URL is set.
 	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
@@ -637,12 +641,11 @@ func handleCommonEnvVars() {
 			}
 			// Look for if URL has invalid values and return error.
 			if !((u.Scheme == "http" || u.Scheme == "https") &&
-				(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
+				u.Opaque == "" &&
 				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
 				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
 			}
-			u.Path = "" // remove any path component such as `/`
 			globalBrowserRedirectURL = u
 		}
 	}
