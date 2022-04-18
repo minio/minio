@@ -603,6 +603,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		decommissionEntry := func(entry metaCacheEntry) {
 			defer func() {
 				<-parallelWorkers
+				wg.Done()
 			}()
 			if entry.isDir() {
 				return
@@ -719,12 +720,14 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				reportNotFound: false,
 				agreed: func(entry metaCacheEntry) {
 					parallelWorkers <- struct{}{}
+					wg.Add(1)
 					go decommissionEntry(entry)
 				},
 				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 					entry, ok := entries.resolve(&resolver)
 					if ok {
 						parallelWorkers <- struct{}{}
+						wg.Add(1)
 						go decommissionEntry(*entry)
 					}
 				},
