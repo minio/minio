@@ -50,22 +50,25 @@ func initGlobalContext() {
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 
+// Return a valid executable path from the passed arguments
+func findBinaryPath() (string, error) {
+	return exec.LookPath(os.Args[0])
+}
+
 // restartProcess starts a new process passing it the active fd's. It
 // doesn't fork, but starts a new process using the same environment and
 // arguments as when it was originally started. This allows for a newly
 // deployed binary to be started. It returns the pid of the newly started
 // process when successful.
 func restartProcess() error {
-	// Use the original binary location. This works with symlinks such that if
-	// the file it points to has been changed we will use the updated symlink.
-	argv0, err := exec.LookPath(os.Args[0])
+	execPath, err := findBinaryPath()
 	if err != nil {
 		return err
 	}
 
 	// Invokes the execve system call.
 	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
-	return syscall.Exec(argv0, os.Args, os.Environ())
+	return syscall.Exec(execPath, os.Args, os.Environ())
 }
 
 // freezeServices will freeze all incoming S3 API calls.

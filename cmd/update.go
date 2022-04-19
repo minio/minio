@@ -530,9 +530,26 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 		}
 	}
 
+	exePath, err := findBinaryPath()
+	if err != nil {
+		return err
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return err
+	}
+	exePath, err = filepath.Abs(exePath)
+	if err != nil {
+		return err
+	}
+
 	opts := selfupdate.Options{
 		Hash:     crypto.SHA256,
 		Checksum: sha256Sum,
+		// Explicitly set the target path. selfupdate library gets it wrong when MinIO is
+		// self restarted using execve, /proc/self/exe returns the new binary name when
+		// renamed to the .minio.old format during to a previous binary update.
+		TargetPath: exePath,
 	}
 
 	if err := opts.CheckPermissions(); err != nil {
