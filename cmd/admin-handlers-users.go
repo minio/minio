@@ -90,7 +90,7 @@ func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request
 
 	password := cred.SecretKey
 
-	allCredentials, err := globalIAMSys.ListBucketUsers(bucket)
+	allCredentials, err := globalIAMSys.ListBucketUsers(ctx, bucket)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -124,7 +124,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	password := cred.SecretKey
 
-	allCredentials, err := globalIAMSys.ListUsers()
+	allCredentials, err := globalIAMSys.ListUsers(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

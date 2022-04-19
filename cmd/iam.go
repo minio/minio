@@ -538,9 +538,12 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListPolicies(ctx, bucketName)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicies(ctx, bucketName)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // SetPolicy - sets a new named policy.
@@ -673,25 +676,30 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 }
 
 // ListBucketUsers - list all users who can access this 'bucket'
-func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListBucketUsers(ctx context.Context, bucket string) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.GetBucketUsers(bucket)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetBucketUsers(bucket)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // ListUsers - list all users.
-func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListUsers(ctx context.Context) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
-
-	<-sys.configLoaded
-
-	return sys.store.GetUsers(), nil
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetUsers(), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // ListLDAPUsers - list LDAP users which has
@@ -909,9 +917,12 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListServiceAccounts(ctx, accessKey)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListServiceAccounts(ctx, accessKey)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // GetServiceAccount - wrapper method to get information about a service account
@@ -1311,9 +1322,12 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListGroups(ctx)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListGroups(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.

@@ -2892,7 +2892,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			//  get users/group info on local.
-			userInfoMap, errU := globalIAMSys.ListUsers()
+			userInfoMap, errU := globalIAMSys.ListUsers(ctx)
 			if errU != nil {
 				return info, errSRBackendIssue(errU)
 			}
