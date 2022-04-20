@@ -527,6 +527,7 @@ func (sys *IAMSys) InfoPolicy(policyName string) (*madmin.PolicyInfo, error) {
 	return &madmin.PolicyInfo{
 		PolicyName: policyName,
 		Policy:     pdata,
+		CreateDate: d.CreateDate,
 		UpdateDate: d.UpdateDate,
 	}, nil
 }
@@ -551,9 +552,12 @@ func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[s
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListPolicyDocs(ctx, bucketName)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicyDocs(ctx, bucketName)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // SetPolicy - sets a new named policy.
