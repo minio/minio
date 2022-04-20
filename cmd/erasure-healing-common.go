@@ -31,7 +31,7 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 	groupNano := group.Nanoseconds()
 	// Ignore the uuid sentinel and count the rest.
 	for _, t := range times {
-		if t.Equal(timeSentinel) {
+		if t.Equal(timeSentinel) || t.IsZero() {
 			continue
 		}
 		nano := t.UnixNano()

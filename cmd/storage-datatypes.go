@@ -112,9 +112,23 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 	return -1
 }
 
+// RawFileInfo - represents raw file stat information as byte array.
+// The above means that any added/deleted fields are incompatible.
+// Make sure to bump the internode version at storage-rest-common.go
+type RawFileInfo struct {
+	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
+	Buf []byte `msg:"b"`
+
+	// DiskMTime indicates the mtime of the xl.meta on disk
+	// This is mainly used for detecting a particular issue
+	// reported in https://github.com/minio/minio/pull/13803
+	DiskMTime time.Time `msg:"dmt"`
+}
+
 // FileInfo - represents file stat information.
 //msgp:tuple FileInfo
 // The above means that any added/deleted fields are incompatible.
+// Make sure to bump the internode version at storage-rest-common.go
 type FileInfo struct {
 	// Name of the volume.
 	Volume string `msg:"v,omitempty"`
