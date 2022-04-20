@@ -113,7 +113,6 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 }
 
 // RawFileInfo - represents raw file stat information as byte array.
-//msgp:tupe RawFileInfo
 // The above means that any added/deleted fields are incompatible.
 // Make sure to bump the internode version at storage-rest-common.go
 type RawFileInfo struct {
