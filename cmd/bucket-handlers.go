@@ -472,7 +472,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	versioned := globalBucketVersioningSys.Enabled(bucket)
-	suspended := globalBucketVersioningSys.Suspended(bucket)
 
 	type deleteResult struct {
 		delInfo DeletedObject
@@ -482,7 +481,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteResults := make([]deleteResult, len(deleteObjectsReq.Objects))
 
 	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
-
+	vc, _ := globalBucketVersioningSys.Get(bucket)
 	for index, object := range deleteObjectsReq.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
@@ -515,7 +514,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
 			Versioned:        versioned,
-			VersionSuspended: suspended,
+			VersionSuspended: vc.SuspendedPrefix(object.ObjectName),
 		}
 
 		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
@@ -526,7 +525,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if !globalTierConfigMgr.Empty() {
-			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, suspended)
+			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, opts.VersionSuspended)
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
@@ -581,8 +580,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned:        versioned,
-		VersionSuspended: suspended,
+		Versioned:          versioned,
+		VersionSuspendedFn: vc.SuspendedPrefix,
 	})
 
 	for i := range errs {

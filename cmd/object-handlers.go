@@ -3212,7 +3212,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	versioned := globalBucketVersioningSys.Enabled(bucket)
-	suspended := globalBucketVersioningSys.Suspended(bucket)
+	suspended := globalBucketVersioningSys.SuspendedPrefix(bucket, object)
 	os := newObjSweeper(bucket, object).WithVersioning(versioned, suspended)
 	if !globalTierConfigMgr.Empty() {
 		// Get appropriate object info to identify the remote object to delete

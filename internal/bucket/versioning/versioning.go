@@ -97,6 +97,9 @@ func (v Versioning) SuspendedPrefix(prefix string) bool {
 		return true
 	}
 	if v.Status == Enabled {
+		if prefix == "" {
+			return false
+		}
 		for _, sprefix := range v.SuspendedPrefixes {
 			if matched, _ := filepath.Match(sprefix, prefix); matched {
 				return true

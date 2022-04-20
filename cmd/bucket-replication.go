@@ -458,7 +458,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		MTime:             dobj.DeleteMarkerMTime.Time,
 		DeleteReplication: drs,
 		Versioned:         globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended:  globalBucketVersioningSys.Suspended(bucket),
+		VersionSuspended:  globalBucketVersioningSys.SuspendedPrefix(bucket, dobj.ObjectName),
 	})
 	if err != nil && !isErrVersionNotFound(err) { // VersionNotFound would be reported by pool that object version is missing on.
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, dobj.ObjectName, versionID, err))

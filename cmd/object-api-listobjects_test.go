@@ -1066,7 +1066,7 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
 				Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-				VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+				VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(object.parentBucket, object.name),
 				UserDefined:      object.meta,
 			})
 		if err != nil {
@@ -1074,7 +1074,7 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 		}
 		obj, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
 			Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-			VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+			VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(object.parentBucket, object.name),
 			VersionID:        object.versionID,
 		})
 		if err != nil {

@@ -416,7 +416,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 		},
 		VersionID:        oi.VersionID,
 		Versioned:        globalBucketVersioningSys.Enabled(oi.Bucket),
-		VersionSuspended: globalBucketVersioningSys.Suspended(oi.Bucket),
+		VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(oi.Bucket, oi.Name),
 		MTime:            oi.ModTime,
 	}
 	return tier, objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
@@ -576,7 +576,7 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 // postRestoreOpts returns ObjectOptions with version-id from the POST restore object request for a given bucket and object.
 func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
-	versionSuspended := globalBucketVersioningSys.Suspended(bucket)
+	versionSuspended := globalBucketVersioningSys.SuspendedPrefix(bucket, object)
 	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
@@ -628,7 +628,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 		}
 		return ObjectOptions{
 			Versioned:        globalBucketVersioningSys.Enabled(bucket),
-			VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+			VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(bucket, object),
 			UserDefined:      meta,
 		}
 	}
@@ -641,7 +641,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 
 	return ObjectOptions{
 		Versioned:        globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
+		VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(bucket, object),
 		UserDefined:      meta,
 		VersionID:        objInfo.VersionID,
 		MTime:            objInfo.ModTime,
