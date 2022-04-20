@@ -112,9 +112,20 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		// preserve destination versionId if specified.
 		if versionID == "" {
 			versionID = mustGetUUID()
+			fi.IsLatest = true // we are creating a new version so this is latest.
 		}
 		modTime = UTCNow()
 	}
+
+	// If the data is not inlined, we may end up incorrectly
+	// inlining the data here, that leads to an inconsistent
+	// situation where some objects are were not inlined
+	// were now inlined, make sure to `nil` the Data such
+	// that xl.meta is written as expected.
+	if !fi.InlineData() {
+		fi.Data = nil
+	}
+
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
 	if !dstOpts.MTime.IsZero() {
@@ -130,6 +141,14 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 			metaArr[index].ModTime = modTime
 			metaArr[index].VersionID = versionID
 			metaArr[index].Metadata = srcInfo.UserDefined
+			if !metaArr[index].InlineData() {
+				// If the data is not inlined, we may end up incorrectly
+				// inlining the data here, that leads to an inconsistent
+				// situation where some objects are were not inlined
+				// were now inlined, make sure to `nil` the Data such
+				// that xl.meta is written as expected.
+				metaArr[index].Data = nil
+			}
 		}
 	}
 
@@ -138,8 +157,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
 
-	// we are adding a new version to this object under the namespace lock, so this is the latest version.
-	fi.IsLatest = true
 	return fi.ToObjectInfo(srcBucket, srcObject), nil
 }
 
@@ -1319,10 +1336,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus() == Complete {
 			markDelete = false
 		}
-		// determine if the version represents an object delete
-		// deleteMarker = true
-		if versionFound && !goi.DeleteMarker { // implies a versioned delete of object
-			deleteMarker = false
+
+		// Version is found but we do not wish to create more delete markers
+		// now, since VersionPurgeStatus() is already set, we can let the
+		// lower layers decide this. This fixes a regression that was introduced
+		// in PR #14555 where !VersionPurgeStatus.Empty() is automatically
+		// considered as Delete marker true to avoid listing such objects by
+		// regular ListObjects() calls. However for delete replication this
+		// ends up being a problem because "upon" a successful delete this
+		// ends up creating a new delete marker that is spurious and unnecessary.
+		if versionFound {
+			if !goi.VersionPurgeStatus.Empty() {
+				deleteMarker = false
+			} else if !goi.DeleteMarker { // implies a versioned delete of object
+				deleteMarker = false
+			}
 		}
 	}
 

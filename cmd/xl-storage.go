@@ -901,18 +901,23 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 			if versionID == "" {
 				versionID = nullVersionID
 			}
+
 			// PR #11758 used DataDir, preserve it
 			// for users who might have used master
 			// branch
-			if !xlMeta.data.remove(versionID, dataDir) {
-				filePath := pathJoin(volumeDir, path, dataDir)
-				if err = checkPathLength(filePath); err != nil {
+			xlMeta.data.remove(versionID, dataDir)
+
+			// We need to attempt delete "dataDir" on the disk
+			// due to a CopyObject() bug where it might have
+			// inlined the data incorrectly, to avoid a situation
+			// where we potentially leave "DataDir"
+			filePath := pathJoin(volumeDir, path, dataDir)
+			if err = checkPathLength(filePath); err != nil {
+				return err
+			}
+			if err = s.moveToTrash(filePath, true); err != nil {
+				if err != errFileNotFound {
 					return err
-				}
-				if err = s.moveToTrash(filePath, true); err != nil {
-					if err != errFileNotFound {
-						return err
-					}
 				}
 			}
 		}
@@ -1026,15 +1031,19 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// PR #11758 used DataDir, preserve it
 		// for users who might have used master
 		// branch
-		if !xlMeta.data.remove(versionID, dataDir) {
-			filePath := pathJoin(volumeDir, path, dataDir)
-			if err = checkPathLength(filePath); err != nil {
+		xlMeta.data.remove(versionID, dataDir)
+
+		// We need to attempt delete "dataDir" on the disk
+		// due to a CopyObject() bug where it might have
+		// inlined the data incorrectly, to avoid a situation
+		// where we potentially leave "DataDir"
+		filePath := pathJoin(volumeDir, path, dataDir)
+		if err = checkPathLength(filePath); err != nil {
+			return err
+		}
+		if err = s.moveToTrash(filePath, true); err != nil {
+			if err != errFileNotFound {
 				return err
-			}
-			if err = s.moveToTrash(filePath, true); err != nil {
-				if err != errFileNotFound {
-					return err
-				}
 			}
 		}
 	}
