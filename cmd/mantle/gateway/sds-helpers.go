@@ -1,0 +1,58 @@
+package gateway
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"net/url"
+	"os"
+	"path"
+)
+
+type config struct {
+	BunkerProductId string `json:"bunkerProductId"`
+	MantleUrl       string `json:"mantleUrl"`
+	ApiKey          string `json:"apiKey"`
+}
+
+var (
+	mantleConfig config
+)
+
+func init() {
+	f, err := os.Open("./cmd/mantle/config/config.json")
+	defer f.Close()
+	
+	if err != nil {
+		log.Fatal("Error opening mantle config file. Hint: maybe config.json is missing?")
+	}
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		log.Fatal("Error reading mantle config file.")
+	}
+
+	err = json.Unmarshal(b, &mantleConfig)
+	if err != nil {
+		log.Fatal("Error parsing json")
+	}
+
+	log.Println("Mantle config file loaded !")
+}
+
+func urlJoin(params ...string) string {
+	u, _ := url.Parse(mantleConfig.MantleUrl)
+	u.Path = path.Join(u.Path, mantleConfig.BunkerProductId)
+
+	for _, p := range params {
+		u.Path = path.Join(u.Path, p)
+	}
+
+	return u.String()
+}
+
+func setMantleHeaders() map[string]string {
+	return map[string]string{
+		"x-api-key": mantleConfig.ApiKey,
+	}
+}
