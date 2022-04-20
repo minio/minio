@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/mantle-labs/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -767,6 +768,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	// Read the object, doesn't exist returns an s3 compatible error.
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
+	//TODO:off may be 0
 	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
 	if err != nil {
 		rwPoolUnlocker()
@@ -777,7 +779,30 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	closeFn := func() {
 		readCloser.Close()
 	}
-	reader := io.LimitReader(readCloser, length)
+
+	var bb []byte
+	if bucket != minioMetaBucket {
+		bb, err = gateway.Get(readCloser)
+
+		if err != nil {
+			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
+		}
+		size = int64(len(bb))
+		objInfo.Size = size
+	}
+
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts)
+	if rErr != nil {
+		return nil, rErr
+	}
+	//TODO:put this in a fct
+	var reader io.Reader
+	if len(bb) >= 0 {
+		reader = bytes.NewReader(bb)
+	} else {
+		reader = readCloser
+	}
+	r := io.LimitReader(reader, length)
 
 	// Check if range is valid
 	if off > size || off+length > size {
@@ -789,7 +814,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, closeFn, rwPoolUnlocker, nsUnlocker)
+	return objReaderFn(r, h, bb, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.
@@ -1084,7 +1109,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	tempObj := mustGetUUID()
 
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
+	_, err = fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be
@@ -1098,9 +1123,9 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < data.Size() {
+	/*if bytesWritten < data.Size() {
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
-	}
+	}*/
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
@@ -1121,8 +1146,52 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
+	if !isSysCall(bucket) {
+		p := pathJoin(fs.fsPath, bucket, object)
+		f, _ := os.Open(p)
+
+		bId, err := gateway.Put(f, object)
+		if err != nil {
+			//TODO: handleHttp error
+		}
+		err = f.Close()
+		if err != nil {
+			//TODO: handle
+		}
+		if err := writeId(p, bId); err != nil {
+			return ObjectInfo{}, err
+		}
+	}
+
 	// Success.
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+}
+
+func isSysCall(path string) bool {
+	return strings.Contains(path, minioMetaBucket)
+}
+
+func writeId(path string, id string) error {
+	if err := os.Remove(path); err != nil {
+		return toObjectErr(err)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println("error closing file: ", id, err)
+		}
+	}()
+
+	if _, err := f.Write([]byte(id)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // DeleteObjects - deletes an object from a bucket, this operation is destructive

@@ -387,6 +387,8 @@ const (
 	ErrAccountNotEligible
 	ErrAdminServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
+
+	ErrSDSFileNotConfirm
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -416,6 +418,11 @@ func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
 // error code to APIError structure, these fields carry respective
 // descriptions for all the error responses.
 var errorCodes = errorCodeMap{
+	ErrSDSFileNotConfirm: {
+		Code:           "NotConfirm",
+		Description:    "The requested object is not confirm in the blockchin",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
 		Description:    "This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.",
@@ -1981,6 +1988,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case ObjectNotFound:
 		apiErr = ErrNoSuchKey
+	case ObjectNotConfirmed:
+		apiErr = ErrSDSFileNotConfirm
 	case MethodNotAllowed:
 		apiErr = ErrMethodNotAllowed
 	case ObjectLocked:

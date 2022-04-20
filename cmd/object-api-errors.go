@@ -105,6 +105,12 @@ func toObjectErr(err error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
+	case errSDSFileNotConfirm.Error():
+		err = ObjectNotComfirmed{
+			Bucket: params[0],
+			Object: params[1],
+		}
+
 	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}
 		if len(params) >= 1 {
@@ -173,6 +179,12 @@ func toObjectErr(err error, params ...string) error {
 		return apiErr
 	}
 	return err
+}
+
+type ObjectNotConfirmed GenericError
+
+func (e ObjectNotConfirmed) Error() string {
+	return "The requested object:" + e.Object + "is not confirm in the blockchain"
 }
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
@@ -290,6 +302,12 @@ type ObjectNotFound GenericError
 
 func (e ObjectNotFound) Error() string {
 	return "Object not found: " + e.Bucket + "/" + e.Object
+}
+
+type ObjectNotComfirmed GenericError
+
+func (e ObjectNotComfirmed) Error() string {
+	return "The requested object:" + e.Object + "is not confirm in the blockchain"
 }
 
 // MethodNotAllowed on the object

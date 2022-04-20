@@ -60,6 +60,9 @@ var errDiskAccessDenied = StorageErr("disk access denied")
 // errFileNotFound - cannot find the file.
 var errFileNotFound = StorageErr("file not found")
 
+//errSDSFileNotConfirm - file is not confirm in the blockchain
+var errSDSFileNotConfirm = StorageErr("The requested object is not confirm in the blockchain")
+
 // errFileNotFound - cannot find requested file version.
 var errFileVersionNotFound = StorageErr("file version not found")
 

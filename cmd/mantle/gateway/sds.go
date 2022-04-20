@@ -1,7 +1,7 @@
 package gateway
 
 import (
-	"github.com/minio/minio/cmd/mantle/network"
+	"github.com/mantle-labs/minio/cmd/mantle/network"
 	"io"
 	"io/ioutil"
 	"net/http"
