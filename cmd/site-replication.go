@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/bucket/policy"
 	bktpolicy "github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -2124,38 +2123,38 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 	}
 
 	sris := make([]madmin.SRInfo, len(c.state.Peers))
-	sriErrs := make([]error, len(c.state.Peers))
-	g := errgroup.WithNErrs(len(c.state.Peers))
+	idxMap := make(map[string]int, len(c.state.Peers))
 	var depIDs []string
+	i := 0
 	for d := range c.state.Peers {
 		depIDs = append(depIDs, d)
+		idxMap[d] = i
+		i++
 	}
-	for index := range depIDs {
-		index := index
-		if depIDs[index] == globalDeploymentID {
-			g.Go(func() error {
-				sris[index], sriErrs[index] = c.SiteReplicationMetaInfo(ctx, objAPI, opts)
-				return nil
-			}, index)
-			continue
-		}
-		g.Go(func() error {
-			admClient, err := c.getAdminClient(ctx, depIDs[index])
+
+	metaInfoConcErr := c.concDo(
+		func() error {
+			srInfo, err := c.SiteReplicationMetaInfo(ctx, objAPI, opts)
+			k := idxMap[globalDeploymentID]
+			sris[k] = srInfo
+			return err
+		},
+		func(deploymentID string, p madmin.PeerInfo) error {
+			admClient, err := c.getAdminClient(ctx, deploymentID)
 			if err != nil {
 				return err
 			}
-			sris[index], sriErrs[index] = admClient.SRMetaInfo(ctx, opts)
-			return nil
-		}, index)
-	}
-	// Wait for the go routines.
-	g.Wait()
+			srInfo, err := admClient.SRMetaInfo(ctx, opts)
+			k := idxMap[deploymentID]
+			sris[k] = srInfo
+			return err
+		},
+	)
 
-	for _, serr := range sriErrs {
-		if serr != nil {
-			return info, errSRBackendIssue(serr)
-		}
+	if metaInfoConcErr.summaryErr != nil {
+		return info, errSRBackendIssue(metaInfoConcErr.summaryErr)
 	}
+
 	info.Enabled = true
 	info.Sites = make(map[string]madmin.PeerInfo, len(c.state.Peers))
 	for d, peer := range c.state.Peers {
