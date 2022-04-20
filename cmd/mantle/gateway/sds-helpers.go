@@ -21,6 +21,8 @@ var (
 
 func init() {
 	f, err := os.Open("./cmd/mantle/config/config.json")
+	defer f.Close()
+	
 	if err != nil {
 		log.Fatal("Error opening mantle config file. Hint: maybe config.json is missing?")
 	}
