@@ -48,45 +48,21 @@ type Config struct {
 	Cycle time.Duration
 }
 
-var (
-	// DefaultKVS - default KV config for heal settings
-	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   Delay,
-			Value: "10",
-		},
-		config.KV{
-			Key:   MaxWait,
-			Value: "15s",
-		},
-		config.KV{
-			Key:   Cycle,
-			Value: "1m",
-		},
-	}
-
-	// Help provides help for config values
-	Help = config.HelpKVS{
-		config.HelpKV{
-			Key:         Delay,
-			Description: `scanner delay multiplier, defaults to '10.0'`,
-			Optional:    true,
-			Type:        "float",
-		},
-		config.HelpKV{
-			Key:         MaxWait,
-			Description: `maximum wait time between operations, defaults to '15s'`,
-			Optional:    true,
-			Type:        "duration",
-		},
-		config.HelpKV{
-			Key:         Cycle,
-			Description: `time duration between scanner cycles, defaults to '1m'`,
-			Optional:    true,
-			Type:        "duration",
-		},
-	}
-)
+// DefaultKVS - default KV config for heal settings
+var DefaultKVS = config.KVS{
+	config.KV{
+		Key:   Delay,
+		Value: "10",
+	},
+	config.KV{
+		Key:   MaxWait,
+		Value: "15s",
+	},
+	config.KV{
+		Key:   Cycle,
+		Value: "1m",
+	},
+}
 
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {

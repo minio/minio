@@ -87,3 +87,12 @@ var (
 		},
 	}
 )
+
+// DefaultHelpPostfix - Helper function to add (default: $value) messages in config help
+func DefaultHelpPostfix(subsystem KVS, key string) string {
+	val, found := subsystem.Lookup(key)
+	if !found || val == "" {
+		return ""
+	}
+	return " (default: '" + val + "')"
+}
