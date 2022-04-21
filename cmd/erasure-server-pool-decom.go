@@ -619,7 +619,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 	parallelWorkers := make(chan struct{}, workerSize)
 
-	versioned := globalBucketVersioningSys.Enabled(bName)
 	for _, set := range pool.sets {
 		set := set
 		disks := set.getOnlineDisks()
@@ -629,6 +628,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			continue
 		}
 
+		vc, _ := globalBucketVersioningSys.Get(bName)
 		decommissionEntry := func(entry metaCacheEntry) {
 			defer func() {
 				<-parallelWorkers
@@ -667,7 +667,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						bName,
 						version.Name,
 						ObjectOptions{
-							Versioned:         versioned,
+							Versioned:         vc.EnabledPrefix(version.Name),
 							VersionID:         version.VersionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,

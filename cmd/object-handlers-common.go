@@ -266,7 +266,6 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {
-	versioned := globalBucketVersioningSys.Enabled(bucket)
 	for remaining := toDel; len(remaining) > 0; toDel = remaining {
 		if len(toDel) > maxDeleteList {
 			remaining = toDel[maxDeleteList:]
@@ -276,7 +275,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 		}
 		vc, _ := globalBucketVersioningSys.Get(bucket)
 		deletedObjs, errs := o.DeleteObjects(ctx, bucket, toDel, ObjectOptions{
-			Versioned:          versioned,
+			VersionedFn:        vc.EnabledPrefix,
 			VersionSuspendedFn: vc.SuspendedPrefix,
 		})
 		var logged bool

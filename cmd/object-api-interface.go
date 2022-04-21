@@ -77,6 +77,7 @@ type ObjectOptions struct {
 	Mutate        bool
 	WalkAscending bool // return Walk results in ascending order of versions
 
+	VersionedFn        func(prefix string) bool
 	VersionSuspendedFn func(prefix string) bool
 }
 

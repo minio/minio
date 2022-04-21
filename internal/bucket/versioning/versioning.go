@@ -87,11 +87,29 @@ func (v Versioning) Enabled() bool {
 	return v.Status == Enabled
 }
 
+// EnabledPrefix - returns true if versioning is enabled at the bucket and given
+// prefix, false otherwise.
+func (v Versioning) EnabledPrefix(prefix string) bool {
+	if v.Status == Enabled {
+		if prefix == "" {
+			return true
+		}
+		for _, sprefix := range v.SuspendedPrefixes {
+			if matched, _ := filepath.Match(sprefix, prefix); matched {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Suspended - returns true if versioning is suspended
 func (v Versioning) Suspended() bool {
 	return v.Status == Suspended
 }
 
+// SuspendedPrefix - returns true if versioning is suspended at the bucket level
+// or suspended on the given prefix.
 func (v Versioning) SuspendedPrefix(prefix string) bool {
 	if v.Status == Suspended {
 		return true

@@ -31,6 +31,17 @@ func (sys *BucketVersioningSys) Enabled(bucket string) bool {
 	return vc.Enabled()
 }
 
+// EnabledPrefix returns true is versioning is enabled at bucket level and if
+// the given prefix doesn't match any suspended prefixes configured. This is
+// part of a MinIO versioning configuration extension.
+func (sys *BucketVersioningSys) EnabledPrefix(bucket, prefix string) bool {
+	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	if err != nil {
+		return false
+	}
+	return vc.EnabledPrefix(prefix)
+}
+
 // Suspended suspended versioning?
 func (sys *BucketVersioningSys) Suspended(bucket string) bool {
 	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)

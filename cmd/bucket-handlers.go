@@ -471,8 +471,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		hasLockEnabled = true
 	}
 
-	versioned := globalBucketVersioningSys.Enabled(bucket)
-
 	type deleteResult struct {
 		delInfo DeletedObject
 		errInfo DeleteError
@@ -513,7 +511,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
-			Versioned:        versioned,
+			Versioned:        vc.EnabledPrefix(object.ObjectName),
 			VersionSuspended: vc.SuspendedPrefix(object.ObjectName),
 		}
 
@@ -525,7 +523,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if !globalTierConfigMgr.Empty() {
-			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, opts.VersionSuspended)
+			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(opts.Versioned, opts.VersionSuspended)
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
@@ -580,7 +578,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned:          versioned,
+		VersionedFn:        vc.EnabledPrefix,
 		VersionSuspendedFn: vc.SuspendedPrefix,
 	})
 

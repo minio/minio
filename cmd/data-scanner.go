@@ -1184,7 +1184,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		opts.VersionID = obj.VersionID
 	}
 	if opts.VersionID == "" {
-		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		opts.Versioned = globalBucketVersioningSys.EnabledPrefix(obj.Bucket, obj.Name)
 	}
 
 	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)

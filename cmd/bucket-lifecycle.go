@@ -330,7 +330,7 @@ const (
 // 2. when a transitioned object expires (based on an ILM rule).
 func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *ObjectInfo, lcOpts lifecycle.ObjectOpts, action expireAction) error {
 	var opts ObjectOptions
-	opts.Versioned = globalBucketVersioningSys.Enabled(oi.Bucket)
+	opts.Versioned = globalBucketVersioningSys.EnabledPrefix(oi.Bucket, oi.Name)
 	opts.VersionID = lcOpts.VersionID
 	opts.Expiration = ExpirationOptions{Expire: true}
 	switch action {
@@ -415,7 +415,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 			ETag:   oi.ETag,
 		},
 		VersionID:        oi.VersionID,
-		Versioned:        globalBucketVersioningSys.Enabled(oi.Bucket),
+		Versioned:        globalBucketVersioningSys.EnabledPrefix(oi.Bucket, oi.Name),
 		VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(oi.Bucket, oi.Name),
 		MTime:            oi.ModTime,
 	}
@@ -575,7 +575,7 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 
 // postRestoreOpts returns ObjectOptions with version-id from the POST restore object request for a given bucket and object.
 func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
-	versioned := globalBucketVersioningSys.Enabled(bucket)
+	versioned := globalBucketVersioningSys.EnabledPrefix(bucket, object)
 	versionSuspended := globalBucketVersioningSys.SuspendedPrefix(bucket, object)
 	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
@@ -627,7 +627,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 			meta[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
 		}
 		return ObjectOptions{
-			Versioned:        globalBucketVersioningSys.Enabled(bucket),
+			Versioned:        globalBucketVersioningSys.EnabledPrefix(bucket, object),
 			VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(bucket, object),
 			UserDefined:      meta,
 		}
@@ -640,7 +640,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 	}
 
 	return ObjectOptions{
-		Versioned:        globalBucketVersioningSys.Enabled(bucket),
+		Versioned:        globalBucketVersioningSys.EnabledPrefix(bucket, object),
 		VersionSuspended: globalBucketVersioningSys.SuspendedPrefix(bucket, object),
 		UserDefined:      meta,
 		VersionID:        objInfo.VersionID,
