@@ -446,11 +446,11 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		if opts.VersionID != "" {
 			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
 				VersionID: opts.VersionID,
-			}, false)
+			}, StoreOptions{})
 		} else {
 			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
 				VersionID: m.VersionID,
-			}, false)
+			}, StoreOptions{})
 		}
 	}
 	return m, err
@@ -1133,7 +1133,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
+func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, opts StoreOptions) error {
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
@@ -1142,7 +1142,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
+			return disks[index].DeleteVersion(ctx, bucket, object, fi, opts)
 		}, index)
 	}
 	// return errors if any during deletion
@@ -1255,7 +1255,9 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				}
 				return
 			}
-			errs := disk.DeleteVersions(ctx, bucket, dedupVersions)
+			errs := disk.DeleteVersions(ctx, bucket, StoreOptions{
+				PurgeOnDelete: opts.PurgeOnDelete,
+			}, dedupVersions)
 			for i, err := range errs {
 				if err == nil {
 					continue
@@ -1496,7 +1498,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			// delete marker. Add delete marker, since we don't have
 			// any version specified explicitly. Or if a particular
 			// version id needs to be replicated.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
+			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, StoreOptions{
+				PurgeOnDelete:  opts.PurgeOnDelete,
+				ForceDelMarker: opts.DeleteMarker,
+			}); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
 			return fi.ToObjectInfo(bucket, object), nil
@@ -1515,7 +1520,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, StoreOptions{
+		PurgeOnDelete:  opts.PurgeOnDelete,
+		ForceDelMarker: opts.DeleteMarker,
+	}); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1810,7 +1818,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		writeQuorum++
 	}
 
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, StoreOptions{}); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 

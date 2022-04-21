@@ -79,8 +79,8 @@ type StorageAPI interface {
 	WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error
 
 	// Metadata operations
-	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error
-	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error
+	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, opts StoreOptions) error
+	DeleteVersions(ctx context.Context, volume string, opts StoreOptions, versions []FileInfoVersions) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
@@ -229,7 +229,7 @@ func (p *unrecognizedDisk) Delete(ctx context.Context, volume string, path strin
 
 // DeleteVersions deletes slice of versions, it can be same object
 // or multiple objects.
-func (p *unrecognizedDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+func (p *unrecognizedDisk) DeleteVersions(ctx context.Context, volume string, opts StoreOptions, versions []FileInfoVersions) (errs []error) {
 	errs = make([]error, len(versions))
 
 	for i := range errs {
@@ -246,7 +246,7 @@ func (p *unrecognizedDisk) WriteAll(ctx context.Context, volume string, path str
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
+func (p *unrecognizedDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, opts StoreOptions) (err error) {
 	return errDiskNotFound
 }
 

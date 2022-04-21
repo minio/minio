@@ -166,6 +166,15 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	if err != nil {
 		return opts, err
 	}
+	purgeOnDelete := false
+	if d := r.Header.Get(xhttp.MinIOPurgeOnDelete); d != "" {
+		if b, err := strconv.ParseBool(d); err == nil {
+			purgeOnDelete = b
+		} else {
+			return opts, err
+		}
+	}
+	opts.PurgeOnDelete = purgeOnDelete
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))

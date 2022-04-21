@@ -150,6 +150,9 @@ const (
 	// Create special flag to force create a bucket
 	MinIOForceCreate = "x-minio-force-create"
 
+	// Delete special flag to purge an object on delete
+	MinIOPurgeOnDelete = "x-minio-purge-on-delete"
+
 	// Header indicates if the mtime should be preserved by client
 	MinIOSourceMTime = "x-minio-source-mtime"
 

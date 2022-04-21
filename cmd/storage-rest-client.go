@@ -418,11 +418,12 @@ func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, pat
 	return err
 }
 
-func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
+func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, opts StoreOptions) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTForceDelMarker, strconv.FormatBool(forceDelMarker))
+	values.Set(storageRESTForceDelMarker, strconv.FormatBool(opts.ForceDelMarker))
+	values.Set(storageRESTPurgeOnDelete, strconv.FormatBool(opts.PurgeOnDelete))
 
 	var buffer bytes.Buffer
 	if err := msgp.Encode(&buffer, &fi); err != nil {
@@ -612,7 +613,7 @@ func (client *storageRESTClient) Delete(ctx context.Context, volume string, path
 }
 
 // DeleteVersions - deletes list of specified versions if present
-func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, storeOpts StoreOptions, versions []FileInfoVersions) (errs []error) {
 	if len(versions) == 0 {
 		return errs
 	}
@@ -620,6 +621,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTTotalVersions, strconv.Itoa(len(versions)))
+	values.Set(storageRESTPurgeOnDelete, strconv.FormatBool(storeOpts.PurgeOnDelete))
 
 	var buffer bytes.Buffer
 	encoder := msgp.NewWriter(&buffer)

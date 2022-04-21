@@ -23,6 +23,15 @@ import (
 
 //go:generate msgp -file=$GOFILE
 
+// StoreOptions represents the storage level options available
+//msgp:ignore StoreOptions
+type StoreOptions struct {
+	// set true to enable purge on delete
+	PurgeOnDelete bool
+	// force to create a delete marker
+	ForceDelMarker bool
+}
+
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 //msgp:tuple DiskInfo

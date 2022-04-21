@@ -81,4 +81,5 @@ const (
 	storageRESTForceDelete    = "force-delete"
 	storageRESTGlob           = "glob"
 	storageRESTScanMode       = "scan-mode"
+	storageRESTPurgeOnDelete  = "purge-on-delete"
 )

@@ -363,6 +363,13 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	var purgeOnDelete bool
+	purgeOnDelete, err = strconv.ParseBool(r.Form.Get(storageRESTPurgeOnDelete))
+	if err != nil {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
@@ -374,7 +381,10 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = s.storage.DeleteVersion(r.Context(), volume, filePath, fi, forceDelMarker)
+	err = s.storage.DeleteVersion(r.Context(), volume, filePath, fi, StoreOptions{
+		ForceDelMarker: forceDelMarker,
+		PurgeOnDelete:  purgeOnDelete,
+	})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -688,12 +698,21 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		}
 	}
 
+	var purgeOnDelete bool
+	purgeOnDelete, err = strconv.ParseBool(r.Form.Get(storageRESTPurgeOnDelete))
+	if err != nil {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
 	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]error, totalVersions)}
 
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
-	errs := s.storage.DeleteVersions(r.Context(), volume, versions)
+	errs := s.storage.DeleteVersions(r.Context(), volume, StoreOptions{
+		PurgeOnDelete: purgeOnDelete,
+	}, versions)
 	done(nil)
 	for idx := range versions {
 		if errs[idx] != nil {
