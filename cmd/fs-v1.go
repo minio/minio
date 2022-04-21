@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/mantle-labs/minio/cmd/mantle/gateway"
+	"github.com/minio/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
