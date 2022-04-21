@@ -484,22 +484,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
 	})
 
-	if globalIsErasure && objAPI != nil {
-		setDriveCounts := objAPI.SetDriveCounts()
-		for i, setDriveCount := range setDriveCounts {
-			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
-				break
-			}
-			// if we validated all setDriveCounts and it was successful
-			// proceed to store the correct storage class globally.
-			if i == len(setDriveCounts)-1 {
-				globalStorageClass.Update(sc)
-			}
-		}
-	}
-
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
 		if globalIsGateway {
@@ -669,6 +653,22 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		err = logger.UpdateAuditKafkaTargets(loggerCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
+		}
+	case config.StorageClassSubSys:
+		if globalIsErasure && objAPI != nil {
+			setDriveCounts := objAPI.SetDriveCounts()
+			for i, setDriveCount := range setDriveCounts {
+				sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
+					break
+				}
+				// if we validated all setDriveCounts and it was successful
+				// proceed to store the correct storage class globally.
+				if i == len(setDriveCounts)-1 {
+					globalStorageClass.Update(sc)
+				}
+			}
 		}
 	}
 	globalServerConfigMu.Lock()
