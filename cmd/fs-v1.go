@@ -779,10 +779,8 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	closeFn := func() {
 		readCloser.Close()
 	}
-	reader := io.LimitReader(readCloser, length)
 
-	//TODO:THIS IS BREAKING STUFF
-	/*var bb []byte
+	var bb []byte
 	if bucket != minioMetaBucket {
 		bb, err = gateway.Get(readCloser)
 
@@ -799,13 +797,13 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	}
 	//TODO:put this in a fct
 	var reader io.Reader
-	if len(bb) >= 0 {
+	if len(bb) >= 0 && bb != nil {
 		reader = bytes.NewReader(bb)
 	} else {
 		reader = readCloser
 	}
 	r := io.LimitReader(reader, length)
-	*/
+
 	// Check if range is valid
 	if off > size || off+length > size {
 		err = InvalidRange{off, length, size}
@@ -816,7 +814,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, nil, closeFn, rwPoolUnlocker, nsUnlocker)
+	return objReaderFn(r, h, bb, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.
