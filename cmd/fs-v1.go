@@ -781,7 +781,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	}
 
 	var bb []byte
-	if bucket != minioMetaBucket {
+	if bucket != minioMetaBucket || !strings.Contains(bucket, ".minio.sys") {
 		bb, err = gateway.Get(readCloser)
 
 		if err != nil {
