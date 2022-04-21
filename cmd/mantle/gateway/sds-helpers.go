@@ -20,7 +20,7 @@ var (
 )
 
 func init() {
-	f, err := os.Open("./cmd/mantle/config/config-mantle.json")
+	f, err := os.Open("./cmd/mantle/configMantle/config-mantle.json")
 	defer f.Close()
 
 	if err != nil {
