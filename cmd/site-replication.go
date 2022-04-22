@@ -191,7 +191,7 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 		logger.Info("Cluster replication initialized")
 	}
 
-	go c.startHealRoutine(ctx)
+	go c.startHealRoutine(ctx, objAPI)
 
 	return err
 }
@@ -3275,7 +3275,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 
 const siteHealTimeInterval = 1 * time.Minute
 
-func (c *SiteReplicationSys) startHealRoutine(ctx context.Context) {
+func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI ObjectLayer) {
 	healTimer := time.NewTimer(siteHealTimeInterval)
 	defer healTimer.Stop()
 
@@ -3283,17 +3283,13 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context) {
 		select {
 		case <-healTimer.C:
 			healTimer.Reset(siteHealTimeInterval)
-			objAPI := newObjectLayerFn()
-			if objAPI == nil {
-				continue
-			}
 			c.RLock()
 			if !c.enabled {
 				continue
 			}
 			c.RUnlock()
-			c.healBuckets(ctx, objAPI)
-			c.healIAMSystem(ctx, objAPI)
+			c.healIAMSystem(ctx, objAPI) // heal IAM system first
+			c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 		case <-ctx.Done():
 			return
 		}
@@ -3361,11 +3357,14 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 		c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
 		c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
 		c.healBucketPolicies(ctx, objAPI, bucket, info)
+		// Notification and ILM are site specific settings.
 	}
 	return nil
 }
 
 func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3377,10 +3376,6 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 		latestTaggingConfig      *string
 	)
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range bs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.meta.TagConfigUpdatedAt
@@ -3400,8 +3395,12 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 	}
 	latestPeerName = info.Sites[latestID].Name
 	var latestTaggingConfigBytes []byte
+	var err error
 	if latestTaggingConfig != nil {
-		latestTaggingConfigBytes = []byte(*latestTaggingConfig)
+		latestTaggingConfigBytes, err = base64.StdEncoding.DecodeString(*latestTaggingConfig)
+		if err != nil {
+			return err
+		}
 	}
 	for dID, bStatus := range bs {
 		if !bStatus.TagMismatch {
@@ -3434,6 +3433,8 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 }
 
 func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3445,10 +3446,6 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 		latestIAMPolicy          json.RawMessage
 	)
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range bs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.meta.PolicyUpdatedAt
@@ -3498,6 +3495,8 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 }
 
 func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3511,10 +3510,6 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		latestQuotaConfigBytes   []byte
 	)
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range bs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.meta.QuotaConfigUpdatedAt
@@ -3532,20 +3527,13 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 			latestQuotaConfig = ss.meta.QuotaConfig
 		}
 	}
+
+	var err error
 	if latestQuotaConfig != nil {
-		cfgBytes, err := base64.StdEncoding.DecodeString(*latestQuotaConfig)
+		latestQuotaConfigBytes, err = base64.StdEncoding.DecodeString(*latestQuotaConfig)
 		if err != nil {
 			return err
 		}
-		cfg, err := parseBucketQuota(bucket, cfgBytes)
-		if err != nil {
-			return err
-		}
-		latestCfgJSON, err = json.Marshal(cfg)
-		if err != nil {
-			return wrapSRErr(err)
-		}
-		latestQuotaConfigBytes = []byte(*latestQuotaConfig)
 	}
 
 	latestPeerName = info.Sites[latestID].Name
@@ -3593,10 +3581,7 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 		latestSSEConfig          *string
 	)
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
+	bs := info.BucketStats[bucket]
 	for dID, ss := range bs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.meta.SSEConfigUpdatedAt
@@ -3614,10 +3599,15 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 			latestSSEConfig = ss.meta.SSEConfig
 		}
 	}
+
 	latestPeerName = info.Sites[latestID].Name
 	var latestSSEConfigBytes []byte
+	var err error
 	if latestSSEConfig != nil {
-		latestSSEConfigBytes = []byte(*latestSSEConfig)
+		latestSSEConfigBytes, err = base64.StdEncoding.DecodeString(*latestSSEConfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	for dID, bStatus := range bs {
@@ -3653,6 +3643,8 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 }
 
 func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3664,10 +3656,6 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 		latestObjLockConfig      *string
 	)
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range bs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.meta.ObjectLockConfigUpdatedAt
@@ -3687,8 +3675,12 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 	}
 	latestPeerName = info.Sites[latestID].Name
 	var latestObjLockConfigBytes []byte
+	var err error
 	if latestObjLockConfig != nil {
-		latestObjLockConfigBytes = []byte(*latestObjLockConfig)
+		latestObjLockConfigBytes, err = base64.StdEncoding.DecodeString(*latestObjLockConfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	for dID, bStatus := range bs {
@@ -3724,16 +3716,14 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 }
 
 func (c *SiteReplicationSys) healCreateMissingBucket(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
 		return nil
 	}
 
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
 	bucketCnt := 0
 	var (
 		latestID   string
@@ -3781,8 +3771,9 @@ func (c *SiteReplicationSys) healCreateMissingBucket(ctx context.Context, objAPI
 		peerName := info.Sites[dID].Name
 		if dID == globalDeploymentID {
 			err := c.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
-			logger.LogIf(ctx, c.annotateErr("MakeWithVersioning", fmt.Errorf("error healing bucket for site replication %w from %s -> %s", err, latestPeerName, peerName)))
 			if err != nil {
+				logger.LogIf(ctx, c.annotateErr("MakeWithVersioning", fmt.Errorf("error healing bucket for site replication %w from %s -> %s",
+					err, latestPeerName, peerName)))
 				return err
 			}
 		} else {
@@ -3816,15 +3807,14 @@ func (c *SiteReplicationSys) healCreateMissingBucket(ctx context.Context, objAPI
 }
 
 func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
 		return nil
 	}
-	bs, ok := info.BucketStats[bucket]
-	if !ok {
-		return nil
-	}
+
 	var replMismatch bool
 	for _, ss := range bs {
 		if ss.ReplicationCfgMismatch {
