@@ -768,8 +768,8 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	// Read the object, doesn't exist returns an s3 compatible error.
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
-	//TODO:off may be 0
-	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
+	//TODO:offset is 0, it may cause bug-----------------------
+	readCloser, size, err := fsOpenFile(ctx, fsObjPath, 0)
 	if err != nil {
 		rwPoolUnlocker()
 		nsUnlocker()
@@ -781,7 +781,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	}
 
 	var bb []byte
-	if bucket != minioMetaBucket || !strings.Contains(bucket, ".minio.sys") {
+	if !isSysCall(bucket) {
 		bb, err = gateway.Get(readCloser)
 
 		if err != nil {
