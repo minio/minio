@@ -2189,7 +2189,7 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 			if _, ok := policyStats[pname]; !ok {
 				policyStats[pname] = make([]srPolicy, 0, numSites)
 			}
-			policyStats[pname] = append(policyStats[pname], srPolicy{policy: policy, DeploymentID: sri.DeploymentID})
+			policyStats[pname] = append(policyStats[pname], srPolicy{policy: policy.Policy, DeploymentID: sri.DeploymentID})
 		}
 		for user, policy := range sri.UserPolicies {
 			if _, ok := userPolicyStats[user]; !ok {
@@ -2848,13 +2848,13 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				return info, errSRBackendIssue(err)
 			}
 		}
-		info.Policies = make(map[string]json.RawMessage, len(allPolicies))
+		info.Policies = make(map[string]madmin.SRIAMPolicy, len(allPolicies))
 		for pname, policy := range allPolicies {
 			policyJSON, err := json.Marshal(policy)
 			if err != nil {
 				return info, wrapSRErr(err)
 			}
-			info.Policies[pname] = json.RawMessage(policyJSON)
+			info.Policies[pname] = madmin.SRIAMPolicy{Policy: json.RawMessage(policyJSON)}
 		}
 	}
 
