@@ -127,7 +127,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalHTTPListen.Subscribe(listenCh, ctx.Done(), func(evI interface{}) bool {
+	listenFn := func(evI interface{}) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -138,7 +138,13 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
-	})
+	}
+
+	err := globalHTTPListen.Subscribe(listenCh, ctx.Done(), listenFn)
+	if err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		return
+	}
 
 	if bucketName != "" {
 		values.Set(peerRESTListenBucket, bucketName)

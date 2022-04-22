@@ -1409,9 +1409,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
+	traceFn := func(entry interface{}) bool {
 		return mustTrace(entry, traceOpts)
-	})
+	}
+
+	err = globalTrace.Subscribe(traceCh, ctx.Done(), traceFn)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		return
+	}
 
 	for _, peer := range peers {
 		if peer == nil {
@@ -1483,7 +1489,11 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
+	err = globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		return
+	}
 
 	for _, peer := range peers {
 		if peer == nil {

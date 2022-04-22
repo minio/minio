@@ -342,7 +342,7 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("getbucketnotification", maxClients(gz(httpTraceAll(api.GetBucketNotificationHandler))))).Queries("notification", "")
 		// ListenNotification
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("listennotification", maxClients(gz(httpTraceAll(api.ListenNotificationHandler))))).Queries("events", "{events:.*}")
+			collectAPIStats("listennotification", gz(httpTraceAll(api.ListenNotificationHandler)))).Queries("events", "{events:.*}")
 		// ResetBucketReplicationStatus - MinIO extension API
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("resetbucketreplicationstatus", maxClients(gz(httpTraceAll(api.ResetBucketReplicationStatusHandler))))).Queries("replication-reset-status", "")
@@ -474,7 +474,7 @@ func registerAPIRouter(router *mux.Router) {
 
 	// ListenNotification
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(
-		collectAPIStats("listennotification", maxClients(gz(httpTraceAll(api.ListenNotificationHandler))))).Queries("events", "{events:.*}")
+		collectAPIStats("listennotification", gz(httpTraceAll(api.ListenNotificationHandler)))).Queries("events", "{events:.*}")
 
 	// ListBuckets
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(
