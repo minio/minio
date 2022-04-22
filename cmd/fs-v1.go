@@ -899,7 +899,25 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 		return oi, err
 	}
 
-	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	//TODO:Place me in a func.
+	bId := ""
+	if !isSysCall(bucket) {
+		// Read the object, doesn't exist returns an s3 compatible error.
+		fsObjPath := pathJoin(fs.fsPath, bucket, object)
+		//TODO:offset is 0, it may cause bug-----------------------
+		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		idB, err := ioutil.ReadAll(readCloser)
+		bId = string(idB)
+
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	}
+
+	return fsMeta.ToObjectInfo(bucket, object, fi, bId), nil
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
@@ -949,7 +967,25 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		return oi, err
 	}
 
-	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	//TODO:Place me in a func :)
+	bId := ""
+	if !isSysCall(bucket) {
+		// Read the object, doesn't exist returns an s3 compatible error.
+		fsObjPath := pathJoin(fs.fsPath, bucket, object)
+		//TODO:offset is 0, it may cause bug-----------------------
+		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		idB, err := ioutil.ReadAll(readCloser)
+		bId = string(idB)
+
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	}
+
+	return fsMeta.ToObjectInfo(bucket, object, fi, bId), nil
 }
 
 // getObjectInfoWithLock - reads object metadata and replies back ObjectInfo.

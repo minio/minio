@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/minio/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -134,7 +135,7 @@ func isFSMetaValid(version string) bool {
 }
 
 // Converts metadata to object info.
-func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo {
+func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo, blockchainId ...string) ObjectInfo {
 	if len(m.Meta) == 0 {
 		m.Meta = make(map[string]string)
 	}
@@ -158,7 +159,15 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	objInfo.ModTime = timeSentinel
 	if fi != nil {
 		objInfo.ModTime = fi.ModTime()
-		objInfo.Size = fi.Size()
+		if len(blockchainId) > 0 && blockchainId[0] != "" {
+			s, err := gateway.GetFileSize(blockchainId[0])
+			if err != nil {
+				return ObjectInfo{}
+			}
+			objInfo.Size = s
+		} else {
+			objInfo.Size = fi.Size()
+		}
 		if fi.IsDir() {
 			// Directory is always 0 bytes in S3 API, treat it as such.
 			objInfo.Size = 0
