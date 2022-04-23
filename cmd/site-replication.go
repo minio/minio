@@ -3325,12 +3325,12 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 
 	for bucket := range info.BucketStats {
 		c.healCreateMissingBucket(ctx, objAPI, bucket, info)
-		c.healTagMetadata(ctx, objAPI, bucket, info)
 		c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
 		c.healSSEMetadata(ctx, objAPI, bucket, info)
-		c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
 		c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
 		c.healBucketPolicies(ctx, objAPI, bucket, info)
+		c.healTagMetadata(ctx, objAPI, bucket, info)
+		c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
 		// Notification and ILM are site specific settings.
 	}
 	return nil
@@ -3400,8 +3400,9 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 			Bucket: bucket,
 			Tags:   latestTaggingConfig,
 		})
-		logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing tagging metadata for peer %s from peer %s : %w", peerName, latestPeerName, err)))
-		return err
+		if err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing tagging metadata for peer %s from peer %s : %w", peerName, latestPeerName, err)))
+		}
 	}
 	return nil
 }
@@ -3464,7 +3465,6 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 		}); err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing bucket policy metadata for peer %s from peer %s : %w",
 				peerName, latestPeerName, err)))
-			return err
 		}
 	}
 	return nil
@@ -3540,7 +3540,6 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		}); err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing quota config metadata for peer %s from peer %s : %s",
 				peerName, latestPeerName, err.Error())))
-			return err
 		}
 	}
 	return nil
@@ -3614,7 +3613,7 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 		if err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing SSE config metadata for peer %s from peer %s : %s",
 				peerName, latestPeerName, err.Error())))
-			return err
+
 		}
 	}
 	return nil
@@ -3689,7 +3688,6 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing object lock config metadata for peer %s from peer %s : %w",
 				peerName, latestPeerName, err)))
 		}
-		return err
 	}
 	return nil
 }
@@ -3805,7 +3803,6 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
 		if err != nil {
 			logger.LogIf(ctx, c.annotateErr("ConfigureRepl", err))
-			return err
 		}
 	}
 	return nil
@@ -3836,7 +3833,7 @@ func (c *SiteReplicationSys) healIAMSystem(ctx context.Context, objAPI ObjectLay
 	}
 
 	for user := range info.UserStats {
-		c.healLocalUsers(ctx, objAPI, user, info)
+		c.healUsers(ctx, objAPI, user, info)
 	}
 	for group := range info.GroupStats {
 		c.healGroups(ctx, objAPI, group, info)
@@ -3859,6 +3856,9 @@ func (c *SiteReplicationSys) healIAMSystem(ctx context.Context, objAPI ObjectLay
 
 // heal iam policies present on this site to peers, provided current cluster has the most recent update.
 func (c *SiteReplicationSys) healPolicies(ctx context.Context, objAPI ObjectLayer, policy string, info srStatusInfo) error {
+	// create IAM policy on peer cluster if missing
+	ps := info.PolicyStats[policy]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3870,11 +3870,6 @@ func (c *SiteReplicationSys) healPolicies(ctx context.Context, objAPI ObjectLaye
 		lastUpdate               time.Time
 		latestPolicyStat         srPolicyStatsSummary
 	)
-	// create IAM policy on peer cluster if missing
-	ps, ok := info.PolicyStats[policy]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range ps {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.policy.UpdatedAt
@@ -3909,13 +3904,15 @@ func (c *SiteReplicationSys) healPolicies(ctx context.Context, objAPI ObjectLaye
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Error healing IAM policy %s from peer site %s -> site %s : %w", policy, latestPeerName, peerName, err))
 		}
-		continue
 	}
 	return nil
 }
 
 // heal user policy mappings present on this site to peers, provided current cluster has the most recent update.
 func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo, svcAcct bool) error {
+	// create user policy mapping on peer cluster if missing
+	us := info.UserStats[user]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3926,12 +3923,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 		lastUpdate               time.Time
 		latestUserStat           srUserStatsSummary
 	)
-	// create user policy mapping on peer cluster if missing
-	ps, ok := info.UserStats[user]
-	if !ok {
-		return nil
-	}
-	for dID, ss := range ps {
+	for dID, ss := range us {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.userPolicy.UpdatedAt
 			latestID = dID
@@ -3949,7 +3941,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 	}
 	latestPeerName = info.Sites[latestID].Name
 	// heal policy of peers if peer does not have it.
-	for dID, pStatus := range ps {
+	for dID, pStatus := range us {
 		if dID == globalDeploymentID {
 			continue
 		}
@@ -3971,13 +3963,15 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Error healing IAM user policy mapping for %s from peer site %s -> site %s : %w", user, latestPeerName, peerName, err))
 		}
-		continue
 	}
 	return nil
 }
 
 // heal group policy mappings present on this site to peers, provided current cluster has the most recent update.
 func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI ObjectLayer, group string, info srStatusInfo, svcAcct bool) error {
+	// create group policy mapping on peer cluster if missing
+	gs := info.GroupStats[group]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -3989,12 +3983,7 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 		lastUpdate               time.Time
 		latestGroupStat          srGroupStatsSummary
 	)
-	// create group policy mapping on peer cluster if missing
-	ps, ok := info.GroupStats[group]
-	if !ok {
-		return nil
-	}
-	for dID, ss := range ps {
+	for dID, ss := range gs {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.groupPolicy.UpdatedAt
 			latestID = dID
@@ -4012,7 +4001,7 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 	}
 	latestPeerName = info.Sites[latestID].Name
 	// heal policy of peers if peer does not have it.
-	for dID, pStatus := range ps {
+	for dID, pStatus := range gs {
 		if dID == globalDeploymentID {
 			continue
 		}
@@ -4035,13 +4024,15 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Error healing IAM group policy mapping for %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
 		}
-		continue
 	}
 	return nil
 }
 
 // heal user accounts of local users that are present on this site, provided current cluster has the most recent update.
-func (c *SiteReplicationSys) healLocalUsers(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo) error {
+func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo) error {
+	// create user if missing; fix user policy mapping if missing
+	us := info.UserStats[user]
+
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -4052,11 +4043,6 @@ func (c *SiteReplicationSys) healLocalUsers(ctx context.Context, objAPI ObjectLa
 		lastUpdate               time.Time
 		latestUserStat           srUserStatsSummary
 	)
-	// create user if missing; fix user policy mapping if missing
-	us, ok := info.UserStats[user]
-	if !ok {
-		return nil
-	}
 	for dID, ss := range us {
 		if lastUpdate.IsZero() {
 			lastUpdate = ss.userInfo.UserInfo.UpdatedAt
@@ -4090,7 +4076,7 @@ func (c *SiteReplicationSys) healLocalUsers(ctx context.Context, objAPI ObjectLa
 			continue
 		}
 		// heal only the user accounts that are local users
-		if creds.IsServiceAccount() {
+		if creds.IsServiceAccount() || creds.IsTemp() {
 			continue
 		}
 		peerName := info.Sites[dID].Name
@@ -4107,7 +4093,6 @@ func (c *SiteReplicationSys) healLocalUsers(ctx context.Context, objAPI ObjectLa
 		}); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Error healing user %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 		}
-		continue
 	}
 	return nil
 }
@@ -4172,7 +4157,6 @@ func (c *SiteReplicationSys) healGroups(ctx context.Context, objAPI ObjectLayer,
 		}); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Error healing group %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
 		}
-		continue
 	}
 	return nil
 }
