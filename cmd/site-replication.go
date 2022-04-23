@@ -3247,7 +3247,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 	return nil
 }
 
-const siteHealTimeInterval = 1 * time.Minute
+const siteHealTimeInterval = 10 * time.Second
 
 func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI ObjectLayer) {
 	healTimer := time.NewTimer(siteHealTimeInterval)
@@ -3439,7 +3439,7 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 	}
 	latestPeerName = info.Sites[latestID].Name
 	for dID, bStatus := range bs {
-		if !bStatus.TagMismatch {
+		if !bStatus.PolicyMismatch {
 			continue
 		}
 		if strings.EqualFold(string(latestIAMPolicy), string(bStatus.meta.Policy)) {
@@ -3457,13 +3457,15 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 			return wrapSRErr(err)
 		}
 		peerName := info.Sites[dID].Name
-		err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
+		if err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
 			Type:   madmin.SRBucketMetaTypePolicy,
 			Bucket: bucket,
 			Policy: latestIAMPolicy,
-		})
-		logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing bucket policy metadata for peer %s from peer %s : %w", peerName, latestPeerName, err)))
-		return err
+		}); err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing bucket policy metadata for peer %s from peer %s : %w",
+				peerName, latestPeerName, err)))
+			return err
+		}
 	}
 	return nil
 }
@@ -3536,7 +3538,8 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 			Bucket: bucket,
 			Quota:  latestCfgJSON,
 		}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing quota config metadata for peer %s from peer %s : %s", peerName, latestPeerName, err.Error())))
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing quota config metadata for peer %s from peer %s : %s",
+				peerName, latestPeerName, err.Error())))
 			return err
 		}
 	}
@@ -3609,7 +3612,8 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 			SSEConfig: latestSSEConfig,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing SSE config metadata for peer %s from peer %s : %s", peerName, latestPeerName, err.Error())))
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing SSE config metadata for peer %s from peer %s : %s",
+				peerName, latestPeerName, err.Error())))
 			return err
 		}
 	}
@@ -3682,7 +3686,8 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 			Tags:   latestObjLockConfig,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing object lock config metadata for peer %s from peer %s : %w", peerName, latestPeerName, err)))
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing object lock config metadata for peer %s from peer %s : %w",
+				peerName, latestPeerName, err)))
 		}
 		return err
 	}
