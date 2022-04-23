@@ -3257,11 +3257,14 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 		select {
 		case <-healTimer.C:
 			healTimer.Reset(siteHealTimeInterval)
+
 			c.RLock()
-			if !c.enabled {
+			enabled := c.enabled
+			c.RUnlock()
+			if !enabled {
 				continue
 			}
-			c.RUnlock()
+
 			c.healIAMSystem(ctx, objAPI) // heal IAM system first
 			c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 		case <-ctx.Done():
@@ -3613,7 +3616,6 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 		if err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing SSE config metadata for peer %s from peer %s : %s",
 				peerName, latestPeerName, err.Error())))
-
 		}
 	}
 	return nil
