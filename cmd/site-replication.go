@@ -2190,19 +2190,19 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	}
 
 	sris := make([]madmin.SRInfo, len(c.state.Peers))
-	idxMap := make(map[string]int, len(c.state.Peers))
+	depIdx := make(map[string]int, len(c.state.Peers))
 	var depIDs []string
 	i := 0
 	for d := range c.state.Peers {
 		depIDs = append(depIDs, d)
-		idxMap[d] = i
+		depIdx[d] = i
 		i++
 	}
 
 	metaInfoConcErr := c.concDo(
 		func() error {
 			srInfo, err := c.SiteReplicationMetaInfo(ctx, objAPI, opts)
-			k := idxMap[globalDeploymentID]
+			k := depIdx[globalDeploymentID]
 			sris[k] = srInfo
 			return err
 		},
@@ -2212,7 +2212,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				return err
 			}
 			srInfo, err := admClient.SRMetaInfo(ctx, opts)
-			k := idxMap[deploymentID]
+			k := depIdx[deploymentID]
 			sris[k] = srInfo
 			return err
 		},
@@ -2229,9 +2229,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	}
 
 	var maxBuckets int
-	depIdxes := make(map[string]int)
-	for i, sri := range sris {
-		depIdxes[sri.DeploymentID] = i
+	for _, sri := range sris {
 		if len(sri.Buckets) > maxBuckets {
 			maxBuckets = len(sri.Buckets)
 		}
@@ -2254,34 +2252,22 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	allPolicies := set.NewStringSet()
 	for _, sri := range sris {
 		for b := range sri.Buckets {
-			if !allBuckets.Contains(b) {
-				allBuckets.Add(b)
-			}
+			allBuckets.Add(b)
 		}
 		for u := range sri.UserInfoMap {
-			if !allUsers.Contains(u) {
-				allUsers.Add(u)
-			}
+			allUsers.Add(u)
 		}
 		for g := range sri.GroupDescMap {
-			if !allGroups.Contains(g) {
-				allGroups.Add(g)
-			}
+			allGroups.Add(g)
 		}
 		for p := range sri.Policies {
-			if !allPolicies.Contains(p) {
-				allPolicies.Add(p)
-			}
+			allPolicies.Add(p)
 		}
 		for u := range sri.UserPolicies {
-			if !allUserWPolicies.Contains(u) {
-				allUserWPolicies.Add(u)
-			}
+			allUserWPolicies.Add(u)
 		}
 		for g := range sri.GroupPolicies {
-			if !allGroupWPolicies.Contains(g) {
-				allGroupWPolicies.Add(g)
-			}
+			allGroupWPolicies.Add(g)
 		}
 	}
 
@@ -2301,50 +2287,38 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			if _, ok := policyStats[pname]; !ok {
 				policyStats[pname] = make([]srPolicy, numSites)
 			}
-			pi, ok := sri.Policies[pname]
-			if !ok {
-				pi = madmin.SRIAMPolicy{}
-			}
+
+			// if pname is not present in the map, the zero value
+			// will be returned.
+			pi := sri.Policies[pname]
 			policyStats[pname][i] = srPolicy{SRIAMPolicy: pi, DeploymentID: sri.DeploymentID}
 		}
 		for user := range allUserWPolicies {
 			if _, ok := userPolicyStats[user]; !ok {
 				userPolicyStats[user] = make([]srPolicyMapping, numSites)
 			}
-			up, ok := sri.UserPolicies[user]
-			if !ok {
-				up = madmin.SRPolicyMapping{}
-			}
+			up := sri.UserPolicies[user]
 			userPolicyStats[user][i] = srPolicyMapping{SRPolicyMapping: up, DeploymentID: sri.DeploymentID}
 		}
 		for group := range allGroupWPolicies {
 			if _, ok := groupPolicyStats[group]; !ok {
 				groupPolicyStats[group] = make([]srPolicyMapping, numSites)
 			}
-			up, ok := sri.GroupPolicies[group]
-			if !ok {
-				up = madmin.SRPolicyMapping{}
-			}
+			up := sri.GroupPolicies[group]
 			groupPolicyStats[group][i] = srPolicyMapping{SRPolicyMapping: up, DeploymentID: sri.DeploymentID}
 		}
 		for u := range allUsers {
 			if _, ok := userInfoStats[u]; !ok {
 				userInfoStats[u] = make([]srUserInfo, numSites)
 			}
-			ui, ok := sri.UserInfoMap[u]
-			if !ok {
-				ui = madmin.UserInfo{}
-			}
+			ui := sri.UserInfoMap[u]
 			userInfoStats[u][i] = srUserInfo{UserInfo: ui, DeploymentID: sri.DeploymentID}
 		}
 		for g := range allGroups {
 			if _, ok := groupDescStats[g]; !ok {
 				groupDescStats[g] = make([]srGroupDesc, numSites)
 			}
-			gd, ok := sri.GroupDescMap[g]
-			if !ok {
-				gd = madmin.GroupDesc{}
-			}
+			gd := sri.GroupDescMap[g]
 			groupDescStats[g][i] = srGroupDesc{GroupDesc: gd, DeploymentID: sri.DeploymentID}
 		}
 	}
@@ -2371,7 +2345,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 			userPolicyMismatch := !isPolicyMappingReplicated(uPolicyCount, numSites, policyMappings)
 			for _, ps := range pslc {
-				dID := depIdxes[ps.DeploymentID]
+				dID := depIdx[ps.DeploymentID]
 				_, hasUser := sris[dID].UserPolicies[u]
 				info.UserStats[u][ps.DeploymentID] = srUserStatsSummary{
 					SRUserStatsSummary: madmin.SRUserStatsSummary{
@@ -2404,7 +2378,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 			userInfoMismatch := !isUserInfoReplicated(userCount, numSites, uiSlc)
 			for _, ps := range pslc {
-				dID := depIdxes[ps.DeploymentID]
+				dID := depIdx[ps.DeploymentID]
 				_, hasUser := sris[dID].UserInfoMap[u]
 				if len(info.UserStats[u]) == 0 {
 					info.UserStats[u] = make(map[string]srUserStatsSummary)
@@ -2445,7 +2419,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				info.GroupStats[g] = make(map[string]srGroupStatsSummary)
 			}
 			for _, ps := range pslc {
-				dID := depIdxes[ps.DeploymentID]
+				dID := depIdx[ps.DeploymentID]
 				_, hasGroup := sris[dID].GroupPolicies[g]
 				info.GroupStats[g][ps.DeploymentID] = srGroupStatsSummary{
 					SRGroupStatsSummary: madmin.SRGroupStatsSummary{
@@ -2478,7 +2452,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 			gdMismatch := !isGroupDescReplicated(groupCount, numSites, gds)
 			for _, ps := range pslc {
-				dID := depIdxes[ps.DeploymentID]
+				dID := depIdx[ps.DeploymentID]
 				_, hasGroup := sris[dID].GroupDescMap[g]
 				if len(info.GroupStats[g]) == 0 {
 					info.GroupStats[g] = make(map[string]srGroupStatsSummary)
@@ -2523,7 +2497,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 			policyMismatch := !isIAMPolicyReplicated(uPolicyCount, numSites, policies)
 			for _, ps := range pslc {
-				dID := depIdxes[ps.DeploymentID]
+				dID := depIdx[ps.DeploymentID]
 				_, hasPolicy := sris[dID].Policies[p]
 				info.PolicyStats[p][ps.DeploymentID] = srPolicyStatsSummary{
 					SRPolicyStatsSummary: madmin.SRPolicyStatsSummary{
@@ -2646,7 +2620,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			quotaCfgMismatch := !isBktQuotaCfgReplicated(numSites, quotaCfgs)
 			info.BucketStats[b] = make(map[string]srBucketStatsSummary, numSites)
 			for i, s := range slc {
-				dIdx := depIdxes[s.DeploymentID]
+				dIdx := depIdx[s.DeploymentID]
 				var hasBucket bool
 				if bi, ok := sris[dIdx].Buckets[s.Bucket]; ok {
 					hasBucket = !bi.CreatedAt.Equal(timeSentinel)
