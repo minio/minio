@@ -4183,7 +4183,7 @@ func isGroupDescEqual(g1, g2 madmin.GroupDesc) bool {
 		g1.Policy != g2.Policy {
 		return false
 	}
-	if len(g1.Members) != len(g1.Members) {
+	if len(g1.Members) != len(g2.Members) {
 		return false
 	}
 	for _, v1 := range g1.Members {
@@ -4226,10 +4226,5 @@ func isUserInfoEqual(u1, u2 madmin.UserInfo) bool {
 }
 
 func isPolicyMappingEqual(p1, p2 srPolicyMapping) bool {
-	if p1.Policy != p2.Policy ||
-		p1.IsGroup != p2.IsGroup ||
-		p1.UserOrGroup != p2.UserOrGroup {
-		return false
-	}
-	return true
+	return p1.Policy == p2.Policy && p1.IsGroup == p2.IsGroup && p1.UserOrGroup == p2.UserOrGroup
 }
