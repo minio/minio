@@ -25,6 +25,8 @@ linters:
     - varcheck
     - gocritic
     - gofumpt
+    - tenv
+    - durationcheck
 
 linters-settings:
   gofumpt:
