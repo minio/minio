@@ -546,6 +546,20 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 	}
 }
 
+// ListPolicyDocs - lists all canned policy docs.
+func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicyDocs(ctx, bucketName)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // SetPolicy - sets a new named policy.
 func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy.Policy) error {
 	if !sys.Initialized() {

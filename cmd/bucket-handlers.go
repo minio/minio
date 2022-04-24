@@ -1374,7 +1374,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	}
 
 	// Deny object locking configuration settings on existing buckets without object lock enabled.
-	if _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
+	if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1427,7 +1427,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
+	config, _, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1529,7 +1529,7 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
+	config, _, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1677,7 +1677,7 @@ func (api objectAPIHandlers) GetBucketReplicationConfigHandler(w http.ResponseWr
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1820,7 +1820,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1908,7 +1908,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 		return
 	}
 
-	if _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
+	if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
