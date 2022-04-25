@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -179,7 +180,10 @@ func minioConfigToConsoleFeatures() {
 	}
 	// pass the console subpath configuration
 	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
-		os.Setenv("CONSOLE_SUBPATH", pathJoin(globalBrowserRedirectURL.Path, SlashSeparator))
+		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
+		if subPath != SlashSeparator {
+			os.Setenv("CONSOLE_SUBPATH", subPath)
+		}
 	}
 	// Enable if prometheus URL is set.
 	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
