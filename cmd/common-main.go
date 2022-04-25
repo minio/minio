@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -179,11 +180,7 @@ func minioConfigToConsoleFeatures() {
 	}
 	// pass the console subpath configuration
 	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
-		subPath := ""
-		trimmedRedirectPath := strings.TrimSpace(globalBrowserRedirectURL.Path)
-		if trimmedRedirectPath != "" && trimmedRedirectPath != SlashSeparator {
-			subPath = pathJoin(trimmedRedirectPath, SlashSeparator)
-		}
+		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
 		}
