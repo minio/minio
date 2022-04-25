@@ -18,6 +18,9 @@ package juicefs
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/gops/agent"
@@ -31,6 +34,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/minio/cli"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"net"
@@ -47,22 +51,33 @@ import (
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	return &meta.Config{
-		Retries:    10,
+		Retries:    c.Int("io-retries"),
 		Strict:     true,
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		Heartbeat:  duration(c.String("heartbeat")),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
+}
+
+func duration(s string) time.Duration {
+	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return time.Second * time.Duration(v)
+	}
+	if v, err := time.ParseDuration(s); err == nil {
+		return v
+	}
+	return 0
 }
 
 func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry) {
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": name}, registry))
-	registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	registerer.MustRegister(prometheus.NewGoCollector())
+	registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	registerer.MustRegister(collectors.NewGoCollector())
 	return registerer, registry
 }
 
@@ -83,7 +98,7 @@ func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer
 			EnableOpenMetrics: true,
 		},
 	))
-	registerer.MustRegister(prometheus.NewBuildInfoCollector())
+	registerer.MustRegister(collectors.NewBuildInfoCollector())
 
 	// If not set metrics addr,the port will be auto set
 	if !c.IsSet("metrics") {
@@ -137,12 +152,15 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
+		HashPrefix: format.HashPrefix,
 
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
+		MaxDeletes:    c.Int("max-deletes"),
+		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    c.Int("buffer-size") << 20,
@@ -167,7 +185,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	return chunkConf
 }
 
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
+	if err := format.Decrypt(); err != nil {
+		return nil, fmt.Errorf("format decrypt: %s", err)
+	}
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
@@ -200,9 +221,22 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
+		block, _ := pem.Decode([]byte(format.EncryptKey))
+		if block == nil {
+			return nil, errors.New("failed to parse PEM block containing the key")
+		}
+		// nolint:staticcheck
+		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+			if passphrase == "" {
+				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			}
+		} else if passphrase != "" {
+			logger.Warningf("passphrase is not used, because private key is not encrypted")
+		}
+
+		privKey, err := object.ParseRsaPrivateKeyFromPem(block, passphrase)
 		if err != nil {
-			return nil, fmt.Errorf("load private key: %s", err)
+			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
@@ -210,8 +244,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	return blob, nil
 }
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
-	readOnly := c.Bool("read-only")
-	metaConf := getMetaConf(c, mp, readOnly)
+	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
 	if err != nil {
@@ -223,7 +256,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 
 	chunkConf := getChunkConf(c, format)
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
@@ -254,7 +287,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Format:     format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
-		BackupMeta: c.Duration("backup-meta"),
+		BackupMeta: duration(c.String("backup-meta")),
 	}
 }
 func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
@@ -284,7 +317,13 @@ func removePassword(uri string) {
 	gspt.SetProcTitle(strings.Join(os.Args, " "))
 }
 
-func setup(c *cli.Context) {
+func setup(c *cli.Context, n int) {
+	if c.NArg() < n {
+		logger.Errorf("This command requires at least %d arguments", n)
+		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
+		os.Exit(1)
+	}
+
 	if c.Bool("trace") {
 		utils.SetLogLevel(logrus.TraceLevel)
 	} else if c.Bool("verbose") {
@@ -318,6 +357,7 @@ func globalFlags() []cli.Flag {
 			Name:  "verbose",
 			Usage: "enable debug log",
 		},
+		// -- quiet used by minio
 		&cli.BoolFlag{
 			Name:  "trace",
 			Usage: "enable trace log",
@@ -336,6 +376,11 @@ func globalFlags() []cli.Flag {
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin":
 		fallthrough
 	case "windows":
@@ -401,9 +446,10 @@ func clientFlags() []cli.Flag {
 			Name:  "writeback",
 			Usage: "upload objects in background",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "upload-delay",
-			Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
+			Value: "0",
+			Usage: "delayed duration (in seconds) for uploading objects",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
@@ -424,15 +470,15 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "backup-meta",
-			Value: time.Hour,
-			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
+			Value: "3600",
+			Usage: "interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "heartbeat",
-			Value: 12 * time.Second,
-			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
+			Value: "12",
+			Usage: "interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
 		&cli.BoolFlag{
 			Name:  "read-only",

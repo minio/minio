@@ -22,6 +22,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs" //nolint:gofumpt
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio/cmd"
@@ -113,7 +114,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               minio.JuiceFSGateway,
-		Usage:              "JuiceFS Distributed File System (JuiceFS)",
+		Usage:              fmt.Sprintf("JuiceFS Distributed File System (JuiceFS %s)", strings.TrimSuffix(version.Version(), "+unknown")),
 		Action:             juicefsGatewayMain,
 		CustomHelpTemplate: juicefsGatewayTemplate,
 		HideHelpCommand:    true,
@@ -148,7 +149,7 @@ func (n *JfsObjects) Name() string {
 }
 
 func (n *JfsObjects) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
-	setup(n.ctx)
+	setup(n.ctx, 2)
 	addr := n.ctx.Args().Get(0)
 	removePassword(addr)
 	m, store, conf := initForSvc(n.ctx, "s3gateway", addr)
