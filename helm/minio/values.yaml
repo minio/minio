@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-04-16T04-26-02Z
+  tag: RELEASE.2022-04-26T01-20-24Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -107,11 +107,8 @@ pools: 1
 
 # Deploy if 'mode == gateway' - 4 replicas.
 gateway:
-  type: "nas" # currently only "nas,gcs" are supported.
+  type: "nas" # currently only "nas" are supported.
   replicas: 4
-  gcs:
-    serviceAccountFile: "" # credential JSON file of service account key (not required if using existing secret)
-    projectId: "" # Google cloud project id required
 
 ## TLS Settings for MinIO
 tls:

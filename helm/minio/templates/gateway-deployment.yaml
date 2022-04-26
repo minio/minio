@@ -74,9 +74,6 @@ spec:
             {{- if eq .Values.gateway.type "nas" }}
             - "/usr/bin/docker-entrypoint.sh minio gateway nas {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
             {{- end }}
-            {{- if eq .Values.gateway.type "gcs" }}
-            - "/usr/bin/docker-entrypoint.sh minio gateway gcs {{ .Values.gateway.gcs.projectId }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
-            {{- end }}
           volumeMounts:
             - name: minio-user
               mountPath: "/tmp/credentials"
@@ -113,10 +110,6 @@ spec:
             - name: MINIO_CONFIG_ENV_FILE
               value: "/tmp/minio-config-env/config.env"
             {{- end}}
-            {{- if eq .Values.gateway.type "gcs" }}
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: "/tmp/credentials/service-account-file.json"
-            {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
