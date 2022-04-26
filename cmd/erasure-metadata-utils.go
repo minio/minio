@@ -178,10 +178,6 @@ func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo,
 			inconsistent++
 			continue
 		}
-		if len(fi.Data) != len(meta.Data) {
-			inconsistent++
-			continue
-		}
 		if meta.XLV1 != fi.XLV1 {
 			inconsistent++
 			continue
@@ -225,12 +221,6 @@ func shuffleDisksAndPartsMetadata(disks []StorageAPI, partsMetadata []FileInfo, 
 		}
 		if !init && !partsMetadata[index].IsValid() {
 			// Check for parts metadata validity for only
-			// fi.ModTime is not empty - ModTime is always set,
-			// if object was ever written previously.
-			continue
-		}
-		if !init && len(fi.Data) != len(partsMetadata[index].Data) {
-			// Check for length of data parts only when
 			// fi.ModTime is not empty - ModTime is always set,
 			// if object was ever written previously.
 			continue

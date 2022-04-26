@@ -297,8 +297,6 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
 			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
-			// make sure that length of Data is same
-			fmt.Fprintf(h, "%v", len(meta.Data))
 
 			// ILM transition fields
 			fmt.Fprint(h, meta.TransitionStatus)
