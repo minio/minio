@@ -73,7 +73,7 @@ func TestIAMInternalIDPConcurrencyServerSuite(t *testing.T) {
 }
 
 func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	bucket := getRandomBucketName()
