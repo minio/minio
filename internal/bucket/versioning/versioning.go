@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	errSuspendedPrefixNotSupported = Errorf("suspended prefixes extension supported only when versioning is enabled")
-	errTooManySuspendedPrefixes    = Errorf("too many suspended prefixes")
+	errExcludedPrefixNotSupported = Errorf("excluded prefixes extension supported only when versioning is enabled")
+	errTooManyExcludedPrefixes    = Errorf("too many excluded prefixes")
 )
 
 // Versioning - Configuration for bucket versioning.
@@ -45,9 +45,9 @@ type Versioning struct {
 	XMLName xml.Name `xml:"VersioningConfiguration"`
 	// MFADelete State    `xml:"MFADelete,omitempty"` // not supported yet.
 	Status State `xml:"Status,omitempty"`
-	// MinIO extension - allows selective, prefix-level version suspension.
+	// MinIO extension - allows selective, prefix-level versioning exclusion.
 	// Requires versioning to be enabled
-	SuspendedPrefixes []string `xml:">Prefix,omitempty"`
+	ExcludedPrefixes []string `xml:">Prefix,omitempty"`
 }
 
 // Validate - validates the versioning configuration
@@ -61,20 +61,20 @@ func (v Versioning) Validate() error {
 	// }
 	switch v.Status {
 	case Enabled:
-		const maxSuspendedPrefixes = 10
-		if len(v.SuspendedPrefixes) > maxSuspendedPrefixes {
-			return errTooManySuspendedPrefixes
+		const maxExcludedPrefixes = 10
+		if len(v.ExcludedPrefixes) > maxExcludedPrefixes {
+			return errTooManyExcludedPrefixes
 		}
-		for _, sprefix := range v.SuspendedPrefixes {
+		for _, sprefix := range v.ExcludedPrefixes {
 			// Use filepath.Match to check for bad patterns
 			if _, err := filepath.Match(sprefix, ""); err != nil {
-				return Errorf("invalid suspended prefix %s: %w", sprefix, err)
+				return Errorf("invalid excluded prefix %s: %w", sprefix, err)
 			}
 		}
 
 	case Suspended:
-		if len(v.SuspendedPrefixes) > 0 {
-			return errSuspendedPrefixNotSupported
+		if len(v.ExcludedPrefixes) > 0 {
+			return errExcludedPrefixNotSupported
 		}
 	default:
 		return Errorf("unsupported Versioning status %s", v.Status)
@@ -94,7 +94,7 @@ func (v Versioning) EnabledPrefix(prefix string) bool {
 		if prefix == "" {
 			return true
 		}
-		for _, sprefix := range v.SuspendedPrefixes {
+		for _, sprefix := range v.ExcludedPrefixes {
 			if matched, _ := filepath.Match(sprefix, prefix); matched {
 				return false
 			}
@@ -118,7 +118,7 @@ func (v Versioning) SuspendedPrefix(prefix string) bool {
 		if prefix == "" {
 			return false
 		}
-		for _, sprefix := range v.SuspendedPrefixes {
+		for _, sprefix := range v.ExcludedPrefixes {
 			if matched, _ := filepath.Match(sprefix, prefix); matched {
 				return true
 			}

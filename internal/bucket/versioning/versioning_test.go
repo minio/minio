@@ -19,26 +19,26 @@ func TestParseConfig(t *testing.T) {
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Enabled</Status>
-                                  <SuspendedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging </Prefix>
                                     <Prefix> path/to/my/workload/_temporary/ </Prefix>
-                                  </SuspendedPrefixes>
+                                  </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
 			err: nil,
 		},
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Suspended</Status>
-                                  <SuspendedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging </Prefix>
-                                  </SuspendedPrefixes>
+                                  </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
-			err: errSuspendedPrefixNotSupported,
+			err: errExcludedPrefixNotSupported,
 		},
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Enabled</Status>
-                                  <SuspendedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/ab </Prefix>
                                     <Prefix> path/to/my/workload/_staging/cd </Prefix>
                                     <Prefix> path/to/my/workload/_staging/ef </Prefix>
@@ -50,9 +50,9 @@ func TestParseConfig(t *testing.T) {
                                     <Prefix> path/to/my/workload/_staging/qr </Prefix>
                                     <Prefix> path/to/my/workload/_staging/st </Prefix>
                                     <Prefix> path/to/my/workload/_staging/uv </Prefix>
-                                  </SuspendedPrefixes>
+                                  </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
-			err: errTooManySuspendedPrefixes,
+			err: errTooManyExcludedPrefixes,
 		},
 	}
 
