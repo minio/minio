@@ -1111,6 +1111,13 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, errNoHealRequired
 	}
 
+	if !reflect.DeepEqual(s.format, refFormat) {
+		// Format is corrupted and unrecognized by the running instance.
+		logger.LogIf(ctx, fmt.Errorf("Unable to heal the newly replaced drives due to format.json inconsistencies, please engage MinIO support for further assistance: %w",
+			errCorruptedFormat))
+		return res, errCorruptedFormat
+	}
+
 	formatOpID := mustGetUUID()
 
 	// Initialize a new set of set formats which will be written to disk.
@@ -1191,9 +1198,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				}
 			}
 		}
-
-		// Replace reference format with what was loaded from disks.
-		s.format = refFormat
 
 		s.erasureDisksMu.Unlock()
 	}
