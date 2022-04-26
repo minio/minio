@@ -115,10 +115,12 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 	case madmin.MakeWithVersioningBktOp:
 		_, isLockEnabled := r.Form["lockEnabled"]
 		_, isVersioningEnabled := r.Form["versioningEnabled"]
+		_, isForceCreate := r.Form["forceCreate"]
 		opts := BucketOptions{
 			Location:          r.Form.Get("location"),
 			LockEnabled:       isLockEnabled,
 			VersioningEnabled: isVersioningEnabled,
+			ForceCreate:       isForceCreate,
 		}
 		err = globalSiteReplicationSys.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
 	case madmin.ConfigureReplBktOp:
