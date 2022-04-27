@@ -115,45 +115,21 @@ func (opts *Config) Update(nopts Config) {
 	opts.cache.bitrotCycle, _ = parseBitrotConfig(nopts.Bitrot)
 }
 
-var (
-	// DefaultKVS - default KV config for heal settings
-	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   Bitrot,
-			Value: config.EnableOff,
-		},
-		config.KV{
-			Key:   Sleep,
-			Value: "1s",
-		},
-		config.KV{
-			Key:   IOCount,
-			Value: "100",
-		},
-	}
-
-	// Help provides help for config values
-	Help = config.HelpKVS{
-		config.HelpKV{
-			Key:         Bitrot,
-			Description: `perform bitrot scan on disks when checking objects during scanner. e.g 6m`,
-			Optional:    true,
-			Type:        "on|off|duration",
-		},
-		config.HelpKV{
-			Key:         Sleep,
-			Description: `maximum sleep duration between objects to slow down heal operation. eg. 2s`,
-			Optional:    true,
-			Type:        "duration",
-		},
-		config.HelpKV{
-			Key:         IOCount,
-			Description: `maximum IO requests allowed between objects to slow down heal operation. eg. 3`,
-			Optional:    true,
-			Type:        "int",
-		},
-	}
-)
+// DefaultKVS - default KV config for heal settings
+var DefaultKVS = config.KVS{
+	config.KV{
+		Key:   Bitrot,
+		Value: config.EnableOff,
+	},
+	config.KV{
+		Key:   Sleep,
+		Value: "1s",
+	},
+	config.KV{
+		Key:   IOCount,
+		Value: "100",
+	},
+}
 
 const minimumBitrotCycleInMonths = 1
 

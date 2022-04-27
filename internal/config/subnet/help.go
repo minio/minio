@@ -15,35 +15,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package opa
+package subnet
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for OPA policy feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
-	Help = config.HelpKVS{
+	// HelpSubnet - provides help for subnet api key config
+	HelpSubnet = config.HelpKVS{
 		config.HelpKV{
-			Key:         URL,
-			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
-			Type:        "url",
-			Sensitive:   true,
-		},
-		config.HelpKV{
-			Key:         AuthToken,
-			Description: "[DEPRECATED] authorization token for OPA endpoint" + defaultHelpPostfix(AuthToken),
-			Optional:    true,
+			Key:         config.License, // Deprecated Dec 2021
 			Type:        "string",
-			Sensitive:   true,
+			Description: "[DEPRECATED use api_key] Subnet license token for the cluster" + defaultHelpPostfix(config.License),
+			Optional:    true,
 		},
 		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
+			Key:         config.APIKey,
+			Type:        "string",
+			Description: "Subnet api key for the cluster" + defaultHelpPostfix(config.APIKey),
 			Optional:    true,
-			Type:        "sentence",
+		},
+		config.HelpKV{
+			Key:         config.Proxy,
+			Type:        "string",
+			Description: "HTTP(S) proxy URL to use for connecting to SUBNET" + defaultHelpPostfix(config.Proxy),
+			Optional:    true,
 		},
 	}
 )

@@ -15,35 +15,35 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package opa
+package heal
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for OPA policy feature.
+// Help template for caching feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
+	// Help provides help for config values
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         URL,
-			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
-			Type:        "url",
-			Sensitive:   true,
+			Key:         Bitrot,
+			Description: `perform bitrot scan on disks when checking objects during scanner` + defaultHelpPostfix(Bitrot),
+			Optional:    true,
+			Type:        "on|off",
 		},
 		config.HelpKV{
-			Key:         AuthToken,
-			Description: "[DEPRECATED] authorization token for OPA endpoint" + defaultHelpPostfix(AuthToken),
+			Key:         Sleep,
+			Description: `maximum sleep duration between objects to slow down heal operation` + defaultHelpPostfix(Sleep),
 			Optional:    true,
-			Type:        "string",
-			Sensitive:   true,
+			Type:        "duration",
 		},
 		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
+			Key:         IOCount,
+			Description: `maximum IO requests allowed between objects to slow down heal operation` + defaultHelpPostfix(IOCount),
 			Optional:    true,
-			Type:        "sentence",
+			Type:        "int",
 		},
 	}
 )

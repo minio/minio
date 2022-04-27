@@ -15,35 +15,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package opa
+package scanner
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for OPA policy feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
+	// Help provides help for config values
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         URL,
-			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
-			Type:        "url",
-			Sensitive:   true,
+			Key:         Delay,
+			Description: `scanner delay multiplier` + defaultHelpPostfix(Delay),
+			Optional:    true,
+			Type:        "float",
 		},
 		config.HelpKV{
-			Key:         AuthToken,
-			Description: "[DEPRECATED] authorization token for OPA endpoint" + defaultHelpPostfix(AuthToken),
+			Key:         MaxWait,
+			Description: `maximum wait time between operations` + defaultHelpPostfix(MaxWait),
 			Optional:    true,
-			Type:        "string",
-			Sensitive:   true,
+			Type:        "duration",
 		},
 		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
+			Key:         Cycle,
+			Description: `time duration between scanner cycles` + defaultHelpPostfix(Cycle),
 			Optional:    true,
-			Type:        "sentence",
+			Type:        "duration",
 		},
 	}
 )
