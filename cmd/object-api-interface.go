@@ -98,6 +98,7 @@ type BucketOptions struct {
 	Location          string
 	LockEnabled       bool
 	VersioningEnabled bool
+	ForceCreate       bool // Create buckets even if they are already created.
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.

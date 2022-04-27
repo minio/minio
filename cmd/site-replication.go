@@ -625,6 +625,9 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	if opts.VersioningEnabled {
 		optsMap["versioningEnabled"] = "true"
 	}
+	if opts.ForceCreate {
+		optsMap["forceCreate"] = "true"
+	}
 
 	// Create bucket and enable versioning on all peers.
 	makeBucketConcErr := c.concDo(

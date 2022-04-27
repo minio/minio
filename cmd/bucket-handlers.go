@@ -706,13 +706,27 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 
 	objectLockEnabled := false
-	if vs, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
-		v := strings.ToLower(strings.Join(vs, ""))
-		if v != "true" && v != "false" {
+	if vs := r.Header.Get(xhttp.AmzObjectLockEnabled); len(vs) > 0 {
+		v := strings.ToLower(vs)
+		switch v {
+		case "true", "false":
+			objectLockEnabled = v == "true"
+		default:
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 			return
 		}
-		objectLockEnabled = v == "true"
+	}
+
+	forceCreate := false
+	if vs := r.Header.Get(xhttp.MinIOForceCreate); len(vs) > 0 {
+		v := strings.ToLower(vs)
+		switch v {
+		case "true", "false":
+			forceCreate = v == "true"
+		default:
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+			return
+		}
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
@@ -737,6 +751,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	opts := BucketOptions{
 		Location:    location,
 		LockEnabled: objectLockEnabled,
+		ForceCreate: forceCreate,
 	}
 
 	if globalDNSConfig != nil {
