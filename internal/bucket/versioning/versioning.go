@@ -98,8 +98,9 @@ func (v Versioning) EnabledPrefix(prefix string) bool {
 				return false
 			}
 		}
+		return true
 	}
-	return true
+	return false
 }
 
 // Suspended - returns true if versioning is suspended

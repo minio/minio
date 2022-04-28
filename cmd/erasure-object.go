@@ -1192,8 +1192,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			if opts.VersionSuspendedFn != nil {
 				suspended = opts.VersionSuspendedFn(objects[i].ObjectName)
 			}
-
-			if opts.Versioned || suspended {
+			versioned := opts.Versioned
+			if opts.VersionedFn != nil {
+				versioned = opts.VersionedFn(objects[i].ObjectName)
+			}
+			if versioned || suspended {
 				// Bucket is versioned and no version was explicitly
 				// mentioned for deletes, create a delete marker instead.
 				vr.ModTime = UTCNow()
