@@ -1,6 +1,7 @@
 package versioning
 
 import (
+	"encoding/xml"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,8 @@ func TestParseConfig(t *testing.T) {
                                   <Status>Enabled</Status>
                                   <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_temporary/ </Prefix>
                                   </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
@@ -40,15 +43,35 @@ func TestParseConfig(t *testing.T) {
                                   <Status>Enabled</Status>
                                   <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/ab </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/cd </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/ef </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/gh </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/ij </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/kl </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/mn </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/op </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/qr </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/st </Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
                                     <Prefix> path/to/my/workload/_staging/uv </Prefix>
                                   </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
@@ -74,4 +97,22 @@ func TestParseConfig(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestMarshalXML(t *testing.T) {
+	// Validates if Versioning with no excluded prefixes omits
+	// ExcludedPrefixes tags
+	v := Versioning{
+		Status: Enabled,
+	}
+	buf, err := xml.Marshal(v)
+	if err != nil {
+		t.Fatalf("Failed to marshal %v: %v", v, err)
+	}
+
+	str := string(buf)
+	if strings.Contains(str, "ExcludedPrefixes") {
+		t.Fatalf("XML shouldn't contain ExcludedPrefixes tag - %s", str)
+	}
+
 }

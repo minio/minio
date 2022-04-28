@@ -39,6 +39,11 @@ var (
 	errTooManyExcludedPrefixes    = Errorf("too many excluded prefixes")
 )
 
+// Prefix - holds individual prefixes excluded from being versioned.
+type Prefix struct {
+	Prefix string
+}
+
 // Versioning - Configuration for bucket versioning.
 type Versioning struct {
 	XMLNS   string   `xml:"xmlns,attr,omitempty"`
@@ -47,7 +52,7 @@ type Versioning struct {
 	Status State `xml:"Status,omitempty"`
 	// MinIO extension - allows selective, prefix-level versioning exclusion.
 	// Requires versioning to be enabled
-	ExcludedPrefixes []string `xml:">Prefix,omitempty"`
+	ExcludedPrefixes []Prefix `xml:",omitempty"`
 }
 
 // Validate - validates the versioning configuration
@@ -67,8 +72,8 @@ func (v Versioning) Validate() error {
 		}
 		for _, sprefix := range v.ExcludedPrefixes {
 			// Use filepath.Match to check for bad patterns
-			if _, err := filepath.Match(sprefix, ""); err != nil {
-				return Errorf("invalid excluded prefix %s: %w", sprefix, err)
+			if _, err := filepath.Match(sprefix.Prefix, ""); err != nil {
+				return Errorf("invalid excluded prefix %s: %w", sprefix.Prefix, err)
 			}
 		}
 
@@ -95,7 +100,7 @@ func (v Versioning) EnabledPrefix(prefix string) bool {
 			return true
 		}
 		for _, sprefix := range v.ExcludedPrefixes {
-			if matched, _ := filepath.Match(sprefix, prefix); matched {
+			if matched, _ := filepath.Match(sprefix.Prefix, prefix); matched {
 				return false
 			}
 		}
@@ -119,7 +124,7 @@ func (v Versioning) SuspendedPrefix(prefix string) bool {
 			return false
 		}
 		for _, sprefix := range v.ExcludedPrefixes {
-			if matched, _ := filepath.Match(sprefix, prefix); matched {
+			if matched, _ := filepath.Match(sprefix.Prefix, prefix); matched {
 				return true
 			}
 		}
