@@ -20,7 +20,8 @@ package versioning
 import (
 	"encoding/xml"
 	"io"
-	"path/filepath"
+
+	"github.com/minio/pkg/wildcard"
 )
 
 // State - enabled/disabled/suspended states
@@ -40,7 +41,7 @@ var (
 )
 
 // Prefix - holds individual prefixes excluded from being versioned.
-type Prefix struct {
+type ExcludedPrefix struct {
 	Prefix string
 }
 
@@ -52,7 +53,7 @@ type Versioning struct {
 	Status State `xml:"Status,omitempty"`
 	// MinIO extension - allows selective, prefix-level versioning exclusion.
 	// Requires versioning to be enabled
-	ExcludedPrefixes []Prefix `xml:",omitempty"`
+	ExcludedPrefixes []ExcludedPrefix `xml:",omitempty"`
 }
 
 // Validate - validates the versioning configuration
@@ -69,12 +70,6 @@ func (v Versioning) Validate() error {
 		const maxExcludedPrefixes = 10
 		if len(v.ExcludedPrefixes) > maxExcludedPrefixes {
 			return errTooManyExcludedPrefixes
-		}
-		for _, sprefix := range v.ExcludedPrefixes {
-			// Use filepath.Match to check for bad patterns
-			if _, err := filepath.Match(sprefix.Prefix, ""); err != nil {
-				return Errorf("invalid excluded prefix %s: %w", sprefix.Prefix, err)
-			}
 		}
 
 	case Suspended:
@@ -100,7 +95,7 @@ func (v Versioning) EnabledPrefix(prefix string) bool {
 			return true
 		}
 		for _, sprefix := range v.ExcludedPrefixes {
-			if matched, _ := filepath.Match(sprefix.Prefix, prefix); matched {
+			if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 				return false
 			}
 		}
@@ -124,7 +119,7 @@ func (v Versioning) SuspendedPrefix(prefix string) bool {
 			return false
 		}
 		for _, sprefix := range v.ExcludedPrefixes {
-			if matched, _ := filepath.Match(sprefix.Prefix, prefix); matched {
+			if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 				return true
 			}
 		}
