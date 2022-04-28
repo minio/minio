@@ -180,6 +180,8 @@ type srStateData struct {
 
 // Init - initialize the site replication manager.
 func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error {
+	go c.startHealRoutine(ctx, objAPI)
+
 	err := c.loadFromDisk(ctx, objAPI)
 	if err == errConfigNotFound {
 		return nil
@@ -190,8 +192,6 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 	if c.enabled {
 		logger.Info("Cluster replication initialized")
 	}
-
-	go c.startHealRoutine(ctx, objAPI)
 
 	return err
 }
@@ -318,14 +318,12 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		currDeploymentIDsSet = set.NewStringSet()
 		err                  error
 	)
-	if c.enabled {
-		currSites, err = c.GetClusterInfo(ctx)
-		if err != nil {
-			return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
-		}
-		for _, v := range currSites.Sites {
-			currDeploymentIDsSet.Add(v.DeploymentID)
-		}
+	currSites, err = c.GetClusterInfo(ctx)
+	if err != nil {
+		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
+	}
+	for _, v := range currSites.Sites {
+		currDeploymentIDsSet.Add(v.DeploymentID)
 	}
 	deploymentIDsSet := set.NewStringSet()
 	localHasBuckets := false
@@ -347,7 +345,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			nonLocalPeerWithBuckets = v.Name
 		}
 	}
-	if c.enabled {
+	if !currDeploymentIDsSet.IsEmpty() {
 		// If current cluster is already SR enabled and no new site being added ,fail.
 		if currDeploymentIDsSet.Equals(deploymentIDsSet) {
 			return madmin.ReplicateAddStatus{}, errSRCannotJoin
@@ -2194,7 +2192,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 
 	sris := make([]madmin.SRInfo, len(c.state.Peers))
 	depIdx := make(map[string]int, len(c.state.Peers))
-	var depIDs []string
+	depIDs := make([]string, 0, len(c.state.Peers))
 	i := 0
 	for d := range c.state.Peers {
 		depIDs = append(depIDs, d)
@@ -2205,9 +2203,11 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	metaInfoConcErr := c.concDo(
 		func() error {
 			srInfo, err := c.SiteReplicationMetaInfo(ctx, objAPI, opts)
-			k := depIdx[globalDeploymentID]
-			sris[k] = srInfo
-			return err
+			if err != nil {
+				return err
+			}
+			sris[depIdx[globalDeploymentID]] = srInfo
+			return nil
 		},
 		func(deploymentID string, p madmin.PeerInfo) error {
 			admClient, err := c.getAdminClient(ctx, deploymentID)
@@ -2215,9 +2215,11 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				return err
 			}
 			srInfo, err := admClient.SRMetaInfo(ctx, opts)
-			k := depIdx[deploymentID]
-			sris[k] = srInfo
-			return err
+			if err != nil {
+				return err
+			}
+			sris[depIdx[deploymentID]] = srInfo
+			return nil
 		},
 	)
 
@@ -2895,7 +2897,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 		if opts.Entity == madmin.SRBucketEntity {
 			bi, err := objAPI.GetBucketInfo(ctx, opts.EntityValue)
 			if err != nil {
-				return info, nil
+				return info, errSRBackendIssue(err)
 			}
 			buckets = append(buckets, bi)
 		} else {
@@ -3081,15 +3083,34 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			//  get users/group info on local.
-			userInfoMap, errU := globalIAMSys.ListUsers(ctx)
-			if errU != nil {
-				return info, errSRBackendIssue(errU)
+			userInfoMap, err := globalIAMSys.ListUsers(ctx)
+			if err != nil {
+				return info, errSRBackendIssue(err)
 			}
 			for user, ui := range userInfoMap {
 				info.UserInfoMap[user] = ui
+				svcAccts, err := globalIAMSys.ListServiceAccounts(ctx, user)
+				if err != nil {
+					return info, errSRBackendIssue(err)
+				}
+				for _, svcAcct := range svcAccts {
+					info.UserInfoMap[svcAcct.AccessKey] = madmin.UserInfo{
+						Status: madmin.AccountStatus(svcAcct.Status),
+					}
+				}
+				tempAccts, err := globalIAMSys.ListTempAccounts(ctx, user)
+				if err != nil {
+					return info, errSRBackendIssue(err)
+				}
+				for _, tempAcct := range tempAccts {
+					info.UserInfoMap[tempAcct.AccessKey] = madmin.UserInfo{
+						Status: madmin.AccountStatus(tempAcct.Status),
+					}
+				}
 			}
 		}
 	}
+
 	if opts.Groups || opts.Entity == madmin.SRGroupEntity {
 		// Replicate policy mappings on local to all peers.
 		groupPolicyMap := make(map[string]MappedPolicy)
@@ -4076,15 +4097,76 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 		if isUserInfoEqual(latestUserStat.userInfo.UserInfo, uStatus.userInfo.UserInfo) {
 			continue
 		}
+
+		peerName := info.Sites[dID].Name
+
 		creds, ok := globalIAMSys.GetUser(ctx, user)
 		if !ok {
 			continue
 		}
+
 		// heal only the user accounts that are local users
-		if creds.IsServiceAccount() || creds.IsTemp() {
+		if creds.IsServiceAccount() {
+			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, creds.AccessKey)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				continue
+			}
+
+			_, policy, err := globalIAMSys.GetServiceAccount(ctx, creds.AccessKey)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				continue
+			}
+
+			var policyJSON []byte
+			if policy != nil {
+				policyJSON, err = json.Marshal(policy)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Error healing service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+					continue
+				}
+			}
+
+			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemSvcAcc,
+				SvcAccChange: &madmin.SRSvcAccChange{
+					Create: &madmin.SRSvcAccCreate{
+						Parent:        creds.ParentUser,
+						AccessKey:     creds.AccessKey,
+						SecretKey:     creds.SecretKey,
+						Groups:        creds.Groups,
+						Claims:        claims,
+						SessionPolicy: json.RawMessage(policyJSON),
+						Status:        creds.Status,
+					},
+				},
+			}); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+			}
 			continue
 		}
-		peerName := info.Sites[dID].Name
+		if creds.IsTemp() && !creds.IsExpired() {
+			u, err := globalIAMSys.GetUserInfo(ctx, creds.ParentUser)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				continue
+			}
+			// Call hook for site replication.
+			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemSTSAcc,
+				STSCredential: &madmin.SRSTSCredential{
+					AccessKey:           creds.AccessKey,
+					SecretKey:           creds.SecretKey,
+					SessionToken:        creds.SessionToken,
+					ParentUser:          creds.ParentUser,
+					ParentPolicyMapping: u.PolicyName,
+				},
+			}); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+			}
+			continue
+		}
 		if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemIAMUser,
 			IAMUser: &madmin.SRIAMUser{
