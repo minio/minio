@@ -40,7 +40,7 @@ var (
 	errTooManyExcludedPrefixes    = Errorf("too many excluded prefixes")
 )
 
-// Prefix - holds individual prefixes excluded from being versioned.
+// ExcludedPrefix - holds individual prefixes excluded from being versioned.
 type ExcludedPrefix struct {
 	Prefix string
 }
@@ -58,7 +58,6 @@ type Versioning struct {
 
 // Validate - validates the versioning configuration
 func (v Versioning) Validate() error {
-
 	// Not supported yet
 	// switch v.MFADelete {
 	// case Enabled, Disabled:
