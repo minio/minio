@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -309,9 +310,31 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		specifiedPools[pool.endpoints.CmdLine] = idx
 	}
 
+	replaceScheme := func(k string) string {
+		// This is needed as fallback when users are changeing
+		// from http->https or https->http, we need to verify
+		// both because MinIO remembers the command-line in
+		// "exact" order - as long as this order is not disturbed
+		// we allow changing the "scheme" i.e internode communication
+		// from plain-text to TLS or from TLS to plain-text.
+		if strings.HasPrefix(k, "http://") {
+			k = strings.ReplaceAll(k, "http://", "https://")
+		} else if strings.HasPrefix(k, "https://") {
+			k = strings.ReplaceAll(k, "https://", "http://")
+		}
+		return k
+	}
+
+	var update bool
 	// Check if specified pools need to remove decommissioned pool.
 	for k := range specifiedPools {
 		pi, ok := rememberedPools[k]
+		if !ok {
+			pi, ok = rememberedPools[replaceScheme(k)]
+			if ok {
+				update = true // Looks like user is changing from http->https or https->http
+			}
+		}
 		if ok && pi.completed {
 			return false, fmt.Errorf("pool(%s) = %s is decommissioned, please remove from server command line", humanize.Ordinal(pi.position+1), k)
 		}
@@ -324,6 +347,12 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		}
 		_, ok := specifiedPools[k]
 		if !ok {
+			_, ok = specifiedPools[replaceScheme(k)]
+			if ok {
+				update = true // Looks like user is changing from http->https or https->http
+			}
+		}
+		if !ok {
 			return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
 		}
 	}
@@ -333,6 +362,12 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		for k, pi := range rememberedPools {
 			pos, ok := specifiedPools[k]
 			if !ok {
+				pos, ok = specifiedPools[replaceScheme(k)]
+				if ok {
+					update = true // Looks like user is changing from http->https or https->http
+				}
+			}
+			if !ok {
 				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
 			}
 			if pos != pi.position {
@@ -341,7 +376,9 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		}
 	}
 
-	update := len(rememberedPools) != len(specifiedPools)
+	if !update {
+		update = len(rememberedPools) != len(specifiedPools)
+	}
 	if update {
 		for k, pi := range rememberedPools {
 			if pi.decomStarted && !pi.completed {
