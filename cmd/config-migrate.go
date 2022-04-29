@@ -2649,7 +2649,6 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 
 	cfg.Version = "31"
 	cfg.OpenID = openid.Config{}
-	cfg.OpenID.JWKS.URL = &xnet.URL{}
 
 	cfg.Policy.OPA = opa.Args{
 		URL:       &xnet.URL{},

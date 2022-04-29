@@ -1002,8 +1002,45 @@ var testAppParams = OpenIDClientAppParams{
 }
 
 const (
-	EnvTestOpenIDServer = "OPENID_TEST_SERVER"
+	EnvTestOpenIDServer  = "OPENID_TEST_SERVER"
+	EnvTestOpenIDServer2 = "OPENID_TEST_SERVER_2"
 )
+
+// SetUpOpenIDs - sets up one or more OpenID test servers using the test OpenID
+// container and canned data from https://github.com/minio/minio-ldap-testing
+//
+// Each set of client app params corresponds to a separate openid server, and
+// the i-th server in this will be applied the i-th policy in `rolePolicies`. If
+// a rolePolicies entry is an empty string, that server will be configured as
+// policy-claim based openid server. NOTE that a valid configuration can have a
+// policy claim based provider only if it is the only OpenID provider.
+func (s *TestSuiteIAM) SetUpOpenIDs(c *check, testApps []OpenIDClientAppParams, rolePolicies []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	for i, testApp := range testApps {
+		configCmds := []string{
+			fmt.Sprintf("identity_openid:%d", i),
+			fmt.Sprintf("config_url=%s/.well-known/openid-configuration", testApp.ProviderURL),
+			fmt.Sprintf("client_id=%s", testApp.ClientID),
+			fmt.Sprintf("client_secret=%s", testApp.ClientSecret),
+			"scopes=openid,groups",
+			fmt.Sprintf("redirect_uri=%s", testApp.RedirectURL),
+		}
+		if rolePolicies[i] != "" {
+			configCmds = append(configCmds, fmt.Sprintf("role_policy=%s", rolePolicies[i]))
+		} else {
+			configCmds = append(configCmds, "claim_name=groups")
+		}
+		_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
+		if err != nil {
+			return fmt.Errorf("unable to setup OpenID for tests: %v", err)
+		}
+	}
+
+	s.RestartIAMSuite(c)
+	return nil
+}
 
 // SetUpOpenID - expects to setup an OpenID test server using the test OpenID
 // container and canned data from https://github.com/minio/minio-ldap-testing
@@ -1113,7 +1150,7 @@ func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
 
 				suite.SetUpSuite(c)
 				suite.SetUpOpenID(c, openIDServer, "readwrite")
-				suite.TestOpenIDSTSWithRolePolicy(c)
+				suite.TestOpenIDSTSWithRolePolicy(c, testRoleARNs[0], testRoleMap[testRoleARNs[0]])
 				suite.TestOpenIDServiceAccWithRolePolicy(c)
 				suite.TearDownSuite(c)
 			},
@@ -1122,10 +1159,46 @@ func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
 }
 
 const (
-	testRoleARN = "arn:minio:iam:::role/nOybJqMNzNmroqEKq5D0EUsRZw0"
+	testRoleARN  = "arn:minio:iam:::role/nOybJqMNzNmroqEKq5D0EUsRZw0"
+	testRoleARN2 = "arn:minio:iam:::role/domXb70kze7Ugc1SaxaeFchhLP4"
 )
 
-func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
+var (
+	testRoleARNs = []string{testRoleARN, testRoleARN2}
+
+	// Load test client app and test role mapping depending on test
+	// environment.
+	testClientApps, testRoleMap = func() ([]OpenIDClientAppParams, map[string]OpenIDClientAppParams) {
+		var apps []OpenIDClientAppParams
+		m := map[string]OpenIDClientAppParams{}
+
+		openIDServer := os.Getenv(EnvTestOpenIDServer)
+		if openIDServer != "" {
+			apps = append(apps, OpenIDClientAppParams{
+				ClientID:     "minio-client-app",
+				ClientSecret: "minio-client-app-secret",
+				ProviderURL:  openIDServer,
+				RedirectURL:  "http://127.0.0.1:10000/oauth_callback",
+			})
+			m[testRoleARNs[len(apps)-1]] = apps[len(apps)-1]
+		}
+
+		openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+		if openIDServer2 != "" {
+			apps = append(apps, OpenIDClientAppParams{
+				ClientID:     "minio-client-app-2",
+				ClientSecret: "minio-client-app-secret-2",
+				ProviderURL:  openIDServer2,
+				RedirectURL:  "http://127.0.0.1:10000/oauth_callback",
+			})
+			m[testRoleARNs[len(apps)-1]] = apps[len(apps)-1]
+		}
+
+		return apps, m
+	}()
+)
+
+func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check, roleARN string, clientApp OpenIDClientAppParams) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1135,12 +1208,13 @@ func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
 		c.Fatalf("bucket create error: %v", err)
 	}
 
-	// Generate web identity STS token by interacting with OpenID IDP.
-	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
+	// Generate web identity JWT by interacting with OpenID IDP.
+	token, err := MockOpenIDTestUserInteraction(ctx, clientApp, "dillon@example.io", "dillon")
 	if err != nil {
 		c.Fatalf("mock user err: %v", err)
 	}
 
+	// Generate STS credential.
 	webID := cr.STSWebIdentity{
 		Client:      s.TestSuiteCommon.client,
 		STSEndpoint: s.endPoint,
@@ -1149,7 +1223,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicy(c *check) {
 				Token: token,
 			}, nil
 		},
-		RoleARN: testRoleARN,
+		RoleARN: roleARN,
 	}
 
 	value, err := webID.Retrieve()
@@ -1235,4 +1309,93 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+}
+
+// List of all IAM test suites (i.e. test server configuration combinations)
+// common to tests.
+var iamTestSuites = func() []*TestSuiteIAM {
+	baseTestCases := []TestSuiteCommon{
+		// Init and run test on FS backend with signature v4.
+		{serverType: "FS", signer: signerV4},
+		// Init and run test on FS backend, with tls enabled.
+		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on Erasure backend.
+		{serverType: "Erasure", signer: signerV4},
+		// Init and run test on ErasureSet backend.
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
+	}
+	return testCases
+}()
+
+func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
+	openIDServer := os.Getenv(EnvTestOpenIDServer)
+	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+	if openIDServer == "" || openIDServer2 == "" {
+		t.Skip("Skipping OpenID test as enough OpenID servers are not provided.")
+	}
+	testApps := testClientApps
+
+	rolePolicies := []string{
+		"", // Treated as claim-based provider as no role policy is given.
+		"readwrite",
+	}
+
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				suite.SetUpSuite(c)
+				defer suite.TearDownSuite(c)
+
+				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
+				if err == nil {
+					c.Fatal("config with both claim based and role policy based providers should fail")
+				}
+			},
+		)
+	}
+}
+
+func TestIAMWithOpenIDWithMultipleRolesServerSuite(t *testing.T) {
+	openIDServer := os.Getenv(EnvTestOpenIDServer)
+	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+	if openIDServer == "" || openIDServer2 == "" {
+		t.Skip("Skipping OpenID test as enough OpenID servers are not provided.")
+	}
+	testApps := testClientApps
+
+	rolePolicies := []string{
+		"consoleAdmin",
+		"readwrite",
+	}
+
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				suite.SetUpSuite(c)
+				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
+				if err != nil {
+					c.Fatalf("Error setting up openid providers for tests: %v", err)
+				}
+				suite.TestOpenIDSTSWithRolePolicy(c, testRoleARNs[0], testRoleMap[testRoleARNs[0]])
+				suite.TestOpenIDSTSWithRolePolicy(c, testRoleARNs[1], testRoleMap[testRoleARNs[1]])
+				suite.TestOpenIDServiceAccWithRolePolicy(c)
+				suite.TearDownSuite(c)
+			},
+		)
+	}
 }

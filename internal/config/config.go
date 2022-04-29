@@ -184,7 +184,6 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	CompressionSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
-	IdentityOpenIDSubSys,
 	IdentityTLSSubSys,
 	HealSubSys,
 	ScannerSubSys,
