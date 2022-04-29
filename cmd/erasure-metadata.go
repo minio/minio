@@ -107,7 +107,7 @@ func (fi FileInfo) IsValid() bool {
 func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	object = decodeDirObject(object)
 	versionID := fi.VersionID
-	if (globalBucketVersioningSys.EnabledPrefix(bucket, object) || globalBucketVersioningSys.SuspendedPrefix(bucket, object)) && versionID == "" {
+	if (globalBucketVersioningSys.PrefixEnabled(bucket, object) || globalBucketVersioningSys.PrefixSuspended(bucket, object)) && versionID == "" {
 		versionID = nullVersionID
 	}
 

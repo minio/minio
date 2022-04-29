@@ -1189,12 +1189,12 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		if objects[i].VersionID == "" {
 			// MinIO extension to bucket version configuration
 			suspended := opts.VersionSuspended
-			if opts.VersionSuspendedFn != nil {
-				suspended = opts.VersionSuspendedFn(objects[i].ObjectName)
+			if opts.PrefixSuspendedFn != nil {
+				suspended = opts.PrefixSuspendedFn(objects[i].ObjectName)
 			}
 			versioned := opts.Versioned
-			if opts.VersionedFn != nil {
-				versioned = opts.VersionedFn(objects[i].ObjectName)
+			if opts.PrefixEnabledFn != nil {
+				versioned = opts.PrefixEnabledFn(objects[i].ObjectName)
 			}
 			if versioned || suspended {
 				// Bucket is versioned and no version was explicitly

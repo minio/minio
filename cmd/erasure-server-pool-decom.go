@@ -667,7 +667,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						bName,
 						version.Name,
 						ObjectOptions{
-							Versioned:         vc.EnabledPrefix(version.Name),
+							Versioned:         vc.PrefixEnabled(version.Name),
 							VersionID:         version.VersionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,

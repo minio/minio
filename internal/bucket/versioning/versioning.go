@@ -86,9 +86,9 @@ func (v Versioning) Enabled() bool {
 	return v.Status == Enabled
 }
 
-// EnabledPrefix - returns true if versioning is enabled at the bucket and given
+// PrefixEnabled - returns true if versioning is enabled at the bucket and given
 // prefix, false otherwise.
-func (v Versioning) EnabledPrefix(prefix string) bool {
+func (v Versioning) PrefixEnabled(prefix string) bool {
 	if v.Status == Enabled {
 		if prefix == "" {
 			return true
@@ -108,9 +108,9 @@ func (v Versioning) Suspended() bool {
 	return v.Status == Suspended
 }
 
-// SuspendedPrefix - returns true if versioning is suspended at the bucket level
+// PrefixSuspended - returns true if versioning is suspended at the bucket level
 // or suspended on the given prefix.
-func (v Versioning) SuspendedPrefix(prefix string) bool {
+func (v Versioning) PrefixSuspended(prefix string) bool {
 	if v.Status == Suspended {
 		return true
 	}
