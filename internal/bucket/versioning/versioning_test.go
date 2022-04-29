@@ -150,3 +150,13 @@ func TestMarshalXML(t *testing.T) {
 		t.Fatalf("XML shouldn't contain ExcludedPrefixes tag - %s", str)
 	}
 }
+
+func TestVersioningZero(t *testing.T) {
+	var v Versioning
+	if v.Enabled() {
+		t.Fatalf("Expected to be disabled but got enabled")
+	}
+	if v.Suspended() {
+		t.Fatalf("Expected to be disabled but got suspended")
+	}
+}
