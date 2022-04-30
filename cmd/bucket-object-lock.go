@@ -44,7 +44,7 @@ func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, 
 		return r, nil
 	}
 
-	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucketName)
+	config, _, err := globalBucketMetadataSys.GetObjectLockConfig(bucketName)
 	if err != nil {
 		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
 			return r, nil

@@ -61,6 +61,7 @@ const (
 	storageMetricWriteMetadata
 	storageMetricUpdateMetadata
 	storageMetricReadVersion
+	storageMetricReadXL
 	storageMetricReadAll
 	storageMetricStatInfoFile
 
@@ -153,7 +154,7 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 
-func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	if contextCanceled(ctx) {
 		return dataUsageCache{}, ctx.Err()
 	}
@@ -161,7 +162,7 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err
 	}
-	return p.storage.NSScanner(ctx, cache, updates)
+	return p.storage.NSScanner(ctx, cache, updates, scanMode)
 }
 
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
@@ -471,6 +472,16 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	defer done(&err)
 
 	return p.storage.ReadAll(ctx, volume, path)
+}
+
+func (p *xlStorageDiskIDCheck) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadXL, volume, path)
+	if err != nil {
+		return RawFileInfo{}, err
+	}
+	defer done(&err)
+
+	return p.storage.ReadXL(ctx, volume, path, readData)
 }
 
 func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {

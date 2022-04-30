@@ -1039,7 +1039,8 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 }
 
 func (client *peerRESTClient) Speedtest(ctx context.Context, size,
-	concurrent int, duration time.Duration, storageClass string) (SpeedtestResult, error) {
+	concurrent int, duration time.Duration, storageClass string,
+) (SpeedtestResult, error) {
 	values := make(url.Values)
 	values.Set(peerRESTSize, strconv.Itoa(size))
 	values.Set(peerRESTConcurrent, strconv.Itoa(concurrent))
@@ -1105,7 +1106,7 @@ func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) e
 	return nil
 }
 
-func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (dailyAllTierStats, error) {
+func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (DailyAllTierStats, error) {
 	var result map[string]lastDayTierStats
 	respBody, err := client.callWithContext(context.Background(), peerRESTMethodGetLastDayTierStats, nil, nil, -1)
 	if err != nil {
@@ -1115,9 +1116,9 @@ func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (dailyAll
 
 	err = gob.NewDecoder(respBody).Decode(&result)
 	if err != nil {
-		return dailyAllTierStats{}, err
+		return DailyAllTierStats{}, err
 	}
-	return dailyAllTierStats(result), nil
+	return DailyAllTierStats(result), nil
 }
 
 // DevNull - Used by netperf to pump data to peer

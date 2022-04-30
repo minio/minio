@@ -24,12 +24,16 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 )
 
 // PoolDecommissionInfo currently decommissioning information
@@ -141,7 +145,7 @@ func (p *poolMeta) returnResumablePools(n int) []PoolStatus {
 }
 
 func (p *poolMeta) DecommissionComplete(idx int) bool {
-	if p.Pools[idx].Decommission != nil {
+	if p.Pools[idx].Decommission != nil && !p.Pools[idx].Decommission.Complete {
 		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.Complete = true
 		p.Pools[idx].Decommission.Failed = false
@@ -152,7 +156,7 @@ func (p *poolMeta) DecommissionComplete(idx int) bool {
 }
 
 func (p *poolMeta) DecommissionFailed(idx int) bool {
-	if p.Pools[idx].Decommission != nil {
+	if p.Pools[idx].Decommission != nil && !p.Pools[idx].Decommission.Failed {
 		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.StartTime = time.Time{}
 		p.Pools[idx].Decommission.Complete = false
@@ -164,7 +168,7 @@ func (p *poolMeta) DecommissionFailed(idx int) bool {
 }
 
 func (p *poolMeta) DecommissionCancel(idx int) bool {
-	if p.Pools[idx].Decommission != nil {
+	if p.Pools[idx].Decommission != nil && !p.Pools[idx].Decommission.Canceled {
 		p.Pools[idx].LastUpdate = UTCNow()
 		p.Pools[idx].Decommission.StartTime = time.Time{}
 		p.Pools[idx].Decommission.Complete = false
@@ -306,9 +310,31 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		specifiedPools[pool.endpoints.CmdLine] = idx
 	}
 
+	replaceScheme := func(k string) string {
+		// This is needed as fallback when users are changeing
+		// from http->https or https->http, we need to verify
+		// both because MinIO remembers the command-line in
+		// "exact" order - as long as this order is not disturbed
+		// we allow changing the "scheme" i.e internode communication
+		// from plain-text to TLS or from TLS to plain-text.
+		if strings.HasPrefix(k, "http://") {
+			k = strings.ReplaceAll(k, "http://", "https://")
+		} else if strings.HasPrefix(k, "https://") {
+			k = strings.ReplaceAll(k, "https://", "http://")
+		}
+		return k
+	}
+
+	var update bool
 	// Check if specified pools need to remove decommissioned pool.
 	for k := range specifiedPools {
 		pi, ok := rememberedPools[k]
+		if !ok {
+			pi, ok = rememberedPools[replaceScheme(k)]
+			if ok {
+				update = true // Looks like user is changing from http->https or https->http
+			}
+		}
 		if ok && pi.completed {
 			return false, fmt.Errorf("pool(%s) = %s is decommissioned, please remove from server command line", humanize.Ordinal(pi.position+1), k)
 		}
@@ -321,6 +347,12 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		}
 		_, ok := specifiedPools[k]
 		if !ok {
+			_, ok = specifiedPools[replaceScheme(k)]
+			if ok {
+				update = true // Looks like user is changing from http->https or https->http
+			}
+		}
+		if !ok {
 			return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
 		}
 	}
@@ -330,6 +362,12 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		for k, pi := range rememberedPools {
 			pos, ok := specifiedPools[k]
 			if !ok {
+				pos, ok = specifiedPools[replaceScheme(k)]
+				if ok {
+					update = true // Looks like user is changing from http->https or https->http
+				}
+			}
+			if !ok {
 				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
 			}
 			if pos != pi.position {
@@ -338,7 +376,9 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		}
 	}
 
-	update := len(rememberedPools) != len(specifiedPools)
+	if !update {
+		update = len(rememberedPools) != len(specifiedPools)
+	}
 	if update {
 		for k, pi := range rememberedPools {
 			if pi.decomStarted && !pi.completed {
@@ -466,24 +506,32 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 
 	// if no update is needed return right away.
 	if !update {
+		z.poolMeta = meta
+
 		// We are only supporting single pool decommission at this time
 		// so it makes sense to only resume single pools at any given
 		// time, in future meta.returnResumablePools() might take
 		// '-1' as argument to decommission multiple pools at a time
 		// but this is not a priority at the moment.
 		for _, pool := range meta.returnResumablePools(1) {
-			go func(pool PoolStatus) {
-				switch err := z.Decommission(ctx, pool.ID); err {
-				case errDecommissionAlreadyRunning:
-					fallthrough
-				case nil:
-					z.doDecommissionInRoutine(ctx, pool.ID)
-				default:
-					logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
-				}
-			}(pool)
+			idx := globalEndpoints.GetPoolIdx(pool.CmdLine)
+			if idx == -1 {
+				return fmt.Errorf("unexpected state present for decommission status pool(%s) not found", pool.CmdLine)
+			}
+			if globalEndpoints[idx].Endpoints[0].IsLocal {
+				go func(pool PoolStatus) {
+					switch err := z.Decommission(ctx, pool.ID); err {
+					case nil:
+						// we already started decommission
+					case errDecommissionAlreadyRunning:
+						// A previous decommission running found restart it.
+						z.doDecommissionInRoutine(ctx, idx)
+					default:
+						logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+					}
+				}(pool)
+			}
 		}
-		z.poolMeta = meta
 
 		return nil
 	}
@@ -570,15 +618,18 @@ func (v versionsSorter) reverse() {
 }
 
 func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool *erasureSets, bName string) error {
-	var forwardTo string
-	// If we resume to the same bucket, forward to last known item.
-	rbucket, robject := z.poolMeta.ResumeBucketObject(idx)
-	if rbucket != "" && rbucket == bName {
-		forwardTo = robject
+	var wg sync.WaitGroup
+	wStr := env.Get("_MINIO_DECOMMISSION_WORKERS", strconv.Itoa(len(pool.sets)))
+	workerSize, err := strconv.Atoi(wStr)
+	if err != nil {
+		return err
 	}
+
+	parallelWorkers := make(chan struct{}, workerSize)
 
 	versioned := globalBucketVersioningSys.Enabled(bName)
 	for _, set := range pool.sets {
+		set := set
 		disks := set.getOnlineDisks()
 		if len(disks) == 0 {
 			logger.LogIf(GlobalContext, fmt.Errorf("no online disks found for set with endpoints %s",
@@ -587,6 +638,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		}
 
 		decommissionEntry := func(entry metaCacheEntry) {
+			defer func() {
+				<-parallelWorkers
+				wg.Done()
+			}()
+
 			if entry.isDir() {
 				return
 			}
@@ -600,15 +656,18 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			// to create the appropriate stack.
 			versionsSorter(fivs.Versions).reverse()
 
+			var decommissionedCount int
 			for _, version := range fivs.Versions {
 				// TODO: Skip transitioned objects for now.
 				if version.IsRemote() {
+					logger.LogIf(ctx, fmt.Errorf("found %s/%s transitioned object, transitioned object won't be decommissioned", bName, version.Name))
 					continue
 				}
 				// We will skip decommissioning delete markers
 				// with single version, its as good as there
 				// is no data associated with the object.
 				if version.Deleted && len(fivs.Versions) == 1 {
+					logger.LogIf(ctx, fmt.Errorf("found %s/%s delete marked object with no other versions, skipping since there is no content left", bName, version.Name))
 					continue
 				}
 				if version.Deleted {
@@ -621,27 +680,24 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
 						})
+					var failure bool
 					if err != nil {
 						logger.LogIf(ctx, err)
-						z.poolMetaMutex.Lock()
-						z.poolMeta.CountItem(idx, 0, true)
-						z.poolMetaMutex.Unlock()
-					} else {
-						set.DeleteObject(ctx,
-							bName,
-							version.Name,
-							ObjectOptions{
-								VersionID: version.VersionID,
-							})
-						z.poolMetaMutex.Lock()
-						z.poolMeta.CountItem(idx, 0, false)
-						z.poolMetaMutex.Unlock()
+						failure = true
 					}
+					z.poolMetaMutex.Lock()
+					z.poolMeta.CountItem(idx, 0, failure)
+					z.poolMetaMutex.Unlock()
+					if failure {
+						break // break out on first error
+					}
+					decommissionedCount++
 					continue
 				}
+
 				gr, err := set.GetObjectNInfo(ctx,
 					bName,
-					version.Name,
+					encodeDirObject(version.Name),
 					nil,
 					http.Header{},
 					noLock, // all mutations are blocked reads are safe without locks.
@@ -653,25 +709,32 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					z.poolMetaMutex.Lock()
 					z.poolMeta.CountItem(idx, version.Size, true)
 					z.poolMetaMutex.Unlock()
-					continue
+					break // break out on first error
 				}
+				var failure bool
 				// gr.Close() is ensured by decommissionObject().
 				if err = z.decommissionObject(ctx, bName, gr); err != nil {
 					logger.LogIf(ctx, err)
-					z.poolMetaMutex.Lock()
-					z.poolMeta.CountItem(idx, version.Size, true)
-					z.poolMetaMutex.Unlock()
-					continue
+					failure = true
 				}
+				z.poolMetaMutex.Lock()
+				z.poolMeta.CountItem(idx, version.Size, failure)
+				z.poolMetaMutex.Unlock()
+				if failure {
+					break // break out on first error
+				}
+				decommissionedCount++
+			}
+
+			// if all versions were decommissioned, then we can delete the object versions.
+			if decommissionedCount == len(fivs.Versions) {
 				set.DeleteObject(ctx,
 					bName,
-					version.Name,
+					entry.name,
 					ObjectOptions{
-						VersionID: version.VersionID,
-					})
-				z.poolMetaMutex.Lock()
-				z.poolMeta.CountItem(idx, version.Size, false)
-				z.poolMetaMutex.Unlock()
+						DeletePrefix: true, // use prefix delete to delete all versions at once.
+					},
+				)
 			}
 			z.poolMetaMutex.Lock()
 			z.poolMeta.TrackCurrentBucketObject(idx, bName, entry.name)
@@ -690,26 +753,35 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			bucket:    bName,
 		}
 
-		if err := listPathRaw(ctx, listPathRawOptions{
-			disks:          disks,
-			bucket:         bName,
-			recursive:      true,
-			forwardTo:      forwardTo,
-			minDisks:       len(disks) / 2, // to capture all quorum ratios
-			reportNotFound: false,
-			agreed:         decommissionEntry,
-			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
-				entry, ok := entries.resolve(&resolver)
-				if ok {
-					decommissionEntry(*entry)
-				}
-			},
-			finished: nil,
-		}); err != nil {
-			// Decommissioning failed and won't continue
-			return err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := listPathRaw(ctx, listPathRawOptions{
+				disks:          disks,
+				bucket:         bName,
+				recursive:      true,
+				forwardTo:      "",
+				minDisks:       len(disks) / 2, // to capture all quorum ratios
+				reportNotFound: false,
+				agreed: func(entry metaCacheEntry) {
+					parallelWorkers <- struct{}{}
+					wg.Add(1)
+					go decommissionEntry(entry)
+				},
+				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+					entry, ok := entries.resolve(&resolver)
+					if ok {
+						parallelWorkers <- struct{}{}
+						wg.Add(1)
+						go decommissionEntry(*entry)
+					}
+				},
+				finished: nil,
+			})
+			logger.LogIf(ctx, err)
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -752,13 +824,23 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 		logger.LogIf(GlobalContext, z.DecommissionFailed(dctx, idx))
 		return
 	}
-	// Complete the decommission..
-	logger.LogIf(GlobalContext, z.CompleteDecommission(dctx, idx))
+
+	z.poolMetaMutex.Lock()
+	failed := z.poolMeta.Pools[idx].Decommission.ItemsDecommissionFailed > 0
+	z.poolMetaMutex.Unlock()
+
+	if failed {
+		// Decommission failed indicate as such.
+		logger.LogIf(GlobalContext, z.DecommissionFailed(dctx, idx))
+	} else {
+		// Complete the decommission..
+		logger.LogIf(GlobalContext, z.CompleteDecommission(dctx, idx))
+	}
 }
 
 func (z *erasureServerPools) IsSuspended(idx int) bool {
-	z.poolMetaMutex.Lock()
-	defer z.poolMetaMutex.Unlock()
+	z.poolMetaMutex.RLock()
+	defer z.poolMetaMutex.RUnlock()
 	return z.poolMeta.IsSuspended(idx)
 }
 
@@ -876,7 +958,7 @@ func (z *erasureServerPools) DecommissionCancel(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionCancel(idx) {
-		z.decommissionCancelers[idx]() // cancel any active thread.
+		defer z.decommissionCancelers[idx]() // cancel any active thread.
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
@@ -898,7 +980,7 @@ func (z *erasureServerPools) DecommissionFailed(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionFailed(idx) {
-		z.decommissionCancelers[idx]() // cancel any active thread.
+		defer z.decommissionCancelers[idx]() // cancel any active thread.
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
@@ -920,6 +1002,7 @@ func (z *erasureServerPools) CompleteDecommission(ctx context.Context, idx int) 
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionComplete(idx) {
+		defer z.decommissionCancelers[idx]() // cancel any active thread.
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}

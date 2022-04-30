@@ -33,6 +33,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -93,13 +94,16 @@ type listPathOptions struct {
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
 
-	// pool and set of where the cache is located.
-	pool, set int
-
-	// lcFilter performs filtering based on lifecycle.
+	// Lifecycle performs filtering based on lifecycle.
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
-	lcFilter *lifecycle.Lifecycle
+	Lifecycle *lifecycle.Lifecycle
+
+	// Retention configuration, needed to be passed along with lifecycle if set.
+	Retention lock.Retention
+
+	// pool and set of where the cache is located.
+	pool, set int
 }
 
 func init() {
@@ -549,7 +553,7 @@ func getListQuorum(quorum string, driveCount int) int {
 	case "reduced":
 		return 2
 	case "strict":
-		return -1
+		return driveCount
 	}
 	// Defaults to (driveCount+1)/2 drives per set, defaults to "optimal" value
 	if driveCount > 0 {
@@ -563,16 +567,19 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
+	// get non-healing disks for listing
+	disks, _ := er.getOnlineDisksWithHealing()
 	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
-	listingQuorum := askDisks - 1
-	disks := er.getDisks()
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
-	if askDisks <= 0 || er.setDriveCount == 4 {
-		askDisks = len(disks)                // with 'strict' quorum list on all drives.
-		listingQuorum = (len(disks) + 1) / 2 // keep this such that we can list all objects with different quorum ratio.
+	if er.setDriveCount == 4 || askDisks > len(disks) {
+		askDisks = len(disks) // use all available drives
 	}
+
+	// However many we ask, versions must exist on ~50%
+	listingQuorum := (askDisks + 1) / 2
+
 	if askDisks > 0 && len(disks) > askDisks {
 		rand.Shuffle(len(disks), func(i, j int) {
 			disks[i], disks[j] = disks[j], disks[i]

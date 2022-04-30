@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -500,7 +501,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 }
 
 // StartProfilingResult contains the status of the starting
-// profiling action in a given server
+// profiling action in a given server - deprecated API
 type StartProfilingResult struct {
 	NodeName string `json:"nodeName"`
 	Success  bool   `json:"success"`
@@ -594,6 +595,85 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	writeSuccessResponseJSON(w, startProfilingResultInBytes)
 }
 
+// ProfileHandler - POST /minio/admin/v3/profile/?profilerType={profilerType}
+// ----------
+// Enable server profiling
+func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "Profile")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	if globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	profileStr := r.Form.Get("profilerType")
+	profiles := strings.Split(profileStr, ",")
+	duration := time.Minute
+	if dstr := r.Form.Get("duration"); dstr != "" {
+		var err error
+		duration, err = time.ParseDuration(dstr)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+			return
+		}
+	}
+	// read request body
+	io.CopyN(ioutil.Discard, r.Body, 1)
+
+	globalProfilerMu.Lock()
+
+	if globalProfiler == nil {
+		globalProfiler = make(map[string]minioProfiler, 10)
+	}
+
+	// Stop profiler of all types if already running
+	for k, v := range globalProfiler {
+		v.Stop()
+		delete(globalProfiler, k)
+	}
+
+	// Start profiling on remote servers.
+	for _, profiler := range profiles {
+		globalNotificationSys.StartProfiling(profiler)
+
+		// Start profiling locally as well.
+		prof, err := startProfiler(profiler)
+		if err == nil {
+			globalProfiler[profiler] = prof
+		}
+	}
+	globalProfilerMu.Unlock()
+
+	timer := time.NewTimer(duration)
+	for {
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			for k, v := range globalProfiler {
+				v.Stop()
+				delete(globalProfiler, k)
+			}
+			return
+		case <-timer.C:
+			if !globalNotificationSys.DownloadProfilingData(ctx, w) {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminProfilerNotEnabled), r.URL)
+				return
+			}
+			return
+		}
+	}
+}
+
 // dummyFileInfo represents a dummy representation of a profile data file
 // present only in memory, it helps to generate the zip stream.
 type dummyFileInfo struct {
@@ -614,7 +694,7 @@ func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 
 // DownloadProfilingHandler - POST /minio/admin/v3/profiling/download
 // ----------
-// Download profiling information of all nodes in a zip format
+// Download profiling information of all nodes in a zip format - deprecated API
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DownloadProfiling")
 
@@ -1029,38 +1109,30 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		duration = time.Second * 10
 	}
 
-	// ignores any errors here.
-	storageInfo, _ := objectAPI.StorageInfo(ctx)
-	capacityNeeded := uint64(concurrent * size)
-	capacity := uint64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo))
+	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
 
-	if capacity < capacityNeeded {
+	if !sufficientCapacity {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
-			Code: "XMinioSpeedtestInsufficientCapacity",
-			Message: fmt.Sprintf("not enough usable space available to perform speedtest - expected %s, got %s",
-				humanize.IBytes(capacityNeeded), humanize.IBytes(capacity)),
+			Code:       "XMinioSpeedtestInsufficientCapacity",
+			Message:    capacityErrMsg,
 			StatusCode: http.StatusInsufficientStorage,
 		}), r.URL)
 		return
 	}
 
-	// Verify if we can employ autotune without running out of capacity,
-	// if we do run out of capacity, make sure to turn-off autotuning
-	// in such situations.
-	newConcurrent := concurrent + (concurrent+1)/2
-	autoTunedCapacityNeeded := uint64(newConcurrent * size)
-	if autotune && capacity < autoTunedCapacityNeeded {
-		// Turn-off auto-tuning if next possible concurrency would reach beyond disk capacity.
+	if autotune && !canAutotune {
 		autotune = false
 	}
 
-	deleteBucket := func() {
-		objectAPI.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, "speedtest"), DeleteBucketOptions{
-			Force:      true,
-			NoRecreate: true,
-		})
+	bucketExists, err := makeObjectPerfBucket(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
 	}
-	defer deleteBucket()
+
+	if !bucketExists {
+		defer deleteObjectPerfBucket(objectAPI)
+	}
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
@@ -1072,7 +1144,7 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
-	ch := speedTest(ctx, speedTestOpts{size, concurrent, duration, autotune, storageClass})
+	ch := objectSpeedTest(ctx, speedTestOpts{size, concurrent, duration, autotune, storageClass})
 	for {
 		select {
 		case <-ctx.Done():
@@ -1093,6 +1165,50 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 			w.(http.Flusher).Flush()
 		}
 	}
+}
+
+func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer) (bucketExists bool, err error) {
+	err = objectAPI.MakeBucketWithLocation(ctx, globalObjectPerfBucket, BucketOptions{})
+	if err != nil {
+		if _, ok := err.(BucketExists); !ok {
+			// Only BucketExists error can be ignored.
+			return false, err
+		}
+		bucketExists = true
+	}
+	return bucketExists, nil
+}
+
+func deleteObjectPerfBucket(objectAPI ObjectLayer) {
+	objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
+		Force:      true,
+		NoRecreate: true,
+	})
+}
+
+func validateObjPerfOptions(ctx context.Context, objectAPI ObjectLayer, concurrent int, size int, autotune bool) (sufficientCapacity bool, canAutotune bool, capacityErrMsg string) {
+	storageInfo, _ := objectAPI.StorageInfo(ctx)
+	capacityNeeded := uint64(concurrent * size)
+	capacity := uint64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo))
+
+	if capacity < capacityNeeded {
+		return false, false, fmt.Sprintf("not enough usable space available to perform speedtest - expected %s, got %s",
+			humanize.IBytes(capacityNeeded), humanize.IBytes(capacity))
+	}
+
+	// Verify if we can employ autotune without running out of capacity,
+	// if we do run out of capacity, make sure to turn-off autotuning
+	// in such situations.
+	if autotune {
+		newConcurrent := concurrent + (concurrent+1)/2
+		autoTunedCapacityNeeded := uint64(newConcurrent * size)
+		if capacity < autoTunedCapacityNeeded {
+			// Turn-off auto-tuning if next possible concurrency would reach beyond disk capacity.
+			return true, false, ""
+		}
+	}
+
+	return true, autotune, ""
 }
 
 // NetSpeedtestHandler - reports maximum network throughput
@@ -1583,6 +1699,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
+	versions := madmin.Versions{}
 	usage := madmin.Usage{}
 
 	objectAPI := newObjectLayerFn()
@@ -1594,6 +1711,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		if err == nil {
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
+			versions = madmin.Versions{Count: dataUsageInfo.VersionsTotalCount}
 			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 		} else {
 			buckets = madmin.Buckets{Error: err.Error()}
@@ -1642,6 +1760,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		DeploymentID: globalDeploymentID,
 		Buckets:      buckets,
 		Objects:      objects,
+		Versions:     versions,
 		Usage:        usage,
 		Services:     services,
 		Backend:      backend,
@@ -1693,7 +1812,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
-	if query.Get("perfnet") != "" || query.Get("perfdrive") != "" {
+	if query.Get(string(madmin.HealthDataTypePerfNet)) != "" ||
+		query.Get(string(madmin.HealthDataTypePerfDrive)) != "" ||
+		query.Get(string(madmin.HealthDataTypePerfObj)) != "" {
 		deadline = 1 * time.Hour
 	}
 	if dstr := r.Form.Get("deadline"); dstr != "" {
@@ -1938,49 +2059,98 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	getAndWriteDrivePerfInfo := func() {
-		if query.Get("perfdrive") == "true" {
-			localDPI := getDrivePerfInfos(deadlinedCtx, globalLocalNodeName)
-			anonymizeAddr(&localDPI)
-			healthInfo.Perf.Drives = append(healthInfo.Perf.Drives, localDPI)
-			partialWrite(healthInfo)
+		if query.Get(string(madmin.HealthDataTypePerfDrive)) == "true" {
+			// Freeze all incoming S3 API calls before running speedtest.
+			globalNotificationSys.ServiceFreeze(ctx, true)
+			// unfreeze all incoming S3 API calls after speedtest.
+			defer globalNotificationSys.ServiceFreeze(ctx, false)
 
-			perfCh := globalNotificationSys.GetDrivePerfInfos(deadlinedCtx)
-			for perfInfo := range perfCh {
-				anonymizeAddr(&perfInfo)
-				healthInfo.Perf.Drives = append(healthInfo.Perf.Drives, perfInfo)
-				partialWrite(healthInfo)
+			opts := madmin.DriveSpeedTestOpts{
+				Serial:    false,
+				BlockSize: 4 * humanize.MiByte,
+				FileSize:  1 * humanize.GiByte,
 			}
+
+			localDPI := driveSpeedTest(ctx, opts)
+			healthInfo.Perf.DrivePerf = append(healthInfo.Perf.DrivePerf, localDPI)
+
+			perfCh := globalNotificationSys.DriveSpeedTest(ctx, opts)
+			for perfInfo := range perfCh {
+				healthInfo.Perf.DrivePerf = append(healthInfo.Perf.DrivePerf, perfInfo)
+			}
+			partialWrite(healthInfo)
 		}
 	}
 
-	anonymizeNetPerfInfo := func(npi *madmin.NetPerfInfo) {
-		anonymizeAddr(npi)
-		rps := npi.RemotePeers
-		for idx, peer := range rps {
-			anonymizeAddr(&peer)
-			rps[idx] = peer
+	getAndWriteObjPerfInfo := func() {
+		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
+			concurrent := 32
+			size := 64 * humanize.MiByte
+			autotune := true
+
+			sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
+
+			if !sufficientCapacity {
+				healthInfo.Perf.Error = capacityErrMsg
+				partialWrite(healthInfo)
+				return
+			}
+
+			if !canAutotune {
+				autotune = false
+			}
+
+			bucketExists, err := makeObjectPerfBucket(ctx, objectAPI)
+			if err != nil {
+				healthInfo.Perf.Error = "Could not make object perf bucket: " + err.Error()
+				partialWrite(healthInfo)
+				return
+			}
+
+			if !bucketExists {
+				defer deleteObjectPerfBucket(objectAPI)
+			}
+
+			// Freeze all incoming S3 API calls before running speedtest.
+			globalNotificationSys.ServiceFreeze(ctx, true)
+
+			// unfreeze all incoming S3 API calls after speedtest.
+			defer globalNotificationSys.ServiceFreeze(ctx, false)
+
+			opts := speedTestOpts{
+				throughputSize:   size,
+				concurrencyStart: concurrent,
+				duration:         10 * time.Second,
+				autotune:         autotune,
+			}
+
+			perfCh := objectSpeedTest(ctx, opts)
+			for perfInfo := range perfCh {
+				healthInfo.Perf.ObjPerf = append(healthInfo.Perf.ObjPerf, perfInfo)
+			}
+			partialWrite(healthInfo)
 		}
-		npi.RemotePeers = rps
 	}
 
 	getAndWriteNetPerfInfo := func() {
-		if globalIsDistErasure && query.Get("perfnet") == "true" {
-			localNPI := globalNotificationSys.GetNetPerfInfo(deadlinedCtx)
-			anonymizeNetPerfInfo(&localNPI)
-			healthInfo.Perf.Net = append(healthInfo.Perf.Net, localNPI)
-
-			partialWrite(healthInfo)
-
-			netInfos := globalNotificationSys.DispatchNetPerfChan(deadlinedCtx)
-			for netInfo := range netInfos {
-				anonymizeNetPerfInfo(&netInfo)
-				healthInfo.Perf.Net = append(healthInfo.Perf.Net, netInfo)
-				partialWrite(healthInfo)
+		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
+			if !globalIsDistErasure {
+				return
 			}
 
-			ppi := globalNotificationSys.GetParallelNetPerfInfo(deadlinedCtx)
-			anonymizeNetPerfInfo(&ppi)
-			healthInfo.Perf.NetParallel = ppi
+			nsLock := objectAPI.NewNSLock(minioMetaBucket, "netperf")
+			lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
+			if err != nil {
+				healthInfo.Perf.Error = "Could not acquire lock for netperf: " + err.Error()
+			} else {
+				defer nsLock.Unlock(lkctx.Cancel)
+
+				netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
+				for _, np := range netPerf {
+					np.Endpoint = anonAddr(np.Endpoint)
+					healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
+				}
+			}
 			partialWrite(healthInfo)
 		}
 	}
@@ -2014,6 +2184,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		getAndWriteProcInfo()
 		getAndWriteMinioConfig()
 		getAndWriteDrivePerfInfo()
+		getAndWriteObjPerfInfo()
 		getAndWriteNetPerfInfo()
 		getAndWriteSysErrors()
 		getAndWriteSysServices()
@@ -2448,6 +2619,10 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			// Not, set it to default.
 			si.Mode = 0o600
 		}
+		if si.ModTime.IsZero() {
+			// Set time to now.
+			si.ModTime = time.Now()
+		}
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
 			size:    si.Size,
@@ -2542,6 +2717,7 @@ func anonymizeHost(hostAnonymizer map[string]string, endpoint Endpoint, poolNum 
 	if !found {
 		// In distributed setup, anonymized addr = 'poolNum.serverNum'
 		newHost := fmt.Sprintf("pool%d.server%d", poolNum, srvrNum)
+		schemePfx := endpoint.Scheme + "://"
 
 		// Hostname
 		mapIfNotPresent(hostAnonymizer, endpoint.Hostname(), newHost)
@@ -2551,6 +2727,7 @@ func anonymizeHost(hostAnonymizer map[string]string, endpoint Endpoint, poolNum 
 			// Host + port
 			newHostPort = newHost + ":" + endpoint.Port()
 			mapIfNotPresent(hostAnonymizer, endpoint.Host, newHostPort)
+			mapIfNotPresent(hostAnonymizer, schemePfx+endpoint.Host, newHostPort)
 		}
 
 		newHostPortPath := newHostPort
@@ -2559,10 +2736,11 @@ func anonymizeHost(hostAnonymizer map[string]string, endpoint Endpoint, poolNum 
 			currentHostPortPath := endpoint.Host + endpoint.Path
 			newHostPortPath = newHostPort + endpoint.Path
 			mapIfNotPresent(hostAnonymizer, currentHostPortPath, newHostPortPath)
+			mapIfNotPresent(hostAnonymizer, schemePfx+currentHostPortPath, newHostPortPath)
 		}
 
 		// Full url
-		hostAnonymizer[currentURL] = endpoint.Scheme + "://" + newHostPortPath
+		hostAnonymizer[currentURL] = schemePfx + newHostPortPath
 	}
 }
 

@@ -139,7 +139,7 @@ var (
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
 
-	// Name of gateway server, e.g S3, GCS, Azure, etc
+	// Name of gateway server, e.g S3, NAS etc
 	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
@@ -290,9 +290,6 @@ var (
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
-	// Authorization validators list.
-	globalOpenIDValidators *openid.Validators
-
 	// OPA policy system.
 	globalPolicyOPA *opa.Opa
 
@@ -347,8 +344,10 @@ var (
 	globalRootDiskThreshold uint64
 
 	// Used for collecting stats for netperf
-	globalNetPerfMinDuration = time.Second * 10
-	globalNetPerfRX          netPerfRX
+	globalNetPerfMinDuration     = time.Second * 10
+	globalNetPerfRX              netPerfRX
+	globalObjectPerfBucket       = "minio-perf-test-tmp-bucket"
+	globalObjectPerfUserMetadata = "X-Amz-Meta-Minio-Object-Perf" // Clients can set this to bypass S3 API service freeze. Used by object pref tests.
 
 	// Add new variable global values here.
 )

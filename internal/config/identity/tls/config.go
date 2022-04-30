@@ -119,7 +119,7 @@ var DefaultKVS = config.KVS{
 var Help = config.HelpKVS{
 	config.HelpKV{
 		Key:         skipVerify,
-		Description: `trust client certificates without verification. Defaults to "off" (verify)`,
+		Description: `trust client certificates without verification (default: 'off')`,
 		Optional:    true,
 		Type:        "on|off",
 	},

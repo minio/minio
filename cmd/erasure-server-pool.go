@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -531,7 +532,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
 	// Updates must be closed before we return.
 	defer close(updates)
 
@@ -576,7 +577,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.nsScanner(ctx, allBuckets, bf, wantCycle, updates)
+				err := erObj.nsScanner(ctx, allBuckets, bf, wantCycle, updates, healScanMode)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()
@@ -1160,11 +1161,9 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
 	lc, _ := globalLifecycleSys.Get(bucket)
-	if lc != nil {
-		if !lc.HasActiveRules(prefix, true) {
-			lc = nil
-		}
-	}
+
+	// Check if bucket is object locked.
+	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -1177,9 +1176,11 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+					fallthrough
+				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 					return loi, nil
 				}
 			}
@@ -1196,6 +1197,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
+		Lifecycle:   lc,
+		Retention:   rcfg,
 	}
 
 	merged, err := z.listPath(ctx, &opts)
@@ -1721,14 +1724,16 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 					}
 
 					path := baseDirFromPrefix(prefix)
-					if path == "" {
-						path = prefix
+					filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
+					if path == prefix {
+						filterPrefix = ""
 					}
 
 					lopts := listPathRawOptions{
 						disks:          disks,
 						bucket:         bucket,
 						path:           path,
+						filterPrefix:   filterPrefix,
 						recursive:      true,
 						forwardTo:      "",
 						minDisks:       1,
@@ -1781,14 +1786,16 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 	}
 
 	path := baseDirFromPrefix(prefix)
-	if path == "" {
-		path = prefix
+	filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
+	if path == prefix {
+		filterPrefix = ""
 	}
 
 	lopts := listPathRawOptions{
 		disks:          disks,
 		bucket:         bucket,
 		path:           path,
+		filterPrefix:   filterPrefix,
 		recursive:      true,
 		forwardTo:      "",
 		minDisks:       1,

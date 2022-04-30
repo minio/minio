@@ -120,7 +120,7 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucket)
+	config, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucket)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

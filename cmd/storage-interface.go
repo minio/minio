@@ -21,6 +21,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/minio/madmin-go"
 )
 
 // StorageAPI interface.
@@ -64,7 +66,7 @@ type StorageAPI interface {
 	// has never been replaced.
 	Healing() *healingTracker
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
-	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)
@@ -82,6 +84,7 @@ type StorageAPI interface {
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
+	ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error)
 	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error
 
 	// File operations.
@@ -142,7 +145,7 @@ func (p *unrecognizedDisk) Healing() *healingTracker {
 	return nil
 }
 
-func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	return dataUsageCache{}, errDiskNotFound
 }
 
@@ -257,6 +260,10 @@ func (p *unrecognizedDisk) WriteMetadata(ctx context.Context, volume, path strin
 
 func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
 	return fi, errDiskNotFound
+}
+
+func (p *unrecognizedDisk) ReadXL(ctx context.Context, volume, path string, readData bool) (rf RawFileInfo, err error) {
+	return rf, errDiskNotFound
 }
 
 func (p *unrecognizedDisk) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {

@@ -320,8 +320,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			defer os.RemoveAll(dirPath)
 			return ioutil.ReadFile(fn)
 		}
-		// TODO(klauspost): Replace with madmin.ProfilerCPUIO on next update.
-	case "cpuio":
+	case madmin.ProfilerCPUIO:
 		// at 10k or more goroutines fgprof is likely to become
 		// unable to maintain its sampling rate and to significantly
 		// degrade the performance of your application
@@ -339,10 +338,6 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		stop := fgprof.Start(f, fgprof.FormatPprof)
-		err = pprof.StartCPUProfile(f)
-		if err != nil {
-			return nil, err
-		}
 		prof.stopFn = func() ([]byte, error) {
 			err := stop()
 			if err != nil {
@@ -699,7 +694,8 @@ func jsonLoad(r io.ReadSeeker, data interface{}) error {
 func jsonSave(f interface {
 	io.WriteSeeker
 	Truncate(int64) error
-}, data interface{}) error {
+}, data interface{},
+) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -904,7 +900,7 @@ func getMinioMode() string {
 }
 
 func iamPolicyClaimNameOpenID() string {
-	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
+	return globalOpenIDConfig.GetIAMPolicyClaimName()
 }
 
 func iamPolicyClaimNameSA() string {

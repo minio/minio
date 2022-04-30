@@ -43,7 +43,8 @@ func (sys *BucketSSEConfigSys) Get(bucket string) (*sse.BucketSSEConfig, error) 
 		return nil, BucketSSEConfigNotFound{Bucket: bucket}
 	}
 
-	return globalBucketMetadataSys.GetSSEConfig(bucket)
+	sseCfg, _, err := globalBucketMetadataSys.GetSSEConfig(bucket)
+	return sseCfg, err
 }
 
 // validateBucketSSEConfig parses bucket encryption configuration and validates if it is supported by MinIO.

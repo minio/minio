@@ -185,7 +185,7 @@ func (m *mrfState) healRoutine() {
 	defer idler.Stop()
 
 	mrfHealingOpts := madmin.HealOpts{
-		ScanMode: globalHealConfig.ScanMode(),
+		ScanMode: madmin.HealNormalScan,
 		Remove:   healDeleteDangling,
 	}
 

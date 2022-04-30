@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v43" // Added DiskMTime field for FileInfo
+	storageRESTVersion       = "v45" // Added ReadXL API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -40,6 +40,7 @@ const (
 	storageRESTMethodUpdateMetadata = "/updatemetadata"
 	storageRESTMethodDeleteVersion  = "/deleteversion"
 	storageRESTMethodReadVersion    = "/readversion"
+	storageRESTMethodReadXL         = "/readxl"
 	storageRESTMethodRenameData     = "/renamedata"
 	storageRESTMethodCheckParts     = "/checkparts"
 	storageRESTMethodReadAll        = "/readall"
@@ -79,4 +80,5 @@ const (
 	storageRESTDiskID         = "disk-id"
 	storageRESTForceDelete    = "force-delete"
 	storageRESTGlob           = "glob"
+	storageRESTScanMode       = "scan-mode"
 )

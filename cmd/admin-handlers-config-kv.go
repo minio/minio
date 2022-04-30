@@ -97,7 +97,8 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config, subSys string,
-	r *http.Request, w http.ResponseWriter) {
+	r *http.Request, w http.ResponseWriter,
+) {
 	// Apply dynamic values.
 	if err := applyDynamicConfigForSubSys(GlobalContext, objectAPI, cfg, subSys); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

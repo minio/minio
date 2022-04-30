@@ -21,16 +21,20 @@ import "github.com/minio/minio/internal/config"
 
 // Help template for OPA policy feature.
 var (
+	defaultHelpPostfix = func(key string) string {
+		return config.DefaultHelpPostfix(DefaultKVS, key)
+	}
+
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         URL,
-			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"`,
+			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
 			Type:        "url",
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "[DEPRECATED] authorization token for OPA endpoint",
+			Description: "[DEPRECATED] authorization token for OPA endpoint" + defaultHelpPostfix(AuthToken),
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,

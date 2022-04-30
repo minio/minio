@@ -1,0 +1,5 @@
+# Config file for markdownlint-cli
+MD033:
+  allowed_elements:
+    - details
+    - summary

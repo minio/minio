@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -291,9 +292,9 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	mu.Unlock()
 
 	// Do lifecycle filtering.
-	if o.lcFilter != nil {
+	if o.Lifecycle != nil {
 		filterIn := make(chan metaCacheEntry, 10)
-		go filterLifeCycle(ctx, o.Bucket, o.lcFilter, filterIn, results)
+		go filterLifeCycle(ctx, o.Bucket, *o.Lifecycle, o.Retention, filterIn, results)
 		// Replace results.
 		results = filterIn
 	}
@@ -359,7 +360,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 // out will be closed when there are no more results.
 // When 'in' is closed or the context is canceled the
 // function closes 'out' and exits.
-func filterLifeCycle(ctx context.Context, bucket string, lc *lifecycle.Lifecycle, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
+func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle, lr lock.Retention, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
 	defer close(out)
 	for {
 		var obj metaCacheEntry
@@ -378,9 +379,11 @@ func filterLifeCycle(ctx context.Context, bucket string, lc *lifecycle.Lifecycle
 			continue
 		}
 		objInfo := fi.ToObjectInfo(bucket, obj.name)
-		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		action := evalActionFromLifecycle(ctx, lc, lr, objInfo, false)
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+			fallthrough
+		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 			// Skip this entry.
 			continue
 		}

@@ -76,12 +76,13 @@ scheme=http
 connectToMinio $scheme
 
 {{ if .Values.users }}
+{{ $global := . }}
 # Create the users
 {{- range .Values.users }}
 {{- if .existingSecret }}
-createUser {{ .accessKey }} $(cat /config/secrets/{{ .accessKey }}) {{ .policy }}
+createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}) {{ .policy }}
 {{ else }}
-createUser {{ .accessKey }} {{ .secretKey }} {{ .policy }}
+createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }}
 {{- end }}
 {{- end }}
 {{- end }}

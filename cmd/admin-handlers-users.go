@@ -90,7 +90,7 @@ func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request
 
 	password := cred.SecretKey
 
-	allCredentials, err := globalIAMSys.ListBucketUsers(bucket)
+	allCredentials, err := globalIAMSys.ListBucketUsers(ctx, bucket)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -124,12 +124,24 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	password := cred.SecretKey
 
-	allCredentials, err := globalIAMSys.ListUsers()
+	allCredentials, err := globalIAMSys.ListUsers(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
+	// Add ldap users which have mapped policies if in LDAP mode
+	// FIXME(vadmeste): move this to policy info in the future
+	ldapUsers, err := globalIAMSys.ListLDAPUsers()
+	if err != nil && err != errIAMActionNotAllowed {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	for k, v := range ldapUsers {
+		allCredentials[k] = v
+	}
+
+	// Marshal the response
 	data, err := json.Marshal(allCredentials)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -605,7 +617,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			Claims:          claims,
-			DenyOnly:        true,
 		}) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
@@ -1171,8 +1182,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 			lcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket.Name)
-			rcfg, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket.Name)
-			tcfg, _ := globalBucketMetadataSys.GetTaggingConfig(bucket.Name)
+			rcfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket.Name)
+			tcfg, _, _ := globalBucketMetadataSys.GetTaggingConfig(bucket.Name)
 
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketAccessInfo{
 				Name:                 bucket.Name,

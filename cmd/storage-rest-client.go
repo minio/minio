@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -207,13 +208,15 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
 	}()
-	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
+	vals := make(url.Values)
+	vals.Set(storageRESTScanMode, strconv.Itoa(int(scanMode)))
+	respBody, err := client.call(ctx, storageRESTMethodNSScanner, vals, pr, -1)
 	defer xhttp.DrainBody(respBody)
 	pr.CloseWithError(err)
 	if err != nil {
@@ -510,6 +513,25 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 
 	err = fi.DecodeMsg(dec)
 	return fi, err
+}
+
+// ReadXL - reads all contents of xl.meta of a file.
+func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTReadData, strconv.FormatBool(readData))
+	respBody, err := client.call(ctx, storageRESTMethodReadXL, values, nil, -1)
+	if err != nil {
+		return rf, err
+	}
+	defer xhttp.DrainBody(respBody)
+
+	dec := msgpNewReader(respBody)
+	defer readMsgpReaderPool.Put(dec)
+
+	err = rf.DecodeMsg(dec)
+	return rf, err
 }
 
 // ReadAll - reads all contents of a file.

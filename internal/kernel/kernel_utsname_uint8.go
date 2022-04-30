@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build (linux && arm) || (linux && ppc64) || (linux && ppc64le) || (linux && s390x)|| (linux && riscv64)
+//go:build (linux && arm) || (linux && ppc64) || (linux && ppc64le) || (linux && s390x) || (linux && riscv64)
 // +build linux,arm linux,ppc64 linux,ppc64le linux,s390x linux,riscv64
 
 package kernel

@@ -158,7 +158,7 @@ func (api objectAPIHandlers) GetBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetSSEConfig(bucket)
+	config, _, err := globalBucketMetadataSys.GetSSEConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

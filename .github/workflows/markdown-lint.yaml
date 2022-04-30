@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint all docs
@@ -22,4 +25,6 @@ jobs:
     - name: Lint all docs
       run: |
         npm install -g markdownlint-cli
-        markdownlint --fix '**/*.md' --disable MD013 MD040
+        markdownlint --fix '**/*.md' \
+          --config /home/runner/work/minio/minio/.github/markdown-lint-cfg.yaml \
+          --disable MD013 MD040

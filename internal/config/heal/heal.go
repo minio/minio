@@ -18,12 +18,13 @@
 package heal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 )
@@ -44,20 +45,27 @@ var configMutex sync.RWMutex
 // Config represents the heal settings.
 type Config struct {
 	// Bitrot will perform bitrot scan on local disk when checking objects.
-	Bitrot bool `json:"bitrotscan"`
+	Bitrot string `json:"bitrotscan"`
+
 	// maximum sleep duration between objects to slow down heal operation.
 	Sleep   time.Duration `json:"sleep"`
 	IOCount int           `json:"iocount"`
+
+	// Cached value from Bitrot field
+	cache struct {
+		// -1: bitrot enabled, 0: bitrot disabled, > 0: bitrot cycle
+		bitrotCycle time.Duration
+	}
 }
 
-// ScanMode returns configured scan mode
-func (opts Config) ScanMode() madmin.HealScanMode {
+// BitrotScanCycle returns the configured cycle for the scanner healing
+// -1 for not enabled
+//  0 for contiunous bitrot scanning
+// >0 interval duration between cycles
+func (opts Config) BitrotScanCycle() (d time.Duration) {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
-	if opts.Bitrot {
-		return madmin.HealDeepScan
-	}
-	return madmin.HealNormalScan
+	return opts.cache.bitrotCycle
 }
 
 // Wait waits for IOCount to go down or max sleep to elapse before returning.
@@ -103,54 +111,64 @@ func (opts *Config) Update(nopts Config) {
 	opts.Bitrot = nopts.Bitrot
 	opts.IOCount = nopts.IOCount
 	opts.Sleep = nopts.Sleep
+
+	opts.cache.bitrotCycle, _ = parseBitrotConfig(nopts.Bitrot)
 }
 
-var (
-	// DefaultKVS - default KV config for heal settings
-	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   Bitrot,
-			Value: config.EnableOff,
-		},
-		config.KV{
-			Key:   Sleep,
-			Value: "1s",
-		},
-		config.KV{
-			Key:   IOCount,
-			Value: "100",
-		},
+// DefaultKVS - default KV config for heal settings
+var DefaultKVS = config.KVS{
+	config.KV{
+		Key:   Bitrot,
+		Value: config.EnableOff,
+	},
+	config.KV{
+		Key:   Sleep,
+		Value: "1s",
+	},
+	config.KV{
+		Key:   IOCount,
+		Value: "100",
+	},
+}
+
+const minimumBitrotCycleInMonths = 1
+
+func parseBitrotConfig(s string) (time.Duration, error) {
+	// Try to parse as a boolean
+	enabled, err := config.ParseBool(s)
+	if err == nil {
+		switch enabled {
+		case true:
+			return 0, nil
+		case false:
+			return -1, nil
+		}
 	}
 
-	// Help provides help for config values
-	Help = config.HelpKVS{
-		config.HelpKV{
-			Key:         Bitrot,
-			Description: `perform bitrot scan on disks when checking objects during scanner`,
-			Optional:    true,
-			Type:        "on|off",
-		},
-		config.HelpKV{
-			Key:         Sleep,
-			Description: `maximum sleep duration between objects to slow down heal operation. eg. 2s`,
-			Optional:    true,
-			Type:        "duration",
-		},
-		config.HelpKV{
-			Key:         IOCount,
-			Description: `maximum IO requests allowed between objects to slow down heal operation. eg. 3`,
-			Optional:    true,
-			Type:        "int",
-		},
+	// Try to parse as a number of months
+	if !strings.HasSuffix(s, "m") {
+		return -1, errors.New("unknown format")
 	}
-)
+
+	months, err := strconv.Atoi(strings.TrimSuffix(s, "m"))
+	if err != nil {
+		return -1, err
+	}
+
+	if months < minimumBitrotCycleInMonths {
+		return -1, fmt.Errorf("minimum bitrot cycle is %d month(s)", minimumBitrotCycleInMonths)
+	}
+
+	return time.Duration(months) * 30 * 24 * time.Hour, nil
+}
 
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.HealSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	cfg.Bitrot, err = config.ParseBool(env.Get(EnvBitrot, kvs.GetWithDefault(Bitrot, DefaultKVS)))
+	cfg.Bitrot = env.Get(EnvBitrot, kvs.GetWithDefault(Bitrot, DefaultKVS))
+	_, err = parseBitrotConfig(cfg.Bitrot)
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:bitrotscan' value invalid: %w", err)
 	}

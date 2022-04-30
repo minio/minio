@@ -407,15 +407,15 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 }
 
 var (
-	usersListKey                   = "/users/"
-	svcAccListKey                  = "/service-accounts/"
-	groupsListKey                  = "/groups/"
-	policiesListKey                = "/policies/"
-	stsListKey                     = "/sts/"
-	policyDBUsersListKey           = "/policydb/users/"
-	policyDBSTSUsersListKey        = "/policydb/sts-users/"
-	policyDBServiceAccountsListKey = "/policydb/service-accounts/"
-	policyDBGroupsListKey          = "/policydb/groups/"
+	usersListKey                   = "users/"
+	svcAccListKey                  = "service-accounts/"
+	groupsListKey                  = "groups/"
+	policiesListKey                = "policies/"
+	stsListKey                     = "sts/"
+	policyDBUsersListKey           = "policydb/users/"
+	policyDBSTSUsersListKey        = "policydb/sts-users/"
+	policyDBServiceAccountsListKey = "policydb/service-accounts/"
+	policyDBGroupsListKey          = "policydb/groups/"
 
 	allListKeys = []string{
 		usersListKey,
@@ -433,7 +433,7 @@ var (
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
 
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
 		if item.Err != nil {
 			return nil, item.Err
 		}
@@ -448,7 +448,7 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 			}
 		}
 
-		if !found && !(item.Item == "config/config.json" || item.Item == "/format.json") {
+		if !found && (item.Item != "format.json") {
 			logger.LogIf(ctx, fmt.Errorf("unknown type of IAM file listed: %v", item.Item))
 		}
 	}

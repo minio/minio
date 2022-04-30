@@ -10,6 +10,3 @@ MinIO Gateway adds Amazon S3 compatibility layer to third party NAS and Cloud St
 
 - [NAS](https://github.com/minio/minio/blob/master/docs/gateway/nas.md)
 - [S3](https://github.com/minio/minio/blob/master/docs/gateway/s3.md)
-- [Microsoft Azure Blob Storage](https://github.com/minio/minio/blob/master/docs/gateway/azure.md)
-- [Google Cloud Storage](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md)
-- [HDFS](https://github.com/minio/minio/blob/master/docs/gateway/hdfs.md)

@@ -108,6 +108,42 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "BucketTargetsConfigMetaJSON")
 				return
 			}
+		case "PolicyConfigUpdatedAt":
+			z.PolicyConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "PolicyConfigUpdatedAt")
+				return
+			}
+		case "ObjectLockConfigUpdatedAt":
+			z.ObjectLockConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "ObjectLockConfigUpdatedAt")
+				return
+			}
+		case "EncryptionConfigUpdatedAt":
+			z.EncryptionConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "EncryptionConfigUpdatedAt")
+				return
+			}
+		case "TaggingConfigUpdatedAt":
+			z.TaggingConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "TaggingConfigUpdatedAt")
+				return
+			}
+		case "QuotaConfigUpdatedAt":
+			z.QuotaConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "QuotaConfigUpdatedAt")
+				return
+			}
+		case "ReplicationConfigUpdatedAt":
+			z.ReplicationConfigUpdatedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicationConfigUpdatedAt")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -121,9 +157,9 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 14
+	// map header, size 20
 	// write "Name"
-	err = en.Append(0x8e, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0xde, 0x0, 0x14, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -262,15 +298,75 @@ func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "BucketTargetsConfigMetaJSON")
 		return
 	}
+	// write "PolicyConfigUpdatedAt"
+	err = en.Append(0xb5, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.PolicyConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "PolicyConfigUpdatedAt")
+		return
+	}
+	// write "ObjectLockConfigUpdatedAt"
+	err = en.Append(0xb9, 0x4f, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x4c, 0x6f, 0x63, 0x6b, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.ObjectLockConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "ObjectLockConfigUpdatedAt")
+		return
+	}
+	// write "EncryptionConfigUpdatedAt"
+	err = en.Append(0xb9, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.EncryptionConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "EncryptionConfigUpdatedAt")
+		return
+	}
+	// write "TaggingConfigUpdatedAt"
+	err = en.Append(0xb6, 0x54, 0x61, 0x67, 0x67, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.TaggingConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "TaggingConfigUpdatedAt")
+		return
+	}
+	// write "QuotaConfigUpdatedAt"
+	err = en.Append(0xb4, 0x51, 0x75, 0x6f, 0x74, 0x61, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.QuotaConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "QuotaConfigUpdatedAt")
+		return
+	}
+	// write "ReplicationConfigUpdatedAt"
+	err = en.Append(0xba, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.ReplicationConfigUpdatedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationConfigUpdatedAt")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 14
+	// map header, size 20
 	// string "Name"
-	o = append(o, 0x8e, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0xde, 0x0, 0x14, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "Created"
 	o = append(o, 0xa7, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64)
@@ -311,6 +407,24 @@ func (z *BucketMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "BucketTargetsConfigMetaJSON"
 	o = append(o, 0xbb, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x4d, 0x65, 0x74, 0x61, 0x4a, 0x53, 0x4f, 0x4e)
 	o = msgp.AppendBytes(o, z.BucketTargetsConfigMetaJSON)
+	// string "PolicyConfigUpdatedAt"
+	o = append(o, 0xb5, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.PolicyConfigUpdatedAt)
+	// string "ObjectLockConfigUpdatedAt"
+	o = append(o, 0xb9, 0x4f, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x4c, 0x6f, 0x63, 0x6b, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.ObjectLockConfigUpdatedAt)
+	// string "EncryptionConfigUpdatedAt"
+	o = append(o, 0xb9, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.EncryptionConfigUpdatedAt)
+	// string "TaggingConfigUpdatedAt"
+	o = append(o, 0xb6, 0x54, 0x61, 0x67, 0x67, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.TaggingConfigUpdatedAt)
+	// string "QuotaConfigUpdatedAt"
+	o = append(o, 0xb4, 0x51, 0x75, 0x6f, 0x74, 0x61, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.QuotaConfigUpdatedAt)
+	// string "ReplicationConfigUpdatedAt"
+	o = append(o, 0xba, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.ReplicationConfigUpdatedAt)
 	return
 }
 
@@ -416,6 +530,42 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "BucketTargetsConfigMetaJSON")
 				return
 			}
+		case "PolicyConfigUpdatedAt":
+			z.PolicyConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PolicyConfigUpdatedAt")
+				return
+			}
+		case "ObjectLockConfigUpdatedAt":
+			z.ObjectLockConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ObjectLockConfigUpdatedAt")
+				return
+			}
+		case "EncryptionConfigUpdatedAt":
+			z.EncryptionConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "EncryptionConfigUpdatedAt")
+				return
+			}
+		case "TaggingConfigUpdatedAt":
+			z.TaggingConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TaggingConfigUpdatedAt")
+				return
+			}
+		case "QuotaConfigUpdatedAt":
+			z.QuotaConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "QuotaConfigUpdatedAt")
+				return
+			}
+		case "ReplicationConfigUpdatedAt":
+			z.ReplicationConfigUpdatedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicationConfigUpdatedAt")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -430,6 +580,6 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketMetadata) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON) + 21 + msgp.BytesPrefixSize + len(z.ReplicationConfigXML) + 24 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigJSON) + 28 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigMetaJSON)
+	s = 3 + 5 + msgp.StringPrefixSize + len(z.Name) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON) + 21 + msgp.BytesPrefixSize + len(z.ReplicationConfigXML) + 24 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigJSON) + 28 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigMetaJSON) + 22 + msgp.TimeSize + 26 + msgp.TimeSize + 26 + msgp.TimeSize + 23 + msgp.TimeSize + 21 + msgp.TimeSize + 27 + msgp.TimeSize
 	return
 }

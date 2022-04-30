@@ -24,48 +24,21 @@ import (
 	"github.com/minio/pkg/env"
 )
 
-var (
-	// DefaultKVS - default KV config for subnet settings
-	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   config.License, // Deprecated Dec 2021
-			Value: "",
-		},
-		config.KV{
-			Key:   config.APIKey,
-			Value: "",
-		},
-		config.KV{
-			Key:   config.Proxy,
-			Value: "",
-		},
-	}
-
-	// HelpSubnet - provides help for subnet api key config
-	HelpSubnet = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.License, // Deprecated Dec 2021
-			Type:        "string",
-			Description: "[DEPRECATED use api_key] Subnet license token for the cluster",
-			Optional:    true,
-			Sensitive:   true,
-		},
-		config.HelpKV{
-			Key:         config.APIKey,
-			Type:        "string",
-			Description: "Subnet api key for the cluster",
-			Optional:    true,
-			Sensitive:   true,
-		},
-		config.HelpKV{
-			Key:         config.Proxy,
-			Type:        "string",
-			Description: "HTTP(S) proxy URL to use for connecting to SUBNET",
-			Optional:    true,
-			Sensitive:   true,
-		},
-	}
-)
+// DefaultKVS - default KV config for subnet settings
+var DefaultKVS = config.KVS{
+	config.KV{
+		Key:   config.License, // Deprecated Dec 2021
+		Value: "",
+	},
+	config.KV{
+		Key:   config.APIKey,
+		Value: "",
+	},
+	config.KV{
+		Key:   config.Proxy,
+		Value: "",
+	},
+}
 
 // Config represents the subnet related configuration
 type Config struct {
