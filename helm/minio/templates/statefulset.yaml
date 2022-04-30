@@ -57,7 +57,7 @@ spec:
     type: {{ .Values.StatefulSetUpdate.updateStrategy }}
   podManagementPolicy: "Parallel"
   serviceName: {{ template "minio.fullname" . }}-svc
-  replicas: {{ $calculatedReplicas }}
+  replicas: {{ $replicas }}
   selector:
     matchLabels:
       app: {{ template "minio.name" . }}
