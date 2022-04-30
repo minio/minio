@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -775,12 +774,11 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 		}
 		seenClientIDs.Add(p.ClientID)
 
-		var configURLDomain string
 		p.URL, err = xnet.ParseHTTPURL(configURL)
 		if err != nil {
 			return c, err
 		}
-		configURLDomain, _, _ = net.SplitHostPort(p.URL.Host)
+		configURLDomain := p.URL.Hostname()
 		p.DiscoveryDoc, err = parseDiscoveryDoc(p.URL, transport, closeRespFn)
 		if err != nil {
 			return c, err
@@ -809,7 +807,17 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 			// `iampolicy.PolicyName` as the claim name explicitly and sets
 			// a role policy, this check is thwarted, but we will be using
 			// the role policy anyway.
-			return c, config.Errorf("Role Policy (=`%s`) and Claim Name (=`%s`) cannot both be set.", p.RolePolicy, p.ClaimName)
+			return c, config.Errorf("Role Policy (=`%s`) and Claim Name (=`%s`) cannot both be set", p.RolePolicy, p.ClaimName)
+		}
+
+		jwksURL := p.DiscoveryDoc.JwksURI
+		if jwksURL == "" {
+			return c, config.Errorf("no JWKS URI found in your provider's discovery doc (config_url=%s)", configURL)
+		}
+
+		p.JWKS.URL, err = xnet.ParseHTTPURL(jwksURL)
+		if err != nil {
+			return c, err
 		}
 
 		if p.RolePolicy != "" {
@@ -821,9 +829,9 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 			domain := configURLDomain
 			if domain == "" {
 				// Attempt to parse the JWKs URI.
-				domain, _, _ = net.SplitHostPort(p.JWKS.URL.Host)
+				domain = p.JWKS.URL.Hostname()
 				if domain == "" {
-					return c, config.Errorf("unable to generate a domain from the OpenID config.")
+					return c, config.Errorf("unable to generate a domain from the OpenID config")
 				}
 			}
 			if p.ClientID == "" {
@@ -848,16 +856,6 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 			c.roleArnPolicyMap[p.roleArn] = p.RolePolicy
 		} else if p.ClaimName == "" {
 			return c, config.Errorf("A role policy or claim name must be specified")
-		}
-
-		jwksURL := p.DiscoveryDoc.JwksURI
-		if jwksURL == "" {
-			return c, config.Errorf("no JWKS URI found in your provider's discovery doc (config_url=%s)", configURL)
-		}
-
-		p.JWKS.URL, err = xnet.ParseHTTPURL(jwksURL)
-		if err != nil {
-			return c, err
 		}
 
 		if err = p.initializeProvider(getCfgVal, c.transport); err != nil {
