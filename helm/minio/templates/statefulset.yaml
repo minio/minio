@@ -169,7 +169,7 @@ spec:
       tolerations:
 {{ toYaml . | indent 8 }}
     {{- end }}
-    {{- if and (gt $calculatedReplicas 1) (ge .Capabilities.KubeVersion.Major "1") (ge .Capabilities.KubeVersion.Minor "19") }}
+    {{- if and (gt $replicas 1) (ge .Capabilities.KubeVersion.Major "1") (ge .Capabilities.KubeVersion.Minor "19") }}
     {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
 {{ toYaml . | indent 8 }}
