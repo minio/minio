@@ -1,7 +1,7 @@
 {{- if eq .Values.mode "distributed" }}
 {{ $poolCount := .Values.pools | int }}
 {{ $nodeCount := .Values.replicas | int }}
-{{ $calculatedReplicas := mul $poolCount $nodeCount }}
+{{ $replicas := mul $poolCount $nodeCount }}
 {{ $drivesPerNode := .Values.drivesPerNode | int }}
 {{ $scheme := "http" }}
 {{- if .Values.tls.enabled }}
