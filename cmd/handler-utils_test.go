@@ -221,6 +221,9 @@ func TestGetResource(t *testing.T) {
 		expectedResource string
 	}{
 		{"/a/b/c", "test.mydomain.com", []string{"mydomain.com"}, "/test/a/b/c"},
+		{"/a/b/c", "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:17000", []string{"mydomain.com"}, "/a/b/c"},
+		{"/a/b/c", "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]", []string{"mydomain.com"}, "/a/b/c"},
+		{"/a/b/c", "192.168.1.1:9000", []string{"mydomain.com"}, "/a/b/c"},
 		{"/a/b/c", "test.mydomain.com", []string{"notmydomain.com"}, "/a/b/c"},
 		{"/a/b/c", "test.mydomain.com", nil, "/a/b/c"},
 	}
