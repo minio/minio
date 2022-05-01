@@ -41,6 +41,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/coreos/go-oidc"
 	"github.com/dustin/go-humanize"
@@ -86,6 +87,20 @@ func IsErr(err error, errs ...error) bool {
 		}
 	}
 	return false
+}
+
+// returns 'true' if either string has space in the
+// - beginning of a string
+// OR
+// - end of a string
+func hasSpaceBE(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	if len(s) == 1 {
+		return unicode.IsSpace(rune(s[0]))
+	}
+	return unicode.IsSpace(rune(s[0])) || unicode.IsSpace(rune(s[len(s)-1]))
 }
 
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {

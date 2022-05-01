@@ -158,8 +158,7 @@ type MappedPolicy struct {
 func (mp MappedPolicy) toSlice() []string {
 	var policies []string
 	for _, policy := range strings.Split(mp.Policies, ",") {
-		policy = strings.TrimSpace(policy)
-		if policy == "" {
+		if strings.TrimSpace(policy) == "" {
 			continue
 		}
 		policies = append(policies, policy)
