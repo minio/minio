@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"path"
@@ -295,6 +296,15 @@ const (
 	dotComponent    = "."
 )
 
+func hasBadHost(host string) error {
+	if globalIsCICD && strings.TrimSpace(host) == "" {
+		// under CI/CD test setups ignore empty hosts as invalid hosts
+		return nil
+	}
+	_, err := xnet.ParseHost(host)
+	return err
+}
+
 // Check if the incoming path has bad path components,
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
@@ -313,7 +323,11 @@ func hasBadPathComponent(path string) bool {
 // Check if client is sending a malicious request.
 func hasMultipleAuth(r *http.Request) bool {
 	authTypeCount := 0
-	for _, hasValidAuth := range []func(*http.Request) bool{isRequestSignatureV2, isRequestPresignedSignatureV2, isRequestSignatureV4, isRequestPresignedSignatureV4, isRequestJWT, isRequestPostPolicySignatureV4} {
+	for _, hasValidAuth := range []func(*http.Request) bool{
+		isRequestSignatureV2, isRequestPresignedSignatureV2,
+		isRequestSignatureV4, isRequestPresignedSignatureV4,
+		isRequestJWT, isRequestPostPolicySignatureV4,
+	} {
 		if hasValidAuth(r) {
 			authTypeCount++
 		}
@@ -325,6 +339,14 @@ func hasMultipleAuth(r *http.Request) bool {
 // any malicious requests.
 func setRequestValidityHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := hasBadHost(r.Host); err != nil {
+			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
+			invalidReq.Description = fmt.Sprintf("%s (%s)", invalidReq.Description, err)
+			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
+			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
+			return
+		}
+
 		// Check for bad components in URL path.
 		if hasBadPathComponent(r.URL.Path) {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
@@ -342,7 +364,9 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			}
 		}
 		if hasMultipleAuth(r) {
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
+			invalidReq.Description = fmt.Sprintf("%s (request has multiple authentication types, please use one)", invalidReq.Description)
+			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
 		}
