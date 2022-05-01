@@ -141,6 +141,14 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	})
 }
 
+var redirectPrefixes = map[string]struct{}{
+	"favicon-16x16.png": {},
+	"favicon-32x32.png": {},
+	"favicon-96x96.png": {},
+	"index.html":        {},
+	minioReservedBucket: {},
+}
+
 // Fetch redirect location if urlPath satisfies certain
 // criteria. Some special names are considered to be
 // redirectable, this is purely internal function and
@@ -151,32 +159,25 @@ func getRedirectLocation(r *http.Request) *xnet.URL {
 	if err != nil {
 		return nil
 	}
-	for _, prefix := range []string{
-		"favicon-16x16.png",
-		"favicon-32x32.png",
-		"favicon-96x96.png",
-		"index.html",
-		minioReservedBucket,
-	} {
-		bucket, _ := path2BucketObject(resource)
-		if path.Clean(bucket) == prefix || resource == slashSeparator {
-			if globalBrowserRedirectURL != nil {
-				return globalBrowserRedirectURL
-			}
-			hostname, _, _ := net.SplitHostPort(r.Host)
-			if hostname == "" {
-				hostname = r.Host
-			}
-			return &xnet.URL{
-				Host: net.JoinHostPort(hostname, globalMinioConsolePort),
-				Scheme: func() string {
-					scheme := "http"
-					if r.TLS != nil {
-						scheme = "https"
-					}
-					return scheme
-				}(),
-			}
+	bucket, _ := path2BucketObject(resource)
+	_, redirect := redirectPrefixes[path.Clean(bucket)]
+	if redirect || resource == slashSeparator {
+		if globalBrowserRedirectURL != nil {
+			return globalBrowserRedirectURL
+		}
+		xhost, err := xnet.ParseHost(r.Host)
+		if err != nil {
+			return nil
+		}
+		return &xnet.URL{
+			Host: net.JoinHostPort(xhost.Name, globalMinioConsolePort),
+			Scheme: func() string {
+				scheme := "http"
+				if r.TLS != nil {
+					scheme = "https"
+				}
+				return scheme
+			}(),
 		}
 	}
 	return nil
