@@ -89,18 +89,20 @@ func (v Versioning) Enabled() bool {
 // PrefixEnabled - returns true if versioning is enabled at the bucket and given
 // prefix, false otherwise.
 func (v Versioning) PrefixEnabled(prefix string) bool {
-	if v.Status == Enabled {
-		if prefix == "" {
-			return true
-		}
-		for _, sprefix := range v.ExcludedPrefixes {
-			if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
-				return false
-			}
-		}
+	if v.Status != Enabled {
+		return false
+	}
+
+	if prefix == "" {
 		return true
 	}
-	return false
+	for _, sprefix := range v.ExcludedPrefixes {
+		if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
+			return false
+		}
+	}
+	return true
+
 }
 
 // Suspended - returns true if versioning is suspended
