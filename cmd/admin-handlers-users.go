@@ -993,11 +993,9 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	// We do not care if service account is readable or not at this point,
+	// since this is a delete call we shall allow it to be deleted if possible.
+	svcAccount, _, _ := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
 
 	adminPrivilege := globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
@@ -1012,7 +1010,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		if cred.ParentUser != "" {
 			parentUser = cred.ParentUser
 		}
-		if parentUser != svcAccount.ParentUser {
+		if svcAccount.ParentUser != "" && parentUser != svcAccount.ParentUser {
 			// The service account belongs to another user but return not
 			// found error to mitigate brute force attacks. or the
 			// serviceAccount doesn't exist.
@@ -1021,23 +1019,21 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true)
-	if err != nil {
+	if err := globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Call site replication hook - non-root user accounts are replicated.
-	if svcAccount.ParentUser != globalActiveCred.AccessKey {
-		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	if svcAccount.ParentUser != "" && svcAccount.ParentUser != globalActiveCred.AccessKey {
+		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Delete: &madmin.SRSvcAccDelete{
 					AccessKey: serviceAccount,
 				},
 			},
-		})
-		if err != nil {
+		}); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
