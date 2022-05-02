@@ -269,6 +269,11 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if delOpts.ReplicationRequest {
 		return
 	}
+	// Skip replication if this object's prefix is excluded from being
+	// versioned.
+	if delOpts.VersionSuspended {
+		return
+	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,
 		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),

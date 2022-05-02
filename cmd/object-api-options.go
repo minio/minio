@@ -161,12 +161,11 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 }
 
 func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
-	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts, err = getOpts(ctx, r, bucket, object)
 	if err != nil {
 		return opts, err
 	}
-	opts.Versioned = versioned
+	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
