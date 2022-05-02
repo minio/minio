@@ -237,6 +237,10 @@ func extractReqParams(r *http.Request) map[string]string {
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
+	if rangeField := r.Header.Get(xhttp.Range); rangeField != "" {
+		m["range"] = rangeField
+	}
+
 	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		m[xhttp.MinIOSourceReplicationRequest] = ""
 	}
