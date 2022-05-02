@@ -88,6 +88,14 @@ func IsErr(err error, errs ...error) bool {
 	return false
 }
 
+// returns 'true' if either string has space in the
+// - beginning of a string
+// OR
+// - end of a string
+func hasSpaceBE(s string) bool {
+	return strings.TrimSpace(s) != s
+}
+
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
 	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
