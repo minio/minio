@@ -1033,6 +1033,11 @@ func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogO
 		entry.ReqQuery[xhttp.VersionID] = opts.VersionID
 	}
 	entry.API.Status = opts.Status
+	// Merge tag information if found - this is currently needed for tags
+	// set during decommissioning.
+	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
+		entry.Tags = reqInfo.GetTagsMap()
+	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
 	logger.AuditLog(ctx, nil, nil, nil)
 }
