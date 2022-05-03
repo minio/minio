@@ -242,39 +242,24 @@ func (p *poolMeta) Decommission(idx int, pi poolSpaceInfo) error {
 		}
 	}
 
+	// Return an error when there is decommission on going - the user needs
+	// to explicitly cancel it first in order to restart decommissioning again.
+	if p.Pools[idx].Decommission != nil &&
+		!p.Pools[idx].Decommission.Complete &&
+		!p.Pools[idx].Decommission.Failed &&
+		!p.Pools[idx].Decommission.Canceled {
+		return errDecommissionAlreadyRunning
+	}
+
 	now := UTCNow()
-	if p.Pools[idx].Decommission == nil {
-		p.Pools[idx].LastUpdate = now
-		p.Pools[idx].Decommission = &PoolDecommissionInfo{
-			StartTime:   now,
-			StartSize:   pi.Free,
-			CurrentSize: pi.Free,
-			TotalSize:   pi.Total,
-		}
-		return nil
+	p.Pools[idx].LastUpdate = now
+	p.Pools[idx].Decommission = &PoolDecommissionInfo{
+		StartTime:   now,
+		StartSize:   pi.Free,
+		CurrentSize: pi.Free,
+		TotalSize:   pi.Total,
 	}
-
-	// Completed pool doesn't need to be decommissioned again.
-	if p.Pools[idx].Decommission.Complete {
-		return errDecommissionComplete
-	}
-
-	// Canceled or Failed decommission can be triggered again.
-	if p.Pools[idx].Decommission.StartTime.IsZero() {
-		if p.Pools[idx].Decommission.Canceled || p.Pools[idx].Decommission.Failed {
-			p.Pools[idx].LastUpdate = now
-			p.Pools[idx].Decommission = &PoolDecommissionInfo{
-				StartTime:   now,
-				StartSize:   pi.Free,
-				CurrentSize: pi.Free,
-				TotalSize:   pi.Total,
-			}
-			return nil
-		}
-	} // In-progress pool doesn't need to be decommissioned again.
-
-	// In all other scenarios an active decommissioning is in progress.
-	return errDecommissionAlreadyRunning
+	return nil
 }
 
 func (p poolMeta) IsSuspended(idx int) bool {
