@@ -561,7 +561,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	defer func() {
 		gr.Close()
 		if err == nil {
-			auditLogDecom(ctx, "CopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID)
+			auditLogDecom(ctx, "DecomCopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID)
 		}
 	}()
 
@@ -747,7 +747,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				if err != nil {
 					logger.LogIf(ctx, err)
 				} else {
-					auditLogDecom(ctx, "DeleteObject", bName, entry.name, "")
+					auditLogDecom(ctx, "DecomDeleteObject", bName, entry.name, "")
 				}
 			}
 			z.poolMetaMutex.Lock()
