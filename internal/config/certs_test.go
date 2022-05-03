@@ -181,6 +181,9 @@ M9ofSEt/bdRD
 }
 
 func TestLoadX509KeyPair(t *testing.T) {
+	t.Cleanup(func() {
+		os.Unsetenv(EnvCertPassword)
+	})
 	for i, testCase := range loadX509KeyPairTests {
 		privateKey, err := createTempFile("private.key", testCase.privateKey)
 		if err != nil {
@@ -192,9 +195,8 @@ func TestLoadX509KeyPair(t *testing.T) {
 			t.Fatalf("Test %d: failed to create tmp certificate file: %v", i, err)
 		}
 
-		os.Unsetenv(EnvCertPassword)
 		if testCase.password != "" {
-			os.Setenv(EnvCertPassword, testCase.password)
+			t.Setenv(EnvCertPassword, testCase.password)
 		}
 		_, err = LoadX509KeyPair(certificate, privateKey)
 		if err != nil && !testCase.shouldFail {

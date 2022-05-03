@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1723,14 +1724,16 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 					}
 
 					path := baseDirFromPrefix(prefix)
-					if path == "" {
-						path = prefix
+					filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
+					if path == prefix {
+						filterPrefix = ""
 					}
 
 					lopts := listPathRawOptions{
 						disks:          disks,
 						bucket:         bucket,
 						path:           path,
+						filterPrefix:   filterPrefix,
 						recursive:      true,
 						forwardTo:      "",
 						minDisks:       1,
@@ -1783,14 +1786,16 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 	}
 
 	path := baseDirFromPrefix(prefix)
-	if path == "" {
-		path = prefix
+	filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
+	if path == prefix {
+		filterPrefix = ""
 	}
 
 	lopts := listPathRawOptions{
 		disks:          disks,
 		bucket:         bucket,
 		path:           path,
+		filterPrefix:   filterPrefix,
 		recursive:      true,
 		forwardTo:      "",
 		minDisks:       1,

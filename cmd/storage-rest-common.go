@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v44" // Added heal scan mode in NSScanner
+	storageRESTVersion       = "v45" // Added ReadXL API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -40,6 +40,7 @@ const (
 	storageRESTMethodUpdateMetadata = "/updatemetadata"
 	storageRESTMethodDeleteVersion  = "/deleteversion"
 	storageRESTMethodReadVersion    = "/readversion"
+	storageRESTMethodReadXL         = "/readxl"
 	storageRESTMethodRenameData     = "/renamedata"
 	storageRESTMethodCheckParts     = "/checkparts"
 	storageRESTMethodReadAll        = "/readall"

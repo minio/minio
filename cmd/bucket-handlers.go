@@ -706,13 +706,27 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 
 	objectLockEnabled := false
-	if vs, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
-		v := strings.ToLower(strings.Join(vs, ""))
-		if v != "true" && v != "false" {
+	if vs := r.Header.Get(xhttp.AmzObjectLockEnabled); len(vs) > 0 {
+		v := strings.ToLower(vs)
+		switch v {
+		case "true", "false":
+			objectLockEnabled = v == "true"
+		default:
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 			return
 		}
-		objectLockEnabled = v == "true"
+	}
+
+	forceCreate := false
+	if vs := r.Header.Get(xhttp.MinIOForceCreate); len(vs) > 0 {
+		v := strings.ToLower(vs)
+		switch v {
+		case "true", "false":
+			forceCreate = v == "true"
+		default:
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+			return
+		}
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
@@ -737,6 +751,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	opts := BucketOptions{
 		Location:    location,
 		LockEnabled: objectLockEnabled,
+		ForceCreate: forceCreate,
 	}
 
 	if globalDNSConfig != nil {
@@ -1374,7 +1389,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	}
 
 	// Deny object locking configuration settings on existing buckets without object lock enabled.
-	if _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
+	if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1427,7 +1442,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
+	config, _, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1529,7 +1544,7 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
+	config, _, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1677,7 +1692,7 @@ func (api objectAPIHandlers) GetBucketReplicationConfigHandler(w http.ResponseWr
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1820,7 +1835,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1908,7 +1923,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 		return
 	}
 
-	if _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
+	if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

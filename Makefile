@@ -82,6 +82,11 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
 
+verify-healing-inconsistent-versions: ## verify resolving inconsistent versions
+	@echo "Verify resolving inconsistent versions build with race"
+	@CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/resolve-right-versions.sh)
+
 build: checks ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null

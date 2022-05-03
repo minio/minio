@@ -124,7 +124,7 @@ func (k *KeycloakProvider) LookupUser(userid string) (User, error) {
 type Option func(*KeycloakProvider)
 
 // WithTransport provide custom transport
-func WithTransport(transport *http.Transport) Option {
+func WithTransport(transport http.RoundTripper) Option {
 	return func(p *KeycloakProvider) {
 		p.client = http.Client{
 			Transport: transport,

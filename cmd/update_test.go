@@ -115,19 +115,17 @@ func TestDownloadURL(t *testing.T) {
 		}
 	}
 
-	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
 	durl = getDownloadURL(minioVersion1)
 	if durl != kubernetesDeploymentDoc {
 		t.Errorf("Expected %s, got %s", kubernetesDeploymentDoc, durl)
 	}
-	os.Unsetenv("KUBERNETES_SERVICE_HOST")
 
-	os.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
+	t.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
 	durl = getDownloadURL(minioVersion1)
 	if durl != mesosDeploymentDoc {
 		t.Errorf("Expected %s, got %s", mesosDeploymentDoc, durl)
 	}
-	os.Unsetenv("MESOS_CONTAINER_NAME")
 }
 
 // Tests user agent string.
@@ -162,10 +160,13 @@ func TestUserAgent(t *testing.T) {
 		sci := globalIsCICD
 		globalIsCICD = false
 
-		os.Setenv(testCase.envName, testCase.envValue)
-		if testCase.envName == "MESOS_CONTAINER_NAME" {
-			os.Setenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "mesos-1111")
+		if testCase.envName != "" {
+			t.Setenv(testCase.envName, testCase.envValue)
+			if testCase.envName == "MESOS_CONTAINER_NAME" {
+				t.Setenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "mesos-1111")
+			}
 		}
+
 		str := getUserAgent(testCase.mode)
 		expectedStr := testCase.expectedStr
 		if IsDocker() {
@@ -188,12 +189,11 @@ func TestIsDCOS(t *testing.T) {
 		globalIsCICD = sci
 	}()
 
-	os.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
+	t.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
 	dcos := IsDCOS()
 	if !dcos {
 		t.Fatalf("Expected %t, got %t", true, dcos)
 	}
-
 	os.Unsetenv("MESOS_CONTAINER_NAME")
 	dcos = IsDCOS()
 	if dcos {
@@ -209,12 +209,13 @@ func TestIsKubernetes(t *testing.T) {
 		globalIsCICD = sci
 	}()
 
-	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
 	kubernetes := IsKubernetes()
 	if !kubernetes {
 		t.Fatalf("Expected %t, got %t", true, kubernetes)
 	}
 	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+
 	kubernetes = IsKubernetes()
 	if kubernetes {
 		t.Fatalf("Expected %t, got %t", false, kubernetes)

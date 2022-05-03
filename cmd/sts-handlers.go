@@ -66,7 +66,6 @@ const (
 	expClaim = "exp"
 	subClaim = "sub"
 	audClaim = "aud"
-	azpClaim = "azp"
 	issClaim = "iss"
 
 	// JWT claim to check the parent user
@@ -328,17 +327,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	ctx = newContext(r, w, action)
 	defer logger.AuditLog(ctx, w, r, nil)
 
-	if globalOpenIDValidators == nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errServerNotInitialized)
-		return
-	}
-
-	v, err := globalOpenIDValidators.Get("jwt")
-	if err != nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
-		return
-	}
-
 	token := r.Form.Get(stsToken)
 	if token == "" {
 		token = r.Form.Get(stsWebIdentityToken)
@@ -346,7 +334,21 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 
 	accessToken := r.Form.Get(stsWebIdentityAccessToken)
 
-	m, err := v.Validate(token, accessToken, r.Form.Get(stsDurationSeconds))
+	roleArn := openid.DummyRoleARN
+	if globalIAMSys.HasRolePolicy() {
+		var err error
+		roleArnStr := r.Form.Get(stsRoleArn)
+		roleArn, _, err = globalIAMSys.GetRolePolicy(roleArnStr)
+		if err != nil {
+			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
+			return
+		}
+
+	}
+
+	// Validate JWT; check clientID in claims matches the one associated with the roleArn
+	m, err := globalOpenIDConfig.Validate(roleArn, token, accessToken, r.Form.Get(stsDurationSeconds))
 	if err != nil {
 		switch err {
 		case openid.ErrTokenExpired:
@@ -365,54 +367,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// REQUIRED. Audience(s) that this ID Token is intended for.
-	// It MUST contain the OAuth 2.0 client_id of the Relying Party
-	// as an audience value. It MAY also contain identifiers for
-	// other audiences. In the general case, the aud value is an
-	// array of case sensitive strings. In the common special case
-	// when there is one audience, the aud value MAY be a single
-	// case sensitive
-	audValues, ok := iampolicy.GetValuesFromClaims(m, audClaim)
-	if !ok {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-			errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
-		return
-	}
-	if !audValues.Contains(globalOpenIDConfig.ClientID) {
-		// if audience claims is missing, look for "azp" claims.
-		// OPTIONAL. Authorized party - the party to which the ID
-		// Token was issued. If present, it MUST contain the OAuth
-		// 2.0 Client ID of this party. This Claim is only needed
-		// when the ID Token has a single audience value and that
-		// audience is different than the authorized party. It MAY
-		// be included even when the authorized party is the same
-		// as the sole audience. The azp value is a case sensitive
-		// string containing a StringOrURI value
-		azpValues, ok := iampolicy.GetValuesFromClaims(m, azpClaim)
-		if !ok {
-			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-				errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID"))
-			return
-		}
-		if !azpValues.Contains(globalOpenIDConfig.ClientID) {
-			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-				errors.New("STS JWT Token has `azp` claim invalid, `azp` must match configured OpenID Client ID"))
-			return
-		}
-	}
-
 	var policyName string
 	if globalIAMSys.HasRolePolicy() {
-		roleArn := r.Form.Get(stsRoleArn)
-		_, err := globalIAMSys.GetRolePolicy(roleArn)
-		if err != nil {
-			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
-				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
-			return
-		}
 		// If roleArn is used, we set it as a claim, and use the
 		// associated policy when credentials are used.
-		m[roleArnClaim] = roleArn
+		m[roleArnClaim] = roleArn.String()
 	} else {
 		// If no role policy is configured, then we use claims from the
 		// JWT. This is a MinIO STS API specific value, this value

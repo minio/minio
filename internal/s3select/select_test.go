@@ -20,7 +20,6 @@ package s3select
 import (
 	"bytes"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,6 +33,22 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/simdjson-go"
 )
+
+func newStringRSC(s string) io.ReadSeekCloser {
+	return newBytesRSC([]byte(s))
+}
+
+func newBytesRSC(b []byte) io.ReadSeekCloser {
+	r := bytes.NewReader(b)
+	segmentReader := func(offset int64) (io.ReadCloser, error) {
+		_, err := r.Seek(offset, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
+		return io.NopCloser(r), nil
+	}
+	return NewObjectReadSeekCloser(segmentReader, int64(len(b)))
+}
 
 type testResponseWriter struct {
 	statusCode int
@@ -608,13 +623,11 @@ func TestJSONQueries(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				in := input
-				if len(testCase.withJSON) > 0 {
-					in = testCase.withJSON
-				}
-				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
-			}); err != nil {
+			in := input
+			if len(testCase.withJSON) > 0 {
+				in = testCase.withJSON
+			}
+			if err = s3Select.Open(newStringRSC(in)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -656,13 +669,11 @@ func TestJSONQueries(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				in := input
-				if len(testCase.withJSON) > 0 {
-					in = testCase.withJSON
-				}
-				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
-			}); err != nil {
+			in := input
+			if len(testCase.withJSON) > 0 {
+				in = testCase.withJSON
+			}
+			if err = s3Select.Open(newStringRSC(in)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -743,9 +754,7 @@ func TestCSVQueries(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
-			}); err != nil {
+			if err = s3Select.Open(newStringRSC(input)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -928,9 +937,7 @@ func TestCSVQueries2(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBuffer(testCase.input)), nil
-			}); err != nil {
+			if err = s3Select.Open(newBytesRSC(testCase.input)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1074,9 +1081,7 @@ true`,
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
-			}); err != nil {
+			if err = s3Select.Open(newStringRSC(input)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1220,9 +1225,7 @@ func TestCSVInput(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewReader(csvData)), nil
-			}); err != nil {
+			if err = s3Select.Open(newBytesRSC(csvData)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1342,9 +1345,7 @@ func TestJSONInput(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewReader(jsonData)), nil
-			}); err != nil {
+			if err = s3Select.Open(newBytesRSC(jsonData)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1616,37 +1617,7 @@ func TestCSVRanges(t *testing.T) {
 				return
 			}
 
-			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				in := testCase.input
-				if offset != 0 || length != -1 {
-					// Copy from SelectObjectContentHandler
-					isSuffixLength := false
-					if offset < 0 {
-						isSuffixLength = true
-					}
-
-					if length > 0 {
-						length--
-					}
-
-					rs := &httpRangeSpec{
-						IsSuffixLength: isSuffixLength,
-						Start:          offset,
-						End:            offset + length,
-					}
-					if length == -1 {
-						rs.End = -1
-					}
-					t.Log("input, offset:", offset, "length:", length, "size:", len(in))
-					offset, length, err = rs.GetOffsetLength(int64(len(in)))
-					if err != nil {
-						return nil, err
-					}
-					t.Log("rs:", *rs, "offset:", offset, "length:", length)
-					in = in[offset : offset+length]
-				}
-				return ioutil.NopCloser(bytes.NewBuffer(in)), nil
-			}); err != nil {
+			if err = s3Select.Open(newBytesRSC(testCase.input)); err != nil {
 				if !testCase.wantErr {
 					t.Fatal(err)
 				}
@@ -1684,8 +1655,7 @@ func TestCSVRanges(t *testing.T) {
 }
 
 func TestParquetInput(t *testing.T) {
-	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
-	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
+	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
 
 	testTable := []struct {
 		requestXML     []byte
@@ -1741,27 +1711,10 @@ func TestParquetInput(t *testing.T) {
 
 	for i, testCase := range testTable {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			getReader := func(offset int64, length int64) (io.ReadCloser, error) {
-				testdataFile := "testdata/testdata.parquet"
-				file, err := os.Open(testdataFile)
-				if err != nil {
-					return nil, err
-				}
-
-				fi, err := file.Stat()
-				if err != nil {
-					return nil, err
-				}
-
-				if offset < 0 {
-					offset = fi.Size() + offset
-				}
-
-				if _, err = file.Seek(offset, io.SeekStart); err != nil {
-					return nil, err
-				}
-
-				return file, nil
+			testdataFile := "testdata/testdata.parquet"
+			file, err := os.Open(testdataFile)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
@@ -1769,9 +1722,11 @@ func TestParquetInput(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(getReader); err != nil {
+			if err = s3Select.Open(file); err != nil {
 				t.Fatal(err)
 			}
+
+			fmt.Printf("R: \nE: %s\n" /* string(w.response), */, string(testCase.expectedResult))
 
 			w := &testResponseWriter{}
 			s3Select.Evaluate(w)
@@ -1801,8 +1756,7 @@ func TestParquetInput(t *testing.T) {
 }
 
 func TestParquetInputSchema(t *testing.T) {
-	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
-	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
+	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
 
 	testTable := []struct {
 		requestXML []byte
@@ -1862,27 +1816,10 @@ func TestParquetInputSchema(t *testing.T) {
 
 	for i, testCase := range testTable {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			getReader := func(offset int64, length int64) (io.ReadCloser, error) {
-				testdataFile := "testdata/lineitem_shipdate.parquet"
-				file, err := os.Open(testdataFile)
-				if err != nil {
-					return nil, err
-				}
-
-				fi, err := file.Stat()
-				if err != nil {
-					return nil, err
-				}
-
-				if offset < 0 {
-					offset = fi.Size() + offset
-				}
-
-				if _, err = file.Seek(offset, io.SeekStart); err != nil {
-					return nil, err
-				}
-
-				return file, nil
+			testdataFile := "testdata/lineitem_shipdate.parquet"
+			file, err := os.Open(testdataFile)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
@@ -1890,7 +1827,7 @@ func TestParquetInputSchema(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(getReader); err != nil {
+			if err = s3Select.Open(file); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1921,8 +1858,7 @@ func TestParquetInputSchema(t *testing.T) {
 }
 
 func TestParquetInputSchemaCSV(t *testing.T) {
-	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
-	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
+	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
 
 	testTable := []struct {
 		requestXML []byte
@@ -1980,27 +1916,10 @@ func TestParquetInputSchemaCSV(t *testing.T) {
 
 	for i, testCase := range testTable {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			getReader := func(offset int64, length int64) (io.ReadCloser, error) {
-				testdataFile := "testdata/lineitem_shipdate.parquet"
-				file, err := os.Open(testdataFile)
-				if err != nil {
-					return nil, err
-				}
-
-				fi, err := file.Stat()
-				if err != nil {
-					return nil, err
-				}
-
-				if offset < 0 {
-					offset = fi.Size() + offset
-				}
-
-				if _, err = file.Seek(offset, io.SeekStart); err != nil {
-					return nil, err
-				}
-
-				return file, nil
+			testdataFile := "testdata/lineitem_shipdate.parquet"
+			file, err := os.Open(testdataFile)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
@@ -2008,7 +1927,7 @@ func TestParquetInputSchemaCSV(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.Open(getReader); err != nil {
+			if err = s3Select.Open(file); err != nil {
 				t.Fatal(err)
 			}
 
@@ -2036,77 +1955,4 @@ func TestParquetInputSchemaCSV(t *testing.T) {
 			}
 		})
 	}
-}
-
-// httpRangeSpec represents a range specification as supported by S3 GET
-// object request.
-//
-// Case 1: Not present -> represented by a nil RangeSpec
-// Case 2: bytes=1-10 (absolute start and end offsets) -> RangeSpec{false, 1, 10}
-// Case 3: bytes=10- (absolute start offset with end offset unspecified) -> RangeSpec{false, 10, -1}
-// Case 4: bytes=-30 (suffix length specification) -> RangeSpec{true, -30, -1}
-type httpRangeSpec struct {
-	// Does the range spec refer to a suffix of the object?
-	IsSuffixLength bool
-
-	// Start and end offset specified in range spec
-	Start, End int64
-}
-
-func (h *httpRangeSpec) GetLength(resourceSize int64) (rangeLength int64, err error) {
-	switch {
-	case resourceSize < 0:
-		return 0, errors.New("Resource size cannot be negative")
-
-	case h == nil:
-		rangeLength = resourceSize
-
-	case h.IsSuffixLength:
-		specifiedLen := -h.Start
-		rangeLength = specifiedLen
-		if specifiedLen > resourceSize {
-			rangeLength = resourceSize
-		}
-
-	case h.Start >= resourceSize:
-		return 0, errors.New("errInvalidRange")
-
-	case h.End > -1:
-		end := h.End
-		if resourceSize <= end {
-			end = resourceSize - 1
-		}
-		rangeLength = end - h.Start + 1
-
-	case h.End == -1:
-		rangeLength = resourceSize - h.Start
-
-	default:
-		return 0, errors.New("Unexpected range specification case")
-	}
-
-	return rangeLength, nil
-}
-
-// GetOffsetLength computes the start offset and length of the range
-// given the size of the resource
-func (h *httpRangeSpec) GetOffsetLength(resourceSize int64) (start, length int64, err error) {
-	if h == nil {
-		// No range specified, implies whole object.
-		return 0, resourceSize, nil
-	}
-
-	length, err = h.GetLength(resourceSize)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	start = h.Start
-	if h.IsSuffixLength {
-		start = resourceSize + h.Start
-		if start < 0 {
-			start = 0
-		}
-	}
-	return start, length, nil
 }

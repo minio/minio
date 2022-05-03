@@ -1699,6 +1699,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
+	versions := madmin.Versions{}
 	usage := madmin.Usage{}
 
 	objectAPI := newObjectLayerFn()
@@ -1710,6 +1711,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		if err == nil {
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
+			versions = madmin.Versions{Count: dataUsageInfo.VersionsTotalCount}
 			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 		} else {
 			buckets = madmin.Buckets{Error: err.Error()}
@@ -1758,6 +1760,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		DeploymentID: globalDeploymentID,
 		Buckets:      buckets,
 		Objects:      objects,
+		Versions:     versions,
 		Usage:        usage,
 		Services:     services,
 		Backend:      backend,

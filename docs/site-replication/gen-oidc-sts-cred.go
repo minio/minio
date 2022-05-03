@@ -58,6 +58,7 @@ func main() {
 		log.Fatalf("Failed to generate OIDC token: %v", err)
 	}
 
+	roleARN := os.Getenv("ROLE_ARN")
 	webID := cr.STSWebIdentity{
 		Client:      &http.Client{},
 		STSEndpoint: endpoint,
@@ -66,6 +67,7 @@ func main() {
 				Token: oidcToken,
 			}, nil
 		},
+		RoleARN: roleARN,
 	}
 
 	value, err := webID.Retrieve()

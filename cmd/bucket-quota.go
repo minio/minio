@@ -42,8 +42,8 @@ func (sys *BucketQuotaSys) Get(ctx context.Context, bucketName string) (*madmin.
 		}
 		return &madmin.BucketQuota{}, nil
 	}
-
-	return globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
+	qCfg, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
+	return qCfg, err
 }
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys

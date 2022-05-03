@@ -515,6 +515,25 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	return fi, err
 }
 
+// ReadXL - reads all contents of xl.meta of a file.
+func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTReadData, strconv.FormatBool(readData))
+	respBody, err := client.call(ctx, storageRESTMethodReadXL, values, nil, -1)
+	if err != nil {
+		return rf, err
+	}
+	defer xhttp.DrainBody(respBody)
+
+	dec := msgpNewReader(respBody)
+	defer readMsgpReaderPool.Put(dec)
+
+	err = rf.DecodeMsg(dec)
+	return rf, err
+}
+
 // ReadAll - reads all contents of a file.
 func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, path string) ([]byte, error) {
 	values := make(url.Values)

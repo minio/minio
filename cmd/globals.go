@@ -139,7 +139,7 @@ var (
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
 
-	// Name of gateway server, e.g S3, GCS, Azure, etc
+	// Name of gateway server, e.g S3, NAS etc
 	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
@@ -289,9 +289,6 @@ var (
 
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
-
-	// Authorization validators list.
-	globalOpenIDValidators *openid.Validators
 
 	// OPA policy system.
 	globalPolicyOPA *opa.Opa

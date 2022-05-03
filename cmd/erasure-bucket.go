@@ -55,6 +55,11 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		g.Go(func() error {
 			if storageDisks[index] != nil {
 				if err := storageDisks[index].MakeVol(ctx, bucket); err != nil {
+					if opts.ForceCreate && errors.Is(err, errVolumeExists) {
+						// No need to return error when force create was
+						// requested.
+						return nil
+					}
 					if !errors.Is(err, errVolumeExists) {
 						logger.LogIf(ctx, err)
 					}

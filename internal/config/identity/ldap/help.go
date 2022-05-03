@@ -21,63 +21,70 @@ import "github.com/minio/minio/internal/config"
 
 // Help template for LDAP identity feature.
 var (
+	defaultHelpPostfix = func(key string) string {
+		return config.DefaultHelpPostfix(DefaultKVS, key)
+	}
+
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         ServerAddr,
-			Description: `AD/LDAP server address e.g. "myldapserver.com:636"`,
+			Description: `AD/LDAP server address e.g. "myldapserver.com:636"` + defaultHelpPostfix(ServerAddr),
 			Type:        "address",
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         LookupBindDN,
-			Description: `DN for LDAP read-only service account used to perform DN and group lookups`,
+			Description: `DN for LDAP read-only service account used to perform DN and group lookups` + defaultHelpPostfix(LookupBindDN),
+			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         LookupBindPassword,
-			Description: `Password for LDAP read-only service account used to perform DN and group lookups`,
+			Description: `Password for LDAP read-only service account used to perform DN and group lookups` + defaultHelpPostfix(LookupBindPassword),
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
-			Description: `";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Description: `";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"` + defaultHelpPostfix(UserDNSearchBaseDN),
+			Optional:    true,
 			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         UserDNSearchFilter,
-			Description: `Search filter to lookup user DN`,
+			Description: `Search filter to lookup user DN` + defaultHelpPostfix(UserDNSearchFilter),
+			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         GroupSearchFilter,
-			Description: `search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"`,
+			Description: `search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"` + defaultHelpPostfix(GroupSearchFilter),
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         GroupSearchBaseDN,
-			Description: `";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Description: `";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"` + defaultHelpPostfix(GroupSearchBaseDN),
 			Optional:    true,
 			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         TLSSkipVerify,
-			Description: `trust server TLS without verification, defaults to "off" (verify)`,
+			Description: `trust server TLS without verification` + defaultHelpPostfix(TLSSkipVerify),
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         ServerInsecure,
-			Description: `allow plain text connection to AD/LDAP server, defaults to "off"`,
+			Description: `allow plain text connection to AD/LDAP server` + defaultHelpPostfix(ServerInsecure),
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         ServerStartTLS,
-			Description: `use StartTLS connection to AD/LDAP server, defaults to "off"`,
+			Description: `use StartTLS connection to AD/LDAP server` + defaultHelpPostfix(ServerStartTLS),
 			Optional:    true,
 			Type:        "on|off",
 		},

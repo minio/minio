@@ -21,16 +21,20 @@ import "github.com/minio/minio/internal/config"
 
 // Help template for compress feature.
 var (
+	defaultHelpPostfix = func(key string) string {
+		return config.DefaultHelpPostfix(DefaultKVS, key)
+	}
+
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Extensions,
-			Description: `comma separated file extensions e.g. ".txt,.log,.csv"`,
+			Description: `comma separated file extensions` + defaultHelpPostfix(Extensions),
 			Optional:    true,
 			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         MimeTypes,
-			Description: `comma separated wildcard mime-types e.g. "text/*,application/json,application/xml"`,
+			Description: `comma separated wildcard mime-types` + defaultHelpPostfix(MimeTypes),
 			Optional:    true,
 			Type:        "csv",
 		},

@@ -63,6 +63,11 @@ const (
 	statusDisabled = "disabled"
 )
 
+const (
+	embeddedPolicyType  = "embedded-policy"
+	inheritedPolicyType = "inherited-policy"
+)
+
 // IAMSys - config system.
 type IAMSys struct {
 	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
@@ -338,17 +343,19 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	go sys.watch(ctx)
 
 	// Load RoleARN
-	if roleARN, rolePolicy, enabled := globalOpenIDConfig.GetRoleInfo(); enabled {
-		numPolicies := len(strings.Split(rolePolicy, ","))
-		validPolicies, _ := sys.store.FilterPolicies(rolePolicy, "")
-		numValidPolicies := len(strings.Split(validPolicies, ","))
-		if numPolicies != numValidPolicies {
-			logger.LogIf(ctx, fmt.Errorf("Some specified role policies (%s) were not defined - role based policies will not be enabled.", rolePolicy))
-			return
+	if rolePolicyMap := globalOpenIDConfig.GetRoleInfo(); rolePolicyMap != nil {
+		// Validate that policies associated with roles are defined.
+		for _, rolePolicies := range rolePolicyMap {
+			ps := newMappedPolicy(rolePolicies).toSlice()
+			numPolicies := len(ps)
+			validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
+			numValidPolicies := len(strings.Split(validPolicies, ","))
+			if numPolicies != numValidPolicies {
+				logger.LogIf(ctx, fmt.Errorf("Some specified role policies (in %s) were not defined - role policies will not be enabled.", rolePolicies))
+				return
+			}
 		}
-		sys.rolesMap = map[arn.ARN]string{
-			roleARN: rolePolicy,
-		}
+		sys.rolesMap = rolePolicyMap
 	}
 
 	sys.printIAMRoles()
@@ -470,16 +477,16 @@ func (sys *IAMSys) HasRolePolicy() bool {
 }
 
 // GetRolePolicy - returns policies associated with a role ARN.
-func (sys *IAMSys) GetRolePolicy(arnStr string) (string, error) {
-	arn, err := arn.Parse(arnStr)
+func (sys *IAMSys) GetRolePolicy(arnStr string) (arn.ARN, string, error) {
+	roleArn, err := arn.Parse(arnStr)
 	if err != nil {
-		return "", fmt.Errorf("RoleARN parse err: %v", err)
+		return arn.ARN{}, "", fmt.Errorf("RoleARN parse err: %v", err)
 	}
-	rolePolicy, ok := sys.rolesMap[arn]
+	rolePolicy, ok := sys.rolesMap[roleArn]
 	if !ok {
-		return "", fmt.Errorf("RoleARN %s is not defined.", arnStr)
+		return arn.ARN{}, "", fmt.Errorf("RoleARN %s is not defined.", arnStr)
 	}
-	return rolePolicy, nil
+	return roleArn, rolePolicy, nil
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -538,9 +545,26 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicies(ctx, bucketName)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
-	return sys.store.ListPolicies(ctx, bucketName)
+// ListPolicyDocs - lists all canned policy docs.
+func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListPolicyDocs(ctx, bucketName)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // SetPolicy - sets a new named policy.
@@ -673,25 +697,52 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 }
 
 // ListBucketUsers - list all users who can access this 'bucket'
-func (sys *IAMSys) ListBucketUsers(bucket string) (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListBucketUsers(ctx context.Context, bucket string) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.GetBucketUsers(bucket)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetBucketUsers(bucket)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // ListUsers - list all users.
-func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListUsers(ctx context.Context) (map[string]madmin.UserInfo, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+	select {
+	case <-sys.configLoaded:
+		return sys.store.GetUsers(), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// ListLDAPUsers - list LDAP users which has
+func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
 	<-sys.configLoaded
 
-	return sys.store.GetUsers(), nil
+	ldapUsers := make(map[string]madmin.UserInfo)
+	for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+		ldapUsers[user] = madmin.UserInfo{
+			PolicyName: policy,
+			Status:     madmin.AccountEnabled,
+		}
+	}
+	return ldapUsers, nil
 }
 
 // IsTempUser - returns if given key is a temporary user.
@@ -820,9 +871,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 	if len(policyBuf) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
-		m[iamPolicyClaimNameSA()] = "embedded-policy"
+		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	} else {
-		m[iamPolicyClaimNameSA()] = "inherited-policy"
+		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
 	// Add all the necessary claims for the service accounts.
@@ -887,9 +938,26 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 		return nil, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListServiceAccounts(ctx, accessKey)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
-	return sys.store.ListServiceAccounts(ctx, accessKey)
+// ListTempAccounts - lists all services accounts associated to a specific user
+func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListTempAccounts(ctx, accessKey)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // GetServiceAccount - wrapper method to get information about a service account
@@ -926,7 +994,7 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (aut
 	}
 	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
 	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
-	if ptok && spok && pt == "embedded-policy" {
+	if ptok && spok && pt == embeddedPolicyType {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			return auth.Credentials{}, nil, err
@@ -1044,10 +1112,27 @@ func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secre
 // purgeExpiredCredentialsForExternalSSO - validates if local credentials are still valid
 // by checking remote IDP if the relevant users are still active and present.
 func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
-	parentUsers := sys.store.GetAllParentUsers()
+	parentUsersMap := sys.store.GetAllParentUsers()
 	var expiredUsers []string
-	for parentUser, expiredUser := range parentUsers {
-		u, err := globalOpenIDConfig.LookupUser(parentUser)
+	for parentUser, puInfo := range parentUsersMap {
+		// There are multiple role ARNs for parent user only when there
+		// are multiple openid provider configurations with the same ID
+		// provider. We lookup the provider associated with some one of
+		// the roleARNs to check if the user still exists. If they don't
+		// we can safely remove credentials for this parent user
+		// associated with any of the provider configurations.
+		//
+		// If there is no roleARN mapped to the user, the user may be
+		// coming from a policy claim based openid provider.
+		roleArns := puInfo.roleArns.ToSlice()
+		var roleArn string
+		if len(roleArns) == 0 {
+			logger.LogIf(GlobalContext,
+				fmt.Errorf("parentUser: %s had no roleArns mapped!", parentUser))
+			continue
+		}
+		roleArn = roleArns[0]
+		u, err := globalOpenIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
@@ -1055,7 +1140,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 		// If user is set to "disabled", we will remove them
 		// subsequently.
 		if !u.Enabled {
-			expiredUsers = append(expiredUsers, expiredUser)
+			expiredUsers = append(expiredUsers, parentUser)
 		}
 	}
 
@@ -1068,12 +1153,12 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
-	for parentUser, expiredUser := range parentUsers {
+	for parentUser := range parentUsers {
 		if !globalLDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
-		allDistNames = append(allDistNames, expiredUser)
+		allDistNames = append(allDistNames, parentUser)
 	}
 
 	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(allDistNames)
@@ -1289,9 +1374,12 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-	<-sys.configLoaded
-
-	return sys.store.ListGroups(ctx)
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListGroups(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.
@@ -1333,6 +1421,8 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]s
 
 	return sys.store.PolicyDBGet(name, isGroup, groups...)
 }
+
+const sessionPolicyNameExtracted = iampolicy.SessionPolicyName + "-extracted"
 
 // IsAllowedServiceAccount - checks if the given service account is allowed to perform
 // actions. The permission of the parent user is checked first
@@ -1410,12 +1500,12 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	if saPolicyClaimStr == "inherited-policy" {
+	if saPolicyClaimStr == inheritedPolicyType {
 		return combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	spolicy, ok := args.Claims[sessionPolicyNameExtracted]
 	if !ok {
 		return false
 	}
@@ -1563,7 +1653,7 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 	isAllowed = false
 
 	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	spolicy, ok := args.Claims[sessionPolicyNameExtracted]
 	if !ok {
 		return
 	}
