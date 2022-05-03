@@ -235,7 +235,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 			logger.LogIf(GlobalContext, err, logger.Application)
 			return nil, errAuthentication
 		}
-		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
+		claims.MapClaims[sessionPolicyNameExtracted] = string(spBytes)
 	}
 
 	return claims.Map(), nil

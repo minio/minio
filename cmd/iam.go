@@ -63,6 +63,11 @@ const (
 	statusDisabled = "disabled"
 )
 
+const (
+	embeddedPolicyType  = "embedded-policy"
+	inheritedPolicyType = "inherited-policy"
+)
+
 // IAMSys - config system.
 type IAMSys struct {
 	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
@@ -866,9 +871,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 	if len(policyBuf) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
-		m[iamPolicyClaimNameSA()] = "embedded-policy"
+		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	} else {
-		m[iamPolicyClaimNameSA()] = "inherited-policy"
+		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
 	// Add all the necessary claims for the service accounts.
@@ -989,7 +994,7 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (aut
 	}
 	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
 	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
-	if ptok && spok && pt == "embedded-policy" {
+	if ptok && spok && pt == embeddedPolicyType {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			return auth.Credentials{}, nil, err
@@ -1417,6 +1422,8 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]s
 	return sys.store.PolicyDBGet(name, isGroup, groups...)
 }
 
+const sessionPolicyNameExtracted = iampolicy.SessionPolicyName + "-extracted"
+
 // IsAllowedServiceAccount - checks if the given service account is allowed to perform
 // actions. The permission of the parent user is checked first
 func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser string) bool {
@@ -1493,12 +1500,12 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	if saPolicyClaimStr == "inherited-policy" {
+	if saPolicyClaimStr == inheritedPolicyType {
 		return combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	spolicy, ok := args.Claims[sessionPolicyNameExtracted]
 	if !ok {
 		return false
 	}
@@ -1646,7 +1653,7 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 	isAllowed = false
 
 	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	spolicy, ok := args.Claims[sessionPolicyNameExtracted]
 	if !ok {
 		return
 	}

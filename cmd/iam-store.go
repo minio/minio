@@ -1684,6 +1684,17 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		return fmt.Errorf("unable to get svc acc claims: %v", err)
 	}
 
+	// Extracted session policy name string can be removed as its not useful
+	// at this point.
+	delete(m, sessionPolicyNameExtracted)
+
+	// sessionPolicy is nil and there is embedded policy attached we remove
+	// rembedded policy at that point.
+	if _, ok := m[iampolicy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
+		delete(m, iampolicy.SessionPolicyName)
+		m[iamPolicyClaimNameSA()] = inheritedPolicyType
+	}
+
 	if opts.sessionPolicy != nil {
 		if err := opts.sessionPolicy.Validate(); err != nil {
 			return err
@@ -1700,7 +1711,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 
 		// Overwrite session policy claims.
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
-		m[iamPolicyClaimNameSA()] = "embedded-policy"
+		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	}
 
 	cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, cr.SecretKey)
