@@ -1019,12 +1019,14 @@ type AuditLogOptions struct {
 	APIName   string
 	Status    string
 	VersionID string
+	Error     string
 }
 
 // sends audit logs for internal subsystem activity
 func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
 	entry := audit.NewEntry(globalDeploymentID)
 	entry.Trigger = opts.Trigger
+	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = bucket
 	entry.API.Object = object

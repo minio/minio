@@ -560,9 +560,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 
 	defer func() {
 		gr.Close()
-		if err == nil {
-			auditLogDecom(ctx, "DecomCopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID)
-		}
+		auditLogDecom(ctx, "DecomCopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID, err)
 	}()
 
 	if objInfo.isMultipart() {
@@ -744,10 +742,9 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
 				)
+				auditLogDecom(ctx, "DecomDeleteObject", bName, entry.name, "", err)
 				if err != nil {
 					logger.LogIf(ctx, err)
-				} else {
-					auditLogDecom(ctx, "DecomDeleteObject", bName, entry.name, "")
 				}
 			}
 			z.poolMetaMutex.Lock()
@@ -1108,10 +1105,15 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 	return nil
 }
 
-func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID string) {
+func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID string, err error) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
 	auditLogInternal(ctx, bucket, object, AuditLogOptions{
 		Trigger:   "decommissioning",
 		APIName:   apiName,
 		VersionID: versionID,
+		Error:     errStr,
 	})
 }
