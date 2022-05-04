@@ -842,17 +842,14 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	data := r.Reader
 
-	// No metadata is set, allocate a new one.
-	if opts.UserDefined == nil {
-		opts.UserDefined = make(map[string]string)
-	}
+	userDefined := cloneMSS(opts.UserDefined)
 
 	storageDisks := er.getDisks()
 
 	parityDrives := len(storageDisks) / 2
 	if !opts.MaxParity {
 		// Get parity and data drive count based on storage class metadata
-		parityDrives = globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+		parityDrives = globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
 		if parityDrives <= 0 {
 			parityDrives = er.defaultParityCount
 		}
@@ -890,7 +887,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			parityDrives = len(storageDisks) / 2
 		}
 		if parityOrig != parityDrives {
-			opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+			userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 		}
 	}
 	dataDrives := len(storageDisks) - parityDrives
@@ -1066,13 +1063,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			Hash:       bitrotWriterSum(w),
 		})
 	}
-	if opts.UserDefined["etag"] == "" {
-		opts.UserDefined["etag"] = r.MD5CurrentHexString()
+	if userDefined["etag"] == "" {
+		userDefined["etag"] = r.MD5CurrentHexString()
 	}
 
 	// Guess content-type from the extension if possible.
-	if opts.UserDefined["content-type"] == "" {
-		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	if userDefined["content-type"] == "" {
+		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	modTime := opts.MTime
@@ -1083,7 +1080,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Fill all the necessary metadata.
 	// Update `xl.meta` content on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Metadata = opts.UserDefined
+		partsMetadata[index].Metadata = userDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
 	}

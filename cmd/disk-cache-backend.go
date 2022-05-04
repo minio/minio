@@ -884,6 +884,7 @@ func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Read
 	}
 
 	if err := os.MkdirAll(cachePath, 0o777); err != nil {
+		removeAll(cachePath)
 		return oi, err
 	}
 	metadata := cloneMSS(opts.UserDefined)
@@ -892,6 +893,7 @@ func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Read
 	if globalCacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
+			removeAll(cachePath)
 			return oi, err
 		}
 		actualSize, _ = sio.EncryptedSize(uint64(size))
