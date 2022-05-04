@@ -63,6 +63,28 @@ Similarly to suspend versioning set the configuration with Status set to `Suspen
 </VersioningConfiguration>
 ```
 
+## MinIO extension to Bucket Versioning
+### Motivation
+Spark/Hadoop workloads which use FileOutputCommitter v1/v2 algorithm upload objects to a temporary prefix in a bucket. These objects are 'renamed' to a different prefix on Job commit. Object storage admins are forced to configure separate ILM policies to expire these objects and their versions to reclaim space.
+
+### Solution
+To exclude objects under a list of prefix (glob) patterns from being versioned, you can send the following versioning configuration with Status set to `Enabled`.
+
+```
+<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Status>Enabled</Status>
+  <ExcludedPrefixes>
+    <Prefix>prefix1/*</Prefix>
+  </ExcludedPrefixes>
+  <ExcludedPrefixes>
+    <Prefix>spark/jobs/* </Prefix>
+  </ExcludedPrefixes>
+  <!-- .. up to 10 prefixes in all -->
+</VersioningConfiguration>
+```
+
+Note: Objects matching these prefixes will behave as though versioning were suspended. These objects **will not** be replicated if replication is configured.
+
 Only users with explicit permissions or the root credential can configure the versioning state of any bucket.
 
 ## Examples of enabling bucket versioning using MinIO Java SDK
