@@ -1243,6 +1243,9 @@ func (i *scannerItem) objectPath() string {
 // healReplication will heal a scanned item that has failed replication.
 func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
 	roi := getHealReplicateObjectInfo(oi, i.replication)
+	if !roi.Dsc.ReplicateAny() {
+		return
+	}
 
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure
