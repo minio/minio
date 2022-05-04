@@ -63,6 +63,8 @@ func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
 // if source object and destination object are same we only
 // update metadata.
 func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, dstObject, &er)
+
 	// This call shouldn't be used for anything other than metadata updates or adding self referential versions.
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
@@ -177,6 +179,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	auditObjectErasureSet(ctx, object, &er)
+
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
 	defer func() {
@@ -413,6 +417,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, &er)
+
 	if !opts.NoLock {
 		// Lock the object before reading.
 		lk := er.NewNSLock(bucket, object)
@@ -832,6 +838,8 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, &er)
+
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
@@ -1148,6 +1156,10 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 // into smaller bulks if some object names are found to be duplicated in the delete list, splitting
 // into smaller bulks will avoid holding twice the write lock of the duplicated object names.
 func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
+	for _, obj := range objects {
+		auditObjectErasureSet(ctx, obj.ObjectV.ObjectName, &er)
+	}
+
 	errs := make([]error, len(objects))
 	dobjects := make([]DeletedObject, len(objects))
 	writeQuorums := make([]int, len(objects))
@@ -1328,6 +1340,8 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, &er)
+
 	if opts.DeletePrefix {
 		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
 	}

@@ -61,6 +61,8 @@ type Entry struct {
 	ReqHeader  map[string]string      `json:"requestHeader,omitempty"`
 	RespHeader map[string]string      `json:"responseHeader,omitempty"`
 	Tags       map[string]interface{} `json:"tags,omitempty"`
+
+	Error string `json:"error,omitempty"`
 }
 
 // NewEntry - constructs an audit entry object with some fields filled

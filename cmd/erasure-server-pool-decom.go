@@ -541,8 +541,13 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 }
 
 func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket string, gr *GetObjectReader) (err error) {
-	defer gr.Close()
 	objInfo := gr.ObjInfo
+
+	defer func() {
+		gr.Close()
+		auditLogDecom(ctx, "DecomCopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID, err)
+	}()
+
 	if objInfo.isMultipart() {
 		uploadID, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
 			VersionID:   objInfo.VersionID,
@@ -603,6 +608,8 @@ func (v versionsSorter) reverse() {
 }
 
 func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool *erasureSets, bName string) error {
+	ctx = logger.SetReqInfo(ctx, &logger.ReqInfo{})
+
 	var wg sync.WaitGroup
 	wStr := env.Get("_MINIO_DECOMMISSION_WORKERS", strconv.Itoa(len(pool.sets)))
 	workerSize, err := strconv.Atoi(wStr)
@@ -713,13 +720,17 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 			// if all versions were decommissioned, then we can delete the object versions.
 			if decommissionedCount == len(fivs.Versions) {
-				set.DeleteObject(ctx,
+				_, err := set.DeleteObject(ctx,
 					bName,
 					entry.name,
 					ObjectOptions{
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
 				)
+				auditLogDecom(ctx, "DecomDeleteObject", bName, entry.name, "", err)
+				if err != nil {
+					logger.LogIf(ctx, err)
+				}
 			}
 			z.poolMetaMutex.Lock()
 			z.poolMeta.TrackCurrentBucketObject(idx, bName, entry.name)
@@ -803,6 +814,9 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 	var dctx context.Context
 	dctx, z.decommissionCancelers[idx] = context.WithCancel(GlobalContext)
 	z.poolMetaMutex.Unlock()
+
+	// Generate an empty request info so it can be directly modified later by audit
+	dctx = logger.SetReqInfo(dctx, &logger.ReqInfo{})
 
 	if err := z.decommissionInBackground(dctx, idx); err != nil {
 		logger.LogIf(GlobalContext, err)
@@ -1074,4 +1088,17 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 	}
 	globalNotificationSys.ReloadPoolMeta(ctx)
 	return nil
+}
+
+func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID string, err error) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+		Trigger:   "decommissioning",
+		APIName:   apiName,
+		VersionID: versionID,
+		Error:     errStr,
+	})
 }
