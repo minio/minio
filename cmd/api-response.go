@@ -728,6 +728,14 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
+	if statusCode == 0 {
+		statusCode = 200
+	}
+	// Similar check to http.checkWriteHeaderCode
+	if statusCode < 100 || statusCode > 999 {
+		logger.Error(fmt.Sprintf("invalid WriteHeader code %v", statusCode))
+		statusCode = http.StatusInternalServerError
+	}
 	setCommonHeaders(w)
 	if mType != mimeNone {
 		w.Header().Set(xhttp.ContentType, string(mType))
@@ -789,6 +797,12 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
 	case "AuthorizationHeaderMalformed":
 		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
+	}
+
+	// Similar check to http.checkWriteHeaderCode
+	if err.HTTPStatusCode < 100 || err.HTTPStatusCode > 999 {
+		logger.Error(fmt.Sprintf("invalid WriteHeader code %v from %v", err.HTTPStatusCode, err.Code))
+		err.HTTPStatusCode = http.StatusInternalServerError
 	}
 
 	// Generate error response.

@@ -241,6 +241,15 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	if updReq.IsRemove {
 		err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
 	} else {
+		// Check if group already exists
+		if _, gerr := globalIAMSys.GetGroupDescription(updReq.Group); gerr != nil {
+			// If group does not exist, then check if the group has beginning and end space characters
+			// we will reject such group names.
+			if errors.Is(gerr, errNoSuchGroup) && hasSpaceBE(updReq.Group) {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+				return
+			}
+		}
 		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
 	if err != nil {
@@ -442,6 +451,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if accessKey has beginning and end space characters, this only applies to new users.
+	if !exists && hasSpaceBE(accessKey) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
 	checkDenyOnly := false
 	if accessKey == cred.AccessKey {
 		// Check that there is no explicit deny - otherwise it's allowed
@@ -530,6 +545,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	var createReq madmin.AddServiceAccountReq
 	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	// service account access key cannot have space characters beginning and end of the string.
+	if hasSpaceBE(createReq.AccessKey) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
 		return
 	}
 
@@ -993,11 +1014,9 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	// We do not care if service account is readable or not at this point,
+	// since this is a delete call we shall allow it to be deleted if possible.
+	svcAccount, _, _ := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
 
 	adminPrivilege := globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
@@ -1012,7 +1031,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		if cred.ParentUser != "" {
 			parentUser = cred.ParentUser
 		}
-		if parentUser != svcAccount.ParentUser {
+		if svcAccount.ParentUser != "" && parentUser != svcAccount.ParentUser {
 			// The service account belongs to another user but return not
 			// found error to mitigate brute force attacks. or the
 			// serviceAccount doesn't exist.
@@ -1021,23 +1040,21 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true)
-	if err != nil {
+	if err := globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Call site replication hook - non-root user accounts are replicated.
-	if svcAccount.ParentUser != globalActiveCred.AccessKey {
-		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	if svcAccount.ParentUser != "" && svcAccount.ParentUser != globalActiveCred.AccessKey {
+		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Delete: &madmin.SRSvcAccDelete{
 					AccessKey: serviceAccount,
 				},
 			},
-		})
-		if err != nil {
+		}); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -1383,6 +1400,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	policyName := vars["name"]
+
+	// Policy has space characters in begin and end reject such inputs.
+	if hasSpaceBE(policyName) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
 
 	// Error out if Content-Length is missing.
 	if r.ContentLength <= 0 {

@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -37,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -237,6 +237,10 @@ func extractReqParams(r *http.Request) map[string]string {
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
+	if rangeField := r.Header.Get(xhttp.Range); rangeField != "" {
+		m["range"] = rangeField
+	}
+
 	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		m[xhttp.MinIOSourceReplicationRequest] = ""
 	}
@@ -395,26 +399,25 @@ func getResource(path string, host string, domains []string) (string, error) {
 	if len(domains) == 0 {
 		return path, nil
 	}
+
 	// If virtual-host-style is enabled construct the "resource" properly.
-	if strings.Contains(host, ":") {
-		// In bucket.mydomain.com:9000, strip out :9000
-		var err error
-		if host, _, err = net.SplitHostPort(host); err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
-			reqInfo.AppendTags("path", path)
-			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
-			return "", err
-		}
+	xhost, err := xnet.ParseHost(host)
+	if err != nil {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
+		reqInfo.AppendTags("path", path)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
+		return "", err
 	}
+
 	for _, domain := range domains {
-		if host == minioReservedBucket+"."+domain {
+		if xhost.Name == minioReservedBucket+"."+domain {
 			continue
 		}
-		if !strings.HasSuffix(host, "."+domain) {
+		if !strings.HasSuffix(xhost.Name, "."+domain) {
 			continue
 		}
-		bucket := strings.TrimSuffix(host, "."+domain)
+		bucket := strings.TrimSuffix(xhost.Name, "."+domain)
 		return SlashSeparator + pathJoin(bucket, path), nil
 	}
 	return path, nil

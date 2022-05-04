@@ -383,6 +383,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrAdminResourceInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
 	ErrAdminServiceAccountNotFound
@@ -1824,6 +1825,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrAdminResourceInvalidArgument: {
+		Code:           "XMinioInvalidResource",
+		Description:    "Policy, user or group names are not allowed to begin or end with space characters",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminAccountNotEligible: {
 		Code:           "XMinioInvalidIAMCredentials",
