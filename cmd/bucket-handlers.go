@@ -44,7 +44,6 @@ import (
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
@@ -480,10 +479,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteResults := make([]deleteResult, len(deleteObjectsReq.Objects))
 
 	vc, _ := globalBucketVersioningSys.Get(bucket)
-	if vc == nil {
-		// versioning.Versioning's zero value represents versioning disabled
-		vc = &versioning.Versioning{}
-	}
 	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
 	for index, object := range deleteObjectsReq.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
