@@ -1019,12 +1019,14 @@ type AuditLogOptions struct {
 	APIName   string
 	Status    string
 	VersionID string
+	Error     string
 }
 
 // sends audit logs for internal subsystem activity
 func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
 	entry := audit.NewEntry(globalDeploymentID)
 	entry.Trigger = opts.Trigger
+	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = bucket
 	entry.API.Object = object
@@ -1033,6 +1035,11 @@ func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogO
 		entry.ReqQuery[xhttp.VersionID] = opts.VersionID
 	}
 	entry.API.Status = opts.Status
+	// Merge tag information if found - this is currently needed for tags
+	// set during decommissioning.
+	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
+		entry.Tags = reqInfo.GetTagsMap()
+	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
 	logger.AuditLog(ctx, nil, nil, nil)
 }
