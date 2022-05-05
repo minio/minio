@@ -108,7 +108,7 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.PolicyOPASubSys,
-			Description: "[DEPRECATED] enable external OPA for policy enforcement",
+			Description: "enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
 			Key:         config.APISubSys,
