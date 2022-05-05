@@ -128,6 +128,12 @@ func (v Versioning) PrefixSuspended(prefix string) bool {
 	return false
 }
 
+// PrefixesExcluded returns true if v contains one or more excluded object
+// prefixes.
+func (v Versioning) PrefixesExcluded() bool {
+	return len(v.ExcludedPrefixes) > 0
+}
+
 // ParseConfig - parses data in given reader to VersioningConfiguration.
 func ParseConfig(reader io.Reader) (*Versioning, error) {
 	var v Versioning
