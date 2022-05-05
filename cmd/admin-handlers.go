@@ -1769,8 +1769,8 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	}
 }
 
-func getKubernetesInfo() madmin.KubernetesInfo {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
+	ctx, cancel := context.WithCancel(dctx)
 	defer cancel()
 
 	ki := madmin.KubernetesInfo{}
@@ -1888,7 +1888,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWritePlatformInfo := func() {
 		if IsKubernetes() {
-			healthInfo.Sys.KubernetesInfo = getKubernetesInfo()
+			healthInfo.Sys.KubernetesInfo = getKubernetesInfo(deadlinedCtx)
 			partialWrite(healthInfo)
 		}
 	}
