@@ -27,6 +27,13 @@ var (
 
 	Help = config.HelpKVS{
 		config.HelpKV{
+			Key:         config.Enable,
+			Description: "Enable or disable OpenID",
+			Type:        "on|off",
+			Optional:    true,
+			Sensitive:   false,
+		},
+		config.HelpKV{
 			Key:         DisplayName,
 			Description: "Friendly display name for this Provider/App" + defaultHelpPostfix(DisplayName),
 			Optional:    true,

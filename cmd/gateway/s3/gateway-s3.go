@@ -502,17 +502,20 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
+
+	userDefined := minio.CloneMSS(opts.UserDefined)
+
 	var tagMap map[string]string
-	if tagstr, ok := opts.UserDefined[xhttp.AmzObjectTagging]; ok && tagstr != "" {
+	if tagstr, ok := userDefined[xhttp.AmzObjectTagging]; ok && tagstr != "" {
 		tagObj, err := tags.ParseObjectTags(tagstr)
 		if err != nil {
 			return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 		}
 		tagMap = tagObj.ToMap()
-		delete(opts.UserDefined, xhttp.AmzObjectTagging)
+		delete(userDefined, xhttp.AmzObjectTagging)
 	}
 	putOpts := miniogo.PutObjectOptions{
-		UserMetadata:         opts.UserDefined,
+		UserMetadata:         userDefined,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		UserTags:             tagMap,
 		// Content-Md5 is needed for buckets with object locking,
@@ -529,7 +532,7 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 		ETag:     ui.ETag,
 		Size:     ui.Size,
 		Key:      object,
-		Metadata: minio.ToMinioClientObjectInfoMetadata(opts.UserDefined),
+		Metadata: minio.ToMinioClientObjectInfoMetadata(userDefined),
 	}
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
@@ -544,8 +547,9 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	// metadata input is already a trickled down value from interpreting x-amz-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
-	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
-	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
+	userDefined := minio.CloneMSS(srcInfo.UserDefined)
+	userDefined["x-amz-metadata-directive"] = "REPLACE"
+	userDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
 		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
@@ -556,10 +560,10 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	}
 
 	for k, v := range header {
-		srcInfo.UserDefined[k] = v[0]
+		userDefined[k] = v[0]
 	}
 
-	if _, err = l.Client.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined, miniogo.CopySrcOptions{}, miniogo.PutObjectOptions{}); err != nil {
+	if _, err = l.Client.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, userDefined, miniogo.CopySrcOptions{}, miniogo.PutObjectOptions{}); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
@@ -605,17 +609,18 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	var tagMap map[string]string
-	if tagStr, ok := o.UserDefined[xhttp.AmzObjectTagging]; ok {
+	userDefined := minio.CloneMSS(o.UserDefined)
+	if tagStr, ok := userDefined[xhttp.AmzObjectTagging]; ok {
 		tagObj, err := tags.Parse(tagStr, true)
 		if err != nil {
 			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
 		}
 		tagMap = tagObj.ToMap()
-		delete(o.UserDefined, xhttp.AmzObjectTagging)
+		delete(userDefined, xhttp.AmzObjectTagging)
 	}
 	// Create PutObject options
 	opts := miniogo.PutObjectOptions{
-		UserMetadata:         o.UserDefined,
+		UserMetadata:         userDefined,
 		ServerSideEncryption: o.ServerSideEncryption,
 		UserTags:             tagMap,
 	}
@@ -645,9 +650,8 @@ func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, de
 	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.PartInfo{}, minio.PreConditionFailed{}
 	}
-	srcInfo.UserDefined = map[string]string{
-		"x-amz-copy-source-if-match": srcInfo.ETag,
-	}
+	userDefined := minio.CloneMSS(srcInfo.UserDefined)
+	userDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
 		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
@@ -657,11 +661,11 @@ func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, de
 		dstOpts.ServerSideEncryption.Marshal(header)
 	}
 	for k, v := range header {
-		srcInfo.UserDefined[k] = v[0]
+		userDefined[k] = v[0]
 	}
 
 	completePart, err := l.Client.CopyObjectPart(ctx, srcBucket, srcObject, destBucket, destObject,
-		uploadID, partID, startOffset, length, srcInfo.UserDefined)
+		uploadID, partID, startOffset, length, userDefined)
 	if err != nil {
 		return p, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}

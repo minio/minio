@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/disk"
 	"github.com/minio/minio/internal/hash"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/wildcard"
@@ -739,35 +738,30 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
 	infoCh := make(chan ObjectInfo)
-	errorCh := make(chan error)
 	go func() {
+		defer close(infoCh)
 		info, err := putObjectFn(ctx, bucket, object, NewPutObjReader(hashReader), opts)
-		if err != nil {
-			close(infoCh)
-			pipeReader.CloseWithError(err)
-			rPipe.CloseWithError(err)
-			errorCh <- err
-			return
+		pipeReader.CloseWithError(err)
+		rPipe.CloseWithError(err)
+		if err == nil {
+			infoCh <- info
 		}
-		close(errorCh)
-		infoCh <- info
 	}()
 
 	go func() {
 		_, err := dcache.put(lkctx.Context(), bucket, object, rPipe, r.Size(), nil, opts, false, false)
 		if err != nil {
-			rPipe.CloseWithError(err)
-			return
+			logger.LogIf(lkctx.Context(), err)
 		}
+		// We do not care about errors to cached backend.
+		rPipe.Close()
 	}()
 
 	mwriter := cacheMultiWriter(pipeWriter, wPipe)
 	_, err = io.Copy(mwriter, r)
 	pipeWriter.Close()
 	wPipe.Close()
-
 	if err != nil {
-		err = <-errorCh
 		return ObjectInfo{}, err
 	}
 	info := <-infoCh
@@ -803,8 +797,7 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 		return
 	}
 	var opts ObjectOptions
-	opts.UserDefined = make(map[string]string)
-	opts.UserDefined[xhttp.ContentMD5] = oi.UserDefined["content-md5"]
+	opts.UserDefined = cloneMSS(oi.UserDefined)
 	objInfo, err := c.InnerPutObjectFn(ctx, oi.Bucket, oi.Name, NewPutObjReader(hashReader), opts)
 	wbCommitStatus := CommitComplete
 	size := objInfo.Size
