@@ -194,7 +194,7 @@ func (g *S3) new(creds madmin.Credentials, transport http.RoundTripper) (*miniog
 		chainCreds = NewChainCredentials(defaultProviders)
 	}
 
-	var region = env.Get("MINIO_GATEWAY_DEFAULT_REGION", s3utils.GetRegionFromURL(*u))
+	region := env.Get("MINIO_GATEWAY_DEFAULT_REGION", s3utils.GetRegionFromURL(*u))
 
 	optionsStaticCreds := &miniogo.Options{
 		Creds:        credentials.NewStaticV4(creds.AccessKey, creds.SecretKey, creds.SessionToken),
