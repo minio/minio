@@ -338,6 +338,9 @@ func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.Policy, ti
 func (sys *BucketMetadataSys) GetQuotaConfig(ctx context.Context, bucket string) (*madmin.BucketQuota, time.Time, error) {
 	meta, err := sys.GetConfig(ctx, bucket)
 	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, time.Time{}, BucketQuotaConfigNotFound{Bucket: bucket}
+		}
 		return nil, time.Time{}, err
 	}
 	return meta.quotaConfig, meta.QuotaConfigUpdatedAt, nil

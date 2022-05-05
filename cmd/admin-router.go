@@ -188,6 +188,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler))).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
 
+		// Bucket migration operations
+		// ExportBucketMetaHandler
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-bucket-metadata").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ExportBucketMetadataHandler)))
+		// ImportBucketMetaHandler
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-bucket-metadata").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ImportBucketMetadataHandler)))
+
 		// Remote Tier management operations
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/tier").HandlerFunc(gz(httpTraceHdrs(adminAPI.AddTierHandler)))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/tier/{tier}").HandlerFunc(gz(httpTraceHdrs(adminAPI.EditTierHandler)))
