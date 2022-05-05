@@ -1775,9 +1775,9 @@ func getKubernetesInfo() madmin.KubernetesInfo {
 
 	ki := madmin.KubernetesInfo{}
 
-	req, e := http.NewRequestWithContext(ctx, http.MethodGet, kubernetesVersionEndpoint, nil)
-	if e != nil {
-		ki.Error = e.Error()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, kubernetesVersionEndpoint, nil)
+	if err != nil {
+		ki.Error = err.Error()
 		return ki
 	}
 
@@ -1786,15 +1786,15 @@ func getKubernetesInfo() madmin.KubernetesInfo {
 		Timeout:   10 * time.Second,
 	}
 
-	resp, e := client.Do(req)
-	if e != nil {
-		ki.Error = e.Error()
+	resp, err := client.Do(req)
+	if err != nil {
+		ki.Error = err.Error()
 		return ki
 	}
 
 	decoder := json.NewDecoder(resp.Body)
-	if e := decoder.Decode(&ki); e != nil {
-		ki.Error = e.Error()
+	if err := decoder.Decode(&ki); err != nil {
+		ki.Error = err.Error()
 	}
 	return ki
 }
