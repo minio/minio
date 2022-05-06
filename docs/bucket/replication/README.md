@@ -255,7 +255,7 @@ When Bucket Versioning with excluded prefixes are configured objects matching th
           <Prefix>app1-jobs/*/_temporary/</Prefix>
         </ExcludedPrefixes>
         <ExcludedPrefixes>
-          <Prefix>app2-jobs/_magic/</Prefix>
+          <Prefix>app2-jobs/*/_magic/</Prefix>
         </ExcludedPrefixes>
 
         <!-- .. up to 10 prefixes in all -->
