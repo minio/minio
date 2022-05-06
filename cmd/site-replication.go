@@ -126,6 +126,13 @@ func errSRIAMError(err error) SRError {
 	}
 }
 
+func errSRConfigMissingError(err error) SRError {
+	return SRError{
+		Cause: err,
+		Code:  ErrSiteReplicationConfigMissing,
+	}
+}
+
 var errSRObjectLayerNotReady = SRError{
 	Cause: fmt.Errorf("object layer not ready"),
 	Code:  ErrServerNotInitialized,
@@ -1848,6 +1855,8 @@ func (c *SiteReplicationSys) isEnabled() bool {
 	return c.enabled
 }
 
+var errMissingSRConfig = fmt.Errorf("Site not found in site replication configuration")
+
 // RemovePeerCluster - removes one or more clusters from site replication configuration.
 func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) (st madmin.ReplicateRemoveStatus, err error) {
 	if !c.isEnabled() {
@@ -1872,7 +1881,7 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	for _, s := range siteNames {
 		info, ok := peerMap[s]
 		if !ok {
-			return st, errSRInvalidRequest(fmt.Errorf("Site %s not found in site replication configuration", s))
+			return st, errSRConfigMissingError(errMissingSRConfig)
 		}
 		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
 		delete(updatedPeers, info.DeploymentID)
@@ -1898,6 +1907,9 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				return
 			}
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
+				if errors.As(err, &errMissingSRConfig) {
+					return
+				}
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
 				return
 			}
@@ -1937,6 +1949,10 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 // InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
 // from the site replication configuration.
 func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) error {
+	if !c.isEnabled() {
+		return errSRNotEnabled
+	}
+
 	ourName := ""
 	peerMap := make(map[string]madmin.PeerInfo)
 	updatedPeers := make(map[string]madmin.PeerInfo)
@@ -1958,7 +1974,7 @@ func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI Ob
 	for _, s := range siteNames {
 		info, ok := peerMap[s]
 		if !ok {
-			return fmt.Errorf("Site %s not found in site replication configuration", s)
+			return errMissingSRConfig
 		}
 		if info.DeploymentID == globalDeploymentID {
 			unlinkSelf = true

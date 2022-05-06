@@ -280,6 +280,7 @@ const (
 	ErrSiteReplicationBucketConfigError
 	ErrSiteReplicationBucketMetaError
 	ErrSiteReplicationIAMError
+	ErrSiteReplicationConfigMissing
 
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
@@ -1340,7 +1341,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Error while replicating an IAM item",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
-
+	ErrSiteReplicationConfigMissing: {
+		Code:           "XMinioSiteReplicationConfigMissingError",
+		Description:    "Site not found in site replication configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
 		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
