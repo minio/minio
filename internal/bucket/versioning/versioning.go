@@ -55,8 +55,8 @@ type Versioning struct {
 	Status State `xml:"Status,omitempty"`
 	// MinIO extension - allows selective, prefix-level versioning exclusion.
 	// Requires versioning to be enabled
-	ExcludedPrefixes    []ExcludedPrefix `xml:",omitempty"`
-	ExcludePrefixMarker bool             `xml:",omitempty"`
+	ExcludedPrefixes []ExcludedPrefix `xml:",omitempty"`
+	ExcludeFolders   bool             `xml:",omitempty"`
 }
 
 // Validate - validates the versioning configuration
@@ -104,7 +104,7 @@ func (v Versioning) PrefixEnabled(prefix string) bool {
 	if prefix == "" {
 		return true
 	}
-	if v.ExcludePrefixMarker && strings.HasSuffix(prefix, "/") {
+	if v.ExcludeFolders && strings.HasSuffix(prefix, "/") {
 		return false
 	}
 
@@ -134,7 +134,7 @@ func (v Versioning) PrefixSuspended(prefix string) bool {
 		if prefix == "" {
 			return false
 		}
-		if v.ExcludePrefixMarker && strings.HasSuffix(prefix, "/") {
+		if v.ExcludeFolders && strings.HasSuffix(prefix, "/") {
 			return true
 		}
 
@@ -150,9 +150,9 @@ func (v Versioning) PrefixSuspended(prefix string) bool {
 }
 
 // PrefixesExcluded returns true if v contains one or more excluded object
-// prefixes or if ExcludePrefixMarker is true.
+// prefixes or if ExcludeFolders is true.
 func (v Versioning) PrefixesExcluded() bool {
-	return len(v.ExcludedPrefixes) > 0 || v.ExcludePrefixMarker
+	return len(v.ExcludedPrefixes) > 0 || v.ExcludeFolders
 }
 
 // ParseConfig - parses data in given reader to VersioningConfiguration.

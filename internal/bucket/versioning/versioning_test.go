@@ -25,10 +25,10 @@ import (
 
 func TestParseConfig(t *testing.T) {
 	testcases := []struct {
-		input               string
-		err                 error
-		excludedPrefixes    []string
-		excludePrefixMarker bool
+		input            string
+		err              error
+		excludedPrefixes []string
+		excludeFolders   bool
 	}{
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -100,7 +100,7 @@ func TestParseConfig(t *testing.T) {
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Enabled</Status>
-                                  <ExcludePrefixMarker>true</ExcludePrefixMarker>
+                                  <ExcludeFolders>true</ExcludeFolders>
                                   <ExcludedPrefixes>
                                     <Prefix>path/to/my/workload/_staging/</Prefix>
                                   </ExcludedPrefixes>
@@ -108,9 +108,9 @@ func TestParseConfig(t *testing.T) {
                                     <Prefix>path/to/my/workload/_temporary/</Prefix>
                                   </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
-			err:                 nil,
-			excludedPrefixes:    []string{"path/to/my/workload/_staging/", "path/to/my/workload/_temporary/"},
-			excludePrefixMarker: true,
+			err:              nil,
+			excludedPrefixes: []string{"path/to/my/workload/_staging/", "path/to/my/workload/_temporary/"},
+			excludeFolders:   true,
 		},
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -155,8 +155,8 @@ func TestParseConfig(t *testing.T) {
 					t.Fatalf("Test %d: Expected excluded prefix %s but got %s", i+1, tc.excludedPrefixes[i], v.ExcludedPrefixes[i].Prefix)
 				}
 			}
-			if tc.excludePrefixMarker != v.ExcludePrefixMarker {
-				t.Fatalf("Test %d: Expected ExcludePrefixMarker=%v but got %v", i+1, tc.excludePrefixMarker, v.ExcludePrefixMarker)
+			if tc.excludeFolders != v.ExcludeFolders {
+				t.Fatalf("Test %d: Expected ExcludeFoldersr=%v but got %v", i+1, tc.excludeFolders, v.ExcludeFolders)
 			}
 		}
 	}
@@ -189,10 +189,10 @@ func TestVersioningZero(t *testing.T) {
 	}
 }
 
-func TestExcludePrefixMarker(t *testing.T) {
+func TestExcludeFolders(t *testing.T) {
 	v := Versioning{
-		Status:              Enabled,
-		ExcludePrefixMarker: true,
+		Status:         Enabled,
+		ExcludeFolders: true,
 	}
 	testPrefixes := []string{"jobs/output/_temporary/", "jobs/output/", "jobs/"}
 	for i, prefix := range testPrefixes {
@@ -206,8 +206,8 @@ func TestExcludePrefixMarker(t *testing.T) {
 		t.Fatalf("Expected versioning to be enabled for %s", prefix)
 	}
 
-	// Test when ExcludePrefixMarker is disabled
-	v.ExcludePrefixMarker = false
+	// Test when ExcludeFolders is disabled
+	v.ExcludeFolders = false
 	for i, prefix := range testPrefixes {
 		if !v.PrefixEnabled(prefix) || v.PrefixSuspended(prefix) {
 			t.Fatalf("Test %d: Expected versioning to be enabled for %s", i+1, prefix)

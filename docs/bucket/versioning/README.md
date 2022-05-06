@@ -73,7 +73,7 @@ To exclude objects under a list of prefix (glob) patterns from being versioned, 
 ```
 <VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
         <Status>Enabled</Status>
-        <ExcludePrefixMarker>true</ExcludePrefixMarker>
+        <ExcludeFolders>true</ExcludeFolders>
 
         <ExcludedPrefixes>
           <Prefix>app1-jobs/*/_temporary/</Prefix>
