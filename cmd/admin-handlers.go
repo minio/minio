@@ -57,7 +57,8 @@ import (
 )
 
 const (
-	maxEConfigJSONSize = 262272
+	maxEConfigJSONSize        = 262272
+	kubernetesVersionEndpoint = "https://kubernetes.default.svc/version"
 )
 
 // Only valid query params for mgmt admin APIs.
@@ -1768,6 +1769,36 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	}
 }
 
+func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
+	ctx, cancel := context.WithCancel(dctx)
+	defer cancel()
+
+	ki := madmin.KubernetesInfo{}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, kubernetesVersionEndpoint, nil)
+	if err != nil {
+		ki.Error = err.Error()
+		return ki
+	}
+
+	client := &http.Client{
+		Transport: NewGatewayHTTPTransport(),
+		Timeout:   10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		ki.Error = err.Error()
+		return ki
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&ki); err != nil {
+		ki.Error = err.Error()
+	}
+	return ki
+}
+
 // HealthInfoHandler - GET /minio/admin/v3/healthinfo
 // ----------
 // Get server health info
@@ -1853,6 +1884,13 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	// anonymizedAddr - Updated the addr of the node info with anonymized one
 	anonymizeAddr := func(info madmin.NodeInfo) {
 		info.SetAddr(anonAddr(info.GetAddr()))
+	}
+
+	getAndWritePlatformInfo := func() {
+		if IsKubernetes() {
+			healthInfo.Sys.KubernetesInfo = getKubernetesInfo(deadlinedCtx)
+			partialWrite(healthInfo)
+		}
 	}
 
 	getAndWriteCPUs := func() {
@@ -2177,6 +2215,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		defer close(healthInfoCh)
 
 		partialWrite(healthInfo) // Write first message with only version and deployment id populated
+		getAndWritePlatformInfo()
 		getAndWriteCPUs()
 		getAndWritePartitions()
 		getAndWriteOSInfo()
