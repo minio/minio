@@ -110,7 +110,7 @@ func (v Versioning) PrefixEnabled(prefix string) bool {
 
 	for _, sprefix := range v.ExcludedPrefixes {
 		// Note: all excluded prefix patterns end with `/` (See Validate)
-		sprefix.Prefix = sprefix.Prefix + "*"
+		sprefix.Prefix += "*"
 
 		if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 			return false
@@ -139,6 +139,8 @@ func (v Versioning) PrefixSuspended(prefix string) bool {
 		}
 
 		for _, sprefix := range v.ExcludedPrefixes {
+			// Note: all excluded prefix patterns end with `/` (See Validate)
+			sprefix.Prefix += "*"
 			if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 				return true
 			}

@@ -248,14 +248,20 @@ When Bucket Versioning with excluded prefixes are configured objects matching th
 
 ```
 <VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Status>Enabled</Status>
-  <ExcludedPrefixes>
-    <Prefix>prefix1/*</Prefix>
-  </ExcludedPrefixes>
-  <!-- .. up to 10 prefixes in all -->
+        <Status>Enabled</Status>
+        <ExcludePrefixMarker>true</ExcludePrefixMarker>
+
+        <ExcludedPrefixes>
+          <Prefix>app1-jobs/*/_temporary/</Prefix>
+        </ExcludedPrefixes>
+        <ExcludedPrefixes>
+          <Prefix>app2-jobs/_magic/</Prefix>
+        </ExcludedPrefixes>
+
+        <!-- .. up to 10 prefixes in all -->
 </VersioningConfiguration>
 ```
-In the above sample config, objects with key matching `prefix1/*` will neither be versioned nor replicated.
+In the above sample config, objects under prefixes matching any of the `ExcludedPrefixes` glob patterns will neither be versioned nor replicated.
 
 ## Explore Further
 

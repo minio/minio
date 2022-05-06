@@ -214,3 +214,37 @@ func TestExcludePrefixMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludedPrefixesMatch(t *testing.T) {
+	v := Versioning{
+		Status:           Enabled,
+		ExcludedPrefixes: []ExcludedPrefix{{"*/_temporary/"}},
+	}
+
+	if err := v.Validate(); err != nil {
+		t.Fatalf("Invalid test versioning config %v: %v", v, err)
+	}
+	tests := []struct {
+		prefix   string
+		excluded bool
+	}{
+		{
+			prefix:   "app1-jobs/output/_temporary/attempt1/data.csv",
+			excluded: true,
+		},
+		{
+			prefix:   "app1-jobs/output/final/attempt1/data.csv",
+			excluded: false,
+		},
+	}
+
+	for i, test := range tests {
+		if v.PrefixSuspended(test.prefix) != test.excluded {
+			if test.excluded {
+				t.Fatalf("Test %d: Expected prefix %s to be excluded from versioning", i+1, test.prefix)
+			} else {
+				t.Fatalf("Test %d: Expected prefix %s to have versioning enabled", i+1, test.prefix)
+			}
+		}
+	}
+}
