@@ -383,7 +383,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			policyName = globalIAMSys.CurrentPolicies(policies)
 		}
 
-		if globalPolicyOPA == nil {
+		if globalAuthZPlugin == nil {
 			if !ok {
 				writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 					fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
@@ -593,7 +593,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-	if len(ldapPolicies) == 0 && globalPolicyOPA == nil {
+	if len(ldapPolicies) == 0 && globalAuthZPlugin == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
 				ldapUserDN, strings.Join(groupDistNames, "`,`")))

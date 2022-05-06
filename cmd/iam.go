@@ -681,7 +681,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 		return errServerNotInitialized
 	}
 
-	if globalPolicyOPA != nil {
+	if globalAuthZPlugin != nil {
 		// If OPA is set, we do not need to set a policy mapping.
 		policyName = ""
 	}
@@ -1693,8 +1693,8 @@ func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
-	if globalPolicyOPA != nil {
-		ok, err := globalPolicyOPA.IsAllowed(args)
+	if globalAuthZPlugin != nil {
+		ok, err := globalAuthZPlugin.IsAllowed(args)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 		}

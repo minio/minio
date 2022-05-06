@@ -69,6 +69,7 @@ const (
 const (
 	CredentialsSubSys    = "credentials"
 	PolicyOPASubSys      = "policy_opa"
+	PolicyPluginSubSys   = "policy_plugin"
 	IdentityOpenIDSubSys = "identity_openid"
 	IdentityLDAPSubSys   = "identity_ldap"
 	IdentityTLSSubSys    = "identity_tls"
@@ -141,6 +142,7 @@ var SubSystems = set.CreateStringSet(
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
 	PolicyOPASubSys,
+	PolicyPluginSubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
 	IdentityTLSSubSys,
@@ -183,6 +185,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	StorageClassSubSys,
 	CompressionSubSys,
 	PolicyOPASubSys,
+	PolicyPluginSubSys,
 	IdentityLDAPSubSys,
 	IdentityTLSSubSys,
 	HealSubSys,

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package opa
+package plugin
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for OPA policy feature.
+// Help template for Access Management Plugin policy feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
@@ -28,13 +28,13 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         URL,
-			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
+			Description: `plugin hook endpoint (HTTP(S)) e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"` + defaultHelpPostfix(URL),
 			Type:        "url",
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "[DEPRECATED] authorization token for OPA endpoint" + defaultHelpPostfix(AuthToken),
+			Description: "authorization token for plugin hook endpoint" + defaultHelpPostfix(AuthToken),
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
