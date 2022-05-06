@@ -20,6 +20,7 @@ package versioning
 import (
 	"encoding/xml"
 	"io"
+	"strings"
 
 	"github.com/minio/pkg/wildcard"
 )
@@ -38,6 +39,7 @@ const (
 var (
 	errExcludedPrefixNotSupported = Errorf("excluded prefixes extension supported only when versioning is enabled")
 	errTooManyExcludedPrefixes    = Errorf("too many excluded prefixes")
+	errInvalidPrefixPattern       = Errorf("invalid prefix pattern")
 )
 
 // ExcludedPrefix - holds individual prefixes excluded from being versioned.
@@ -53,7 +55,8 @@ type Versioning struct {
 	Status State `xml:"Status,omitempty"`
 	// MinIO extension - allows selective, prefix-level versioning exclusion.
 	// Requires versioning to be enabled
-	ExcludedPrefixes []ExcludedPrefix `xml:",omitempty"`
+	ExcludedPrefixes    []ExcludedPrefix `xml:",omitempty"`
+	ExcludePrefixMarker bool             `xml:",omitempty"`
 }
 
 // Validate - validates the versioning configuration
@@ -69,6 +72,11 @@ func (v Versioning) Validate() error {
 		const maxExcludedPrefixes = 10
 		if len(v.ExcludedPrefixes) > maxExcludedPrefixes {
 			return errTooManyExcludedPrefixes
+		}
+		for _, sprefix := range v.ExcludedPrefixes {
+			if !strings.HasSuffix(sprefix.Prefix, "/") {
+				return errInvalidPrefixPattern
+			}
 		}
 
 	case Suspended:
@@ -96,7 +104,14 @@ func (v Versioning) PrefixEnabled(prefix string) bool {
 	if prefix == "" {
 		return true
 	}
+	if v.ExcludePrefixMarker && strings.HasSuffix(prefix, "/") {
+		return false
+	}
+
 	for _, sprefix := range v.ExcludedPrefixes {
+		// Note: all excluded prefix patterns end with `/` (See Validate)
+		sprefix.Prefix = sprefix.Prefix + "*"
+
 		if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 			return false
 		}
@@ -119,6 +134,10 @@ func (v Versioning) PrefixSuspended(prefix string) bool {
 		if prefix == "" {
 			return false
 		}
+		if v.ExcludePrefixMarker && strings.HasSuffix(prefix, "/") {
+			return true
+		}
+
 		for _, sprefix := range v.ExcludedPrefixes {
 			if matched := wildcard.MatchSimple(sprefix.Prefix, prefix); matched {
 				return true

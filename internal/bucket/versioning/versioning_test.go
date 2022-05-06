@@ -25,9 +25,10 @@ import (
 
 func TestParseConfig(t *testing.T) {
 	testcases := []struct {
-		input            string
-		err              error
-		excludedPrefixes []string
+		input               string
+		err                 error
+		excludedPrefixes    []string
+		excludePrefixMarker bool
 	}{
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -39,14 +40,14 @@ func TestParseConfig(t *testing.T) {
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Enabled</Status>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_temporary/*</Prefix>
+                                    <Prefix>path/to/my/workload/_temporary/</Prefix>
                                   </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
 			err:              nil,
-			excludedPrefixes: []string{"path/to/my/workload/_staging/*", "path/to/my/workload/_temporary/*"},
+			excludedPrefixes: []string{"path/to/my/workload/_staging/", "path/to/my/workload/_temporary/"},
 		},
 		{
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -61,40 +62,64 @@ func TestParseConfig(t *testing.T) {
 			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                                   <Status>Enabled</Status>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/ab/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/ab/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/cd/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/cd/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/ef/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/ef/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/gh/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/gh/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/ij/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/ij/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/kl/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/kl/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/mn/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/mn/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/op/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/op/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/qr/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/qr/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/st/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/st/</Prefix>
                                   </ExcludedPrefixes>
                                   <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging/uv/*</Prefix>
+                                    <Prefix>path/to/my/workload/_staging/uv/</Prefix>
                                   </ExcludedPrefixes>
                                 </VersioningConfiguration>`,
 			err: errTooManyExcludedPrefixes,
+		},
+		{
+			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                                  <Status>Enabled</Status>
+                                  <ExcludePrefixMarker>true</ExcludePrefixMarker>
+                                  <ExcludedPrefixes>
+                                    <Prefix>path/to/my/workload/_staging/</Prefix>
+                                  </ExcludedPrefixes>
+                                  <ExcludedPrefixes>
+                                    <Prefix>path/to/my/workload/_temporary/</Prefix>
+                                  </ExcludedPrefixes>
+                                </VersioningConfiguration>`,
+			err:                 nil,
+			excludedPrefixes:    []string{"path/to/my/workload/_staging/", "path/to/my/workload/_temporary/"},
+			excludePrefixMarker: true,
+		},
+		{
+			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                                  <Status>Enabled</Status>
+                                  <ExcludedPrefixes>
+                                    <Prefix>path/to/my/workload/_staging</Prefix>
+                                  </ExcludedPrefixes>
+                                </VersioningConfiguration>`,
+			err: errInvalidPrefixPattern,
 		},
 	}
 
@@ -130,6 +155,9 @@ func TestParseConfig(t *testing.T) {
 					t.Fatalf("Test %d: Expected excluded prefix %s but got %s", i+1, tc.excludedPrefixes[i], v.ExcludedPrefixes[i].Prefix)
 				}
 			}
+			if tc.excludePrefixMarker != v.ExcludePrefixMarker {
+				t.Fatalf("Test %d: Expected ExcludePrefixMarker=%v but got %v", i+1, tc.excludePrefixMarker, v.ExcludePrefixMarker)
+			}
 		}
 	}
 }
@@ -158,5 +186,31 @@ func TestVersioningZero(t *testing.T) {
 	}
 	if v.Suspended() {
 		t.Fatalf("Expected to be disabled but got suspended")
+	}
+}
+
+func TestExcludePrefixMarker(t *testing.T) {
+	v := Versioning{
+		Status:              Enabled,
+		ExcludePrefixMarker: true,
+	}
+	testPrefixes := []string{"jobs/output/_temporary/", "jobs/output/", "jobs/"}
+	for i, prefix := range testPrefixes {
+		if v.PrefixEnabled(prefix) || !v.PrefixSuspended(prefix) {
+			t.Fatalf("Test %d: Expected versioning to be excluded for %s", i+1, prefix)
+		}
+	}
+
+	// Test applicability for regular objects
+	if prefix := "prefix-1/obj-1"; !v.PrefixEnabled(prefix) || v.PrefixSuspended(prefix) {
+		t.Fatalf("Expected versioning to be enabled for %s", prefix)
+	}
+
+	// Test when ExcludePrefixMarker is disabled
+	v.ExcludePrefixMarker = false
+	for i, prefix := range testPrefixes {
+		if !v.PrefixEnabled(prefix) || v.PrefixSuspended(prefix) {
+			t.Fatalf("Test %d: Expected versioning to be enabled for %s", i+1, prefix)
+		}
 	}
 }
