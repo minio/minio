@@ -932,6 +932,8 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
 		case <-keepAliveTicker.C:
 			if err := enc.Encode(&event.Event{}); err != nil {
 				return
@@ -993,6 +995,8 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
 		case <-keepAliveTicker.C:
 			if err := enc.Encode(&madmin.TraceInfo{}); err != nil {
 				return
@@ -1059,20 +1063,25 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Connection", "close")
-	w.WriteHeader(http.StatusOK)
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
 	ch := make(chan interface{}, 2000)
 	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
 
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
 	enc := gob.NewEncoder(w)
 	for {
 		select {
 		case entry := <-ch:
 			if err := enc.Encode(entry); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if err := enc.Encode(&madmin.LogInfo{}); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
