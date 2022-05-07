@@ -509,7 +509,7 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 				ObjectName: oi.Name,
 				VersionID:  oi.VersionID,
 			},
-		}, oi, ObjectOptions{}, nil)
+		}, oi, ObjectOptions{VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name)}, nil)
 	} else {
 		dsc = mustReplicate(GlobalContext, oi.Bucket, oi.Name, getMustReplicateOptions(ObjectInfo{
 			UserDefined: oi.UserDefined,

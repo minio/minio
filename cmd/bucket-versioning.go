@@ -31,6 +31,17 @@ func (sys *BucketVersioningSys) Enabled(bucket string) bool {
 	return vc.Enabled()
 }
 
+// PrefixEnabled returns true is versioning is enabled at bucket level and if
+// the given prefix doesn't match any excluded prefixes pattern. This is
+// part of a MinIO versioning configuration extension.
+func (sys *BucketVersioningSys) PrefixEnabled(bucket, prefix string) bool {
+	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	if err != nil {
+		return false
+	}
+	return vc.PrefixEnabled(prefix)
+}
+
 // Suspended suspended versioning?
 func (sys *BucketVersioningSys) Suspended(bucket string) bool {
 	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
@@ -40,15 +51,19 @@ func (sys *BucketVersioningSys) Suspended(bucket string) bool {
 	return vc.Suspended()
 }
 
+// PrefixSuspended returns true if the given prefix matches an excluded prefix
+// pattern. This is part of a MinIO versioning configuration extension.
+func (sys *BucketVersioningSys) PrefixSuspended(bucket, prefix string) bool {
+	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	if err != nil {
+		return false
+	}
+
+	return vc.PrefixSuspended(prefix)
+}
+
 // Get returns stored bucket policy
 func (sys *BucketVersioningSys) Get(bucket string) (*versioning.Versioning, error) {
-	if globalIsGateway {
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return nil, errServerNotInitialized
-		}
-		return nil, NotImplemented{}
-	}
 	return globalBucketMetadataSys.GetVersioningConfig(bucket)
 }
 

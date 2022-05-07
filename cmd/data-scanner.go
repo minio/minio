@@ -1184,7 +1184,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		opts.VersionID = obj.VersionID
 	}
 	if opts.VersionID == "" {
-		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		opts.Versioned = globalBucketVersioningSys.PrefixEnabled(obj.Bucket, obj.Name)
 	}
 
 	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
@@ -1243,6 +1243,9 @@ func (i *scannerItem) objectPath() string {
 // healReplication will heal a scanned item that has failed replication.
 func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
 	roi := getHealReplicateObjectInfo(oi, i.replication)
+	if !roi.Dsc.ReplicateAny() {
+		return
+	}
 
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure

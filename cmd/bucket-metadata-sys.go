@@ -196,7 +196,7 @@ func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
 func (sys *BucketMetadataSys) GetVersioningConfig(bucket string) (*versioning.Versioning, error) {
 	meta, err := sys.GetConfig(GlobalContext, bucket)
 	if err != nil {
-		return nil, err
+		return &versioning.Versioning{}, err
 	}
 	return meta.versioningConfig, nil
 }

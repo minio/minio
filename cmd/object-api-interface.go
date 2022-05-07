@@ -76,6 +76,9 @@ type ObjectOptions struct {
 	// Mutate set to 'true' if the call is namespace mutation call
 	Mutate        bool
 	WalkAscending bool // return Walk results in ascending order of versions
+
+	PrefixEnabledFn   func(prefix string) bool // function which returns true if versioning is enabled on prefix
+	PrefixSuspendedFn func(prefix string) bool // function which returns true if versioning is suspended on prefix
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.

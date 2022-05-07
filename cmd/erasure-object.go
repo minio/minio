@@ -1187,7 +1187,16 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		// VersionID is not set means delete is not specific about
 		// any version, look for if the bucket is versioned or not.
 		if objects[i].VersionID == "" {
-			if opts.Versioned || opts.VersionSuspended {
+			// MinIO extension to bucket version configuration
+			suspended := opts.VersionSuspended
+			if opts.PrefixSuspendedFn != nil {
+				suspended = opts.PrefixSuspendedFn(objects[i].ObjectName)
+			}
+			versioned := opts.Versioned
+			if opts.PrefixEnabledFn != nil {
+				versioned = opts.PrefixEnabledFn(objects[i].ObjectName)
+			}
+			if versioned || suspended {
 				// Bucket is versioned and no version was explicitly
 				// mentioned for deletes, create a delete marker instead.
 				vr.ModTime = UTCNow()

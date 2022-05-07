@@ -180,6 +180,11 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 		return
 	}
 
+	// Disable server-side replication on object prefixes which are excluded
+	// from versioning via the MinIO bucket versioning extension.
+	if globalBucketVersioningSys.PrefixSuspended(bucket, object) {
+		return
+	}
 	replStatus := mopts.ReplicationStatus()
 	if replStatus == replication.Replica && !mopts.isMetadataReplication() {
 		return
@@ -262,6 +267,11 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	}
 	// If incoming request is a replication request, it does not need to be re-replicated.
 	if delOpts.ReplicationRequest {
+		return
+	}
+	// Skip replication if this object's prefix is excluded from being
+	// versioned.
+	if delOpts.VersionSuspended {
 		return
 	}
 	opts := replication.ObjectOpts{
@@ -457,8 +467,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		VersionID:         versionID,
 		MTime:             dobj.DeleteMarkerMTime.Time,
 		DeleteReplication: drs,
-		Versioned:         globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended:  globalBucketVersioningSys.Suspended(bucket),
+		Versioned:         globalBucketVersioningSys.PrefixEnabled(bucket, dobj.ObjectName),
+		VersionSuspended:  globalBucketVersioningSys.PrefixSuspended(bucket, dobj.ObjectName),
 	})
 	if err != nil && !isErrVersionNotFound(err) { // VersionNotFound would be reported by pool that object version is missing on.
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, dobj.ObjectName, versionID, err))

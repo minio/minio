@@ -70,7 +70,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		md5Bytes := md5.Sum([]byte(object.content))
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name, mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-			Versioned:   globalBucketVersioningSys.Enabled(object.parentBucket),
+			Versioned:   globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 			UserDefined: object.meta,
 		})
 		if err != nil {
@@ -78,7 +78,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		}
 		if object.addDeleteMarker {
 			oi, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
-				Versioned: globalBucketVersioningSys.Enabled(object.parentBucket),
+				Versioned: globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 			})
 			if err != nil {
 				t.Fatalf("%s : %s", instanceType, err.Error())
@@ -380,7 +380,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name,
 			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-				Versioned:   globalBucketVersioningSys.Enabled(object.parentBucket),
+				Versioned:   globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 				UserDefined: object.meta,
 			})
 		if err != nil {
@@ -1065,16 +1065,16 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 		_, err := obj.PutObject(context.Background(), object.parentBucket, object.name,
 			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-				Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-				VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+				Versioned:        globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
+				VersionSuspended: globalBucketVersioningSys.PrefixSuspended(object.parentBucket, object.name),
 				UserDefined:      object.meta,
 			})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
 		obj, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
-			Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-			VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+			Versioned:        globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
+			VersionSuspended: globalBucketVersioningSys.PrefixSuspended(object.parentBucket, object.name),
 			VersionID:        object.versionID,
 		})
 		if err != nil {

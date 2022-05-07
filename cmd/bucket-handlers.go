@@ -471,9 +471,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		hasLockEnabled = true
 	}
 
-	versioned := globalBucketVersioningSys.Enabled(bucket)
-	suspended := globalBucketVersioningSys.Suspended(bucket)
-
 	type deleteResult struct {
 		delInfo DeletedObject
 		errInfo DeleteError
@@ -481,8 +478,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteResults := make([]deleteResult, len(deleteObjectsReq.Objects))
 
+	vc, _ := globalBucketVersioningSys.Get(bucket)
 	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
-
 	for index, object := range deleteObjectsReq.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
@@ -514,8 +511,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
-			Versioned:        versioned,
-			VersionSuspended: suspended,
+			Versioned:        vc.PrefixEnabled(object.ObjectName),
+			VersionSuspended: vc.PrefixSuspended(object.ObjectName),
 		}
 
 		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
@@ -526,7 +523,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if !globalTierConfigMgr.Empty() {
-			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, suspended)
+			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(opts.Versioned, opts.VersionSuspended)
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
@@ -581,8 +578,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned:        versioned,
-		VersionSuspended: suspended,
+		PrefixEnabledFn:   vc.PrefixEnabled,
+		PrefixSuspendedFn: vc.PrefixSuspended,
 	})
 
 	for i := range errs {
