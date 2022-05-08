@@ -157,6 +157,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 			}
 		}
 	}
+	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
 	return opts, nil
 }
 
