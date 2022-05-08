@@ -93,7 +93,7 @@ To exclude objects under a list of prefix (glob) patterns from being versioned, 
 
 ### Features
 - Objects matching these prefixes will behave as though versioning were suspended. These objects **will not** be replicated if bucket has replication configured.
-- Objects matching these prefixes will also not leave delete markers, dramatically reduces namespace pollution while keeping the benefits of replication.
+- Objects matching these prefixes will also not leave `null` delete markers, dramatically reduces namespace pollution while keeping the benefits of replication.
 - Users with explicit permissions or the root credential can configure the versioning state of any bucket.
 
 ## Examples of enabling bucket versioning using MinIO Java SDK

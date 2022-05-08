@@ -425,7 +425,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			proxy  proxyResult
 			perr   error
 		)
-		proxytgts := getproxyTargets(ctx, bucket, object, opts)
+		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
 			// proxy to replication target if active-active replication is in place.
 			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
@@ -662,7 +662,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			oi    ObjectInfo
 		)
 		// proxy HEAD to replication target if active-active replication configured on bucket
-		proxytgts := getproxyTargets(ctx, bucket, object, opts)
+		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
 			if rangeHeader != "" {
 				rs, _ = parseRequestRangeSpec(rangeHeader)
