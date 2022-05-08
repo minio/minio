@@ -271,7 +271,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	}
 	// Skip replication if this object's prefix is excluded from being
 	// versioned.
-	if delOpts.VersionSuspended {
+	if !delOpts.Versioned {
 		return
 	}
 	opts := replication.ObjectOpts{

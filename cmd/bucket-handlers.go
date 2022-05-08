@@ -512,7 +512,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
 			Versioned:        vc.PrefixEnabled(object.ObjectName),
-			VersionSuspended: vc.PrefixSuspended(object.ObjectName),
+			VersionSuspended: vc.Suspended(),
 		}
 
 		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
@@ -578,8 +578,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		PrefixEnabledFn:   vc.PrefixEnabled,
-		PrefixSuspendedFn: vc.PrefixSuspended,
+		PrefixEnabledFn:  vc.PrefixEnabled,
+		VersionSuspended: vc.Suspended(),
 	})
 
 	for i := range errs {
@@ -635,22 +635,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		if replicateDeletes {
-			if dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending {
-				dv := DeletedObjectReplicationInfo{
-					DeletedObject: dobj,
-					Bucket:        bucket,
-				}
-				scheduleReplicationDelete(ctx, dv, objectAPI)
+		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending) {
+			dv := DeletedObjectReplicationInfo{
+				DeletedObject: dobj,
+				Bucket:        bucket,
 			}
-		}
-
-	}
-
-	// Notify deleted event for objects.
-	for _, dobj := range deletedObjects {
-		if dobj.ObjectName == "" {
-			continue
+			scheduleReplicationDelete(ctx, dv, objectAPI)
 		}
 
 		eventName := event.ObjectRemovedDelete

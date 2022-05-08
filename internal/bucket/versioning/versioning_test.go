@@ -112,15 +112,6 @@ func TestParseConfig(t *testing.T) {
 			excludedPrefixes: []string{"path/to/my/workload/_staging/", "path/to/my/workload/_temporary/"},
 			excludeFolders:   true,
 		},
-		{
-			input: `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-                                  <Status>Enabled</Status>
-                                  <ExcludedPrefixes>
-                                    <Prefix>path/to/my/workload/_staging</Prefix>
-                                  </ExcludedPrefixes>
-                                </VersioningConfiguration>`,
-			err: errInvalidPrefixPattern,
-		},
 	}
 
 	for i, tc := range testcases {

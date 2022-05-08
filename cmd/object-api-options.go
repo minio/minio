@@ -166,7 +166,7 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 		return opts, err
 	}
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
-	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
+	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
 		switch delMarker {
