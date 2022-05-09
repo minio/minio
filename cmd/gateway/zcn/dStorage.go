@@ -203,23 +203,8 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 		return err
 	}
 
-	var chunkSize int64
-	switch {
-	case size > hundredMB:
-		chunkSize = 2 * tenMB
-	case size > tenMB:
-		chunkSize = tenMB
-	case size > oneMB:
-		chunkSize = oneMB
-	case size > fiveHunderedKB:
-		chunkSize = fiveHunderedKB
-	default:
-		chunkSize = defaultChunkSize
-	}
-
 	chunkUpload, err := sdk.CreateChunkedUpload(workDir, alloc, fileMeta, newMinioReader(r), isUpdate, false,
 		sdk.WithStatusCallback(cb),
-		sdk.WithChunkSize(chunkSize),
 	)
 
 	if err != nil {

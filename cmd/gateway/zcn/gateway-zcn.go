@@ -245,8 +245,6 @@ func (zob *zcnObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		remotePath = filepath.Join(rootPath, bucket, object)
 	}
 
-	fmt.Println("Getting object info for: ", remotePath)
-
 	var ref *sdk.ORef
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
