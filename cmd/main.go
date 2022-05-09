@@ -69,7 +69,7 @@ var GlobalFlags = []cli.Flag{
 }
 
 // Help template for minio.
-var minioHelpTemplate = `NAME:
+const minioHelpTemplate = `NAME:
   {{.Name}} - {{.Usage}}
 
 DESCRIPTION:
