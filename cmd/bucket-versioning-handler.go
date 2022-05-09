@@ -18,12 +18,14 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"io"
 	"net/http"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -63,10 +65,10 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if globalSiteReplicationSys.isEnabled() {
+	if globalSiteReplicationSys.isEnabled() && !v.Enabled() {
 		writeErrorResponse(ctx, w, APIError{
 			Code:           "InvalidBucketState",
-			Description:    "Cluster replication is enabled for this site, so the versioning state cannot be changed.",
+			Description:    "Cluster replication is enabled for this site, so the versioning cannot be suspended.",
 			HTTPStatusCode: http.StatusConflict,
 		}, r.URL)
 		return
@@ -96,6 +98,20 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	}
 
 	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Call site replication hook.
+	//
+	// We encode the xml bytes as base64 to ensure there are no encoding
+	// errors.
+	cfgStr := base64.StdEncoding.EncodeToString(configData)
+	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+		Type:       madmin.SRBucketMetaTypeVersionConfig,
+		Bucket:     bucket,
+		Versioning: &cfgStr,
+	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

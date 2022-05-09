@@ -39,7 +39,6 @@ const (
 var (
 	errExcludedPrefixNotSupported = Errorf("excluded prefixes extension supported only when versioning is enabled")
 	errTooManyExcludedPrefixes    = Errorf("too many excluded prefixes")
-	errInvalidPrefixPattern       = Errorf("invalid prefix pattern")
 )
 
 // ExcludedPrefix - holds individual prefixes excluded from being versioned.
@@ -72,11 +71,6 @@ func (v Versioning) Validate() error {
 		const maxExcludedPrefixes = 10
 		if len(v.ExcludedPrefixes) > maxExcludedPrefixes {
 			return errTooManyExcludedPrefixes
-		}
-		for _, sprefix := range v.ExcludedPrefixes {
-			if !strings.HasSuffix(sprefix.Prefix, "/") {
-				return errInvalidPrefixPattern
-			}
 		}
 
 	case Suspended:

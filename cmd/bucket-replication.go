@@ -271,7 +271,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	}
 	// Skip replication if this object's prefix is excluded from being
 	// versioned.
-	if delOpts.VersionSuspended {
+	if !delOpts.Versioned {
 		return
 	}
 	opts := replication.ObjectOpts{
@@ -1600,7 +1600,11 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	return reader, proxyResult{Proxy: true}, nil
 }
 
-func getproxyTargets(ctx context.Context, bucket, object string, opts ObjectOptions) (tgts *madmin.BucketTargets) {
+func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOptions) (tgts *madmin.BucketTargets) {
+	if opts.VersionSuspended {
+		return &madmin.BucketTargets{}
+	}
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
 		return &madmin.BucketTargets{}
