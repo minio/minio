@@ -1,7 +1,7 @@
 //go:build (linux && arm) || (linux && 386)
 // +build linux,arm linux,386
 
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
