@@ -388,13 +388,13 @@ func Test_localLocker_RUnlock(t *testing.T) {
 					for k, v := range l.lockMap {
 						for _, lock := range v {
 							if rng.Intn(2) == 0 {
-								toUnLock = append(toUnLock, dsync.LockArgs{Resources: []string{k}, UID: lock.UID, Owner: lock.Owner})
+								toUnLock = append(toUnLock, dsync.LockArgs{Resources: []string{k}, UID: lock.UID})
 							}
 						}
 					}
 					start := time.Now()
 					for _, lock := range toUnLock {
-						ok, err := l.RUnlock(nil, lock)
+						ok, err := l.ForceUnlock(context.Background(), lock)
 						if err != nil || !ok {
 							t.Fatal(err)
 						}
@@ -407,8 +407,8 @@ func Test_localLocker_RUnlock(t *testing.T) {
 					if len(l.lockMap) == 0 && locks > 10 {
 						t.Fatalf("objects all deleted, 0 remains")
 					}
-					if len(l.lockUID) == 0 && locks > 10 {
-						t.Fatalf("objects uids all deleted, 0 remains")
+					if len(l.lockUID) != locks*readers-len(toUnLock) {
+						t.Fatalf("want %d objects uids all deleted, %d remains", len(l.lockUID), locks*readers-len(toUnLock))
 					}
 
 					toUnLock = toUnLock[:0]
