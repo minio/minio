@@ -1255,19 +1255,33 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				}
 				return
 			}
-			errs := disk.DeleteVersions(ctx, bucket, dedupVersions)
-			for i, err := range errs {
-				if err == nil {
+			dresp := disk.DeleteVersions(ctx, bucket, dedupVersions)
+			for i, resp := range dresp {
+				if resp.NoOp {
+					// overlay delete marker version ID with top most delete marker on the stack
+					// for the version
+					for _, v := range dedupVersions[i].Versions {
+						if !v.Deleted {
+							continue
+						}
+						oi, err := er.getObjectInfo(ctx, bucket, dobjects[v.Idx].ObjectName, ObjectOptions{})
+						if err != nil && oi.DeleteMarker {
+							dobjects[v.Idx].DeleteMarkerVersionID = oi.VersionID
+							continue
+						}
+					}
+				}
+				if resp.Err == nil { // check if all err are nil
 					continue
 				}
 				for _, v := range dedupVersions[i].Versions {
-					if err == errFileNotFound || err == errFileVersionNotFound {
+					if resp.Err == errFileNotFound || resp.Err == errFileVersionNotFound {
 						if !dobjects[v.Idx].DeleteMarker {
 							// Not delete marker, if not found, ok.
 							continue
 						}
 					}
-					delObjErrs[index][v.Idx] = err
+					delObjErrs[index][v.Idx] = resp.Err
 				}
 			}
 		}(index, disk)
@@ -1497,12 +1511,18 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			// any version specified explicitly. Or if a particular
 			// version id needs to be replicated.
 			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
-				return objInfo, toObjectErr(err, bucket, object)
+				// soft deletes are idempotent. Return the topmost delete marker in stack if delete marker already set
+				if !errors.As(err, &errDeleteNoOp) {
+					return objInfo, toObjectErr(err, bucket, object)
+				}
+				oi, err := er.getObjectInfo(ctx, bucket, object, ObjectOptions{})
+				if err != nil && oi.DeleteMarker {
+					fi.VersionID = oi.VersionID
+				}
 			}
 			return fi.ToObjectInfo(bucket, object), nil
 		}
 	}
-
 	// Delete the object version on all disks.
 	dfi := FileInfo{
 		Name:             object,

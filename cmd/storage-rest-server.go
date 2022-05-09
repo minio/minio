@@ -662,7 +662,7 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 // DeleteVersionsErrsResp - collection of delete errors
 // for bulk version deletes
 type DeleteVersionsErrsResp struct {
-	Errs []error
+	Errs []StorageDeleteResp
 }
 
 // DeleteVersionsHandler - delete a set of a versions.
@@ -688,17 +688,14 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]error, totalVersions)}
-
+	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]StorageDeleteResp, totalVersions)}
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs := s.storage.DeleteVersions(r.Context(), volume, versions)
 	done(nil)
 	for idx := range versions {
-		if errs[idx] != nil {
-			dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
-		}
+		dErrsResp.Errs[idx] = StorageDeleteResp{Err: toStorageErr(errs[idx].Err), NoOp: errs[idx].NoOp}
 	}
 	encoder.Encode(dErrsResp)
 }

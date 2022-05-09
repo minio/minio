@@ -228,13 +228,13 @@ func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, re
 	return d.disk.Delete(ctx, volume, path, recursive)
 }
 
-func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error {
+func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []StorageDeleteResp {
 	if err := d.calcError(); err != nil {
-		errs := make([]error, len(versions))
-		for i := range errs {
-			errs[i] = err
+		slc := make([]StorageDeleteResp, len(versions))
+		for i := range slc {
+			slc[i] = StorageDeleteResp{Err: err}
 		}
-		return errs
+		return slc
 	}
 	return d.disk.DeleteVersions(ctx, volume, versions)
 }

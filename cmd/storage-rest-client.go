@@ -612,7 +612,7 @@ func (client *storageRESTClient) Delete(ctx context.Context, volume string, path
 }
 
 // DeleteVersions - deletes list of specified versions if present
-func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []StorageDeleteResp) {
 	if len(versions) == 0 {
 		return errs
 	}
@@ -628,7 +628,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	}
 	logger.LogIf(ctx, encoder.Flush())
 
-	errs = make([]error, len(versions))
+	errs = make([]StorageDeleteResp, len(versions))
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVersions, values, &buffer, -1)
 	defer xhttp.DrainBody(respBody)
@@ -637,7 +637,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 			err = ctx.Err()
 		}
 		for i := range errs {
-			errs[i] = err
+			errs[i] = StorageDeleteResp{Err: err}
 		}
 		return errs
 	}
@@ -645,7 +645,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		for i := range errs {
-			errs[i] = err
+			errs[i] = StorageDeleteResp{Err: err}
 		}
 		return errs
 	}
@@ -653,15 +653,13 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	dErrResp := &DeleteVersionsErrsResp{}
 	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
 		for i := range errs {
-			errs[i] = err
+			errs[i] = StorageDeleteResp{Err: err}
 		}
 		return errs
 	}
-
-	for i, dErr := range dErrResp.Errs {
-		errs[i] = toStorageErr(dErr)
+	for i, err := range dErrResp.Errs {
+		errs[i] = StorageDeleteResp{Err: toStorageErr(err.Err), NoOp: err.NoOp}
 	}
-
 	return errs
 }
 

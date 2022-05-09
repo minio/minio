@@ -1323,8 +1323,13 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 		}
 		return uuid.UUID(ver.ObjectV2.DataDir).String(), err
 	}
-
 	if fi.Deleted {
+		if len(x.versions) > 0 && x.versions[0].header.Type == DeleteType {
+			ver, err := x.getIdx(0)
+			if err == nil && x.versions[0].header.VersionID == ver.DeleteMarker.VersionID {
+				return "", errDeleteNoOp
+			}
+		}
 		err = x.addVersion(ventry)
 		return "", err
 	}

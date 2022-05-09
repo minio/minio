@@ -1740,7 +1740,7 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 		deleted[i] = true
 	}
 	errs := xl.DeleteVersions(ctx, volume, fis)
-	if errs[0] != nil {
+	if errs[0].Err != nil {
 		t.Fatalf("expected nil error, got %v", errs[0])
 	}
 	checkVerExist(t)
@@ -1752,7 +1752,7 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 		deleted[i] = true
 	}
 	errs = xl.DeleteVersions(ctx, volume, fis)
-	if errs[0] != nil {
+	if errs[0].Err != nil {
 		t.Fatalf("expected nil error, got %v", errs[0])
 	}
 	checkVerExist(t)

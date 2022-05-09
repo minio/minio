@@ -378,25 +378,25 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 
 // DeleteVersions deletes slice of versions, it can be same object
 // or multiple objects.
-func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []StorageDeleteResp) {
 	// Merely for tracing storage
 	path := ""
 	if len(versions) > 0 {
 		path = versions[0].Name
 	}
-	errs = make([]error, len(versions))
+	errs = make([]StorageDeleteResp, len(versions))
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricDeleteVersions, volume, path)
 	if err != nil {
 		for i := range errs {
-			errs[i] = ctx.Err()
+			errs[i] = StorageDeleteResp{Err: ctx.Err()}
 		}
 		return errs
 	}
 	defer done(&err)
 	errs = p.storage.DeleteVersions(ctx, volume, versions)
 	for i := range errs {
-		if errs[i] != nil {
-			err = errs[i]
+		if errs[i].Err != nil {
+			err = errs[i].Err
 			break
 		}
 	}

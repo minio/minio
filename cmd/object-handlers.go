@@ -3526,6 +3526,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				ReplicationState:      objInfo.getReplicationState(dsc.String(), opts.VersionID, false),
 			},
 			Bucket: bucket,
+			OpType: replication.DeleteReplicationType,
 		}
 		scheduleReplicationDelete(ctx, dobj, objectAPI)
 	}

@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v45" // Added ReadXL API
+	storageRESTVersion       = "v46" // Changed DeleteVersions API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
