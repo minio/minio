@@ -774,7 +774,16 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 
 	lockType = noLock // do not take locks at lower levels for GetObjectNInfo()
-	return z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if unlockOnDefer {
+		unlockOnDefer = false
+		return gr.WithCleanupFuncs(nsUnlocker), nil
+	}
+	return gr, nil
 }
 
 // getLatestObjectInfoWithIdx returns the objectInfo of the latest object from multiple pools (this function
