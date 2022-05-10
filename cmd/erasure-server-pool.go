@@ -779,8 +779,11 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return nil, err
 	}
 
-	unlockOnDefer = false
-	return gr.WithCleanupFuncs(nsUnlocker), nil
+	if unlockOnDefer {
+		unlockOnDefer = false
+		return gr.WithCleanupFuncs(nsUnlocker), nil
+	}
+	return gr, nil
 }
 
 // getLatestObjectInfoWithIdx returns the objectInfo of the latest object from multiple pools (this function
