@@ -80,6 +80,9 @@ type AccElem struct {
 
 // Add a duration to a single element.
 func (a *AccElem) add(dur time.Duration) {
+	if dur < 0 {
+		dur = 0
+	}
 	a.Total += int64(dur)
 	a.N++
 }
@@ -90,10 +93,10 @@ func (a *AccElem) merge(b AccElem) {
 	a.Total += b.Total
 }
 
-// Avg converts total to average.
-func (a AccElem) avg() uint64 {
+// Avg returns average time spent.
+func (a AccElem) avg() time.Duration {
 	if a.N >= 1 && a.Total > 0 {
-		return uint64(a.Total / a.N)
+		return time.Duration(a.Total / a.N)
 	}
 	return 0
 }
@@ -133,7 +136,7 @@ func (l *lastMinuteLatency) add(t time.Duration) {
 }
 
 // Merge all recorded latencies of last minute into one
-func (l *lastMinuteLatency) getAvgData() AccElem {
+func (l *lastMinuteLatency) getTotal() AccElem {
 	var res AccElem
 	sec := time.Now().Unix()
 	l.forwardTo(sec)
@@ -181,7 +184,7 @@ func (l *LastMinuteLatencies) Add(size int64, t time.Duration) {
 func (l *LastMinuteLatencies) GetAvgData() [sizeLastElemMarker]AccElem {
 	var res [sizeLastElemMarker]AccElem
 	for i, elem := range l[:] {
-		res[i] = elem.getAvgData()
+		res[i] = elem.getTotal()
 	}
 	return res
 }

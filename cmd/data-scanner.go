@@ -200,9 +200,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			// Reset the timer for next cycle.
 			scannerTimer.Reset(scannerCycle.Get())
 
-			if intDataUpdateTracker.debug {
-				console.Debugln("starting scanner cycle")
-			}
+			stopFn := globalScannerMetrics.log(scannerMetricScanCycle)
 
 			bgHealInfo := readBackgroundHealInfo(ctx, objAPI)
 			scanMode := getCycleScanMode(nextBloomCycle, bgHealInfo.BitrotStartCycle, bgHealInfo.BitrotStartTime)
@@ -223,6 +221,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			logger.LogIf(ctx, err)
 			err = objAPI.NSScanner(ctx, bf, results, uint32(nextBloomCycle), scanMode)
 			logger.LogIf(ctx, err)
+			stopFn()
 			if err == nil {
 				// Store new cycle...
 				nextBloomCycle++
@@ -323,19 +322,12 @@ var globalScannerStats scannerStats
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
 func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
-	t := UTCNow()
-
 	logPrefix := color.Green("data-usage: ")
-	logSuffix := color.Blue("- %v + %v", basePath, cache.Info.Name)
+	defer globalScannerMetrics.log(scannerMetricScanBucketDisk, basePath, cache.Info.Name)()
 	atomic.AddUint64(&globalScannerStats.bucketsStarted, 1)
 	defer func() {
 		atomic.AddUint64(&globalScannerStats.bucketsFinished, 1)
 	}()
-	if intDataUpdateTracker.debug {
-		defer func() {
-			console.Debugf(logPrefix+" Scanner time: %v %s\n", time.Since(t), logSuffix)
-		}()
-	}
 
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
@@ -384,14 +376,8 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 			s.withFilter = nil
 		}
 	}
-	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Start scanning. Bloom filter: %v %s\n", s.withFilter != nil, logSuffix)
-	}
 
 	done := ctx.Done()
-	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Cycle: %v, Entries: %v %s\n", cache.Info.NextCycle, len(cache.Cache), logSuffix)
-	}
 
 	// Read top level in bucket.
 	select {
@@ -407,9 +393,6 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 		return cache, err
 	}
 
-	if s.dataUsageScannerDebug {
-		console.Debugf(logPrefix+"Finished scanner, %v entries (%+v) %s \n", len(s.newCache.Cache), *s.newCache.sizeRecursive(s.newCache.Info.Name), logSuffix)
-	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
@@ -438,6 +421,7 @@ func (f *folderScanner) sendUpdate() {
 func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, into *dataUsageEntry) error {
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
+
 	thisHash := hashPath(folder.name)
 	// Store initial compaction state.
 	wasCompacted := into.Compacted
@@ -666,7 +650,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					f.updateCache.replaceHashed(h, &thisHash, dataUsageEntry{})
 				}
 			}
+			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name, "NEW")
 			scanFolder(folder)
+			stopFn()
 			// Add new folders if this is new and we don't have existing.
 			if !into.Compacted {
 				parent := f.updateCache.find(thisHash.Key())
@@ -694,7 +680,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					folder.objectHealProbDiv = f.healFolderInclude
 				}
 			}
+			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name, "EXISTING")
 			scanFolder(folder)
+			stopFn()
 		}
 
 		// Scan for healing
@@ -735,9 +723,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		healObjectsPrefix := color.Green("healObjects:")
 		for k := range abandonedChildren {
 			bucket, prefix := path2BucketObject(k)
-			if f.dataUsageScannerDebug {
-				console.Debugf(scannerLogPrefix+" checking disappeared folder: %v/%v\n", bucket, prefix)
-			}
+			stopFn := globalScannerMetrics.log(scannerMetricCheckMissing, f.root, k)
 
 			if bucket != resolver.bucket {
 				// Bucket might be missing as well with abandoned children.
@@ -825,6 +811,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				},
 			})
 
+			stopFn()
 			if f.dataUsageScannerDebug && err != nil && err != errFileNotFound {
 				console.Debugf(healObjectsPrefix+" checking returned value %v (%T)\n", err, err)
 			}
@@ -832,7 +819,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// Add unless healing returned an error.
 			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: 1}
+				stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, this.name, "RECOVERED")
 				scanFolder(this)
+				stopFn()
 			}
 		}
 		break

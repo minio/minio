@@ -86,7 +86,7 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 		APICalls:     make(map[string]uint64),
 	}
 	for i, v := range p.apiLatencies {
-		diskMetric.APILatencies[storageMetric(i).String()] = v.value()
+		diskMetric.APILatencies[storageMetric(i).String()] = uint64(v.avgLatency())
 	}
 	for i := range p.apiCalls {
 		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
@@ -105,10 +105,18 @@ func (e *lockedLastMinuteLatency) add(value time.Duration) {
 	e.lastMinuteLatency.add(value)
 }
 
-func (e *lockedLastMinuteLatency) value() uint64 {
+// avgLatency returns the average latency for all calls within the last minute.
+func (e *lockedLastMinuteLatency) avgLatency() time.Duration {
 	e.Lock()
 	defer e.Unlock()
-	return e.lastMinuteLatency.getAvgData().avg()
+	return e.lastMinuteLatency.getTotal().avg()
+}
+
+// total returns the total call count and latency for the last minute.
+func (e *lockedLastMinuteLatency) total() AccElem {
+	e.Lock()
+	defer e.Unlock()
+	return e.lastMinuteLatency.getTotal()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
@@ -500,6 +508,19 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "storage." + s.String(),
+		StorageStats: madmin.TraceStorageStats{
+			Duration: duration,
+			Path:     path,
+		},
+	}
+}
+
+func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceType(3),
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  "scanner." + s.String(),
 		StorageStats: madmin.TraceStorageStats{
 			Duration: duration,
 			Path:     path,
