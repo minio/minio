@@ -42,7 +42,7 @@ import (
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
-	"github.com/minio/minio/internal/config/policy/opa"
+	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/config/subnet"
 	xhttp "github.com/minio/minio/internal/http"
@@ -290,8 +290,8 @@ var (
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
-	// OPA policy system.
-	globalPolicyOPA *opa.Opa
+	// AuthZ Plugin system.
+	globalAuthZPlugin *polplugin.AuthZPlugin
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string

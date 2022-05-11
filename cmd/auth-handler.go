@@ -217,8 +217,8 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 		}
 	}
 
-	// If OPA is set, return without any further checks.
-	if globalPolicyOPA != nil {
+	// If AuthZPlugin is set, return without any further checks.
+	if globalAuthZPlugin != nil {
 		return claims.Map(), nil
 	}
 
