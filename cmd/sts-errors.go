@@ -96,6 +96,7 @@ const (
 	ErrSTSInsecureConnection
 	ErrSTSInvalidClientCertificate
 	ErrSTSNotInitialized
+	ErrSTSUpstreamError
 	ErrSTSInternalError
 )
 
@@ -161,6 +162,11 @@ var stsErrCodes = stsErrorCodeMap{
 		Code:           "STSNotInitialized",
 		Description:    "STS API not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSTSUpstreamError: {
+		Code:           "InternalError",
+		Description:    "An upstream service required for this operation failed - please try again or contact an administrator.",
+		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrSTSInternalError: {
 		Code:           "InternalError",
