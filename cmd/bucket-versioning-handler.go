@@ -68,8 +68,8 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	if globalSiteReplicationSys.isEnabled() && !v.Enabled() {
 		writeErrorResponse(ctx, w, APIError{
 			Code:           "InvalidBucketState",
-			Description:    "Cluster replication is enabled for this site, so the versioning cannot be suspended.",
-			HTTPStatusCode: http.StatusConflict,
+			Description:    "Cluster replication is enabled on this site, versioning cannot be suspended on bucket.",
+			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 		return
 	}
@@ -77,16 +77,16 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled && (v.Suspended() || v.PrefixesExcluded()) {
 		writeErrorResponse(ctx, w, APIError{
 			Code:           "InvalidBucketState",
-			Description:    "An Object Lock configuration is present on this bucket, so the versioning state cannot be changed.",
-			HTTPStatusCode: http.StatusConflict,
+			Description:    "An Object Lock configuration is present on this bucket, versioning cannot be suspended.",
+			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 		return
 	}
 	if _, err := getReplicationConfig(ctx, bucket); err == nil && v.Suspended() {
 		writeErrorResponse(ctx, w, APIError{
 			Code:           "InvalidBucketState",
-			Description:    "A replication configuration is present on this bucket, so the versioning state cannot be changed.",
-			HTTPStatusCode: http.StatusConflict,
+			Description:    "A replication configuration is present on this bucket, bucket wide versioning cannot be suspended.",
+			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 		return
 	}
