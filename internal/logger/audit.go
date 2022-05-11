@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/klauspost/compress/gzhttp"
@@ -158,13 +157,12 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, filterKeys ...string) {
-	// Fast exit if there is not audit target configured
-	if atomic.LoadInt32(&nAuditTargets) == 0 {
+	auditTgts := AuditTargets()
+	if len(auditTgts) == 0 {
 		return
 	}
 
 	var entry audit.Entry
-
 	if w != nil && r != nil {
 		reqInfo := GetReqInfo(ctx)
 		if reqInfo == nil {
@@ -234,7 +232,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	}
 
 	// Send audit logs only to http targets.
-	for _, t := range AuditTargets() {
+	for _, t := range auditTgts {
 		if err := t.Send(entry, string(All)); err != nil {
 			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), All)
 		}
