@@ -901,7 +901,7 @@ var errorCodes = errorCodeMap{
 	ErrReplicationDenyEditError: {
 		Code:           "XMinioReplicationDenyEdit",
 		Description:    "Cannot alter local replication config since this server is in a cluster replication setup",
-		HTTPStatusCode: http.StatusConflict,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketRemoteIdenticalToSource: {
 		Code:           "XMinioAdminRemoteIdenticalToSource",
@@ -1167,7 +1167,7 @@ var errorCodes = errorCodeMap{
 	ErrObjectExistsAsDirectory: {
 		Code:           "XMinioObjectExistsAsDirectory",
 		Description:    "Object name already exists as a directory.",
-		HTTPStatusCode: http.StatusConflict,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",
