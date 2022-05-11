@@ -190,6 +190,10 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
 		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
 			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
+			// Support additional labels for more granular filtering.
+			if value := env.Get("MINIO_PROMETHEUS_EXTRA_LABELS", ""); value != "" {
+				os.Setenv("CONSOLE_PROMETHEUS_EXTRA_LABELS", value)
+			}
 		}
 	}
 	// Enable if LDAP is enabled.
