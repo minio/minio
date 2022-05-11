@@ -1,4 +1,5 @@
 module github.com/minio/minio
+replace github.com/minio/minio/cmd/mantle => ./cmd/mantle
 
 go 1.17
 

@@ -307,7 +307,7 @@ func (e ObjectNotFound) Error() string {
 type ObjectNotComfirmed GenericError
 
 func (e ObjectNotComfirmed) Error() string {
-	return "The requested object:" + e.Object + "is not confirm in the blockchain"
+	return "The requested object:" + e.Object + " is not confirm in the blockchain"
 }
 
 // MethodNotAllowed on the object
