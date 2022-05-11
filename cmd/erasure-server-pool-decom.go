@@ -687,27 +687,30 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					continue
 				}
 
-				gr, err := set.GetObjectNInfo(ctx,
-					bName,
-					encodeDirObject(version.Name),
-					nil,
-					http.Header{},
-					noLock, // all mutations are blocked reads are safe without locks.
-					ObjectOptions{
-						VersionID: version.VersionID,
-					})
-				if err != nil {
-					logger.LogIf(ctx, err)
-					z.poolMetaMutex.Lock()
-					z.poolMeta.CountItem(idx, version.Size, true)
-					z.poolMetaMutex.Unlock()
-					break // break out on first error
-				}
 				var failure bool
 				// gr.Close() is ensured by decommissionObject().
-				if err = z.decommissionObject(ctx, bName, gr); err != nil {
-					logger.LogIf(ctx, err)
-					failure = true
+				for try := 0; try < 3; try++ {
+					gr, err := set.GetObjectNInfo(ctx,
+						bName,
+						encodeDirObject(version.Name),
+						nil,
+						http.Header{},
+						noLock, // all mutations are blocked reads are safe without locks.
+						ObjectOptions{
+							VersionID: version.VersionID,
+						})
+					if err != nil {
+						failure = true
+						logger.LogIf(ctx, err)
+						continue
+					}
+					if err = z.decommissionObject(ctx, bName, gr); err != nil {
+						failure = true
+						logger.LogIf(ctx, err)
+						continue
+					}
+					failure = false
+					break
 				}
 				z.poolMetaMutex.Lock()
 				z.poolMeta.CountItem(idx, version.Size, failure)
