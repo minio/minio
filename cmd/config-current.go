@@ -639,7 +639,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.HTTP {
 			if l.Enabled {
-				l.LogOnce = logger.LogOnceIf
+				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 				loggerCfg.HTTP[n] = l
@@ -657,7 +657,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.AuditWebhook {
 			if l.Enabled {
-				l.LogOnce = logger.LogOnceIf
+				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 				loggerCfg.AuditWebhook[n] = l
