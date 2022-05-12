@@ -79,5 +79,6 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", mainHandler)
 
+	log.Print("Listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

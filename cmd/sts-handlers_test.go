@@ -1311,29 +1311,6 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }
 
-// List of all IAM test suites (i.e. test server configuration combinations)
-// common to tests.
-var iamTestSuites = func() []*TestSuiteIAM {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
-	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	return testCases
-}()
-
 func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
 	openIDServer := os.Getenv(EnvTestOpenIDServer)
 	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
