@@ -278,12 +278,7 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logIf(ctx, err, errKind...)
 }
 
-// logIf prints a detailed error message during
-// the execution of the server.
-func logIf(ctx context.Context, err error, errKind ...interface{}) {
-	if Disable {
-		return
-	}
+func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entry {
 	logKind := string(Minio)
 	if len(errKind) > 0 {
 		if ek, ok := errKind[0].(Kind); ok {
@@ -357,8 +352,37 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		entry.Trace.Variables = make(map[string]interface{})
 	}
 
+	return entry
+}
+
+// consoleLogIf prints a detailed error message during
+// the execution of the server.
+func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
+	if Disable {
+		return
+	}
+
+	if consoleTgt != nil {
+		entry := errToEntry(ctx, err, errKind...)
+		consoleTgt.Send(entry, entry.LogKind)
+	}
+}
+
+// logIf prints a detailed error message during
+// the execution of the server.
+func logIf(ctx context.Context, err error, errKind ...interface{}) {
+	if Disable {
+		return
+	}
+
+	systemTgts := SystemTargets()
+	if len(systemTgts) == 0 {
+		return
+	}
+
+	entry := errToEntry(ctx, err, errKind...)
 	// Iterate over all logger targets to send the log entry
-	for _, t := range SystemTargets() {
+	for _, t := range systemTgts {
 		if err := t.Send(entry, entry.LogKind); err != nil {
 			if consoleTgt != nil {
 				entry.Trace.Message = fmt.Sprintf("event(%#v) was not sent to Logger target (%#v): %#v", entry, t, err)
