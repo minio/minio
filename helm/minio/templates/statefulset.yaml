@@ -184,9 +184,9 @@ spec:
     {{- range $diskId := until $drivesPerNode}}
     - metadata:
         name: export-{{ $diskId }}
-      {{- if .Values.persistence.annotations }}
+      {{- if $.Values.persistence.annotations }}
         annotations:
-      {{ toYaml .Values.persistence.annotations | trimSuffix "\n" | indent 10 }}
+{{ toYaml $.Values.persistence.annotations | trimSuffix "\n" | indent 10 }}
       {{- end }}
       spec:
         accessModes: [ {{ $accessMode | quote }} ]
@@ -200,9 +200,9 @@ spec:
   {{- else }}
     - metadata:
         name: export
-      {{- if .Values.persistence.annotations }}
+      {{- if $.Values.persistence.annotations }}
         annotations:
-      {{ toYaml .Values.persistence.annotations | trimSuffix "\n" | indent 10 }}
+{{ toYaml $.Values.persistence.annotations | trimSuffix "\n" | indent 10 }}
       {{- end }}
       spec:
         accessModes: [ {{ $accessMode | quote }} ]
