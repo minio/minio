@@ -1201,6 +1201,16 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	}
 }
 
+func (c *check) mustNotUpload(ctx context.Context, client *minio.Client, bucket string) {
+	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
+	if e, ok := err.(minio.ErrorResponse); ok {
+		if e.Code == "AccessDenied" {
+			return
+		}
+	}
+	c.Fatalf("upload did not get an AccessDenied error - got %#v instead", err)
+}
+
 func (c *check) assertSvcAccS3Access(ctx context.Context, s *TestSuiteIAM, cr madmin.Credentials, bucket string) {
 	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
 	c.mustListObjects(ctx, svcClient, bucket)
