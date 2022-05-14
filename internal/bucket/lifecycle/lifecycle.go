@@ -259,7 +259,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 			continue
 		}
 
-		if rule.Filter.TestTags(strings.Split(obj.UserTags, "&")) {
+		if rule.Filter.TestTags(obj.UserTags) {
 			rules = append(rules, rule)
 		}
 		if !rule.Transition.IsNull() {
