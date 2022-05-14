@@ -485,7 +485,9 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 	go s.cleanupDeletedObjects(ctx)
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
+	if !globalIsTesting {
+		go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
+	}
 
 	return s, nil
 }

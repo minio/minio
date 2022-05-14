@@ -139,6 +139,9 @@ var (
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
 
+	// Indicates if server code should go through testing path.
+	globalIsTesting = false
+
 	// Name of gateway server, e.g S3, NAS etc
 	globalGatewayName = ""
 
