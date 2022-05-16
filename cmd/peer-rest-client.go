@@ -688,9 +688,10 @@ func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha2
 }
 
 // SignalService - sends signal to peer nodes.
-func (client *peerRESTClient) SignalService(sig serviceSignal) error {
+func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string) error {
 	values := make(url.Values)
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
+	values.Set(peerRESTSubSys, subSys)
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
 		return err

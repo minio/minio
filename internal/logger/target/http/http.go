@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
@@ -58,8 +57,8 @@ type Config struct {
 // buffer is full, new logs are just ignored and an error
 // is returned to the caller.
 type Target struct {
-	status int32
 	wg     sync.WaitGroup
+	doneCh chan struct{}
 
 	// Channel of log entries
 	logCh chan interface{}
@@ -115,7 +114,6 @@ func (h *Target) Init() error {
 			h.config.Endpoint, resp.Status)
 	}
 
-	h.status = 1
 	go h.startHTTPLogger()
 	return nil
 }
@@ -177,11 +175,15 @@ func (h *Target) logEntry(entry interface{}) {
 func (h *Target) startHTTPLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
+	h.wg.Add(1)
 	go func() {
-		h.wg.Add(1)
 		defer h.wg.Done()
-		for entry := range h.logCh {
+
+		select {
+		case entry := <-h.logCh:
 			h.logEntry(entry)
+		case <-h.doneCh:
+			return
 		}
 	}()
 }
@@ -191,6 +193,7 @@ func (h *Target) startHTTPLogger() {
 func New(config Config) *Target {
 	h := &Target{
 		logCh:  make(chan interface{}, config.QueueSize),
+		doneCh: make(chan struct{}),
 		config: config,
 	}
 
@@ -199,12 +202,14 @@ func New(config Config) *Target {
 
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}, errKind string) error {
-	if atomic.LoadInt32(&h.status) == 0 {
-		// Channel was closed or used before init.
+	select {
+	case <-h.doneCh:
 		return nil
+	default:
 	}
 
 	select {
+	case <-h.doneCh:
 	case h.logCh <- entry:
 	default:
 		// log channel is full, do not wait and return
@@ -217,9 +222,8 @@ func (h *Target) Send(entry interface{}, errKind string) error {
 
 // Cancel - cancels the target
 func (h *Target) Cancel() {
-	if atomic.CompareAndSwapInt32(&h.status, 1, 0) {
-		close(h.logCh)
-	}
+	close(h.doneCh)
+	close(h.logCh)
 	h.wg.Wait()
 }
 

@@ -414,6 +414,21 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 	return ng.Wait()
 }
 
+// SignalConfigReload reloads requested sub-system on a remote peer dynamically.
+func (sys *NotificationSys) SignalConfigReload(subSys string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.SignalService(serviceReloadDynamic, subSys)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // SignalService - calls signal service RPC call on all peers.
 func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
@@ -423,7 +438,7 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(sig)
+			return client.SignalService(sig, "")
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -1541,7 +1556,7 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(serviceSig)
+			return client.SignalService(serviceSig, "")
 		}, idx, *client.host)
 	}
 	nerrs := ng.Wait()

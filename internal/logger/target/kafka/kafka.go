@@ -25,7 +25,6 @@ import (
 	"errors"
 	"net"
 	"sync"
-	"sync/atomic"
 
 	"github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
@@ -37,8 +36,8 @@ import (
 
 // Target - Kafka target.
 type Target struct {
-	status int32
 	wg     sync.WaitGroup
+	doneCh chan struct{}
 
 	// Channel of log entries
 	logCh chan interface{}
@@ -51,6 +50,13 @@ type Target struct {
 // Send log message 'e' to kafka target.
 func (h *Target) Send(entry interface{}, errKind string) error {
 	select {
+	case <-h.doneCh:
+		return nil
+	default:
+	}
+
+	select {
+	case <-h.doneCh:
 	case h.logCh <- entry:
 	default:
 		// log channel is full, do not wait and return
@@ -86,11 +92,15 @@ func (h *Target) logEntry(entry interface{}) {
 func (h *Target) startKakfaLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
+	h.wg.Add(1)
 	go func() {
-		h.wg.Add(1)
 		defer h.wg.Done()
-		for entry := range h.logCh {
+
+		select {
+		case entry := <-h.logCh:
 			h.logEntry(entry)
+		case <-h.doneCh:
+			return
 		}
 	}()
 }
@@ -204,17 +214,14 @@ func (h *Target) Init() error {
 	}
 
 	h.producer = producer
-
-	h.status = 1
 	go h.startKakfaLogger()
 	return nil
 }
 
 // Cancel - cancels the target
 func (h *Target) Cancel() {
-	if atomic.CompareAndSwapInt32(&h.status, 1, 0) {
-		close(h.logCh)
-	}
+	close(h.doneCh)
+	close(h.logCh)
 	h.wg.Wait()
 }
 
