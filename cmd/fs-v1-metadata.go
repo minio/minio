@@ -164,6 +164,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo, blockchain
 			if err != nil {
 				return ObjectInfo{}
 			}
+			//TODO: need to put actual file size
 			objInfo.Size = s
 		} else {
 			objInfo.Size = fi.Size()

@@ -13,7 +13,7 @@ import (
 	"path"
 )
 
-func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutBunkerFileResp, err error) {
+func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
 	b := bytes.Buffer{}
 	w := multipart.NewWriter(&b)
 
@@ -56,7 +56,7 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 		return
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode >= http.StatusBadRequest {
 		b, _ := ioutil.ReadAll(res.Body)
 		fmt.Println(string(b))
 		err = fmt.Errorf("bad status: %s", res.Status)
