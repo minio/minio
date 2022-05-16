@@ -104,7 +104,7 @@ func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config,
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	globalNotificationSys.SignalService(serviceReloadDynamic)
+	globalNotificationSys.SignalConfigReload(subSys)
 	// Tell the client that dynamic config was applied.
 	w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 }

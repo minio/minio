@@ -837,7 +837,14 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 			s.writeErrorResponse(w, err)
 			return
 		}
-		if err = applyDynamicConfig(r.Context(), objAPI, srvCfg); err != nil {
+		subSys := r.Form.Get(peerRESTSubSys)
+		// Apply dynamic values.
+		if subSys == "" {
+			err = applyDynamicConfig(r.Context(), objAPI, srvCfg)
+		} else {
+			err = applyDynamicConfigForSubSys(r.Context(), objAPI, srvCfg, subSys)
+		}
+		if err != nil {
 			s.writeErrorResponse(w, err)
 		}
 		return
