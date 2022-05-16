@@ -1,6 +1,8 @@
 # OPA Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 OPA is a lightweight general-purpose policy engine that can be co-located with MinIO server, in this document we talk about how to use OPA HTTP API to authorize requests. It can be used with any type of credentials (STS based like OpenID or LDAP, regular IAM users or service accounts).
 
+OPA is enabled through MinIO's Access Management Plugin feature.
+
 ## Get started
 
 ### 1. Start OPA in a container
@@ -48,10 +50,10 @@ curl -X PUT --data-binary @example.rego \
 
 ### 4. Setup MinIO with OPA
 
-Set the `MINIO_POLICY_OPA_URL` as the endpoint that MinIO should send authorization requests to. Then start the server.
+Set the `MINIO_POLICY_PLUGIN_URL` as the endpoint that MinIO should send authorization requests to. Then start the server.
 
 ```sh
-export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz/allow
+export MINIO_POLICY_PLUGIN_URL=http://localhost:8181/v1/data/httpapi/authz/allow
 export MINIO_CI_CD=1
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123
@@ -77,6 +79,3 @@ mc cat foo/test/issue
 mc cp /etc/issue myminio/test/issue2
 ```
 
-## Explore Further
-- [MinIO STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
-- [The MinIO documentation website](https://docs.minio.io)

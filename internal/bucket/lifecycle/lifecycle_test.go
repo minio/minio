@@ -325,6 +325,14 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: DeleteAction,
 		},
+		// Should remove (Tags with encoded chars)
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Tag><Key>factory</Key><Value>true</Value></Tag><Tag><Key>store forever</Key><Value>false</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "fooobject",
+			objectTags:     "store+forever=false&factory=true",
+			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
+			expectedAction: DeleteAction,
+		},
 
 		// Should not remove (Tags don't match)
 		{
