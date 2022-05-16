@@ -49,8 +49,9 @@ func Get(r io.Reader) (bb []byte, err error) {
 
 type sdsFileInfo struct {
 	//More fields are available.
-	Size int64  `json:"size"`
-	Id   string `json:"id"`
+	Size            int64  `json:"size"`
+	UnencryptedSize int64  `json:"unencryptedSize"`
+	Id              string `json:"id"`
 }
 
 func GetFileSize(id string) (s int64, err error) {
@@ -71,8 +72,8 @@ func GetFileSize(id string) (s int64, err error) {
 		return
 	}
 
-	if fi.Size > 0 {
-		return fi.Size, nil
+	if fi.UnencryptedSize > 0 {
+		return fi.UnencryptedSize, nil
 	}
 
 	fmt.Println("cannot find file in mantle sds")
