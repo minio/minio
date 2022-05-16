@@ -73,6 +73,9 @@ import (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	// set to 'true' when testing is invoked
+	globalIsTesting = true
+
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
