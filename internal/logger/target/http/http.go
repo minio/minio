@@ -179,11 +179,13 @@ func (h *Target) startHTTPLogger() {
 	go func() {
 		defer h.wg.Done()
 
-		select {
-		case entry := <-h.logCh:
-			h.logEntry(entry)
-		case <-h.doneCh:
-			return
+		for {
+			select {
+			case entry := <-h.logCh:
+				h.logEntry(entry)
+			case <-h.doneCh:
+				return
+			}
 		}
 	}()
 }
