@@ -238,6 +238,7 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 	if err != nil {
 		c.Fatalf("unable to set policy: %v", err)
 	}
+
 	client := s.getUserClient(c, accessKey, secretKey, "")
 	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
 	if err != nil {
@@ -1188,7 +1189,7 @@ func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bu
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if !ok || v.Err == nil {
-		c.Fatalf("user was able to list unexpectedly!")
+		c.Fatalf("user was able to list unexpectedly! on %s", bucket)
 	}
 }
 
@@ -1196,8 +1197,7 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if ok && v.Err != nil {
-		msg := fmt.Sprintf("user was unable to list: %v", v.Err)
-		c.Fatalf(msg)
+		c.Fatalf("user was unable to list: %v", v.Err)
 	}
 }
 
