@@ -96,11 +96,13 @@ func (h *Target) startKakfaLogger() {
 	go func() {
 		defer h.wg.Done()
 
-		select {
-		case entry := <-h.logCh:
-			h.logEntry(entry)
-		case <-h.doneCh:
-			return
+		for {
+			select {
+			case entry := <-h.logCh:
+				h.logEntry(entry)
+			case <-h.doneCh:
+				return
+			}
 		}
 	}()
 }
@@ -230,6 +232,7 @@ func (h *Target) Cancel() {
 func New(config Config) *Target {
 	target := &Target{
 		logCh:   make(chan interface{}, 10000),
+		doneCh:  make(chan struct{}),
 		kconfig: config,
 	}
 	return target
