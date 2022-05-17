@@ -1810,11 +1810,15 @@ func (store *IAMStoreSys) ListTempAccounts(ctx context.Context, accessKey string
 
 // ListServiceAccounts - lists only service accounts from the cache.
 func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
-	cache := store.rlock()
 	defer store.runlock()
 
 	var serviceAccounts []auth.Credentials
-	for _, v := range cache.iamUsersMap {
+	tempAccounts, err := store.ListTempAccounts(ctx, accessKey)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range tempAccounts {
 		if v.IsServiceAccount() && v.ParentUser == accessKey {
 			// Hide secret key & session key here
 			v.SecretKey = ""
@@ -1822,7 +1826,9 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 			serviceAccounts = append(serviceAccounts, v)
 		}
 	}
-
+	if len(serviceAccounts) == 0 {
+		return nil, errNoSuchUser
+	}
 	return serviceAccounts, nil
 }
 
