@@ -169,19 +169,17 @@ func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
 	)
 outer:
 	for {
-		rTimer.Reset(time.Minute)
 		select {
 		case <-ctx.Done():
 			return
 		case <-rTimer.C:
 			dui, err = loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
-			if err != nil {
-				continue
-			}
 			// If LastUpdate is set, data usage is available.
-			if !dui.LastUpdate.IsZero() {
+			if err == nil && !dui.LastUpdate.IsZero() {
 				break outer
 			}
+
+			rTimer.Reset(time.Minute)
 		}
 	}
 

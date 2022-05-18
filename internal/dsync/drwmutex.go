@@ -255,8 +255,6 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 		defer refreshTimer.Stop()
 
 		for {
-			refreshTimer.Reset(dm.refreshInterval)
-
 			select {
 			case <-ctx.Done():
 				return
@@ -271,6 +269,8 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 					}
 					return
 				}
+
+				refreshTimer.Reset(dm.refreshInterval)
 			}
 		}
 	}()
