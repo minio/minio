@@ -373,11 +373,13 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 		s.writeErrorResponse(w, err)
 		return
 	}
-
-	err = s.storage.DeleteVersion(r.Context(), volume, filePath, fi, forceDelMarker)
-	if err != nil {
-		s.writeErrorResponse(w, err)
+	encoder := gob.NewEncoder(w)
+	resp := s.storage.DeleteVersion(r.Context(), volume, filePath, fi, forceDelMarker)
+	var se StorageErr
+	if resp.Err != nil {
+		se = StorageErr(resp.Err.Error())
 	}
+	logger.LogIf(GlobalContext, encoder.Encode(StorageDeleteResp{FileInfo: resp.FileInfo, NoOp: resp.NoOp, Err: se}))
 }
 
 // ReadVersion read metadata of versionID
@@ -695,7 +697,7 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	errs := s.storage.DeleteVersions(r.Context(), volume, versions)
 	done(nil)
 	for idx := range versions {
-		dErrsResp.Errs[idx] = StorageDeleteResp{Err: toStorageErr(errs[idx].Err), NoOp: errs[idx].NoOp}
+		dErrsResp.Errs[idx] = StorageDeleteResp{Err: toStorageErr(errs[idx].Err), NoOp: errs[idx].NoOp, FileInfo: errs[idx].FileInfo}
 	}
 	encoder.Encode(dErrsResp)
 }

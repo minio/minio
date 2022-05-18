@@ -1726,9 +1726,9 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 
 	// Delete version 0...
 	checkVerExist(t)
-	err = xl.DeleteVersion(ctx, volume, object, FileInfo{Name: object, Volume: volume, VersionID: versions[0]}, false)
-	if err != nil {
-		t.Fatal(err)
+	resp := xl.DeleteVersion(ctx, volume, object, FileInfo{Name: object, Volume: volume, VersionID: versions[0]}, false)
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
 	}
 	deleted[0] = true
 	checkVerExist(t)

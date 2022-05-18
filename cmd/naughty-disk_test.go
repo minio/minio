@@ -253,9 +253,9 @@ func (d *naughtyDisk) UpdateMetadata(ctx context.Context, volume, path string, f
 	return d.disk.UpdateMetadata(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
+func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err StorageDeleteResp) {
 	if err := d.calcError(); err != nil {
-		return err
+		return StorageDeleteResp{Err: err}
 	}
 	return d.disk.DeleteVersion(ctx, volume, path, fi, forceDelMarker)
 }

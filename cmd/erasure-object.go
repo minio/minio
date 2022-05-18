@@ -1133,20 +1133,27 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
+func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) StorageDeleteResp {
 	disks := er.getDisks()
-	g := errgroup.WithNErrs(len(disks))
+	var wg sync.WaitGroup
+	diskErrs := make([]StorageDeleteResp, len(disks))
 	for index := range disks {
 		index := index
-		g.Go(func() error {
-			if disks[index] == nil {
-				return errDiskNotFound
+		if disks[index] == nil {
+			diskErrs[index] = StorageDeleteResp{Err: errDiskNotFound}
+		}
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			disk := disks[index]
+			if disk == nil {
+				return
 			}
-			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
-		}, index)
+			diskErrs[index] = disk.DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
+		}(index)
 	}
-	// return errors if any during deletion
-	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
+	wg.Wait()
+	return reduceDeleteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorum)
 }
 
 // DeleteObjects deletes objects/versions in bulk, this function will still automatically split objects list
@@ -1240,7 +1247,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	}
 
 	// Initialize list of errors.
-	delObjErrs := make([][]error, len(storageDisks))
+	delObjErrs := make([][]StorageDeleteResp, len(storageDisks))
 
 	var wg sync.WaitGroup
 	// Remove versions in bulk for each disk
@@ -1248,10 +1255,10 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			delObjErrs[index] = make([]error, len(objects))
+			delObjErrs[index] = make([]StorageDeleteResp, len(objects))
 			if disk == nil {
 				for i := range objects {
-					delObjErrs[index][i] = errDiskNotFound
+					delObjErrs[index][i] = StorageDeleteResp{Err: errDiskNotFound}
 				}
 				return
 			}
@@ -1264,11 +1271,8 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 						if !v.Deleted {
 							continue
 						}
-						oi, err := er.getObjectInfo(ctx, bucket, dobjects[v.Idx].ObjectName, ObjectOptions{})
-						if err != nil && oi.DeleteMarker {
-							dobjects[v.Idx].DeleteMarkerVersionID = oi.VersionID
-							continue
-						}
+						delObjErrs[index][v.Idx] = resp
+						continue
 					}
 				}
 				if resp.Err == nil { // check if all err are nil
@@ -1281,7 +1285,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 							continue
 						}
 					}
-					delObjErrs[index][v.Idx] = resp.Err
+					delObjErrs[index][v.Idx] = resp
 				}
 			}
 		}(index, disk)
@@ -1291,12 +1295,16 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	// Reduce errors for each object
 	for objIndex := range objects {
 		diskErrs := make([]error, len(storageDisks))
+		metaArr := make([]FileInfo, len(storageDisks))
+		var idempotentDel bool
 		// Iterate over disks to fetch the error
 		// of deleting of the current object
 		for i := range delObjErrs {
 			// delObjErrs[i] is not nil when disks[i] is also not nil
-			if delObjErrs[i] != nil {
-				diskErrs[i] = delObjErrs[i][objIndex]
+			diskErrs[i] = delObjErrs[i][objIndex].Err
+			if delObjErrs[i][objIndex].NoOp {
+				metaArr[i] = delObjErrs[i][objIndex].FileInfo
+				idempotentDel = true
 			}
 		}
 		err := reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
@@ -1304,6 +1312,19 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName, objects[objIndex].VersionID)
 		} else {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName)
+			if idempotentDel {
+				// List all online disks.
+				if readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, diskErrs, er.defaultParityCount); err == nil {
+					_, modTime := listOnlineDisks(storageDisks, metaArr, diskErrs)
+					// Pick latest valid metadata.
+					fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+					if err == nil && fi.Deleted {
+						dobjects[objIndex].DeleteMarkerVersionID = fi.VersionID
+					} else { // should never happen
+						logger.LogIf(ctx, err)
+					}
+				}
+			}
 		}
 
 		defer NSUpdated(bucket, objects[objIndex].ObjectName)
@@ -1510,14 +1531,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			// delete marker. Add delete marker, since we don't have
 			// any version specified explicitly. Or if a particular
 			// version id needs to be replicated.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
-				// soft deletes are idempotent. Return the topmost delete marker in stack if delete marker already set
-				if !errors.As(err, &errDeleteNoOp) {
-					return objInfo, toObjectErr(err, bucket, object)
+			if resp := er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); resp.Err != nil {
+				if !errors.As(resp.Err, &errDeleteNoOp) {
+					return objInfo, toObjectErr(resp.Err, bucket, object)
 				}
-				oi, err := er.getObjectInfo(ctx, bucket, object, ObjectOptions{})
-				if err != nil && oi.DeleteMarker {
-					fi.VersionID = oi.VersionID
+				if resp.Deleted && resp.NoOp {
+					fi.VersionID = resp.VersionID
 				}
 			}
 			return fi.ToObjectInfo(bucket, object), nil
@@ -1535,8 +1554,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
-		return objInfo, toObjectErr(err, bucket, object)
+	if resp := er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); resp.Err != nil {
+		return objInfo, toObjectErr(resp.Err, bucket, object)
 	}
 
 	for _, disk := range storageDisks {
@@ -1830,7 +1849,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		writeQuorum++
 	}
 
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+	if resp := er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); resp.Err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 

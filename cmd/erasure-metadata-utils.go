@@ -89,6 +89,22 @@ func reduceWriteQuorumErrs(ctx context.Context, errs []error, ignoredErrs []erro
 	return reduceQuorumErrs(ctx, errs, ignoredErrs, writeQuorum, errErasureWriteQuorum)
 }
 
+// reduceDeleteQuorumErrs behaves like reduceErrs but only for returning
+// values of maximally occurring StorageDeleteResp errors validated against writeQuorum.
+func reduceDeleteQuorumErrs(ctx context.Context, resps []StorageDeleteResp, ignoredErrs []error, writeQuorum int) (maxErr StorageDeleteResp) {
+	errs := make([]error, len(resps))
+	for i, resp := range resps {
+		errs[i] = resp.Err
+	}
+	err := reduceQuorumErrs(ctx, errs, ignoredErrs, writeQuorum, errErasureWriteQuorum)
+	for _, resp := range resps {
+		if errors.As(err, &resp.Err) {
+			return resp
+		}
+	}
+	return StorageDeleteResp{Err: err}
+}
+
 // Similar to 'len(slice)' but returns the actual elements count
 // skipping the unallocated elements.
 func diskCount(disks []StorageAPI) int {

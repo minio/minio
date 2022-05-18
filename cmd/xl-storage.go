@@ -855,6 +855,7 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 
 // StorageDeleteResp holds the response for storage delete operation
 type StorageDeleteResp struct {
+	FileInfo
 	Err  error
 	NoOp bool // true if delete marker already present and a soft delete is performed.
 }
@@ -907,7 +908,11 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 				continue
 			}
 			if errors.As(err, &errDeleteNoOp) {
-				derr.NoOp = true
+				ofi, ferr := xlMeta.ToFileInfo(volumeDir, path, "")
+				if ferr == nil {
+					derr.FileInfo = ofi
+					derr.NoOp = true
+				}
 				continue
 			}
 			derr.Err = err
@@ -980,7 +985,6 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 			diskHealthCheckOK(ctx, err.Err)
 		}
 	}
-
 	return errs
 }
 
@@ -994,58 +998,68 @@ func (s *xlStorage) moveToTrash(filePath string, recursive bool) error {
 
 // DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. forceDelMarker
 // will force creating a new `xl.meta` to create a new delete marker
-func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
+func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (resp StorageDeleteResp) {
 	if HasSuffix(path, SlashSeparator) {
-		return s.Delete(ctx, volume, path, false)
+		err := s.Delete(ctx, volume, path, false)
+		return StorageDeleteResp{Err: err}
 	}
 
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err != errFileNotFound {
-			return err
+			return StorageDeleteResp{Err: err}
 		}
 		metaDataPoolPut(buf) // Never used, return it
 		if fi.Deleted && forceDelMarker {
 			// Create a new xl.meta with a delete marker in it
-			return s.WriteMetadata(ctx, volume, path, fi)
+			err := s.WriteMetadata(ctx, volume, path, fi)
+			return StorageDeleteResp{Err: err}
 		}
 
 		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
 		if err != nil {
 			if err == errFileNotFound && fi.VersionID != "" {
-				return errFileVersionNotFound
+				return StorageDeleteResp{Err: errFileVersionNotFound}
 			}
-			return err
+			return StorageDeleteResp{Err: err}
 		}
 	}
 
 	if len(buf) == 0 {
 		if fi.VersionID != "" {
-			return errFileVersionNotFound
+			return StorageDeleteResp{Err: errFileVersionNotFound}
 		}
-		return errFileNotFound
+		return StorageDeleteResp{Err: errFileNotFound}
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return err
+		return StorageDeleteResp{Err: err}
 	}
 
 	if !isXL2V1Format(buf) {
 		// Delete the meta file, if there are no more versions the
 		// top level parent is automatically removed.
-		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
+		err := s.deleteFile(volumeDir, pathJoin(volumeDir, path), true)
+		return StorageDeleteResp{Err: err}
 	}
 
 	var xlMeta xlMetaV2
 	if err := xlMeta.Load(buf); err != nil {
-		return err
+		return StorageDeleteResp{Err: err}
 	}
 
 	dataDir, err := xlMeta.DeleteVersion(fi)
 	if err != nil {
-		return err
+		if errors.As(err, &errDeleteNoOp) {
+			ofi, ferr := xlMeta.ToFileInfo(volumeDir, path, "")
+			if ferr == nil {
+				return StorageDeleteResp{Err: err, FileInfo: ofi, NoOp: true}
+			}
+		}
+		return StorageDeleteResp{Err: err}
 	}
+
 	if dataDir != "" {
 		versionID := fi.VersionID
 		if versionID == "" {
@@ -1062,11 +1076,11 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		// where we potentially leave "DataDir"
 		filePath := pathJoin(volumeDir, path, dataDir)
 		if err = checkPathLength(filePath); err != nil {
-			return err
+			return StorageDeleteResp{Err: err}
 		}
 		if err = s.moveToTrash(filePath, true); err != nil {
 			if err != errFileNotFound {
-				return err
+				return StorageDeleteResp{Err: err}
 			}
 		}
 	}
@@ -1075,23 +1089,24 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
-			return err
+			return StorageDeleteResp{Err: err}
 		}
 
-		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+		err := s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+		return StorageDeleteResp{Err: err}
 	}
 
 	// Move xl.meta to trash
 	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
 	if err = checkPathLength(filePath); err != nil {
-		return err
+		return StorageDeleteResp{Err: err}
 	}
 
 	err = s.moveToTrash(filePath, false)
 	if err == nil || err == errFileNotFound {
 		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false)
 	}
-	return err
+	return StorageDeleteResp{Err: err}
 }
 
 // Updates only metadata for a given version.

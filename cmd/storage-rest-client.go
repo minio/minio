@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/http"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -418,7 +419,7 @@ func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, pat
 	return err
 }
 
-func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
+func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (resp StorageDeleteResp) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -426,12 +427,28 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 
 	var buffer bytes.Buffer
 	if err := msgp.Encode(&buffer, &fi); err != nil {
-		return err
+		resp.Err = err
+		return
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteVersion, values, &buffer, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	defer http.DrainBody(respBody)
+	if err != nil {
+		if contextCanceled(ctx) {
+			err = ctx.Err()
+		}
+		resp.Err = err
+		return
+	}
+	if err = gob.NewDecoder(respBody).Decode(&resp); err != nil {
+		return StorageDeleteResp{Err: err}
+	}
+
+	var se error
+	if resp.Err != nil {
+		se = toStorageErr(resp.Err)
+	}
+	return StorageDeleteResp{Err: se, NoOp: resp.NoOp, FileInfo: resp.FileInfo}
 }
 
 // WriteAll - write all data to a file.
@@ -658,7 +675,11 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 		return errs
 	}
 	for i, err := range dErrResp.Errs {
-		errs[i] = StorageDeleteResp{Err: toStorageErr(err.Err), NoOp: err.NoOp}
+		var se error
+		if err.Err != nil {
+			se = toStorageErr(err.Err)
+		}
+		errs[i] = StorageDeleteResp{Err: se, NoOp: err.NoOp, FileInfo: err.FileInfo}
 	}
 	return errs
 }
