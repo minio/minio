@@ -312,12 +312,14 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	switch {
 	case globalOpenIDConfig.ProviderEnabled():
 		go func() {
-			ticker := time.NewTicker(sys.iamRefreshInterval)
-			defer ticker.Stop()
+			timer := time.NewTimer(sys.iamRefreshInterval)
+			defer timer.Stop()
 			for {
 				select {
-				case <-ticker.C:
+				case <-timer.C:
 					sys.purgeExpiredCredentialsForExternalSSO(ctx)
+
+					timer.Reset(sys.iamRefreshInterval)
 				case <-ctx.Done():
 					return
 				}
@@ -325,13 +327,16 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		}()
 	case globalLDAPConfig.Enabled:
 		go func() {
-			ticker := time.NewTicker(sys.iamRefreshInterval)
-			defer ticker.Stop()
+			timer := time.NewTimer(sys.iamRefreshInterval)
+			defer timer.Stop()
+
 			for {
 				select {
-				case <-ticker.C:
+				case <-timer.C:
 					sys.purgeExpiredCredentialsForLDAP(ctx)
 					sys.updateGroupMembershipsForLDAP(ctx)
+
+					timer.Reset(sys.iamRefreshInterval)
 				case <-ctx.Done():
 					return
 				}
@@ -403,12 +408,12 @@ func (sys *IAMSys) watch(ctx context.Context) {
 
 	var maxRefreshDurationSecondsForLog float64 = 10
 
-	// Fall back to loading all items periodically
-	ticker := time.NewTicker(sys.iamRefreshInterval)
-	defer ticker.Stop()
+	// Load all items periodically
+	timer := time.NewTimer(sys.iamRefreshInterval)
+	defer timer.Stop()
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			refreshStart := time.Now()
 			if err := sys.Load(ctx); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
@@ -420,6 +425,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 				}
 			}
 
+			timer.Reset(sys.iamRefreshInterval)
 		case <-ctx.Done():
 			return
 		}

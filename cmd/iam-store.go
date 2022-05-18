@@ -244,6 +244,8 @@ type iamWatchEvent struct {
 
 // iamCache contains in-memory cache of IAM data.
 type iamCache struct {
+	updatedAt time.Time
+
 	// map of policy names to policy definitions
 	iamPolicyDocsMap map[string]PolicyDoc
 	// map of usernames to credentials
@@ -432,8 +434,7 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	newCache := newIamCache()
 
-	cache := store.lock()
-	defer store.unlock()
+	loadedAt := time.Now()
 
 	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
 		err := iamOS.loadAllFromObjStore(ctx, newCache)
@@ -486,12 +487,28 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 		newCache.buildUserGroupMemberships()
 	}
 
-	cache.iamGroupPolicyMap = newCache.iamGroupPolicyMap
-	cache.iamGroupsMap = newCache.iamGroupsMap
-	cache.iamPolicyDocsMap = newCache.iamPolicyDocsMap
-	cache.iamUserGroupMemberships = newCache.iamUserGroupMemberships
-	cache.iamUserPolicyMap = newCache.iamUserPolicyMap
-	cache.iamUsersMap = newCache.iamUsersMap
+	cache := store.lock()
+	defer store.unlock()
+
+	// We should only update the in-memory cache if there were no changes
+	// to the in-memory cache since the disk loading began. If there
+	// were changes to the in-memory cache we should wait for the next
+	// cycle until we can safely update the in-memory cache.
+	//
+	// An in-memory cache must be replaced only if we know for sure that
+	// the values loaded from disk are not stale. They might be stale
+	// if the cached.updatedAt is recent than the refresh cycle began.
+	if cache.updatedAt.Before(loadedAt) {
+		// No one has updated anything since the config was loaded,
+		// so we just replace whatever is on the disk into memory.
+		cache.iamGroupPolicyMap = newCache.iamGroupPolicyMap
+		cache.iamGroupsMap = newCache.iamGroupsMap
+		cache.iamPolicyDocsMap = newCache.iamPolicyDocsMap
+		cache.iamUserGroupMemberships = newCache.iamUserGroupMemberships
+		cache.iamUserPolicyMap = newCache.iamUserPolicyMap
+		cache.iamUsersMap = newCache.iamUsersMap
+		cache.updatedAt = time.Now()
+	}
 
 	return nil
 }
@@ -548,6 +565,8 @@ func (store *IAMStoreSys) GroupNotificationHandler(ctx context.Context, group st
 		cache.removeGroupFromMembershipsMap(group)
 		delete(cache.iamGroupsMap, group)
 		delete(cache.iamGroupPolicyMap, group)
+
+		cache.updatedAt = time.Now()
 		return nil
 	}
 
@@ -562,6 +581,7 @@ func (store *IAMStoreSys) GroupNotificationHandler(ctx context.Context, group st
 	// removed, the cache stays current.
 	cache.removeGroupFromMembershipsMap(group)
 	cache.updateGroupMembershipsMap(group, &gi)
+	cache.updatedAt = time.Now()
 	return nil
 }
 
@@ -639,6 +659,8 @@ func (store *IAMStoreSys) AddUsersToGroup(ctx context.Context, group string, mem
 		cache.iamUserGroupMemberships[member] = gset
 	}
 
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -672,6 +694,7 @@ func removeMembersFromGroup(ctx context.Context, store *IAMStoreSys, cache *iamC
 		cache.iamUserGroupMemberships[member] = gset
 	}
 
+	cache.updatedAt = time.Now()
 	return nil
 }
 
@@ -720,6 +743,7 @@ func (store *IAMStoreSys) RemoveUsersFromGroup(ctx context.Context, group string
 		// Delete from server memory
 		delete(cache.iamGroupsMap, group)
 		delete(cache.iamGroupPolicyMap, group)
+		cache.updatedAt = time.Now()
 		return nil
 	}
 
@@ -749,7 +773,10 @@ func (store *IAMStoreSys) SetGroupStatus(ctx context.Context, group string, enab
 	if err := store.saveGroupInfo(ctx, group, gi); err != nil {
 		return err
 	}
+
 	cache.iamGroupsMap[group] = gi
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -800,7 +827,7 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 			return
 		}
 		cache.iamGroupsMap = m
-
+		cache.updatedAt = time.Now()
 		for k := range cache.iamGroupsMap {
 			res = append(res, k)
 		}
@@ -813,6 +840,7 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 			return
 		}
 		cache.iamGroupPolicyMap = m
+		cache.updatedAt = time.Now()
 		for k := range cache.iamGroupPolicyMap {
 			res = append(res, k)
 		}
@@ -861,6 +889,8 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 		} else {
 			delete(cache.iamGroupPolicyMap, name)
 		}
+		cache.updatedAt = time.Now()
+
 		return nil
 	}
 
@@ -881,6 +911,7 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 	} else {
 		cache.iamGroupPolicyMap[name] = mp
 	}
+	cache.updatedAt = time.Now()
 	return nil
 }
 
@@ -930,6 +961,7 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 			cache.iamGroupPolicyMap[g] = newMappedPolicy(strings.Join(pset.ToSlice(), ","))
 		}
 
+		cache.updatedAt = time.Now()
 		return nil
 	}
 	return err
@@ -987,6 +1019,8 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 	}
 
 	delete(cache.iamPolicyDocsMap, policy)
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -1057,6 +1091,8 @@ func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iam
 	}
 
 	cache.iamPolicyDocsMap[name] = d
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -1076,6 +1112,7 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 	setDefaultCannedPolicies(m)
 
 	cache.iamPolicyDocsMap = m
+	cache.updatedAt = time.Now()
 
 	ret := map[string]iampolicy.Policy{}
 	for k, v := range m {
@@ -1103,6 +1140,7 @@ func (store *IAMStoreSys) ListPolicyDocs(ctx context.Context, bucketName string)
 	setDefaultCannedPolicies(m)
 
 	cache.iamPolicyDocsMap = m
+	cache.updatedAt = time.Now()
 
 	ret := map[string]PolicyDoc{}
 	for k, v := range m {
@@ -1299,6 +1337,8 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 		// This means that the policy mapping was deleted, so we update
 		// the cache.
 		delete(m, userOrGroup)
+		cache.updatedAt = time.Now()
+
 		err = nil
 	}
 	return err
@@ -1347,11 +1387,15 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 
 		// 3. Delete any mapped policy
 		delete(cache.iamUserPolicyMap, accessKey)
+
+		cache.updatedAt = time.Now()
 		return nil
 	}
+
 	if err != nil {
 		return err
 	}
+
 	if userType != svcUser {
 		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
 		// Ignore policy not mapped error
@@ -1373,6 +1417,7 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		if cred.IsTemp() && cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
 			if _, ok := cache.iamUserPolicyMap[cred.ParentUser]; !ok {
 				cache.iamUserPolicyMap[cred.ParentUser] = cache.iamUserPolicyMap[accessKey]
+				cache.updatedAt = time.Now()
 			}
 		}
 	}
@@ -1430,6 +1475,8 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 	}
 	delete(cache.iamUsersMap, accessKey)
 
+	cache.updatedAt = time.Now()
+
 	return err
 }
 
@@ -1469,6 +1516,9 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 	}
 
 	cache.iamUsersMap[accessKey] = cred
+
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -1479,6 +1529,7 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	cache := store.lock()
 	defer store.unlock()
 
+	var deleted bool
 	usersToDelete := set.CreateStringSet(users...)
 	for user, cred := range cache.iamUsersMap {
 		userType := regUser
@@ -1497,7 +1548,13 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 			err := store.deleteUserIdentity(ctx, user, userType)
 			logger.LogIf(GlobalContext, err)
 			delete(cache.iamUsersMap, user)
+
+			deleted = true
 		}
+	}
+
+	if deleted {
+		cache.updatedAt = time.Now()
 	}
 
 	return nil
@@ -1610,6 +1667,8 @@ func (store *IAMStoreSys) SetUserStatus(ctx context.Context, accessKey string, s
 	}
 
 	cache.iamUsersMap[accessKey] = uinfo.Credentials
+	cache.updatedAt = time.Now()
+
 	return nil
 }
 
@@ -1643,6 +1702,7 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 	}
 
 	cache.iamUsersMap[u.Credentials.AccessKey] = u.Credentials
+	cache.updatedAt = time.Now()
 
 	return nil
 }
@@ -1725,6 +1785,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 	}
 
 	cache.iamUsersMap[u.Credentials.AccessKey] = u.Credentials
+	cache.updatedAt = time.Now()
 
 	return nil
 }
@@ -1770,6 +1831,8 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 	cache := store.lock()
 	defer store.unlock()
 
+	cache.updatedAt = time.Now()
+
 	cr, ok := cache.iamUsersMap[accessKey]
 
 	// It is not possible to update an STS account.
@@ -1802,6 +1865,8 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 func (store *IAMStoreSys) UpdateUserSecretKey(ctx context.Context, accessKey, secretKey string) error {
 	cache := store.lock()
 	defer store.unlock()
+
+	cache.updatedAt = time.Now()
 
 	cred, ok := cache.iamUsersMap[accessKey]
 	if !ok {
@@ -1837,6 +1902,8 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 	cache := store.lock()
 	defer store.unlock()
 
+	cache.updatedAt = time.Now()
+
 	userType := regUser
 	if cred.IsServiceAccount() {
 		userType = svcUser
@@ -1857,6 +1924,8 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 	cache := store.lock()
 	defer store.unlock()
+
+	cache.updatedAt = time.Now()
 
 	_, found := cache.iamUsersMap[accessKey]
 	if !found {

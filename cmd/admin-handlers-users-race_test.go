@@ -26,6 +26,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +42,10 @@ func runAllIAMConcurrencyTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPConcurrencyServerSuite(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip("windows is clunky")
+	}
+
 	baseTestCases := []TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
 		{serverType: "FS", signer: signerV4},
