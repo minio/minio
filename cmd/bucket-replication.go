@@ -1926,7 +1926,6 @@ func (p *ReplicationPool) periodicResyncMetaSave(ctx context.Context, objectAPI 
 	for {
 		select {
 		case <-resyncTimer.C:
-			resyncTimer.Reset(resyncTimeInterval)
 			now := UTCNow()
 			p.resyncState.RLock()
 			for bucket, brs := range p.resyncState.statusMap {
@@ -1947,6 +1946,8 @@ func (p *ReplicationPool) periodicResyncMetaSave(ctx context.Context, objectAPI 
 				}
 			}
 			p.resyncState.RUnlock()
+
+			resyncTimer.Reset(resyncTimeInterval)
 		case <-ctx.Done():
 			// server could be restarting - need
 			// to exit immediately

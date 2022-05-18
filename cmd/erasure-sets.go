@@ -301,14 +301,14 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 		case <-ctx.Done():
 			return
 		case <-monitor.C:
-			// Reset the timer once fired for required interval.
-			monitor.Reset(monitorInterval)
-
 			if serverDebugLog {
 				console.Debugln("running disk monitoring")
 			}
 
 			s.connectDisks()
+
+			// Reset the timer for next interval
+			monitor.Reset(monitorInterval)
 		}
 	}
 }
@@ -504,9 +504,6 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			// Reset for the next interval
-			timer.Reset(globalAPIConfig.getDeleteCleanupInterval())
-
 			var wg sync.WaitGroup
 			for _, set := range s.sets {
 				wg.Add(1)
@@ -519,6 +516,9 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
 				}(set)
 			}
 			wg.Wait()
+
+			// Reset for the next interval
+			timer.Reset(globalAPIConfig.getDeleteCleanupInterval())
 		}
 	}
 }
@@ -532,9 +532,6 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			// Reset for the next interval
-			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
-
 			var wg sync.WaitGroup
 			for _, set := range s.sets {
 				wg.Add(1)
@@ -547,6 +544,9 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 				}(set)
 			}
 			wg.Wait()
+
+			// Reset for the next interval
+			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
 		}
 	}
 }

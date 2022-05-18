@@ -312,9 +312,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 		case <-ctx.Done():
 			return
 		case <-diskCheckTimer.C:
-			// Reset to next interval.
-			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
-
 			var erasureSetInPoolDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDiskEndpoints()
@@ -448,6 +445,9 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 				}
 			}
 			wg.Wait()
+
+			// Reset for next interval.
+			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
 		}
 	}
 }

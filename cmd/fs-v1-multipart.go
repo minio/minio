@@ -887,8 +887,6 @@ func (fs *FSObjects) cleanupStaleUploads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-bgAppendTmpCleaner.C:
-			bgAppendTmpCleaner.Reset(bgAppendsCleanupInterval)
-
 			foundUploadIDs := fs.getAllUploadIDs(ctx)
 
 			// Remove background append map from the memory
@@ -915,10 +913,8 @@ func (fs *FSObjects) cleanupStaleUploads(ctx context.Context) {
 				}
 			}
 
+			bgAppendTmpCleaner.Reset(bgAppendsCleanupInterval)
 		case <-expiryUploadsTimer.C:
-			// Reset for the next interval
-			expiryUploadsTimer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
-
 			expiry := globalAPIConfig.getStaleUploadsExpiry()
 			now := time.Now()
 
@@ -944,6 +940,9 @@ func (fs *FSObjects) cleanupStaleUploads(ctx context.Context) {
 					fs.appendFileMapMu.Unlock()
 				}
 			}
+
+			// Reset for the next interval
+			expiryUploadsTimer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
 		}
 	}
 }

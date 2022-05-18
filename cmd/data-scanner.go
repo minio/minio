@@ -197,9 +197,6 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-scannerTimer.C:
-			// Reset the timer for next cycle.
-			scannerTimer.Reset(scannerCycle.Get())
-
 			if intDataUpdateTracker.debug {
 				console.Debugln("starting scanner cycle")
 			}
@@ -232,6 +229,9 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 					logger.LogIf(ctx, err)
 				}
 			}
+
+			// Reset the timer for next cycle.
+			scannerTimer.Reset(scannerCycle.Get())
 		}
 	}
 }
