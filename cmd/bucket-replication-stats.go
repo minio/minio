@@ -161,7 +161,7 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 
 // load replication metrics at cluster start from initial data usage
 func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
-	rTimer := time.NewTimer(time.Minute * 1)
+	rTimer := time.NewTimer(time.Minute)
 	defer rTimer.Stop()
 	var (
 		dui DataUsageInfo
@@ -169,6 +169,7 @@ func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
 	)
 outer:
 	for {
+		rTimer.Reset(time.Minute)
 		select {
 		case <-ctx.Done():
 			return

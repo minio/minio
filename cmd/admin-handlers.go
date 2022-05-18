@@ -654,12 +654,10 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	globalProfilerMu.Unlock()
 
 	timer := time.NewTimer(duration)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
 			for k, v := range globalProfiler {
 				v.Stop()
 				delete(globalProfiler, k)

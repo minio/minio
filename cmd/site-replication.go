@@ -3330,10 +3330,10 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 	defer healTimer.Stop()
 
 	for {
+		healTimer.Reset(siteHealTimeInterval)
+
 		select {
 		case <-healTimer.C:
-			healTimer.Reset(siteHealTimeInterval)
-
 			c.RLock()
 			enabled := c.enabled
 			c.RUnlock()
