@@ -170,6 +170,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// Set Group Status
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetGroupStatus))).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
 
+		// Export IAM info to zipped file
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-iam").HandlerFunc(gz(httpTraceHdrs(adminAPI.ExportIAM)))
+
+		// Import IAM info
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(gz(httpTraceHdrs(adminAPI.ImportIAM)))
+
 		// GetBucketQuotaConfig
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler))).Queries("bucket", "{bucket:.*}")
