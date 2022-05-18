@@ -190,12 +190,12 @@ func (m *mrfState) healRoutine() {
 	}
 
 	for {
-		idler.Reset(mrfInfoResetInterval)
 		select {
 		case <-m.ctx.Done():
 			return
 		case <-idler.C:
 			m.resetMRFInfoIfNoPendingOps()
+			idler.Reset(mrfInfoResetInterval)
 		case setInfo := <-m.setReconnectEvent:
 			// Get the list of objects related the er.set
 			// to which the connected disk belongs.
