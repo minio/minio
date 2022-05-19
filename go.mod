@@ -43,13 +43,13 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.16.3
+	github.com/minio/console v0.17.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.3.6
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
 	github.com/minio/madmin-go v1.3.14
-	github.com/minio/minio-go/v7 v7.0.24
+	github.com/minio/minio-go/v7 v7.0.26
 	github.com/minio/pkg v1.1.23
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
@@ -165,7 +165,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/minio/colorjson v1.0.2 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220419155441-cc4ff3a0cc82 // indirect
+	github.com/minio/mc v0.0.0-20220512134321-aa60a8db1e4d // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -184,7 +184,8 @@ require (
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
-	github.com/prometheus/common v0.32.1 // indirect
+	github.com/prometheus/common v0.33.0 // indirect
+	github.com/prometheus/prom2json v1.3.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rivo/tview v0.0.0-20220216162559-96063d6082f3 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect

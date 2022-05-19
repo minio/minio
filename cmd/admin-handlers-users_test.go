@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,9 @@ func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToke
 }
 
 func TestIAMInternalIDPServerSuite(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip("windows is clunky disable these tests")
+	}
 	for i, testCase := range iamTestSuites {
 		t.Run(
 			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),

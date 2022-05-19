@@ -3330,19 +3330,17 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 	defer healTimer.Stop()
 
 	for {
-		healTimer.Reset(siteHealTimeInterval)
-
 		select {
 		case <-healTimer.C:
 			c.RLock()
 			enabled := c.enabled
 			c.RUnlock()
-			if !enabled {
-				continue
+			if enabled {
+				c.healIAMSystem(ctx, objAPI) // heal IAM system first
+				c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 			}
+			healTimer.Reset(siteHealTimeInterval)
 
-			c.healIAMSystem(ctx, objAPI) // heal IAM system first
-			c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 		case <-ctx.Done():
 			return
 		}
