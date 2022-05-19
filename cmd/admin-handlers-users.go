@@ -677,29 +677,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Call hook for cluster-replication if the service account is not for a
-	// root user.
-	if newCred.ParentUser != globalActiveCred.AccessKey {
-		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSvcAcc,
-			SvcAccChange: &madmin.SRSvcAccChange{
-				Create: &madmin.SRSvcAccCreate{
-					Parent:        newCred.ParentUser,
-					AccessKey:     newCred.AccessKey,
-					SecretKey:     newCred.SecretKey,
-					Groups:        newCred.Groups,
-					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
-					Status:        auth.AccountOn,
-				},
-			},
-		})
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-	}
-
 	createResp := madmin.AddServiceAccountResp{
 		Credentials: madmin.Credentials{
 			AccessKey: newCred.AccessKey,
@@ -720,6 +697,29 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeSuccessResponseJSON(w, encryptedData)
+
+	// Call hook for cluster-replication if the service account is not for a
+	// root user.
+	if newCred.ParentUser != globalActiveCred.AccessKey {
+		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemSvcAcc,
+			SvcAccChange: &madmin.SRSvcAccChange{
+				Create: &madmin.SRSvcAccCreate{
+					Parent:        newCred.ParentUser,
+					AccessKey:     newCred.AccessKey,
+					SecretKey:     newCred.SecretKey,
+					Groups:        newCred.Groups,
+					Claims:        opts.claims,
+					SessionPolicy: createReq.Policy,
+					Status:        auth.AccountOn,
+				},
+			},
+		})
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return
+		}
+	}
 }
 
 // UpdateServiceAccount - POST /minio/admin/v3/update-service-account
