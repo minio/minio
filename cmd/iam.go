@@ -1543,54 +1543,10 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	return combinedPolicy.IsAllowed(parentArgs) && subPolicy.IsAllowed(parentArgs)
 }
 
-// IsAllowedLDAPSTS - checks for LDAP specific claims and values
-func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool {
-	// parentUser value must match the ldap user in the claim.
-	if parentInClaimIface, ok := args.Claims[ldapUser]; !ok {
-		// no ldapUser claim present reject it.
-		return false
-	} else if parentInClaim, ok := parentInClaimIface.(string); !ok {
-		// not the right type, reject it.
-		return false
-	} else if parentInClaim != parentUser {
-		// ldap claim has been modified maliciously reject it.
-		return false
-	}
-
-	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
-	if err != nil {
-		return false
-	}
-
-	if len(ldapPolicies) == 0 {
-		return false
-	}
-
-	// Policies were found, evaluate all of them.
-	availablePoliciesStr, combinedPolicy := sys.store.FilterPolicies(strings.Join(ldapPolicies, ","), "")
-	if availablePoliciesStr == "" {
-		return false
-	}
-
-	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
-	if hasSessionPolicy {
-		return isAllowedSP && combinedPolicy.IsAllowed(args)
-	}
-
-	return combinedPolicy.IsAllowed(args)
-}
-
 // IsAllowedSTS is meant for STS based temporary credentials,
 // which implements claims validation and verification other than
 // applying policies.
 func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
-	// If it is an LDAP request, check that user and group
-	// policies allow the request.
-	if sys.usersSysType == LDAPUsersSysType {
-		return sys.IsAllowedLDAPSTS(args, parentUser)
-	}
-
 	var policies []string
 	roleArn := args.GetRoleArn()
 	if roleArn != "" {
@@ -1623,6 +1579,11 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			}
 			policies = policySet.ToSlice()
 		}
+	}
+
+	// Defensive code: Do not allow any operation if no policy is found in the session token
+	if len(policies) == 0 {
+		return false
 	}
 
 	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
