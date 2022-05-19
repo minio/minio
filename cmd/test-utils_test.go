@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -46,6 +47,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -2322,4 +2324,36 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 		apiRouter.ServeHTTP(rec, reqC)
 		checkRespErr(rec, http.StatusOK)
 	}
+}
+
+// unzip a file into a specific target dir - used to unzip sample data in cmd/testdata/
+func unzipArchive(zipFilePath, targetDir string) error {
+	zipReader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		return err
+	}
+	for _, file := range zipReader.Reader.File {
+		zippedFile, err := file.Open()
+		if err != nil {
+			return err
+		}
+		err = func() (err error) {
+			defer zippedFile.Close()
+			extractedFilePath := filepath.Join(targetDir, file.Name)
+			if file.FileInfo().IsDir() {
+				return os.MkdirAll(extractedFilePath, file.Mode())
+			}
+			outputFile, err := os.OpenFile(extractedFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+			if err != nil {
+				return err
+			}
+			defer outputFile.Close()
+			_, err = io.Copy(outputFile, zippedFile)
+			return err
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
