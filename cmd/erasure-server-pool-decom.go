@@ -699,6 +699,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						ObjectOptions{
 							VersionID: version.VersionID,
 						})
+					if isErrObjectNotFound(err) {
+						// object deleted by the application, nothing to do here we move on.
+						return
+					}
 					if err != nil {
 						failure = true
 						logger.LogIf(ctx, err)
@@ -725,7 +729,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			if decommissionedCount == len(fivs.Versions) {
 				_, err := set.DeleteObject(ctx,
 					bName,
-					entry.name,
+					encodeDirObject(entry.name),
 					ObjectOptions{
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
