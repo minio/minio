@@ -218,21 +218,19 @@ func (m *mrfState) healRoutine() {
 
 			// Heal objects
 			for _, u := range mrfOperations {
-				if _, err := m.objectAPI.HealObject(m.ctx, u.bucket, u.object, u.versionID, mrfHealingOpts); err != nil {
-					// If not deleted, assume they failed.
-					logger.LogIf(m.ctx, err)
-				} else {
-					m.mu.Lock()
-					m.itemsHealed++
-					m.pendingItems--
-					m.bytesHealed += uint64(u.size)
-					m.pendingBytes -= uint64(u.size)
-					m.mu.Unlock()
-				}
-
+				_, err := m.objectAPI.HealObject(m.ctx, u.bucket, u.object, u.versionID, mrfHealingOpts)
 				m.mu.Lock()
+				if err == nil {
+					m.itemsHealed++
+					m.bytesHealed += uint64(u.size)
+				}
+				m.pendingItems--
+				m.pendingBytes -= uint64(u.size)
 				delete(m.pendingOps, u)
 				m.mu.Unlock()
+
+				// Log healing error if any
+				logger.LogIf(m.ctx, err)
 			}
 
 			waitForLowHTTPReq()
