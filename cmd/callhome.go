@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/minio/madmin-go"
@@ -45,16 +46,36 @@ type CallhomeInfo struct {
 }
 
 var (
-	enableCallhome            = false
+	enableCallhome            = &safeBool{b: false}
 	callhomeLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	callhomeFreq              = &safeDuration{t: CallhomeCycleDefault}
 )
 
+type safeBool struct {
+	sync.Mutex
+	b bool
+}
+
+func (s *safeBool) Update(b bool) {
+	s.Lock()
+	defer s.Unlock()
+	s.b = b
+}
+
+func (s *safeBool) Get() bool {
+	s.Lock()
+	defer s.Unlock()
+	return s.b
+}
+
 func updateCallhomeParams(ctx context.Context, objAPI ObjectLayer) {
-	alreadyEnabled := enableCallhome
-	enableCallhome = globalCallhomeConfig.Enable
+	alreadyEnabled := enableCallhome.Get()
+	enableCallhome.Update(globalCallhomeConfig.Enable)
 	callhomeFreq.Update(globalCallhomeConfig.Frequency)
-	if !alreadyEnabled && enableCallhome {
+
+	// If callhome was disabled earlier and has now been enabled,
+	// initialize the callhome process again.
+	if !alreadyEnabled && enableCallhome.Get() {
 		initCallhome(ctx, objAPI)
 	}
 }
@@ -69,7 +90,7 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 		// because of this loop.
 		for {
 			runCallhome(ctx, objAPI)
-			if !enableCallhome {
+			if !enableCallhome.Get() {
 				return
 			}
 
@@ -82,23 +103,23 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 			}
 			time.Sleep(duration)
 
-			if !enableCallhome {
+			if !enableCallhome.Get() {
 				return
 			}
 		}
 	}()
 }
 
-func runCallhome(pctx context.Context, objAPI ObjectLayer) {
+func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 callhome is running on the cluster.
 	locker := objAPI.NewNSLock(minioMetaBucket, "callhome/runCallhome.lock")
-	lkctx, err := locker.GetLock(pctx, callhomeLeaderLockTimeout)
+	lkctx, err := locker.GetLock(ctx, callhomeLeaderLockTimeout)
 	if err != nil {
 		return
 	}
 	defer locker.Unlock(lkctx.cancel)
 
-	ctx := lkctx.Context()
+	ctx = lkctx.Context()
 	defer lkctx.Cancel()
 
 	callhomeTimer := time.NewTimer(callhomeFreq.Get())
@@ -109,14 +130,14 @@ func runCallhome(pctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-callhomeTimer.C:
-			if !enableCallhome {
+			if !enableCallhome.Get() {
 				// Stop the processing as callhome got disabled
 				return
 			}
+			performCallhome(ctx)
+
 			// Reset the timer for next cycle.
 			callhomeTimer.Reset(callhomeFreq.Get())
-
-			go performCallhome(ctx)
 		}
 	}
 }

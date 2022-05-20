@@ -58,7 +58,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	cfg.Enable = env.Get(config.EnvMinIOCallhomeEnable,
-		kvs.GetWithDefault(Enable, DefaultKVS)) == "on"
+		kvs.GetWithDefault(Enable, DefaultKVS)) == config.EnableOn
 	cfg.Frequency, err = time.ParseDuration(env.Get(config.EnvMinIOCallhomeFrequency,
 		kvs.GetWithDefault(Frequency, DefaultKVS)))
 	return cfg, err

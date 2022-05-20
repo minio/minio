@@ -19,59 +19,40 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"time"
 
-	"github.com/mattn/go-ieproxy"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 const (
 	subnetRespBodyLimit = 1 << 20 // 1 MiB
+	callhomeURL         = "https://subnet.min.io/api/callhome"
+	callhomeURLDev      = "http://localhost:9000/api/callhome"
 )
-
-func subnetAuthHeaders(authToken string) map[string]string {
-	return map[string]string{"Authorization": authToken}
-}
 
 func httpClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			Proxy: ieproxy.GetProxyFunc(),
-			TLSClientConfig: &tls.Config{
-				RootCAs: globalRootCAs,
-				// Can't use SSLv3 because of POODLE and BEAST
-				// Can't use TLSv1.0 because of POODLE and BEAST using CBC cipher
-				// Can't use TLSv1.1 because of RC4 cipher usage
-				MinVersion: tls.VersionTLS12,
-			},
-		},
+		Timeout:   timeout,
+		Transport: globalProxyTransport,
 	}
 }
 
 func subnetHTTPDo(req *http.Request) (*http.Response, error) {
 	client := httpClient(10 * time.Second)
-	if len(globalSubnetConfig.Proxy) > 0 {
-		proxyURL, err := url.Parse(globalSubnetConfig.Proxy)
-		if err != nil {
-			return nil, err
-		}
-		client.Transport.(*http.Transport).Proxy = http.ProxyURL(proxyURL)
+	if globalSubnetConfig.ProxyURL != nil {
+		client.Transport.(*http.Transport).Proxy = http.ProxyURL(globalSubnetConfig.ProxyURL)
 	}
 	return client.Do(req)
 }
 
-func subnetReqDo(r *http.Request, headers map[string]string) (string, error) {
-	for k, v := range headers {
-		r.Header.Add(k, v)
-	}
+func subnetReqDo(r *http.Request, authToken string) (string, error) {
+	r.Header.Set("Authorization", authToken)
 
 	ct := r.Header.Get("Content-Type")
 	if len(ct) == 0 {
@@ -79,11 +60,13 @@ func subnetReqDo(r *http.Request, headers map[string]string) (string, error) {
 	}
 
 	resp, err := subnetHTTPDo(r)
+	if resp != nil {
+		defer xhttp.DrainBody(resp.Body)
+	}
 	if err != nil {
 		return "", err
 	}
 
-	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(io.LimitReader(resp.Body, subnetRespBodyLimit))
 	if err != nil {
 		return "", err
@@ -96,7 +79,7 @@ func subnetReqDo(r *http.Request, headers map[string]string) (string, error) {
 	return respStr, fmt.Errorf("SUBNET request failed with code %d and error: %s", resp.StatusCode, respStr)
 }
 
-func subnetPostReq(reqURL string, payload interface{}, headers map[string]string) (string, error) {
+func subnetPostReq(reqURL string, payload interface{}, authToken string) (string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -105,26 +88,18 @@ func subnetPostReq(reqURL string, payload interface{}, headers map[string]string
 	if err != nil {
 		return "", err
 	}
-	return subnetReqDo(r, headers)
-}
-
-func subnetBaseURL() string {
-	if globalIsCICD {
-		return "http://localhost:9000"
-	}
-
-	return "https://subnet.min.io"
-}
-
-func subnetCallhomeURL() string {
-	return subnetBaseURL() + "/api/callhome"
+	return subnetReqDo(r, authToken)
 }
 
 func sendCallhomeInfo(ch CallhomeInfo) error {
 	if len(globalSubnetConfig.APIKey) == 0 {
 		return errors.New("Cluster is not registered with SUBNET.")
 	}
-	headers := subnetAuthHeaders(globalSubnetConfig.APIKey)
-	_, err := subnetPostReq(subnetCallhomeURL(), ch, headers)
+
+	url := callhomeURL
+	if globalIsCICD {
+		url = callhomeURLDev
+	}
+	_, err := subnetPostReq(url, ch, globalSubnetConfig.APIKey)
 	return err
 }
