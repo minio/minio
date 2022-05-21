@@ -510,6 +510,19 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	return bs, msgp.Decode(respBody, &bs)
 }
 
+// GetAllBucketStats - load replication stats for all buckets
+func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
+	values := make(url.Values)
+	respBody, err := client.call(peerRESTMethodGetAllBucketStats, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	bsMap := BucketStatsMap{}
+	defer http.DrainBody(respBody)
+	return bsMap, msgp.Decode(respBody, &bsMap)
+}
+
 // LoadBucketMetadata - load bucket metadata
 func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	values := make(url.Values)

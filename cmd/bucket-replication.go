@@ -1845,9 +1845,26 @@ func resyncTarget(oi ObjectInfo, arn string, resetID string, resetBeforeDate tim
 	return
 }
 
-// get the most current of in-memory replication stats  and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
-	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+func getAllLatestReplicationStats(bucketsUsage map[string]BucketUsageInfo) (bucketsReplicationStats map[string]BucketReplicationStats) {
+	peerBucketStatsList := globalNotificationSys.GetClusterAllBucketStats(GlobalContext)
+	bucketsReplicationStats = make(map[string]BucketReplicationStats, len(bucketsUsage))
+
+	for bucket, u := range bucketsUsage {
+		bucketStats := make([]BucketStats, len(peerBucketStatsList))
+		for i, peerBucketStats := range peerBucketStatsList {
+			bucketStat, ok := peerBucketStats[bucket]
+			if !ok {
+				continue
+			}
+			bucketStats[i] = bucketStat
+		}
+		bucketsReplicationStats[bucket] = calculateBucketReplicationStats(bucket, u, bucketStats)
+	}
+
+	return bucketsReplicationStats
+}
+
+func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketStats []BucketStats) (s BucketReplicationStats) {
 	// accumulate cluster bucket stats
 	stats := make(map[string]*BucketReplicationStat)
 	var totReplicaSize int64
@@ -1914,6 +1931,12 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	s.ReplicaSize = int64(math.Max(float64(totReplicaSize), float64(u.ReplicaSize)))
 	s.ReplicatedSize = int64(math.Max(float64(s.ReplicatedSize), float64(latestTotReplicatedSize)))
 	return s
+}
+
+// get the most current of in-memory replication stats  and data usage info from crawler.
+func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+	return calculateBucketReplicationStats(bucket, u, bucketStats)
 }
 
 const resyncTimeInterval = time.Minute * 10

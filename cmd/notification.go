@@ -601,6 +601,44 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	}
 }
 
+// GetClusterAllBucketStats - returns bucket stats for all buckets from all remote peers.
+func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []BucketStatsMap {
+	ng := WithNPeers(len(sys.peerClients))
+	replicationStats := make([]BucketStatsMap, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		index := index
+		client := client
+		ng.Go(ctx, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			bsMap, err := client.GetAllBucketStats()
+			if err != nil {
+				return err
+			}
+			replicationStats[index] = bsMap
+			return nil
+		}, index, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+
+	replicationStatsList := globalReplicationStats.GetAll()
+	bucketStatsMap := make(map[string]BucketStats, len(replicationStatsList))
+	for k, replicationStats := range replicationStatsList {
+		bucketStatsMap[k] = BucketStats{
+			ReplicationStats: replicationStats,
+		}
+	}
+
+	replicationStats = append(replicationStats, BucketStatsMap(bucketStatsMap))
+	return replicationStats
+}
+
 // GetClusterBucketStats - calls GetClusterBucketStats call on all peers for a cluster statistics view.
 func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketName string) []BucketStats {
 	ng := WithNPeers(len(sys.peerClients))
