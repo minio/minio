@@ -284,8 +284,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 				ParentUser:   cred.ParentUser,
 			},
 		}); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
+			logger.LogIf(ctx, err)
 		}
 	}
 
@@ -479,8 +478,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			ParentPolicyMapping: policyName,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	var encodedSuccessResponse []byte
@@ -649,8 +647,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			ParentUser:   cred.ParentUser,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
@@ -810,8 +807,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			ParentPolicyMapping: policyName,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	response := new(AssumeRoleWithCertificateResponse)
