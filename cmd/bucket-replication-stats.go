@@ -135,6 +135,23 @@ func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats
 	return st.Clone()
 }
 
+// GetAll returns replication metrics for all buckets at once.
+func (r *ReplicationStats) GetAll() map[string]BucketReplicationStats {
+	if r == nil {
+		return map[string]BucketReplicationStats{}
+	}
+
+	r.RLock()
+	defer r.RUnlock()
+
+	bucketReplicationStats := make(map[string]BucketReplicationStats, len(r.Cache))
+	for k, v := range r.Cache {
+		bucketReplicationStats[k] = v.Clone()
+	}
+
+	return bucketReplicationStats
+}
+
 // Get replication metrics for a bucket from this node since this node came up.
 func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	if r == nil {

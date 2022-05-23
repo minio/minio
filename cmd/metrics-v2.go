@@ -1604,8 +1604,9 @@ func getBucketUsageMetrics() *MetricsGroup {
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
+		bucketReplStats := getAllLatestReplicationStats(dataUsageInfo.BucketsUsage)
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			stats := getLatestReplicationStats(bucket, usage)
+			stats := bucketReplStats[bucket]
 
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
