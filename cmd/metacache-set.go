@@ -882,7 +882,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			}
 
 			// fallback only when set.
-			for fd := fallback(werr); fd != nil; {
+			for {
+				fd := fallback(werr)
+				if fd == nil {
+					break
+				}
 				// This fallback is only set when
 				// askDisks is less than total
 				// number of disks per set.
