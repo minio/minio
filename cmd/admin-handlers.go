@@ -51,6 +51,7 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/minio/internal/pubsub"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
@@ -1315,19 +1316,21 @@ const (
 // - input entry is not of the type *madmin.TraceInfo*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
 // - madmin.TraceInfo type is asked by opts
-func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
+func mustTrace(entry madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
 	trcInfo, ok := entry.(madmin.TraceInfo)
 	if !ok {
 		return false
 	}
 
-	// Override shouldTrace decision with errOnly filtering
-	defer func() {
-		if shouldTrace && opts.OnlyErrors {
-			shouldTrace = trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
-		}
-	}()
+	// Reject all unwanted types.
+	want := opts.TraceTypes()
+	if !want.Contains(trcInfo.TraceType) {
+		return false
+	}
 
+	isHTTP := trcInfo.TraceType.Overlaps(madmin.TraceInternal|madmin.TraceS3) && trcInfo.HTTP != nil
+
+	// Check latency...
 	if opts.Threshold > 0 {
 		var latency time.Duration
 		switch trcInfo.TraceType {
@@ -1335,27 +1338,26 @@ func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace boo
 			latency = trcInfo.OSStats.Duration
 		case madmin.TraceStorage:
 			latency = trcInfo.StorageStats.Duration
-		case madmin.TraceHTTP:
-			latency = trcInfo.CallStats.Latency
+		case madmin.TraceS3, madmin.TraceInternal:
+			latency = trcInfo.HTTP.CallStats.Latency
 		}
 		if latency < opts.Threshold {
 			return false
 		}
 	}
 
-	if opts.Internal && trcInfo.TraceType == madmin.TraceHTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
-		return true
+	// Check internal path
+	isInternal := isHTTP && HasPrefix(trcInfo.HTTP.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
+	if isInternal && !opts.Internal {
+		return false
 	}
 
-	if opts.S3 && trcInfo.TraceType == madmin.TraceHTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
-		return true
+	// Filter non-errors.
+	if isHTTP && opts.OnlyErrors && trcInfo.HTTP.RespInfo.StatusCode < http.StatusBadRequest {
+		return false
 	}
 
-	if opts.Storage && trcInfo.TraceType == madmin.TraceStorage {
-		return true
-	}
-
-	return opts.OS && trcInfo.TraceType == madmin.TraceOS
+	return true
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
@@ -1366,6 +1368,7 @@ func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err err
 	opts.Internal = q.Get("internal") == "true"
 	opts.Storage = q.Get("storage") == "true"
 	opts.OS = q.Get("os") == "true"
+	opts.Scanner = q.Get("scanner") == "true"
 
 	// Support deprecated 'all' query
 	if q.Get("all") == "true" {
@@ -1408,11 +1411,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan interface{}, 4000)
+	traceCh := make(chan pubsub.Item, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
+	globalTrace.Subscribe(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry pubsub.Item) bool {
 		return mustTrace(entry, traceOpts)
 	})
 

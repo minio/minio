@@ -49,10 +49,10 @@ type healRoutine struct {
 	workers int
 }
 
-func systemIO() int {
+func activeListeners() int {
 	// Bucket notification and http trace are not costly, it is okay to ignore them
 	// while counting the number of concurrent connections
-	return int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
+	return int(globalHTTPListen.NumSubscribers(0)) + int(globalTrace.NumSubscribers(0))
 }
 
 func waitForLowHTTPReq() {
@@ -61,7 +61,7 @@ func waitForLowHTTPReq() {
 		currentIO = httpServer.GetRequestCount
 	}
 
-	globalHealConfig.Wait(currentIO, systemIO)
+	globalHealConfig.Wait(currentIO, activeListeners)
 }
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {

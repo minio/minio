@@ -22,6 +22,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/logger/target/console"
@@ -115,7 +116,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan
 			}
 		}
 	}
-	sys.pubsub.Subscribe(subCh, doneCh, filter)
+	sys.pubsub.Subscribe(madmin.TraceS3, subCh, doneCh, filter)
 }
 
 // Init if HTTPConsoleLoggerSys is valid, always returns nil right now

@@ -52,7 +52,7 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "os." + s.String(),
-		OSStats: madmin.TraceOSStats{
+		OSStats: &madmin.TraceOSStats{
 			Duration: duration,
 			Path:     path,
 		},
@@ -60,7 +60,7 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 }
 
 func updateOSMetrics(s osMetric, paths ...string) func() {
-	if globalTrace.NumSubscribers() == 0 {
+	if globalTrace.NumSubscribers(madmin.TraceOS) == 0 {
 		return func() {}
 	}
 

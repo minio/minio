@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	policy "github.com/minio/pkg/bucket/policy"
 )
 
@@ -123,12 +125,12 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 
 	// Listen Publisher and peer-listen-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	listenCh := make(chan interface{}, 4000)
+	listenCh := make(chan pubsub.Item, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalHTTPListen.Subscribe(listenCh, ctx.Done(), func(evI interface{}) bool {
-		ev, ok := evI.(event.Event)
+	globalHTTPListen.Subscribe(madmin.TraceS3, listenCh, ctx.Done(), func(evI pubsub.Item) bool {
+		ev, ok := evI.(*event.Event)
 		if !ok {
 			return false
 		}
