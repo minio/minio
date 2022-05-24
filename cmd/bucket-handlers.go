@@ -1636,7 +1636,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig)
+	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, true)
 	if apiErr != noError {
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return

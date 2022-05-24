@@ -876,14 +876,28 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				ExistingObjectReplicate: "enable",
 			}
 		)
+		ruleARN := targetARN
 		for _, r := range replicationConfig.Rules {
 			if r.ID == ruleID {
 				hasRule = true
+				ruleARN = r.Destination.Bucket
 			}
 		}
 		switch {
 		case hasRule:
-			err = replicationConfig.EditRule(opts)
+			if ruleARN != opts.DestBucket {
+				// remove stale replication rule and replace rule with correct target ARN
+				if len(replicationConfig.Rules) > 1 {
+					err = replicationConfig.RemoveRule(opts)
+				} else {
+					replicationConfig = replication.Config{}
+				}
+				if err == nil {
+					err = replicationConfig.AddRule(opts)
+				}
+			} else {
+				err = replicationConfig.EditRule(opts)
+			}
 		default:
 			err = replicationConfig.AddRule(opts)
 		}
@@ -902,7 +916,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig)
+		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig, true)
 		if apiErr != noError {
 			return fmt.Errorf("bucket replication config validation error: %#v", apiErr)
 		}
@@ -3947,6 +3961,16 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 			replMismatch = true
 			break
 		}
+	}
+	rcfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	if err != nil {
+		replMismatch = true
+	}
+
+	// validate remote targets on current cluster for this bucket
+	_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
+	if apiErr != noError {
+		replMismatch = true
 	}
 	if replMismatch {
 		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
