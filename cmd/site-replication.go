@@ -3560,7 +3560,6 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		latestID, latestPeerName string
 		lastUpdate               time.Time
 		latestQuotaConfig        *string
-		latestCfgJSON            []byte
 		latestQuotaConfigBytes   []byte
 	)
 
@@ -3614,7 +3613,7 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		if err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
 			Type:   madmin.SRBucketMetaTypeQuotaConfig,
 			Bucket: bucket,
-			Quota:  latestCfgJSON,
+			Quota:  latestQuotaConfigBytes,
 		}); err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing quota config metadata for peer %s from peer %s : %s",
 				peerName, latestPeerName, err.Error())))
