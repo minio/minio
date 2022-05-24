@@ -133,15 +133,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = UTCNow()
 	}
 
-	// If the data is not inlined, we may end up incorrectly
-	// inlining the data here, that leads to an inconsistent
-	// situation where some objects are were not inlined
-	// were now inlined, make sure to `nil` the Data such
-	// that xl.meta is written as expected.
-	if !fi.InlineData() {
-		fi.Data = nil
-	}
-
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
 	if !dstOpts.MTime.IsZero() {
@@ -151,12 +142,15 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
+	inlineData := fi.InlineData()
+	freeVersionID := fi.TierFreeVersionID()
+	freeVersionMarker := fi.TierFreeVersion()
+
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
 		if metaArr[index].IsValid() {
 			metaArr[index].ModTime = modTime
 			metaArr[index].VersionID = versionID
-			metaArr[index].Metadata = srcInfo.UserDefined
 			if !metaArr[index].InlineData() {
 				// If the data is not inlined, we may end up incorrectly
 				// inlining the data here, that leads to an inconsistent
@@ -164,6 +158,17 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 				// were now inlined, make sure to `nil` the Data such
 				// that xl.meta is written as expected.
 				metaArr[index].Data = nil
+			}
+			metaArr[index].Metadata = srcInfo.UserDefined
+			// Preserve existing values
+			if inlineData {
+				metaArr[index].SetInlineData()
+			}
+			if freeVersionID != "" {
+				metaArr[index].SetTierFreeVersionID(freeVersionID)
+			}
+			if freeVersionMarker {
+				metaArr[index].SetTierFreeVersion()
 			}
 		}
 	}

@@ -1424,6 +1424,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.metadataOnly = false
 	}
 
+	if srcInfo.metadataOnly {
+		gr.Close() // We are not interested in the reader stream at this point close it.
+	}
+
 	// Check if x-amz-metadata-directive or x-amz-tagging-directive was not set to REPLACE and source,
 	// destination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
