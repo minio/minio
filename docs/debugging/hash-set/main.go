@@ -18,11 +18,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"hash/crc32"
+	"io/ioutil"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
@@ -64,21 +69,21 @@ func hashOrder(key string, cardinality int) []int {
 }
 
 var (
-	object, deploymentID string
-	setCount, shards     int
+	file, object, deploymentID, prefix string
+	setCount, shards                   int
+	verbose                            bool
 )
 
 func main() {
+	flag.StringVar(&file, "file", "", "Read all objects from file, newline separated")
+	flag.StringVar(&prefix, "prefix", "", "Add prefix to all objects")
 	flag.StringVar(&object, "object", "", "Select an object")
 	flag.StringVar(&deploymentID, "deployment-id", "", "MinIO deployment ID, obtained from 'format.json'")
 	flag.IntVar(&setCount, "set-count", 0, "Total set count")
 	flag.IntVar(&shards, "shards", 0, "Total shards count")
+	flag.BoolVar(&verbose, "v", false, "Display all objects")
 
 	flag.Parse()
-
-	if object == "" {
-		log.Fatalln("object name is mandatory")
-	}
 
 	if deploymentID == "" {
 		log.Fatalln("deployment ID is mandatory")
@@ -88,12 +93,39 @@ func main() {
 		log.Fatalln("set count cannot be zero")
 	}
 
-	if shards == 0 {
-		log.Fatalln("total shards cannot be zero")
-	}
-
 	id := uuid.MustParse(deploymentID)
 
-	fmt.Println("Erasure distribution for the object", hashOrder(object, shards))
-	fmt.Println("Erasure setNumber for the object", sipHashMod(object, setCount, id)+1)
+	if file != "" {
+		distrib := make([][]string, setCount)
+		b, err := ioutil.ReadFile(file)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		b = bytes.ReplaceAll(b, []byte("\r"), []byte{})
+		sc := bufio.NewScanner(bytes.NewBuffer(b))
+		for sc.Scan() {
+			object = strings.TrimSpace(sc.Text())
+			set := sipHashMod(prefix+object, setCount, id)
+			distrib[set] = append(distrib[set], prefix+object)
+		}
+		for set, files := range distrib {
+			fmt.Println("Set:", set+1, "Objects:", len(files))
+			if !verbose {
+				continue
+			}
+			for _, s := range files {
+				fmt.Printf("\t%s\n", s)
+			}
+		}
+		os.Exit(0)
+	}
+
+	if object == "" {
+		log.Fatalln("object name is mandatory")
+	}
+
+	if shards != 0 {
+		fmt.Println("Erasure distribution for the object", hashOrder(prefix+object, shards))
+	}
+	fmt.Println("Erasure setNumber for the object", sipHashMod(prefix+object, setCount, id)+1)
 }
