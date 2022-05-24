@@ -19,6 +19,7 @@ package juicefs
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/fs" //nolint:gofumpt
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -155,7 +156,9 @@ func (n *JfsObjects) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLaye
 		logger.Fatalf("invalid umask %s: %s", n.ctx.String("umask"), err)
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &JfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: &Config{MultiBucket: n.ctx.Bool("multi-buckets"), KeepEtag: n.ctx.Bool("keep-etag"), Mode: uint16(0777 &^ umask)}}, nil
+	jfsObj := &JfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: &Config{MultiBucket: n.ctx.Bool("multi-buckets"), KeepEtag: n.ctx.Bool("keep-etag"), Mode: uint16(0777 &^ umask)}}
+	go jfsObj.cleanup()
+	return jfsObj, nil
 }
 
 func (n *JfsObjects) IsCompressionSupported() bool {
@@ -1000,4 +1003,44 @@ func (n *JfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	}
 	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID))
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
+}
+
+func (n *JfsObjects) cleanup() {
+	for t := range time.Tick(24 * time.Hour) {
+		var tmpDirs []string
+		if n.gConf.MultiBucket {
+			buckets, err := n.ListBuckets(context.Background())
+			if err != nil {
+				logger.Errorf("list buckets error: %v", err)
+				continue
+			}
+			for _, bucket := range buckets {
+				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
+				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
+			}
+		} else {
+			tmpDirs = append(tmpDirs, ".sys/tmp/")
+			tmpDirs = append(tmpDirs, ".sys/uploads/")
+		}
+		for _, dir := range tmpDirs {
+			f, errno := n.fs.Open(mctx, dir, 0)
+			if errno != 0 {
+				continue
+			}
+			entries, _ := f.ReaddirPlus(mctx, 0)
+			for _, entry := range entries {
+				if _, err := uuid.Parse(string(entry.Name)); err != nil {
+					continue
+				}
+				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
+					p := n.path(dir, string(entry.Name))
+					if errno := n.fs.Rmr(mctx, p); errno != 0 {
+						logger.Errorf("failed to delete expired temporary files path: %s,", p)
+					} else {
+						logger.Infof("delete expired temporary files path: %s, mtime: %s", p, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
+					}
+				}
+			}
+		}
+	}
 }
