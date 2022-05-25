@@ -233,8 +233,9 @@ func (z *erasureServerPools) SetDriveCounts() []int {
 type serverPoolsAvailableSpace []poolAvailableSpace
 
 type poolAvailableSpace struct {
-	Index     int
-	Available uint64
+	Index      int
+	Available  uint64
+	MaxUsedPct int // Used disk percentage of most filled disk, rounded down.
 }
 
 // TotalAvailable - total available space
@@ -246,10 +247,41 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 	return total
 }
 
+// FilterMaxUsed will filter out any pools that has used percent bigger than max,
+// unless all have that, in which case all are preserved.
+func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
+	// We aren't modifying p, only entries in it, so we don't need to receive a pointer.
+	if len(p) <= 1 {
+		// Nothing to do.
+		return
+	}
+	var ok bool
+	for _, z := range p {
+		if z.MaxUsedPct < max {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		// All above limit.
+		// Do not modify
+		return
+	}
+
+	// Remove entries that are above.
+	for i, z := range p {
+		if z.MaxUsedPct < max {
+			continue
+		}
+		p[i].Available = 0
+	}
+}
+
 // getAvailablePoolIdx will return an index that can hold size bytes.
 // -1 is returned if no serverPools have available space for the size given.
 func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, bucket, object string, size int64) int {
 	serverPools := z.getServerPoolsAvailableSpace(ctx, bucket, object, size)
+	serverPools.FilterMaxUsed(100 - (100 * diskReserveFraction))
 	total := serverPools.TotalAvailable()
 	if total == 0 {
 		return -1
@@ -302,11 +334,17 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 			serverPools[i] = poolAvailableSpace{Index: i}
 			continue
 		}
+		var maxUsedPct int
 		for _, disk := range zinfo {
 			if disk == nil {
 				continue
 			}
 			available += disk.Total - disk.Used
+
+			// set maxUsedPct to the value from the disk with the least space percentage.
+			if pctUsed := int(available * 100 / disk.Total); pctUsed > maxUsedPct {
+				maxUsedPct = pctUsed
+			}
 		}
 
 		// Since we are comparing pools that may have a different number of sets
@@ -317,8 +355,9 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		available *= uint64(nSets[i])
 
 		serverPools[i] = poolAvailableSpace{
-			Index:     i,
-			Available: available,
+			Index:      i,
+			Available:  available,
+			MaxUsedPct: maxUsedPct,
 		}
 	}
 	return serverPools
