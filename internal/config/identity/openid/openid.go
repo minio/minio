@@ -164,6 +164,32 @@ type Config struct {
 	closeRespFn func(io.ReadCloser)
 }
 
+// Clone returns a cloned copy of OpenID config.
+func (r *Config) Clone() Config {
+	if r == nil {
+		return Config{}
+	}
+	cfg := Config{
+		Enabled:            r.Enabled,
+		arnProviderCfgsMap: make(map[arn.ARN]*providerCfg, len(r.arnProviderCfgsMap)),
+		ProviderCfgs:       make(map[string]*providerCfg, len(r.ProviderCfgs)),
+		pubKeys:            r.pubKeys,
+		roleArnPolicyMap:   make(map[arn.ARN]string, len(r.roleArnPolicyMap)),
+		transport:          r.transport,
+		closeRespFn:        r.closeRespFn,
+	}
+	for k, v := range r.arnProviderCfgsMap {
+		cfg.arnProviderCfgsMap[k] = v
+	}
+	for k, v := range r.ProviderCfgs {
+		cfg.ProviderCfgs[k] = v
+	}
+	for k, v := range r.roleArnPolicyMap {
+		cfg.roleArnPolicyMap[k] = v
+	}
+	return cfg
+}
+
 // LookupConfig lookup jwks from config, override with any ENVs.
 func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, closeRespFn func(io.ReadCloser), serverRegion string) (c Config, err error) {
 	openIDClientTransport := http.DefaultTransport

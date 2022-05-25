@@ -558,7 +558,8 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			authZPluginCfg.CloseRespFn = opaCfg.CloseRespFn
 		}
 	}
-	globalAuthZPlugin = polplugin.New(authZPluginCfg)
+
+	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
 		globalRootCAs)

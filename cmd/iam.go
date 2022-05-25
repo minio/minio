@@ -38,6 +38,8 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -80,6 +82,8 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
+	ldapConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
+	openIDConfig       openid.Config // only valid if OpenID is configured
 
 	usersSysType UsersSysType
 
@@ -164,7 +168,7 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if globalLDAPConfig.Enabled {
+	if sys.ldapConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
 
@@ -224,6 +228,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.Lock()
 	defer sys.Unlock()
 
+	sys.ldapConfig = globalLDAPConfig.Clone()
+	sys.openIDConfig = globalOpenIDConfig.Clone()
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
@@ -310,7 +316,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Set up polling for expired accounts and credentials purging.
 	switch {
-	case globalOpenIDConfig.ProviderEnabled():
+	case sys.openIDConfig.ProviderEnabled():
 		go func() {
 			timer := time.NewTimer(sys.iamRefreshInterval)
 			defer timer.Stop()
@@ -325,7 +331,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case globalLDAPConfig.Enabled:
+	case sys.ldapConfig.Enabled:
 		go func() {
 			timer := time.NewTimer(sys.iamRefreshInterval)
 			defer timer.Stop()
@@ -348,7 +354,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	go sys.watch(ctx)
 
 	// Load RoleARN
-	if rolePolicyMap := globalOpenIDConfig.GetRoleInfo(); rolePolicyMap != nil {
+	if rolePolicyMap := sys.openIDConfig.GetRoleInfo(); rolePolicyMap != nil {
 		// Validate that policies associated with roles are defined.
 		for _, rolePolicies := range rolePolicyMap {
 			ps := newMappedPolicy(rolePolicies).toSlice()
@@ -1138,7 +1144,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 			continue
 		}
 		roleArn = roleArns[0]
-		u, err := globalOpenIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
+		u, err := sys.openIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
@@ -1160,14 +1166,14 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
 	for parentUser := range parentUsers {
-		if !globalLDAPConfig.IsLDAPUserDN(parentUser) {
+		if !sys.ldapConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
 		allDistNames = append(allDistNames, parentUser)
 	}
 
-	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(allDistNames)
+	expiredUsers, err := sys.ldapConfig.GetNonEligibleUserDistNames(allDistNames)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1189,7 +1195,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// DN to ldap username mapping for each LDAP user
 	parentUserToLDAPUsernameMap := make(map[string]string)
 	for _, cred := range allCreds {
-		if !globalLDAPConfig.IsLDAPUserDN(cred.ParentUser) {
+		if !sys.ldapConfig.IsLDAPUserDN(cred.ParentUser) {
 			continue
 		}
 		// Check if this is the first time we are
@@ -1237,7 +1243,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 2. Query LDAP server for groups of the LDAP users collected.
-	updatedGroups, err := globalLDAPConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
+	updatedGroups, err := sys.ldapConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
