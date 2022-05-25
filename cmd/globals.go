@@ -113,6 +113,10 @@ const (
 	// diskFillFraction is the fraction of a disk we allow to be filled.
 	diskFillFraction = 0.99
 
+	// diskReserveFraction is the fraction of a disk where we will fill other server pools first.
+	// If all pools reach this, we will use all pools with regular placement.
+	diskReserveFraction = 0.15
+
 	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
 	diskAssumeUnknownSize = 1 << 30
 
