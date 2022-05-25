@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -46,6 +47,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -53,6 +55,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/fatih/color"
 
@@ -71,6 +74,9 @@ import (
 // TestMain to set up global env.
 func TestMain(m *testing.M) {
 	flag.Parse()
+
+	// set to 'true' when testing is invoked
+	globalIsTesting = true
 
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
@@ -1183,12 +1189,11 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	return req, nil
 }
 
-// Function to generate random string for bucket/object names.
-func randString(n int) string {
-	src := rand.NewSource(UTCNow().UnixNano())
+var src = rand.NewSource(time.Now().UnixNano())
 
+func randString(n int) string {
 	b := make([]byte, n)
-	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = src.Int63(), letterIdxMax
@@ -1200,7 +1205,8 @@ func randString(n int) string {
 		cache >>= letterIdxBits
 		remain--
 	}
-	return string(b)
+
+	return *(*string)(unsafe.Pointer(&b))
 }
 
 // generate random object name.
@@ -2318,4 +2324,36 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 		apiRouter.ServeHTTP(rec, reqC)
 		checkRespErr(rec, http.StatusOK)
 	}
+}
+
+// unzip a file into a specific target dir - used to unzip sample data in cmd/testdata/
+func unzipArchive(zipFilePath, targetDir string) error {
+	zipReader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		return err
+	}
+	for _, file := range zipReader.Reader.File {
+		zippedFile, err := file.Open()
+		if err != nil {
+			return err
+		}
+		err = func() (err error) {
+			defer zippedFile.Close()
+			extractedFilePath := filepath.Join(targetDir, file.Name)
+			if file.FileInfo().IsDir() {
+				return os.MkdirAll(extractedFilePath, file.Mode())
+			}
+			outputFile, err := os.OpenFile(extractedFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+			if err != nil {
+				return err
+			}
+			defer outputFile.Close()
+			_, err = io.Copy(outputFile, zippedFile)
+			return err
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -244,7 +244,7 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		diskIndex:  -1,
 	}
 
-	go formatErasureCleanupTmp(s.diskPath) // cleanup any old data.
+	bgFormatErasureCleanupTmp(s.diskPath) // cleanup any old data.
 
 	formatData, formatFi, err := formatErasureMigrate(s.diskPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

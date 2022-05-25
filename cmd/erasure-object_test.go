@@ -20,11 +20,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -1046,5 +1049,65 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 				t.Errorf("Expected Write Quorum %d, got %d", tt.expectedWriteQuorum, actualWriteQuorum)
 			}
 		})
+	}
+}
+
+// In some deployments, one object has data inlined in one disk and not inlined in other disks.
+func TestGetObjectInlineNotInline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create a backend with 4 disks named disk{1...4}, this name convention
+	// because we will unzip some object data from a sample archive.
+	const numDisks = 4
+	path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var fsDirs []string
+	for i := 1; i <= numDisks; i++ {
+		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("disk%d", i)))
+	}
+
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	if err != nil {
+		removeRoots(fsDirs)
+		t.Fatal(err)
+	}
+
+	// cleaning up of temporary test directories
+	defer objLayer.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	// Create a testbucket
+	err = objLayer.MakeBucketWithLocation(ctx, "testbucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unzip sample object data to the existing disks
+	err = unzipArchive("testdata/xl-meta-inline-notinline.zip", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to read the object and check its md5sum
+	gr, err := objLayer.GetObjectNInfo(ctx, "testbucket", "file", nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+
+	h := md5.New()
+	_, err = io.Copy(h, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+
+	const expectedHash = "fffb6377948ebea75ad2b8058e849ef5"
+	foundHash := fmt.Sprintf("%x", h.Sum(nil))
+	if foundHash != expectedHash {
+		t.Fatalf("Expected data to have md5sum = `%s`, found `%s`", expectedHash, foundHash)
 	}
 }

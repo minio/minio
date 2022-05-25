@@ -259,8 +259,6 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 			case <-ctx.Done():
 				return
 			case <-refreshTimer.C:
-				refreshTimer.Reset(dm.refreshInterval)
-
 				noQuorum, err := refreshLock(ctx, dm.clnt, id, source, quorum)
 				if err == nil && noQuorum {
 					// Clean the lock locally and in remote nodes
@@ -271,6 +269,8 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 					}
 					return
 				}
+
+				refreshTimer.Reset(dm.refreshInterval)
 			}
 		}
 	}()

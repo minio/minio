@@ -180,7 +180,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			apiErr = APIError{
 				Code:           "XMinioAdminTierBackendInUse",
 				Description:    err.Error(),
-				HTTPStatusCode: http.StatusConflict,
+				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case errors.Is(err, errTierBackendNotEmpty):
 			apiErr = APIError{

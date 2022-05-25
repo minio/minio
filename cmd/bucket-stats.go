@@ -51,6 +51,9 @@ func (rl *ReplicationLatency) update(size int64, duration time.Duration) {
 	rl.UploadHistogram.Add(size, duration)
 }
 
+// BucketStatsMap captures bucket statistics for all buckets
+type BucketStatsMap map[string]BucketStats
+
 // BucketStats bucket statistics
 type BucketStats struct {
 	ReplicationStats BucketReplicationStats

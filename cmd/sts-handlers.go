@@ -284,8 +284,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 				ParentUser:   cred.ParentUser,
 			},
 		}); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
+			logger.LogIf(ctx, err)
 		}
 	}
 
@@ -383,7 +382,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			policyName = globalIAMSys.CurrentPolicies(policies)
 		}
 
-		if globalPolicyOPA == nil {
+		if globalAuthZPlugin == nil {
 			if !ok {
 				writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 					fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
@@ -479,8 +478,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			ParentPolicyMapping: policyName,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	var encodedSuccessResponse []byte
@@ -593,7 +591,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-	if len(ldapPolicies) == 0 && globalPolicyOPA == nil {
+	if len(ldapPolicies) == 0 && globalAuthZPlugin == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
 				ldapUserDN, strings.Join(groupDistNames, "`,`")))
@@ -649,8 +647,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			ParentUser:   cred.ParentUser,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
@@ -810,8 +807,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			ParentPolicyMapping: policyName,
 		},
 	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		logger.LogIf(ctx, err)
 	}
 
 	response := new(AssumeRoleWithCertificateResponse)

@@ -194,7 +194,6 @@ func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	for {
 		select {
 		case <-periodicTimer.C:
-			periodicTimer.Reset(time.Minute * 5)
 			now := UTCNow()
 			ahs.Lock()
 			for path, h := range ahs.healSeqMap {
@@ -203,6 +202,8 @@ func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 				}
 			}
 			ahs.Unlock()
+
+			periodicTimer.Reset(time.Minute * 5)
 		case <-ctx.Done():
 			// server could be restarting - need
 			// to exit immediately
@@ -581,12 +582,7 @@ func (h *healSequence) pushHealResultItem(r madmin.HealResultItem) error {
 	// heal-results in memory and the client has not consumed it
 	// for too long.
 	unconsumedTimer := time.NewTimer(healUnconsumedTimeout)
-	defer func() {
-		// stop the timeout timer so it is garbage collected.
-		if !unconsumedTimer.Stop() {
-			<-unconsumedTimer.C
-		}
-	}()
+	defer unconsumedTimer.Stop()
 
 	var itemsLen int
 	for {

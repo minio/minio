@@ -70,7 +70,7 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 }()
 
 // Cleans up tmp directory of the local disk.
-func formatErasureCleanupTmp(diskPath string) {
+func bgFormatErasureCleanupTmp(diskPath string) {
 	// Need to move temporary objects left behind from previous run of minio
 	// server to a unique directory under `minioMetaTmpBucket-old` to clean
 	// up `minioMetaTmpBucket` for the current run.
@@ -98,9 +98,8 @@ func formatErasureCleanupTmp(diskPath string) {
 	}
 
 	go removeAll(tmpOld)
-
 	// Renames and schedules for purging all bucket metacache.
-	renameAllBucketMetacache(diskPath)
+	go renameAllBucketMetacache(diskPath)
 }
 
 // Following error message is added to fix a regression in release

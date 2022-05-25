@@ -270,11 +270,13 @@ func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, bucket, ob
 
 // getServerPoolsAvailableSpace will return the available space of each pool after storing the content.
 // If there is not enough space the pool will return 0 bytes available.
+// The size of each will be multiplied by the number of sets.
 // Negative sizes are seen as 0 bytes.
 func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, bucket, object string, size int64) serverPoolsAvailableSpace {
 	serverPools := make(serverPoolsAvailableSpace, len(z.serverPools))
 
 	storageInfos := make([][]*DiskInfo, len(z.serverPools))
+	nSets := make([]int, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
@@ -282,9 +284,11 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		if z.IsSuspended(index) {
 			continue
 		}
+		pool := z.serverPools[index]
+		nSets[index] = pool.setCount
 		g.Go(func() error {
 			// Get the set where it would be placed.
-			storageInfos[index] = getDiskInfos(ctx, z.serverPools[index].getHashedSet(object).getDisks())
+			storageInfos[index] = getDiskInfos(ctx, pool.getHashedSet(object).getDisks())
 			return nil
 		}, index)
 	}
@@ -304,6 +308,14 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 			}
 			available += disk.Total - disk.Used
 		}
+
+		// Since we are comparing pools that may have a different number of sets
+		// we multiply by the number of sets in the pool.
+		// This will compensate for differences in set sizes
+		// when choosing destination pool.
+		// Different set sizes are already compensated by less disks.
+		available *= uint64(nSets[i])
+
 		serverPools[i] = poolAvailableSpace{
 			Index:     i,
 			Available: available,
@@ -774,7 +786,16 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 
 	lockType = noLock // do not take locks at lower levels for GetObjectNInfo()
-	return z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if unlockOnDefer {
+		unlockOnDefer = false
+		return gr.WithCleanupFuncs(nsUnlocker), nil
+	}
+	return gr, nil
 }
 
 // getLatestObjectInfoWithIdx returns the objectInfo of the latest object from multiple pools (this function

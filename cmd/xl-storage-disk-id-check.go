@@ -538,6 +538,7 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 		atomic.AddUint64(&p.apiCalls[s], 1)
 		p.apiLatencies[s].add(duration)
 
+		paths = append([]string{p.String()}, paths...)
 		if trace {
 			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " ")))
 		}

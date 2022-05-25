@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +97,29 @@ func (s *TestSuiteIAM) iamSetup(c *check) {
 		c.Fatalf("error creating minio client: %v", err)
 	}
 }
+
+// List of all IAM test suites (i.e. test server configuration combinations)
+// common to tests.
+var iamTestSuites = func() []*TestSuiteIAM {
+	baseTestCases := []TestSuiteCommon{
+		// Init and run test on FS backend with signature v4.
+		{serverType: "FS", signer: signerV4},
+		// Init and run test on FS backend, with tls enabled.
+		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on Erasure backend.
+		{serverType: "Erasure", signer: signerV4},
+		// Init and run test on ErasureSet backend.
+		{serverType: "ErasureSet", signer: signerV4},
+	}
+	testCases := []*TestSuiteIAM{}
+	for _, bt := range baseTestCases {
+		testCases = append(testCases,
+			newTestSuiteIAM(bt, false),
+			newTestSuiteIAM(bt, true),
+		)
+	}
+	return testCases
+}()
 
 const (
 	EnvTestEtcdBackend = "ETCD_SERVER"
@@ -166,30 +190,12 @@ func (s *TestSuiteIAM) getUserClient(c *check, accessKey, secretKey, sessionToke
 }
 
 func TestIAMInternalIDPServerSuite(t *testing.T) {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip("windows is clunky disable these tests")
 	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	for i, testCase := range testCases {
-		etcdStr := ""
-		if testCase.withEtcdBackend {
-			etcdStr = " (with etcd backend)"
-		}
+	for i, testCase := range iamTestSuites {
 		t.Run(
-			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
 			func(t *testing.T) {
 				suite := testCase
 				c := &check{t, testCase.serverType}
@@ -236,6 +242,7 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 	if err != nil {
 		c.Fatalf("unable to set policy: %v", err)
 	}
+
 	client := s.getUserClient(c, accessKey, secretKey, "")
 	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
 	if err != nil {
@@ -973,6 +980,166 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
 }
 
+func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	pluginEndpoint := os.Getenv("POLICY_PLUGIN_ENDPOINT")
+	if pluginEndpoint == "" {
+		c.Skip("POLICY_PLUGIN_ENDPOINT not given - skipping.")
+	}
+
+	configCmds := []string{
+		"policy_plugin",
+		"url=" + pluginEndpoint,
+	}
+
+	_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
+	if err != nil {
+		c.Fatalf("unable to setup access management plugin for tests: %v", err)
+	}
+
+	s.RestartIAMSuite(c)
+}
+
+// TestIAM_AMPInternalIDPServerSuite - tests for access management plugin
+func TestIAM_AMPInternalIDPServerSuite(t *testing.T) {
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				suite := testCase
+				c := &check{t, testCase.serverType}
+
+				suite.SetUpSuite(c)
+				defer suite.TearDownSuite(c)
+
+				suite.SetUpAccMgmtPlugin(c)
+
+				suite.TestAccMgmtPlugin(c)
+			},
+		)
+	}
+}
+
+// TestAccMgmtPlugin - this test assumes that the access-management-plugin is
+// the same as the example in `docs/iam/access-manager-plugin.go` -
+// specifically, it denies only `s3:Put*` operations on non-root accounts.
+func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	// 0. Check that owner is able to make-bucket.
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// 1. Create a user.
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	// 2. Check new user appears in listing
+	usersMap, err := s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("error listing: %v", err)
+	}
+	v, ok := usersMap[accessKey]
+	if !ok {
+		c.Fatalf("user not listed: %s", accessKey)
+	}
+	c.Assert(v.Status, madmin.AccountEnabled)
+
+	// 3. Check that user is able to make a bucket.
+	client := s.getUserClient(c, accessKey, secretKey, "")
+	err = client.MakeBucket(ctx, getRandomBucketName(), minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("user not create bucket: %v", err)
+	}
+
+	// 3.1 check user has access to bucket
+	c.mustListObjects(ctx, client, bucket)
+
+	// 3.2 check that user cannot upload an object.
+	_, err = client.PutObject(ctx, bucket, "objectName", bytes.NewBuffer([]byte("some content")), 12, minio.PutObjectOptions{})
+	if err == nil {
+		c.Fatalf("user was able to upload unexpectedly")
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient)
+
+	// 1. Check that svc account appears in listing
+	c.assertSvcAccAppearsInListing(ctx, userAdmClient, accessKey, cr.AccessKey)
+
+	// 2. Check that svc account info can be queried
+	c.assertSvcAccInfoQueryable(ctx, userAdmClient, accessKey, cr.AccessKey, false)
+
+	// 3. Check S3 access
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
+
+	// Check that session policies do not apply - as policy enforcement is
+	// delegated to plugin.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+
+		// This policy does not allow listing objects.
+		policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:     policyBytes,
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		// Though the attached policy does not allow listing, it will be
+		// ignored because the plugin allows it.
+		c.mustListObjects(ctx, svcClient, bucket)
+	}
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, accessKey, bucket)
+
+	// 5. Check that service account can be deleted.
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
+
+	// 6. Check that service account **can** be created for some other user.
+	// This is possible because of the policy enforced in the plugin.
+	c.mustCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
+}
+
 func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) madmin.Credentials {
 	randUser := mustGetUUID()
 	randPass := mustGetUUID()
@@ -1026,7 +1193,7 @@ func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bu
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if !ok || v.Err == nil {
-		c.Fatalf("user was able to list unexpectedly!")
+		c.Fatalf("user was able to list unexpectedly! on %s", bucket)
 	}
 }
 
@@ -1034,9 +1201,18 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if ok && v.Err != nil {
-		msg := fmt.Sprintf("user was unable to list: %v", v.Err)
-		c.Fatalf(msg)
+		c.Fatalf("user was unable to list: %v", v.Err)
 	}
+}
+
+func (c *check) mustNotUpload(ctx context.Context, client *minio.Client, bucket string) {
+	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
+	if e, ok := err.(minio.ErrorResponse); ok {
+		if e.Code == "AccessDenied" {
+			return
+		}
+	}
+	c.Fatalf("upload did not get an AccessDenied error - got %#v instead", err)
 }
 
 func (c *check) assertSvcAccS3Access(ctx context.Context, s *TestSuiteIAM, cr madmin.Credentials, bucket string) {

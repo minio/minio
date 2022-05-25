@@ -561,8 +561,26 @@ func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(w http.ResponseWrite
 	logger.LogIf(r.Context(), globalSiteReplicationSys.Init(ctx, objAPI))
 }
 
+// GetAllBucketStatsHandler - fetches bucket replication stats for all buckets from this peer.
+func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	replicationStats := globalReplicationStats.GetAll()
+	bucketStatsMap := make(map[string]BucketStats, len(replicationStats))
+	for k, v := range replicationStats {
+		bucketStatsMap[k] = BucketStats{
+			ReplicationStats: v,
+		}
+	}
+
+	logger.LogIf(r.Context(), msgp.Encode(w, BucketStatsMap(bucketStatsMap)))
+}
+
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
-// returns BucketReplicationStatus
+// returns BucketStats, that currently includes ReplicationStats.
 func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
@@ -837,7 +855,14 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 			s.writeErrorResponse(w, err)
 			return
 		}
-		if err = applyDynamicConfig(r.Context(), objAPI, srvCfg); err != nil {
+		subSys := r.Form.Get(peerRESTSubSys)
+		// Apply dynamic values.
+		if subSys == "" {
+			err = applyDynamicConfig(r.Context(), objAPI, srvCfg)
+		} else {
+			err = applyDynamicConfigForSubSys(r.Context(), objAPI, srvCfg, subSys)
+		}
+		if err != nil {
 			s.writeErrorResponse(w, err)
 		}
 		return
@@ -1309,6 +1334,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetInfo).HandlerFunc(httpTraceHdrs(server.NetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDispatchNetInfo).HandlerFunc(httpTraceHdrs(server.DispatchNetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCycleBloom).HandlerFunc(httpTraceHdrs(server.CycleServerBloomFilterHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetAllBucketStats).HandlerFunc(httpTraceHdrs(server.GetAllBucketStatsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(httpTraceHdrs(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadBucketMetadata).HandlerFunc(httpTraceHdrs(server.LoadBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBucketStats).HandlerFunc(httpTraceHdrs(server.GetBucketStatsHandler)).Queries(restQueries(peerRESTBucket)...)

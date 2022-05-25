@@ -364,6 +364,18 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			}) {
 				bucketsInfo[n] = bucketInfo
 				n++
+			} else if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
+				Action:          iampolicy.GetBucketLocationAction,
+				BucketName:      bucketInfo.Name,
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				IsOwner:         owner,
+				ObjectName:      "",
+				Claims:          cred.Claims,
+			}) {
+				bucketsInfo[n] = bucketInfo
+				n++
 			}
 		}
 		bucketsInfo = bucketsInfo[:n]
@@ -1612,10 +1624,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if globalSiteReplicationSys.isEnabled() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
-		return
-	}
+
 	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNeedsVersioningError), r.URL)
 		return

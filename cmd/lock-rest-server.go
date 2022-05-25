@@ -239,10 +239,10 @@ func lockMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-lkTimer.C:
+			globalLockServer.expireOldLocks(lockValidityDuration)
+
 			// Reset the timer for next cycle.
 			lkTimer.Reset(lockMaintenanceInterval)
-
-			globalLockServer.expireOldLocks(lockValidityDuration)
 		}
 	}
 }

@@ -1630,8 +1630,6 @@ func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			// Reset for the next interval
-			timer.Reset(cacheStaleUploadCleanupInterval)
 			now := time.Now()
 			readDirFn(pathJoin(c.dir, minioMetaBucket, cacheMultipartDir), func(shaDir string, typ os.FileMode) error {
 				return readDirFn(pathJoin(c.dir, minioMetaBucket, cacheMultipartDir, shaDir), func(uploadIDDir string, typ os.FileMode) error {
@@ -1662,6 +1660,9 @@ func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
 				}
 				return nil
 			})
+
+			// Reset for the next interval
+			timer.Reset(cacheStaleUploadCleanupInterval)
 		}
 	}
 }
