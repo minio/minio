@@ -342,7 +342,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 			available += disk.Total - disk.Used
 
 			// set maxUsedPct to the value from the disk with the least space percentage.
-			if pctUsed := int(available * 100 / disk.Total); pctUsed > maxUsedPct {
+			if pctUsed := int(disk.Used * 100 / disk.Total); pctUsed > maxUsedPct {
 				maxUsedPct = pctUsed
 			}
 		}
