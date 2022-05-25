@@ -201,7 +201,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil {
-			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{}) {
+			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{OpType: replication.AllReplicationType}) {
 				if err == nil && (tgtArn == arnStr || rcfg.RoleArn == arnStr) {
 					sys.RLock()
 					_, ok := sys.arnRemotesMap[arnStr]
