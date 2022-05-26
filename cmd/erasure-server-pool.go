@@ -336,7 +336,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		}
 		var maxUsedPct int
 		for _, disk := range zinfo {
-			if disk == nil {
+			if disk == nil || disk.Total == 0 {
 				continue
 			}
 			available += disk.Total - disk.Used
