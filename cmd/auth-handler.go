@@ -218,7 +218,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 	}
 
 	// If AuthZPlugin is set, return without any further checks.
-	if globalAuthZPlugin != nil {
+	if newGlobalAuthZPluginFn() != nil {
 		return claims.Map(), nil
 	}
 

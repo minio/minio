@@ -359,4 +359,18 @@ var (
 	// Add new variable global values here.
 )
 
+var globalAuthZPluginMutex sync.Mutex
+
+func newGlobalAuthZPluginFn() *polplugin.AuthZPlugin {
+	globalAuthZPluginMutex.Lock()
+	defer globalAuthZPluginMutex.Unlock()
+	return globalAuthZPlugin
+}
+
+func setGlobalAuthZPlugin(authz *polplugin.AuthZPlugin) {
+	globalAuthZPluginMutex.Lock()
+	globalAuthZPlugin = authz
+	globalAuthZPluginMutex.Unlock()
+}
+
 var errSelfTestFailure = errors.New("self test failed. unsafe to start server")
