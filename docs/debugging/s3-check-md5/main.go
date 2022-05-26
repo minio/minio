@@ -38,6 +38,7 @@ var (
 	bucket, prefix                 string
 	debug                          bool
 	versions                       bool
+	insecure                       bool
 )
 
 // getMD5Sum returns MD5 sum of given data.
@@ -55,6 +56,7 @@ func main() {
 	flag.StringVar(&prefix, "prefix", "", "Select a prefix")
 	flag.BoolVar(&debug, "debug", false, "Prints HTTP network calls to S3 endpoint")
 	flag.BoolVar(&versions, "versions", false, "Verify all versions")
+	flag.BoolVar(&insecure, "insecure", false, "Disable TLS verification")
 	flag.Parse()
 
 	if endpoint == "" {
@@ -78,12 +80,23 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	secure := strings.EqualFold(u.Scheme, "https")
+	transport, err := minio.DefaultTransport(secure)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if insecure {
+		// skip TLS verification
+		transport.TLSClientConfig.InsecureSkipVerify = true
+	}
+
 	s3Client, err := minio.New(u.Host, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: strings.EqualFold(u.Scheme, "https"),
+		Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure:    secure,
+		Transport: transport,
 	})
 	if err != nil {
-		log.Fatalln()
+		log.Fatalln(err)
 	}
 
 	if debug {
