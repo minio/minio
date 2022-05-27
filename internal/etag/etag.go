@@ -110,7 +110,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -120,6 +119,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/hash/sha256"
 	"github.com/minio/sio"
 )
 

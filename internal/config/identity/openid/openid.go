@@ -20,7 +20,6 @@ package openid
 import (
 	"crypto"
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -36,6 +35,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
+	"github.com/minio/minio/internal/hash/sha256"
 	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"

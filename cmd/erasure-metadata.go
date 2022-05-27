@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
