@@ -3125,13 +3125,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err = globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			usrErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if usrErr != nil {
+				return info, errSRBackendIssue(usrErr)
+			}
 		}
 		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
 		for user, mp := range userPolicyMap {
@@ -3186,13 +3190,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			userErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
+			globalIAMSys.store.runlock()
+			if userErr != nil {
+				return info, errSRBackendIssue(userErr)
+			}
 		}
 
 		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, len(c.state.Peers))
