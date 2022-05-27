@@ -238,7 +238,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	}(*o)
 
 	entries, err = filteredResults()
-	cancelList()
+	defer cancelList()
 	wg.Wait()
 	if listErr != nil && !errors.Is(listErr, context.Canceled) {
 		return entries, listErr
@@ -324,7 +324,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		return len(oMeta.versions) > len(eMeta.versions)
 	})
 
-	cancelList()
+	//cancelList()
 	wg.Wait()
 	if err != nil {
 		return err
