@@ -1,6 +1,7 @@
 name: Go
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
     - master
