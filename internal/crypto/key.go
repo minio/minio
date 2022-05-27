@@ -22,13 +22,13 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"io"
 	"path"
 
 	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/hash/sha256"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/sio"
 )
