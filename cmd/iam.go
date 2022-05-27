@@ -353,26 +353,50 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Start watching changes to storage.
 	go sys.watch(ctx)
 
-	// Load RoleARN
-	if rolePolicyMap := sys.openIDConfig.GetRoleInfo(); rolePolicyMap != nil {
-		// Validate that policies associated with roles are defined.
-		for _, rolePolicies := range rolePolicyMap {
-			ps := newMappedPolicy(rolePolicies).toSlice()
-			numPolicies := len(ps)
-			validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
-			numValidPolicies := len(strings.Split(validPolicies, ","))
-			if numPolicies != numValidPolicies {
-				logger.LogIf(ctx, fmt.Errorf("Some specified role policies (in %s) were not defined - role policies will not be enabled.", rolePolicies))
-				return
-			}
-		}
-		sys.rolesMap = rolePolicyMap
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := globalOpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if globalAuthNPlugin != nil {
+		riMap := globalAuthNPlugin.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
 	}
 
 	sys.printIAMRoles()
 
 	now := time.Now()
 	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs to load data).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
+}
+
+func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
+	// Validate that policies associated with roles are defined. If
+	// authZ plugin is set, role policies are just claims sent to
+	// the plugin and they need not exist.
+	//
+	// If some mapped policies do not exist, we print some error
+	// messages but continue any way - they can be fixed in the
+	// running server by creating the policies after start up.
+	for arn, rolePolicies := range m {
+		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
+		validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
+		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
+		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
+		if len(unknownPoliciesSet) > 0 {
+			if globalAuthZPlugin == nil {
+				// Print a warning that some policies mapped to a role are not defined.
+				errMsg := fmt.Errorf(
+					"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",
+					unknownPoliciesSet.ToSlice(), arn.String())
+				logger.LogIf(ctx, errMsg)
+			}
+		}
+		sys.rolesMap[arn] = rolePolicies
+	}
 }
 
 // Prints IAM role ARNs.

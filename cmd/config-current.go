@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
@@ -56,6 +57,7 @@ func initHelp() {
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
 		config.IdentityTLSSubSys:    xtls.DefaultKVS,
+		config.IdentityPluginSubSys: idplugin.DefaultKVS,
 		config.PolicyOPASubSys:      opa.DefaultKVS,
 		config.PolicyPluginSubSys:   polplugin.DefaultKVS,
 		config.SiteSubSys:           config.DefaultSiteKVS,
@@ -107,6 +109,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.IdentityTLSSubSys,
 			Description: "enable X.509 TLS certificate SSO support",
+		},
+		config.HelpKV{
+			Key:         config.IdentityPluginSubSys,
+			Description: "enable Identity Plugin via external hook",
 		},
 		config.HelpKV{
 			Key:         config.PolicyPluginSubSys,
@@ -220,6 +226,7 @@ func initHelp() {
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.IdentityTLSSubSys:    xtls.Help,
+		config.IdentityPluginSubSys: idplugin.Help,
 		config.PolicyOPASubSys:      opa.Help,
 		config.PolicyPluginSubSys:   polplugin.Help,
 		config.LoggerWebhookSubSys:  logger.Help,
@@ -340,6 +347,11 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	case config.IdentityTLSSubSys:
 		if _, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.IdentityPluginSubSys:
+		if _, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
+			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 			return err
 		}
 	case config.SubnetSubSys:
@@ -541,6 +553,19 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
 
+	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+		globalRootCAs)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
+	}
+
+	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
+		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
+	}
+	globalAuthNPlugin = idplugin.New(authNPluginCfg)
+
 	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
 		NewGatewayHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
@@ -560,12 +585,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
-
-	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-		globalRootCAs)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
-	}
 
 	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
 	if err != nil {

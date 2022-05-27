@@ -73,6 +73,7 @@ const (
 	IdentityOpenIDSubSys = "identity_openid"
 	IdentityLDAPSubSys   = "identity_ldap"
 	IdentityTLSSubSys    = "identity_tls"
+	IdentityPluginSubSys = "identity_plugin"
 	CacheSubSys          = "cache"
 	SiteSubSys           = "site"
 	RegionSubSys         = "region"
@@ -146,6 +147,7 @@ var SubSystems = set.CreateStringSet(
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
 	IdentityTLSSubSys,
+	IdentityPluginSubSys,
 	ScannerSubSys,
 	HealSubSys,
 	NotifyAMQPSubSys,
@@ -188,6 +190,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	PolicyPluginSubSys,
 	IdentityLDAPSubSys,
 	IdentityTLSSubSys,
+	IdentityPluginSubSys,
 	HealSubSys,
 	ScannerSubSys,
 }...)
