@@ -73,6 +73,20 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_SHUTDOWN_TIMEOUT",
 		Hidden: true,
 	},
+	cli.DurationFlag{
+		Name:   "idle-timeout",
+		Value:  xhttp.DefaultIdleTimeout,
+		Usage:  "idle timeout is the maximum amount of time to wait for the next request when keep-alives are enabled",
+		EnvVar: "MINIO_IDLE_TIMEOUT",
+		Hidden: true,
+	},
+	cli.DurationFlag{
+		Name:   "read-header-timeout",
+		Value:  xhttp.DefaultReadHeaderTimeout,
+		Usage:  "read header timeout is the amount of time allowed to read request headers",
+		EnvVar: "MINIO_READ_HEADER_TIMEOUT",
+		Hidden: true,
+	},
 }
 
 var serverCmd = cli.Command{
@@ -486,6 +500,8 @@ func serverMain(ctx *cli.Context) {
 		UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 		UseTLSConfig(newTLSConfig(getCert)).
 		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
+		UseIdleTimeout(ctx.Duration("idle-timeout")).
+		UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
 		UseBaseContext(GlobalContext).
 		UseCustomLogger(log.New(ioutil.Discard, "", 0)) // Turn-off random logging by Go stdlib
 

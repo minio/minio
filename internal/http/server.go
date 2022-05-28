@@ -47,6 +47,12 @@ const (
 	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
 	DefaultShutdownTimeout = 5 * time.Second
 
+	// DefaultIdleTimeout for idle inactive connections
+	DefaultIdleTimeout = 30 * time.Second
+
+	// DefaultReadHeaderTimeout for very slow inactive connections
+	DefaultReadHeaderTimeout = 30 * time.Second
+
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
 )
@@ -169,6 +175,18 @@ func (srv *Server) UseShutdownTimeout(d time.Duration) *Server {
 	return srv
 }
 
+// UseIdleTimeout configure idle connection timeout
+func (srv *Server) UseIdleTimeout(d time.Duration) *Server {
+	srv.IdleTimeout = d
+	return srv
+}
+
+// UseReadHeaderTimeout configure read header timeout
+func (srv *Server) UseReadHeaderTimeout(d time.Duration) *Server {
+	srv.ReadHeaderTimeout = d
+	return srv
+}
+
 // UseHandler configure final handler for this HTTP *Server
 func (srv *Server) UseHandler(h http.Handler) *Server {
 	srv.Handler = h
@@ -206,8 +224,8 @@ func NewServer(addrs []string) *Server {
 }
 
 // SetMinIOVersion -- MinIO version from the main package is set here
-func SetMinIOVersion(minioVer string) {
-	GlobalMinIOVersion = minioVer
+func SetMinIOVersion(version string) {
+	GlobalMinIOVersion = version
 }
 
 // SetDeploymentID -- Deployment Id from the main package is set here
