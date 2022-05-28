@@ -190,11 +190,17 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 		return
 	}
 
+	// object layer not initialized we return with no decision.
+	if newObjectLayerFn() == nil {
+		return
+	}
+
 	// Disable server-side replication on object prefixes which are excluded
 	// from versioning via the MinIO bucket versioning extension.
 	if globalBucketVersioningSys.PrefixSuspended(bucket, object) {
 		return
 	}
+
 	replStatus := mopts.ReplicationStatus()
 	if replStatus == replication.Replica && !mopts.isMetadataReplication() {
 		return

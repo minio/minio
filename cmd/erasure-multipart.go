@@ -1027,7 +1027,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	fi.IsLatest = true
 
 	// Success, return object info.
-	return fi.ToObjectInfo(bucket, object), nil
+	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
 // AbortMultipartUpload - aborts an ongoing multipart operation

@@ -1057,9 +1057,13 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	fivs = fivs[:lim+1]
 
 	rcfg, _ := globalBucketObjectLockSys.Get(i.bucket)
+	vcfg, _ := globalBucketVersioningSys.Get(i.bucket)
+
+	versioned := vcfg != nil && vcfg.Versioned(i.objectPath())
+
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
-		obj := fi.ToObjectInfo(i.bucket, i.objectPath())
+		obj := fi.ToObjectInfo(i.bucket, i.objectPath(), versioned)
 		// skip versions with object locking enabled
 		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			if i.debug {

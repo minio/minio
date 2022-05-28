@@ -2984,8 +2984,9 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				CreatedAt: createdAt,
 				Location:  globalSite.Region,
 			}
+
 			// Get bucket policy if present.
-			policy, err := globalPolicySys.Get(bucket)
+			policy, updatedAt, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 			found := true
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				found = false
@@ -2998,6 +2999,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 					return info, wrapSRErr(err)
 				}
 				bms.Policy = policyJSON
+				bms.PolicyUpdatedAt = updatedAt
 			}
 
 			// Get bucket tags if present.
@@ -3016,6 +3018,23 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				tagCfgStr := base64.StdEncoding.EncodeToString(tagBytes)
 				bms.Tags = &tagCfgStr
 				bms.TagConfigUpdatedAt = updatedAt
+			}
+
+			versioningCfg, updatedAt, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+			found = true
+			if versioningCfg != nil && versioningCfg.Status == "" {
+				found = false
+			} else if err != nil {
+				return info, errSRBackendIssue(err)
+			}
+			if found {
+				versionCfgData, err := xml.Marshal(versioningCfg)
+				if err != nil {
+					return info, wrapSRErr(err)
+				}
+				versioningCfgStr := base64.StdEncoding.EncodeToString(versionCfgData)
+				bms.Versioning = &versioningCfgStr
+				bms.VersioningConfigUpdatedAt = updatedAt
 			}
 
 			// Get object-lock config if present.

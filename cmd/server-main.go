@@ -277,8 +277,6 @@ func initAllSubsystems() {
 	// Create new bucket versioning subsystem
 	if globalBucketVersioningSys == nil {
 		globalBucketVersioningSys = NewBucketVersioningSys()
-	} else {
-		globalBucketVersioningSys.Reset()
 	}
 
 	// Create new bucket replication subsytem
