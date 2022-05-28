@@ -17,21 +17,21 @@
       "version": ""
     },
     {
-      "type": "panel",
-      "id": "gauge",
-      "name": "Gauge",
-      "version": ""
-    },
-    {
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "8.0.6"
+      "version": "8.2.1"
     },
     {
       "type": "panel",
       "id": "graph",
-      "name": "Graph",
+      "name": "Graph (old)",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
       "version": ""
     },
     {
@@ -56,16 +56,23 @@
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
         "type": "dashboard"
       }
     ]
   },
-  "description": "MinIO dashboard - https://min.io/",
+  "description": "MinIO Grafana Dashboard - https://min.io/",
   "editable": true,
+  "fiscalYearStartMonth": 0,
   "gnetId": 13502,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1629787190164,
+  "iteration": 1653756543524,
   "links": [
     {
       "icon": "external link",
@@ -77,6 +84,7 @@
       "type": "dashboards"
     }
   ],
+  "liveNow": false,
   "panels": [
     {
       "cacheTimeout": null,
@@ -133,7 +141,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -208,7 +216,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -232,8 +240,19 @@
     {
       "cacheTimeout": null,
       "datasource": "${DS_PROMETHEUS}",
+      "description": "",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
           "mappings": [
             {
               "options": {
@@ -245,22 +264,13 @@
               "type": "special"
             }
           ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "rgba(255, 255, 255, 0.97)",
-                "value": null
-              }
-            ]
-          },
           "unit": "bytes"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 3,
+        "w": 4,
         "x": 6,
         "y": 0
       },
@@ -269,7 +279,15 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
-        "orientation": "horizontal",
+        "displayLabels": [],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "values": [
+            "percent"
+          ]
+        },
+        "pieType": "donut",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -277,28 +295,36 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
+        "tooltip": {
+          "mode": "single"
+        }
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
-          "expr": "topk(1, sum(minio_cluster_capacity_usable_free_bytes{job=\"$scrape_jobs\"}) by (instance))",
+          "expr": "topk(1, sum(minio_cluster_capacity_usable_total_bytes{job=\"$scrape_jobs\"}) by (instance)) - topk(1, sum(minio_cluster_capacity_usable_free_bytes{job=\"$scrape_jobs\"}) by (instance))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",
           "intervalFactor": 1,
-          "legendFormat": "",
+          "legendFormat": "Used",
           "refId": "A",
           "step": 300
+        },
+        {
+          "exemplar": true,
+          "expr": "topk(1, sum(minio_cluster_capacity_usable_free_bytes{job=\"$scrape_jobs\"}) by (instance)) ",
+          "hide": false,
+          "interval": "1m",
+          "legendFormat": "Free",
+          "refId": "B"
         }
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Current Usable Capacity",
-      "type": "gauge"
+      "title": "Capacity",
+      "type": "piechart"
     },
     {
       "aliasColors": {},
@@ -310,8 +336,8 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 7,
-        "x": 9,
+        "w": 6,
+        "x": 10,
         "y": 0
       },
       "hiddenSeries": false,
@@ -332,7 +358,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -434,7 +460,7 @@
         "showUnfilled": false,
         "text": {}
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -512,7 +538,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -588,7 +614,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -668,7 +694,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -748,7 +774,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -828,7 +854,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -911,7 +937,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -962,7 +988,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1058,7 +1084,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1178,7 +1204,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -1258,7 +1284,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -1341,7 +1367,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -1405,7 +1431,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -1473,7 +1499,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "targets": [
         {
           "exemplar": true,
@@ -1528,7 +1554,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1624,7 +1650,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1730,7 +1756,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1833,7 +1859,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1941,7 +1967,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2033,7 +2059,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2125,7 +2151,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2219,7 +2245,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2326,7 +2352,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2443,7 +2469,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2536,7 +2562,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.0.6",
+      "pluginVersion": "8.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2606,8 +2632,8 @@
       }
     }
   ],
-  "refresh": "10s",
-  "schemaVersion": 30,
+  "refresh": false,
+  "schemaVersion": 31,
   "style": "dark",
   "tags": [
     "minio"
@@ -2668,7 +2694,7 @@
     ]
   },
   "timezone": "",
-  "title": "MinIO Overview",
+  "title": "MinIO Dashboard",
   "uid": "TgmJnqnnk",
-  "version": 18
+  "version": 7
 }
