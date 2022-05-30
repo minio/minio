@@ -509,23 +509,45 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 	}
 
 	readQuorum := (len(disks) + 1) / 2
-	merged := mergeXLV2Versions(readQuorum, false, 1, metadataShallowVersions...)
+	meta := &xlMetaV2{versions: mergeXLV2Versions(readQuorum, false, 1, metadataShallowVersions...)}
+	lfi, err := meta.ToFileInfo(bucket, object, "")
+	if err != nil {
+		for i := range errs {
+			if errs[i] == nil {
+				errs[i] = err
+			}
+		}
+		return metaFileInfos, errs
+	}
+	if !lfi.IsValid() {
+		for i := range errs {
+			if errs[i] == nil {
+				errs[i] = errCorruptedFormat
+			}
+		}
+		return metaFileInfos, errs
+	}
+
 	for index := range metadataArray {
 		if metadataArray[index] == nil {
 			continue
 		}
 
-		metadataArray[index].versions = merged
-
 		// make sure to preserve this for diskmtime based healing bugfix.
 		diskMTime := metaFileInfos[index].DiskMTime
 		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, "")
-		if errs[index] == nil {
+		if errs[index] != nil {
+			continue
+		}
+
+		if metaFileInfos[index].IsValid() && metaFileInfos[index].ModTime.Equal(lfi.ModTime) {
 			versionID := metaFileInfos[index].VersionID
 			if versionID == "" {
 				versionID = nullVersionID
 			}
-			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
+			if readData {
+				metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
+			}
 			metaFileInfos[index].DiskMTime = diskMTime
 		}
 	}
@@ -593,6 +615,8 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) {
 			continue
 		}
+		metaArr[i] = FileInfo{}
+		onlineDisks[i] = nil
 		missingBlocks++
 	}
 
