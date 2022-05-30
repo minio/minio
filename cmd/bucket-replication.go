@@ -2187,10 +2187,6 @@ func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, 
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
-	// replication applies only to erasure coded setups
-	if !globalIsErasure {
-		return nil
-	}
 	// Load bucket metadata sys in background
 	go p.loadResync(ctx, buckets, objAPI)
 	return nil

@@ -51,10 +51,12 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 	if cleanup {
 		// Recursively delete all caches.
 		objAPI := newObjectLayerFn()
-		ez, ok := objAPI.(*erasureServerPools)
-		if ok {
-			ctx := context.Background()
-			ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+		if objAPI != nil {
+			ez, ok := objAPI.(renameAllStorager)
+			if ok {
+				ctx := context.Background()
+				ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+			}
 		}
 	}
 	return &bucketMetacache{
@@ -207,9 +209,15 @@ func (b *bucketMetacache) cloneCaches() (map[string]metacache, map[string][]stri
 // Deletes are performed concurrently.
 func (b *bucketMetacache) deleteAll() {
 	ctx := context.Background()
-	ez, ok := newObjectLayerFn().(*erasureServerPools)
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return
+	}
+
+	ez, ok := objAPI.(renameAllStorager)
 	if !ok {
-		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasurePools"))
+		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be 'renameAllStorager'"))
 		return
 	}
 

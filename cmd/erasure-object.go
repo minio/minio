@@ -1327,12 +1327,17 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
+	dirPrefix := encodeDirObject(prefix)
 	for index := range disks {
 		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return nil
 			}
+			// Deletes
+			// - The prefix and its children
+			// - The prefix__XLDIR__
+			defer disks[index].Delete(ctx, bucket, dirPrefix, true)
 			return disks[index].Delete(ctx, bucket, prefix, true)
 		}, index)
 	}

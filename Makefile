@@ -53,7 +53,7 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
 	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
-	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
+	@GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
 test-replication: install ## verify multi site replication
 	@echo "Running tests for replicating three sites"
@@ -73,18 +73,18 @@ test-site-replication-minio: install ## verify automatic site replication
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
-	@CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 verify-healing: ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
-	@CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
 
 verify-healing-inconsistent-versions: ## verify resolving inconsistent versions
 	@echo "Verify resolving inconsistent versions build with race"
-	@CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/resolve-right-versions.sh)
 
 build: checks ## builds minio to $(PWD)

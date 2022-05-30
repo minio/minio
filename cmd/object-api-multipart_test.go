@@ -1620,39 +1620,35 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 				t.Errorf("Test %d: %s: Expected Bucket to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.Bucket, actualResult.Bucket)
 			}
 
-			// ListObjectParts returns empty response always in FS mode
-			if instanceType != FSTestStr {
-				// Asserting IsTruncated.
-				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-					t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-					continue
+			// Asserting IsTruncated.
+			if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
+				t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
+				continue
+			}
+			// Asserting NextPartNumberMarker.
+			if actualResult.NextPartNumberMarker != expectedResult.NextPartNumberMarker {
+				t.Errorf("Test %d: %s: Expected NextPartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.NextPartNumberMarker, actualResult.NextPartNumberMarker)
+				continue
+			}
+			// Asserting the number of Parts.
+			if len(expectedResult.Parts) != len(actualResult.Parts) {
+				t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
+				continue
+			}
+			// Iterating over the partInfos and asserting the fields.
+			for j, actualMetaData := range actualResult.Parts {
+				//  Asserting the PartNumber in the PartInfo.
+				if actualMetaData.PartNumber != expectedResult.Parts[j].PartNumber {
+					t.Errorf("Test %d: %s: Part %d: Expected PartNumber to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].PartNumber, actualMetaData.PartNumber)
 				}
-				// Asserting NextPartNumberMarker.
-				if actualResult.NextPartNumberMarker != expectedResult.NextPartNumberMarker {
-					t.Errorf("Test %d: %s: Expected NextPartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.NextPartNumberMarker, actualResult.NextPartNumberMarker)
-					continue
+				//  Asserting the Size in the PartInfo.
+				if actualMetaData.Size != expectedResult.Parts[j].Size {
+					t.Errorf("Test %d: %s: Part %d: Expected Part Size to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].Size, actualMetaData.Size)
 				}
-				// Asserting the number of Parts.
-				if len(expectedResult.Parts) != len(actualResult.Parts) {
-					t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
-					continue
+				//  Asserting the ETag in the PartInfo.
+				if actualMetaData.ETag != expectedResult.Parts[j].ETag {
+					t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
 				}
-				// Iterating over the partInfos and asserting the fields.
-				for j, actualMetaData := range actualResult.Parts {
-					//  Asserting the PartNumber in the PartInfo.
-					if actualMetaData.PartNumber != expectedResult.Parts[j].PartNumber {
-						t.Errorf("Test %d: %s: Part %d: Expected PartNumber to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].PartNumber, actualMetaData.PartNumber)
-					}
-					//  Asserting the Size in the PartInfo.
-					if actualMetaData.Size != expectedResult.Parts[j].Size {
-						t.Errorf("Test %d: %s: Part %d: Expected Part Size to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].Size, actualMetaData.Size)
-					}
-					//  Asserting the ETag in the PartInfo.
-					if actualMetaData.ETag != expectedResult.Parts[j].ETag {
-						t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
-					}
-				}
-
 			}
 		}
 	}

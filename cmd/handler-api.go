@@ -116,10 +116,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
 		blockSize := xioutil.BlockSizeLarge + xioutil.BlockSizeSmall
 		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
-
-		if globalIsErasure {
-			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
-		}
+		logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
 		if len(globalEndpoints.Hostnames()) > 0 {

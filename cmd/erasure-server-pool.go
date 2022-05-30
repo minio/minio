@@ -61,6 +61,22 @@ func (z *erasureServerPools) SinglePool() bool {
 
 // Initialize new pool of erasure sets.
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
+	if endpointServerPools.NEndpoints() == 1 {
+		ep := endpointServerPools[0]
+		storageDisks, format, err := waitForFormatErasure(true, ep.Endpoints, 1, ep.SetCount, ep.DrivesPerSet, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		objLayer, err := newErasureSingle(ctx, storageDisks[0], format)
+		if err != nil {
+			return nil, err
+		}
+
+		globalLocalDrives = storageDisks
+		return objLayer, nil
+	}
+
 	var (
 		deploymentID       string
 		distributionAlgo   string
@@ -320,7 +336,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		nSets[index] = pool.setCount
 		g.Go(func() error {
 			// Get the set where it would be placed.
-			storageInfos[index] = getDiskInfos(ctx, pool.getHashedSet(object).getDisks())
+			storageInfos[index] = getDiskInfos(ctx, pool.getHashedSet(object).getDisks()...)
 			return nil
 		}, index)
 	}
@@ -933,7 +949,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), data.Size()) {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size()) {
 			return ObjectInfo{}, toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
@@ -1325,7 +1341,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), -1) {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1) {
 			return "", toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
