@@ -66,9 +66,7 @@ var (
 	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second)
-	scannerCycle   = &safeDuration{
-		t: dataScannerStartDelay,
-	}
+	scannerCycle   = safeDuration(dataScannerStartDelay)
 )
 
 // initDataScanner will start the scanner in the background.
@@ -88,21 +86,15 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	}()
 }
 
-type safeDuration struct {
-	sync.Mutex
-	t time.Duration
-}
+// safeDuration contains an atomic duration value.
+type safeDuration time.Duration
 
 func (s *safeDuration) Update(t time.Duration) {
-	s.Lock()
-	defer s.Unlock()
-	s.t = t
+	atomic.StoreInt64((*int64)(s), int64(t))
 }
 
 func (s *safeDuration) Get() time.Duration {
-	s.Lock()
-	defer s.Unlock()
-	return s.t
+	return time.Duration(atomic.LoadInt64((*int64)(s)))
 }
 
 func getCycleScanMode(currentCycle, bitrotStartCycle uint64, bitrotStartTime time.Time) madmin.HealScanMode {

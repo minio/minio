@@ -28,7 +28,7 @@ var (
 	HelpCallhome = config.HelpKVS{
 		config.HelpKV{
 			Key:         Enable,
-			Type:        "boolean",
+			Type:        "on|off",
 			Description: "set to enable callhome" + defaultHelpPostfix(Enable),
 			Optional:    true,
 		},

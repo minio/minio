@@ -21,7 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go"
@@ -29,14 +29,17 @@ import (
 )
 
 const (
-	// CallhomeSchemaVersion1 is callhome schema version 1
-	CallhomeSchemaVersion1 = "1"
+	// callhomeSchemaVersion1 is callhome schema version 1
+	callhomeSchemaVersion1 = "1"
 
-	// CallhomeSchemaVersion is current callhome schema version.
-	CallhomeSchemaVersion = CallhomeSchemaVersion1
+	// callhomeSchemaVersion is current callhome schema version.
+	callhomeSchemaVersion = callhomeSchemaVersion1
 
-	// CallhomeCycleDefault is the default interval between two callhome cycles (24hrs)
-	CallhomeCycleDefault = 24 * time.Hour
+	// callhomeCycleDefault is the default interval between two callhome cycles (24hrs)
+	callhomeCycleDefault = 24 * time.Hour
+
+	// false value of the safeBool - use for initializing only, not for comparisons
+	safeBoolFalse safeBool = 0
 )
 
 // CallhomeInfo - Contains callhome information
@@ -46,26 +49,28 @@ type CallhomeInfo struct {
 }
 
 var (
-	enableCallhome            = &safeBool{b: false}
+	enableCallhome            = safeBoolFalse
 	callhomeLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
-	callhomeFreq              = &safeDuration{t: CallhomeCycleDefault}
+	callhomeFreq              = safeDuration(callhomeCycleDefault)
 )
 
-type safeBool struct {
-	sync.Mutex
-	b bool
-}
+// safeBool contains an atomic bool value.
+// Zero value is "false", use safeBoolTrue to initialize a true value.
+type safeBool int32
 
+// Update will update the bool.
+// Order of concurrent updates is not guaranteed
 func (s *safeBool) Update(b bool) {
-	s.Lock()
-	defer s.Unlock()
-	s.b = b
+	if b {
+		atomic.StoreInt32((*int32)(s), 1)
+	} else {
+		atomic.StoreInt32((*int32)(s), 0)
+	}
 }
 
+// Get returns the bool value.
 func (s *safeBool) Get() bool {
-	s.Lock()
-	defer s.Unlock()
-	return s.b
+	return atomic.LoadInt32((*int32)(s)) == 1
 }
 
 func updateCallhomeParams(ctx context.Context, objAPI ObjectLayer) {
@@ -145,7 +150,7 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 func performCallhome(ctx context.Context) {
 	err := sendCallhomeInfo(
 		CallhomeInfo{
-			SchemaVersion: CallhomeSchemaVersion,
+			SchemaVersion: callhomeSchemaVersion,
 			AdminInfo:     getServerInfo(ctx, nil),
 		})
 	if err != nil {
