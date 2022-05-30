@@ -91,6 +91,10 @@ build: checks ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
+build-linux-amd64:
+	@echo "Building minio binary to './minio' for linux amd64"
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#')))
@@ -117,6 +121,10 @@ docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix t
 docker: build checks ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
+
+docker-linux-amd64: build-linux-amd64
+	@echo "Building minio docker image '$(TAG)' for linux amd64"
+	@docker buildx build --platform linux/amd64 -q --no-cache -t $(TAG) . -f Dockerfile
 
 install: build ## builds minio and installs it to $GOPATH/bin.
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
