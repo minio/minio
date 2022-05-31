@@ -642,6 +642,8 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 // function closes 'out' and exits.
 func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle, lr lock.Retention, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
 	defer close(out)
+
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
 	for {
 		var obj metaCacheEntry
 		var ok bool
@@ -658,7 +660,10 @@ func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle,
 		if err != nil {
 			continue
 		}
-		objInfo := fi.ToObjectInfo(bucket, obj.name)
+
+		versioned := vcfg != nil && vcfg.Versioned(obj.name)
+
+		objInfo := fi.ToObjectInfo(bucket, obj.name, versioned)
 		action := evalActionFromLifecycle(ctx, lc, lr, objInfo, false)
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:

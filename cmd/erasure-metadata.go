@@ -104,10 +104,10 @@ func (fi FileInfo) IsValid() bool {
 }
 
 // ToObjectInfo - Converts metadata to object info.
-func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
+func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInfo {
 	object = decodeDirObject(object)
 	versionID := fi.VersionID
-	if (globalBucketVersioningSys.PrefixEnabled(bucket, object) || globalBucketVersioningSys.PrefixSuspended(bucket, object)) && versionID == "" {
+	if versioned && versionID == "" {
 		versionID = nullVersionID
 	}
 

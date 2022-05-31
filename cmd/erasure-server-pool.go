@@ -1756,6 +1756,8 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 		defer cancel()
 		defer close(results)
 
+		versioned := opts.Versioned || opts.VersionSuspended
+
 		for _, erasureSet := range z.serverPools {
 			var wg sync.WaitGroup
 			for _, set := range erasureSet.sets {
@@ -1783,12 +1785,12 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						if opts.WalkAscending {
 							for i := len(fivs.Versions) - 1; i >= 0; i-- {
 								version := fivs.Versions[i]
-								results <- version.ToObjectInfo(bucket, version.Name)
+								results <- version.ToObjectInfo(bucket, version.Name, versioned)
 							}
 							return
 						}
 						for _, version := range fivs.Versions {
-							results <- version.ToObjectInfo(bucket, version.Name)
+							results <- version.ToObjectInfo(bucket, version.Name, versioned)
 						}
 					}
 
