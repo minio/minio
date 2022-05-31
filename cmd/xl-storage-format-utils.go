@@ -50,7 +50,9 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 	var versions []FileInfo
 	var err error
 
-	if buf, _ := isIndexedMetaV2(xlMetaBuf); buf != nil {
+	if buf, _, err := isIndexedMetaV2(xlMetaBuf); err != nil {
+		return FileInfoVersions{}, err
+	} else if buf != nil {
 		versions, err = buf.ListVersions(volume, path)
 	} else {
 		var xlMeta xlMetaV2
@@ -87,7 +89,9 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	var fi FileInfo
 	var err error
 	var inData xlMetaInlineData
-	if buf, data := isIndexedMetaV2(xlMetaBuf); buf != nil {
+	if buf, data, err := isIndexedMetaV2(xlMetaBuf); err != nil {
+		return FileInfo{}, err
+	} else if buf != nil {
 		inData = data
 		fi, err = buf.ToFileInfo(volume, path, versionID)
 		if len(buf) != 0 && errors.Is(err, errFileNotFound) {

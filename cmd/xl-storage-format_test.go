@@ -514,7 +514,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					buf, _ := isIndexedMetaV2(enc)
+					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
@@ -529,7 +529,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					buf, _ := isIndexedMetaV2(enc)
+					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
