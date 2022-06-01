@@ -69,7 +69,12 @@ spec:
       - name: minio-mc
         image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
         imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
+        {{- if .Values.customCommandJob.exitCommand }}
+        command: ["/bin/sh", "-c"]
+        args: ["/bin/sh /config/custom-command; x=$(echo $?); {{ .Values.customCommandJob.exitCommand }} && exit $x" ]
+        {{- else }}
         command: ["/bin/sh", "/config/custom-command"]
+        {{- end }}
         env:
           - name: MINIO_ENDPOINT
             value: {{ template "minio.fullname" . }}
