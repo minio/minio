@@ -168,8 +168,10 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	if !isXL2V1Format(e.metadata) {
 		return false
 	}
-	if meta, _ := isIndexedMetaV2(e.metadata); meta != nil {
+	if meta, _, err := isIndexedMetaV2(e.metadata); meta != nil {
 		return meta.IsLatestDeleteMarker()
+	} else if err != nil {
+		return true
 	}
 	// Fall back...
 	xlMeta, err := e.xlmeta()
