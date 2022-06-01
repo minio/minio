@@ -38,8 +38,8 @@ additionalLabels: []
 additionalAnnotations: []
 
 ## Typically the deployment/statefulset includes checksums of secrets/config,
-## So that when these change on a subsequent helm install, the deployment/statefulset 
-## is restarted. This can result in unnecessary restarts under GitOps tooling such as 
+## So that when these change on a subsequent helm install, the deployment/statefulset
+## is restarted. This can result in unnecessary restarts under GitOps tooling such as
 ## flux, so set to "true" to disable this behaviour.
 ignoreChartChecksums: false
 
@@ -255,12 +255,12 @@ resources:
 ## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
 ## you can define additional policies with custom supported actions and resources
 policies: []
-## writeexamplepolicy policy grants creation or deletion of buckets with name 
+## writeexamplepolicy policy grants creation or deletion of buckets with name
 ## starting with example. In addition, grants objects write permissions on buckets starting with
 ## example.
 # - name: writeexamplepolicy
 #   statements:
-#     - resources: 
+#     - resources:
 #         - 'arn:aws:s3:::example*/*'
 #       actions:
 #         - "s3:AbortMultipartUpload"
@@ -268,7 +268,7 @@ policies: []
 #         - "s3:DeleteObject"
 #         - "s3:PutObject"
 #         - "s3:ListMultipartUploadParts"
-#     - resources: 
+#     - resources:
 #         - 'arn:aws:s3:::example*'
 #       actions:
 #         - "s3:CreateBucket"
@@ -276,15 +276,15 @@ policies: []
 #         - "s3:GetBucketLocation"
 #         - "s3:ListBucket"
 #         - "s3:ListBucketMultipartUploads"
-## readonlyexamplepolicy policy grants access to buckets with name starting with example. 
+## readonlyexamplepolicy policy grants access to buckets with name starting with example.
 ## In addition, grants objects read permissions on buckets starting with example.
 # - name: readonlyexamplepolicy
 #   statements:
-#     - resources: 
+#     - resources:
 #         - 'arn:aws:s3:::example*/*'
 #       actions:
 #         - "s3:GetObject"
-#     - resources: 
+#     - resources:
 #         - 'arn:aws:s3:::example*'
 #       actions:
 #         - "s3:GetBucketLocation"
@@ -432,6 +432,7 @@ metrics:
     enabled: false
     public: true
     additionalLabels: {}
+    annotations: {}
     relabelConfigs: {}
     # namespace: monitoring
     # interval: 30s

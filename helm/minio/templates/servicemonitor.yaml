@@ -16,6 +16,10 @@ metadata:
     {{- if .Values.metrics.serviceMonitor.additionalLabels }}
 {{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
     {{- end }}
+{{- if .Values.metrics.serviceMonitor.annotations }}
+  annotations:
+{{ toYaml .Values.metrics.serviceMonitor.annotations | trimSuffix "\n" | indent 4 }}
+{{- end }}
 spec:
   endpoints:
     {{- if .Values.tls.enabled }}
