@@ -3991,14 +3991,21 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 	}
 	rcfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 	if err != nil {
+		_, ok := err.(BucketReplicationConfigNotFound)
+		if !ok {
+			return err
+		}
 		replMismatch = true
 	}
 
-	// validate remote targets on current cluster for this bucket
-	_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
-	if apiErr != noError {
-		replMismatch = true
+	if rcfg != nil {
+		// validate remote targets on current cluster for this bucket
+		_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
+		if apiErr != noError {
+			replMismatch = true
+		}
 	}
+
 	if replMismatch {
 		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
 		if err != nil {
