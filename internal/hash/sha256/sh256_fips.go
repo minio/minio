@@ -21,7 +21,7 @@
 package sha256
 
 import (
-	fipsha256 "crypto/sha256"
+	fipssha256 "crypto/sha256"
 	"hash"
 )
 
@@ -29,7 +29,7 @@ import (
 // The SHA256 implementation is FIPS 140-2 compliant when the
 // boringcrypto branch of Go is used.
 // Ref: https://github.com/golang/go/tree/dev.boringcrypto
-func New() hash.Hash { return fipsha256.New() }
+func New() hash.Hash { return fipssha256.New() }
 
 // Sum256 returns the SHA256 checksum of the data.
 func Sum256(data []byte) [fipssha256.Size]byte { return fipssha256.Sum256(data) }
