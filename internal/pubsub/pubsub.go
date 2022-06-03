@@ -18,7 +18,7 @@
 package pubsub
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -59,7 +59,7 @@ func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filt
 	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
 	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
 		atomic.AddInt32(&ps.numSubscribers, -1)
-		return errors.New("maximum clients subscribed exceeded")
+		return fmt.Errorf("the limit of `%d` subscribers is reached", ps.maxSubscribers)
 	}
 
 	ps.Lock()
