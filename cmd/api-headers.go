@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,6 +29,8 @@ import (
 
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
+	xxml "github.com/minio/xxml"
 )
 
 // Returns a hexadecimal representation of time at the
@@ -64,9 +65,13 @@ func setCommonHeaders(w http.ResponseWriter) {
 // Encodes the response headers into XML format.
 func encodeResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
-	bytesBuffer.WriteString(xml.Header)
-	e := xml.NewEncoder(&bytesBuffer)
-	e.Encode(response)
+	bytesBuffer.WriteString(xxml.Header)
+	buf, err := xxml.Marshal(response)
+	if err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
+	}
+	bytesBuffer.Write(buf)
 	return bytesBuffer.Bytes()
 }
 
