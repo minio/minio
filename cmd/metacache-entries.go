@@ -695,8 +695,12 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			}
 		}
 		if best.name > last {
-			out <- *best
-			last = best.name
+			select {
+			case <-ctxDone:
+				return ctx.Err()
+			case out <- *best:
+				last = best.name
+			}
 		} else if serverDebugLog {
 			console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
 		}
