@@ -214,7 +214,7 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	}
 
 	var rootDisk bool
-	if !globalIsCICD {
+	if !globalIsCICD && !globalIsErasureSD {
 		if globalRootDiskThreshold > 0 {
 			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
 			// this disk is a root disk.
