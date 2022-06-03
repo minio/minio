@@ -1821,9 +1821,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	healthInfoCh := make(chan madmin.HealthInfo)
 
 	enc := json.NewEncoder(w)
-	partialWrite := func(oinfo madmin.HealthInfo) {
-		healthInfoCh <- oinfo
-	}
 
 	setCommonHeaders(w)
 
@@ -1854,9 +1851,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	deadlinedCtx, deadlineCancel := context.WithTimeout(ctx, deadline)
-	defer deadlineCancel()
-
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
 	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
 	if err != nil { // returns a locked lock
@@ -1864,6 +1858,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer nsLock.Unlock(lkctx.Cancel)
+
+	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
+	defer healthCancel()
 
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
@@ -1883,20 +1880,27 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		info.SetAddr(anonAddr(info.GetAddr()))
 	}
 
+	partialWrite := func(oinfo madmin.HealthInfo) {
+		select {
+		case healthInfoCh <- oinfo:
+		case <-healthCtx.Done():
+		}
+	}
+
 	getAndWritePlatformInfo := func() {
 		if IsKubernetes() {
-			healthInfo.Sys.KubernetesInfo = getKubernetesInfo(deadlinedCtx)
+			healthInfo.Sys.KubernetesInfo = getKubernetesInfo(healthCtx)
 			partialWrite(healthInfo)
 		}
 	}
 
 	getAndWriteCPUs := func() {
 		if query.Get("syscpu") == "true" {
-			localCPUInfo := madmin.GetCPUs(deadlinedCtx, globalLocalNodeName)
+			localCPUInfo := madmin.GetCPUs(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localCPUInfo)
 			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, localCPUInfo)
 
-			peerCPUInfo := globalNotificationSys.GetCPUs(deadlinedCtx)
+			peerCPUInfo := globalNotificationSys.GetCPUs(healthCtx)
 			for _, cpuInfo := range peerCPUInfo {
 				anonymizeAddr(&cpuInfo)
 				healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, cpuInfo)
@@ -1908,11 +1912,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWritePartitions := func() {
 		if query.Get("sysdrivehw") == "true" {
-			localPartitions := madmin.GetPartitions(deadlinedCtx, globalLocalNodeName)
+			localPartitions := madmin.GetPartitions(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localPartitions)
 			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, localPartitions)
 
-			peerPartitions := globalNotificationSys.GetPartitions(deadlinedCtx)
+			peerPartitions := globalNotificationSys.GetPartitions(healthCtx)
 			for _, p := range peerPartitions {
 				anonymizeAddr(&p)
 				healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, p)
@@ -1923,11 +1927,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteOSInfo := func() {
 		if query.Get("sysosinfo") == "true" {
-			localOSInfo := madmin.GetOSInfo(deadlinedCtx, globalLocalNodeName)
+			localOSInfo := madmin.GetOSInfo(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localOSInfo)
 			healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, localOSInfo)
 
-			peerOSInfos := globalNotificationSys.GetOSInfo(deadlinedCtx)
+			peerOSInfos := globalNotificationSys.GetOSInfo(healthCtx)
 			for _, o := range peerOSInfos {
 				anonymizeAddr(&o)
 				healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, o)
@@ -1938,11 +1942,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteMemInfo := func() {
 		if query.Get("sysmem") == "true" {
-			localMemInfo := madmin.GetMemInfo(deadlinedCtx, globalLocalNodeName)
+			localMemInfo := madmin.GetMemInfo(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localMemInfo)
 			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, localMemInfo)
 
-			peerMemInfos := globalNotificationSys.GetMemInfo(deadlinedCtx)
+			peerMemInfos := globalNotificationSys.GetMemInfo(healthCtx)
 			for _, m := range peerMemInfos {
 				anonymizeAddr(&m)
 				healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, m)
@@ -1953,12 +1957,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysErrors := func() {
 		if query.Get(string(madmin.HealthDataTypeSysErrors)) == "true" {
-			localSysErrors := madmin.GetSysErrors(deadlinedCtx, globalLocalNodeName)
+			localSysErrors := madmin.GetSysErrors(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysErrors)
 			healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, localSysErrors)
 			partialWrite(healthInfo)
 
-			peerSysErrs := globalNotificationSys.GetSysErrors(deadlinedCtx)
+			peerSysErrs := globalNotificationSys.GetSysErrors(healthCtx)
 			for _, se := range peerSysErrs {
 				anonymizeAddr(&se)
 				healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, se)
@@ -1969,12 +1973,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysConfig := func() {
 		if query.Get(string(madmin.HealthDataTypeSysConfig)) == "true" {
-			localSysConfig := madmin.GetSysConfig(deadlinedCtx, globalLocalNodeName)
+			localSysConfig := madmin.GetSysConfig(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysConfig)
 			healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, localSysConfig)
 			partialWrite(healthInfo)
 
-			peerSysConfig := globalNotificationSys.GetSysConfig(deadlinedCtx)
+			peerSysConfig := globalNotificationSys.GetSysConfig(healthCtx)
 			for _, sc := range peerSysConfig {
 				anonymizeAddr(&sc)
 				healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, sc)
@@ -1985,12 +1989,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysServices := func() {
 		if query.Get(string(madmin.HealthDataTypeSysServices)) == "true" {
-			localSysServices := madmin.GetSysServices(deadlinedCtx, globalLocalNodeName)
+			localSysServices := madmin.GetSysServices(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysServices)
 			healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, localSysServices)
 			partialWrite(healthInfo)
 
-			peerSysServices := globalNotificationSys.GetSysServices(deadlinedCtx)
+			peerSysServices := globalNotificationSys.GetSysServices(healthCtx)
 			for _, ss := range peerSysServices {
 				anonymizeAddr(&ss)
 				healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, ss)
@@ -2065,10 +2069,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteProcInfo := func() {
 		if query.Get("sysprocess") == "true" {
-			localProcInfo := madmin.GetProcInfo(deadlinedCtx, globalLocalNodeName)
+			localProcInfo := madmin.GetProcInfo(healthCtx, globalLocalNodeName)
 			anonymizeProcInfo(&localProcInfo)
 			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, localProcInfo)
-			peerProcInfos := globalNotificationSys.GetProcInfo(deadlinedCtx)
+			peerProcInfos := globalNotificationSys.GetProcInfo(healthCtx)
 			for _, p := range peerProcInfos {
 				anonymizeProcInfo(&p)
 				healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, p)
@@ -2294,7 +2298,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-deadlinedCtx.Done():
+		case <-healthCtx.Done():
 			return
 		}
 	}
