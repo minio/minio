@@ -226,10 +226,10 @@ var (
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.
-	globalTrace = pubsub.New()
+	globalTrace = pubsub.New(8)
 
 	// global Listen system to send S3 API events to registered listeners
-	globalHTTPListen = pubsub.New()
+	globalHTTPListen = pubsub.New(0)
 
 	// global console system to send console logs to
 	// registered listeners

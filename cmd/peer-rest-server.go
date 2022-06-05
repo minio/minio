@@ -933,7 +933,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalHTTPListen.Subscribe(ch, doneCh, func(evI interface{}) bool {
+	listenFn := func(evI interface{}) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -944,7 +944,13 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
-	})
+	}
+
+	err := globalHTTPListen.Subscribe(ch, doneCh, listenFn)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -1005,9 +1011,15 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
+	traceFn := func(entry interface{}) bool {
 		return mustTrace(entry, traceOpts)
-	})
+	}
+
+	err = globalTrace.Subscribe(ch, doneCh, traceFn)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -1092,7 +1104,11 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	defer close(doneCh)
 
 	ch := make(chan interface{}, 2000)
-	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
+	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()

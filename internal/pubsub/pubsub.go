@@ -18,6 +18,7 @@
 package pubsub
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -32,6 +33,7 @@ type Sub struct {
 type PubSub struct {
 	subs           []*Sub
 	numSubscribers int32
+	maxSubscribers int32
 	sync.RWMutex
 }
 
@@ -53,13 +55,18 @@ func (ps *PubSub) Publish(item interface{}) {
 }
 
 // Subscribe - Adds a subscriber to pubsub system
-func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filter func(entry interface{}) bool) {
+func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filter func(entry interface{}) bool) error {
+	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
+	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
+		atomic.AddInt32(&ps.numSubscribers, -1)
+		return fmt.Errorf("the limit of `%d` subscribers is reached", ps.maxSubscribers)
+	}
+
 	ps.Lock()
 	defer ps.Unlock()
 
 	sub := &Sub{subCh, filter}
 	ps.subs = append(ps.subs, sub)
-	atomic.AddInt32(&ps.numSubscribers, 1)
 
 	go func() {
 		<-doneCh
@@ -74,6 +81,8 @@ func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filt
 		}
 		atomic.AddInt32(&ps.numSubscribers, -1)
 	}()
+
+	return nil
 }
 
 // NumSubscribers returns the number of current subscribers
@@ -81,7 +90,8 @@ func (ps *PubSub) NumSubscribers() int32 {
 	return atomic.LoadInt32(&ps.numSubscribers)
 }
 
-// New inits a PubSub system
-func New() *PubSub {
-	return &PubSub{}
+// New inits a PubSub system with a limit of maximum
+// subscribers unless zero is specified
+func New(maxSubscribers int32) *PubSub {
+	return &PubSub{maxSubscribers: maxSubscribers}
 }
