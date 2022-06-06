@@ -102,7 +102,7 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	ctx = lkctx.Context()
-	defer locker.Unlock(lkctx.cancel)
+	defer locker.Unlock(lkctx.Cancel)
 
 	callhomeTimer := time.NewTimer(callhomeFreq.Load())
 	defer callhomeTimer.Stop()
