@@ -2066,7 +2066,7 @@ func skipAccessChecks(volume string) (ok bool) {
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	defer func() {
-		if err != nil && !contextCanceled(ctx) {
+		if err != nil && !contextCanceled(ctx) && !errors.Is(err, errFileNotFound) {
 			// Only log these errors if context is not yet canceled.
 			logger.LogIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				srcVolume, srcPath,
