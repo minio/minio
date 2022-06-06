@@ -1751,12 +1751,12 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 		return err
 	}
 
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
 		defer close(results)
-
-		versioned := opts.Versioned || opts.VersionSuspended
 
 		for _, erasureSet := range z.serverPools {
 			var wg sync.WaitGroup
@@ -1785,11 +1785,14 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						if opts.WalkAscending {
 							for i := len(fivs.Versions) - 1; i >= 0; i-- {
 								version := fivs.Versions[i]
+								versioned := vcfg != nil && vcfg.Versioned(version.Name)
+
 								results <- version.ToObjectInfo(bucket, version.Name, versioned)
 							}
 							return
 						}
 						for _, version := range fivs.Versions {
+							versioned := vcfg != nil && vcfg.Versioned(version.Name)
 							results <- version.ToObjectInfo(bucket, version.Name, versioned)
 						}
 					}
