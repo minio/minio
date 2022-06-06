@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
@@ -46,18 +47,14 @@ func httpClient(timeout time.Duration) *http.Client {
 func subnetHTTPDo(req *http.Request) (*http.Response, error) {
 	client := httpClient(10 * time.Second)
 	if globalSubnetConfig.ProxyURL != nil {
-		client.Transport.(*http.Transport).Proxy = http.ProxyURL(globalSubnetConfig.ProxyURL)
+		client.Transport.(*http.Transport).Proxy = http.ProxyURL((*url.URL)(globalSubnetConfig.ProxyURL))
 	}
 	return client.Do(req)
 }
 
 func subnetReqDo(r *http.Request, authToken string) (string, error) {
 	r.Header.Set("Authorization", authToken)
-
-	ct := r.Header.Get("Content-Type")
-	if len(ct) == 0 {
-		r.Header.Add("Content-Type", "application/json")
-	}
+	r.Header.Set("Content-Type", "application/json")
 
 	resp, err := subnetHTTPDo(r)
 	if resp != nil {
@@ -93,7 +90,7 @@ func subnetPostReq(reqURL string, payload interface{}, authToken string) (string
 
 func sendCallhomeInfo(ch CallhomeInfo) error {
 	if len(globalSubnetConfig.APIKey) == 0 {
-		return errors.New("Cluster is not registered with SUBNET.")
+		return errors.New("Cluster is not registered with SUBNET. Please register by running 'mc support register ALIAS'")
 	}
 
 	url := callhomeURL

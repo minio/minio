@@ -662,7 +662,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply scanner config: %w", err)
 		}
 		// update dynamic scanner values.
-		scannerCycle.Update(scannerCfg.Cycle)
+		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)

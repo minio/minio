@@ -21,11 +21,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
+	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -37,9 +37,6 @@ const (
 
 	// callhomeCycleDefault is the default interval between two callhome cycles (24hrs)
 	callhomeCycleDefault = 24 * time.Hour
-
-	// false value of the safeBool - use for initializing only, not for comparisons
-	safeBoolFalse safeBool = 0
 )
 
 // CallhomeInfo - Contains callhome information
@@ -49,38 +46,19 @@ type CallhomeInfo struct {
 }
 
 var (
-	enableCallhome            = safeBoolFalse
+	enableCallhome            = uatomic.NewBool(false)
 	callhomeLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
-	callhomeFreq              = safeDuration(callhomeCycleDefault)
+	callhomeFreq              = uatomic.NewDuration(callhomeCycleDefault)
 )
 
-// safeBool contains an atomic bool value.
-// Zero value is "false", use safeBoolTrue to initialize a true value.
-type safeBool int32
-
-// Update will update the bool.
-// Order of concurrent updates is not guaranteed
-func (s *safeBool) Update(b bool) {
-	if b {
-		atomic.StoreInt32((*int32)(s), 1)
-	} else {
-		atomic.StoreInt32((*int32)(s), 0)
-	}
-}
-
-// Get returns the bool value.
-func (s *safeBool) Get() bool {
-	return atomic.LoadInt32((*int32)(s)) == 1
-}
-
 func updateCallhomeParams(ctx context.Context, objAPI ObjectLayer) {
-	alreadyEnabled := enableCallhome.Get()
-	enableCallhome.Update(globalCallhomeConfig.Enable)
-	callhomeFreq.Update(globalCallhomeConfig.Frequency)
+	alreadyEnabled := enableCallhome.Load()
+	enableCallhome.Store(globalCallhomeConfig.Enable)
+	callhomeFreq.Store(globalCallhomeConfig.Frequency)
 
 	// If callhome was disabled earlier and has now been enabled,
 	// initialize the callhome process again.
-	if !alreadyEnabled && enableCallhome.Get() {
+	if !alreadyEnabled && enableCallhome.Load() {
 		initCallhome(ctx, objAPI)
 	}
 }
@@ -95,20 +73,20 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 		// because of this loop.
 		for {
 			runCallhome(ctx, objAPI)
-			if !enableCallhome.Get() {
+			if !enableCallhome.Load() {
 				return
 			}
 
 			// callhome running on a different node.
 			// sleep for some time and try again.
-			duration := time.Duration(r.Float64() * float64(callhomeFreq.Get()))
+			duration := time.Duration(r.Float64() * float64(callhomeFreq.Load()))
 			if duration < time.Second {
 				// Make sure to sleep atleast a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
 
-			if !enableCallhome.Get() {
+			if !enableCallhome.Load() {
 				return
 			}
 		}
@@ -122,12 +100,11 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 	if err != nil {
 		return
 	}
-	defer locker.Unlock(lkctx.cancel)
 
 	ctx = lkctx.Context()
-	defer lkctx.Cancel()
+	defer locker.Unlock(lkctx.cancel)
 
-	callhomeTimer := time.NewTimer(callhomeFreq.Get())
+	callhomeTimer := time.NewTimer(callhomeFreq.Load())
 	defer callhomeTimer.Stop()
 
 	for {
@@ -135,14 +112,14 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-callhomeTimer.C:
-			if !enableCallhome.Get() {
+			if !enableCallhome.Load() {
 				// Stop the processing as callhome got disabled
 				return
 			}
 			performCallhome(ctx)
 
 			// Reset the timer for next cycle.
-			callhomeTimer.Reset(callhomeFreq.Get())
+			callhomeTimer.Reset(callhomeFreq.Load())
 		}
 	}
 }
