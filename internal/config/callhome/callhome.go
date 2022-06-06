@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,58 +15,51 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package subnet
+package callhome
 
 import (
+	"time"
+
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
-	xnet "github.com/minio/pkg/net"
+)
+
+// Callhome related keys
+const (
+	Enable    = "enable"
+	Frequency = "frequency"
 )
 
 // DefaultKVS - default KV config for subnet settings
 var DefaultKVS = config.KVS{
 	config.KV{
-		Key:   config.License, // Deprecated Dec 2021
-		Value: "",
+		Key:   Enable,
+		Value: "off",
 	},
 	config.KV{
-		Key:   config.APIKey,
-		Value: "",
-	},
-	config.KV{
-		Key:   config.Proxy,
-		Value: "",
+		Key:   Frequency,
+		Value: "24h",
 	},
 }
 
 // Config represents the subnet related configuration
 type Config struct {
-	// The subnet license token - Deprecated Dec 2021
-	License string `json:"license"`
+	// Flag indicating whether callhome is enabled.
+	Enable bool `json:"enable"`
 
-	// The subnet api key
-	APIKey string `json:"api_key"`
-
-	// The HTTP(S) proxy URL to use for connecting to SUBNET
-	ProxyURL *xnet.URL `json:"proxy_url"`
+	// The interval between callhome cycles
+	Frequency time.Duration `json:"frequency"`
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	if err = config.CheckValidKeys(config.SubnetSubSys, kvs, DefaultKVS); err != nil {
+	if err = config.CheckValidKeys(config.CallhomeSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
 
-	proxy := env.Get(config.EnvMinIOSubnetProxy, kvs.Get(config.Proxy))
-	if len(proxy) > 0 {
-		cfg.ProxyURL, err = xnet.ParseHTTPURL(proxy)
-		if err != nil {
-			return cfg, err
-		}
-	}
-
-	cfg.License = env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License))
-	cfg.APIKey = env.Get(config.EnvMinIOSubnetAPIKey, kvs.Get(config.APIKey))
-
-	return cfg, nil
+	cfg.Enable = env.Get(config.EnvMinIOCallhomeEnable,
+		kvs.GetWithDefault(Enable, DefaultKVS)) == config.EnableOn
+	cfg.Frequency, err = time.ParseDuration(env.Get(config.EnvMinIOCallhomeFrequency,
+		kvs.GetWithDefault(Frequency, DefaultKVS)))
+	return cfg, err
 }
