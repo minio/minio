@@ -230,8 +230,8 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.APIKey != "" {
 		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
 	}
-	if globalSubnetConfig.Proxy != "" {
-		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.Proxy)
+	if globalSubnetConfig.ProxyURL != nil {
+		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
 	}
 }
 

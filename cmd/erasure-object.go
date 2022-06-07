@@ -493,6 +493,9 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 
 	errs := g.Wait()
 	for index, err := range errs {
+		if err == nil {
+			continue
+		}
 		if !IsErr(err, []error{
 			errFileNotFound,
 			errVolumeNotFound,

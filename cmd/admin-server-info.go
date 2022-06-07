@@ -31,7 +31,10 @@ import (
 // local endpoints from given list of endpoints
 func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
 	var localEndpoints Endpoints
-	addr := r.Host
+	addr := globalLocalNodeName
+	if r != nil {
+		addr = r.Host
+	}
 	if globalIsDistErasure {
 		addr = globalLocalNodeName
 	}
@@ -40,7 +43,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		for _, endpoint := range ep.Endpoints {
 			nodeName := endpoint.Host
 			if nodeName == "" {
-				nodeName = r.Host
+				nodeName = addr
 			}
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints

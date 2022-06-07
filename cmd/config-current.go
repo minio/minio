@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/etcd"
@@ -70,6 +71,7 @@ func initHelp() {
 		config.HealSubSys:           heal.DefaultKVS,
 		config.ScannerSubSys:        scanner.DefaultKVS,
 		config.SubnetSubSys:         subnet.DefaultKVS,
+		config.CallhomeSubSys:       callhome.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -201,6 +203,12 @@ func initHelp() {
 			Description: "set subnet config for the cluster e.g. api key",
 			Optional:    true,
 		},
+		config.HelpKV{
+			Key:         config.CallhomeSubSys,
+			Type:        "string",
+			Description: "enable callhome for the cluster",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -243,6 +251,7 @@ func initHelp() {
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
 		config.SubnetSubSys:         subnet.HelpSubnet,
+		config.CallhomeSubSys:       callhome.HelpCallhome,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -356,6 +365,10 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	case config.SubnetSubSys:
 		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.CallhomeSubSys:
+		if _, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default]); err != nil {
 			return err
 		}
 	case config.PolicyOPASubSys:
@@ -649,7 +662,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply scanner config: %w", err)
 		}
 		// update dynamic scanner values.
-		scannerCycle.Update(scannerCfg.Cycle)
+		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)
@@ -718,6 +731,14 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 					globalStorageClass.Update(sc)
 				}
 			}
+		}
+	case config.CallhomeSubSys:
+		callhomeCfg, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default])
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
+		} else {
+			globalCallhomeConfig = callhomeCfg
+			updateCallhomeParams(ctx, objAPI)
 		}
 	}
 	globalServerConfigMu.Lock()

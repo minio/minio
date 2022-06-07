@@ -37,6 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
@@ -242,6 +243,9 @@ var (
 
 	// The global subnet config
 	globalSubnetConfig subnet.Config
+
+	// The global callhome config
+	globalCallhomeConfig callhome.Config
 
 	globalRemoteEndpoints map[string]Endpoint
 

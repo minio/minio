@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -66,9 +67,7 @@ var (
 	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second)
-	scannerCycle   = &safeDuration{
-		t: dataScannerStartDelay,
-	}
+	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
 )
 
 // initDataScanner will start the scanner in the background.
@@ -78,7 +77,7 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 		// Run the data scanner in a loop
 		for {
 			runDataScanner(ctx, objAPI)
-			duration := time.Duration(r.Float64() * float64(scannerCycle.Get()))
+			duration := time.Duration(r.Float64() * float64(scannerCycle.Load()))
 			if duration < time.Second {
 				// Make sure to sleep atleast a second to avoid high CPU ticks.
 				duration = time.Second
@@ -86,23 +85,6 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			time.Sleep(duration)
 		}
 	}()
-}
-
-type safeDuration struct {
-	sync.Mutex
-	t time.Duration
-}
-
-func (s *safeDuration) Update(t time.Duration) {
-	s.Lock()
-	defer s.Unlock()
-	s.t = t
-}
-
-func (s *safeDuration) Get() time.Duration {
-	s.Lock()
-	defer s.Unlock()
-	return s.t
 }
 
 func getCycleScanMode(currentCycle, bitrotStartCycle uint64, bitrotStartTime time.Time) madmin.HealScanMode {
@@ -189,7 +171,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
-	scannerTimer := time.NewTimer(scannerCycle.Get())
+	scannerTimer := time.NewTimer(scannerCycle.Load())
 	defer scannerTimer.Stop()
 
 	for {
@@ -231,7 +213,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Reset the timer for next cycle.
-			scannerTimer.Reset(scannerCycle.Get())
+			scannerTimer.Reset(scannerCycle.Load())
 		}
 	}
 }
