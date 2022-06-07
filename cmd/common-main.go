@@ -190,6 +190,10 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
 		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
 			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
+			// Support additional labels for more granular filtering.
+			if value := env.Get("MINIO_PROMETHEUS_EXTRA_LABELS", ""); value != "" {
+				os.Setenv("CONSOLE_PROMETHEUS_EXTRA_LABELS", value)
+			}
 		}
 	}
 	// Enable if LDAP is enabled.
@@ -226,8 +230,8 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.APIKey != "" {
 		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
 	}
-	if globalSubnetConfig.Proxy != "" {
-		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.Proxy)
+	if globalSubnetConfig.ProxyURL != nil {
+		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
 	}
 }
 

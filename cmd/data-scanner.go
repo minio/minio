@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -66,9 +67,7 @@ var (
 	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second)
-	scannerCycle   = &safeDuration{
-		t: dataScannerStartDelay,
-	}
+	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
 )
 
 // initDataScanner will start the scanner in the background.
@@ -78,7 +77,7 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 		// Run the data scanner in a loop
 		for {
 			runDataScanner(ctx, objAPI)
-			duration := time.Duration(r.Float64() * float64(scannerCycle.Get()))
+			duration := time.Duration(r.Float64() * float64(scannerCycle.Load()))
 			if duration < time.Second {
 				// Make sure to sleep atleast a second to avoid high CPU ticks.
 				duration = time.Second
@@ -86,23 +85,6 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			time.Sleep(duration)
 		}
 	}()
-}
-
-type safeDuration struct {
-	sync.Mutex
-	t time.Duration
-}
-
-func (s *safeDuration) Update(t time.Duration) {
-	s.Lock()
-	defer s.Unlock()
-	s.t = t
-}
-
-func (s *safeDuration) Get() time.Duration {
-	s.Lock()
-	defer s.Unlock()
-	return s.t
 }
 
 func getCycleScanMode(currentCycle, bitrotStartCycle uint64, bitrotStartTime time.Time) madmin.HealScanMode {
@@ -189,7 +171,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
-	scannerTimer := time.NewTimer(scannerCycle.Get())
+	scannerTimer := time.NewTimer(scannerCycle.Load())
 	defer scannerTimer.Stop()
 
 	for {
@@ -197,9 +179,6 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-scannerTimer.C:
-			// Reset the timer for next cycle.
-			scannerTimer.Reset(scannerCycle.Get())
-
 			if intDataUpdateTracker.debug {
 				console.Debugln("starting scanner cycle")
 			}
@@ -232,6 +211,9 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 					logger.LogIf(ctx, err)
 				}
 			}
+
+			// Reset the timer for next cycle.
+			scannerTimer.Reset(scannerCycle.Load())
 		}
 	}
 }
@@ -1057,9 +1039,13 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	fivs = fivs[:lim+1]
 
 	rcfg, _ := globalBucketObjectLockSys.Get(i.bucket)
+	vcfg, _ := globalBucketVersioningSys.Get(i.bucket)
+
+	versioned := vcfg != nil && vcfg.Versioned(i.objectPath())
+
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
-		obj := fi.ToObjectInfo(i.bucket, i.objectPath())
+		obj := fi.ToObjectInfo(i.bucket, i.objectPath(), versioned)
 		// skip versions with object locking enabled
 		if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			if i.debug {
@@ -1184,7 +1170,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		opts.VersionID = obj.VersionID
 	}
 	if opts.VersionID == "" {
-		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		opts.Versioned = globalBucketVersioningSys.PrefixEnabled(obj.Bucket, obj.Name)
+		opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(obj.Bucket, obj.Name)
 	}
 
 	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
@@ -1243,6 +1230,9 @@ func (i *scannerItem) objectPath() string {
 // healReplication will heal a scanned item that has failed replication.
 func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
 	roi := getHealReplicateObjectInfo(oi, i.replication)
+	if !roi.Dsc.ReplicateAny() {
+		return
+	}
 
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure

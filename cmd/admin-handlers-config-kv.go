@@ -33,7 +33,8 @@ import (
 	"github.com/minio/minio/internal/config/etcd"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
-	"github.com/minio/minio/internal/config/policy/opa"
+	idplugin "github.com/minio/minio/internal/config/identity/plugin"
+	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -104,7 +105,7 @@ func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config,
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	globalNotificationSys.SignalService(serviceReloadDynamic)
+	globalNotificationSys.SignalConfigReload(subSys)
 	// Tell the client that dynamic config was applied.
 	w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 }
@@ -436,14 +437,16 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 				off = !cache.Enabled(kv)
 			case config.StorageClassSubSys:
 				off = !storageclass.Enabled(kv)
-			case config.PolicyOPASubSys:
-				off = !opa.Enabled(kv)
+			case config.PolicyPluginSubSys:
+				off = !polplugin.Enabled(kv)
 			case config.IdentityOpenIDSubSys:
 				off = !openid.Enabled(kv)
 			case config.IdentityLDAPSubSys:
 				off = !xldap.Enabled(kv)
 			case config.IdentityTLSSubSys:
 				off = !globalSTSTLSConfig.Enabled
+			case config.IdentityPluginSubSys:
+				off = !idplugin.Enabled(kv)
 			}
 			if off {
 				s.WriteString(config.KvComment)

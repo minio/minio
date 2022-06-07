@@ -42,10 +42,10 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 
 func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
 	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on ErasureSD backend with signature v4.
+		{serverType: "ErasureSD", signer: signerV4},
+		// Init and run test on ErasureSD backend, with tls enabled.
+		{serverType: "ErasureSD", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
 		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.
@@ -356,30 +356,9 @@ const (
 )
 
 func TestIAMWithLDAPServerSuite(t *testing.T) {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
-	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	for i, testCase := range testCases {
-		etcdStr := ""
-		if testCase.withEtcdBackend {
-			etcdStr = " (with etcd backend)"
-		}
+	for i, testCase := range iamTestSuites {
 		t.Run(
-			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
 			func(t *testing.T) {
 				c := &check{t, testCase.serverType}
 				suite := testCase
@@ -1070,30 +1049,9 @@ func (s *TestSuiteIAM) SetUpOpenID(c *check, serverAddr string, rolePolicy strin
 }
 
 func TestIAMWithOpenIDServerSuite(t *testing.T) {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
-	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	for i, testCase := range testCases {
-		etcdStr := ""
-		if testCase.withEtcdBackend {
-			etcdStr = " (with etcd backend)"
-		}
+	for i, testCase := range iamTestSuites {
 		t.Run(
-			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
 			func(t *testing.T) {
 				c := &check{t, testCase.serverType}
 				suite := testCase
@@ -1115,30 +1073,9 @@ func TestIAMWithOpenIDServerSuite(t *testing.T) {
 }
 
 func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
-	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	for i, testCase := range testCases {
-		etcdStr := ""
-		if testCase.withEtcdBackend {
-			etcdStr = " (with etcd backend)"
-		}
+	for i, testCase := range iamTestSuites {
 		t.Run(
-			fmt.Sprintf("Test: %d, ServerType: %s%s", i+1, testCase.serverType, etcdStr),
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
 			func(t *testing.T) {
 				c := &check{t, testCase.serverType}
 				suite := testCase
@@ -1311,29 +1248,6 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }
 
-// List of all IAM test suites (i.e. test server configuration combinations)
-// common to tests.
-var iamTestSuites = func() []*TestSuiteIAM {
-	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on Erasure backend.
-		{serverType: "Erasure", signer: signerV4},
-		// Init and run test on ErasureSet backend.
-		{serverType: "ErasureSet", signer: signerV4},
-	}
-	testCases := []*TestSuiteIAM{}
-	for _, bt := range baseTestCases {
-		testCases = append(testCases,
-			newTestSuiteIAM(bt, false),
-			newTestSuiteIAM(bt, true),
-		)
-	}
-	return testCases
-}()
-
 func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
 	openIDServer := os.Getenv(EnvTestOpenIDServer)
 	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
@@ -1398,4 +1312,195 @@ func TestIAMWithOpenIDWithMultipleRolesServerSuite(t *testing.T) {
 			},
 		)
 	}
+}
+
+// Access Management Plugin tests
+func TestIAM_AMPWithOpenIDWithMultipleRolesServerSuite(t *testing.T) {
+	openIDServer := os.Getenv(EnvTestOpenIDServer)
+	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+	if openIDServer == "" || openIDServer2 == "" {
+		t.Skip("Skipping OpenID test as enough OpenID servers are not provided.")
+	}
+	testApps := testClientApps
+
+	rolePolicies := []string{
+		"consoleAdmin",
+		"readwrite",
+	}
+
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				suite.SetUpSuite(c)
+				defer suite.TearDownSuite(c)
+
+				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
+				if err != nil {
+					c.Fatalf("Error setting up openid providers for tests: %v", err)
+				}
+
+				suite.SetUpAccMgmtPlugin(c)
+
+				suite.TestOpenIDSTSWithRolePolicyUnderAMP(c, testRoleARNs[0], testRoleMap[testRoleARNs[0]])
+				suite.TestOpenIDSTSWithRolePolicyUnderAMP(c, testRoleARNs[1], testRoleMap[testRoleARNs[1]])
+				suite.TestOpenIDServiceAccWithRolePolicyUnderAMP(c)
+			},
+		)
+	}
+}
+
+func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicyUnderAMP(c *check, roleARN string, clientApp OpenIDClientAppParams) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity JWT by interacting with OpenID IDP.
+	token, err := MockOpenIDTestUserInteraction(ctx, clientApp, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+
+	// Generate STS credential.
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token: token,
+			}, nil
+		},
+		RoleARN: roleARN,
+	}
+
+	value, err := webID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+	// fmt.Printf("value: %#v\n", value)
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client from STS creds cannot upload any object as
+	// it is denied by the plugin.
+	c.mustNotUpload(ctx, minioClient, bucket)
+}
+
+func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicyUnderAMP(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token: token,
+			}, nil
+		},
+		RoleARN: testRoleARN,
+	}
+
+	value, err := webID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	// 1. Check that svc account appears in listing
+	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
+
+	// 2. Check that svc account info can be queried
+	c.assertSvcAccInfoQueryable(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey, true)
+
+	// 3. Check S3 access
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
+	// 3.1 Validate that the client from STS creds cannot upload any object as
+	// it is denied by the plugin.
+	c.mustNotUpload(ctx, s.getUserClient(c, cr.AccessKey, cr.SecretKey, ""), bucket)
+
+	// Check that session policies do not apply - as policy enforcement is
+	// delegated to plugin.
+	{
+		svcAK, svcSK := mustGenerateCredentials(c)
+
+		// This policy does not allow listing objects.
+		policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:     policyBytes,
+			TargetUser: value.AccessKeyID,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+		if err != nil {
+			c.Fatalf("Unable to create svc acc: %v", err)
+		}
+		svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+		// Though the attached policy does not allow listing, it will be
+		// ignored because the plugin allows it.
+		c.mustListObjects(ctx, svcClient, bucket)
+	}
+
+	// 4. Check that service account's secret key and account status can be
+	// updated.
+	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+
+	// 5. Check that service account can be deleted.
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 }

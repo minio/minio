@@ -35,9 +35,6 @@ func TestListObjectsVersionedFolders(t *testing.T) {
 }
 
 func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -70,7 +67,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		md5Bytes := md5.Sum([]byte(object.content))
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name, mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-			Versioned:   globalBucketVersioningSys.Enabled(object.parentBucket),
+			Versioned:   globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 			UserDefined: object.meta,
 		})
 		if err != nil {
@@ -78,7 +75,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		}
 		if object.addDeleteMarker {
 			oi, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
-				Versioned: globalBucketVersioningSys.Enabled(object.parentBucket),
+				Versioned: globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 			})
 			if err != nil {
 				t.Fatalf("%s : %s", instanceType, err.Error())
@@ -317,9 +314,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 }
 
 func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, versioned bool) {
-	if instanceType == FSTestStr && versioned {
-		return
-	}
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -380,7 +374,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name,
 			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-				Versioned:   globalBucketVersioningSys.Enabled(object.parentBucket),
+				Versioned:   globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
 				UserDefined: object.meta,
 			})
 		if err != nil {
@@ -1020,10 +1014,6 @@ func TestDeleteObjectVersionMarker(t *testing.T) {
 }
 
 func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
-
 	t, _ := t1.(*testing.T)
 
 	testBuckets := []string{
@@ -1065,16 +1055,16 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 		_, err := obj.PutObject(context.Background(), object.parentBucket, object.name,
 			mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{
-				Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-				VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+				Versioned:        globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
+				VersionSuspended: globalBucketVersioningSys.PrefixSuspended(object.parentBucket, object.name),
 				UserDefined:      object.meta,
 			})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
 		obj, err := obj.DeleteObject(context.Background(), object.parentBucket, object.name, ObjectOptions{
-			Versioned:        globalBucketVersioningSys.Enabled(object.parentBucket),
-			VersionSuspended: globalBucketVersioningSys.Suspended(object.parentBucket),
+			Versioned:        globalBucketVersioningSys.PrefixEnabled(object.parentBucket, object.name),
+			VersionSuspended: globalBucketVersioningSys.PrefixSuspended(object.parentBucket, object.name),
 			VersionID:        object.versionID,
 		})
 		if err != nil {
@@ -1101,10 +1091,6 @@ func TestListObjectVersions(t *testing.T) {
 
 // Unit test for ListObjectVersions
 func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
-
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -1886,16 +1872,14 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 
 // Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
-	var err error
-	obj, err = NewFSObjectLayer(disk)
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
 	if err != nil {
-		t.Fatal("Unexpected err: ", err)
+		t.Fatal(err)
 	}
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
 	initAllSubsystems()
-
 	return obj
 }
 

@@ -209,22 +209,7 @@ func (l *lockRESTServer) ForceUnlockHandler(w http.ResponseWriter, r *http.Reque
 // lockMaintenance loops over all locks and discards locks
 // that have not been refreshed for some time.
 func lockMaintenance(ctx context.Context) {
-	// Wait until the object API is ready
-	// no need to start the lock maintenance
-	// if ObjectAPI is not initialized.
-
-	var objAPI ObjectLayer
-
-	for {
-		objAPI = newObjectLayerFn()
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
-	if _, ok := objAPI.(*erasureServerPools); !ok {
+	if !globalIsDistErasure {
 		return
 	}
 
@@ -239,10 +224,10 @@ func lockMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-lkTimer.C:
+			globalLockServer.expireOldLocks(lockValidityDuration)
+
 			// Reset the timer for next cycle.
 			lkTimer.Reset(lockMaintenanceInterval)
-
-			globalLockServer.expireOldLocks(lockValidityDuration)
 		}
 	}
 }

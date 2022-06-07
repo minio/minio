@@ -27,6 +27,13 @@ var (
 
 	Help = config.HelpKVS{
 		config.HelpKV{
+			Key:         config.Enable,
+			Description: "Enable or disable object compression",
+			Type:        "on|off",
+			Optional:    true,
+			Sensitive:   false,
+		},
+		config.HelpKV{
 			Key:         Extensions,
 			Description: `comma separated file extensions` + defaultHelpPostfix(Extensions),
 			Optional:    true,

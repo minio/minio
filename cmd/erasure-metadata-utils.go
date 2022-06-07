@@ -137,24 +137,29 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 				return errDiskNotFound
 			}
 			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, readData)
-			if err != nil {
-				if !IsErr(err, []error{
-					errFileNotFound,
-					errVolumeNotFound,
-					errFileVersionNotFound,
-					errDiskNotFound,
-				}...) {
-					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
-						disks[index], bucket, object, err),
-						disks[index].String())
-				}
-			}
 			return err
 		}, index)
 	}
 
+	errs := g.Wait()
+	for index, err := range errs {
+		if err == nil {
+			continue
+		}
+		if !IsErr(err, []error{
+			errFileNotFound,
+			errVolumeNotFound,
+			errFileVersionNotFound,
+			errDiskNotFound,
+		}...) {
+			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+				disks[index], bucket, object, err),
+				disks[index].String())
+		}
+	}
+
 	// Return all the metadata.
-	return metadataArray, g.Wait()
+	return metadataArray, errs
 }
 
 // shuffleDisksAndPartsMetadataByIndex this function should be always used by GetObjectNInfo()
@@ -175,10 +180,6 @@ func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo,
 			continue
 		}
 		if !meta.IsValid() {
-			inconsistent++
-			continue
-		}
-		if len(fi.Data) != len(meta.Data) {
 			inconsistent++
 			continue
 		}
@@ -225,12 +226,6 @@ func shuffleDisksAndPartsMetadata(disks []StorageAPI, partsMetadata []FileInfo, 
 		}
 		if !init && !partsMetadata[index].IsValid() {
 			// Check for parts metadata validity for only
-			// fi.ModTime is not empty - ModTime is always set,
-			// if object was ever written previously.
-			continue
-		}
-		if !init && len(fi.Data) != len(partsMetadata[index].Data) {
-			// Check for length of data parts only when
 			// fi.ModTime is not empty - ModTime is always set,
 			// if object was ever written previously.
 			continue

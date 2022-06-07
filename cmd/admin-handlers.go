@@ -57,7 +57,8 @@ import (
 )
 
 const (
-	maxEConfigJSONSize = 262272
+	maxEConfigJSONSize        = 262272
+	kubernetesVersionEndpoint = "https://kubernetes.default.svc/version"
 )
 
 // Only valid query params for mgmt admin APIs.
@@ -653,12 +654,10 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	globalProfilerMu.Unlock()
 
 	timer := time.NewTimer(duration)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
 			for k, v := range globalProfiler {
 				v.Stop()
 				delete(globalProfiler, k)
@@ -806,8 +805,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this setup has an erasure coded backend.
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -999,7 +997,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Check if this setup has an erasure coded backend.
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -1079,7 +1077,7 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1229,7 +1227,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1411,9 +1409,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
+	traceFn := func(entry interface{}) bool {
 		return mustTrace(entry, traceOpts)
-	})
+	}
+
+	err = globalTrace.Subscribe(traceCh, ctx.Done(), traceFn)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		return
+	}
 
 	for _, peer := range peers {
 		if peer == nil {
@@ -1485,7 +1489,11 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
+	err = globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		return
+	}
 
 	for _, peer := range peers {
 		if peer == nil {
@@ -1768,6 +1776,36 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 	}
 }
 
+func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
+	ctx, cancel := context.WithCancel(dctx)
+	defer cancel()
+
+	ki := madmin.KubernetesInfo{}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, kubernetesVersionEndpoint, nil)
+	if err != nil {
+		ki.Error = err.Error()
+		return ki
+	}
+
+	client := &http.Client{
+		Transport: NewGatewayHTTPTransport(),
+		Timeout:   10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		ki.Error = err.Error()
+		return ki
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&ki); err != nil {
+		ki.Error = err.Error()
+	}
+	return ki
+}
+
 // HealthInfoHandler - GET /minio/admin/v3/healthinfo
 // ----------
 // Get server health info
@@ -1793,9 +1831,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	healthInfoCh := make(chan madmin.HealthInfo)
 
 	enc := json.NewEncoder(w)
-	partialWrite := func(oinfo madmin.HealthInfo) {
-		healthInfoCh <- oinfo
-	}
 
 	setCommonHeaders(w)
 
@@ -1826,9 +1861,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	deadlinedCtx, deadlineCancel := context.WithTimeout(ctx, deadline)
-	defer deadlineCancel()
-
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
 	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
 	if err != nil { // returns a locked lock
@@ -1836,6 +1868,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer nsLock.Unlock(lkctx.Cancel)
+
+	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
+	defer healthCancel()
 
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
@@ -1855,13 +1890,27 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		info.SetAddr(anonAddr(info.GetAddr()))
 	}
 
+	partialWrite := func(oinfo madmin.HealthInfo) {
+		select {
+		case healthInfoCh <- oinfo:
+		case <-healthCtx.Done():
+		}
+	}
+
+	getAndWritePlatformInfo := func() {
+		if IsKubernetes() {
+			healthInfo.Sys.KubernetesInfo = getKubernetesInfo(healthCtx)
+			partialWrite(healthInfo)
+		}
+	}
+
 	getAndWriteCPUs := func() {
 		if query.Get("syscpu") == "true" {
-			localCPUInfo := madmin.GetCPUs(deadlinedCtx, globalLocalNodeName)
+			localCPUInfo := madmin.GetCPUs(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localCPUInfo)
 			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, localCPUInfo)
 
-			peerCPUInfo := globalNotificationSys.GetCPUs(deadlinedCtx)
+			peerCPUInfo := globalNotificationSys.GetCPUs(healthCtx)
 			for _, cpuInfo := range peerCPUInfo {
 				anonymizeAddr(&cpuInfo)
 				healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, cpuInfo)
@@ -1873,11 +1922,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWritePartitions := func() {
 		if query.Get("sysdrivehw") == "true" {
-			localPartitions := madmin.GetPartitions(deadlinedCtx, globalLocalNodeName)
+			localPartitions := madmin.GetPartitions(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localPartitions)
 			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, localPartitions)
 
-			peerPartitions := globalNotificationSys.GetPartitions(deadlinedCtx)
+			peerPartitions := globalNotificationSys.GetPartitions(healthCtx)
 			for _, p := range peerPartitions {
 				anonymizeAddr(&p)
 				healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, p)
@@ -1888,11 +1937,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteOSInfo := func() {
 		if query.Get("sysosinfo") == "true" {
-			localOSInfo := madmin.GetOSInfo(deadlinedCtx, globalLocalNodeName)
+			localOSInfo := madmin.GetOSInfo(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localOSInfo)
 			healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, localOSInfo)
 
-			peerOSInfos := globalNotificationSys.GetOSInfo(deadlinedCtx)
+			peerOSInfos := globalNotificationSys.GetOSInfo(healthCtx)
 			for _, o := range peerOSInfos {
 				anonymizeAddr(&o)
 				healthInfo.Sys.OSInfo = append(healthInfo.Sys.OSInfo, o)
@@ -1903,11 +1952,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteMemInfo := func() {
 		if query.Get("sysmem") == "true" {
-			localMemInfo := madmin.GetMemInfo(deadlinedCtx, globalLocalNodeName)
+			localMemInfo := madmin.GetMemInfo(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localMemInfo)
 			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, localMemInfo)
 
-			peerMemInfos := globalNotificationSys.GetMemInfo(deadlinedCtx)
+			peerMemInfos := globalNotificationSys.GetMemInfo(healthCtx)
 			for _, m := range peerMemInfos {
 				anonymizeAddr(&m)
 				healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, m)
@@ -1918,12 +1967,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysErrors := func() {
 		if query.Get(string(madmin.HealthDataTypeSysErrors)) == "true" {
-			localSysErrors := madmin.GetSysErrors(deadlinedCtx, globalLocalNodeName)
+			localSysErrors := madmin.GetSysErrors(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysErrors)
 			healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, localSysErrors)
 			partialWrite(healthInfo)
 
-			peerSysErrs := globalNotificationSys.GetSysErrors(deadlinedCtx)
+			peerSysErrs := globalNotificationSys.GetSysErrors(healthCtx)
 			for _, se := range peerSysErrs {
 				anonymizeAddr(&se)
 				healthInfo.Sys.SysErrs = append(healthInfo.Sys.SysErrs, se)
@@ -1934,12 +1983,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysConfig := func() {
 		if query.Get(string(madmin.HealthDataTypeSysConfig)) == "true" {
-			localSysConfig := madmin.GetSysConfig(deadlinedCtx, globalLocalNodeName)
+			localSysConfig := madmin.GetSysConfig(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysConfig)
 			healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, localSysConfig)
 			partialWrite(healthInfo)
 
-			peerSysConfig := globalNotificationSys.GetSysConfig(deadlinedCtx)
+			peerSysConfig := globalNotificationSys.GetSysConfig(healthCtx)
 			for _, sc := range peerSysConfig {
 				anonymizeAddr(&sc)
 				healthInfo.Sys.SysConfig = append(healthInfo.Sys.SysConfig, sc)
@@ -1950,12 +1999,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteSysServices := func() {
 		if query.Get(string(madmin.HealthDataTypeSysServices)) == "true" {
-			localSysServices := madmin.GetSysServices(deadlinedCtx, globalLocalNodeName)
+			localSysServices := madmin.GetSysServices(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localSysServices)
 			healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, localSysServices)
 			partialWrite(healthInfo)
 
-			peerSysServices := globalNotificationSys.GetSysServices(deadlinedCtx)
+			peerSysServices := globalNotificationSys.GetSysServices(healthCtx)
 			for _, ss := range peerSysServices {
 				anonymizeAddr(&ss)
 				healthInfo.Sys.SysServices = append(healthInfo.Sys.SysServices, ss)
@@ -2030,10 +2079,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteProcInfo := func() {
 		if query.Get("sysprocess") == "true" {
-			localProcInfo := madmin.GetProcInfo(deadlinedCtx, globalLocalNodeName)
+			localProcInfo := madmin.GetProcInfo(healthCtx, globalLocalNodeName)
 			anonymizeProcInfo(&localProcInfo)
 			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, localProcInfo)
-			peerProcInfos := globalNotificationSys.GetProcInfo(deadlinedCtx)
+			peerProcInfos := globalNotificationSys.GetProcInfo(healthCtx)
 			for _, p := range peerProcInfos {
 				anonymizeProcInfo(&p)
 				healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, p)
@@ -2177,6 +2226,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		defer close(healthInfoCh)
 
 		partialWrite(healthInfo) // Write first message with only version and deployment id populated
+		getAndWritePlatformInfo()
 		getAndWriteCPUs()
 		getAndWritePartitions()
 		getAndWriteOSInfo()
@@ -2258,7 +2308,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-deadlinedCtx.Done():
+		case <-healthCtx.Done():
 			return
 		}
 	}

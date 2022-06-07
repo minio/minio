@@ -120,9 +120,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 	}
 	if tgt.Type == madmin.ReplicationService {
-		if !globalIsErasure {
-			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
-		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
 		}
@@ -184,9 +181,6 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if globalIsGateway {
 		return nil
 	}
-	if !globalIsErasure {
-		return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
-	}
 
 	if arnStr == "" {
 		return BucketRemoteArnInvalid{Bucket: bucket}
@@ -201,7 +195,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil {
-			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{}) {
+			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{OpType: replication.AllReplicationType}) {
 				if err == nil && (tgtArn == arnStr || rcfg.RoleArn == arnStr) {
 					sys.RLock()
 					_, ok := sys.arnRemotesMap[arnStr]

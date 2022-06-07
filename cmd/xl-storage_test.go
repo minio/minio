@@ -959,13 +959,6 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	}
 	defer os.RemoveAll(path)
 
-	// create xlStorage test setup
-	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
-	if err != nil {
-		t.Fatalf("Unable to create xlStorage test setup, %s", err)
-	}
-	// removing the disk, used to recreate disk not found error.
-	os.RemoveAll(diskPath)
 	// Setup test environment.
 	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
@@ -1064,6 +1057,17 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errVolumeAccessDenied {
 			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
 		}
+	}
+
+	// create xlStorage test setup
+	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+	// removing the disk, used to recreate disk not found error.
+	err = os.RemoveAll(diskPath)
+	if err != nil {
+		t.Fatalf("Unable to remoe xlStorage diskpath, %s", err)
 	}
 
 	// TestXLStorage for delete on an removed disk.

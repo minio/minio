@@ -561,8 +561,26 @@ func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(w http.ResponseWrite
 	logger.LogIf(r.Context(), globalSiteReplicationSys.Init(ctx, objAPI))
 }
 
+// GetAllBucketStatsHandler - fetches bucket replication stats for all buckets from this peer.
+func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	replicationStats := globalReplicationStats.GetAll()
+	bucketStatsMap := make(map[string]BucketStats, len(replicationStats))
+	for k, v := range replicationStats {
+		bucketStatsMap[k] = BucketStats{
+			ReplicationStats: v,
+		}
+	}
+
+	logger.LogIf(r.Context(), msgp.Encode(w, BucketStatsMap(bucketStatsMap)))
+}
+
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
-// returns BucketReplicationStatus
+// returns BucketStats, that currently includes ReplicationStats.
 func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
@@ -837,7 +855,14 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 			s.writeErrorResponse(w, err)
 			return
 		}
-		if err = applyDynamicConfig(r.Context(), objAPI, srvCfg); err != nil {
+		subSys := r.Form.Get(peerRESTSubSys)
+		// Apply dynamic values.
+		if subSys == "" {
+			err = applyDynamicConfig(r.Context(), objAPI, srvCfg)
+		} else {
+			err = applyDynamicConfigForSubSys(r.Context(), objAPI, srvCfg, subSys)
+		}
+		if err != nil {
 			s.writeErrorResponse(w, err)
 		}
 		return
@@ -908,7 +933,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalHTTPListen.Subscribe(ch, doneCh, func(evI interface{}) bool {
+	listenFn := func(evI interface{}) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -919,7 +944,13 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
-	})
+	}
+
+	err := globalHTTPListen.Subscribe(ch, doneCh, listenFn)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -932,6 +963,8 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
 		case <-keepAliveTicker.C:
 			if err := enc.Encode(&event.Event{}); err != nil {
 				return
@@ -978,9 +1011,15 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
 
-	globalTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
+	traceFn := func(entry interface{}) bool {
 		return mustTrace(entry, traceOpts)
-	})
+	}
+
+	err = globalTrace.Subscribe(ch, doneCh, traceFn)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -993,6 +1032,8 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
 		case <-keepAliveTicker.C:
 			if err := enc.Encode(&madmin.TraceInfo{}); err != nil {
 				return
@@ -1059,20 +1100,29 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Connection", "close")
-	w.WriteHeader(http.StatusOK)
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
 	ch := make(chan interface{}, 2000)
-	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
+	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 
 	enc := gob.NewEncoder(w)
 	for {
 		select {
 		case entry := <-ch:
 			if err := enc.Encode(entry); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if err := enc.Encode(&madmin.LogInfo{}); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
@@ -1300,6 +1350,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetInfo).HandlerFunc(httpTraceHdrs(server.NetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDispatchNetInfo).HandlerFunc(httpTraceHdrs(server.DispatchNetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCycleBloom).HandlerFunc(httpTraceHdrs(server.CycleServerBloomFilterHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetAllBucketStats).HandlerFunc(httpTraceHdrs(server.GetAllBucketStatsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(httpTraceHdrs(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadBucketMetadata).HandlerFunc(httpTraceHdrs(server.LoadBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBucketStats).HandlerFunc(httpTraceHdrs(server.GetBucketStatsHandler)).Queries(restQueries(peerRESTBucket)...)

@@ -38,6 +38,8 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
+	xldap "github.com/minio/minio/internal/config/identity/ldap"
+	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -80,6 +82,8 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
+	ldapConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
+	openIDConfig       openid.Config // only valid if OpenID is configured
 
 	usersSysType UsersSysType
 
@@ -164,7 +168,7 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if globalLDAPConfig.Enabled {
+	if sys.ldapConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
 
@@ -224,6 +228,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.Lock()
 	defer sys.Unlock()
 
+	sys.ldapConfig = globalLDAPConfig.Clone()
+	sys.openIDConfig = globalOpenIDConfig.Clone()
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
@@ -308,30 +314,37 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	refreshInterval := sys.iamRefreshInterval
+
 	// Set up polling for expired accounts and credentials purging.
 	switch {
-	case globalOpenIDConfig.ProviderEnabled():
+	case sys.openIDConfig.ProviderEnabled():
 		go func() {
-			ticker := time.NewTicker(sys.iamRefreshInterval)
-			defer ticker.Stop()
+			timer := time.NewTimer(refreshInterval)
+			defer timer.Stop()
 			for {
 				select {
-				case <-ticker.C:
+				case <-timer.C:
 					sys.purgeExpiredCredentialsForExternalSSO(ctx)
+
+					timer.Reset(refreshInterval)
 				case <-ctx.Done():
 					return
 				}
 			}
 		}()
-	case globalLDAPConfig.Enabled:
+	case sys.ldapConfig.Enabled:
 		go func() {
-			ticker := time.NewTicker(sys.iamRefreshInterval)
-			defer ticker.Stop()
+			timer := time.NewTimer(refreshInterval)
+			defer timer.Stop()
+
 			for {
 				select {
-				case <-ticker.C:
+				case <-timer.C:
 					sys.purgeExpiredCredentialsForLDAP(ctx)
 					sys.updateGroupMembershipsForLDAP(ctx)
+
+					timer.Reset(refreshInterval)
 				case <-ctx.Done():
 					return
 				}
@@ -342,26 +355,50 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Start watching changes to storage.
 	go sys.watch(ctx)
 
-	// Load RoleARN
-	if rolePolicyMap := globalOpenIDConfig.GetRoleInfo(); rolePolicyMap != nil {
-		// Validate that policies associated with roles are defined.
-		for _, rolePolicies := range rolePolicyMap {
-			ps := newMappedPolicy(rolePolicies).toSlice()
-			numPolicies := len(ps)
-			validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
-			numValidPolicies := len(strings.Split(validPolicies, ","))
-			if numPolicies != numValidPolicies {
-				logger.LogIf(ctx, fmt.Errorf("Some specified role policies (in %s) were not defined - role policies will not be enabled.", rolePolicies))
-				return
-			}
-		}
-		sys.rolesMap = rolePolicyMap
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := globalOpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if globalAuthNPlugin != nil {
+		riMap := globalAuthNPlugin.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
 	}
 
 	sys.printIAMRoles()
 
 	now := time.Now()
 	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs to load data).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
+}
+
+func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
+	// Validate that policies associated with roles are defined. If
+	// authZ plugin is set, role policies are just claims sent to
+	// the plugin and they need not exist.
+	//
+	// If some mapped policies do not exist, we print some error
+	// messages but continue any way - they can be fixed in the
+	// running server by creating the policies after start up.
+	for arn, rolePolicies := range m {
+		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
+		validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
+		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
+		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
+		if len(unknownPoliciesSet) > 0 {
+			if globalAuthZPlugin == nil {
+				// Print a warning that some policies mapped to a role are not defined.
+				errMsg := fmt.Errorf(
+					"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",
+					unknownPoliciesSet.ToSlice(), arn.String())
+				logger.LogIf(ctx, errMsg)
+			}
+		}
+		sys.rolesMap[arn] = rolePolicies
+	}
 }
 
 // Prints IAM role ARNs.
@@ -403,12 +440,12 @@ func (sys *IAMSys) watch(ctx context.Context) {
 
 	var maxRefreshDurationSecondsForLog float64 = 10
 
-	// Fall back to loading all items periodically
-	ticker := time.NewTicker(sys.iamRefreshInterval)
-	defer ticker.Stop()
+	// Load all items periodically
+	timer := time.NewTimer(sys.iamRefreshInterval)
+	defer timer.Stop()
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			refreshStart := time.Now()
 			if err := sys.Load(ctx); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
@@ -420,6 +457,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 				}
 			}
 
+			timer.Reset(sys.iamRefreshInterval)
 		case <-ctx.Done():
 			return
 		}
@@ -681,7 +719,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 		return errServerNotInitialized
 	}
 
-	if globalPolicyOPA != nil {
+	if newGlobalAuthZPluginFn() != nil {
 		// If OPA is set, we do not need to set a policy mapping.
 		policyName = ""
 	}
@@ -1132,7 +1170,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 			continue
 		}
 		roleArn = roleArns[0]
-		u, err := globalOpenIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
+		u, err := sys.openIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
@@ -1154,14 +1192,14 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
 	for parentUser := range parentUsers {
-		if !globalLDAPConfig.IsLDAPUserDN(parentUser) {
+		if !sys.ldapConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
 		allDistNames = append(allDistNames, parentUser)
 	}
 
-	expiredUsers, err := globalLDAPConfig.GetNonEligibleUserDistNames(allDistNames)
+	expiredUsers, err := sys.ldapConfig.GetNonEligibleUserDistNames(allDistNames)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1183,7 +1221,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// DN to ldap username mapping for each LDAP user
 	parentUserToLDAPUsernameMap := make(map[string]string)
 	for _, cred := range allCreds {
-		if !globalLDAPConfig.IsLDAPUserDN(cred.ParentUser) {
+		if !sys.ldapConfig.IsLDAPUserDN(cred.ParentUser) {
 			continue
 		}
 		// Check if this is the first time we are
@@ -1231,7 +1269,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 2. Query LDAP server for groups of the LDAP users collected.
-	updatedGroups, err := globalLDAPConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
+	updatedGroups, err := sys.ldapConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1537,54 +1575,10 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	return combinedPolicy.IsAllowed(parentArgs) && subPolicy.IsAllowed(parentArgs)
 }
 
-// IsAllowedLDAPSTS - checks for LDAP specific claims and values
-func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool {
-	// parentUser value must match the ldap user in the claim.
-	if parentInClaimIface, ok := args.Claims[ldapUser]; !ok {
-		// no ldapUser claim present reject it.
-		return false
-	} else if parentInClaim, ok := parentInClaimIface.(string); !ok {
-		// not the right type, reject it.
-		return false
-	} else if parentInClaim != parentUser {
-		// ldap claim has been modified maliciously reject it.
-		return false
-	}
-
-	// Check policy for this LDAP user.
-	ldapPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
-	if err != nil {
-		return false
-	}
-
-	if len(ldapPolicies) == 0 {
-		return false
-	}
-
-	// Policies were found, evaluate all of them.
-	availablePoliciesStr, combinedPolicy := sys.store.FilterPolicies(strings.Join(ldapPolicies, ","), "")
-	if availablePoliciesStr == "" {
-		return false
-	}
-
-	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
-	if hasSessionPolicy {
-		return isAllowedSP && combinedPolicy.IsAllowed(args)
-	}
-
-	return combinedPolicy.IsAllowed(args)
-}
-
 // IsAllowedSTS is meant for STS based temporary credentials,
 // which implements claims validation and verification other than
 // applying policies.
 func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
-	// If it is an LDAP request, check that user and group
-	// policies allow the request.
-	if sys.usersSysType == LDAPUsersSysType {
-		return sys.IsAllowedLDAPSTS(args, parentUser)
-	}
-
 	var policies []string
 	roleArn := args.GetRoleArn()
 	if roleArn != "" {
@@ -1617,6 +1611,11 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			}
 			policies = policySet.ToSlice()
 		}
+	}
+
+	// Defensive code: Do not allow any operation if no policy is found in the session token
+	if len(policies) == 0 {
+		return false
 	}
 
 	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
@@ -1693,8 +1692,8 @@ func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
-	if globalPolicyOPA != nil {
-		ok, err := globalPolicyOPA.IsAllowed(args)
+	if authz := newGlobalAuthZPluginFn(); authz != nil {
+		ok, err := authz.IsAllowed(args)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 		}

@@ -20,6 +20,9 @@ package lifecycle
 import (
 	"encoding/xml"
 	"io"
+	"log"
+
+	"github.com/minio/minio-go/v7/pkg/tags"
 )
 
 var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
@@ -36,8 +39,9 @@ type Filter struct {
 
 	Tag    Tag
 	tagSet bool
+
 	// Caching tags, only once
-	cachedTags []string
+	cachedTags map[string]string
 }
 
 // MarshalXML - produces the xml representation of the Filter struct
@@ -150,27 +154,42 @@ func (f Filter) Validate() error {
 
 // TestTags tests if the object tags satisfy the Filter tags requirement,
 // it returns true if there is no tags in the underlying Filter.
-func (f Filter) TestTags(tags []string) bool {
+func (f Filter) TestTags(userTags string) bool {
 	if f.cachedTags == nil {
-		tags := make([]string, 0)
+		cache := make(map[string]string)
 		for _, t := range append(f.And.Tags, f.Tag) {
 			if !t.IsEmpty() {
-				tags = append(tags, t.String())
+				cache[t.Key] = t.Value
 			}
 		}
-		f.cachedTags = tags
+		f.cachedTags = cache
 	}
-	for _, ct := range f.cachedTags {
-		foundTag := false
-		for _, t := range tags {
-			if ct == t {
-				foundTag = true
-				break
-			}
-		}
-		if !foundTag {
-			return false
+
+	// This filter does not have any tags, always return true
+	if len(f.cachedTags) == 0 {
+		return true
+	}
+
+	parsedTags, err := tags.ParseObjectTags(userTags)
+	if err != nil {
+		log.Printf("Unexpected object tag found: `%s`\n", userTags)
+		return false
+	}
+	tagsMap := parsedTags.ToMap()
+
+	// This filter has tags configured but this object
+	// does not have any tag, skip this object
+	if len(tagsMap) == 0 {
+		return false
+	}
+
+	// Both filter and object have tags, find a match,
+	// skip this object otherwise
+	for k, cv := range f.cachedTags {
+		v, ok := tagsMap[k]
+		if ok && v == cv {
+			return true
 		}
 	}
-	return true
+	return false
 }

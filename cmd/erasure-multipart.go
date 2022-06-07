@@ -286,8 +286,10 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
+	userDefined := cloneMSS(opts.UserDefined)
+
 	onlineDisks := er.getDisks()
-	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
 	if parityDrives <= 0 {
 		parityDrives = er.defaultParityCount
 	}
@@ -308,7 +310,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		}
 	}
 	if parityOrig != parityDrives {
-		opts.UserDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
 
 	dataDrives := len(onlineDisks) - parityDrives
@@ -336,8 +338,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	// Guess content-type from the extension if possible.
-	if opts.UserDefined["content-type"] == "" {
-		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	if userDefined["content-type"] == "" {
+		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	modTime := opts.MTime
@@ -352,7 +354,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	for index := range partsMetadata {
 		partsMetadata[index].Fresh = true
 		partsMetadata[index].ModTime = modTime
-		partsMetadata[index].Metadata = opts.UserDefined
+		partsMetadata[index].Metadata = userDefined
 	}
 
 	uploadID := mustGetUUID()
@@ -375,10 +377,6 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
 	auditObjectErasureSet(ctx, object, &er)
 
-	// No metadata is set, allocate a new one.
-	if opts.UserDefined == nil {
-		opts.UserDefined = make(map[string]string)
-	}
 	return er.newMultipartUpload(ctx, bucket, object, opts)
 }
 
@@ -1029,7 +1027,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	fi.IsLatest = true
 
 	// Success, return object info.
-	return fi.ToObjectInfo(bucket, object), nil
+	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
 // AbortMultipartUpload - aborts an ongoing multipart operation

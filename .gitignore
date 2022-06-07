@@ -9,8 +9,7 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-vendor/**/*.js
-vendor/**/*.json
+vendor/
 .DS_Store
 *.syso
 coverage.txt

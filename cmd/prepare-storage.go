@@ -70,7 +70,7 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 }()
 
 // Cleans up tmp directory of the local disk.
-func formatErasureCleanupTmp(diskPath string) {
+func bgFormatErasureCleanupTmp(diskPath string) {
 	// Need to move temporary objects left behind from previous run of minio
 	// server to a unique directory under `minioMetaTmpBucket-old` to clean
 	// up `minioMetaTmpBucket` for the current run.
@@ -98,9 +98,8 @@ func formatErasureCleanupTmp(diskPath string) {
 	}
 
 	go removeAll(tmpOld)
-
 	// Renames and schedules for purging all bucket metacache.
-	renameAllBucketMetacache(diskPath)
+	go renameAllBucketMetacache(diskPath)
 }
 
 // Following error message is added to fix a regression in release
@@ -151,13 +150,13 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
-			closeStorageDisks(storageDisks)
+			closeStorageDisks(storageDisks...)
 		}
 	}(storageDisks)
 
 	for i, err := range errs {
-		if err != nil {
-			if err == errDiskNotFound && verboseLogging {
+		if err != nil && !errors.Is(err, errXLBackend) {
+			if errors.Is(err, errDiskNotFound) && verboseLogging {
 				logger.Error("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
 			} else {
 				logger.Error("Unable to use the drive %s: %v", endpoints[i], err)
@@ -174,7 +173,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
-		if sErr != errUnformattedDisk && sErr != errDiskNotFound && verboseLogging {
+		if !errors.Is(sErr, errUnformattedDisk) && !errors.Is(sErr, errDiskNotFound) && verboseLogging {
 			if sErr != nil {
 				logger.Error("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
 			}

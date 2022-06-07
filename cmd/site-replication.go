@@ -126,6 +126,13 @@ func errSRIAMError(err error) SRError {
 	}
 }
 
+func errSRConfigMissingError(err error) SRError {
+	return SRError{
+		Cause: err,
+		Code:  ErrSiteReplicationConfigMissing,
+	}
+}
+
 var errSRObjectLayerNotReady = SRError{
 	Cause: fmt.Errorf("object layer not ready"),
 	Code:  ErrServerNotInitialized,
@@ -869,14 +876,28 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				ExistingObjectReplicate: "enable",
 			}
 		)
+		ruleARN := targetARN
 		for _, r := range replicationConfig.Rules {
 			if r.ID == ruleID {
 				hasRule = true
+				ruleARN = r.Destination.Bucket
 			}
 		}
 		switch {
 		case hasRule:
-			err = replicationConfig.EditRule(opts)
+			if ruleARN != opts.DestBucket {
+				// remove stale replication rule and replace rule with correct target ARN
+				if len(replicationConfig.Rules) > 1 {
+					err = replicationConfig.RemoveRule(opts)
+				} else {
+					replicationConfig = replication.Config{}
+				}
+				if err == nil {
+					err = replicationConfig.AddRule(opts)
+				}
+			} else {
+				err = replicationConfig.EditRule(opts)
+			}
 		default:
 			err = replicationConfig.AddRule(opts)
 		}
@@ -895,7 +916,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig)
+		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig, true)
 		if apiErr != noError {
 			return fmt.Errorf("bucket replication config validation error: %#v", apiErr)
 		}
@@ -1207,6 +1228,23 @@ func (c *SiteReplicationSys) BucketMetaHook(ctx context.Context, item madmin.SRB
 		return err
 	})
 	return cErr.summaryErr
+}
+
+// PeerBucketVersioningHandler - updates versioning config to local cluster.
+func (c *SiteReplicationSys) PeerBucketVersioningHandler(ctx context.Context, bucket string, versioning *string) error {
+	if versioning != nil {
+		configData, err := base64.StdEncoding.DecodeString(*versioning)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		return nil
+	}
+
+	return nil
 }
 
 // PeerBucketPolicyHandler - copies/deletes policy to local cluster.
@@ -1848,6 +1886,8 @@ func (c *SiteReplicationSys) isEnabled() bool {
 	return c.enabled
 }
 
+var errMissingSRConfig = fmt.Errorf("Site not found in site replication configuration")
+
 // RemovePeerCluster - removes one or more clusters from site replication configuration.
 func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) (st madmin.ReplicateRemoveStatus, err error) {
 	if !c.isEnabled() {
@@ -1872,7 +1912,7 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	for _, s := range siteNames {
 		info, ok := peerMap[s]
 		if !ok {
-			return st, errSRInvalidRequest(fmt.Errorf("Site %s not found in site replication configuration", s))
+			return st, errSRConfigMissingError(errMissingSRConfig)
 		}
 		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
 		delete(updatedPeers, info.DeploymentID)
@@ -1898,6 +1938,9 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				return
 			}
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
+				if errors.As(err, &errMissingSRConfig) {
+					return
+				}
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
 				return
 			}
@@ -1937,6 +1980,10 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 // InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
 // from the site replication configuration.
 func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) error {
+	if !c.isEnabled() {
+		return errSRNotEnabled
+	}
+
 	ourName := ""
 	peerMap := make(map[string]madmin.PeerInfo)
 	updatedPeers := make(map[string]madmin.PeerInfo)
@@ -1958,7 +2005,7 @@ func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI Ob
 	for _, s := range siteNames {
 		info, ok := peerMap[s]
 		if !ok {
-			return fmt.Errorf("Site %s not found in site replication configuration", s)
+			return errMissingSRConfig
 		}
 		if info.DeploymentID == globalDeploymentID {
 			unlinkSelf = true
@@ -2135,6 +2182,7 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 	for b, stat := range sinfo.BucketStats {
 		for dID, st := range stat {
 			if st.TagMismatch ||
+				st.VersioningConfigMismatch ||
 				st.OLockConfigMismatch ||
 				st.SSEConfigMismatch ||
 				st.PolicyMismatch ||
@@ -2532,7 +2580,8 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			replCfgs := make([]*sreplication.Config, numSites)
 			quotaCfgs := make([]*madmin.BucketQuota, numSites)
 			sseCfgSet := set.NewStringSet()
-			var tagCount, olockCfgCount, sseCfgCount int
+			versionCfgSet := set.NewStringSet()
+			var tagCount, olockCfgCount, sseCfgCount, versionCfgCount int
 			for i, s := range slc {
 				if s.ReplicationConfig != nil {
 					cfgBytes, err := base64.StdEncoding.DecodeString(*s.ReplicationConfig)
@@ -2544,6 +2593,16 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 						continue
 					}
 					replCfgs[i] = cfg
+				}
+				if s.Versioning != nil {
+					configData, err := base64.StdEncoding.DecodeString(*s.Versioning)
+					if err != nil {
+						continue
+					}
+					versionCfgCount++
+					if !versionCfgSet.Contains(string(configData)) {
+						versionCfgSet.Add(string(configData))
+					}
 				}
 				if s.QuotaConfig != nil {
 					cfgBytes, err := base64.StdEncoding.DecodeString(*s.QuotaConfig)
@@ -2574,12 +2633,11 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					policies[i] = plcy
 				}
 				if s.ObjectLockConfig != nil {
-					olockCfgCount++
 					configData, err := base64.StdEncoding.DecodeString(*s.ObjectLockConfig)
 					if err != nil {
 						continue
 					}
-
+					olockCfgCount++
 					if !olockConfigSet.Contains(string(configData)) {
 						olockConfigSet.Add(string(configData))
 					}
@@ -2589,10 +2647,10 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					if err != nil {
 						continue
 					}
+					sseCfgCount++
 					if !sseCfgSet.Contains(string(configData)) {
 						sseCfgSet.Add(string(configData))
 					}
-					sseCfgCount++
 				}
 				ss, ok := info.StatsSummary[s.DeploymentID]
 				if !ok {
@@ -2612,6 +2670,9 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				if sseCfgCount > 0 {
 					ss.TotalSSEConfigCount++
 				}
+				if versionCfgCount > 0 {
+					ss.TotalVersioningConfigCount++
+				}
 				if len(policies) > 0 {
 					ss.TotalBucketPoliciesCount++
 				}
@@ -2620,6 +2681,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			tagMismatch := !isReplicated(tagCount, numSites, tagSet)
 			olockCfgMismatch := !isReplicated(olockCfgCount, numSites, olockConfigSet)
 			sseCfgMismatch := !isReplicated(sseCfgCount, numSites, sseCfgSet)
+			versionCfgMismatch := !isReplicated(versionCfgCount, numSites, versionCfgSet)
 			policyMismatch := !isBktPolicyReplicated(numSites, policies)
 			replCfgMismatch := !isBktReplCfgReplicated(numSites, replCfgs)
 			quotaCfgMismatch := !isBktQuotaCfgReplicated(numSites, quotaCfgs)
@@ -2632,20 +2694,21 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				}
 				quotaCfgSet := hasBucket && *quotaCfgs[i] != madmin.BucketQuota{}
 				ss := madmin.SRBucketStatsSummary{
-					DeploymentID:           s.DeploymentID,
-					HasBucket:              hasBucket,
-					TagMismatch:            tagMismatch,
-					OLockConfigMismatch:    olockCfgMismatch,
-					SSEConfigMismatch:      sseCfgMismatch,
-					PolicyMismatch:         policyMismatch,
-					ReplicationCfgMismatch: replCfgMismatch,
-					QuotaCfgMismatch:       quotaCfgMismatch,
-					HasReplicationCfg:      s.ReplicationConfig != nil,
-					HasTagsSet:             s.Tags != nil,
-					HasOLockConfigSet:      s.ObjectLockConfig != nil,
-					HasPolicySet:           s.Policy != nil,
-					HasQuotaCfgSet:         quotaCfgSet,
-					HasSSECfgSet:           s.SSEConfig != nil,
+					DeploymentID:             s.DeploymentID,
+					HasBucket:                hasBucket,
+					TagMismatch:              tagMismatch,
+					OLockConfigMismatch:      olockCfgMismatch,
+					SSEConfigMismatch:        sseCfgMismatch,
+					VersioningConfigMismatch: versionCfgMismatch,
+					PolicyMismatch:           policyMismatch,
+					ReplicationCfgMismatch:   replCfgMismatch,
+					QuotaCfgMismatch:         quotaCfgMismatch,
+					HasReplicationCfg:        s.ReplicationConfig != nil,
+					HasTagsSet:               s.Tags != nil,
+					HasOLockConfigSet:        s.ObjectLockConfig != nil,
+					HasPolicySet:             s.Policy != nil,
+					HasQuotaCfgSet:           quotaCfgSet,
+					HasSSECfgSet:             s.SSEConfig != nil,
 				}
 				var m srBucketMetaInfo
 				if len(bucketStats[s.Bucket]) > dIdx {
@@ -2661,6 +2724,9 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				sum := info.StatsSummary[s.DeploymentID]
 				if !olockCfgMismatch && olockCfgCount == numSites {
 					sum.ReplicatedLockConfig++
+				}
+				if !versionCfgMismatch && versionCfgCount == numSites {
+					sum.ReplicatedVersioningConfig++
 				}
 				if !sseCfgMismatch && sseCfgCount == numSites {
 					sum.ReplicatedSSEConfig++
@@ -2918,8 +2984,9 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				CreatedAt: createdAt,
 				Location:  globalSite.Region,
 			}
+
 			// Get bucket policy if present.
-			policy, err := globalPolicySys.Get(bucket)
+			policy, updatedAt, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 			found := true
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				found = false
@@ -2932,6 +2999,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 					return info, wrapSRErr(err)
 				}
 				bms.Policy = policyJSON
+				bms.PolicyUpdatedAt = updatedAt
 			}
 
 			// Get bucket tags if present.
@@ -2950,6 +3018,23 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				tagCfgStr := base64.StdEncoding.EncodeToString(tagBytes)
 				bms.Tags = &tagCfgStr
 				bms.TagConfigUpdatedAt = updatedAt
+			}
+
+			versioningCfg, updatedAt, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+			found = true
+			if versioningCfg != nil && versioningCfg.Status == "" {
+				found = false
+			} else if err != nil {
+				return info, errSRBackendIssue(err)
+			}
+			if found {
+				versionCfgData, err := xml.Marshal(versioningCfg)
+				if err != nil {
+					return info, wrapSRErr(err)
+				}
+				versioningCfgStr := base64.StdEncoding.EncodeToString(versionCfgData)
+				bms.Versioning = &versioningCfgStr
+				bms.VersioningConfigUpdatedAt = updatedAt
 			}
 
 			// Get object-lock config if present.
@@ -3059,13 +3144,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err = globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			usrErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if usrErr != nil {
+				return info, errSRBackendIssue(usrErr)
+			}
 		}
 		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
 		for user, mp := range userPolicyMap {
@@ -3120,13 +3209,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			userErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
+			globalIAMSys.store.runlock()
+			if userErr != nil {
+				return info, errSRBackendIssue(userErr)
+			}
 		}
 
 		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, len(c.state.Peers))
@@ -3280,17 +3373,15 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 	for {
 		select {
 		case <-healTimer.C:
-			healTimer.Reset(siteHealTimeInterval)
-
 			c.RLock()
 			enabled := c.enabled
 			c.RUnlock()
-			if !enabled {
-				continue
+			if enabled {
+				c.healIAMSystem(ctx, objAPI) // heal IAM system first
+				c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 			}
+			healTimer.Reset(siteHealTimeInterval)
 
-			c.healIAMSystem(ctx, objAPI) // heal IAM system first
-			c.healBuckets(ctx, objAPI)   // heal buckets subsequently
 		case <-ctx.Done():
 			return
 		}
@@ -3352,6 +3443,7 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 
 	for bucket := range info.BucketStats {
 		c.healCreateMissingBucket(ctx, objAPI, bucket, info)
+		c.healVersioningMetadata(ctx, objAPI, bucket, info)
 		c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
 		c.healSSEMetadata(ctx, objAPI, bucket, info)
 		c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
@@ -3509,7 +3601,6 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		latestID, latestPeerName string
 		lastUpdate               time.Time
 		latestQuotaConfig        *string
-		latestCfgJSON            []byte
 		latestQuotaConfigBytes   []byte
 	)
 
@@ -3563,9 +3654,82 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		if err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
 			Type:   madmin.SRBucketMetaTypeQuotaConfig,
 			Bucket: bucket,
-			Quota:  latestCfgJSON,
+			Quota:  latestQuotaConfigBytes,
 		}); err != nil {
 			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing quota config metadata for peer %s from peer %s : %s",
+				peerName, latestPeerName, err.Error())))
+		}
+	}
+	return nil
+}
+
+func (c *SiteReplicationSys) healVersioningMetadata(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return nil
+	}
+	var (
+		latestID, latestPeerName string
+		lastUpdate               time.Time
+		latestVersioningConfig   *string
+	)
+
+	bs := info.BucketStats[bucket]
+	for dID, ss := range bs {
+		if lastUpdate.IsZero() {
+			lastUpdate = ss.meta.VersioningConfigUpdatedAt
+			latestID = dID
+			latestVersioningConfig = ss.meta.Versioning
+		}
+		// avoid considering just created buckets as latest. Perhaps this site
+		// just joined cluster replication and yet to be sync'd
+		if ss.meta.CreatedAt.Equal(ss.meta.VersioningConfigUpdatedAt) {
+			continue
+		}
+		if ss.meta.VersioningConfigUpdatedAt.After(lastUpdate) {
+			lastUpdate = ss.meta.VersioningConfigUpdatedAt
+			latestID = dID
+			latestVersioningConfig = ss.meta.Versioning
+		}
+	}
+
+	latestPeerName = info.Sites[latestID].Name
+	var latestVersioningConfigBytes []byte
+	var err error
+	if latestVersioningConfig != nil {
+		latestVersioningConfigBytes, err = base64.StdEncoding.DecodeString(*latestVersioningConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	for dID, bStatus := range bs {
+		if !bStatus.VersioningConfigMismatch {
+			continue
+		}
+		if isBucketMetadataEqual(latestVersioningConfig, bStatus.meta.Versioning) {
+			continue
+		}
+		if dID == globalDeploymentID {
+			if err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, latestVersioningConfigBytes); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing sse metadata from peer site %s : %w", latestPeerName, err))
+			}
+			continue
+		}
+
+		admClient, err := c.getAdminClient(ctx, dID)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		peerName := info.Sites[dID].Name
+		err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
+			Type:       madmin.SRBucketMetaTypeVersionConfig,
+			Bucket:     bucket,
+			Versioning: latestVersioningConfig,
+		})
+		if err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, "SRPeerReplicateBucketMeta", fmt.Errorf("Error healing versioning config metadata for peer %s from peer %s : %s",
 				peerName, latestPeerName, err.Error())))
 		}
 	}
@@ -3825,6 +3989,23 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 			break
 		}
 	}
+	rcfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	if err != nil {
+		_, ok := err.(BucketReplicationConfigNotFound)
+		if !ok {
+			return err
+		}
+		replMismatch = true
+	}
+
+	if rcfg != nil {
+		// validate remote targets on current cluster for this bucket
+		_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
+		if apiErr != noError {
+			replMismatch = true
+		}
+	}
+
 	if replMismatch {
 		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
 		if err != nil {

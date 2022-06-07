@@ -168,8 +168,10 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	if !isXL2V1Format(e.metadata) {
 		return false
 	}
-	if meta, _ := isIndexedMetaV2(e.metadata); meta != nil {
+	if meta, _, err := isIndexedMetaV2(e.metadata); meta != nil {
 		return meta.IsLatestDeleteMarker()
+	} else if err != nil {
+		return true
 	}
 	// Fall back...
 	xlMeta, err := e.xlmeta()
@@ -438,6 +440,8 @@ func (m metaCacheEntriesSorted) shallowClone() metaCacheEntriesSorted {
 func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, afterV string) (versions []ObjectInfo) {
 	versions = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	for _, entry := range m.o {
 		if entry.isObject() {
 			if delimiter != "" {
@@ -473,7 +477,8 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 
 			for _, version := range fiVersions {
-				versions = append(versions, version.ToObjectInfo(bucket, entry.name))
+				versioned := vcfg != nil && vcfg.Versioned(entry.name)
+				versions = append(versions, version.ToObjectInfo(bucket, entry.name, versioned))
 			}
 
 			continue
@@ -509,6 +514,9 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (objects []ObjectInfo) {
 	objects = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
+
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	for _, entry := range m.o {
 		if entry.isObject() {
 			if delimiter != "" {
@@ -531,7 +539,8 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 
 			fi, err := entry.fileInfo(bucket)
 			if err == nil {
-				objects = append(objects, fi.ToObjectInfo(bucket, entry.name))
+				versioned := vcfg != nil && vcfg.Versioned(entry.name)
+				objects = append(objects, fi.ToObjectInfo(bucket, entry.name, versioned))
 			}
 			continue
 		}
@@ -686,8 +695,12 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			}
 		}
 		if best.name > last {
-			out <- *best
-			last = best.name
+			select {
+			case <-ctxDone:
+				return ctx.Err()
+			case out <- *best:
+				last = best.name
+			}
 		} else if serverDebugLog {
 			console.Debugln("mergeEntryChannels: discarding duplicate", best.name, "<=", last)
 		}

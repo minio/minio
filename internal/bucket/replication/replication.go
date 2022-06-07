@@ -124,6 +124,7 @@ const (
 	HealReplicationType
 	ExistingObjectReplicationType
 	ResyncReplicationType
+	AllReplicationType
 )
 
 // Valid returns true if replication type is set
@@ -145,10 +146,22 @@ type ObjectOpts struct {
 	TargetArn      string
 }
 
+// HasExistingObjectReplication returns true if any of the rule returns 'ExistingObjects' replication.
+func (c Config) HasExistingObjectReplication(arn string) bool {
+	for _, rule := range c.Rules {
+		if rule.Destination.ARN == arn || c.RoleArn == arn {
+			if rule.ExistingObjectReplication.Status == Enabled {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // FilterActionableRules returns the rules actions that need to be executed
 // after evaluating prefix/tag filtering
 func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
-	if obj.Name == "" && obj.OpType != ResyncReplicationType {
+	if obj.Name == "" && !(obj.OpType == ResyncReplicationType || obj.OpType == AllReplicationType) {
 		return nil
 	}
 	var rules []Rule
@@ -160,8 +173,8 @@ func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
 		if obj.TargetArn != "" && rule.Destination.ARN != obj.TargetArn && c.RoleArn != obj.TargetArn {
 			continue
 		}
-		// Ignore other object level and prefix filters for resyncing target
-		if obj.OpType == ResyncReplicationType {
+		// Ignore other object level and prefix filters for resyncing target/listing bucket targets
+		if obj.OpType == ResyncReplicationType || obj.OpType == AllReplicationType {
 			rules = append(rules, rule)
 			continue
 		}

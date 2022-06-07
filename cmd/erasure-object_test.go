@@ -20,11 +20,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -1046,5 +1049,159 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 				t.Errorf("Expected Write Quorum %d, got %d", tt.expectedWriteQuorum, actualWriteQuorum)
 			}
 		})
+	}
+}
+
+// In some deployments, one object has data inlined in one disk and not inlined in other disks.
+func TestGetObjectInlineNotInline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create a backend with 4 disks named disk{1...4}, this name convention
+	// because we will unzip some object data from a sample archive.
+	const numDisks = 4
+	path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var fsDirs []string
+	for i := 1; i <= numDisks; i++ {
+		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("disk%d", i)))
+	}
+
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	if err != nil {
+		removeRoots(fsDirs)
+		t.Fatal(err)
+	}
+
+	// cleaning up of temporary test directories
+	defer objLayer.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	// Create a testbucket
+	err = objLayer.MakeBucketWithLocation(ctx, "testbucket", BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unzip sample object data to the existing disks
+	err = unzipArchive("testdata/xl-meta-inline-notinline.zip", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to read the object and check its md5sum
+	gr, err := objLayer.GetObjectNInfo(ctx, "testbucket", "file", nil, nil, readLock, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+	}
+
+	h := md5.New()
+	_, err = io.Copy(h, gr)
+	if err != nil {
+		t.Fatalf("Expected GetObject reading data to succeed, but failed with %v", err)
+	}
+	gr.Close()
+
+	const expectedHash = "fffb6377948ebea75ad2b8058e849ef5"
+	foundHash := fmt.Sprintf("%x", h.Sum(nil))
+	if foundHash != expectedHash {
+		t.Fatalf("Expected data to have md5sum = `%s`, found `%s`", expectedHash, foundHash)
+	}
+}
+
+// Test reading an object with some outdated data in some disks
+func TestGetObjectWithOutdatedDisks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create an instance of xl backend.
+	obj, fsDirs, err := prepareErasure(ctx, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	sets := z.serverPools[0]
+	xl := sets.sets[0]
+
+	origErasureDisks := xl.getDisks()
+
+	testCases := []struct {
+		bucket    string
+		versioned bool
+		object    string
+		content   []byte
+	}{
+		{"bucket1", false, "object1", []byte("aaaaaaaaaaaaaaaa")},
+		{"bucket2", false, "object2", bytes.Repeat([]byte{'a'}, smallFileThreshold*2)},
+		{"bucket3", true, "version1", []byte("aaaaaaaaaaaaaaaa")},
+		{"bucket4", true, "version2", bytes.Repeat([]byte{'a'}, smallFileThreshold*2)},
+	}
+
+	for i, testCase := range testCases {
+		// Step 1: create a bucket
+		err = z.MakeBucketWithLocation(ctx, testCase.bucket, BucketOptions{VersioningEnabled: testCase.versioned})
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create a bucket: %v", i+1, err)
+		}
+
+		// Step 2: Upload an object with a random content
+		initialData := bytes.Repeat([]byte{'b'}, len(testCase.content))
+		sets.erasureDisksMu.Lock()
+		xl.getDisks = func() []StorageAPI { return origErasureDisks }
+		sets.erasureDisksMu.Unlock()
+		_, err = z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(initialData), int64(len(initialData)), "", ""),
+			ObjectOptions{Versioned: testCase.versioned})
+		if err != nil {
+			t.Fatalf("Test %d: Failed to upload a random object: %v", i+1, err)
+		}
+
+		// Step 3: Upload the object with some disks offline
+		sets.erasureDisksMu.Lock()
+		xl.getDisks = func() []StorageAPI {
+			disks := make([]StorageAPI, len(origErasureDisks))
+			copy(disks, origErasureDisks)
+			disks[0] = nil
+			disks[1] = nil
+			return disks
+		}
+		sets.erasureDisksMu.Unlock()
+		_, err = z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(testCase.content), int64(len(testCase.content)), "", ""),
+			ObjectOptions{Versioned: testCase.versioned})
+		if err != nil {
+			t.Fatalf("Test %d: Failed to upload the final object: %v", i+1, err)
+		}
+
+		// Step 4: Try to read the object back and check its md5sum
+		sets.erasureDisksMu.Lock()
+		xl.getDisks = func() []StorageAPI { return origErasureDisks }
+		sets.erasureDisksMu.Unlock()
+		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{})
+		if err != nil {
+			t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
+		}
+
+		h := md5.New()
+		h.Write(testCase.content)
+		expectedHash := h.Sum(nil)
+
+		h.Reset()
+		_, err = io.Copy(h, gr)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to calculate md5sum of the object: %v", i+1, err)
+		}
+		gr.Close()
+		foundHash := h.Sum(nil)
+
+		if !bytes.Equal(foundHash, expectedHash) {
+			t.Fatalf("Test %d: Expected data to have md5sum = `%x`, found `%x`", i+1, expectedHash, foundHash)
+		}
 	}
 }

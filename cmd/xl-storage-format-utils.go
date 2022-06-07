@@ -50,7 +50,9 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 	var versions []FileInfo
 	var err error
 
-	if buf, _ := isIndexedMetaV2(xlMetaBuf); buf != nil {
+	if buf, _, e := isIndexedMetaV2(xlMetaBuf); e != nil {
+		return FileInfoVersions{}, e
+	} else if buf != nil {
 		versions, err = buf.ListVersions(volume, path)
 	} else {
 		var xlMeta xlMetaV2
@@ -87,7 +89,9 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 	var fi FileInfo
 	var err error
 	var inData xlMetaInlineData
-	if buf, data := isIndexedMetaV2(xlMetaBuf); buf != nil {
+	if buf, data, e := isIndexedMetaV2(xlMetaBuf); e != nil {
+		return FileInfo{}, e
+	} else if buf != nil {
 		inData = data
 		fi, err = buf.ToFileInfo(volume, path, versionID)
 		if len(buf) != 0 && errors.Is(err, errFileNotFound) {
@@ -141,6 +145,9 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 // Will return -1 for unknown values.
 func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 	if api := newObjectLayerFn(); api != nil {
+		if globalIsErasureSD {
+			return 0, 0, 0
+		}
 		if ep, ok := api.(*erasureServerPools); ok {
 			if pool, set, disk, err := ep.getPoolAndSet(diskID); err == nil {
 				return pool, set, disk

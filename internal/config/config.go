@@ -69,9 +69,11 @@ const (
 const (
 	CredentialsSubSys    = "credentials"
 	PolicyOPASubSys      = "policy_opa"
+	PolicyPluginSubSys   = "policy_plugin"
 	IdentityOpenIDSubSys = "identity_openid"
 	IdentityLDAPSubSys   = "identity_ldap"
 	IdentityTLSSubSys    = "identity_tls"
+	IdentityPluginSubSys = "identity_plugin"
 	CacheSubSys          = "cache"
 	SiteSubSys           = "site"
 	RegionSubSys         = "region"
@@ -86,6 +88,7 @@ const (
 	ScannerSubSys        = "scanner"
 	CrawlerSubSys        = "crawler"
 	SubnetSubSys         = "subnet"
+	CallhomeSubSys       = "callhome"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -141,9 +144,11 @@ var SubSystems = set.CreateStringSet(
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
 	PolicyOPASubSys,
+	PolicyPluginSubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
 	IdentityTLSSubSys,
+	IdentityPluginSubSys,
 	ScannerSubSys,
 	HealSubSys,
 	NotifyAMQPSubSys,
@@ -157,6 +162,7 @@ var SubSystems = set.CreateStringSet(
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
 	SubnetSubSys,
+	CallhomeSubSys,
 )
 
 // SubSystemsDynamic - all sub-systems that have dynamic config.
@@ -166,6 +172,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	ScannerSubSys,
 	HealSubSys,
 	SubnetSubSys,
+	CallhomeSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
@@ -183,8 +190,10 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	StorageClassSubSys,
 	CompressionSubSys,
 	PolicyOPASubSys,
+	PolicyPluginSubSys,
 	IdentityLDAPSubSys,
 	IdentityTLSSubSys,
+	IdentityPluginSubSys,
 	HealSubSys,
 	ScannerSubSys,
 }...)

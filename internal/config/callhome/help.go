@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,17 +15,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !fips
-// +build !fips
+package callhome
 
-package hash
+import "github.com/minio/minio/internal/config"
 
-import (
-	"hash"
+var (
+	defaultHelpPostfix = func(key string) string {
+		return config.DefaultHelpPostfix(DefaultKVS, key)
+	}
 
-	sha256 "github.com/minio/sha256-simd"
+	// HelpCallhome - provides help for callhome config
+	HelpCallhome = config.HelpKVS{
+		config.HelpKV{
+			Key:         Enable,
+			Type:        "on|off",
+			Description: "set to enable callhome" + defaultHelpPostfix(Enable),
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         Frequency,
+			Type:        "duration",
+			Description: "time duration between callhome cycles e.g. 24h" + defaultHelpPostfix(Frequency),
+			Optional:    true,
+		},
+	}
 )
-
-// newSHA256 returns a new hash.Hash computing the SHA256 checksum.
-// The SHA256 implementation is not FIPS 140-2 compliant.
-func newSHA256() hash.Hash { return sha256.New() }

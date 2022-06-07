@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -33,7 +32,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -364,6 +362,18 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			}) {
 				bucketsInfo[n] = bucketInfo
 				n++
+			} else if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
+				Action:          iampolicy.GetBucketLocationAction,
+				BucketName:      bucketInfo.Name,
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				IsOwner:         owner,
+				ObjectName:      "",
+				Claims:          cred.Claims,
+			}) {
+				bucketsInfo[n] = bucketInfo
+				n++
 			}
 		}
 		bucketsInfo = bucketsInfo[:n]
@@ -471,9 +481,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		hasLockEnabled = true
 	}
 
-	versioned := globalBucketVersioningSys.Enabled(bucket)
-	suspended := globalBucketVersioningSys.Suspended(bucket)
-
 	type deleteResult struct {
 		delInfo DeletedObject
 		errInfo DeleteError
@@ -481,8 +488,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteResults := make([]deleteResult, len(deleteObjectsReq.Objects))
 
+	vc, _ := globalBucketVersioningSys.Get(bucket)
 	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
-
 	for index, object := range deleteObjectsReq.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
@@ -514,11 +521,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
-			Versioned:        versioned,
-			VersionSuspended: suspended,
+			Versioned:        vc.PrefixEnabled(object.ObjectName),
+			VersionSuspended: vc.Suspended(),
 		}
 
-		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
+		if replicateDeletes || hasLockEnabled || !globalTierConfigMgr.Empty() {
 			if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
 				opts.VersionID = nullVersionID
 			}
@@ -526,7 +533,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if !globalTierConfigMgr.Empty() {
-			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(versioned, suspended)
+			oss[index] = newObjSweeper(bucket, object.ObjectName).WithVersion(opts.VersionID).WithVersioning(opts.Versioned, opts.VersionSuspended)
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
@@ -547,7 +554,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				object.ReplicateDecisionStr = dsc.String()
 			}
 		}
-		if object.VersionID != "" && hasLockEnabled {
+		if hasLockEnabled {
 			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
 				apiErr := errorCodes.ToAPIErr(apiErrCode)
 				deleteResults[index].errInfo = DeleteError{
@@ -581,8 +588,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned:        versioned,
-		VersionSuspended: suspended,
+		PrefixEnabledFn:  vc.PrefixEnabled,
+		VersionSuspended: vc.Suspended(),
 	})
 
 	for i := range errs {
@@ -638,22 +645,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		if replicateDeletes {
-			if dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending {
-				dv := DeletedObjectReplicationInfo{
-					DeletedObject: dobj,
-					Bucket:        bucket,
-				}
-				scheduleReplicationDelete(ctx, dv, objectAPI)
+		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending) {
+			dv := DeletedObjectReplicationInfo{
+				DeletedObject: dobj,
+				Bucket:        bucket,
 			}
-		}
-
-	}
-
-	// Notify deleted event for objects.
-	for _, dobj := range deletedObjects {
-		if dobj.ObjectName == "" {
-			continue
+			scheduleReplicationDelete(ctx, dv, objectAPI)
 		}
 
 		eventName := event.ObjectRemovedDelete
@@ -1365,7 +1362,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1596,376 +1593,4 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
-}
-
-// PutBucketReplicationConfigHandler - PUT Bucket replication configuration.
-// ----------
-// Add a replication configuration on the specified bucket as specified in https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketReplication.html
-func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "PutBucketReplicationConfig")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-	if !globalIsErasure {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if globalSiteReplicationSys.isEnabled() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
-		return
-	}
-	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNeedsVersioningError), r.URL)
-		return
-	}
-	replicationConfig, err := replication.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
-		apiErr.Description = err.Error()
-		writeErrorResponse(ctx, w, apiErr, r.URL)
-		return
-	}
-	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig)
-	if apiErr != noError {
-		writeErrorResponse(ctx, w, apiErr, r.URL)
-		return
-	}
-	// Validate the received bucket replication config
-	if err = replicationConfig.Validate(bucket, sameTarget); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	configData, err := xml.Marshal(replicationConfig)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, configData); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// GetBucketReplicationConfigHandler - GET Bucket replication configuration.
-// ----------
-// Gets the replication configuration for a bucket.
-func (api objectAPIHandlers) GetBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketReplicationConfig")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	// check if user has permissions to perform this operation
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	configData, err := xml.Marshal(config)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	// Write success response.
-	writeSuccessResponseXML(w, configData)
-}
-
-// DeleteBucketReplicationConfigHandler - DELETE Bucket replication config.
-// ----------
-func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "DeleteBucketReplicationConfig")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if globalSiteReplicationSys.isEnabled() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
-		return
-	}
-	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, nil); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// GetBucketReplicationMetricsHandler - GET Bucket replication metrics.
-// ----------
-// Gets the replication metrics for a bucket.
-func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketReplicationMetrics")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	// check if user has permissions to perform this operation
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	var usageInfo BucketUsageInfo
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err == nil && !dataUsageInfo.LastUpdate.IsZero() {
-		usageInfo = dataUsageInfo.BucketsUsage[bucket]
-	}
-
-	w.Header().Set(xhttp.ContentType, string(mimeJSON))
-
-	enc := json.NewEncoder(w)
-	if err = enc.Encode(getLatestReplicationStats(bucket, usageInfo)); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-}
-
-// ResetBucketReplicationStartHandler - starts a replication reset for all objects in a bucket which
-// qualify for replication and re-sync the object(s) to target, provided ExistingObjectReplication is
-// enabled for the qualifying rule. This API is a MinIO only extension provided for situations where
-// remote target is entirely lost,and previously replicated objects need to be re-synced. If resync is
-// already in progress it returns an error
-func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ResetBucketReplicationStart")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	durationStr := r.URL.Query().Get("older-than")
-	arn := r.URL.Query().Get("arn")
-	resetID := r.URL.Query().Get("reset-id")
-	if resetID == "" {
-		resetID = mustGetUUID()
-	}
-	var (
-		days time.Duration
-		err  error
-	)
-	if durationStr != "" {
-		days, err = time.ParseDuration(durationStr)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, InvalidArgument{
-				Bucket: bucket,
-				Err:    fmt.Errorf("invalid query parameter older-than %s for %s : %w", durationStr, bucket, err),
-			}), r.URL)
-		}
-	}
-	resetBeforeDate := UTCNow().AddDate(0, 0, -1*int(days/24))
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.ResetBucketReplicationStateAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if !config.HasActiveRules("", true) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNoMatchingRuleError), r.URL)
-		return
-	}
-	tgtArns := config.FilterTargetArns(
-		replication.ObjectOpts{
-			OpType:    replication.ResyncReplicationType,
-			TargetArn: arn,
-		})
-
-	if len(tgtArns) == 0 {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-			Bucket: bucket,
-			Err:    fmt.Errorf("Remote target ARN %s missing or ineligible for replication resync", arn),
-		}), r.URL)
-		return
-	}
-
-	if len(tgtArns) > 1 && arn == "" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-			Bucket: bucket,
-			Err:    fmt.Errorf("ARN should be specified for replication reset"),
-		}), r.URL)
-		return
-	}
-	var rinfo ResyncTargetsInfo
-	target := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, bucket, tgtArns[0])
-	target.ResetBeforeDate = UTCNow().AddDate(0, 0, -1*int(days/24))
-	target.ResetID = resetID
-	rinfo.Targets = append(rinfo.Targets, ResyncTarget{Arn: tgtArns[0], ResetID: target.ResetID})
-	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, true); err != nil {
-		switch err.(type) {
-		case BucketRemoteConnectionErr:
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationRemoteConnectionError, err), r.URL)
-		default:
-			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		}
-	}
-	if err := startReplicationResync(ctx, bucket, arn, resetID, resetBeforeDate, objectAPI); err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-			Bucket: bucket,
-			Err:    err,
-		}), r.URL)
-		return
-	}
-
-	data, err := json.Marshal(rinfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	// Write success response.
-	writeSuccessResponseJSON(w, data)
-}
-
-// ResetBucketReplicationStatusHandler - returns the status of replication reset.
-// This API is a MinIO only extension
-func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ResetBucketReplicationStatus")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	arn := r.URL.Query().Get("arn")
-	var err error
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.ResetBucketReplicationStateAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
-	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	globalReplicationPool.resyncState.RLock()
-	brs, ok := globalReplicationPool.resyncState.statusMap[bucket]
-	if !ok {
-		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
-		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-				Bucket: bucket,
-				Err:    fmt.Errorf("No replication resync status available for %s", arn),
-			}), r.URL)
-		}
-		return
-	}
-
-	var rinfo ResyncTargetsInfo
-	for tarn, st := range brs.TargetsMap {
-		if arn != "" && tarn != arn {
-			continue
-		}
-		rinfo.Targets = append(rinfo.Targets, ResyncTarget{
-			Arn:             tarn,
-			ResetID:         st.ResyncID,
-			StartTime:       st.StartTime,
-			EndTime:         st.EndTime,
-			ResyncStatus:    st.ResyncStatus.String(),
-			ReplicatedSize:  st.ReplicatedSize,
-			ReplicatedCount: st.ReplicatedCount,
-			FailedSize:      st.FailedSize,
-			FailedCount:     st.FailedCount,
-			Bucket:          st.Bucket,
-			Object:          st.Object,
-		})
-	}
-	globalReplicationPool.resyncState.RUnlock()
-	data, err := json.Marshal(rinfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	// Write success response.
-	writeSuccessResponseJSON(w, data)
 }

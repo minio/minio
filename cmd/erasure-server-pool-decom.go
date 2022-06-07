@@ -619,7 +619,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 	parallelWorkers := make(chan struct{}, workerSize)
 
-	versioned := globalBucketVersioningSys.Enabled(bName)
 	for _, set := range pool.sets {
 		set := set
 		disks := set.getOnlineDisks()
@@ -629,6 +628,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			continue
 		}
 
+		vc, _ := globalBucketVersioningSys.Get(bName)
 		decommissionEntry := func(entry metaCacheEntry) {
 			defer func() {
 				<-parallelWorkers
@@ -667,7 +667,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						bName,
 						version.Name,
 						ObjectOptions{
-							Versioned:         versioned,
+							Versioned:         vc.PrefixEnabled(version.Name),
 							VersionID:         version.VersionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
@@ -687,27 +687,34 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					continue
 				}
 
-				gr, err := set.GetObjectNInfo(ctx,
-					bName,
-					encodeDirObject(version.Name),
-					nil,
-					http.Header{},
-					noLock, // all mutations are blocked reads are safe without locks.
-					ObjectOptions{
-						VersionID: version.VersionID,
-					})
-				if err != nil {
-					logger.LogIf(ctx, err)
-					z.poolMetaMutex.Lock()
-					z.poolMeta.CountItem(idx, version.Size, true)
-					z.poolMetaMutex.Unlock()
-					break // break out on first error
-				}
 				var failure bool
 				// gr.Close() is ensured by decommissionObject().
-				if err = z.decommissionObject(ctx, bName, gr); err != nil {
-					logger.LogIf(ctx, err)
-					failure = true
+				for try := 0; try < 3; try++ {
+					gr, err := set.GetObjectNInfo(ctx,
+						bName,
+						encodeDirObject(version.Name),
+						nil,
+						http.Header{},
+						noLock, // all mutations are blocked reads are safe without locks.
+						ObjectOptions{
+							VersionID: version.VersionID,
+						})
+					if isErrObjectNotFound(err) {
+						// object deleted by the application, nothing to do here we move on.
+						return
+					}
+					if err != nil {
+						failure = true
+						logger.LogIf(ctx, err)
+						continue
+					}
+					if err = z.decommissionObject(ctx, bName, gr); err != nil {
+						failure = true
+						logger.LogIf(ctx, err)
+						continue
+					}
+					failure = false
+					break
 				}
 				z.poolMetaMutex.Lock()
 				z.poolMeta.CountItem(idx, version.Size, failure)
@@ -722,7 +729,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			if decommissionedCount == len(fivs.Versions) {
 				_, err := set.DeleteObject(ctx,
 					bName,
-					entry.name,
+					encodeDirObject(entry.name),
 					ObjectOptions{
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},

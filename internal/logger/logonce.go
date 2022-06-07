@@ -31,6 +31,27 @@ type logOnceType struct {
 	sync.Mutex
 }
 
+func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	if err == nil {
+		return
+	}
+	l.Lock()
+	shouldLog := false
+	prevErr := l.IDMap[id]
+	if prevErr == nil {
+		l.IDMap[id] = err
+		shouldLog = true
+	} else if prevErr.Error() != err.Error() {
+		l.IDMap[id] = err
+		shouldLog = true
+	}
+	l.Unlock()
+
+	if shouldLog {
+		consoleLogIf(ctx, err, errKind...)
+	}
+}
+
 // One log message per error.
 func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
 	if err == nil {
@@ -90,4 +111,21 @@ func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interf
 	}
 
 	logOnce.logOnceIf(ctx, err, id, errKind...)
+}
+
+// LogOnceConsoleIf - similar to LogOnceIf but exclusively only logs to console target.
+func LogOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	if err == nil {
+		return
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+
+	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
+		return
+	}
+
+	logOnce.logOnceConsoleIf(ctx, err, id, errKind...)
 }

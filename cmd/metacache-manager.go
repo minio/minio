@@ -56,7 +56,7 @@ func (m *metacacheManager) initManager() {
 			objAPI = newObjectLayerFn()
 		}
 
-		if !globalIsErasure {
+		if globalIsGateway {
 			return
 		}
 

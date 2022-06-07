@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -99,15 +99,15 @@ func (fi FileInfo) IsValid() bool {
 		fi.Erasure.Index <= dataBlocks+parityBlocks &&
 		len(fi.Erasure.Distribution) == (dataBlocks+parityBlocks))
 	return ((dataBlocks >= parityBlocks) &&
-		(dataBlocks != 0) && (parityBlocks != 0) &&
+		(dataBlocks > 0) && (parityBlocks >= 0) &&
 		correctIndexes)
 }
 
 // ToObjectInfo - Converts metadata to object info.
-func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
+func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInfo {
 	object = decodeDirObject(object)
 	versionID := fi.VersionID
-	if (globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket)) && versionID == "" {
+	if versioned && versionID == "" {
 		versionID = nullVersionID
 	}
 
@@ -284,7 +284,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 
 func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
 	// with less quorum return error.
-	if quorum < 2 {
+	if quorum < 1 {
 		return FileInfo{}, errErasureReadQuorum
 	}
 	metaHashes := make([]string, len(metaArr))
@@ -297,8 +297,6 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
 			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
-			// make sure that length of Data is same
-			fmt.Fprintf(h, "%v", len(meta.Data))
 
 			// ILM transition fields
 			fmt.Fprint(h, meta.TransitionStatus)
@@ -400,6 +398,10 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
+	if defaultParityCount == 0 {
+		return 1, 1, nil
+	}
+
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
 	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {

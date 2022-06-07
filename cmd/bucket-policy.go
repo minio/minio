@@ -38,7 +38,8 @@ type PolicySys struct{}
 
 // Get returns stored bucket policy
 func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
-	return globalBucketMetadataSys.GetPolicyConfig(bucket)
+	policy, _, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
+	return policy, err
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.

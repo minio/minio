@@ -130,6 +130,9 @@ func getWriteQuorum(drive int) int {
 	return quorum
 }
 
+// CloneMSS is an exposed function of cloneMSS for gateway usage.
+var CloneMSS = cloneMSS
+
 // cloneMSS will clone a map[string]string.
 // If input is nil an empty map is returned, not nil.
 func cloneMSS(v map[string]string) map[string]string {
@@ -903,6 +906,8 @@ func getMinioMode() string {
 		mode = globalMinioModeErasure
 	} else if globalIsGateway {
 		mode = globalMinioModeGatewayPrefix + globalGatewayName
+	} else if globalIsErasureSD {
+		mode = globalMinioModeErasureSD
 	}
 	return mode
 }

@@ -1365,7 +1365,7 @@ func getMinioHealingMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 5)
-		if !globalIsErasure {
+		if globalIsGateway {
 			return
 		}
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
@@ -1604,8 +1604,9 @@ func getBucketUsageMetrics() *MetricsGroup {
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
+		bucketReplStats := getAllLatestReplicationStats(dataUsageInfo.BucketsUsage)
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			stats := getLatestReplicationStats(bucket, usage)
+			stats := bucketReplStats[bucket]
 
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
@@ -1816,7 +1817,7 @@ func getClusterStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || !globalIsErasure {
+		if objLayer == nil || globalIsGateway {
 			return
 		}
 

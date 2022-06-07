@@ -87,7 +87,7 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
-func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, APIError) {
+func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config, checkRemote bool) (bool, APIError) {
 	var arns []string
 	if rCfg.RoleArn != "" {
 		arns = append(arns, rCfg.RoleArn)
@@ -96,26 +96,29 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			arns = append(arns, rule.Destination.String())
 		}
 	}
+	var sameTarget bool
 	for _, arnStr := range arns {
 		arn, err := madmin.ParseARN(arnStr)
 		if err != nil {
-			return false, errorCodes.ToAPIErrWithErr(ErrBucketRemoteArnInvalid, err)
+			return sameTarget, errorCodes.ToAPIErrWithErr(ErrBucketRemoteArnInvalid, err)
 		}
 		if arn.Type != madmin.ReplicationService {
-			return false, toAPIError(ctx, BucketRemoteArnTypeInvalid{Bucket: bucket})
+			return sameTarget, toAPIError(ctx, BucketRemoteArnTypeInvalid{Bucket: bucket})
 		}
 		clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, arnStr)
 		if clnt == nil {
-			return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
+			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
-		if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
-			return false, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
-		}
-		if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
-			if ret.LockEnabled {
-				lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
-				if err != nil || lock != "Enabled" {
-					return false, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
+		if checkRemote { // validate remote bucket
+			if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
+				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
+			}
+			if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
+				if ret.LockEnabled {
+					lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
+					if err != nil || lock != "Enabled" {
+						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
+					}
 				}
 			}
 		}
@@ -123,12 +126,19 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		c, ok := globalBucketTargetSys.arnRemotesMap[arnStr]
 		if ok {
 			if c.EndpointURL().String() == clnt.EndpointURL().String() {
-				sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
-				return sameTarget, toAPIError(ctx, nil)
+				selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
+				if !sameTarget {
+					sameTarget = selfTarget
+				}
+				continue
 			}
 		}
 	}
-	return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
+
+	if len(arns) == 0 {
+		return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
+	}
+	return sameTarget, toAPIError(ctx, nil)
 }
 
 type mustReplicateOptions struct {
@@ -177,6 +187,17 @@ func getMustReplicateOptions(o ObjectInfo, op replication.Type, opts ObjectOptio
 // a synchronous manner.
 func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplicateOptions) (dsc ReplicateDecision) {
 	if globalIsGateway {
+		return
+	}
+
+	// object layer not initialized we return with no decision.
+	if newObjectLayerFn() == nil {
+		return
+	}
+
+	// Disable server-side replication on object prefixes which are excluded
+	// from versioning via the MinIO bucket versioning extension.
+	if globalBucketVersioningSys.PrefixSuspended(bucket, object) {
 		return
 	}
 
@@ -262,6 +283,11 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	}
 	// If incoming request is a replication request, it does not need to be re-replicated.
 	if delOpts.ReplicationRequest {
+		return
+	}
+	// Skip replication if this object's prefix is excluded from being
+	// versioned.
+	if !delOpts.Versioned {
 		return
 	}
 	opts := replication.ObjectOpts{
@@ -457,8 +483,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		VersionID:         versionID,
 		MTime:             dobj.DeleteMarkerMTime.Time,
 		DeleteReplication: drs,
-		Versioned:         globalBucketVersioningSys.Enabled(bucket),
-		VersionSuspended:  globalBucketVersioningSys.Suspended(bucket),
+		Versioned:         globalBucketVersioningSys.PrefixEnabled(bucket, dobj.ObjectName),
+		VersionSuspended:  globalBucketVersioningSys.PrefixSuspended(bucket, dobj.ObjectName),
 	})
 	if err != nil && !isErrVersionNotFound(err) { // VersionNotFound would be reported by pool that object version is missing on.
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, dobj.ObjectName, versionID, err))
@@ -1019,8 +1045,13 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		return
 	}
 
+	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
+	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
+
 	gr, err = objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
-		VersionID: objInfo.VersionID,
+		VersionID:        objInfo.VersionID,
+		Versioned:        versioned,
+		VersionSuspended: versionSuspended,
 	})
 	if err != nil {
 		sendEvent(eventArgs{
@@ -1590,7 +1621,11 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	return reader, proxyResult{Proxy: true}, nil
 }
 
-func getproxyTargets(ctx context.Context, bucket, object string, opts ObjectOptions) (tgts *madmin.BucketTargets) {
+func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOptions) (tgts *madmin.BucketTargets) {
+	if opts.VersionSuspended {
+		return &madmin.BucketTargets{}
+	}
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
 		return &madmin.BucketTargets{}
@@ -1727,10 +1762,6 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo, dsc *Repli
 	if c.Empty() {
 		return
 	}
-	// existing object replication does not apply to un-versioned objects
-	if oi.VersionID == "" {
-		return
-	}
 
 	// Now overlay existing object replication choices for target
 	if oi.DeleteMarker {
@@ -1831,9 +1862,26 @@ func resyncTarget(oi ObjectInfo, arn string, resetID string, resetBeforeDate tim
 	return
 }
 
-// get the most current of in-memory replication stats  and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
-	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+func getAllLatestReplicationStats(bucketsUsage map[string]BucketUsageInfo) (bucketsReplicationStats map[string]BucketReplicationStats) {
+	peerBucketStatsList := globalNotificationSys.GetClusterAllBucketStats(GlobalContext)
+	bucketsReplicationStats = make(map[string]BucketReplicationStats, len(bucketsUsage))
+
+	for bucket, u := range bucketsUsage {
+		bucketStats := make([]BucketStats, len(peerBucketStatsList))
+		for i, peerBucketStats := range peerBucketStatsList {
+			bucketStat, ok := peerBucketStats[bucket]
+			if !ok {
+				continue
+			}
+			bucketStats[i] = bucketStat
+		}
+		bucketsReplicationStats[bucket] = calculateBucketReplicationStats(bucket, u, bucketStats)
+	}
+
+	return bucketsReplicationStats
+}
+
+func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketStats []BucketStats) (s BucketReplicationStats) {
 	// accumulate cluster bucket stats
 	stats := make(map[string]*BucketReplicationStat)
 	var totReplicaSize int64
@@ -1902,6 +1950,12 @@ func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplic
 	return s
 }
 
+// get the most current of in-memory replication stats  and data usage info from crawler.
+func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
+	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
+	return calculateBucketReplicationStats(bucket, u, bucketStats)
+}
+
 const resyncTimeInterval = time.Minute * 10
 
 // periodicResyncMetaSave saves in-memory resync meta stats to disk in periodic intervals
@@ -1912,7 +1966,6 @@ func (p *ReplicationPool) periodicResyncMetaSave(ctx context.Context, objectAPI 
 	for {
 		select {
 		case <-resyncTimer.C:
-			resyncTimer.Reset(resyncTimeInterval)
 			now := UTCNow()
 			p.resyncState.RLock()
 			for bucket, brs := range p.resyncState.statusMap {
@@ -1933,6 +1986,8 @@ func (p *ReplicationPool) periodicResyncMetaSave(ctx context.Context, objectAPI 
 				}
 			}
 			p.resyncState.RUnlock()
+
+			resyncTimer.Reset(resyncTimeInterval)
 		case <-ctx.Done():
 			// server could be restarting - need
 			// to exit immediately
@@ -1952,6 +2007,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		st.EndTime = UTCNow()
 		st.ResyncStatus = resyncStatus
 		m.TargetsMap[arn] = st
+		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}()
 	// Allocate new results channel to receive ObjectInfo.
@@ -2012,7 +2068,6 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		}
 
 		if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
-
 			versionID := ""
 			dmVersionID := ""
 			if roi.VersionPurgeStatus.Empty() {
@@ -2059,6 +2114,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 			st.ReplicatedSize += roi.Size
 		}
 		m.TargetsMap[arn] = st
+		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}
 	resyncStatus = ResyncCompleted
@@ -2138,10 +2194,6 @@ func (p *ReplicationPool) deleteResyncMetadata(ctx context.Context, bucket strin
 func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
-	}
-	// replication applies only to erasure coded setups
-	if !globalIsErasure {
-		return nil
 	}
 	// Load bucket metadata sys in background
 	go p.loadResync(ctx, buckets, objAPI)

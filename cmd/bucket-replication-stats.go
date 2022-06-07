@@ -135,6 +135,23 @@ func (r *ReplicationStats) GetInitialUsage(bucket string) BucketReplicationStats
 	return st.Clone()
 }
 
+// GetAll returns replication metrics for all buckets at once.
+func (r *ReplicationStats) GetAll() map[string]BucketReplicationStats {
+	if r == nil {
+		return map[string]BucketReplicationStats{}
+	}
+
+	r.RLock()
+	defer r.RUnlock()
+
+	bucketReplicationStats := make(map[string]BucketReplicationStats, len(r.Cache))
+	for k, v := range r.Cache {
+		bucketReplicationStats[k] = v.Clone()
+	}
+
+	return bucketReplicationStats
+}
+
 // Get replication metrics for a bucket from this node since this node came up.
 func (r *ReplicationStats) Get(bucket string) BucketReplicationStats {
 	if r == nil {
@@ -161,7 +178,7 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 
 // load replication metrics at cluster start from initial data usage
 func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
-	rTimer := time.NewTimer(time.Minute * 1)
+	rTimer := time.NewTimer(time.Minute)
 	defer rTimer.Stop()
 	var (
 		dui DataUsageInfo
@@ -174,13 +191,12 @@ outer:
 			return
 		case <-rTimer.C:
 			dui, err = loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
-			if err != nil {
-				continue
-			}
 			// If LastUpdate is set, data usage is available.
-			if !dui.LastUpdate.IsZero() {
+			if err == nil && !dui.LastUpdate.IsZero() {
 				break outer
 			}
+
+			rTimer.Reset(time.Minute)
 		}
 	}
 

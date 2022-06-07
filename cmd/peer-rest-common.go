@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v21" // Add netperf
+	peerRESTVersion       = "v22" // Add bulk GetBucketStats
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -41,6 +41,7 @@ const (
 	peerRESTMethodDeleteBucketMetadata        = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
 	peerRESTMethodGetBucketStats              = "/getbucketstats"
+	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
 	peerRESTMethodServerUpdate                = "/serverupdate"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
@@ -84,6 +85,7 @@ const (
 	peerRESTUserOrGroup    = "user-or-group"
 	peerRESTIsGroup        = "is-group"
 	peerRESTSignal         = "signal"
+	peerRESTSubSys         = "sub-sys"
 	peerRESTProfiler       = "profiler"
 	peerRESTTraceErr       = "err"
 	peerRESTTraceInternal  = "internal"

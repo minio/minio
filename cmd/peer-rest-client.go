@@ -510,6 +510,19 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	return bs, msgp.Decode(respBody, &bs)
 }
 
+// GetAllBucketStats - load replication stats for all buckets
+func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
+	values := make(url.Values)
+	respBody, err := client.call(peerRESTMethodGetAllBucketStats, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	bsMap := BucketStatsMap{}
+	defer http.DrainBody(respBody)
+	return bsMap, msgp.Decode(respBody, &bsMap)
+}
+
 // LoadBucketMetadata - load bucket metadata
 func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	values := make(url.Values)
@@ -688,9 +701,10 @@ func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha2
 }
 
 // SignalService - sends signal to peer nodes.
-func (client *peerRESTClient) SignalService(sig serviceSignal) error {
+func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string) error {
 	values := make(url.Values)
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
+	values.Set(peerRESTSubSys, subSys)
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
 		return err
@@ -903,43 +917,54 @@ func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan stru
 	}()
 }
 
+func (client *peerRESTClient) doConsoleLog(logCh chan interface{}, doneCh <-chan struct{}) {
+	// To cancel the REST request in case doneCh gets closed.
+	ctx, cancel := context.WithCancel(GlobalContext)
+
+	cancelCh := make(chan struct{})
+	defer close(cancelCh)
+	go func() {
+		select {
+		case <-doneCh:
+		case <-cancelCh:
+			// There was an error in the REST request.
+		}
+		cancel()
+	}()
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return
+	}
+
+	dec := gob.NewDecoder(respBody)
+	for {
+		var lg madmin.LogInfo
+		if err = dec.Decode(&lg); err != nil {
+			break
+		}
+		if lg.DeploymentID != "" {
+			select {
+			case logCh <- lg:
+			default:
+				// Do not block on slow receivers.
+			}
+		}
+	}
+}
+
 // ConsoleLog - sends request to peer nodes to get console logs
 func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan struct{}) {
 	go func() {
 		for {
-			// get cancellation context to properly unsubscribe peers
-			ctx, cancel := context.WithCancel(GlobalContext)
-			respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
-			if err != nil {
-				// Retry the failed request.
-				time.Sleep(5 * time.Second)
-			} else {
-				dec := gob.NewDecoder(respBody)
-
-				go func() {
-					<-doneCh
-					cancel()
-				}()
-
-				for {
-					var log madmin.LogInfo
-					if err = dec.Decode(&log); err != nil {
-						break
-					}
-					select {
-					case logCh <- log:
-					default:
-					}
-				}
-			}
-
+			client.doConsoleLog(logCh, doneCh)
 			select {
 			case <-doneCh:
-				cancel()
-				http.DrainBody(respBody)
 				return
 			default:
-				// There was error in the REST request, retry.
+				// There was error in the REST request, retry after sometime as probably the peer is down.
+				time.Sleep(5 * time.Second)
 			}
 		}
 	}()
