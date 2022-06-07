@@ -72,7 +72,7 @@
   "gnetId": 13502,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1653756543524,
+  "iteration": 1654578559812,
   "links": [
     {
       "icon": "external link",
@@ -505,7 +505,7 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 2000
               }
             ]
           },
@@ -661,7 +661,7 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 2000
               }
             ]
           },
@@ -2696,5 +2696,5 @@
   "timezone": "",
   "title": "MinIO Dashboard",
   "uid": "TgmJnqnnk",
-  "version": 7
+  "version": 8
 }
