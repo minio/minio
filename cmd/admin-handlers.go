@@ -291,6 +291,8 @@ type ServerHTTPStats struct {
 	CurrentS3Requests      ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests        ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors          ServerHTTPAPIStats `json:"totalS3Errors"`
+	TotalS35xxErrors       ServerHTTPAPIStats `json:"totalS35xxErrors"`
+	TotalS34xxErrors       ServerHTTPAPIStats `json:"totalS34xxErrors"`
 	TotalS3Canceled        ServerHTTPAPIStats `json:"totalS3Canceled"`
 	TotalS3RejectedAuth    uint64             `json:"totalS3RejectedAuth"`
 	TotalS3RejectedTime    uint64             `json:"totalS3RejectedTime"`
