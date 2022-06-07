@@ -143,6 +143,9 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 
 	errs := g.Wait()
 	for index, err := range errs {
+		if err == nil {
+			continue
+		}
 		if !IsErr(err, []error{
 			errFileNotFound,
 			errVolumeNotFound,
