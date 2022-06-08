@@ -1347,7 +1347,7 @@ func getNodeHealthMetrics() *MetricsGroup {
 			return
 		}
 		metrics = make([]Metric, 0, 16)
-		nodesUp, nodesDown := GetPeerOnlineCount()
+		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
 		metrics = append(metrics, Metric{
 			Description: getNodeOnlineTotalMD(),
 			Value:       float64(nodesUp),
@@ -1932,11 +1932,9 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 	}
 
 	// Call peer api to fetch metrics
-	peerCh := globalNotificationSys.GetClusterMetrics(GlobalContext)
-	selfCh := ReportMetrics(GlobalContext, c.metricsGroups)
 	wg.Add(2)
-	go publish(peerCh)
-	go publish(selfCh)
+	go publish(ReportMetrics(GlobalContext, c.metricsGroups))
+	go publish(globalNotificationSys.GetClusterMetrics(GlobalContext))
 	wg.Wait()
 }
 
