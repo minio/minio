@@ -2082,11 +2082,14 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 	}
 
 	b := z.BackendInfo()
-	readQuorum := b.StandardSCData[0]
+	poolReadQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolReadQuorums[i] = data
+	}
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolReadQuorums[poolIdx] {
 				return false
 			}
 		}
@@ -2123,9 +2126,12 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData[0]
-	if writeQuorum == b.StandardSCParity {
-		writeQuorum++
+	poolWriteQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolWriteQuorums[i] = data
+		if data == b.StandardSCParity {
+			poolWriteQuorums[i] = data + 1
+		}
 	}
 
 	var aggHealStateResult madmin.BgHealState
@@ -2149,18 +2155,28 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < writeQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, writeQuorum))
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
 				return HealthResult{
 					Healthy:       false,
 					HealingDrives: len(aggHealStateResult.HealDisks),
 					PoolID:        poolIdx,
 					SetID:         setIdx,
-					WriteQuorum:   writeQuorum,
+					WriteQuorum:   poolWriteQuorums[poolIdx],
 				}
 			}
+		}
+	}
+
+	var maximumWriteQuorum int
+	for _, writeQuorum := range poolWriteQuorums {
+		if maximumWriteQuorum == 0 {
+			maximumWriteQuorum = writeQuorum
+		}
+		if writeQuorum > maximumWriteQuorum {
+			maximumWriteQuorum = writeQuorum
 		}
 	}
 
@@ -2169,14 +2185,14 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	if !opts.Maintenance {
 		return HealthResult{
 			Healthy:     true,
-			WriteQuorum: writeQuorum,
+			WriteQuorum: maximumWriteQuorum,
 		}
 	}
 
 	return HealthResult{
 		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
-		WriteQuorum:   writeQuorum,
+		WriteQuorum:   maximumWriteQuorum,
 	}
 }
 
