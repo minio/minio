@@ -527,7 +527,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			VersionSuspended: vc.Suspended(),
 		}
 
-		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
+		if replicateDeletes || hasLockEnabled || !globalTierConfigMgr.Empty() {
 			if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
 				opts.VersionID = nullVersionID
 			}
@@ -556,7 +556,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				object.ReplicateDecisionStr = dsc.String()
 			}
 		}
-		if object.VersionID != "" && hasLockEnabled {
+		if hasLockEnabled {
 			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
 				apiErr := errorCodes.ToAPIErr(apiErrCode)
 				deleteResults[index].errInfo = DeleteError{
@@ -1364,7 +1364,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1611,7 +1611,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -1636,7 +1636,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig)
+	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, true)
 	if apiErr != noError {
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return

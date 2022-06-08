@@ -22,7 +22,6 @@ package cmd
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"hash"
@@ -32,6 +31,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 )
 

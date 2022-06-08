@@ -17,16 +17,21 @@
 
 package cmd
 
-import "github.com/minio/minio/internal/bucket/versioning"
+import (
+	"strings"
+
+	"github.com/minio/minio/internal/bucket/versioning"
+	"github.com/minio/minio/internal/logger"
+)
 
 // BucketVersioningSys - policy subsystem.
 type BucketVersioningSys struct{}
 
 // Enabled enabled versioning?
 func (sys *BucketVersioningSys) Enabled(bucket string) bool {
-	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	vc, err := sys.Get(bucket)
 	if err != nil {
-		return false
+		logger.CriticalIf(GlobalContext, err)
 	}
 	return vc.Enabled()
 }
@@ -35,18 +40,18 @@ func (sys *BucketVersioningSys) Enabled(bucket string) bool {
 // the given prefix doesn't match any excluded prefixes pattern. This is
 // part of a MinIO versioning configuration extension.
 func (sys *BucketVersioningSys) PrefixEnabled(bucket, prefix string) bool {
-	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	vc, err := sys.Get(bucket)
 	if err != nil {
-		return false
+		logger.CriticalIf(GlobalContext, err)
 	}
 	return vc.PrefixEnabled(prefix)
 }
 
 // Suspended suspended versioning?
 func (sys *BucketVersioningSys) Suspended(bucket string) bool {
-	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	vc, err := sys.Get(bucket)
 	if err != nil {
-		return false
+		logger.CriticalIf(GlobalContext, err)
 	}
 	return vc.Suspended()
 }
@@ -54,9 +59,9 @@ func (sys *BucketVersioningSys) Suspended(bucket string) bool {
 // PrefixSuspended returns true if the given prefix matches an excluded prefix
 // pattern. This is part of a MinIO versioning configuration extension.
 func (sys *BucketVersioningSys) PrefixSuspended(bucket, prefix string) bool {
-	vc, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	vc, err := sys.Get(bucket)
 	if err != nil {
-		return false
+		logger.CriticalIf(GlobalContext, err)
 	}
 
 	return vc.PrefixSuspended(prefix)
@@ -64,12 +69,17 @@ func (sys *BucketVersioningSys) PrefixSuspended(bucket, prefix string) bool {
 
 // Get returns stored bucket policy
 func (sys *BucketVersioningSys) Get(bucket string) (*versioning.Versioning, error) {
-	return globalBucketMetadataSys.GetVersioningConfig(bucket)
-}
+	if globalIsGateway {
+		// Gateway does not implement versioning.
+		return &versioning.Versioning{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/"}, nil
+	}
 
-// Reset BucketVersioningSys to initial state.
-func (sys *BucketVersioningSys) Reset() {
-	// There is currently no internal state.
+	if bucket == minioMetaBucket || strings.HasPrefix(bucket, minioMetaBucket) {
+		return &versioning.Versioning{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/"}, nil
+	}
+
+	vcfg, _, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+	return vcfg, err
 }
 
 // NewBucketVersioningSys - creates new versioning system.

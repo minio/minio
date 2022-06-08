@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -73,6 +74,7 @@ const (
 	globalWindowsOSName            = "windows"
 	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
+	globalMinioModeErasureSD       = "mode-server-xl-single"
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
 	globalMinioModeGatewayPrefix   = "mode-gateway-"
@@ -113,6 +115,10 @@ const (
 	// diskFillFraction is the fraction of a disk we allow to be filled.
 	diskFillFraction = 0.99
 
+	// diskReserveFraction is the fraction of a disk where we will fill other server pools first.
+	// If all pools reach this, we will use all pools with regular placement.
+	diskReserveFraction = 0.15
+
 	// diskAssumeUnknownSize is the size to assume when an unknown size upload is requested.
 	diskAssumeUnknownSize = 1 << 30
 
@@ -135,6 +141,9 @@ var (
 
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsErasure = false
+
+	// Indicates if the running minio server is in single drive XL mode.
+	globalIsErasureSD = false
 
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
@@ -196,9 +205,12 @@ var (
 	globalAPIConfig = apiConfig{listQuorum: "strict"}
 
 	globalStorageClass storageclass.Config
+
 	globalLDAPConfig   xldap.Config
 	globalOpenIDConfig openid.Config
 	globalSTSTLSConfig xtls.Config
+
+	globalAuthNPlugin *idplugin.AuthNPlugin
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -354,5 +366,19 @@ var (
 
 	// Add new variable global values here.
 )
+
+var globalAuthZPluginMutex sync.Mutex
+
+func newGlobalAuthZPluginFn() *polplugin.AuthZPlugin {
+	globalAuthZPluginMutex.Lock()
+	defer globalAuthZPluginMutex.Unlock()
+	return globalAuthZPlugin
+}
+
+func setGlobalAuthZPlugin(authz *polplugin.AuthZPlugin) {
+	globalAuthZPluginMutex.Lock()
+	globalAuthZPlugin = authz
+	globalAuthZPluginMutex.Unlock()
+}
 
 var errSelfTestFailure = errors.New("self test failed. unsafe to start server")

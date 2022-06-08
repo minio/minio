@@ -1140,6 +1140,10 @@ func checkDiskFatalErrs(errs []error) error {
 		return errFaultyDisk
 	}
 
+	if countErrs(errs, errXLBackend) == len(errs) {
+		return errXLBackend
+	}
+
 	return nil
 }
 
@@ -1152,6 +1156,8 @@ func checkDiskFatalErrs(errs []error) error {
 // Do not like it :-(
 func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	switch {
+	case errors.Is(err, errXLBackend):
+		logger.Fatal(config.ErrInvalidXLValue(err), "Unable to initialize backend")
 	case errors.Is(err, errUnsupportedDisk):
 		var hint string
 		if endpoint.URL != nil {

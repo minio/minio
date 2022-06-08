@@ -141,6 +141,9 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 // Will return -1 for unknown values.
 func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 	if api := newObjectLayerFn(); api != nil {
+		if globalIsErasureSD {
+			return 0, 0, 0
+		}
 		if ep, ok := api.(*erasureServerPools); ok {
 			if pool, set, disk, err := ep.getPoolAndSet(diskID); err == nil {
 				return pool, set, disk

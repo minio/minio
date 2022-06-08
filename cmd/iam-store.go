@@ -1795,14 +1795,29 @@ func (store *IAMStoreSys) ListTempAccounts(ctx context.Context, accessKey string
 	cache := store.rlock()
 	defer store.runlock()
 
+	userExists := false
 	var tempAccounts []auth.Credentials
 	for _, v := range cache.iamUsersMap {
-		if v.IsTemp() && v.ParentUser == accessKey {
-			// Hide secret key & session key here
-			v.SecretKey = ""
-			v.SessionToken = ""
-			tempAccounts = append(tempAccounts, v)
+		isDerived := false
+		if v.IsServiceAccount() || v.IsTemp() {
+			isDerived = true
 		}
+
+		if !isDerived && v.AccessKey == accessKey {
+			userExists = true
+		} else if isDerived && v.ParentUser == accessKey {
+			userExists = true
+			if v.IsTemp() {
+				// Hide secret key & session key here
+				v.SecretKey = ""
+				v.SessionToken = ""
+				tempAccounts = append(tempAccounts, v)
+			}
+		}
+	}
+
+	if !userExists {
+		return nil, errNoSuchUser
 	}
 
 	return tempAccounts, nil
@@ -1813,14 +1828,29 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 	cache := store.rlock()
 	defer store.runlock()
 
+	userExists := false
 	var serviceAccounts []auth.Credentials
 	for _, v := range cache.iamUsersMap {
-		if v.IsServiceAccount() && v.ParentUser == accessKey {
-			// Hide secret key & session key here
-			v.SecretKey = ""
-			v.SessionToken = ""
-			serviceAccounts = append(serviceAccounts, v)
+		isDerived := false
+		if v.IsServiceAccount() || v.IsTemp() {
+			isDerived = true
 		}
+
+		if !isDerived && v.AccessKey == accessKey {
+			userExists = true
+		} else if isDerived && v.ParentUser == accessKey {
+			userExists = true
+			if v.IsServiceAccount() {
+				// Hide secret key & session key here
+				v.SecretKey = ""
+				v.SessionToken = ""
+				serviceAccounts = append(serviceAccounts, v)
+			}
+		}
+	}
+
+	if !userExists {
+		return nil, errNoSuchUser
 	}
 
 	return serviceAccounts, nil

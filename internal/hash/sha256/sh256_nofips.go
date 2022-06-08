@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,14 +18,17 @@
 //go:build !fips
 // +build !fips
 
-package hash
+package sha256
 
 import (
 	"hash"
 
-	sha256 "github.com/minio/sha256-simd"
+	nofipssha256 "github.com/minio/sha256-simd"
 )
 
-// newSHA256 returns a new hash.Hash computing the SHA256 checksum.
+// New returns a new hash.Hash computing the SHA256 checksum.
 // The SHA256 implementation is not FIPS 140-2 compliant.
-func newSHA256() hash.Hash { return sha256.New() }
+func New() hash.Hash { return nofipssha256.New() }
+
+// Sum256 returns the SHA256 checksum of the data.
+func Sum256(data []byte) [nofipssha256.Size]byte { return nofipssha256.Sum256(data) }

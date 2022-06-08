@@ -443,6 +443,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 		}
 	}
+
+	vcfg, _ := globalBucketVersioningSys.Get(cache.Info.Name)
+
 	// return initialized object layer
 	objAPI := newObjectLayerFn()
 	// object layer not initialized, return.
@@ -494,9 +497,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
+
+		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
+
 		for _, version := range fivs.Versions {
 			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
-			oi := version.ToObjectInfo(item.bucket, item.objectPath())
+			oi := version.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
@@ -521,7 +527,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		// apply tier sweep action on free versions
 		for _, freeVersion := range fivs.FreeVersions {
-			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath())
+			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			item.applyTierObjSweep(ctx, objAPI, oi)
 		}
 		return sizeS, nil

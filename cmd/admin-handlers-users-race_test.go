@@ -47,10 +47,10 @@ func TestIAMInternalIDPConcurrencyServerSuite(t *testing.T) {
 	}
 
 	baseTestCases := []TestSuiteCommon{
-		// Init and run test on FS backend with signature v4.
-		{serverType: "FS", signer: signerV4},
-		// Init and run test on FS backend, with tls enabled.
-		{serverType: "FS", signer: signerV4, secure: true},
+		// Init and run test on ErasureSD backend with signature v4.
+		{serverType: "ErasureSD", signer: signerV4},
+		// Init and run test on ErasureSD backend, with tls enabled.
+		{serverType: "ErasureSD", signer: signerV4, secure: true},
 		// Init and run test on Erasure backend.
 		{serverType: "Erasure", signer: signerV4},
 		// Init and run test on ErasureSet backend.

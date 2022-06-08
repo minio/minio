@@ -950,7 +950,7 @@ func compressSelfTest() {
 
 // getDiskInfos returns the disk information for the provided disks.
 // If a disk is nil or an error is returned the result will be nil as well.
-func getDiskInfos(ctx context.Context, disks []StorageAPI) []*DiskInfo {
+func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 	res := make([]*DiskInfo, len(disks))
 	for i, disk := range disks {
 		if disk == nil {
