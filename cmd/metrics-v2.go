@@ -603,7 +603,27 @@ func getS3RequestsErrorsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      errorsTotal,
-		Help:      "Total number S3 requests with errors",
+		Help:      "Total number S3 requests with (4xx and 5xx) errors",
+		Type:      counterMetric,
+	}
+}
+
+func getS3Requests4xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "4xx_" + errorsTotal,
+		Help:      "Total number S3 requests with (4xx) errors",
+		Type:      counterMetric,
+	}
+}
+
+func getS3Requests5xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "5xx_" + errorsTotal,
+		Help:      "Total number S3 requests with (5xx) errors",
 		Type:      counterMetric,
 	}
 }
@@ -1488,7 +1508,9 @@ func getHTTPMetrics() *MetricsGroup {
 		metrics = make([]Metric, 0, 3+
 			len(httpStats.CurrentS3Requests.APIStats)+
 			len(httpStats.TotalS3Requests.APIStats)+
-			len(httpStats.TotalS3Errors.APIStats))
+			len(httpStats.TotalS3Errors.APIStats)+
+			len(httpStats.TotalS35xxErrors.APIStats)+
+			len(httpStats.TotalS34xxErrors.APIStats))
 		metrics = append(metrics, Metric{
 			Description: getS3RejectedAuthRequestsTotalMD(),
 			Value:       float64(httpStats.TotalS3RejectedAuth),
@@ -1531,6 +1553,20 @@ func getHTTPMetrics() *MetricsGroup {
 		for api, value := range httpStats.TotalS3Errors.APIStats {
 			metrics = append(metrics, Metric{
 				Description:    getS3RequestsErrorsMD(),
+				Value:          float64(value),
+				VariableLabels: map[string]string{"api": api},
+			})
+		}
+		for api, value := range httpStats.TotalS35xxErrors.APIStats {
+			metrics = append(metrics, Metric{
+				Description:    getS3Requests5xxErrorsMD(),
+				Value:          float64(value),
+				VariableLabels: map[string]string{"api": api},
+			})
+		}
+		for api, value := range httpStats.TotalS34xxErrors.APIStats {
+			metrics = append(metrics, Metric{
+				Description:    getS3Requests4xxErrorsMD(),
 				Value:          float64(value),
 				VariableLabels: map[string]string{"api": api},
 			})

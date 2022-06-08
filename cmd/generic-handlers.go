@@ -115,9 +115,11 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 // Reserved bucket.
 const (
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = SlashSeparator + minioReservedBucket
-	loginPathPrefix         = SlashSeparator + "login"
+	minioReservedBucket              = "minio"
+	minioReservedBucketPath          = SlashSeparator + minioReservedBucket
+	minioReservedBucketPathWithSlash = SlashSeparator + minioReservedBucket + SlashSeparator
+
+	loginPathPrefix = SlashSeparator + "login"
 )
 
 func guessIsBrowserReq(r *http.Request) bool {
