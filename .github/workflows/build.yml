@@ -27,33 +27,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout the repository
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-          
-      - name: Login to ECR (docker cli)
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          aws-region: us-west-2
-          registry: 743287612805.dkr.ecr.us-west-2.amazonaws.com
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          
+
       - name: Quay login
         run: |
           echo "${{secrets.QUAY_TOKEN}}" | docker login --username "${{secrets.QUAY_USERNAME}}"  --password-stdin quay.io
           
-      - name: Login to ECR
-        uses: docker/login-action@v1
-        with:
-          registry: 743287612805.dkr.ecr.us-west-2.amazonaws.com
-          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          
       - name: Build minio
-        if: steps.pull-base.outputs.BASE_MISSING != 0
         run: bash docker-buildx.sh
