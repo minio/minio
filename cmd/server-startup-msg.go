@@ -46,7 +46,7 @@ func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
 func printStartupMessage(apiEndpoints []string, err error) {
 	if err != nil {
 		if globalConsoleSys != nil {
-			globalConsoleSys.Send(fmt.Sprintf("Server startup failed with '%v', some features may be missing", err), string(logger.All))
+			globalConsoleSys.Send(fmt.Sprintf("Server startup failed with '%v', some features may be missing", err))
 		}
 	}
 

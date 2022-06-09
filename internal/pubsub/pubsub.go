@@ -29,10 +29,6 @@ type Sub struct {
 	filter func(entry Maskable) bool
 }
 
-type Item interface {
-	Mask() Mask
-}
-
 // PubSub holds publishers and subscribers
 type PubSub struct {
 	// atomics, keep at top:

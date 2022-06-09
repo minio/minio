@@ -163,9 +163,9 @@ func (sys *HTTPConsoleLoggerSys) Type() types.TargetType {
 
 // Send log message 'e' to console and publish to console
 // log pubsub system
-func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
+func (sys *HTTPConsoleLoggerSys) Send(entry interface{}) error {
 	var lg log.Info
-	switch e := e.(type) {
+	switch e := entry.(type) {
 	case log.Entry:
 		lg = log.Info{Entry: e, NodeName: sys.nodeName}
 	case string:
@@ -179,5 +179,5 @@ func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
 	sys.logBuf = sys.logBuf.Next()
 	sys.Unlock()
 
-	return sys.console.Send(e, string(logger.All))
+	return sys.console.Send(entry, string(logger.All))
 }

@@ -364,7 +364,7 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 
 	if consoleTgt != nil {
 		entry := errToEntry(ctx, err, errKind...)
-		consoleTgt.Send(entry, entry.LogKind)
+		consoleTgt.Send(entry)
 	}
 }
 
@@ -383,10 +383,10 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	entry := errToEntry(ctx, err, errKind...)
 	// Iterate over all logger targets to send the log entry
 	for _, t := range systemTgts {
-		if err := t.Send(entry, entry.LogKind); err != nil {
+		if err := t.Send(entry); err != nil {
 			if consoleTgt != nil {
 				entry.Trace.Message = fmt.Sprintf("event(%#v) was not sent to Logger target (%#v): %#v", entry, t, err)
-				consoleTgt.Send(entry, entry.LogKind)
+				consoleTgt.Send(entry)
 			}
 		}
 	}
