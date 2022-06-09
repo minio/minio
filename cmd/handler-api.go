@@ -247,7 +247,12 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			if val := globalServiceFreeze.Load(); val != nil {
 				if unlock, ok := val.(chan struct{}); ok && unlock != nil {
 					// Wait until unfrozen.
-					<-unlock
+					select {
+					case <-unlock:
+					case <-r.Context().Done():
+						// if client canceled we don't need to wait here forever.
+						return
+					}
 				}
 			}
 		}
