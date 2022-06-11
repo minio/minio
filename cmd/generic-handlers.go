@@ -282,7 +282,9 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 		r.Body = meteredRequest
 		h.ServeHTTP(meteredResponse, r)
 
-		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
 			globalConnStats.incInputBytes(meteredRequest.BytesRead())
 			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
 		} else {
