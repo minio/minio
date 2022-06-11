@@ -72,7 +72,7 @@
   "gnetId": 13502,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1654578559812,
+  "iteration": 1654921222878,
   "links": [
     {
       "icon": "external link",
@@ -1713,6 +1713,198 @@
     },
     {
       "aliasColors": {
+        "S3 Errors": "light-red",
+        "S3 Requests": "light-green"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "hiddenSeries": false,
+      "id": 86,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.2.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum by (server,api) (increase(minio_s3_requests_5xx_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "interval": "1m",
+          "intervalFactor": 2,
+          "legendFormat": "{{server,api}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "S3 API Request Error Rate (5xx)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:331",
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:332",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "S3 Errors": "light-red",
+        "S3 Requests": "light-green"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "hiddenSeries": false,
+      "id": 88,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.2.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum by (server,api) (increase(minio_s3_requests_4xx_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "interval": "1m",
+          "intervalFactor": 2,
+          "legendFormat": "{{server,api}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "S3 API Request Error Rate (4xx)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:331",
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:332",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
         "10.13.1.25:9000 DELETE": "red",
         "10.13.1.25:9000 GET": "green",
         "10.13.1.25:9000 POST": "blue"
@@ -1734,7 +1926,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 32
       },
       "hiddenSeries": false,
       "id": 17,
@@ -1839,7 +2031,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 22
+        "y": 32
       },
       "hiddenSeries": false,
       "id": 84,
@@ -1947,7 +2139,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 41
       },
       "hiddenSeries": false,
       "id": 77,
@@ -2039,7 +2231,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 31
+        "y": 41
       },
       "hiddenSeries": false,
       "id": 76,
@@ -2131,7 +2323,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 50
       },
       "hiddenSeries": false,
       "id": 74,
@@ -2225,7 +2417,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 50
       },
       "hiddenSeries": false,
       "id": 82,
@@ -2330,7 +2522,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 58
       },
       "hiddenSeries": false,
       "id": 11,
@@ -2447,7 +2639,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 48
+        "y": 58
       },
       "hiddenSeries": false,
       "id": 8,
@@ -2542,7 +2734,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 67
       },
       "hiddenSeries": false,
       "id": 73,
@@ -2666,7 +2858,7 @@
     ]
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -2696,5 +2888,5 @@
   "timezone": "",
   "title": "MinIO Dashboard",
   "uid": "TgmJnqnnk",
-  "version": 8
+  "version": 10
 }

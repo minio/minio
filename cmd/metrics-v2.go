@@ -1587,19 +1587,21 @@ func getNetworkMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 10)
-		metrics = append(metrics, Metric{
-			Description: getInternodeFailedRequests(),
-			Value:       float64(loadAndResetRPCNetworkErrsCounter()),
-		})
 		connStats := globalConnStats.toServerConnStats()
-		metrics = append(metrics, Metric{
-			Description: getInterNodeSentBytesMD(),
-			Value:       float64(connStats.TotalOutputBytes),
-		})
-		metrics = append(metrics, Metric{
-			Description: getInterNodeReceivedBytesMD(),
-			Value:       float64(connStats.TotalInputBytes),
-		})
+		if globalIsDistErasure {
+			metrics = append(metrics, Metric{
+				Description: getInternodeFailedRequests(),
+				Value:       float64(loadAndResetRPCNetworkErrsCounter()),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInterNodeSentBytesMD(),
+				Value:       float64(connStats.TotalOutputBytes),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInterNodeReceivedBytesMD(),
+				Value:       float64(connStats.TotalInputBytes),
+			})
+		}
 		metrics = append(metrics, Metric{
 			Description: getS3SentBytesMD(),
 			Value:       float64(connStats.S3OutputBytes),
