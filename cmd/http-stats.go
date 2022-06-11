@@ -199,6 +199,8 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		return
 	}
 
+	st.totalS3Requests.Inc(api)
+
 	// Increment the prometheus http request response histogram with appropriate label
 	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
 
