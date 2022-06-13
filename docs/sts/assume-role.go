@@ -24,8 +24,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -60,7 +62,7 @@ func init() {
 	flag.BoolVar(&displayCreds, "d", false, "Only show generated credentials")
 	flag.DurationVar(&expiryDuration, "e", 0, "Request a duration of validity for the generated credential")
 	flag.StringVar(&bucketToList, "b", "", "Bucket to list (defaults to username)")
-	// flag.StringVar(&sessionPolicyFile, "s", "", "File containing session policy to apply to the STS request")
+	flag.StringVar(&sessionPolicyFile, "s", "", "File containing session policy to apply to the STS request")
 }
 
 func main() {
@@ -77,21 +79,20 @@ func main() {
 	var stsOpts cr.STSAssumeRoleOptions
 	stsOpts.AccessKey = minioUsername
 	stsOpts.SecretKey = minioPassword
-	// FIXME: add support for passing this in minio-go
-	// if sessionPolicyFile != "" {
-	// 	var policy string
-	// 	if f, err := os.Open(sessionPolicyFile); err != nil {
-	// 		log.Fatalf("Unable to open session policy file: %v", sessionPolicyFile, err)
-	// 	} else {
-	// 		bs, err := ioutil.ReadAll(f)
-	// 		if err != nil {
-	// 			log.Fatalf("Error reading session policy file: %v", err)
-	// 		}
-	// 		policy = string(bs)
-	// 	}
-	// 	opts
-	// 	ldapOpts = append(ldapOpts, cr.LDAPIdentityPolicyOpt(policy))
-	// }
+
+	if sessionPolicyFile != "" {
+		var policy string
+		if f, err := os.Open(sessionPolicyFile); err != nil {
+			log.Fatalf("Unable to open session policy file: %v", err)
+		} else {
+			bs, err := ioutil.ReadAll(f)
+			if err != nil {
+				log.Fatalf("Error reading session policy file: %v", err)
+			}
+			policy = string(bs)
+		}
+		stsOpts.Policy = policy
+	}
 	if expiryDuration != 0 {
 		stsOpts.DurationSeconds = int(expiryDuration.Seconds())
 	}
@@ -126,7 +127,7 @@ func main() {
 	// Use generated credentials to authenticate with MinIO server
 	minioClient, err := minio.New(stsEndpointURL.Host, opts)
 	if err != nil {
-		log.Fatalf("Error initializing client: ", err)
+		log.Fatalf("Error initializing client: %v", err)
 	}
 
 	// Use minIO Client object normally like the regular client.
