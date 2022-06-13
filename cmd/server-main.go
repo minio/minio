@@ -435,6 +435,9 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
+	// Initialize KMS configuration
+	handleKMSConfig()
+
 	// Set node name, only set for distributed setup.
 	globalConsoleSys.SetNodeName(globalLocalNodeName)
 

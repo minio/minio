@@ -212,6 +212,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle gateway specific env
 	gatewayHandleEnvVars()
 
+	// Initialize KMS configuration
+	handleKMSConfig()
+
 	// Set system resources to maximum.
 	setMaxResources()
 
