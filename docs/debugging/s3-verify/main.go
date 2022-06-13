@@ -230,6 +230,8 @@ func main() {
 						}()
 						wg.Wait()
 
+						tobj.Close()
+
 						if !sourceFailed && !targetFailed {
 							ssum := srcSha256.Sum(nil)
 							tsum := tgtSha256.Sum(nil)
@@ -240,6 +242,8 @@ func main() {
 							}
 						}
 					}
+
+					sobj.Close()
 				} else {
 					fmt.Printf("unreadable on source: %s (%s)\n", srcCtnt.Key, err)
 				}
