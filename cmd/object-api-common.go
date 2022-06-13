@@ -123,6 +123,9 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 				}...) {
 					continue
 				}
+				if _, ok := err.(ObjectNotFound); ok {
+					continue
+				}
 				return loi, toObjectErr(err, bucket, prefix)
 			}
 		} else {
@@ -249,20 +252,20 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		return loi, nil
 	}
 
-	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
-		// Optimization for certain applications like
-		// - Cohesity
-		// - Actifio, Splunk etc.
-		// which send ListObjects requests where the actual object
-		// itself is the prefix and max-keys=1 in such scenarios
-		// we can simply verify locally if such an object exists
-		// to avoid the need for ListObjects().
-		objInfo, err := obj.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
-		if err == nil {
-			loi.Objects = append(loi.Objects, objInfo)
-			return loi, nil
-		}
-	}
+	//if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
+	//	// Optimization for certain applications like
+	//	// - Cohesity
+	//	// - Actifio, Splunk etc.
+	//	// which send ListObjects requests where the actual object
+	//	// itself is the prefix and max-keys=1 in such scenarios
+	//	// we can simply verify locally if such an object exists
+	//	// to avoid the need for ListObjects().
+	//	objInfo, err := obj.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
+	//	if err == nil {
+	//		loi.Objects = append(loi.Objects, objInfo)
+	//		return loi, nil
+	//	}
+	//}
 
 	// For delimiter and prefix as '/' we do not list anything at all
 	// since according to s3 spec we stop at the 'delimiter'
@@ -353,6 +356,9 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 						errFileNotFound,
 						errErasureReadQuorum,
 					}...) {
+						return nil
+					}
+					if _, ok := err.(ObjectNotFound); ok {
 						return nil
 					}
 					return toObjectErr(err, bucket, prefix)
