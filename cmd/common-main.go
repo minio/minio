@@ -784,17 +784,22 @@ func handleCommonEnvVars() {
 		}
 		globalActiveCred = cred
 	}
+}
 
+// Initialize KMS global variable after valiadating and loading the configuration.
+// It depends on KMS env variables and global cli flags.
+func handleKMSConfig() {
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
-		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
+		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
+		GlobalKMS = KMS
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
 		var endpoints []string
