@@ -116,10 +116,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
 		blockSize := xioutil.BlockSizeLarge + xioutil.BlockSizeSmall
 		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
-
-		if globalIsErasure {
-			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
-		}
+		logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
 		if len(globalEndpoints.Hostnames()) > 0 {
@@ -250,7 +247,12 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			if val := globalServiceFreeze.Load(); val != nil {
 				if unlock, ok := val.(chan struct{}); ok && unlock != nil {
 					// Wait until unfrozen.
-					<-unlock
+					select {
+					case <-unlock:
+					case <-r.Context().Done():
+						// if client canceled we don't need to wait here forever.
+						return
+					}
 				}
 			}
 		}

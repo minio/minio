@@ -142,6 +142,11 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, config.ErrUnableToWriteInBackend(err).Hint(hint)
 	}
 
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
+	if _, err = fsStat(ctx, fsFormatPath); err != nil && os.IsNotExist(err) {
+		return nil, errFreshDisk
+	}
+
 	// Assign a new UUID for FS minio mode. Each server instance
 	// gets its own UUID for temporary file transaction.
 	fsUUID := mustGetUUID()

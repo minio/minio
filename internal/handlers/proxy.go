@@ -123,5 +123,8 @@ func GetSourceIP(r *http.Request) string {
 
 	// Default to remote address if headers not set.
 	addr, _, _ = net.SplitHostPort(r.RemoteAddr)
+	if strings.ContainsRune(addr, ':') {
+		return "[" + addr + "]"
+	}
 	return addr
 }

@@ -62,6 +62,31 @@ type Config struct {
 	rootCAs           *x509.CertPool
 }
 
+// Clone returns a cloned copy of LDAP config.
+func (l *Config) Clone() Config {
+	if l == nil {
+		return Config{}
+	}
+	cfg := Config{
+		Enabled:                   l.Enabled,
+		ServerAddr:                l.ServerAddr,
+		UserDNSearchBaseDistName:  l.UserDNSearchBaseDistName,
+		UserDNSearchBaseDistNames: l.UserDNSearchBaseDistNames,
+		UserDNSearchFilter:        l.UserDNSearchFilter,
+		GroupSearchBaseDistName:   l.GroupSearchBaseDistName,
+		GroupSearchBaseDistNames:  l.GroupSearchBaseDistNames,
+		GroupSearchFilter:         l.GroupSearchFilter,
+		LookupBindDN:              l.LookupBindDN,
+		LookupBindPassword:        l.LookupBindPassword,
+		stsExpiryDuration:         l.stsExpiryDuration,
+		tlsSkipVerify:             l.tlsSkipVerify,
+		serverInsecure:            l.serverInsecure,
+		serverStartTLS:            l.serverStartTLS,
+		rootCAs:                   l.rootCAs,
+	}
+	return cfg
+}
+
 // LDAP keys and envs.
 const (
 	ServerAddr         = "server_addr"

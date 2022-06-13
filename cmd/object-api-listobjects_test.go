@@ -35,9 +35,6 @@ func TestListObjectsVersionedFolders(t *testing.T) {
 }
 
 func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -317,9 +314,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 }
 
 func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, versioned bool) {
-	if instanceType == FSTestStr && versioned {
-		return
-	}
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -1020,10 +1014,6 @@ func TestDeleteObjectVersionMarker(t *testing.T) {
 }
 
 func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
-
 	t, _ := t1.(*testing.T)
 
 	testBuckets := []string{
@@ -1101,10 +1091,6 @@ func TestListObjectVersions(t *testing.T) {
 
 // Unit test for ListObjectVersions
 func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
-	if instanceType == FSTestStr {
-		return
-	}
-
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
@@ -1886,16 +1872,14 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 
 // Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
-	var err error
-	obj, err = NewFSObjectLayer(disk)
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
 	if err != nil {
-		t.Fatal("Unexpected err: ", err)
+		t.Fatal(err)
 	}
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
 	initAllSubsystems()
-
 	return obj
 }
 

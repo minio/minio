@@ -74,7 +74,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -132,7 +132,7 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -158,7 +158,7 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -210,7 +210,7 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -247,7 +247,7 @@ func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -273,7 +273,7 @@ func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Requ
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}

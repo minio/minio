@@ -115,9 +115,11 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 // Reserved bucket.
 const (
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = SlashSeparator + minioReservedBucket
-	loginPathPrefix         = SlashSeparator + "login"
+	minioReservedBucket              = "minio"
+	minioReservedBucketPath          = SlashSeparator + minioReservedBucket
+	minioReservedBucketPathWithSlash = SlashSeparator + minioReservedBucket + SlashSeparator
+
+	loginPathPrefix = SlashSeparator + "login"
 )
 
 func guessIsBrowserReq(r *http.Request) bool {
@@ -280,7 +282,9 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 		r.Body = meteredRequest
 		h.ServeHTTP(meteredResponse, r)
 
-		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
 			globalConnStats.incInputBytes(meteredRequest.BytesRead())
 			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
 		} else {

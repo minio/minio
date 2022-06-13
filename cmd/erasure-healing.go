@@ -418,10 +418,19 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		return result, nil
 	}
 
+	if !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks {
+		// When disk to heal count is greater than parity blocks we should simply error out.
+		err := fmt.Errorf("more disks are expected to heal than parity, returned errors: %v -> %s/%s(%s)", errs, bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	cleanFileInfo := func(fi FileInfo) FileInfo {
-		// Returns a copy of the 'fi' with checksums and parts nil'ed.
+		// Returns a copy of the 'fi' with erasure index, checksums and inline data niled.
 		nfi := fi
-		if !fi.IsRemote() {
+		if !nfi.IsRemote() {
+			nfi.Data = nil
 			nfi.Erasure.Index = 0
 			nfi.Erasure.Checksums = nil
 		}
@@ -432,12 +441,25 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	tmpID := mustGetUUID()
 	migrateDataDir := mustGetUUID()
 
+	// Reorder so that we have data disks first and parity disks next.
+	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
+	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
+
 	copyPartsMetadata := make([]FileInfo, len(partsMetadata))
+	for i := range latestDisks {
+		if latestDisks[i] == nil {
+			continue
+		}
+		copyPartsMetadata[i] = partsMetadata[i]
+	}
+
 	for i := range outDatedDisks {
 		if outDatedDisks[i] == nil {
 			continue
 		}
-		copyPartsMetadata[i] = partsMetadata[i]
+		// Make sure to write the FileInfo information
+		// that is expected to be in quorum.
 		partsMetadata[i] = cleanFileInfo(latestMeta)
 	}
 
@@ -455,12 +477,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	if latestMeta.InlineData() {
 		inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 	}
-
-	// Reorder so that we have data disks first and parity disks next.
-	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
-	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
-	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
-	copyPartsMetadata = shufflePartsMetadata(copyPartsMetadata, latestMeta.Erasure.Distribution)
 
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		// Heal each part. erasureHealFile() will write the healed
@@ -486,7 +502,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
-				readers[i] = newBitrotReader(disk, partsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
+				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
 					checksumInfo.Hash, erasure.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))

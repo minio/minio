@@ -38,6 +38,7 @@ var (
 	bucket, prefix                 string
 	debug                          bool
 	versions                       bool
+	insecure                       bool
 )
 
 // getMD5Sum returns MD5 sum of given data.
@@ -55,6 +56,7 @@ func main() {
 	flag.StringVar(&prefix, "prefix", "", "Select a prefix")
 	flag.BoolVar(&debug, "debug", false, "Prints HTTP network calls to S3 endpoint")
 	flag.BoolVar(&versions, "versions", false, "Verify all versions")
+	flag.BoolVar(&insecure, "insecure", false, "Disable TLS verification")
 	flag.Parse()
 
 	if endpoint == "" {
@@ -78,12 +80,23 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	secure := strings.EqualFold(u.Scheme, "https")
+	transport, err := minio.DefaultTransport(secure)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if insecure {
+		// skip TLS verification
+		transport.TLSClientConfig.InsecureSkipVerify = true
+	}
+
 	s3Client, err := minio.New(u.Host, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: strings.EqualFold(u.Scheme, "https"),
+		Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure:    secure,
+		Transport: transport,
 	})
 	if err != nil {
-		log.Fatalln()
+		log.Fatalln(err)
 	}
 
 	if debug {
@@ -114,7 +127,7 @@ func main() {
 		// List all objects from a bucket-name with a matching prefix.
 		for object := range s3Client.ListObjects(context.Background(), bucket, opts) {
 			if object.Err != nil {
-				log.Fatalln("LIST error:", object.Err)
+				log.Println("LIST error:", object.Err)
 				continue
 			}
 			if object.IsDeleteMarker {
@@ -149,6 +162,7 @@ func main() {
 			}
 
 			var partsMD5Sum [][]byte
+			var failedMD5 bool
 			for p := 1; p <= parts; p++ {
 				opts := minio.GetObjectOptions{
 					VersionID:  object.VersionID,
@@ -157,14 +171,21 @@ func main() {
 				obj, err := s3Client.GetObject(context.Background(), bucket, object.Key, opts)
 				if err != nil {
 					log.Println("GET", bucket, object.Key, object.VersionID, "=>", err)
-					continue
+					failedMD5 = true
+					break
 				}
 				h := md5.New()
 				if _, err := io.Copy(h, obj); err != nil {
 					log.Println("MD5 calculation error:", bucket, object.Key, object.VersionID, "=>", err)
-					continue
+					failedMD5 = true
+					break
 				}
 				partsMD5Sum = append(partsMD5Sum, h.Sum(nil))
+			}
+
+			if failedMD5 {
+				log.Println("CORRUPTED object:", bucket, object.Key, object.VersionID)
+				continue
 			}
 
 			corrupted := false

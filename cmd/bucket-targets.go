@@ -120,9 +120,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 	}
 	if tgt.Type == madmin.ReplicationService {
-		if !globalIsErasure {
-			return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
-		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
 		}
@@ -183,9 +180,6 @@ func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
 func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr string) error {
 	if globalIsGateway {
 		return nil
-	}
-	if !globalIsErasure {
-		return NotImplemented{Message: "Replication is not implemented in " + getMinioMode()}
 	}
 
 	if arnStr == "" {

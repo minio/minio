@@ -19,8 +19,9 @@ package cmd
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
+
+	"github.com/minio/minio/internal/hash/sha256"
 )
 
 // getSHA256Hash returns SHA-256 hash in hex encoding of given data.

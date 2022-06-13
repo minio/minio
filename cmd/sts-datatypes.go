@@ -203,3 +203,16 @@ type AssumeRoleWithCertificateResponse struct {
 		RequestID string `xml:"RequestId,omitempty"`
 	} `xml:"ResponseMetadata,omitempty"`
 }
+
+// AssumeRoleWithCustomTokenResponse contains the result of a successful
+// AssumeRoleWithCustomToken request.
+type AssumeRoleWithCustomTokenResponse struct {
+	XMLName xml.Name `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithCustomTokenResponse" json:"-"`
+	Result  struct {
+		Credentials auth.Credentials `xml:"Credentials,omitempty"`
+		AssumedUser string           `xml:"AssumedUser,omitempty"`
+	} `xml:"AssumeRoleWithCustomTokenResult"`
+	Metadata struct {
+		RequestID string `xml:"RequestId,omitempty"`
+	} `xml:"ResponseMetadata,omitempty"`
+}

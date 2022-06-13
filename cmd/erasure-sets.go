@@ -1252,7 +1252,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
-			closeStorageDisks(storageDisks)
+			closeStorageDisks(storageDisks...)
 		}
 	}(storageDisks)
 

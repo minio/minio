@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,6 +26,7 @@ import (
 	"io"
 
 	"github.com/minio/highwayhash"
+	"github.com/minio/minio/internal/hash/sha256"
 	"golang.org/x/crypto/blake2b"
 
 	xioutil "github.com/minio/minio/internal/ioutil"

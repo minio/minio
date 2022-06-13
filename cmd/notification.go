@@ -1344,6 +1344,35 @@ func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient
 	return peerClients[idx]
 }
 
+// GetPeerOnlineCount gets the count of online and offline nodes.
+func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
+	nodesOnline = 1 // Self is always online.
+	nodesOffline = 0
+	nodesOnlineIndex := make([]bool, len(sys.peerClients))
+	var wg sync.WaitGroup
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, client *peerRESTClient) {
+			defer wg.Done()
+			nodesOnlineIndex[idx] = client.restClient.HealthCheckFn()
+		}(idx, client)
+
+	}
+	wg.Wait()
+
+	for _, online := range nodesOnlineIndex {
+		if online {
+			nodesOnline++
+		} else {
+			nodesOffline++
+		}
+	}
+	return
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
@@ -1356,21 +1385,6 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 		peerClients:                remote,
 		allPeerClients:             all,
 	}
-}
-
-// GetPeerOnlineCount gets the count of online and offline nodes.
-func GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
-	nodesOnline = 1 // Self is always online.
-	nodesOffline = 0
-	servers := globalNotificationSys.ServerInfo()
-	for _, s := range servers {
-		if s.State == string(madmin.ItemOnline) {
-			nodesOnline++
-			continue
-		}
-		nodesOffline++
-	}
-	return
 }
 
 type eventArgs struct {
@@ -1524,7 +1538,7 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 }
 
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
-func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
+func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric {
 	if sys == nil {
 		return nil
 	}
@@ -1545,11 +1559,14 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
 	ch := make(chan Metric)
 	var wg sync.WaitGroup
 	for index, err := range g.Wait() {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
-			sys.peerClients[index].host.String())
-		ctx := logger.SetReqInfo(ctx, reqInfo)
 		if err != nil {
-			logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
+			if sys.peerClients[index] != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+					sys.peerClients[index].host.String())
+				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+			} else {
+				logger.LogOnceIf(ctx, err, "peer-offline")
+			}
 			continue
 		}
 		wg.Add(1)

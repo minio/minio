@@ -876,14 +876,28 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				ExistingObjectReplicate: "enable",
 			}
 		)
+		ruleARN := targetARN
 		for _, r := range replicationConfig.Rules {
 			if r.ID == ruleID {
 				hasRule = true
+				ruleARN = r.Destination.Bucket
 			}
 		}
 		switch {
 		case hasRule:
-			err = replicationConfig.EditRule(opts)
+			if ruleARN != opts.DestBucket {
+				// remove stale replication rule and replace rule with correct target ARN
+				if len(replicationConfig.Rules) > 1 {
+					err = replicationConfig.RemoveRule(opts)
+				} else {
+					replicationConfig = replication.Config{}
+				}
+				if err == nil {
+					err = replicationConfig.AddRule(opts)
+				}
+			} else {
+				err = replicationConfig.EditRule(opts)
+			}
 		default:
 			err = replicationConfig.AddRule(opts)
 		}
@@ -902,7 +916,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig)
+		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig, true)
 		if apiErr != noError {
 			return fmt.Errorf("bucket replication config validation error: %#v", apiErr)
 		}
@@ -2970,8 +2984,9 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				CreatedAt: createdAt,
 				Location:  globalSite.Region,
 			}
+
 			// Get bucket policy if present.
-			policy, err := globalPolicySys.Get(bucket)
+			policy, updatedAt, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 			found := true
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				found = false
@@ -2984,6 +2999,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 					return info, wrapSRErr(err)
 				}
 				bms.Policy = policyJSON
+				bms.PolicyUpdatedAt = updatedAt
 			}
 
 			// Get bucket tags if present.
@@ -3002,6 +3018,23 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				tagCfgStr := base64.StdEncoding.EncodeToString(tagBytes)
 				bms.Tags = &tagCfgStr
 				bms.TagConfigUpdatedAt = updatedAt
+			}
+
+			versioningCfg, updatedAt, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
+			found = true
+			if versioningCfg != nil && versioningCfg.Status == "" {
+				found = false
+			} else if err != nil {
+				return info, errSRBackendIssue(err)
+			}
+			if found {
+				versionCfgData, err := xml.Marshal(versioningCfg)
+				if err != nil {
+					return info, wrapSRErr(err)
+				}
+				versioningCfgStr := base64.StdEncoding.EncodeToString(versionCfgData)
+				bms.Versioning = &versioningCfgStr
+				bms.VersioningConfigUpdatedAt = updatedAt
 			}
 
 			// Get object-lock config if present.
@@ -3111,13 +3144,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err = globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			usrErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if usrErr != nil {
+				return info, errSRBackendIssue(usrErr)
+			}
 		}
 		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
 		for user, mp := range userPolicyMap {
@@ -3172,13 +3209,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			globalIAMSys.store.rlock()
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
-			if err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap); err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
 			globalIAMSys.store.runlock()
+			if stsErr != nil {
+				return info, errSRBackendIssue(stsErr)
+			}
+			globalIAMSys.store.rlock()
+			userErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
+			globalIAMSys.store.runlock()
+			if userErr != nil {
+				return info, errSRBackendIssue(userErr)
+			}
 		}
 
 		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, len(c.state.Peers))
@@ -3948,6 +3989,23 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 			break
 		}
 	}
+	rcfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	if err != nil {
+		_, ok := err.(BucketReplicationConfigNotFound)
+		if !ok {
+			return err
+		}
+		replMismatch = true
+	}
+
+	if rcfg != nil {
+		// validate remote targets on current cluster for this bucket
+		_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
+		if apiErr != noError {
+			replMismatch = true
+		}
+	}
+
 	if replMismatch {
 		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
 		if err != nil {

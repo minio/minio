@@ -26,6 +26,7 @@ import (
 	"io"
 
 	"github.com/minio/minio/internal/etag"
+	"github.com/minio/minio/internal/hash/sha256"
 )
 
 // A Reader wraps an io.Reader and computes the MD5 checksum
@@ -122,7 +123,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	}
 	var hash hash.Hash
 	if len(SHA256) != 0 {
-		hash = newSHA256()
+		hash = sha256.New()
 	}
 	return &Reader{
 		src:           src,

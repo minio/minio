@@ -603,7 +603,27 @@ func getS3RequestsErrorsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      errorsTotal,
-		Help:      "Total number S3 requests with errors",
+		Help:      "Total number S3 requests with (4xx and 5xx) errors",
+		Type:      counterMetric,
+	}
+}
+
+func getS3Requests4xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "4xx_" + errorsTotal,
+		Help:      "Total number S3 requests with (4xx) errors",
+		Type:      counterMetric,
+	}
+}
+
+func getS3Requests5xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "5xx_" + errorsTotal,
+		Help:      "Total number S3 requests with (5xx) errors",
 		Type:      counterMetric,
 	}
 }
@@ -1347,7 +1367,7 @@ func getNodeHealthMetrics() *MetricsGroup {
 			return
 		}
 		metrics = make([]Metric, 0, 16)
-		nodesUp, nodesDown := GetPeerOnlineCount()
+		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
 		metrics = append(metrics, Metric{
 			Description: getNodeOnlineTotalMD(),
 			Value:       float64(nodesUp),
@@ -1365,7 +1385,7 @@ func getMinioHealingMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 5)
-		if !globalIsErasure {
+		if globalIsGateway {
 			return
 		}
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
@@ -1488,7 +1508,9 @@ func getHTTPMetrics() *MetricsGroup {
 		metrics = make([]Metric, 0, 3+
 			len(httpStats.CurrentS3Requests.APIStats)+
 			len(httpStats.TotalS3Requests.APIStats)+
-			len(httpStats.TotalS3Errors.APIStats))
+			len(httpStats.TotalS3Errors.APIStats)+
+			len(httpStats.TotalS35xxErrors.APIStats)+
+			len(httpStats.TotalS34xxErrors.APIStats))
 		metrics = append(metrics, Metric{
 			Description: getS3RejectedAuthRequestsTotalMD(),
 			Value:       float64(httpStats.TotalS3RejectedAuth),
@@ -1535,6 +1557,20 @@ func getHTTPMetrics() *MetricsGroup {
 				VariableLabels: map[string]string{"api": api},
 			})
 		}
+		for api, value := range httpStats.TotalS35xxErrors.APIStats {
+			metrics = append(metrics, Metric{
+				Description:    getS3Requests5xxErrorsMD(),
+				Value:          float64(value),
+				VariableLabels: map[string]string{"api": api},
+			})
+		}
+		for api, value := range httpStats.TotalS34xxErrors.APIStats {
+			metrics = append(metrics, Metric{
+				Description:    getS3Requests4xxErrorsMD(),
+				Value:          float64(value),
+				VariableLabels: map[string]string{"api": api},
+			})
+		}
 		for api, value := range httpStats.TotalS3Canceled.APIStats {
 			metrics = append(metrics, Metric{
 				Description:    getS3RequestsCanceledMD(),
@@ -1551,19 +1587,21 @@ func getNetworkMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 10)
-		metrics = append(metrics, Metric{
-			Description: getInternodeFailedRequests(),
-			Value:       float64(loadAndResetRPCNetworkErrsCounter()),
-		})
 		connStats := globalConnStats.toServerConnStats()
-		metrics = append(metrics, Metric{
-			Description: getInterNodeSentBytesMD(),
-			Value:       float64(connStats.TotalOutputBytes),
-		})
-		metrics = append(metrics, Metric{
-			Description: getInterNodeReceivedBytesMD(),
-			Value:       float64(connStats.TotalInputBytes),
-		})
+		if globalIsDistErasure {
+			metrics = append(metrics, Metric{
+				Description: getInternodeFailedRequests(),
+				Value:       float64(loadAndResetRPCNetworkErrsCounter()),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInterNodeSentBytesMD(),
+				Value:       float64(connStats.TotalOutputBytes),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInterNodeReceivedBytesMD(),
+				Value:       float64(connStats.TotalInputBytes),
+			})
+		}
 		metrics = append(metrics, Metric{
 			Description: getS3SentBytesMD(),
 			Value:       float64(connStats.S3OutputBytes),
@@ -1817,7 +1855,7 @@ func getClusterStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || !globalIsErasure {
+		if objLayer == nil || globalIsGateway {
 			return
 		}
 
@@ -1932,11 +1970,9 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 	}
 
 	// Call peer api to fetch metrics
-	peerCh := globalNotificationSys.GetClusterMetrics(GlobalContext)
-	selfCh := ReportMetrics(GlobalContext, c.metricsGroups)
 	wg.Add(2)
-	go publish(peerCh)
-	go publish(selfCh)
+	go publish(ReportMetrics(GlobalContext, c.metricsGroups))
+	go publish(globalNotificationSys.GetClusterMetrics(GlobalContext))
 	wg.Wait()
 }
 

@@ -131,7 +131,7 @@ const (
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrReplicationDenyEditError
-	ErrReplicationNoMatchingRuleError
+	ErrReplicationNoExistingObjects
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
@@ -893,9 +893,9 @@ var errorCodes = errorCodeMap{
 		Description:    "Bandwidth limit for remote target must be atleast 100MBps",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrReplicationNoMatchingRuleError: {
-		Code:           "XMinioReplicationNoMatchingRule",
-		Description:    "No matching replication rule found for this object prefix",
+	ErrReplicationNoExistingObjects: {
+		Code:           "XMinioReplicationNoExistingObjects",
+		Description:    "No matching ExistingsObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationDenyEditError: {

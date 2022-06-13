@@ -78,6 +78,8 @@ func TestMain(m *testing.M) {
 	// set to 'true' when testing is invoked
 	globalIsTesting = true
 
+	globalIsCICD = globalIsTesting
+
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
@@ -191,10 +193,14 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, err := NewFSObjectLayer(fsDirs[0])
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(fsDirs...))
 	if err != nil {
 		return nil, "", err
 	}
+
+	initAllSubsystems()
+
+	globalIAMSys.Init(context.Background(), obj, globalEtcdClient, 2*time.Second)
 	return obj, fsDirs[0], nil
 }
 
@@ -221,8 +227,7 @@ func prepareErasure16(ctx context.Context) (ObjectLayer, []string, error) {
 
 // Initialize FS objects.
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	var err error
-	obj, err = NewFSObjectLayer(disk)
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,8 +247,8 @@ type TestErrHandler interface {
 }
 
 const (
-	// FSTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
-	FSTestStr string = "FS"
+	// ErasureSDStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
+	ErasureSDStr string = "ErasureSD"
 
 	// ErasureTestStr is the string which is used as notation for Erasure ObjectLayer in the unit tests.
 	ErasureTestStr string = "Erasure"
@@ -1469,20 +1474,9 @@ func getRandomDisks(N int) ([]string, error) {
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (newObject ObjectLayer, err error) {
-	// For FS only, directly use the disk.
-	if endpointServerPools.NEndpoints() == 1 {
-		// Initialize new FS object layer.
-		return NewFSObjectLayer(endpointServerPools[0].Endpoints[0].Path)
-	}
-
-	z, err := newErasureServerPools(ctx, endpointServerPools)
-	if err != nil {
-		return nil, err
-	}
-
 	initAllSubsystems()
 
-	return z, nil
+	return newErasureServerPools(ctx, endpointServerPools)
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
@@ -1750,7 +1744,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	credentials := globalActiveCred
 
 	// Executing the object layer tests for single node setup.
-	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
+	objAPITest(objLayer, ErasureSDStr, bucketFS, fsAPIRouter, credentials, t)
 
 	objLayer, erasureDisks, err := prepareErasure16(ctx)
 	if err != nil {
@@ -1816,7 +1810,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 		// Executing the object layer tests for single node setup.
-		objTest(objLayer, FSTestStr, t)
+		objTest(objLayer, ErasureSDStr, t)
 
 		// Call clean up functions
 		cancel()

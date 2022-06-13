@@ -203,7 +203,7 @@ func TestObjectIsRemote(t *testing.T) {
 		if got := fi.IsRemote(); got != tc.remote {
 			t.Fatalf("Test %d.a: expected %v got %v", i+1, tc.remote, got)
 		}
-		oi := fi.ToObjectInfo("bucket", "object")
+		oi := fi.ToObjectInfo("bucket", "object", false)
 		if got := oi.IsRemote(); got != tc.remote {
 			t.Fatalf("Test %d.b: expected %v got %v", i+1, tc.remote, got)
 		}
