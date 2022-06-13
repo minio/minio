@@ -61,6 +61,22 @@ func (z *erasureServerPools) SinglePool() bool {
 
 // Initialize new pool of erasure sets.
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
+	if endpointServerPools.NEndpoints() == 1 {
+		ep := endpointServerPools[0]
+		storageDisks, format, err := waitForFormatErasure(true, ep.Endpoints, 1, ep.SetCount, ep.DrivesPerSet, "", "")
+		if err != nil {
+			return nil, err
+		}
+
+		objLayer, err := newErasureSingle(ctx, storageDisks[0], format)
+		if err != nil {
+			return nil, err
+		}
+
+		globalLocalDrives = storageDisks
+		return objLayer, nil
+	}
+
 	var (
 		deploymentID       string
 		distributionAlgo   string
@@ -233,8 +249,9 @@ func (z *erasureServerPools) SetDriveCounts() []int {
 type serverPoolsAvailableSpace []poolAvailableSpace
 
 type poolAvailableSpace struct {
-	Index     int
-	Available uint64
+	Index      int
+	Available  uint64
+	MaxUsedPct int // Used disk percentage of most filled disk, rounded down.
 }
 
 // TotalAvailable - total available space
@@ -246,10 +263,41 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 	return total
 }
 
+// FilterMaxUsed will filter out any pools that has used percent bigger than max,
+// unless all have that, in which case all are preserved.
+func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
+	// We aren't modifying p, only entries in it, so we don't need to receive a pointer.
+	if len(p) <= 1 {
+		// Nothing to do.
+		return
+	}
+	var ok bool
+	for _, z := range p {
+		if z.MaxUsedPct < max {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		// All above limit.
+		// Do not modify
+		return
+	}
+
+	// Remove entries that are above.
+	for i, z := range p {
+		if z.MaxUsedPct < max {
+			continue
+		}
+		p[i].Available = 0
+	}
+}
+
 // getAvailablePoolIdx will return an index that can hold size bytes.
 // -1 is returned if no serverPools have available space for the size given.
 func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, bucket, object string, size int64) int {
 	serverPools := z.getServerPoolsAvailableSpace(ctx, bucket, object, size)
+	serverPools.FilterMaxUsed(100 - (100 * diskReserveFraction))
 	total := serverPools.TotalAvailable()
 	if total == 0 {
 		return -1
@@ -288,7 +336,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		nSets[index] = pool.setCount
 		g.Go(func() error {
 			// Get the set where it would be placed.
-			storageInfos[index] = getDiskInfos(ctx, pool.getHashedSet(object).getDisks())
+			storageInfos[index] = getDiskInfos(ctx, pool.getHashedSet(object).getDisks()...)
 			return nil
 		}, index)
 	}
@@ -302,11 +350,17 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 			serverPools[i] = poolAvailableSpace{Index: i}
 			continue
 		}
+		var maxUsedPct int
 		for _, disk := range zinfo {
-			if disk == nil {
+			if disk == nil || disk.Total == 0 {
 				continue
 			}
 			available += disk.Total - disk.Used
+
+			// set maxUsedPct to the value from the disk with the least space percentage.
+			if pctUsed := int(disk.Used * 100 / disk.Total); pctUsed > maxUsedPct {
+				maxUsedPct = pctUsed
+			}
 		}
 
 		// Since we are comparing pools that may have a different number of sets
@@ -317,8 +371,9 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		available *= uint64(nSets[i])
 
 		serverPools[i] = poolAvailableSpace{
-			Index:     i,
-			Available: available,
+			Index:      i,
+			Available:  available,
+			MaxUsedPct: maxUsedPct,
 		}
 	}
 	return serverPools
@@ -894,7 +949,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), data.Size()) {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size()) {
 			return ObjectInfo{}, toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
@@ -1286,7 +1341,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()), -1) {
+		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1) {
 			return "", toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
@@ -1696,6 +1751,8 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 		return err
 	}
 
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
@@ -1728,12 +1785,15 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						if opts.WalkAscending {
 							for i := len(fivs.Versions) - 1; i >= 0; i-- {
 								version := fivs.Versions[i]
-								results <- version.ToObjectInfo(bucket, version.Name)
+								versioned := vcfg != nil && vcfg.Versioned(version.Name)
+
+								results <- version.ToObjectInfo(bucket, version.Name, versioned)
 							}
 							return
 						}
 						for _, version := range fivs.Versions {
-							results <- version.ToObjectInfo(bucket, version.Name)
+							versioned := vcfg != nil && vcfg.Versioned(version.Name)
+							results <- version.ToObjectInfo(bucket, version.Name, versioned)
 						}
 					}
 
@@ -2022,11 +2082,14 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 	}
 
 	b := z.BackendInfo()
-	readQuorum := b.StandardSCData[0]
+	poolReadQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolReadQuorums[i] = data
+	}
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolReadQuorums[poolIdx] {
 				return false
 			}
 		}
@@ -2063,9 +2126,12 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData[0]
-	if writeQuorum == b.StandardSCParity {
-		writeQuorum++
+	poolWriteQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolWriteQuorums[i] = data
+		if data == b.StandardSCParity {
+			poolWriteQuorums[i] = data + 1
+		}
 	}
 
 	var aggHealStateResult madmin.BgHealState
@@ -2089,18 +2155,28 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < writeQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, writeQuorum))
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
 				return HealthResult{
 					Healthy:       false,
 					HealingDrives: len(aggHealStateResult.HealDisks),
 					PoolID:        poolIdx,
 					SetID:         setIdx,
-					WriteQuorum:   writeQuorum,
+					WriteQuorum:   poolWriteQuorums[poolIdx],
 				}
 			}
+		}
+	}
+
+	var maximumWriteQuorum int
+	for _, writeQuorum := range poolWriteQuorums {
+		if maximumWriteQuorum == 0 {
+			maximumWriteQuorum = writeQuorum
+		}
+		if writeQuorum > maximumWriteQuorum {
+			maximumWriteQuorum = writeQuorum
 		}
 	}
 
@@ -2109,14 +2185,14 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	if !opts.Maintenance {
 		return HealthResult{
 			Healthy:     true,
-			WriteQuorum: writeQuorum,
+			WriteQuorum: maximumWriteQuorum,
 		}
 	}
 
 	return HealthResult{
 		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
-		WriteQuorum:   writeQuorum,
+		WriteQuorum:   maximumWriteQuorum,
 	}
 }
 

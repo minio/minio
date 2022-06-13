@@ -45,7 +45,7 @@ type HTTPConsoleLoggerSys struct {
 // NewConsoleLogger - creates new HTTPConsoleLoggerSys with all nodes subscribed to
 // the console logging pub sub system
 func NewConsoleLogger(ctx context.Context) *HTTPConsoleLoggerSys {
-	ps := pubsub.New()
+	ps := pubsub.New(8)
 	return &HTTPConsoleLoggerSys{
 		pubsub:  ps,
 		console: console.New(),
@@ -75,7 +75,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 }
 
 // Subscribe starts console logging for this node.
-func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
+func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) error {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
 		logger.AddSystemTarget(sys)
@@ -111,11 +111,12 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan
 			select {
 			case subCh <- entry:
 			case <-doneCh:
-				return
+				return nil
 			}
 		}
 	}
-	sys.pubsub.Subscribe(subCh, doneCh, filter)
+
+	return sys.pubsub.Subscribe(subCh, doneCh, filter)
 }
 
 // Init if HTTPConsoleLoggerSys is valid, always returns nil right now

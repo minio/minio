@@ -137,24 +137,29 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 				return errDiskNotFound
 			}
 			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, readData)
-			if err != nil {
-				if !IsErr(err, []error{
-					errFileNotFound,
-					errVolumeNotFound,
-					errFileVersionNotFound,
-					errDiskNotFound,
-				}...) {
-					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
-						disks[index], bucket, object, err),
-						disks[index].String())
-				}
-			}
 			return err
 		}, index)
 	}
 
+	errs := g.Wait()
+	for index, err := range errs {
+		if err == nil {
+			continue
+		}
+		if !IsErr(err, []error{
+			errFileNotFound,
+			errVolumeNotFound,
+			errFileVersionNotFound,
+			errDiskNotFound,
+		}...) {
+			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+				disks[index], bucket, object, err),
+				disks[index].String())
+		}
+	}
+
 	// Return all the metadata.
-	return metadataArray, g.Wait()
+	return metadataArray, errs
 }
 
 // shuffleDisksAndPartsMetadataByIndex this function should be always used by GetObjectNInfo()

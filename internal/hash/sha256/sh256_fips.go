@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,15 +18,18 @@
 //go:build fips
 // +build fips
 
-package hash
+package sha256
 
 import (
-	"crypto/sha256"
+	fipssha256 "crypto/sha256"
 	"hash"
 )
 
-// newSHA256 returns a new hash.Hash computing the SHA256 checksum.
+// New returns a new hash.Hash computing the SHA256 checksum.
 // The SHA256 implementation is FIPS 140-2 compliant when the
 // boringcrypto branch of Go is used.
 // Ref: https://github.com/golang/go/tree/dev.boringcrypto
-func newSHA256() hash.Hash { return sha256.New() }
+func New() hash.Hash { return fipssha256.New() }
+
+// Sum256 returns the SHA256 checksum of the data.
+func Sum256(data []byte) [fipssha256.Size]byte { return fipssha256.Sum256(data) }

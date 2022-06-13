@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/internal/config/etcd"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
@@ -444,6 +445,8 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 				off = !xldap.Enabled(kv)
 			case config.IdentityTLSSubSys:
 				off = !globalSTSTLSConfig.Enabled
+			case config.IdentityPluginSubSys:
+				off = !idplugin.Enabled(kv)
 			}
 			if off {
 				s.WriteString(config.KvComment)

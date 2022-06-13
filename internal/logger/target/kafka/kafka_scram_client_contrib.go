@@ -18,11 +18,12 @@
 package kafka
 
 import (
-	"crypto/sha256"
 	"crypto/sha512"
 
 	"github.com/Shopify/sarama"
 	"github.com/xdg/scram"
+
+	"github.com/minio/minio/internal/hash/sha256"
 )
 
 func initScramClient(cfg Config, config *sarama.Config) {

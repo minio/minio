@@ -148,6 +148,8 @@ type HTTPStats struct {
 	currentS3Requests       HTTPAPIStats
 	totalS3Requests         HTTPAPIStats
 	totalS3Errors           HTTPAPIStats
+	totalS34xxErrors        HTTPAPIStats
+	totalS35xxErrors        HTTPAPIStats
 	totalS3Canceled         HTTPAPIStats
 }
 
@@ -178,6 +180,12 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
 		APIStats: st.totalS3Errors.Load(),
 	}
+	serverStats.TotalS34xxErrors = ServerHTTPAPIStats{
+		APIStats: st.totalS34xxErrors.Load(),
+	}
+	serverStats.TotalS35xxErrors = ServerHTTPAPIStats{
+		APIStats: st.totalS35xxErrors.Load(),
+	}
 	serverStats.TotalS3Canceled = ServerHTTPAPIStats{
 		APIStats: st.totalS3Canceled.Load(),
 	}
@@ -186,27 +194,31 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 
 // Update statistics from http request and response data
 func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter) {
-	// A successful request has a 2xx response code or < 4xx response
-	successReq := w.StatusCode >= 200 && w.StatusCode < 400
-
-	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPathLegacy) ||
-		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
-		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
-		st.totalS3Requests.Inc(api)
-		if !successReq {
-			switch w.StatusCode {
-			case 0:
-			case 499:
-				// 499 is a good error, shall be counted as canceled.
-				st.totalS3Canceled.Inc(api)
-			default:
-				st.totalS3Errors.Inc(api)
-			}
-		}
+	// Ignore non S3 requests
+	if strings.HasSuffix(r.URL.Path, minioReservedBucketPathWithSlash) {
+		return
 	}
+
+	st.totalS3Requests.Inc(api)
 
 	// Increment the prometheus http request response histogram with appropriate label
 	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
+
+	code := w.StatusCode
+
+	switch {
+	case code == 0:
+	case code == 499:
+		// 499 is a good error, shall be counted as canceled.
+		st.totalS3Canceled.Inc(api)
+	case code >= http.StatusBadRequest:
+		st.totalS3Errors.Inc(api)
+		if code >= http.StatusInternalServerError {
+			st.totalS35xxErrors.Inc(api)
+		} else {
+			st.totalS34xxErrors.Inc(api)
+		}
+	}
 }
 
 // Prepare new HTTPStats structure

@@ -19,6 +19,18 @@ package config
 
 // UI errors
 var (
+	ErrInvalidFSValue = newErrFn(
+		"Invalid drive path",
+		"Please provide an existing deployment with MinIO",
+		"MinIO does not support newer NAS gateway deployments anymore refer https://github.com/minio/minio/issues/14331",
+	)
+
+	ErrInvalidXLValue = newErrFn(
+		"Invalid drive path",
+		"Please provide a fresh drive for single drive MinIO setup",
+		"MinIO only supports fresh drive paths",
+	)
+
 	ErrInvalidBrowserValue = newErrFn(
 		"Invalid console value",
 		"Please check the passed value",

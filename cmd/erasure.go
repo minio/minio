@@ -79,7 +79,7 @@ func (er erasureObjects) NewNSLock(bucket string, objects ...string) RWLocker {
 // Shutdown function for object storage interface.
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
-	closeStorageDisks(er.getDisks())
+	closeStorageDisks(er.getDisks()...)
 	return nil
 }
 

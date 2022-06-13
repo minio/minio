@@ -1067,9 +1067,12 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 				return err
 			}
 			length := binary.LittleEndian.Uint32(tmp[:])
-			_, err = io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf)
+			n, err := io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf)
 			if err != nil {
 				return err
+			}
+			if n != int64(length) {
+				return io.ErrUnexpectedEOF
 			}
 			continue
 		case 32:
@@ -1140,6 +1143,10 @@ func checkDiskFatalErrs(errs []error) error {
 		return errFaultyDisk
 	}
 
+	if countErrs(errs, errXLBackend) == len(errs) {
+		return errXLBackend
+	}
+
 	return nil
 }
 
@@ -1152,6 +1159,8 @@ func checkDiskFatalErrs(errs []error) error {
 // Do not like it :-(
 func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	switch {
+	case errors.Is(err, errXLBackend):
+		logger.Fatal(config.ErrInvalidXLValue(err), "Unable to initialize backend")
 	case errors.Is(err, errUnsupportedDisk):
 		var hint string
 		if endpoint.URL != nil {

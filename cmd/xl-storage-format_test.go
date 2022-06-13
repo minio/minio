@@ -62,13 +62,15 @@ func TestIsXLMetaErasureInfoValid(t *testing.T) {
 		{1, 5, 6, false},
 		{2, 5, 5, true},
 		{3, 0, 5, false},
-		{4, 5, 0, false},
-		{5, 5, 0, false},
-		{6, 5, 4, true},
+		{3, -1, 5, false},
+		{4, 5, -1, false},
+		{5, 5, 0, true},
+		{6, 5, 0, true},
+		{7, 5, 4, true},
 	}
 	for _, tt := range tests {
 		if got := isXLMetaErasureInfoValid(tt.data, tt.parity); got != tt.want {
-			t.Errorf("Test %d: Expected %v but received %v", tt.name, got, tt.want)
+			t.Errorf("Test %d: Expected %v but received %v -> %#v", tt.name, got, tt.want, tt)
 		}
 	}
 }
@@ -512,7 +514,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					buf, _ := isIndexedMetaV2(enc)
+					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
@@ -527,7 +529,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					buf, _ := isIndexedMetaV2(enc)
+					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
