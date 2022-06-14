@@ -52,17 +52,17 @@ type providerCfg struct {
 	provider provider.Provider
 }
 
-func newProviderCfgFromConfig(getCfgVal func(env, cfgName string) string) providerCfg {
+func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg {
 	return providerCfg{
-		DisplayName:        getCfgVal(EnvIdentityOpenIDDisplayName, DisplayName),
-		ClaimName:          getCfgVal(EnvIdentityOpenIDClaimName, ClaimName),
-		ClaimUserinfo:      getCfgVal(EnvIdentityOpenIDClaimUserInfo, ClaimUserinfo) == config.EnableOn,
-		ClaimPrefix:        getCfgVal(EnvIdentityOpenIDClaimPrefix, ClaimPrefix),
-		RedirectURI:        getCfgVal(EnvIdentityOpenIDRedirectURI, RedirectURI),
-		RedirectURIDynamic: getCfgVal(EnvIdentityOpenIDRedirectURIDynamic, RedirectURIDynamic) == config.EnableOn,
-		ClientID:           getCfgVal(EnvIdentityOpenIDClientID, ClientID),
-		ClientSecret:       getCfgVal(EnvIdentityOpenIDClientSecret, ClientSecret),
-		RolePolicy:         getCfgVal(EnvIdentityOpenIDRolePolicy, RolePolicy),
+		DisplayName:        getCfgVal(DisplayName),
+		ClaimName:          getCfgVal(ClaimName),
+		ClaimUserinfo:      getCfgVal(ClaimUserinfo) == config.EnableOn,
+		ClaimPrefix:        getCfgVal(ClaimPrefix),
+		RedirectURI:        getCfgVal(RedirectURI),
+		RedirectURIDynamic: getCfgVal(RedirectURIDynamic) == config.EnableOn,
+		ClientID:           getCfgVal(ClientID),
+		ClientSecret:       getCfgVal(ClientSecret),
+		RolePolicy:         getCfgVal(RolePolicy),
 	}
 }
 
@@ -72,16 +72,16 @@ const (
 
 // initializeProvider initializes if any additional vendor specific information
 // was provided, initialization will return an error initial login fails.
-func (p *providerCfg) initializeProvider(cfgGet func(string, string) string, transport http.RoundTripper) error {
-	vendor := cfgGet(EnvIdentityOpenIDVendor, Vendor)
+func (p *providerCfg) initializeProvider(cfgGet func(string) string, transport http.RoundTripper) error {
+	vendor := cfgGet(Vendor)
 	if vendor == "" {
 		return nil
 	}
 	var err error
 	switch vendor {
 	case keyCloakVendor:
-		adminURL := cfgGet(EnvIdentityOpenIDKeyCloakAdminURL, KeyCloakAdminURL)
-		realm := cfgGet(EnvIdentityOpenIDKeyCloakRealm, KeyCloakRealm)
+		adminURL := cfgGet(KeyCloakAdminURL)
+		realm := cfgGet(KeyCloakRealm)
 		p.provider, err = provider.KeyCloak(
 			provider.WithAdminURL(adminURL),
 			provider.WithOpenIDConfig(provider.DiscoveryDoc(p.DiscoveryDoc)),

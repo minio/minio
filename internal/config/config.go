@@ -940,3 +940,197 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 	c[subSys][tgt] = currKVS
 	return dynamic, nil
 }
+
+// CheckValidKeys - checks if the config parameters for the given subsystem and
+// target are valid. It checks both the configuration store as well as
+// environment variables.
+func (c Config) CheckValidKeys(subSys string, deprecatedKeys []string) error {
+	defKVS, ok := DefaultKVS[subSys]
+	if !ok {
+		return fmt.Errorf("Subsystem %s does not exist", subSys)
+	}
+
+	// Make a list of valid keys for the subsystem including the `comment`
+	// key.
+	validKeys := make([]string, 0, len(defKVS)+1)
+	for _, param := range defKVS {
+		validKeys = append(validKeys, param.Key)
+	}
+	validKeys = append(validKeys, Comment)
+
+	subSysEnvVars := env.List(fmt.Sprintf("%s%s", EnvPrefix, strings.ToUpper(subSys)))
+
+	// Set of env vars for the sub-system to validate.
+	candidates := set.CreateStringSet(subSysEnvVars...)
+
+	// Remove all default target env vars from the candidates set (as they
+	// are valid).
+	for _, param := range validKeys {
+		paramEnvName := getEnvVarName(subSys, Default, param)
+		candidates.Remove(paramEnvName)
+	}
+
+	isSingleTarget := SubSystemsSingleTargets.Contains(subSys)
+	if isSingleTarget && len(candidates) > 0 {
+		return fmt.Errorf("The following environment variables are unknown: %s",
+			strings.Join(candidates.ToSlice(), ", "))
+	}
+
+	if !isSingleTarget {
+		// Validate other env vars for all targets.
+		envVars := candidates.ToSlice()
+		for _, envVar := range envVars {
+			for _, param := range validKeys {
+				pEnvName := getEnvVarName(subSys, Default, param) + Default
+				if len(envVar) > len(pEnvName) && strings.HasPrefix(envVar, pEnvName) {
+					// This envVar is valid - it has a
+					// non-empty target.
+					candidates.Remove(envVar)
+				}
+			}
+		}
+
+		// Whatever remains are invalid env vars - return an error.
+		if len(candidates) > 0 {
+			return fmt.Errorf("The following environment variables are unknown: %s",
+				strings.Join(candidates.ToSlice(), ", "))
+		}
+	}
+
+	validKeysSet := set.CreateStringSet(validKeys...)
+	validKeysSet = validKeysSet.Difference(set.CreateStringSet(deprecatedKeys...))
+	kvsMap := c[subSys]
+	for tgt, kvs := range kvsMap {
+		invalidKV := KVS{}
+		for _, kv := range kvs {
+			if !validKeysSet.Contains(kv.Key) {
+				invalidKV = append(invalidKV, kv)
+			}
+		}
+		if len(invalidKV) > 0 {
+			return Errorf(
+				"found invalid keys (%s) for '%s:%s' sub-system, use 'mc admin config reset myminio %s:%s' to fix invalid keys",
+				invalidKV.String(), subSys, tgt, subSys, tgt)
+		}
+	}
+	return nil
+}
+
+// GetAvailableTargets - returns a list of targets configured for the given
+// subsystem (whether they are enabled or not). A target could be configured via
+// environment variables or via the configuration store. The default target is
+// `_` and is always returned.
+func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
+	if SubSystemsSingleTargets.Contains(subSys) {
+		return []string{Default}, nil
+	}
+
+	defKVS, ok := DefaultKVS[subSys]
+	if !ok {
+		return nil, fmt.Errorf("Subsystem %s does not exist", subSys)
+	}
+
+	kvsMap := c[subSys]
+	s := set.NewStringSet()
+
+	// Add all targets that are configured in the config store.
+	for k := range kvsMap {
+		s.Add(k)
+	}
+
+	// Add targets that are configured via environment variables.
+	for _, param := range defKVS {
+		envVarPrefix := getEnvVarName(subSys, Default, param.Key) + Default
+		envsWithPrefix := env.List(envVarPrefix)
+		for _, k := range envsWithPrefix {
+			tgtName := strings.TrimPrefix(k, envVarPrefix)
+			if tgtName != "" {
+				s.Add(tgtName)
+			}
+		}
+	}
+
+	return s.ToSlice(), nil
+}
+
+func getEnvVarName(subSys, target, param string) string {
+	if target == Default {
+		return fmt.Sprintf("%s%s_%s", EnvPrefix, strings.ToUpper(subSys), strings.ToUpper(param))
+	}
+
+	return fmt.Sprintf("%s%s_%s_%s", EnvPrefix, strings.ToUpper(subSys), strings.ToUpper(param), target)
+}
+
+var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys)
+
+// ValueSource represents the source of a config parameter value.
+type ValueSource uint8
+
+// Constants for ValueSource
+const (
+	ValueSourceAbsent ValueSource = iota // this is an error case
+	ValueSourceDef
+	ValueSourceCfg
+	ValueSourceEnv
+)
+
+// ResolveConfigParam returns the effective value of a configuration parameter,
+// within a subsystem and subsystem target. The effective value is, in order of
+// decreasing precedence:
+//
+// 1. the value of the corresponding environment variable if set,
+// 2. the value of the parameter in the config store if set,
+// 3. the default value,
+//
+// This function only works for a subset of sub-systems, others return
+// `ValueSourceAbsent`. FIXME: some parameters have custom environment
+// variables for which support needs to be added.
+func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value string, cs ValueSource) {
+	// cs = ValueSourceAbsent initially as it is iota by default.
+
+	// Initially only support OpenID
+	if !resolvableSubsystems.Contains(subSys) {
+		return
+	}
+
+	// Check if config param requested is valid.
+	defKVS, ok := DefaultKVS[subSys]
+	if !ok {
+		return
+	}
+
+	defValue, isFound := defKVS.Lookup(cfgParam)
+	if !isFound {
+		return
+	}
+
+	if target == "" {
+		target = Default
+	}
+
+	envVar := getEnvVarName(subSys, target, cfgParam)
+
+	// Lookup Env var.
+	value = env.Get(envVar, "")
+	if value != "" {
+		cs = ValueSourceEnv
+		return
+	}
+
+	// Lookup config store.
+	if subSysStore, ok := c[subSys]; ok {
+		if kvs, ok2 := subSysStore[target]; ok2 {
+			var ok3 bool
+			value, ok3 = kvs.Lookup(cfgParam)
+			if ok3 {
+				cs = ValueSourceCfg
+				return
+			}
+		}
+	}
+
+	// Return the default value.
+	value = defValue
+	cs = ValueSourceDef
+	return
+}

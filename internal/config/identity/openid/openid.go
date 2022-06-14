@@ -36,49 +36,32 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/minio/internal/hash/sha256"
-	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 )
 
 // OpenID keys and envs.
 const (
-	JwksURL       = "jwks_url"
+	ClientID      = "client_id"
+	ClientSecret  = "client_secret"
 	ConfigURL     = "config_url"
 	ClaimName     = "claim_name"
 	ClaimUserinfo = "claim_userinfo"
-	ClaimPrefix   = "claim_prefix"
-	ClientID      = "client_id"
-	ClientSecret  = "client_secret"
 	RolePolicy    = "role_policy"
 	DisplayName   = "display_name"
 
-	Vendor             = "vendor"
 	Scopes             = "scopes"
 	RedirectURI        = "redirect_uri"
 	RedirectURIDynamic = "redirect_uri_dynamic"
+	Vendor             = "vendor"
 
 	// Vendor specific ENV only enabled if the Vendor matches == "vendor"
 	KeyCloakRealm    = "keycloak_realm"
 	KeyCloakAdminURL = "keycloak_admin_url"
 
-	EnvIdentityOpenIDEnable             = "MINIO_IDENTITY_OPENID_ENABLE"
-	EnvIdentityOpenIDVendor             = "MINIO_IDENTITY_OPENID_VENDOR"
-	EnvIdentityOpenIDClientID           = "MINIO_IDENTITY_OPENID_CLIENT_ID"
-	EnvIdentityOpenIDClientSecret       = "MINIO_IDENTITY_OPENID_CLIENT_SECRET"
-	EnvIdentityOpenIDURL                = "MINIO_IDENTITY_OPENID_CONFIG_URL"
-	EnvIdentityOpenIDClaimName          = "MINIO_IDENTITY_OPENID_CLAIM_NAME"
-	EnvIdentityOpenIDClaimUserInfo      = "MINIO_IDENTITY_OPENID_CLAIM_USERINFO"
-	EnvIdentityOpenIDClaimPrefix        = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
-	EnvIdentityOpenIDRolePolicy         = "MINIO_IDENTITY_OPENID_ROLE_POLICY"
-	EnvIdentityOpenIDRedirectURI        = "MINIO_IDENTITY_OPENID_REDIRECT_URI"
-	EnvIdentityOpenIDRedirectURIDynamic = "MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC"
-	EnvIdentityOpenIDScopes             = "MINIO_IDENTITY_OPENID_SCOPES"
-	EnvIdentityOpenIDDisplayName        = "MINIO_IDENTITY_OPENID_DISPLAY_NAME"
-
-	// Vendor specific ENVs only enabled if the Vendor matches == "vendor"
-	EnvIdentityOpenIDKeyCloakRealm    = "MINIO_IDENTITY_OPENID_KEYCLOAK_REALM"
-	EnvIdentityOpenIDKeyCloakAdminURL = "MINIO_IDENTITY_OPENID_KEYCLOAK_ADMIN_URL"
+	// Removed params
+	JwksURL     = "jwks_url"
+	ClaimPrefix = "claim_prefix"
 )
 
 // DefaultKVS - default config for OpenID config
@@ -191,7 +174,7 @@ func (r *Config) Clone() Config {
 }
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, closeRespFn func(io.ReadCloser), serverRegion string) (c Config, err error) {
+func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func(io.ReadCloser), serverRegion string) (c Config, err error) {
 	openIDClientTransport := http.DefaultTransport
 	if transport != nil {
 		openIDClientTransport = transport
@@ -209,48 +192,28 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 		closeRespFn:      closeRespFn,
 	}
 
-	// Make a copy of the config we received so we can mutate it safely.
-	kvsMap2 := make(map[string]config.KVS, len(kvsMap))
-	for k, v := range kvsMap {
-		kvsMap2[k] = v
-	}
-
-	// Add in each configuration name found from environment variables, i.e.
-	// if we see MINIO_IDENTITY_OPENID_CONFIG_URL_2, we add the key "2" to
-	// `kvsMap2` if it does not already exist.
-	envs := env.List(EnvIdentityOpenIDURL + config.Default)
-	for _, k := range envs {
-		cfgName := strings.TrimPrefix(k, EnvIdentityOpenIDURL+config.Default)
-		if cfgName == "" {
-			return c, config.Errorf("Environment variable must have a non-empty config name: %s", k)
-		}
-
-		// It is possible that some variables were specified via config
-		// commands and some variables are intended to be overridden
-		// from the environment, so we ensure that the key is not
-		// overwritten in `kvsMap2` as it may have existing config.
-		if _, ok := kvsMap2[cfgName]; !ok {
-			kvsMap2[cfgName] = DefaultKVS
-		}
-	}
-
 	var (
 		hasLegacyPolicyMapping = false
 		seenClientIDs          = set.NewStringSet()
 	)
-	for cfgName, kvs := range kvsMap2 {
-		// remove this since we have removed support for this already.
-		kvs.Delete(JwksURL)
 
-		if err = config.CheckValidKeys(config.IdentityOpenIDSubSys, kvs, DefaultKVS); err != nil {
-			return c, err
-		}
+	// remove this since we have removed support for this already.
+	deprecatedKeys := []string{JwksURL}
+	if err := s.CheckValidKeys(config.IdentityOpenIDSubSys, deprecatedKeys); err != nil {
+		return c, err
+	}
 
-		getCfgVal := func(envVar, cfgParam string) string {
-			if cfgName != config.Default {
-				envVar += config.Default + cfgName
-			}
-			return env.Get(envVar, kvs.Get(cfgParam))
+	openIDTargets, err := s.GetAvailableTargets(config.IdentityOpenIDSubSys)
+	if err != nil {
+		return c, err
+	}
+
+	for _, cfgName := range openIDTargets {
+		getCfgVal := func(cfgParam string) string {
+			// As parameters are already validated, we skip checking
+			// if the config param was found.
+			val, _ := s.ResolveConfigParam(config.IdentityOpenIDSubSys, cfgName, cfgParam)
+			return val
 		}
 
 		// In the past, when only one openID provider was allowed, there
@@ -261,7 +224,7 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 		// setting, otherwise we treat it as enabled if some important
 		// parameters are non-empty.
 		var (
-			cfgEnableVal        = getCfgVal(EnvIdentityOpenIDEnable, config.Enable)
+			cfgEnableVal        = getCfgVal(config.Enable)
 			isExplicitlyEnabled = false
 		)
 		if cfgEnableVal != "" {
@@ -281,7 +244,7 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 		}
 
 		p := newProviderCfgFromConfig(getCfgVal)
-		configURL := getCfgVal(EnvIdentityOpenIDURL, ConfigURL)
+		configURL := getCfgVal(ConfigURL)
 
 		if !isExplicitlyEnabled {
 			enabled = true
@@ -315,7 +278,7 @@ func LookupConfig(kvsMap map[string]config.KVS, transport http.RoundTripper, clo
 			return c, errors.New("please specify config_url to enable fetching claims from UserInfo endpoint")
 		}
 
-		if scopeList := getCfgVal(EnvIdentityOpenIDScopes, Scopes); scopeList != "" {
+		if scopeList := getCfgVal(Scopes); scopeList != "" {
 			var scopes []string
 			for _, scope := range strings.Split(scopeList, ",") {
 				scope = strings.TrimSpace(scope)
