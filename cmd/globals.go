@@ -255,6 +255,9 @@ var (
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
+	// Global bucket network statistics
+	globalBucketConnStats = newBucketConnStats()
+
 	// Time when the server is started
 	globalBootTime = UTCNow()
 

@@ -15,6 +15,8 @@ These metrics can be from any MinIO server once per collection.
 | `minio_bucket_usage_object_total`            | Total number of objects                                                                                             |
 | `minio_bucket_usage_total_bytes`             | Total bucket size in bytes                                                                                          |
 | `minio_bucket_quota_total_bytes`             | Total bucket quota size in bytes                                                                                    |
+| `minio_bucket_traffic_sent_bytes`            | Total s3 bytes sent per bucket                                                                                      |
+| `minio_bucket_traffic_received_bytes`        | Total s3 bytes received per bucket                                                                                  |
 | `minio_cache_hits_total`                     | Total number of disk cache hits                                                                                     |
 | `minio_cache_missed_total`                   | Total number of disk cache misses                                                                                   |
 | `minio_cache_sent_bytes`                     | Total number of bytes served from cache                                                                             |
