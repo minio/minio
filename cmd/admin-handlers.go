@@ -1110,7 +1110,6 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	}
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
-
 	if !sufficientCapacity {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
 			Code:       "XMinioSpeedtestInsufficientCapacity",
@@ -1874,6 +1873,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
 	defer healthCancel()
 
+	// Freeze all incoming S3 API calls before running speedtest.
+	globalNotificationSys.ServiceFreeze(ctx, true)
+
+	// unfreeze all incoming S3 API calls after speedtest.
+	defer globalNotificationSys.ServiceFreeze(ctx, false)
+
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
 	anonAddr := func(addr string) string {
@@ -2111,11 +2116,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteDrivePerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfDrive)) == "true" {
-			// Freeze all incoming S3 API calls before running speedtest.
-			globalNotificationSys.ServiceFreeze(ctx, true)
-			// unfreeze all incoming S3 API calls after speedtest.
-			defer globalNotificationSys.ServiceFreeze(ctx, false)
-
 			opts := madmin.DriveSpeedTestOpts{
 				Serial:    false,
 				BlockSize: 4 * humanize.MiByte,
@@ -2136,6 +2136,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	getAndWriteObjPerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
 			concurrent := 32
+			if runtime.GOMAXPROCS(0) < concurrent {
+				concurrent = runtime.GOMAXPROCS(0)
+			}
+
 			size := 64 * humanize.MiByte
 			autotune := true
 
@@ -2162,12 +2166,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				defer deleteObjectPerfBucket(objectAPI)
 			}
 
-			// Freeze all incoming S3 API calls before running speedtest.
-			globalNotificationSys.ServiceFreeze(ctx, true)
-
-			// unfreeze all incoming S3 API calls after speedtest.
-			defer globalNotificationSys.ServiceFreeze(ctx, false)
-
 			opts := speedTestOpts{
 				throughputSize:   size,
 				concurrencyStart: concurrent,
@@ -2189,19 +2187,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				return
 			}
 
-			nsLock := objectAPI.NewNSLock(minioMetaBucket, "netperf")
-			lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
-			if err != nil {
-				healthInfo.Perf.Error = "Could not acquire lock for netperf: " + err.Error()
-			} else {
-				defer nsLock.Unlock(lkctx.Cancel)
-
-				netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
-				for _, np := range netPerf {
-					np.Endpoint = anonAddr(np.Endpoint)
-					healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
-				}
+			netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
+			for _, np := range netPerf {
+				np.Endpoint = anonAddr(np.Endpoint)
+				healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
 			}
+
 			partialWrite(healthInfo)
 		}
 	}
