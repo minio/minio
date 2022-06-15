@@ -29,6 +29,7 @@ import (
 	"github.com/klauspost/compress/gzhttp"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/pkg/wildcard"
 )
 
 // ResponseWriter - is a wrapper to trap the http response status code.
@@ -233,8 +234,20 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
-		if err := t.Send(entry, string(All)); err != nil {
-			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), All)
+		matched := true
+		for _, filter := range t.Filters() {
+			if filter == "" {
+				continue
+			}
+			matched = wildcard.MatchSimple(filter, entry.API.Name)
+			if matched {
+				break
+			}
+		}
+		if matched {
+			if err := t.Send(entry, string(All)); err != nil {
+				LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), All)
+			}
 		}
 	}
 }

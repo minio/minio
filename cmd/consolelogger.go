@@ -161,6 +161,11 @@ func (sys *HTTPConsoleLoggerSys) Type() types.TargetType {
 	return types.TargetConsole
 }
 
+// Filters is dummy function for console target.
+func (sys *HTTPConsoleLoggerSys) Filters() []string {
+	return []string{}
+}
+
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {

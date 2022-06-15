@@ -43,6 +43,7 @@ const (
 	ClientCert = "client_cert"
 	ClientKey  = "client_key"
 	QueueSize  = "queue_size"
+	Filter     = "filter"
 
 	KafkaBrokers       = "brokers"
 	KafkaTopic         = "topic"
@@ -70,6 +71,7 @@ const (
 	EnvAuditWebhookClientCert = "MINIO_AUDIT_WEBHOOK_CLIENT_CERT"
 	EnvAuditWebhookClientKey  = "MINIO_AUDIT_WEBHOOK_CLIENT_KEY"
 	EnvAuditWebhookQueueSize  = "MINIO_AUDIT_WEBHOOK_QUEUE_SIZE"
+	EnvAuditWebhookFilter     = "MINIO_AUDIT_WEBHOOK_FILTER"
 
 	EnvKafkaEnable        = "MINIO_AUDIT_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_AUDIT_KAFKA_BROKERS"
@@ -84,6 +86,7 @@ const (
 	EnvKafkaClientTLSCert = "MINIO_AUDIT_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_AUDIT_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_AUDIT_KAFKA_VERSION"
+	EnvKafkaFilter        = "MINIO_AUDIT_KAFKA_FILTER"
 )
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
@@ -140,6 +143,10 @@ var (
 			Key:   QueueSize,
 			Value: "100000",
 		},
+		config.KV{
+			Key:   Filter,
+			Value: "",
+		},
 	}
 
 	DefaultAuditKafkaKVS = config.KVS{
@@ -193,6 +200,10 @@ var (
 		},
 		config.KV{
 			Key:   KafkaVersion,
+			Value: "",
+		},
+		config.KV{
+			Key:   Filter,
 			Value: "",
 		},
 	}
@@ -337,11 +348,17 @@ func GetAuditKafka(kafkaKVS map[string]config.KVS) (map[string]kafka.Config, err
 			versionEnv = versionEnv + config.Default + k
 		}
 
+		filterEnv := EnvKafkaFilter
+		if k != config.Default {
+			filterEnv = filterEnv + config.Default + k
+		}
+
 		kafkaArgs := kafka.Config{
 			Enabled: enabled,
 			Brokers: brokers,
 			Topic:   env.Get(topicEnv, kv.Get(KafkaTopic)),
 			Version: env.Get(versionEnv, kv.Get(KafkaVersion)),
+			Filters: strings.Split(env.Get(filterEnv, kv.Get(Filter)), config.ValueSeparator),
 		}
 
 		tlsEnableEnv := EnvKafkaTLS
@@ -565,6 +582,10 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if queueSize <= 0 {
 			return cfg, errors.New("invalid queue_size value")
 		}
+		filterEnv := EnvAuditWebhookFilter
+		if target != config.Default {
+			filterEnv = EnvAuditWebhookFilter + config.Default + target
+		}
 		cfg.AuditWebhook[target] = http.Config{
 			Enabled:    true,
 			Endpoint:   env.Get(endpointEnv, ""),
@@ -572,6 +593,7 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
 			QueueSize:  queueSize,
+			Filters:    strings.Split(env.Get(filterEnv, ""), config.ValueSeparator),
 		}
 	}
 
@@ -615,6 +637,7 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
 			QueueSize:  queueSize,
+			Filters:    strings.Split(kv.Get(Filter), config.ValueSeparator),
 		}
 	}
 

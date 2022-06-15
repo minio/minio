@@ -47,6 +47,11 @@ type Target struct {
 	config   *sarama.Config
 }
 
+// Filters - Returns configured filters if any.
+func (h *Target) Filters() []string {
+	return h.kconfig.Filters
+}
+
 // Send log message 'e' to kafka target.
 func (h *Target) Send(entry interface{}, errKind string) error {
 	select {
@@ -127,6 +132,7 @@ type Config struct {
 		Password  string `json:"password"`
 		Mechanism string `json:"mechanism"`
 	} `json:"sasl"`
+	Filters []string `json:"filters"`
 
 	// Custom logger
 	LogOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}) `json:"-"`

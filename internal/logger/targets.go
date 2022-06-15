@@ -32,6 +32,7 @@ type Target interface {
 	String() string
 	Endpoint() string
 	Init() error
+	Filters() []string
 	Cancel()
 	Send(entry interface{}, errKind string) error
 	Type() types.TargetType

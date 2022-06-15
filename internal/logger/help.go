@@ -114,6 +114,12 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         Filter,
+			Description: "filter only relevant audit events to Audit Webhook targets, eg: 'Decom*,Replicate*'",
+			Optional:    true,
+			Type:        "csv",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
@@ -203,6 +209,12 @@ var (
 			Description: "specify the version of the Kafka cluster",
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         Filter,
+			Description: "filter only relevant audit events to Audit Webhook targets, eg: 'Decom*,Replicate*'",
+			Optional:    true,
+			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         config.Comment,

@@ -45,6 +45,7 @@ type Config struct {
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
 	QueueSize  int               `json:"queueSize"`
+	Filters    []string          `json:"filters"`
 	Transport  http.RoundTripper `json:"-"`
 
 	// Custom logger
@@ -200,6 +201,11 @@ func New(config Config) *Target {
 	}
 
 	return h
+}
+
+// Filters - Returns configured filters if any.
+func (h *Target) Filters() []string {
+	return h.config.Filters
 }
 
 // Send log message 'e' to http target.

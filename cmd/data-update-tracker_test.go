@@ -63,6 +63,10 @@ func (t *testingLogger) Type() types.TargetType {
 	return types.TargetHTTP
 }
 
+func (t *testingLogger) Filters() []string {
+	return []string{}
+}
+
 func (t *testingLogger) Send(entry interface{}, errKind string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

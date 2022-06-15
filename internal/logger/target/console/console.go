@@ -47,6 +47,11 @@ func (c *Target) String() string {
 	return "console"
 }
 
+// Filters is a dummy function for console target
+func (c *Target) Filters() []string {
+	return []string{}
+}
+
 // Send log message 'e' to console
 func (c *Target) Send(e interface{}, logKind string) error {
 	entry, ok := e.(log.Entry)
