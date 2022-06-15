@@ -32,6 +32,12 @@ import (
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
+type nullReader struct{}
+
+func (r *nullReader) Read(b []byte) (int, error) {
+	return len(b), nil
+}
+
 // Test get request auth type.
 func TestGetRequestAuthType(t *testing.T) {
 	type testCase struct {

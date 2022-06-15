@@ -38,7 +38,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -1264,43 +1263,29 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
-	enc := json.NewEncoder(w)
 	ch := globalNotificationSys.DriveSpeedTest(ctx, opts)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// local driveSpeedTest
-	go func() {
-		defer wg.Done()
-		enc.Encode(driveSpeedTest(ctx, opts))
-		if wf, ok := w.(http.Flusher); ok {
-			wf.Flush()
-		}
-	}()
-
+	enc := json.NewEncoder(w)
 	for {
 		select {
 		case <-ctx.Done():
-			goto endloop
+			return
 		case <-keepAliveTicker.C:
 			// Write a blank entry to prevent client from disconnecting
 			if err := enc.Encode(madmin.DriveSpeedTestResult{}); err != nil {
-				goto endloop
+				return
 			}
 			w.(http.Flusher).Flush()
 		case result, ok := <-ch:
 			if !ok {
-				goto endloop
+				return
 			}
 			if err := enc.Encode(result); err != nil {
-				goto endloop
+				return
 			}
 			w.(http.Flusher).Flush()
 		}
 	}
-endloop:
-	wg.Wait()
 }
 
 // Admin API errors
