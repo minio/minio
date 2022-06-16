@@ -22,6 +22,17 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/gops/agent"
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -36,21 +47,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
-	return &meta.Config{
+	cfg := &meta.Config{
 		Retries:    c.Int("io-retries"),
 		Strict:     true,
 		ReadOnly:   readOnly,
@@ -60,6 +62,15 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
+	if cfg.Heartbeat < time.Second {
+		logger.Warnf("heartbeat should not be less than 1 second")
+		cfg.Heartbeat = time.Second
+	}
+	if cfg.Heartbeat > time.Minute*10 {
+		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
+		cfg.Heartbeat = time.Minute * 10
+	}
+	return cfg
 }
 
 func duration(s string) time.Duration {
@@ -83,6 +94,7 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 
 func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer, registry *prometheus.Registry) string {
 	var ip, port string
+	//default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
 	if err != nil {
 		logger.Fatalf("metrics format error: %v", err)
@@ -166,6 +178,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		BufferSize:    c.Int("buffer-size") << 20,
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
+		UploadDelay:   duration(c.String("upload-delay")),
 
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
@@ -173,6 +186,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+	}
+	if chunkConf.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		chunkConf.MaxUpload = 1
+	}
+	if chunkConf.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		chunkConf.BufferSize = 32 << 20
 	}
 
 	if chunkConf.CacheDir != "memory" {
@@ -183,6 +204,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
 	return chunkConf
+}
+
+type storageHolder struct {
+	object.ObjectStorage
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
@@ -243,7 +268,53 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	}
 	return blob, nil
 }
+
+func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, error)) (object.ObjectStorage, error) {
+	blob, err := createStorage(*format)
+	if err != nil {
+		return nil, err
+	}
+	holder := &storageHolder{blob}
+	go func() {
+		old := *format // keep a copy, so it will not refreshed
+		for {
+			time.Sleep(time.Minute)
+			new, err := reload()
+			if err != nil {
+				logger.Warnf("reload config: %s", err)
+				continue
+			}
+			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey {
+				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
+				newBlob, err := createStorage(*new)
+				if err != nil {
+					logger.Warnf("object storage: %s", err)
+					continue
+				}
+				holder.ObjectStorage = newBlob
+				old = *new
+			}
+		}
+	}()
+	return holder, nil
+}
+
+func getFormat(c *cli.Context, metaCli meta.Meta) (*meta.Format, error) {
+	format, err := metaCli.Load(true)
+	if err != nil {
+		return nil, fmt.Errorf("load setting: %s", err)
+	}
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
+	}
+	if c.IsSet("storage") {
+		format.Storage = c.String("storage")
+	}
+	return format, nil
+}
+
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
@@ -255,13 +326,15 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
-	chunkConf := getChunkConf(c, format)
-	blob, err := createStorage(*format)
+	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
+		return getFormat(c, metaCli)
+	})
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
 
+	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
@@ -282,13 +355,17 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 }
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
-	return &vfs.Config{
+	cfg := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
 		BackupMeta: duration(c.String("backup-meta")),
 	}
+	if cfg.BackupMeta < time.Minute*5 {
+		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
+	}
+	return cfg
 }
 func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
@@ -319,7 +396,7 @@ func removePassword(uri string) {
 
 func setup(c *cli.Context, n int) {
 	if c.NArg() < n {
-		logger.Errorf("This command requires at least %d arguments", n)
+		fmt.Printf("ERROR: This command requires at least %d arguments\n", n)
 		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
 		os.Exit(1)
 	}
@@ -349,6 +426,30 @@ func setup(c *cli.Context, n int) {
 			}
 		}()
 	}
+
+	if c.IsSet("pyroscope") {
+		tags := make(map[string]string)
+		appName := fmt.Sprintf("juicefs.%s", c.Command.Name)
+		if c.Command.Name == "mount" {
+			tags["mountpoint"] = c.Args().Get(1)
+		}
+		if hostname, err := os.Hostname(); err == nil {
+			tags["hostname"] = hostname
+		}
+		tags["pid"] = strconv.Itoa(os.Getpid())
+		tags["version"] = version.Version()
+
+		if _, err := pyroscope.Start(pyroscope.Config{
+			ApplicationName: appName,
+			ServerAddress:   c.String("pyroscope"),
+			Logger:          logger,
+			Tags:            tags,
+			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
+			ProfileTypes:    pyroscope.DefaultProfileTypes,
+		}); err != nil {
+			logger.Errorf("start pyroscope agent: %v", err)
+		}
+	}
 }
 
 func globalFlags() []cli.Flag {
@@ -365,6 +466,10 @@ func globalFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "no-agent",
 			Usage: "disable pprof (:6060) and gops (:6070) agent",
+		},
+		&cli.StringFlag{
+			Name:  "pyroscope",
+			Usage: "pyroscope address",
 		},
 		&cli.BoolFlag{
 			Name:  "no-color",
@@ -392,6 +497,10 @@ func clientFlags() []cli.Flag {
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
 	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "storage",
+			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
+		},
 		&cli.StringFlag{
 			Name:  "bucket",
 			Usage: "customized endpoint to access object store",
