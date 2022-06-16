@@ -73,6 +73,13 @@ var (
 		return fmt.Sprint
 	}()
 
+	Greenf = func() func(format string, a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgGreen).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+
 	GreenBold = func() func(a ...interface{}) string {
 		if IsTerminal() {
 			return color.New(color.FgGreen, color.Bold).SprintFunc()
