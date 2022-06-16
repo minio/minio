@@ -420,7 +420,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// When disk to heal count is greater than parity blocks we should simply error out.
-		err := fmt.Errorf("more disks are expected to heal than parity, returned errors: %v -> %s/%s(%s)", errs, bucket, object, versionID)
+		err := fmt.Errorf("more disks are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", errs, dataErrs, bucket, object, versionID)
 		logger.LogIf(ctx, err)
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
