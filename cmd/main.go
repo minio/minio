@@ -18,12 +18,14 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/words"
@@ -67,11 +69,6 @@ var GlobalFlags = []cli.Flag{
 		Usage:  "disable strict S3 compatibility by turning on certain performance optimizations",
 		Hidden: true,
 	},
-}
-
-var versionFlag = cli.BoolFlag{
-	Name:  "version, v",
-	Usage: "print version information",
 }
 
 // Help template for minio.
@@ -137,20 +134,16 @@ func newApp(name string) *cli.App {
 		Name:  "help, h",
 		Usage: "show help",
 	}
-
-	topLevelFlags := make([]cli.Flag, len(GlobalFlags)+1)
-	copy(topLevelFlags, GlobalFlags)
-	topLevelFlags[len(GlobalFlags)] = versionFlag
+	cli.VersionPrinter = printMinIOVersion
 
 	app := cli.NewApp()
 	app.Name = name
 	app.Author = "MinIO, Inc."
-	app.Action = versionAndHelpAction
+	app.Version = ReleaseTag
 	app.Usage = "High Performance Object Storage"
 	app.Description = `Build high performance data infrastructure for machine learning, analytics and application data workloads with MinIO`
-	app.Flags = topLevelFlags
+	app.Flags = GlobalFlags
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
-	app.HideVersion = true
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
@@ -170,16 +163,11 @@ func newApp(name string) *cli.App {
 	return app
 }
 
-func versionAndHelpAction(ctx *cli.Context) {
-	if ctx.IsSet("version") {
-		console.Printf("%s version %s\n", ctx.App.Name, ReleaseTag)
-		console.Printf("commit: %s\n", CommitID)
-		console.Printf("go version: %s\n", runtime.Version())
-
-		return
-	}
-
-	cli.ShowAppHelpAndExit(ctx, 1)
+func printMinIOVersion(c *cli.Context) {
+	fmt.Fprintln(c.App.Writer, color.Greenf("%s version %s (commit-id=%s)", c.App.Name, c.App.Version, CommitID))
+	fmt.Fprintln(c.App.Writer, color.Greenf("Runtime: %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH))
+	fmt.Fprintln(c.App.Writer, color.Greenf("Copyright (c) 2015-%s MinIO, Inc.", CopyrightYear))
+	fmt.Fprintln(c.App.Writer, color.Red("Licence AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"))
 }
 
 // Main main for minio server.

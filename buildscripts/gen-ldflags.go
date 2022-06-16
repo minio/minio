@@ -24,14 +24,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
 
 func genLDFlags(version string) string {
+	releaseTag, date := releaseTag(version)
+	copyrightYear := strconv.Itoa(date.Year())
 	ldflagsStr := "-s -w"
 	ldflagsStr += " -X github.com/minio/minio/cmd.Version=" + version
-	ldflagsStr += " -X github.com/minio/minio/cmd.ReleaseTag=" + releaseTag(version)
+	ldflagsStr += " -X github.com/minio/minio/cmd.CopyrightYear=" + copyrightYear
+	ldflagsStr += " -X github.com/minio/minio/cmd.ReleaseTag=" + releaseTag
 	ldflagsStr += " -X github.com/minio/minio/cmd.CommitID=" + commitID()
 	ldflagsStr += " -X github.com/minio/minio/cmd.ShortCommitID=" + commitID()[:12]
 	ldflagsStr += " -X github.com/minio/minio/cmd.GOPATH=" + os.Getenv("GOPATH")
@@ -40,7 +44,7 @@ func genLDFlags(version string) string {
 }
 
 // genReleaseTag prints release tag to the console for easy git tagging.
-func releaseTag(version string) string {
+func releaseTag(version string) (string, time.Time) {
 	relPrefix := "DEVELOPMENT"
 	if prefix := os.Getenv("MINIO_RELEASE"); prefix != "" {
 		relPrefix = prefix
@@ -53,14 +57,17 @@ func releaseTag(version string) string {
 
 	relTag := strings.Replace(version, " ", "-", -1)
 	relTag = strings.Replace(relTag, ":", "-", -1)
+	t, err := time.Parse("2006-01-02T15-04-05Z", relTag)
+	if err != nil {
+		panic(err)
+	}
 	relTag = strings.Replace(relTag, ",", "", -1)
 	relTag = relPrefix + "." + relTag
-
 	if relSuffix != "" {
 		relTag += "." + relSuffix
 	}
 
-	return relTag
+	return relTag, t
 }
 
 // commitID returns the abbreviated commit-id hash of the last commit.
