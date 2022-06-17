@@ -182,7 +182,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					// It is totally possible that xl.meta was overwritten
+					// while being concurrently listed at the same time in
+					// such scenarios the 'xl.meta' might get truncated
+					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
+						logger.LogIf(ctx, err)
+					}
 					continue
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
@@ -200,7 +205,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
+						logger.LogIf(ctx, err)
+					}
 					continue
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
@@ -245,7 +252,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
 						forward = strings.TrimPrefix(opts.ForwardTo, pop)
 					}
-					logger.LogIf(ctx, scanDir(pop))
+
+					err := scanDir(pop)
+					if err != nil && !IsErrIgnored(err, context.Canceled) {
+						logger.LogIf(ctx, err)
+					}
 				}
 				dirStack = dirStack[:len(dirStack)-1]
 			}
