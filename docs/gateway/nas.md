@@ -92,7 +92,7 @@ export MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_1=/tmp/webhk
 
 ## Symlink support
 
-NAS gateway implementation allows symlinks on regular files,
+NAS gateway implementation allows symlinks on regular files.
 
 ### Behavior
 
