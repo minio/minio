@@ -43,7 +43,7 @@ MinIO Gateway comes with an embedded web based object browser. Point your web br
 
 ## Test using MinIO Client `mc`
 
-`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
+`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff, etc. It supports filesystems and Amazon S3 compatible cloud storage services.
 
 ### Configure `mc`
 
@@ -88,25 +88,24 @@ export MINIO_NOTIFY_WEBHOOK_ENDPOINT_1=http://localhost:8080/
 export MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_1=/tmp/webhk
 ```
 
-> NOTE: Please check the docs for the corresponding ENV setting. Alternatively, We can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
+> NOTE: Please check the docs for the corresponding ENV setting. Alternatively, we can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
 
 ## Symlink support
 
-NAS gateway implementation allows symlinks on regular files,
+NAS gateway implementation allows symlinks on regular files.
 
 ### Behavior
 
-- For reads symlink resolves to file symlink points to.
+- For reads symlinks resolve to the file the symlink points to. 
 - For deletes
-  - Delete of symlink deletes the symlink but not the real file to which the symlink points.
-  - Delete of actual file automatically makes symlink'ed file invisible, dangling symlinks won't be visible.
+  - Deleting a symlink deletes the symlink but not the real file to which the symlink points.
+  - Deleting the real file a symlink points to automatically makes the dangling symlink invisible.
 
 #### Caveats
 
 - Disallows follow of directory symlinks to avoid security issues, and leaving them as is on namespace makes them very inconsistent.
-- Dangling symlinks are ignored automatically.
 
-*Directory symlinks is not and will not be supported as there are no safe ways to handle them.*
+*Directory symlinks are not and will not be supported as there are no safe ways to handle them.*
 
 ## Explore Further
 
