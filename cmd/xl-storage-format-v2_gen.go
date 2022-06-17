@@ -865,31 +865,22 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "PartETags":
-			if dc.IsNil() {
-				err = dc.ReadNil()
-				if err != nil {
-					err = msgp.WrapError(err, "PartETags")
-					return
-				}
-				z.PartETags = nil
+			var zb0006 uint32
+			zb0006, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "PartETags")
+				return
+			}
+			if cap(z.PartETags) >= int(zb0006) {
+				z.PartETags = (z.PartETags)[:zb0006]
 			} else {
-				var zb0006 uint32
-				zb0006, err = dc.ReadArrayHeader()
+				z.PartETags = make([]string, zb0006)
+			}
+			for za0005 := range z.PartETags {
+				z.PartETags[za0005], err = dc.ReadString()
 				if err != nil {
-					err = msgp.WrapError(err, "PartETags")
+					err = msgp.WrapError(err, "PartETags", za0005)
 					return
-				}
-				if cap(z.PartETags) >= int(zb0006) {
-					z.PartETags = (z.PartETags)[:zb0006]
-				} else {
-					z.PartETags = make([]string, zb0006)
-				}
-				for za0005 := range z.PartETags {
-					z.PartETags[za0005], err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "PartETags", za0005)
-						return
-					}
 				}
 			}
 		case "PartSizes":
@@ -912,31 +903,22 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "PartASizes":
-			if dc.IsNil() {
-				err = dc.ReadNil()
-				if err != nil {
-					err = msgp.WrapError(err, "PartActualSizes")
-					return
-				}
-				z.PartActualSizes = nil
+			var zb0008 uint32
+			zb0008, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "PartActualSizes")
+				return
+			}
+			if cap(z.PartActualSizes) >= int(zb0008) {
+				z.PartActualSizes = (z.PartActualSizes)[:zb0008]
 			} else {
-				var zb0008 uint32
-				zb0008, err = dc.ReadArrayHeader()
+				z.PartActualSizes = make([]int64, zb0008)
+			}
+			for za0007 := range z.PartActualSizes {
+				z.PartActualSizes[za0007], err = dc.ReadInt64()
 				if err != nil {
-					err = msgp.WrapError(err, "PartActualSizes")
+					err = msgp.WrapError(err, "PartActualSizes", za0007)
 					return
-				}
-				if cap(z.PartActualSizes) >= int(zb0008) {
-					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
-				} else {
-					z.PartActualSizes = make([]int64, zb0008)
-				}
-				for za0007 := range z.PartActualSizes {
-					z.PartActualSizes[za0007], err = dc.ReadInt64()
-					if err != nil {
-						err = msgp.WrapError(err, "PartActualSizes", za0007)
-						return
-					}
 				}
 			}
 		case "PartIdx":
@@ -971,82 +953,64 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "MetaSys":
-			if dc.IsNil() {
-				err = dc.ReadNil()
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys")
-					return
-				}
-				z.MetaSys = nil
-			} else {
-				var zb0010 uint32
-				zb0010, err = dc.ReadMapHeader()
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys")
-					return
-				}
-				if z.MetaSys == nil {
-					z.MetaSys = make(map[string][]byte, zb0010)
-				} else if len(z.MetaSys) > 0 {
-					for key := range z.MetaSys {
-						delete(z.MetaSys, key)
-					}
-				}
-				for zb0010 > 0 {
-					zb0010--
-					var za0009 string
-					var za0010 []byte
-					za0009, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "MetaSys")
-						return
-					}
-					za0010, err = dc.ReadBytes(za0010)
-					if err != nil {
-						err = msgp.WrapError(err, "MetaSys", za0009)
-						return
-					}
-					z.MetaSys[za0009] = za0010
+			var zb0010 uint32
+			zb0010, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "MetaSys")
+				return
+			}
+			if z.MetaSys == nil {
+				z.MetaSys = make(map[string][]byte, zb0010)
+			} else if len(z.MetaSys) > 0 {
+				for key := range z.MetaSys {
+					delete(z.MetaSys, key)
 				}
 			}
+			for zb0010 > 0 {
+				zb0010--
+				var za0009 string
+				var za0010 []byte
+				za0009, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "MetaSys")
+					return
+				}
+				za0010, err = dc.ReadBytes(za0010)
+				if err != nil {
+					err = msgp.WrapError(err, "MetaSys", za0009)
+					return
+				}
+				z.MetaSys[za0009] = za0010
+			}
 		case "MetaUsr":
-			if dc.IsNil() {
-				err = dc.ReadNil()
+			var zb0011 uint32
+			zb0011, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "MetaUser")
+				return
+			}
+			if z.MetaUser == nil {
+				z.MetaUser = make(map[string]string, zb0011)
+			} else if len(z.MetaUser) > 0 {
+				for key := range z.MetaUser {
+					delete(z.MetaUser, key)
+				}
+			}
+			for zb0011 > 0 {
+				zb0011--
+				var za0011 string
+				var za0012 string
+				za0011, err = dc.ReadString()
 				if err != nil {
 					err = msgp.WrapError(err, "MetaUser")
 					return
 				}
-				z.MetaUser = nil
-			} else {
-				var zb0011 uint32
-				zb0011, err = dc.ReadMapHeader()
+				za0012, err = dc.ReadString()
 				if err != nil {
-					err = msgp.WrapError(err, "MetaUser")
+					err = msgp.WrapError(err, "MetaUser", za0011)
 					return
 				}
-				if z.MetaUser == nil {
-					z.MetaUser = make(map[string]string, zb0011)
-				} else if len(z.MetaUser) > 0 {
-					for key := range z.MetaUser {
-						delete(z.MetaUser, key)
-					}
-				}
-				for zb0011 > 0 {
-					zb0011--
-					var za0011 string
-					var za0012 string
-					za0011, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "MetaUser")
-						return
-					}
-					za0012, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "MetaUser", za0011)
-						return
-					}
-					z.MetaUser[za0011] = za0012
-				}
+				z.MetaUser[za0011] = za0012
 			}
 		default:
 			err = dc.Skip()
@@ -1196,23 +1160,16 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if z.PartETags == nil { // allownil: if nil
-		err = en.WriteNil()
+	err = en.WriteArrayHeader(uint32(len(z.PartETags)))
+	if err != nil {
+		err = msgp.WrapError(err, "PartETags")
+		return
+	}
+	for za0005 := range z.PartETags {
+		err = en.WriteString(z.PartETags[za0005])
 		if err != nil {
+			err = msgp.WrapError(err, "PartETags", za0005)
 			return
-		}
-	} else {
-		err = en.WriteArrayHeader(uint32(len(z.PartETags)))
-		if err != nil {
-			err = msgp.WrapError(err, "PartETags")
-			return
-		}
-		for za0005 := range z.PartETags {
-			err = en.WriteString(z.PartETags[za0005])
-			if err != nil {
-				err = msgp.WrapError(err, "PartETags", za0005)
-				return
-			}
 		}
 	}
 	// write "PartSizes"
@@ -1237,23 +1194,16 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if z.PartActualSizes == nil { // allownil: if nil
-		err = en.WriteNil()
+	err = en.WriteArrayHeader(uint32(len(z.PartActualSizes)))
+	if err != nil {
+		err = msgp.WrapError(err, "PartActualSizes")
+		return
+	}
+	for za0007 := range z.PartActualSizes {
+		err = en.WriteInt64(z.PartActualSizes[za0007])
 		if err != nil {
+			err = msgp.WrapError(err, "PartActualSizes", za0007)
 			return
-		}
-	} else {
-		err = en.WriteArrayHeader(uint32(len(z.PartActualSizes)))
-		if err != nil {
-			err = msgp.WrapError(err, "PartActualSizes")
-			return
-		}
-		for za0007 := range z.PartActualSizes {
-			err = en.WriteInt64(z.PartActualSizes[za0007])
-			if err != nil {
-				err = msgp.WrapError(err, "PartActualSizes", za0007)
-				return
-			}
 		}
 	}
 	if (zb0001Mask & 0x2000) == 0 { // if not empty
@@ -1300,28 +1250,21 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if z.MetaSys == nil { // allownil: if nil
-		err = en.WriteNil()
-		if err != nil {
-			return
-		}
-	} else {
-		err = en.WriteMapHeader(uint32(len(z.MetaSys)))
+	err = en.WriteMapHeader(uint32(len(z.MetaSys)))
+	if err != nil {
+		err = msgp.WrapError(err, "MetaSys")
+		return
+	}
+	for za0009, za0010 := range z.MetaSys {
+		err = en.WriteString(za0009)
 		if err != nil {
 			err = msgp.WrapError(err, "MetaSys")
 			return
 		}
-		for za0009, za0010 := range z.MetaSys {
-			err = en.WriteString(za0009)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			err = en.WriteBytes(za0010)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys", za0009)
-				return
-			}
+		err = en.WriteBytes(za0010)
+		if err != nil {
+			err = msgp.WrapError(err, "MetaSys", za0009)
+			return
 		}
 	}
 	// write "MetaUsr"
@@ -1329,28 +1272,21 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if z.MetaUser == nil { // allownil: if nil
-		err = en.WriteNil()
-		if err != nil {
-			return
-		}
-	} else {
-		err = en.WriteMapHeader(uint32(len(z.MetaUser)))
+	err = en.WriteMapHeader(uint32(len(z.MetaUser)))
+	if err != nil {
+		err = msgp.WrapError(err, "MetaUser")
+		return
+	}
+	for za0011, za0012 := range z.MetaUser {
+		err = en.WriteString(za0011)
 		if err != nil {
 			err = msgp.WrapError(err, "MetaUser")
 			return
 		}
-		for za0011, za0012 := range z.MetaUser {
-			err = en.WriteString(za0011)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaUser")
-				return
-			}
-			err = en.WriteString(za0012)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaUser", za0011)
-				return
-			}
+		err = en.WriteString(za0012)
+		if err != nil {
+			err = msgp.WrapError(err, "MetaUser", za0011)
+			return
 		}
 	}
 	return
@@ -1410,13 +1346,9 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "PartETags"
 	o = append(o, 0xa9, 0x50, 0x61, 0x72, 0x74, 0x45, 0x54, 0x61, 0x67, 0x73)
-	if z.PartETags == nil { // allownil: if nil
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendArrayHeader(o, uint32(len(z.PartETags)))
-		for za0005 := range z.PartETags {
-			o = msgp.AppendString(o, z.PartETags[za0005])
-		}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.PartETags)))
+	for za0005 := range z.PartETags {
+		o = msgp.AppendString(o, z.PartETags[za0005])
 	}
 	// string "PartSizes"
 	o = append(o, 0xa9, 0x50, 0x61, 0x72, 0x74, 0x53, 0x69, 0x7a, 0x65, 0x73)
@@ -1426,13 +1358,9 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "PartASizes"
 	o = append(o, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x41, 0x53, 0x69, 0x7a, 0x65, 0x73)
-	if z.PartActualSizes == nil { // allownil: if nil
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendArrayHeader(o, uint32(len(z.PartActualSizes)))
-		for za0007 := range z.PartActualSizes {
-			o = msgp.AppendInt64(o, z.PartActualSizes[za0007])
-		}
+	o = msgp.AppendArrayHeader(o, uint32(len(z.PartActualSizes)))
+	for za0007 := range z.PartActualSizes {
+		o = msgp.AppendInt64(o, z.PartActualSizes[za0007])
 	}
 	if (zb0001Mask & 0x2000) == 0 { // if not empty
 		// string "PartIdx"
@@ -1450,25 +1378,17 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendInt64(o, z.ModTime)
 	// string "MetaSys"
 	o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
-	if z.MetaSys == nil { // allownil: if nil
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendMapHeader(o, uint32(len(z.MetaSys)))
-		for za0009, za0010 := range z.MetaSys {
-			o = msgp.AppendString(o, za0009)
-			o = msgp.AppendBytes(o, za0010)
-		}
+	o = msgp.AppendMapHeader(o, uint32(len(z.MetaSys)))
+	for za0009, za0010 := range z.MetaSys {
+		o = msgp.AppendString(o, za0009)
+		o = msgp.AppendBytes(o, za0010)
 	}
 	// string "MetaUsr"
 	o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x55, 0x73, 0x72)
-	if z.MetaUser == nil { // allownil: if nil
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendMapHeader(o, uint32(len(z.MetaUser)))
-		for za0011, za0012 := range z.MetaUser {
-			o = msgp.AppendString(o, za0011)
-			o = msgp.AppendString(o, za0012)
-		}
+	o = msgp.AppendMapHeader(o, uint32(len(z.MetaUser)))
+	for za0011, za0012 := range z.MetaUser {
+		o = msgp.AppendString(o, za0011)
+		o = msgp.AppendString(o, za0012)
 	}
 	return
 }
@@ -1586,27 +1506,22 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "PartETags":
-			if msgp.IsNil(bts) {
-				bts = bts[1:]
-				z.PartETags = nil
+			var zb0006 uint32
+			zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PartETags")
+				return
+			}
+			if cap(z.PartETags) >= int(zb0006) {
+				z.PartETags = (z.PartETags)[:zb0006]
 			} else {
-				var zb0006 uint32
-				zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				z.PartETags = make([]string, zb0006)
+			}
+			for za0005 := range z.PartETags {
+				z.PartETags[za0005], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PartETags")
+					err = msgp.WrapError(err, "PartETags", za0005)
 					return
-				}
-				if cap(z.PartETags) >= int(zb0006) {
-					z.PartETags = (z.PartETags)[:zb0006]
-				} else {
-					z.PartETags = make([]string, zb0006)
-				}
-				for za0005 := range z.PartETags {
-					z.PartETags[za0005], bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PartETags", za0005)
-						return
-					}
 				}
 			}
 		case "PartSizes":
@@ -1629,27 +1544,22 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "PartASizes":
-			if msgp.IsNil(bts) {
-				bts = bts[1:]
-				z.PartActualSizes = nil
+			var zb0008 uint32
+			zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PartActualSizes")
+				return
+			}
+			if cap(z.PartActualSizes) >= int(zb0008) {
+				z.PartActualSizes = (z.PartActualSizes)[:zb0008]
 			} else {
-				var zb0008 uint32
-				zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				z.PartActualSizes = make([]int64, zb0008)
+			}
+			for za0007 := range z.PartActualSizes {
+				z.PartActualSizes[za0007], bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "PartActualSizes")
+					err = msgp.WrapError(err, "PartActualSizes", za0007)
 					return
-				}
-				if cap(z.PartActualSizes) >= int(zb0008) {
-					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
-				} else {
-					z.PartActualSizes = make([]int64, zb0008)
-				}
-				for za0007 := range z.PartActualSizes {
-					z.PartActualSizes[za0007], bts, err = msgp.ReadInt64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PartActualSizes", za0007)
-						return
-					}
 				}
 			}
 		case "PartIdx":
@@ -1684,74 +1594,64 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "MetaSys":
-			if msgp.IsNil(bts) {
-				bts = bts[1:]
-				z.MetaSys = nil
-			} else {
-				var zb0010 uint32
-				zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0010 uint32
+			zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "MetaSys")
+				return
+			}
+			if z.MetaSys == nil {
+				z.MetaSys = make(map[string][]byte, zb0010)
+			} else if len(z.MetaSys) > 0 {
+				for key := range z.MetaSys {
+					delete(z.MetaSys, key)
+				}
+			}
+			for zb0010 > 0 {
+				var za0009 string
+				var za0010 []byte
+				zb0010--
+				za0009, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MetaSys")
 					return
 				}
-				if z.MetaSys == nil {
-					z.MetaSys = make(map[string][]byte, zb0010)
-				} else if len(z.MetaSys) > 0 {
-					for key := range z.MetaSys {
-						delete(z.MetaSys, key)
-					}
+				za0010, bts, err = msgp.ReadBytesBytes(bts, za0010)
+				if err != nil {
+					err = msgp.WrapError(err, "MetaSys", za0009)
+					return
 				}
-				for zb0010 > 0 {
-					var za0009 string
-					var za0010 []byte
-					zb0010--
-					za0009, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "MetaSys")
-						return
-					}
-					za0010, bts, err = msgp.ReadBytesBytes(bts, za0010)
-					if err != nil {
-						err = msgp.WrapError(err, "MetaSys", za0009)
-						return
-					}
-					z.MetaSys[za0009] = za0010
-				}
+				z.MetaSys[za0009] = za0010
 			}
 		case "MetaUsr":
-			if msgp.IsNil(bts) {
-				bts = bts[1:]
-				z.MetaUser = nil
-			} else {
-				var zb0011 uint32
-				zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0011 uint32
+			zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "MetaUser")
+				return
+			}
+			if z.MetaUser == nil {
+				z.MetaUser = make(map[string]string, zb0011)
+			} else if len(z.MetaUser) > 0 {
+				for key := range z.MetaUser {
+					delete(z.MetaUser, key)
+				}
+			}
+			for zb0011 > 0 {
+				var za0011 string
+				var za0012 string
+				zb0011--
+				za0011, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MetaUser")
 					return
 				}
-				if z.MetaUser == nil {
-					z.MetaUser = make(map[string]string, zb0011)
-				} else if len(z.MetaUser) > 0 {
-					for key := range z.MetaUser {
-						delete(z.MetaUser, key)
-					}
+				za0012, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MetaUser", za0011)
+					return
 				}
-				for zb0011 > 0 {
-					var za0011 string
-					var za0012 string
-					zb0011--
-					za0011, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "MetaUser")
-						return
-					}
-					za0012, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "MetaUser", za0011)
-						return
-					}
-					z.MetaUser[za0011] = za0012
-				}
+				z.MetaUser[za0011] = za0012
 			}
 		default:
 			bts, err = msgp.Skip(bts)

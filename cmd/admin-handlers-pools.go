@@ -19,9 +19,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -199,4 +202,122 @@ func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.LogIf(r.Context(), json.NewEncoder(w).Encode(poolsStatus))
+}
+
+func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RebalanceStart")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	// NB rebalance-start admin API is always coordinated from first pool's
+	// first node. The following is required to serialize (the effects of)
+	// concurrent rebalance-start commands.
+	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
+		for nodeIdx, proxyEp := range globalProxyEndpoints {
+			if proxyEp.Endpoint.Host == ep.Host {
+				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+					return
+				}
+			}
+		}
+	}
+
+	pools, ok := objectAPI.(*erasureServerPools)
+	if !ok || len(pools.serverPools) == 1 {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	if pools.IsRebalanceStarted() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
+		return
+	}
+
+	bucketInfos, err := objectAPI.ListBuckets(ctx, BucketOptions{})
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	buckets := make([]string, 0, len(bucketInfos))
+	for _, bInfo := range bucketInfos {
+		buckets = append(buckets, bInfo.Name)
+	}
+
+	var arn uuid.UUID
+	if arn, err = pools.initRebalanceMeta(ctx, buckets); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Rebalance routine is run on the first node of any pool participating in rebalance.
+	pools.StartRebalance()
+
+	b, err := json.Marshal(struct {
+		ARN uuid.UUID `json:"arn"`
+	}{ARN: arn})
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, b)
+	// Notify peers to load rebalance.bin and start rebalance routine if they happen to be
+	// participating pool's leader node
+	globalNotificationSys.LoadRebalanceMeta(ctx, true)
+}
+
+func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RebalanceStatus")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	pools, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	pools.loadRebalanceMetaWithTTL(ctx, 2*time.Second)
+
+	rs, err := pools.rebalanceStatus(ctx)
+	if err != nil {
+		if errors.Is(err, errRebalanceNotStarted) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceNotStarted), r.URL)
+			return
+		}
+		logger.LogIf(ctx, fmt.Errorf("failed to fetch rebalance status: %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	logger.LogIf(r.Context(), json.NewEncoder(w).Encode(rs))
+}
+
+func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RebalanceStop")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	pools, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	// Cancel any ongoing rebalance operation
+	globalNotificationSys.StopRebalance(r.Context())
+	writeSuccessResponseHeadersOnly(w)
+	logger.LogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
 }

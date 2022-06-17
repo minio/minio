@@ -499,6 +499,15 @@ const (
 // Init() initializes pools and saves additional information about them
 // in 'pool.bin', this is eventually used for decommissioning the pool.
 func (z *erasureServerPools) Init(ctx context.Context) error {
+	// Load rebalance metadata if present
+	err := z.loadRebalanceMeta(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load rebalance data: %w", err)
+	}
+
+	// Start rebalance routine
+	z.StartRebalance()
+
 	meta := poolMeta{}
 
 	if err := meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {

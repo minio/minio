@@ -299,6 +299,7 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+
 }
 
 func configRetriableErrors(err error) bool {
