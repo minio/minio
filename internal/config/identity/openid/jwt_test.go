@@ -243,7 +243,7 @@ func TestKeycloakProviderInitialization(t *testing.T) {
 	testKvs.Set(Vendor, "keycloak")
 	testKvs.Set(KeyCloakRealm, "TestRealm")
 	testKvs.Set(KeyCloakAdminURL, "http://keycloak.test/auth/admin")
-	cfgGet := func(env, param string) string {
+	cfgGet := func(param string) string {
 		return testKvs.Get(param)
 	}
 
