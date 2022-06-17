@@ -96,17 +96,16 @@ NAS gateway implementation allows symlinks on regular files,
 
 ### Behavior
 
-- For reads symlink resolves to file symlink points to.
+- For reads symlinks resolve to the file the symlink points to. 
 - For deletes
-  - Delete of symlink deletes the symlink but not the real file to which the symlink points.
-  - Delete of actual file automatically makes symlink'ed file invisible, dangling symlinks won't be visible.
+  - Deleting a symlink deletes the symlink but not the real file to which the symlink points.
+  - Deleting the real file a symlink points to automatically makes the dangling symlink invisible.
 
 #### Caveats
 
 - Disallows follow of directory symlinks to avoid security issues, and leaving them as is on namespace makes them very inconsistent.
-- Dangling symlinks are ignored automatically.
 
-*Directory symlinks is not and will not be supported as there are no safe ways to handle them.*
+*Directory symlinks are not and will not be supported as there are no safe ways to handle them.*
 
 ## Explore Further
 
