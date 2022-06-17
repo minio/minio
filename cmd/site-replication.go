@@ -3712,8 +3712,8 @@ func (c *SiteReplicationSys) healVersioningMetadata(ctx context.Context, objAPI 
 			continue
 		}
 		if dID == globalDeploymentID {
-			if err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, latestVersioningConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Error healing sse metadata from peer site %s : %w", latestPeerName, err))
+			if err := globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, latestVersioningConfigBytes); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Error healing versioning metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
