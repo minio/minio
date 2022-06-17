@@ -597,9 +597,6 @@ func serverMain(ctx *cli.Context) {
 			}
 		}()
 
-		// Initialize site replication manager.
-		globalSiteReplicationSys.Init(GlobalContext, newObject)
-
 		// Initialize quota manager.
 		globalBucketQuotaSys.Init(newObject)
 
@@ -621,6 +618,9 @@ func serverMain(ctx *cli.Context) {
 
 		// Initialize bucket metadata sub-system.
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
+
+		// Initialize site replication manager.
+		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize bucket notification targets.
 		globalNotificationSys.InitBucketTargets(GlobalContext, newObject)
