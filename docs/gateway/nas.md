@@ -43,7 +43,7 @@ MinIO Gateway comes with an embedded web based object browser. Point your web br
 
 ## Test using MinIO Client `mc`
 
-`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
+`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff, etc. It supports filesystems and Amazon S3 compatible cloud storage services.
 
 ### Configure `mc`
 
@@ -88,7 +88,7 @@ export MINIO_NOTIFY_WEBHOOK_ENDPOINT_1=http://localhost:8080/
 export MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_1=/tmp/webhk
 ```
 
-> NOTE: Please check the docs for the corresponding ENV setting. Alternatively, We can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
+> NOTE: Please check the docs for the corresponding ENV setting. Alternatively, we can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
 
 ## Symlink support
 
