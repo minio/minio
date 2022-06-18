@@ -171,6 +171,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	healBuckets := make([]string, len(buckets))
 	copy(healBuckets, buckets)
 
+	// Heal all buckets first in this erasure set - this is useful
+	// for new objects upload in different buckets to be successful
+	for _, bucket := range healBuckets {
+		_, err := er.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
+		if err != nil {
+			// Log healing bucket error - we will retry again later anyway
+			logger.LogIf(ctx, err)
+		}
+	}
+
 	var retErr error
 	// Heal all buckets with all objects
 	for _, bucket := range healBuckets {
@@ -189,7 +199,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 		tracker.Object = ""
 		tracker.Bucket = bucket
-		// Heal current bucket
+		// Heal current bucket again in case if it is failed
+		// in the  being of erasure set healing
 		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {

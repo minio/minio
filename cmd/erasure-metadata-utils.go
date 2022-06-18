@@ -151,6 +151,7 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			errVolumeNotFound,
 			errFileVersionNotFound,
 			errDiskNotFound,
+			errUnformattedDisk,
 		}...) {
 			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], bucket, object, err),
