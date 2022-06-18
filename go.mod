@@ -43,13 +43,13 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.18.1
+	github.com/minio/console v0.19.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
 	github.com/minio/madmin-go v1.3.14
-  github.com/minio/minio-go/v7 v7.0.29
+	github.com/minio/minio-go/v7 v7.0.29
 	github.com/minio/pkg v1.1.25
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
