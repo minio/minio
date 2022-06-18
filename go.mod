@@ -49,7 +49,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
 	github.com/minio/madmin-go v1.3.14
-	github.com/minio/minio-go/v7 v7.0.28
+  github.com/minio/minio-go/v7 v7.0.29
 	github.com/minio/pkg v1.1.25
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
@@ -57,7 +57,6 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/minio/zipindex v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/montanaflynn/stats v0.6.6
 	github.com/nats-io/nats-server/v2 v2.7.4
 	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
 	github.com/nats-io/stan.go v0.10.2
@@ -170,6 +169,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/montanaflynn/stats v0.6.6 // indirect
 	github.com/muesli/ansi v0.0.0-20211031195517-c9f0611b6c70 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.11.1-0.20220212125758-44cd13922739 // indirect
