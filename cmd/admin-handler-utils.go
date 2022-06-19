@@ -96,6 +96,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		}
 	default:
 		switch {
+		case errors.Is(err, errTooManyPolicies):
+			apiErr = APIError{
+				Code:           "XMinioAdminInvalidRequest",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case errors.Is(err, errDecommissionAlreadyRunning):
 			apiErr = APIError{
 				Code:           "XMinioDecommissionNotAllowed",

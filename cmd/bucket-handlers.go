@@ -806,19 +806,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Proceed to creating a bucket.
-	err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
-	if _, ok := err.(BucketExists); ok {
-		// Though bucket exists locally, we send the site-replication
-		// hook to ensure all sites have this bucket. If the hook
-		// succeeds, the client will still receive a bucket exists
-		// message.
-		err2 := globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
-		if err2 != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
+	if err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+		if _, ok := err.(BucketExists); ok {
+			// Though bucket exists locally, we send the site-replication
+			// hook to ensure all sites have this bucket. If the hook
+			// succeeds, the client will still receive a bucket exists
+			// message.
+			globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
 		}
-	}
-	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -827,8 +822,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	err = globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
-	if err != nil {
+	if err := globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
