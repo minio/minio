@@ -3296,3 +3296,39 @@ func (es *erasureSingle) NSScanner(ctx context.Context, bf *bloomFilter, updates
 	}
 	return firstErr
 }
+
+// GetRawData will return all files with a given raw path to the callback.
+// Errors are ignored, only errors from the callback are returned.
+// For now only direct file paths are supported.
+func (es *erasureSingle) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error {
+	found := 0
+	stats, err := es.disk.StatInfoFile(ctx, volume, file, true)
+	if err != nil {
+		return err
+	}
+	for _, si := range stats {
+		found++
+		var r io.ReadCloser
+		if !si.Dir {
+			r, err = es.disk.ReadFileStream(ctx, volume, si.Name, 0, si.Size)
+			if err != nil {
+				continue
+			}
+		} else {
+			r = io.NopCloser(bytes.NewBuffer([]byte{}))
+		}
+		// Keep disk path instead of ID, to ensure that the downloaded zip file can be
+		// easily automated with `minio server hostname{1...n}/disk{1...m}`.
+		err = fn(r, es.disk.Hostname(), es.disk.Endpoint().Path, pathJoin(volume, si.Name), si)
+		r.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	if found == 0 {
+		return errFileNotFound
+	}
+
+	return nil
+}
