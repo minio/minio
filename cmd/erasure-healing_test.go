@@ -684,16 +684,18 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
-	// Create an object with multiple parts uploaded in decreasing
-	// part number.
-	uploadID, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
+	// Upload a multipart object in the second pool
+	z := objLayer.(*erasureServerPools)
+	set := z.serverPools[1]
+
+	uploadID, err := set.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := set.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -703,120 +705,114 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 		})
 	}
 
-	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = set.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
 	// Test 1: Remove the object backend files from the first disk.
-	z := objLayer.(*erasureServerPools)
-	for _, set := range z.serverPools {
-		er := set.sets[0]
-		erasureDisks := er.getDisks()
-		firstDisk := erasureDisks[0]
-		err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
-		if err != nil {
-			t.Fatalf("Failed to delete a file - %v", err)
-		}
+	er := set.sets[0]
+	erasureDisks := er.getDisks()
+	firstDisk := erasureDisks[0]
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+	if err != nil {
+		t.Fatalf("Failed to delete a file - %v", err)
+	}
 
-		_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
-		if err != nil {
-			t.Fatalf("Failed to heal object - %v", err)
-		}
+	_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	if err != nil {
+		t.Fatalf("Failed to heal object - %v", err)
+	}
 
-		fileInfos, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-		fi, err := getLatestFileInfo(ctx, fileInfos, errs)
-		if errors.Is(err, errFileNotFound) {
-			continue
-		}
-		if err != nil {
-			t.Fatalf("Failed to getLatestFileInfo - %v", err)
-		}
+	fileInfos, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+	fi, err := getLatestFileInfo(ctx, fileInfos, errs)
+	if err != nil {
+		t.Fatalf("Failed to getLatestFileInfo - %v", err)
+	}
 
-		if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile, false); err != nil {
-			t.Errorf("Expected xl.meta file to be present but stat failed - %v", err)
-		}
+	if _, err = firstDisk.StatInfoFile(context.Background(), bucket, object+"/"+xlStorageFormatFile, false); err != nil {
+		t.Errorf("Expected xl.meta file to be present but stat failed - %v", err)
+	}
 
-		err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
-		if err != nil {
-			t.Errorf("Failure during deleting part.1 - %v", err)
-		}
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+	if err != nil {
+		t.Errorf("Failure during deleting part.1 - %v", err)
+	}
 
-		err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), []byte{})
-		if err != nil {
-			t.Errorf("Failure during creating part.1 - %v", err)
-		}
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), []byte{})
+	if err != nil {
+		t.Errorf("Failure during creating part.1 - %v", err)
+	}
 
-		_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
-		if err != nil {
-			t.Errorf("Expected nil but received %v", err)
-		}
+	_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	if err != nil {
+		t.Errorf("Expected nil but received %v", err)
+	}
 
-		fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-		nfi, err := getLatestFileInfo(ctx, fileInfos, errs)
-		if err != nil {
-			t.Fatalf("Failed to getLatestFileInfo - %v", err)
-		}
+	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+	nfi, err := getLatestFileInfo(ctx, fileInfos, errs)
+	if err != nil {
+		t.Fatalf("Failed to getLatestFileInfo - %v", err)
+	}
 
-		fi.DiskMTime = time.Time{}
-		nfi.DiskMTime = time.Time{}
-		if !reflect.DeepEqual(fi, nfi) {
-			t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
-		}
+	fi.DiskMTime = time.Time{}
+	nfi.DiskMTime = time.Time{}
+	if !reflect.DeepEqual(fi, nfi) {
+		t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
+	}
 
-		err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
-		if err != nil {
-			t.Errorf("Failure during deleting part.1 - %v", err)
-		}
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+	if err != nil {
+		t.Errorf("Failure during deleting part.1 - %v", err)
+	}
 
-		bdata := bytes.Repeat([]byte("b"), int(nfi.Size))
-		err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bdata)
-		if err != nil {
-			t.Errorf("Failure during creating part.1 - %v", err)
-		}
+	bdata := bytes.Repeat([]byte("b"), int(nfi.Size))
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bdata)
+	if err != nil {
+		t.Errorf("Failure during creating part.1 - %v", err)
+	}
 
-		_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
-		if err != nil {
-			t.Errorf("Expected nil but received %v", err)
-		}
+	_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	if err != nil {
+		t.Errorf("Expected nil but received %v", err)
+	}
 
-		fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-		nfi, err = getLatestFileInfo(ctx, fileInfos, errs)
-		if err != nil {
-			t.Fatalf("Failed to getLatestFileInfo - %v", err)
-		}
+	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+	nfi, err = getLatestFileInfo(ctx, fileInfos, errs)
+	if err != nil {
+		t.Fatalf("Failed to getLatestFileInfo - %v", err)
+	}
 
-		fi.DiskMTime = time.Time{}
-		nfi.DiskMTime = time.Time{}
-		if !reflect.DeepEqual(fi, nfi) {
-			t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
-		}
+	fi.DiskMTime = time.Time{}
+	nfi.DiskMTime = time.Time{}
+	if !reflect.DeepEqual(fi, nfi) {
+		t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
+	}
 
-		// Test 4: checks if HealObject returns an error when xl.meta is not found
-		// in more than read quorum number of disks, to create a corrupted situation.
-		for i := 0; i <= nfi.Erasure.DataBlocks; i++ {
-			erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
-		}
+	// Test 4: checks if HealObject returns an error when xl.meta is not found
+	// in more than read quorum number of disks, to create a corrupted situation.
+	for i := 0; i <= nfi.Erasure.DataBlocks; i++ {
+		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+	}
 
-		// Try healing now, expect to receive errFileNotFound.
-		_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
-		if err != nil {
-			if _, ok := err.(ObjectNotFound); !ok {
-				t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
-			}
-		}
-
-		// since majority of xl.meta's are not available, object should be successfully deleted.
-		_, err = objLayer.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	// Try healing now, expect to receive errFileNotFound.
+	_, err = objLayer.HealObject(ctx, bucket, object, "", madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	if err != nil {
 		if _, ok := err.(ObjectNotFound); !ok {
 			t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
 		}
+	}
 
-		for i := 0; i < (nfi.Erasure.DataBlocks + nfi.Erasure.ParityBlocks); i++ {
-			_, err = erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
-			if err == nil {
-				t.Errorf("Expected xl.meta file to be not present, but succeeeded")
-			}
+	// since majority of xl.meta's are not available, object should be successfully deleted.
+	_, err = objLayer.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if _, ok := err.(ObjectNotFound); !ok {
+		t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
+	}
+
+	for i := 0; i < (nfi.Erasure.DataBlocks + nfi.Erasure.ParityBlocks); i++ {
+		_, err = erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+		if err == nil {
+			t.Errorf("Expected xl.meta file to be not present, but succeeeded")
 		}
 	}
 }
@@ -1202,7 +1198,7 @@ func TestHealObjectErasure(t *testing.T) {
 	// since majority of xl.meta's are not available, object quorum
 	// can't be read properly will be deleted automatically and
 	// err is nil
-	if err != nil {
+	if !isErrObjectNotFound(err) {
 		t.Fatal(err)
 	}
 }
