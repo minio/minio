@@ -286,12 +286,12 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 
 	disk, format, err := connectEndpoint(endpoint)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error: %w, %s", err, endpoint)
 	}
 
 	poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
 	if poolIdx < 0 {
-		return errors.New("unexpected local node pool index")
+		return fmt.Errorf("unexpected pool index (%d) found in %s", poolIdx, disk.Endpoint())
 	}
 
 	// Calculate the set index where the current endpoint belongs
@@ -301,9 +301,12 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	if err != nil {
 		return err
 	}
+	if setIdx < 0 {
+		return fmt.Errorf("unexpected set index (%d) found in %s", setIdx, disk.Endpoint())
+	}
 
 	// Prevent parallel erasure set healing
-	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-disk-healing/%d/%d", poolIdx, setIdx))
+	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-disk-healing/%s/%d/%d", endpoint, poolIdx, setIdx))
 	lkctx, err := locker.GetLock(ctx, newDiskHealingTimeout)
 	if err != nil {
 		return err
@@ -406,7 +409,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 
 			for _, disk := range healDisks {
 				go func(disk Endpoint) {
-					globalBackgroundHealState.markDiskAsHealing(disk)
+					globalBackgroundHealState.markDiskForHealing(disk)
 					err := healFreshDisk(ctx, z, disk)
 					if err != nil {
 						printEndpointError(disk, err, false)

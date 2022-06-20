@@ -92,7 +92,7 @@ type allHealState struct {
 
 	// map of heal path to heal sequence
 	healSeqMap     map[string]*healSequence  // Indexed by endpoint
-	healLocalDisks map[Endpoint]bool         // healing on going
+	healLocalDisks map[Endpoint]bool         // healing in progress
 	healStatus     map[string]healingTracker // Indexed by disk ID
 }
 
@@ -171,7 +171,7 @@ func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
 	return endpoints
 }
 
-func (ahs *allHealState) markDiskAsHealing(ep Endpoint) {
+func (ahs *allHealState) markDiskForHealing(ep Endpoint) {
 	ahs.Lock()
 	defer ahs.Unlock()
 

@@ -176,7 +176,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	for _, bucket := range healBuckets {
 		_, err := er.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
 		if err != nil {
-			// Log healing bucket error - we will retry again later anyway
+			// Log bucket healing error if any, we shall retry again.
 			logger.LogIf(ctx, err)
 		}
 	}
