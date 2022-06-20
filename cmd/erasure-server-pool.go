@@ -1939,7 +1939,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		}
 
 		for _, version := range fivs.Versions {
-			if err := healObjectFn(bucket, version.Name, version.VersionID); err != nil {
+			err := healObjectFn(bucket, version.Name, version.VersionID)
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				return err
 			}
 		}
@@ -2000,18 +2001,21 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 	}
 	wg.Wait()
 
-	for _, err := range errs {
-		if err != nil {
-			return madmin.HealResultItem{}, err
+	// Return the first nil error
+	for idx, err := range errs {
+		if err == nil {
+			return results[idx], nil
 		}
 	}
 
-	for _, result := range results {
-		if result.Object != "" {
-			return result, nil
+	// No pool returned a nil error, return the first non 'not found' error
+	for idx, err := range errs {
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return results[idx], err
 		}
 	}
 
+	// At this stage, all errors are 'not found'
 	if versionID != "" {
 		return madmin.HealResultItem{}, VersionNotFound{
 			Bucket:    bucket,
