@@ -2231,7 +2231,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case crypto.Error:
 			apiErr = APIError{
-				Code:           "XMinIOEncryptionError",
+				Code:           "XMinioEncryptionError",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
