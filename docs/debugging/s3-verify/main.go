@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"hash"
 	"io"
 	"log"
 	"net/url"
@@ -131,15 +132,13 @@ func main() {
 	}
 
 	sopts := minio.ListObjectsOptions{
-		Recursive:    true,
-		Prefix:       sourcePrefix,
-		WithMetadata: true,
+		Recursive: true,
+		Prefix:    sourcePrefix,
 	}
 
 	topts := minio.ListObjectsOptions{
-		Recursive:    true,
-		Prefix:       targetPrefix,
-		WithMetadata: true,
+		Recursive: true,
+		Prefix:    targetPrefix,
 	}
 
 	srcCh := sclnt.ListObjects(context.Background(), sourceBucket, sopts)
@@ -150,7 +149,13 @@ func main() {
 
 	var srcEOF, tgtEOF bool
 
+	srcSha256 := sha256.New()
+	tgtSha256 := sha256.New()
+
 	for {
+		srcSha256.Reset()
+		tgtSha256.Reset()
+
 		srcEOF = !srcOk
 		tgtEOF = !tgtOk
 
@@ -182,74 +187,7 @@ func main() {
 		}
 
 		if srcCtnt.Key == tgtCtnt.Key {
-			var allgood bool
-			if srcCtnt.Size != tgtCtnt.Size {
-				fmt.Printf("differ in size sourceSize: %d, targetSize: %d\n", srcCtnt.Size, tgtCtnt.Size)
-			} else if srcCtnt.ContentType != tgtCtnt.ContentType {
-				fmt.Printf("differ in contentType source: %s, target: %s\n", srcCtnt.ContentType, tgtCtnt.ContentType)
-			} else {
-				opts := minio.GetObjectOptions{}
-				sobj, err := sclnt.GetObject(context.Background(), sourceBucket, srcCtnt.Key, opts)
-				if err == nil {
-					tobj, err := tclnt.GetObject(context.Background(), targetBucket, tgtCtnt.Key, opts)
-					if err != nil {
-						fmt.Printf("unreadable on target: %s (%s)\n", tgtCtnt.Key, err)
-					} else {
-						srcSha256 := sha256.New()
-						tgtSha256 := sha256.New()
-
-						var sourceFailed, targetFailed bool
-						var wg sync.WaitGroup
-
-						wg.Add(2)
-						go func() {
-							defer wg.Done()
-							srcSize, err := io.Copy(srcSha256, sobj)
-							if err != nil {
-								fmt.Printf("unreadable on source: %s (%s)\n", srcCtnt.Key, err)
-								sourceFailed = true
-								return
-							}
-							if srcSize != srcCtnt.Size {
-								fmt.Printf("unreadable on source - size differs upon read: %s\n", srcCtnt.Key)
-								sourceFailed = true
-							}
-						}()
-						go func() {
-							defer wg.Done()
-							tgtSize, err := io.Copy(tgtSha256, tobj)
-							if err != nil {
-								fmt.Printf("unreadable on target: %s (%s)\n", tgtCtnt.Key, err)
-								targetFailed = true
-								return
-							}
-							if tgtSize != tgtCtnt.Size {
-								fmt.Printf("unreadable on target - size differs upon read: %s\n", tgtCtnt.Key)
-								targetFailed = true
-							}
-						}()
-						wg.Wait()
-
-						tobj.Close()
-
-						if !sourceFailed && !targetFailed {
-							ssum := srcSha256.Sum(nil)
-							tsum := tgtSha256.Sum(nil)
-							if !bytes.Equal(ssum, tsum) {
-								fmt.Printf("sha256 sum mismatch: %s -> Expected(%x), Found(%x)\n", srcCtnt.Key, ssum, tsum)
-							} else {
-								allgood = true
-							}
-						}
-					}
-
-					sobj.Close()
-				} else {
-					fmt.Printf("unreadable on source: %s (%s)\n", srcCtnt.Key, err)
-				}
-			}
-
-			if allgood {
+			if verifyChecksum(sclnt, srcSha256, tgtSha256, srcCtnt, tgtCtnt) {
 				fmt.Printf("all readable source and target: %s -> %s\n", srcCtnt.Key, tgtCtnt.Key)
 			}
 
@@ -261,4 +199,70 @@ func main() {
 		fmt.Printf("only in target: %s (%s)\n", tgtCtnt.Key, tgtCtnt.VersionID)
 		tgtCtnt, tgtOk = <-tgtCh
 	}
+}
+
+func verifyChecksum(sclnt *minio.Client, srcSha256, tgtSha256 hash.Hash, srcCtnt, tgtCtnt minio.ObjectInfo) (allgood bool) {
+	opts := minio.GetObjectOptions{}
+	if srcCtnt.Size != tgtCtnt.Size {
+		fmt.Printf("differ in size sourceSize: %d, targetSize: %d\n", srcCtnt.Size, tgtCtnt.Size)
+		return false
+	} else if srcCtnt.ContentType != tgtCtnt.ContentType {
+		fmt.Printf("differ in contentType source: %s, target: %s\n", srcCtnt.ContentType, tgtCtnt.ContentType)
+		return false
+	}
+
+	core := minio.Core{Client: sclnt}
+	sobj, _, _, err := core.GetObject(context.Background(), sourceBucket, srcCtnt.Key, opts)
+	if err != nil {
+		fmt.Printf("unreadable on source: %s (%s)\n", srcCtnt.Key, err)
+		return false
+	}
+
+	tobj, _, _, err := core.GetObject(context.Background(), targetBucket, tgtCtnt.Key, opts)
+	if err != nil {
+		fmt.Printf("unreadable on target: %s (%s)\n", tgtCtnt.Key, err)
+		return false
+	}
+
+	var sourceFailed, targetFailed bool
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		srcSize, err := io.Copy(srcSha256, sobj)
+		if err != nil {
+			fmt.Printf("unreadable on source: %s (%s)\n", srcCtnt.Key, err)
+			sourceFailed = true
+		} else if srcSize != srcCtnt.Size {
+			fmt.Printf("unreadable on source - size differs upon read: %s\n", srcCtnt.Key)
+			sourceFailed = true
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		tgtSize, err := io.Copy(tgtSha256, tobj)
+		if err != nil {
+			fmt.Printf("unreadable on target: %s (%s)\n", tgtCtnt.Key, err)
+			targetFailed = true
+		} else if tgtSize != tgtCtnt.Size {
+			fmt.Printf("unreadable on target - size differs upon read: %s\n", tgtCtnt.Key)
+			targetFailed = true
+		}
+	}()
+	wg.Wait()
+
+	sobj.Close()
+	tobj.Close()
+
+	if !sourceFailed && !targetFailed {
+		ssum := srcSha256.Sum(nil)
+		tsum := tgtSha256.Sum(nil)
+		allgood = bytes.Equal(ssum, tsum)
+		if !allgood {
+			fmt.Printf("sha256 sum mismatch: %s -> Expected(%x), Found(%x)\n", srcCtnt.Key, ssum, tsum)
+		}
+	}
+
+	return allgood
 }
