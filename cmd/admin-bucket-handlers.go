@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -457,16 +456,16 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 				config, err := globalBucketMetadataSys.GetNotificationConfig(bucket)
 				if err != nil {
 					logger.LogIf(ctx, err)
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketLifecycleConfig:
@@ -476,16 +475,16 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 						continue
 					}
 					logger.LogIf(ctx, err)
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketQuotaConfigFile:
@@ -503,7 +502,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketSSEConfig:
@@ -512,16 +511,16 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					if errors.Is(err, BucketSSEConfigNotFound{Bucket: bucket}) {
 						continue
 					}
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketTaggingConfig:
@@ -530,16 +529,16 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					if errors.Is(err, BucketTaggingNotFound{Bucket: bucket}) {
 						continue
 					}
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case objectLockConfig:
@@ -548,23 +547,23 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					if errors.Is(err, BucketObjectLockConfigNotFound{Bucket: bucket}) {
 						continue
 					}
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketVersioningConfig:
 				config, _, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				// ignore empty versioning configs
@@ -573,11 +572,11 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketReplicationConfig:
@@ -586,17 +585,17 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					if errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucket}) {
 						continue
 					}
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			case bucketTargetsFile:
@@ -611,11 +610,11 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 				}
 				configData, err := xml.Marshal(config)
 				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile), r.URL)
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
 			}
@@ -672,7 +671,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		case objectLockConfig:
 			reader, err := file.Open()
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			config, err := objectlock.ParseObjectLockConfig(reader)
@@ -685,7 +684,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			configData, err := xml.Marshal(config)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			if _, ok := bucketMap[bucket]; !ok {
@@ -695,7 +694,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
-						writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+						writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 						return
 					}
 				}
@@ -704,12 +703,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Deny object locking configuration settings on existing buckets without object lock enabled.
 			if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -723,7 +722,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Bucket:           bucket,
 				ObjectLockConfig: &cfgStr,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 		}
@@ -744,19 +743,19 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		case bucketVersioningConfig:
 			reader, err := file.Open()
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			v, err := versioning.ParseConfig(io.LimitReader(reader, maxBucketVersioningConfigSize))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			if _, ok := bucketMap[bucket]; !ok {
 				err = objectAPI.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
-						writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+						writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 						return
 					}
 				}
@@ -791,12 +790,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			configData, err := xml.Marshal(v)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 		}
@@ -805,7 +804,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 	for _, file := range zr.File {
 		reader, err := file.Open()
 		if err != nil {
-			writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+			writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 			return
 		}
 		sz := file.FileInfo().Size()
@@ -823,7 +822,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			err = objectAPI.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
-					writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+					writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 					return
 				}
 			}
@@ -835,7 +834,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			if err != nil {
 				apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 				if event.IsEventError(err) {
-					apiErr = importError(ctx, err, file.Name)
+					apiErr = importError(ctx, err, file.Name, bucket)
 				}
 				writeErrorResponse(ctx, w, apiErr, r.URL)
 				return
@@ -843,12 +842,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			configData, err := xml.Marshal(config)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketNotificationConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			rulesMap := config.ToRulesMap()
@@ -862,13 +861,13 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			bucketPolicyBytes, err := ioutil.ReadAll(io.LimitReader(reader, sz))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			bucketPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyBytes), bucket)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -880,12 +879,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			configData, err := json.Marshal(bucketPolicy)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			// Call site replication hook.
@@ -894,37 +893,37 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Bucket: bucket,
 				Policy: bucketPolicyBytes,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 		case bucketLifecycleConfig:
 			bucketLifecycle, err := lifecycle.ParseLifecycleConfig(io.LimitReader(reader, sz))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			// Validate the received bucket policy document
 			if err = bucketLifecycle.Validate(); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			// Validate the transition storage ARNs
 			if err = validateTransitionTier(bucketLifecycle); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			configData, err := xml.Marshal(bucketLifecycle)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 		case bucketSSEConfig:
@@ -951,23 +950,23 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				_, err := GlobalKMS.GenerateKey(kmsKey, kmsContext)
 				if err != nil {
 					if errors.Is(err, kes.ErrKeyNotFound) {
-						writeErrorResponse(ctx, w, importError(ctx, errKMSKeyNotFound, file.Name), r.URL)
+						writeErrorResponse(ctx, w, importError(ctx, errKMSKeyNotFound, file.Name, bucket), r.URL)
 						return
 					}
-					writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+					writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 					return
 				}
 			}
 
 			configData, err := xml.Marshal(encConfig)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			// Store the bucket encryption configuration in the object layer
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -981,7 +980,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Bucket:    bucket,
 				SSEConfig: &cfgStr,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -995,12 +994,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			configData, err := xml.Marshal(tags)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			// Call site replication hook.
@@ -1013,7 +1012,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Bucket: bucket,
 				Tags:   &cfgStr,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 		case bucketQuotaConfigFile:
@@ -1025,7 +1024,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			quotaConfig, err := parseBucketQuota(bucket, data)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -1035,7 +1034,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 
 			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
@@ -1050,19 +1049,9 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Call site replication hook.
 			if err = globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name), r.URL)
+				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 		}
 	}
-}
-
-// wraps import error for more context
-func importError(ctx context.Context, err error, fname string) APIError {
-	return toAPIError(ctx, fmt.Errorf("error importing %s with %w", fname, err))
-}
-
-// wraps export error for more context
-func exportError(ctx context.Context, err error, fname string) APIError {
-	return toAPIError(ctx, fmt.Errorf("error exporting %s with %w", fname, err))
 }
