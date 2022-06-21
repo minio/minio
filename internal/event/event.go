@@ -19,7 +19,6 @@ package event
 
 import (
 	"github.com/minio/madmin-go"
-	"github.com/minio/minio/internal/pubsub"
 )
 
 const (
@@ -87,8 +86,8 @@ type Event struct {
 	Type              madmin.TraceType  `json:"-"`
 }
 
-func (e *Event) Mask() pubsub.Mask {
-	return pubsub.Mask(e.Type.Mask())
+func (e Event) Mask() uint64 {
+	return e.EventName.Mask()
 }
 
 // Log represents event information for some event targets.

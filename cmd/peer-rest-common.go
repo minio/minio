@@ -73,6 +73,7 @@ const (
 	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
+	peerRESTMethodMetrics                     = "/metrics"
 )
 
 const (
@@ -97,6 +98,7 @@ const (
 	peerRESTConcurrent     = "concurrent"
 	peerRESTDuration       = "duration"
 	peerRESTStorageClass   = "storage-class"
+	peerRESTTypes          = "types"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

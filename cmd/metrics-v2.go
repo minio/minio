@@ -1193,7 +1193,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of unique objects scanned since server start.",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.accTotalObjects)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanObject)),
 			},
 			{
 				Description: MetricDescription{
@@ -1203,7 +1203,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of object versions scanned since server start.",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.accTotalVersions)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricApplyVersion)),
 			},
 			{
 				Description: MetricDescription{
@@ -1213,7 +1213,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of directories scanned since server start.",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.accFolders)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricReadDir)),
 			},
 			{
 				Description: MetricDescription{
@@ -1223,7 +1223,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of bucket scans started since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.bucketsStarted)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDisk) + uint64(globalScannerMetrics.activeDisks())),
 			},
 			{
 				Description: MetricDescription{
@@ -1233,7 +1233,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of bucket scans finished since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.bucketsFinished)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDisk)),
 			},
 			{
 				Description: MetricDescription{
@@ -1243,12 +1243,12 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of object versions checked for ilm actions since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(atomic.LoadUint64(&globalScannerStats.ilmChecks)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricILM)),
 			},
 		}
-		for i := range globalScannerStats.actions {
+		for i := range globalScannerMetrics.actions {
 			action := lifecycle.Action(i)
-			v := atomic.LoadUint64(&globalScannerStats.actions[action])
+			v := globalScannerMetrics.lifetimeActions(action)
 			if v == 0 {
 				continue
 			}

@@ -468,7 +468,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				getDisks:              s.GetDisks(i),
 				getLockers:            s.GetLockers(i),
 				getEndpoints:          s.GetEndpoints(i),
-				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
+				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
 				nsMutex:               mutex,
 				bp:                    bp,
 				bpOld:                 bpOld,

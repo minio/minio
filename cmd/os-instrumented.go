@@ -52,10 +52,8 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "os." + s.String(),
-		OSStats: &madmin.TraceOSStats{
-			Duration: duration,
-			Path:     path,
-		},
+		Duration:  duration,
+		Path:      path,
 	}
 }
 
@@ -67,7 +65,6 @@ func updateOSMetrics(s osMetric, paths ...string) func() {
 	startTime := time.Now()
 	return func() {
 		duration := time.Since(startTime)
-
 		globalTrace.Publish(osTrace(s, startTime, duration, strings.Join(paths, " -> ")))
 	}
 }

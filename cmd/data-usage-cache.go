@@ -1323,3 +1323,19 @@ func (z dataUsageHashMap) Msgsize() (s int) {
 	}
 	return
 }
+
+//msgp:encode ignore currentScannerCycle
+//msgp:decode ignore currentScannerCycle
+
+type currentScannerCycle struct {
+	current        uint64
+	next           uint64
+	started        time.Time
+	cycleCompleted []time.Time
+}
+
+// clone returns a clone.
+func (z currentScannerCycle) clone() currentScannerCycle {
+	z.cycleCompleted = append(make([]time.Time, 0, len(z.cycleCompleted)), z.cycleCompleted...)
+	return z
+}

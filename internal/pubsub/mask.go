@@ -1,9 +1,25 @@
 package pubsub
 
-import "math/bits"
+import (
+	"math"
+	"math/bits"
+)
 
 // Mask allows filtering by a bitset mask.
-type Mask uint32
+type Mask uint64
+
+const (
+	// MaskAll is the mask for all entries.
+	MaskAll Mask = math.MaxUint64
+)
+
+func MaskFromUint64(m uint64) Mask {
+	return Mask(m)
+}
+
+func MaskFromMaskable(m Maskable) Mask {
+	return Mask(m.Mask())
+}
 
 // Contains returns whether all flags in other is present in t.
 func (t Mask) Contains(other Mask) bool {
@@ -17,13 +33,22 @@ func (t Mask) Overlaps(other Mask) bool {
 
 // SingleType returns whether t has a single type set.
 func (t Mask) SingleType() bool {
-	// Include
-	return bits.OnesCount32(uint32(t)) == 1
+	return bits.OnesCount64(uint64(t)) == 1
+}
+
+// FromUint64 will set a mask to the uint64 value.
+func (t *Mask) FromUint64(m uint64) {
+	*t = Mask(m)
 }
 
 // Merge will merge other into t.
 func (t *Mask) Merge(other Mask) {
 	*t = *t | other
+}
+
+// MergeMaskable will merge other into t.
+func (t *Mask) MergeMaskable(other Maskable) {
+	*t = *t | Mask(other.Mask())
 }
 
 // SetIf will add other if b is true.
@@ -33,7 +58,11 @@ func (t *Mask) SetIf(b bool, other Mask) {
 	}
 }
 
-// Maskable implementations must return their mask as a 32 bit uint.
+func (t Mask) Mask() uint64 {
+	return uint64(t)
+}
+
+// Maskable implementations must return their mask as a 64 bit uint.
 type Maskable interface {
-	Mask() uint32
+	Mask() uint64
 }

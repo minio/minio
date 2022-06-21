@@ -508,30 +508,26 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "storage." + s.String(),
-		StorageStats: madmin.TraceStorageStats{
-			Duration: duration,
-			Path:     path,
-		},
+		Duration:  duration,
+		Path:      path,
 	}
 }
 
 func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
 	return madmin.TraceInfo{
-		TraceType: madmin.TraceType(3),
+		TraceType: madmin.TraceScanner,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "scanner." + s.String(),
-		StorageStats: madmin.TraceStorageStats{
-			Duration: duration,
-			Path:     path,
-		},
+		Duration:  duration,
+		Path:      path,
 	}
 }
 
 // Update storage metrics
 func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...string) func(err *error) {
 	startTime := time.Now()
-	trace := globalTrace.NumSubscribers() > 0
+	trace := globalTrace.NumSubscribers(madmin.TraceStorage) > 0
 	return func(err *error) {
 		duration := time.Since(startTime)
 

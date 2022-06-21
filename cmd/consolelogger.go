@@ -18,7 +18,7 @@
 package cmd
 
 import (
-	ring "container/ring"
+	"container/ring"
 	"context"
 	"sync"
 
@@ -72,11 +72,11 @@ func (sys *HTTPConsoleLoggerSys) SetNodeName(nodeName string) {
 // HasLogListeners returns true if console log listeners are registered
 // for this node or peers
 func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
-	return sys != nil && sys.pubsub.NumSubscribers() > 0
+	return sys != nil && sys.pubsub.NumSubscribers(madmin.LogMaskAll) > 0
 }
 
 // Subscribe starts console logging for this node.
-func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
+func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan pubsub.Maskable, doneCh <-chan struct{}, node string, last int, logKind madmin.LogMask, filter func(entry pubsub.Maskable) bool) {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
 		logger.AddSystemTarget(sys)
@@ -116,7 +116,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan
 			}
 		}
 	}
-	sys.pubsub.Subscribe(madmin.TraceS3, subCh, doneCh, filter)
+	sys.pubsub.Subscribe(pubsub.MaskFromMaskable(madmin.LogMaskAll), subCh, doneCh, filter)
 }
 
 // Init if HTTPConsoleLoggerSys is valid, always returns nil right now

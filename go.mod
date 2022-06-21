@@ -48,7 +48,7 @@ require (
 	github.com/minio/dperf v0.3.6
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
-	github.com/minio/madmin-go v1.3.14
+	github.com/minio/madmin-go v1.3.19
 	github.com/minio/minio-go/v7 v7.0.27
 	github.com/minio/pkg v1.1.23
 	github.com/minio/selfupdate v0.4.0
@@ -83,7 +83,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.4
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.21.0
-	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 	golang.org/x/sys v0.0.0-20220502124256-b6088ccd6cba
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
@@ -101,7 +101,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
-	github.com/briandowns/spinner v1.18.1 // indirect
 	github.com/charmbracelet/bubbles v0.10.3 // indirect
 	github.com/charmbracelet/bubbletea v0.20.0 // indirect
 	github.com/charmbracelet/lipgloss v0.5.0 // indirect
@@ -220,7 +219,10 @@ require (
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
-	maze.io/x/duration v0.0.0-20160924141736-faac084b6075 // indirect
 )
 
-replace github.com/minio/madmin-go  => e:\gopath\src\github.com\minio\madmin-go\
+replace github.com/minio/madmin-go => e:\gopath\src\github.com\minio\madmin-go\
+
+replace github.com/minio/mc => e:\gopath\src\github.com\minio\mc\
+
+replace github.com/minio/console => e:\gopath\src\github.com\minio\console\

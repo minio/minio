@@ -110,6 +110,10 @@ func (name Name) Expand() []Name {
 	}
 }
 
+func (name Name) Mask() uint64 {
+	return 1 << (name - 1)
+}
+
 // String - returns string representation of event type.
 func (name Name) String() string {
 	switch name {

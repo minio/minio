@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"net/http"
 
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -48,7 +49,7 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, isErrCode
 	if errCtxt != nil {
 		stsErrorResponse.Error.Message = errCtxt.Error()
 	}
-	var logKind logger.Kind
+	var logKind madmin.LogKind
 	switch errCode {
 	case ErrSTSInternalError, ErrSTSNotInitialized:
 		logKind = logger.Minio

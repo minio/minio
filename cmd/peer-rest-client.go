@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/http"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/minio/internal/rest"
 	xnet "github.com/minio/pkg/net"
 	"github.com/tinylib/msgp/msgp"
@@ -462,6 +463,19 @@ func (client *peerRESTClient) GetMemInfo(ctx context.Context) (info madmin.MemIn
 	return info, err
 }
 
+// GetMetrics - fetch metrics from a remote node.
+func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricType) (info madmin.RealtimeMetrics, err error) {
+	values := make(url.Values)
+	values.Set(peerRESTTypes, strconv.FormatUint(uint64(t), 10))
+	respBody, err := client.callWithContext(ctx, peerRESTMethodMetrics, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // GetProcInfo - fetch MinIO process information for a remote node.
 func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.ProcInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodProcInfo, nil, nil, -1)
@@ -801,14 +815,9 @@ func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) erro
 	return nil
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
+func (client *peerRESTClient) doTrace(traceCh chan<- pubsub.Maskable, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
 	values := make(url.Values)
-	values.Set(peerRESTTraceErr, strconv.FormatBool(traceOpts.OnlyErrors))
-	values.Set(peerRESTTraceS3, strconv.FormatBool(traceOpts.S3))
-	values.Set(peerRESTTraceStorage, strconv.FormatBool(traceOpts.Storage))
-	values.Set(peerRESTTraceOS, strconv.FormatBool(traceOpts.OS))
-	values.Set(peerRESTTraceInternal, strconv.FormatBool(traceOpts.Internal))
-	values.Set(peerRESTTraceThreshold, traceOpts.Threshold.String())
+	traceOpts.AddParams(values)
 
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(GlobalContext)
@@ -847,7 +856,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan st
 	}
 }
 
-func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh <-chan struct{}, v url.Values) {
+func (client *peerRESTClient) doListen(listenCh chan<- pubsub.Maskable, doneCh <-chan struct{}, v url.Values) {
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(GlobalContext)
 
@@ -886,7 +895,7 @@ func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh <-chan 
 }
 
 // Listen - listen on peers.
-func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh <-chan struct{}, v url.Values) {
+func (client *peerRESTClient) Listen(listenCh chan<- pubsub.Maskable, doneCh <-chan struct{}, v url.Values) {
 	go func() {
 		for {
 			client.doListen(listenCh, doneCh, v)
@@ -902,7 +911,7 @@ func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh <-chan st
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
+func (client *peerRESTClient) Trace(traceCh chan<- pubsub.Maskable, doneCh <-chan struct{}, traceOpts madmin.ServiceTraceOpts) {
 	go func() {
 		for {
 			client.doTrace(traceCh, doneCh, traceOpts)
@@ -917,7 +926,7 @@ func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan stru
 	}()
 }
 
-func (client *peerRESTClient) doConsoleLog(logCh chan interface{}, doneCh <-chan struct{}) {
+func (client *peerRESTClient) doConsoleLog(logCh chan pubsub.Maskable, doneCh <-chan struct{}) {
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(GlobalContext)
 
@@ -955,7 +964,7 @@ func (client *peerRESTClient) doConsoleLog(logCh chan interface{}, doneCh <-chan
 }
 
 // ConsoleLog - sends request to peer nodes to get console logs
-func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan struct{}) {
+func (client *peerRESTClient) ConsoleLog(logCh chan pubsub.Maskable, doneCh <-chan struct{}) {
 	go func() {
 		for {
 			client.doConsoleLog(logCh, doneCh)

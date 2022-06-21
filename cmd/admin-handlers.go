@@ -28,6 +28,7 @@ import (
 	"hash/crc32"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -339,6 +340,88 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// MetricsHandler - GET /minio/admin/v3/metrics
+// ----------
+// Get realtime server metrics
+func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "Metrics")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+	const defaultMetricsInterval = time.Second
+
+	interval, err := time.ParseDuration(r.Form.Get("interval"))
+	if err != nil || interval < time.Second {
+		interval = defaultMetricsInterval
+	}
+	n, err := strconv.Atoi(r.Form.Get("n"))
+	if err != nil || n <= 0 {
+		n = math.MaxInt32
+	}
+	var types madmin.MetricType
+	if t, _ := strconv.ParseUint(r.Form.Get("types"), 10, 64); t != 0 {
+		types = madmin.MetricType(t)
+	} else {
+		types = madmin.MetricsAll
+	}
+	hosts := strings.Split(r.Form.Get("hosts"), ",")
+	byhost := strings.EqualFold(r.Form.Get("by-host"), "true")
+	var hostMap map[string]struct{}
+	if len(hosts) > 0 && hosts[0] != "" {
+		hostMap = make(map[string]struct{}, len(hosts))
+		for _, k := range hosts {
+			if k != "" {
+				hostMap[k] = struct{}{}
+			}
+		}
+	}
+	done := ctx.Done()
+	ticker := time.NewTicker(interval)
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+
+	for n > 0 {
+		var m madmin.RealtimeMetrics
+		mLocal := collectLocalMetrics(types, hostMap)
+		m.Merge(&mLocal)
+		mRemote := collectRemoteMetrics(ctx, types, hostMap)
+		m.Merge(&mRemote)
+		if !byhost {
+			m.ByHost = nil
+		}
+
+		m.Final = n == 0
+		// Marshal API response
+		jsonBytes, err := json.Marshal(m)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		fmt.Println(string(jsonBytes))
+		_, err = w.Write(jsonBytes)
+		if err != nil {
+			n = 0
+		}
+
+		n--
+		if n <= 0 {
+			break
+		}
+
+		// Flush before waiting for next...
+		w.(http.Flusher).Flush()
+
+		select {
+		case <-ticker.C:
+		case <-done:
+			return
+		}
+	}
 }
 
 // DataUsageInfoHandler - GET /minio/admin/v3/datausage
@@ -1313,12 +1396,7 @@ const (
 // - input entry is not of the type *madmin.TraceInfo*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
 // - madmin.TraceInfo type is asked by opts
-func mustTrace(entry madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
-	trcInfo, ok := entry.(madmin.TraceInfo)
-	if !ok {
-		return false
-	}
-
+func shouldTrace(trcInfo madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
 	// Reject all unwanted types.
 	want := opts.TraceTypes()
 	if !want.Contains(trcInfo.TraceType) {
@@ -1328,19 +1406,8 @@ func mustTrace(entry madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrac
 	isHTTP := trcInfo.TraceType.Overlaps(madmin.TraceInternal|madmin.TraceS3) && trcInfo.HTTP != nil
 
 	// Check latency...
-	if opts.Threshold > 0 {
-		var latency time.Duration
-		switch trcInfo.TraceType {
-		case madmin.TraceOS:
-			latency = trcInfo.OSStats.Duration
-		case madmin.TraceStorage:
-			latency = trcInfo.StorageStats.Duration
-		case madmin.TraceS3, madmin.TraceInternal:
-			latency = trcInfo.HTTP.CallStats.Latency
-		}
-		if latency < opts.Threshold {
-			return false
-		}
+	if opts.Threshold > 0 && trcInfo.Duration < opts.Threshold {
+		return false
 	}
 
 	// Check internal path
@@ -1358,29 +1425,16 @@ func mustTrace(entry madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrac
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
-	q := r.Form
-
-	opts.OnlyErrors = q.Get("err") == "true"
-	opts.S3 = q.Get("s3") == "true"
-	opts.Internal = q.Get("internal") == "true"
-	opts.Storage = q.Get("storage") == "true"
-	opts.OS = q.Get("os") == "true"
-	opts.Scanner = q.Get("scanner") == "true"
-
+	if err := opts.ParseParams(r); err != nil {
+		return opts, err
+	}
 	// Support deprecated 'all' query
-	if q.Get("all") == "true" {
+	if r.Form.Get("all") == "true" {
 		opts.S3 = true
 		opts.Internal = true
 		opts.Storage = true
 		opts.OS = true
-	}
-
-	if t := q.Get("threshold"); t != "" {
-		d, err := time.ParseDuration(t)
-		if err != nil {
-			return opts, err
-		}
-		opts.Threshold = d
+		// Older mc - cannot deal with more types...
 	}
 	return
 }
@@ -1403,17 +1457,20 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
-
 	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan pubsub.Item, 4000)
+	traceCh := make(chan pubsub.Maskable, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
+	mask := pubsub.MaskFromMaskable(traceOpts.TraceTypes())
 
-	globalTrace.Subscribe(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry pubsub.Item) bool {
-		return mustTrace(entry, traceOpts)
+	globalTrace.Subscribe(mask, traceCh, ctx.Done(), func(entry pubsub.Maskable) bool {
+		if e, ok := entry.(madmin.TraceInfo); ok {
+			return shouldTrace(e, traceOpts)
+		}
+		return false
 	})
 
 	for _, peer := range peers {
@@ -1451,7 +1508,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// The handler sends console logs to the connected HTTP client.
+// The ConsoleLogHandler handler sends console logs to the connected HTTP client.
 func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ConsoleLog")
 
@@ -1469,11 +1526,10 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 		limitLines = 10
 	}
 
-	logKind := r.Form.Get("logType")
-	if logKind == "" {
-		logKind = string(logger.All)
+	logKind := madmin.LogKind(strings.ToUpper(r.Form.Get("logType"))).LogMask()
+	if logKind == 0 {
+		logKind = madmin.LogMaskAll
 	}
-	logKind = strings.ToUpper(logKind)
 
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
@@ -1482,7 +1538,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	setEventStreamHeaders(w)
 
-	logCh := make(chan interface{}, 4000)
+	logCh := make(chan pubsub.Maskable, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 

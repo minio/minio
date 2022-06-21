@@ -32,7 +32,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -464,8 +463,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			// if no xl.meta/xl.json found, skip the file.
 			return sizeSummary{}, errSkipFile
 		}
+		stopFn := globalScannerMetrics.log(scannerMetricScanObject, s.diskPath, item.objectPath())
+		defer stopFn()
 
+		done := globalScannerMetrics.time(scannerMetricReadMetadata)
 		buf, err := s.readMetadata(ctx, item.Path)
+		done()
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -489,8 +492,11 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
 			sizeS.tiers = make(map[string]tierStats)
 		}
-		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
+
+		done = globalScannerMetrics.time(scannerMetricApplyAll)
 		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		done()
+
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)
@@ -501,9 +507,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
 
 		for _, version := range fivs.Versions {
-			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
 			oi := version.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
+			done()
 			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
 			}
@@ -528,7 +535,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// apply tier sweep action on free versions
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
 			item.applyTierObjSweep(ctx, objAPI, oi)
+			done()
 		}
 		return sizeS, nil
 	}, scanMode)

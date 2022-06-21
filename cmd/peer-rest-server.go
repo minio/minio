@@ -36,6 +36,7 @@ import (
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -470,6 +471,28 @@ func (s *peerRESTServer) GetMemInfoHandler(w http.ResponseWriter, r *http.Reques
 	defer cancel()
 
 	info := madmin.GetMemInfo(ctx, r.Host)
+
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// GetMetricsHandler - returns server metrics.
+func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	var types madmin.MetricType
+	if t, _ := strconv.ParseUint(r.Form.Get(peerRESTTypes), 10, 64); t != 0 {
+		types = madmin.MetricType(t)
+	} else {
+		types = madmin.MetricsAll
+	}
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	info := collectLocalMetrics(types, nil)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -914,26 +937,26 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	pattern := event.NewPattern(prefix, suffix)
 
 	var eventNames []event.Name
+	var mask pubsub.Mask
 	for _, ev := range values[peerRESTListenEvents] {
 		eventName, err := event.ParseName(ev)
 		if err != nil {
 			s.writeErrorResponse(w, err)
 			return
 		}
-
+		mask.MergeMaskable(eventName)
 		eventNames = append(eventNames, eventName)
 	}
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, event.TargetID{ID: mustGetUUID()})
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+	doneCh := r.Context().Done()
 
 	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan interface{}, 2000)
+	ch := make(chan pubsub.Maskable, 2000)
 
-	globalHTTPListen.Subscribe(madmin.TraceS3, ch, doneCh, func(evI interface{}) bool {
+	globalHTTPListen.Subscribe(mask, ch, doneCh, func(evI pubsub.Maskable) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -956,7 +979,10 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 			if err := enc.Encode(ev); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			if len(ch) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
 		case <-r.Context().Done():
 			return
 		case <-keepAliveTicker.C:
@@ -968,23 +994,6 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func extractTraceOptsFromPeerRequest(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
-	opts.S3 = r.Form.Get(peerRESTTraceS3) == "true"
-	opts.OS = r.Form.Get(peerRESTTraceOS) == "true"
-	opts.Storage = r.Form.Get(peerRESTTraceStorage) == "true"
-	opts.Internal = r.Form.Get(peerRESTTraceInternal) == "true"
-	opts.OnlyErrors = r.Form.Get(peerRESTTraceErr) == "true"
-
-	if t := r.Form.Get(peerRESTTraceThreshold); t != "" {
-		d, err := time.ParseDuration(t)
-		if err != nil {
-			return opts, err
-		}
-		opts.Threshold = d
-	}
-	return
-}
-
 // TraceHandler sends http trace messages back to peer rest client
 func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -992,21 +1001,22 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	traceOpts, err := extractTraceOptsFromPeerRequest(r)
+	var traceOpts madmin.ServiceTraceOpts
+	err := traceOpts.ParseParams(r)
 	if err != nil {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan interface{}, 2000)
-
-	globalTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
-		return mustTrace(entry, traceOpts)
+	ch := make(chan pubsub.Maskable, 2000)
+	mask := pubsub.MaskFromMaskable(traceOpts.TraceTypes())
+	globalTrace.Subscribe(mask, ch, r.Context().Done(), func(entry pubsub.Maskable) bool {
+		if e, ok := entry.(madmin.TraceInfo); ok {
+			return shouldTrace(e, traceOpts)
+		}
+		return false
 	})
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -1019,7 +1029,6 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			if err := enc.Encode(entry); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
 		case <-r.Context().Done():
 			return
 		case <-keepAliveTicker.C:
@@ -1091,8 +1100,8 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	ch := make(chan interface{}, 2000)
-	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
+	ch := make(chan pubsub.Maskable, 2000)
+	globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -1324,6 +1333,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(httpTraceHdrs(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(httpTraceHdrs(server.GetMemInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(httpTraceHdrs(server.GetMetricsHandler)).Queries(restQueries(peerRESTTypes)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysErrors).HandlerFunc(httpTraceHdrs(server.GetSysErrorsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysServices).HandlerFunc(httpTraceHdrs(server.GetSysServicesHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(httpTraceHdrs(server.GetSysConfigHandler))

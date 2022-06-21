@@ -33,7 +33,7 @@ type Sub struct {
 type PubSub struct {
 	// atomics, keep at top:
 	numSubscribers int32
-	types          uint32
+	types          uint64
 
 	subs []*Sub
 	sync.RWMutex
@@ -56,19 +56,18 @@ func (ps *PubSub) Publish(item Maskable) {
 }
 
 // Subscribe - Adds a subscriber to pubsub system
-func (ps *PubSub) Subscribe(types Maskable, subCh chan Maskable, doneCh <-chan struct{}, filter func(entry Maskable) bool) {
+func (ps *PubSub) Subscribe(mask Mask, subCh chan Maskable, doneCh <-chan struct{}, filter func(entry Maskable) bool) {
 	ps.Lock()
 	defer ps.Unlock()
 
-	mask := Mask(types.Mask())
 	sub := &Sub{ch: subCh, types: mask, filter: filter}
 	ps.subs = append(ps.subs, sub)
 	atomic.AddInt32(&ps.numSubscribers, 1)
 
 	// We hold a lock, so we are safe to update
-	combined := Mask(atomic.LoadUint32(&ps.types))
+	combined := Mask(atomic.LoadUint64(&ps.types))
 	combined.Merge(mask)
-	atomic.StoreUint32(&ps.types, uint32(combined))
+	atomic.StoreUint64(&ps.types, uint64(combined))
 
 	go func() {
 		<-doneCh
@@ -83,17 +82,17 @@ func (ps *PubSub) Subscribe(types Maskable, subCh chan Maskable, doneCh <-chan s
 				remainTypes.Merge(s.types)
 			}
 		}
-		atomic.StoreUint32(&ps.types, uint32(remainTypes))
+		atomic.StoreUint64(&ps.types, uint64(remainTypes))
 		atomic.AddInt32(&ps.numSubscribers, -1)
 	}()
 }
 
 // NumSubscribers returns the number of current subscribers.
 // If t is non-nil, the type is checked against the active subscribed types,
-// and 0 will be returned if nobody is subscribed fot the type.
+// and 0 will be returned if nobody is subscribed for the type.
 func (ps *PubSub) NumSubscribers(t Maskable) int32 {
 	if t != nil {
-		types := Mask(atomic.LoadUint32(&ps.types))
+		types := Mask(atomic.LoadUint64(&ps.types))
 		if !types.Contains(Mask(t.Mask())) {
 			return 0
 		}

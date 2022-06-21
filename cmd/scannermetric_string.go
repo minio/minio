@@ -9,20 +9,27 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[scannerMetricReadDir-0]
-	_ = x[scannerMetricReadXL-1]
+	_ = x[scannerMetricReadMetadata-1]
 	_ = x[scannerMetricCheckMissing-2]
 	_ = x[scannerMetricSaveUsage-3]
-	_ = x[scannerMetricLastRealtime-4]
-	_ = x[scannerMetricScanCycle-5]
-	_ = x[scannerMetricScanBucketCycle-6]
-	_ = x[scannerMetricScanBucketDisk-7]
-	_ = x[scannerMetricScanFolder-8]
-	_ = x[scannerMetricLastTrace-9]
+	_ = x[scannerMetricApplyAll-4]
+	_ = x[scannerMetricApplyVersion-5]
+	_ = x[scannerMetricTierObjSweep-6]
+	_ = x[scannerMetricHealCheck-7]
+	_ = x[scannerMetricILM-8]
+	_ = x[scannerMetricCheckReplication-9]
+	_ = x[scannerMetricYield-10]
+	_ = x[scannerMetricLastRealtime-11]
+	_ = x[scannerMetricScanCycle-12]
+	_ = x[scannerMetricScanBucketDisk-13]
+	_ = x[scannerMetricScanFolder-14]
+	_ = x[scannerMetricScanObject-15]
+	_ = x[scannerMetricLast-16]
 }
 
-const _scannerMetric_name = "ReadDirReadXLCheckMissingSaveUsageLastRealtimeScanCycleScanBucketCycleScanBucketDiskScanFolderLastTrace"
+const _scannerMetric_name = "ReadDirReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldLastRealtimeScanCycleScanBucketDiskScanFolderScanObjectLast"
 
-var _scannerMetric_index = [...]uint8{0, 7, 13, 25, 34, 46, 55, 70, 84, 94, 103}
+var _scannerMetric_index = [...]uint8{0, 7, 19, 31, 40, 48, 60, 72, 81, 84, 100, 105, 117, 126, 140, 150, 160, 164}
 
 func (i scannerMetric) String() string {
 	if i >= scannerMetric(len(_scannerMetric_index)-1) {

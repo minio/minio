@@ -31,7 +31,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -349,6 +348,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 // A partially updated bucket may be returned.
 func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUsageCache) (dataUsageCache, error) {
 	defer close(cache.Info.updates)
+	defer globalScannerMetrics.log(scannerMetricScanBucketDisk, fs.fsPath, bucket)()
 
 	// Get bucket policy
 	// Check if the current bucket has a configured lifecycle policy
@@ -363,6 +363,12 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 	// Load bucket info.
 	cache, err = scanDataFolder(ctx, -1, -1, fs.fsPath, cache, func(item scannerItem) (sizeSummary, error) {
 		bucket, object := item.bucket, item.objectPath()
+		done := globalScannerMetrics.time(scannerMetricReadMetadata)
+		defer func() {
+			if done != nil {
+				done()
+			}
+		}()
 		fsMetaBytes, err := xioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !osIsNotExist(err) {
 			if intDataUpdateTracker.debug {
@@ -391,11 +397,16 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 			}
 			return sizeSummary{}, errSkipFile
 		}
+		done()
+		done = nil
+
+		// FS has no "all versions". Increment the counter, though
+		globalScannerMetrics.incNoTime(scannerMetricApplyAll)
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
-		atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
-		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
+		doneVer := globalScannerMetrics.time(scannerMetricApplyVersion)
 		sz := item.applyActions(ctx, fs, oi, &sizeSummary{})
+		doneVer()
 		if sz >= 0 {
 			return sizeSummary{totalSize: sz, versions: 1}, nil
 		}

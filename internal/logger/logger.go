@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/highwayhash"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/message/log"
@@ -50,6 +51,10 @@ const (
 	InformationLvl Level = iota + 1
 	ErrorLvl
 	FatalLvl
+
+	Application = madmin.LogKindApplication
+	Minio       = madmin.LogKindMinio
+	All         = madmin.LogKindAll
 )
 
 var trimStrings []string
@@ -65,16 +70,15 @@ var matchingFuncNames = [...]string{
 }
 
 func (level Level) String() string {
-	var lvlStr string
 	switch level {
 	case InformationLvl:
-		lvlStr = "INFO"
+		return "INFO"
 	case ErrorLvl:
-		lvlStr = "ERROR"
+		return "ERROR"
 	case FatalLvl:
-		lvlStr = "FATAL"
+		return "FATAL"
 	}
-	return lvlStr
+	return ""
 }
 
 // quietFlag: Hide startup messages if enabled
@@ -237,18 +241,6 @@ func hashString(input string) string {
 	return hex.EncodeToString(hh.Sum(nil))
 }
 
-// Kind specifies the kind of error log
-type Kind string
-
-const (
-	// Minio errors
-	Minio Kind = "MINIO"
-	// Application errors
-	Application Kind = "APPLICATION"
-	// All errors
-	All Kind = "ALL"
-)
-
 // LogAlwaysIf prints a detailed error message during
 // the execution of the server.
 func LogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
@@ -279,10 +271,10 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 }
 
 func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entry {
-	logKind := string(Minio)
+	logKind := madmin.LogKindAll
 	if len(errKind) > 0 {
-		if ek, ok := errKind[0].(Kind); ok {
-			logKind = string(ek)
+		if ek, ok := errKind[0].(madmin.LogKind); ok {
+			logKind = ek
 		}
 	}
 	req := GetReqInfo(ctx)
