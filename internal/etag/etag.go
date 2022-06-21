@@ -340,7 +340,7 @@ func Decrypt(key []byte, etag ETag) (ETag, error) {
 	plaintext := make([]byte, 0, 16)
 	etag, err := sio.DecryptBuffer(plaintext, etag, sio.Config{
 		Key:          decryptionKey,
-		CipherSuites: fips.CipherSuitesDARE(),
+		CipherSuites: fips.DARECiphers(),
 	})
 	if err != nil {
 		return nil, err

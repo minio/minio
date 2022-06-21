@@ -406,7 +406,7 @@ func newEncryptReader(content io.Reader, kind crypto.Type, keyID string, key []b
 		return nil, crypto.ObjectKey{}, err
 	}
 
-	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
+	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.DARECiphers()})
 	if err != nil {
 		return nil, crypto.ObjectKey{}, crypto.ErrInvalidCustomerKey
 	}
@@ -553,7 +553,7 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 	reader, err := sio.DecryptReader(client, sio.Config{
 		Key:            objectEncryptionKey,
 		SequenceNumber: seqNumber,
-		CipherSuites:   fips.CipherSuitesDARE(),
+		CipherSuites:   fips.DARECiphers(),
 	})
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey

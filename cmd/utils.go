@@ -1067,17 +1067,12 @@ func newTLSConfig(getCert certs.GetCertificateFunc) *tls.Config {
 		tlsConfig.ClientAuth = tls.RequestClientCert
 	}
 
-	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
-	if secureCiphers || fips.Enabled {
-		// Hardened ciphers
-		tlsConfig.CipherSuites = fips.CipherSuitesTLS()
-		tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+	if secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn; secureCiphers {
+		tlsConfig.CipherSuites = fips.TLSCiphers()
 	} else {
-		// Default ciphers while excluding those with security issues
-		for _, cipher := range tls.CipherSuites() {
-			tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
-		}
+		tlsConfig.CipherSuites = fips.TLSCiphersBackwardCompatible()
 	}
+	tlsConfig.CurvePreferences = fips.TLSCurveIDs()
 	return tlsConfig
 }
 
