@@ -146,6 +146,18 @@ type ObjectOpts struct {
 	TargetArn      string
 }
 
+// HasExistingObjectReplication returns true if any of the rule returns 'ExistingObjects' replication.
+func (c Config) HasExistingObjectReplication(arn string) bool {
+	for _, rule := range c.Rules {
+		if rule.Destination.ARN == arn || c.RoleArn == arn {
+			if rule.ExistingObjectReplication.Status == Enabled {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // FilterActionableRules returns the rules actions that need to be executed
 // after evaluating prefix/tag filtering
 func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {

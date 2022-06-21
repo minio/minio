@@ -1751,12 +1751,12 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 		return err
 	}
 
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
 		defer close(results)
-
-		versioned := opts.Versioned || opts.VersionSuspended
 
 		for _, erasureSet := range z.serverPools {
 			var wg sync.WaitGroup
@@ -1785,11 +1785,14 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						if opts.WalkAscending {
 							for i := len(fivs.Versions) - 1; i >= 0; i-- {
 								version := fivs.Versions[i]
+								versioned := vcfg != nil && vcfg.Versioned(version.Name)
+
 								results <- version.ToObjectInfo(bucket, version.Name, versioned)
 							}
 							return
 						}
 						for _, version := range fivs.Versions {
+							versioned := vcfg != nil && vcfg.Versioned(version.Name)
 							results <- version.ToObjectInfo(bucket, version.Name, versioned)
 						}
 					}
@@ -1936,7 +1939,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		}
 
 		for _, version := range fivs.Versions {
-			if err := healObjectFn(bucket, version.Name, version.VersionID); err != nil {
+			err := healObjectFn(bucket, version.Name, version.VersionID)
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				return err
 			}
 		}
@@ -1997,18 +2001,21 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 	}
 	wg.Wait()
 
-	for _, err := range errs {
-		if err != nil {
-			return madmin.HealResultItem{}, err
+	// Return the first nil error
+	for idx, err := range errs {
+		if err == nil {
+			return results[idx], nil
 		}
 	}
 
-	for _, result := range results {
-		if result.Object != "" {
-			return result, nil
+	// No pool returned a nil error, return the first non 'not found' error
+	for idx, err := range errs {
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return results[idx], err
 		}
 	}
 
+	// At this stage, all errors are 'not found'
 	if versionID != "" {
 		return madmin.HealResultItem{}, VersionNotFound{
 			Bucket:    bucket,
@@ -2079,11 +2086,14 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 	}
 
 	b := z.BackendInfo()
-	readQuorum := b.StandardSCData[0]
+	poolReadQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolReadQuorums[i] = data
+	}
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolReadQuorums[poolIdx] {
 				return false
 			}
 		}
@@ -2120,9 +2130,12 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData[0]
-	if writeQuorum == b.StandardSCParity {
-		writeQuorum++
+	poolWriteQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolWriteQuorums[i] = data
+		if data == b.StandardSCParity {
+			poolWriteQuorums[i] = data + 1
+		}
 	}
 
 	var aggHealStateResult madmin.BgHealState
@@ -2146,18 +2159,28 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < writeQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, writeQuorum))
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
 				return HealthResult{
 					Healthy:       false,
 					HealingDrives: len(aggHealStateResult.HealDisks),
 					PoolID:        poolIdx,
 					SetID:         setIdx,
-					WriteQuorum:   writeQuorum,
+					WriteQuorum:   poolWriteQuorums[poolIdx],
 				}
 			}
+		}
+	}
+
+	var maximumWriteQuorum int
+	for _, writeQuorum := range poolWriteQuorums {
+		if maximumWriteQuorum == 0 {
+			maximumWriteQuorum = writeQuorum
+		}
+		if writeQuorum > maximumWriteQuorum {
+			maximumWriteQuorum = writeQuorum
 		}
 	}
 
@@ -2166,14 +2189,14 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	if !opts.Maintenance {
 		return HealthResult{
 			Healthy:     true,
-			WriteQuorum: writeQuorum,
+			WriteQuorum: maximumWriteQuorum,
 		}
 	}
 
 	return HealthResult{
 		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
-		WriteQuorum:   writeQuorum,
+		WriteQuorum:   maximumWriteQuorum,
 	}
 }
 

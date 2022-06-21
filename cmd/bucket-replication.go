@@ -1045,8 +1045,13 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		return
 	}
 
+	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
+	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
+
 	gr, err = objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
-		VersionID: objInfo.VersionID,
+		VersionID:        objInfo.VersionID,
+		Versioned:        versioned,
+		VersionSuspended: versionSuspended,
 	})
 	if err != nil {
 		sendEvent(eventArgs{
@@ -1757,10 +1762,6 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo, dsc *Repli
 	if c.Empty() {
 		return
 	}
-	// existing object replication does not apply to un-versioned objects
-	if oi.VersionID == "" {
-		return
-	}
 
 	// Now overlay existing object replication choices for target
 	if oi.DeleteMarker {
@@ -2006,6 +2007,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		st.EndTime = UTCNow()
 		st.ResyncStatus = resyncStatus
 		m.TargetsMap[arn] = st
+		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}()
 	// Allocate new results channel to receive ObjectInfo.
@@ -2066,7 +2068,6 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		}
 
 		if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
-
 			versionID := ""
 			dmVersionID := ""
 			if roi.VersionPurgeStatus.Empty() {
@@ -2113,6 +2114,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 			st.ReplicatedSize += roi.Size
 		}
 		m.TargetsMap[arn] = st
+		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}
 	resyncStatus = ResyncCompleted

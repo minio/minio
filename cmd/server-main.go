@@ -139,6 +139,13 @@ func serverCmdArgs(ctx *cli.Context) []string {
 			config.EnvArgs, os.Getenv(config.EnvArgs))
 	}
 	if v == "" {
+		v, _, _, err = env.LookupEnv(config.EnvVolumes)
+		if err != nil {
+			logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
+				config.EnvVolumes, os.Getenv(config.EnvVolumes))
+		}
+	}
+	if v == "" {
 		// Fall back to older environment value MINIO_ENDPOINTS
 		v, _, _, err = env.LookupEnv(config.EnvEndpoints)
 		if err != nil {
@@ -422,11 +429,14 @@ func serverMain(ctx *cli.Context) {
 	erasureSelfTest()
 	compressSelfTest()
 
+	// Handle all server environment vars.
+	serverHandleEnvVars()
+
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
-	// Handle all server environment vars.
-	serverHandleEnvVars()
+	// Initialize KMS configuration
+	handleKMSConfig()
 
 	// Set node name, only set for distributed setup.
 	globalConsoleSys.SetNodeName(globalLocalNodeName)
@@ -587,9 +597,6 @@ func serverMain(ctx *cli.Context) {
 			}
 		}()
 
-		// Initialize site replication manager.
-		globalSiteReplicationSys.Init(GlobalContext, newObject)
-
 		// Initialize quota manager.
 		globalBucketQuotaSys.Init(newObject)
 
@@ -611,6 +618,9 @@ func serverMain(ctx *cli.Context) {
 
 		// Initialize bucket metadata sub-system.
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
+
+		// Initialize site replication manager.
+		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize bucket notification targets.
 		globalNotificationSys.InitBucketTargets(GlobalContext, newObject)

@@ -1067,9 +1067,12 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 				return err
 			}
 			length := binary.LittleEndian.Uint32(tmp[:])
-			_, err = io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf)
+			n, err := io.CopyBuffer(w, io.LimitReader(respBody, int64(length)), buf)
 			if err != nil {
 				return err
+			}
+			if n != int64(length) {
+				return io.ErrUnexpectedEOF
 			}
 			continue
 		case 32:

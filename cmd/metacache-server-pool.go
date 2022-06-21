@@ -554,11 +554,11 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	for _, pool := range z.serverPools {
 		for _, set := range pool.sets {
 			wg.Add(1)
-			results := make(chan metaCacheEntry, 100)
-			inputs = append(inputs, results)
+			innerResults := make(chan metaCacheEntry, 100)
+			inputs = append(inputs, innerResults)
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
-				err := set.listPath(listCtx, o, results)
+				err := set.listPath(listCtx, o, innerResults)
 				mu.Lock()
 				defer mu.Unlock()
 				if err == nil {
@@ -609,6 +609,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	if err != nil {
 		return err
 	}
+
 	if contextCanceled(ctx) {
 		return ctx.Err()
 	}
@@ -629,7 +630,6 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		return err
 	}
 	if allAtEOF {
-		// TODO" Maybe, maybe not
 		return io.EOF
 	}
 	return nil

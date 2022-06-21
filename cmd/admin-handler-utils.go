@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/minio/kes"
@@ -96,6 +97,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		}
 	default:
 		switch {
+		case errors.Is(err, errTooManyPolicies):
+			apiErr = APIError{
+				Code:           "XMinioAdminInvalidRequest",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case errors.Is(err, errDecommissionAlreadyRunning):
 			apiErr = APIError{
 				Code:           "XMinioDecommissionNotAllowed",
@@ -216,4 +223,20 @@ func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
 	default:
 		return toAPIErrorCode(ctx, err)
 	}
+}
+
+// wraps export error for more context
+func exportError(ctx context.Context, err error, fname, entity string) APIError {
+	if entity == "" {
+		return toAPIError(ctx, fmt.Errorf("error exporting %s with: %w", fname, err))
+	}
+	return toAPIError(ctx, fmt.Errorf("error exporting %s from %s with: %w", entity, fname, err))
+}
+
+// wraps import error for more context
+func importError(ctx context.Context, err error, fname, entity string) APIError {
+	if entity == "" {
+		return toAPIError(ctx, fmt.Errorf("error importing %s with: %w", fname, err))
+	}
+	return toAPIError(ctx, fmt.Errorf("error importing %s from %s with: %w", entity, fname, err))
 }

@@ -93,8 +93,8 @@ type xlStorage struct {
 	endpoint Endpoint
 
 	globalSync bool
-
-	rootDisk bool
+	oDirect    bool // indicates if this disk supports ODirect
+	rootDisk   bool
 
 	diskID string
 
@@ -213,7 +213,7 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	}
 
 	var rootDisk bool
-	if !globalIsCICD {
+	if !globalIsCICD && !globalIsErasureSD {
 		if globalRootDiskThreshold > 0 {
 			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
 			// this disk is a root disk.
@@ -263,15 +263,27 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		filePath := pathJoin(s.diskPath, ".writable-check-"+uuid+".tmp")
 		w, err := s.openFileDirect(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 		if err != nil {
-			return s, err
+			// relax single drive mode without O_DIRECT support
+			if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
+				s.oDirect = false
+			} else {
+				return s, err
+			}
 		}
 		_, err = w.Write(alignedBuf)
 		w.Close()
 		if err != nil {
 			if isSysErrInvalidArg(err) {
-				return s, errUnsupportedDisk
+				err = errUnsupportedDisk
 			}
-			return s, err
+			// relax single drive mode without O_DIRECT support
+			if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
+				s.oDirect = false
+			} else {
+				return s, err
+			}
+		} else {
+			s.oDirect = true
 		}
 		renameAll(filePath, pathJoin(s.diskPath, minioMetaTmpDeletedBucket, uuid))
 
@@ -288,6 +300,7 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		s.diskID = format.Erasure.This
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
+		s.oDirect = true
 	}
 
 	// Success.
@@ -1381,7 +1394,13 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		return nil, time.Time{}, ctx.Err()
 	}
 
-	f, err := OpenFileDirectIO(filePath, readMode, 0o666)
+	odirectEnabled := !globalAPIConfig.isDisableODirect() && s.oDirect
+	var f *os.File
+	if odirectEnabled {
+		f, err = OpenFileDirectIO(filePath, readMode, 0o666)
+	} else {
+		f, err = OpenFile(filePath, readMode, 0o666)
+	}
 	if err != nil {
 		if osIsNotExist(err) {
 			// Check if the object doesn't exist because its bucket
@@ -1671,7 +1690,14 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	file, err := OpenFileDirectIO(filePath, readMode, 0o666)
+	odirectEnabled := !globalAPIConfig.isDisableODirect() && s.oDirect
+
+	var file *os.File
+	if odirectEnabled {
+		file, err = OpenFileDirectIO(filePath, readMode, 0o666)
+	} else {
+		file, err = OpenFile(filePath, readMode, 0o666)
+	}
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1715,7 +1741,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	}
 
 	alignment := offset%xioutil.DirectioAlignSize == 0
-	if !alignment || globalAPIConfig.isDisableODirect() {
+	if !alignment && odirectEnabled {
 		if err = disk.DisableDirectIO(file); err != nil {
 			file.Close()
 			return nil, err
@@ -1745,13 +1771,11 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(diskHealthReader(ctx, or), length), Closer: closeWrapper(func() error {
-		if !alignment || offset+length%xioutil.DirectioAlignSize != 0 {
+		if (!alignment || offset+length%xioutil.DirectioAlignSize != 0) && odirectEnabled {
 			// invalidate page-cache for unaligned reads.
-			if !globalAPIConfig.isDisableODirect() {
-				// skip removing from page-cache only
-				// if O_DIRECT was disabled.
-				disk.FadviseDontNeed(file)
-			}
+			// skip removing from page-cache only
+			// if O_DIRECT was disabled.
+			disk.FadviseDontNeed(file)
 		}
 		return or.Close()
 	})}
@@ -1823,7 +1847,13 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		return osErrToFileErr(err)
 	}
 
-	w, err := OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
+	odirectEnabled := s.oDirect
+	var w *os.File
+	if odirectEnabled {
+		w, err = OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
+	} else {
+		w, err = OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
+	}
 	if err != nil {
 		return osErrToFileErr(err)
 	}
@@ -1843,7 +1873,12 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		defer xioutil.ODirectPoolLarge.Put(bufp)
 	}
 
-	written, err := xioutil.CopyAligned(diskHealthWriter(ctx, w), r, *bufp, fileSize, w)
+	var written int64
+	if odirectEnabled {
+		written, err = xioutil.CopyAligned(diskHealthWriter(ctx, w), r, *bufp, fileSize, w)
+	} else {
+		written, err = io.CopyBuffer(diskHealthWriter(ctx, w), r, *bufp)
+	}
 	if err != nil {
 		return err
 	}
@@ -2075,7 +2110,7 @@ func skipAccessChecks(volume string) (ok bool) {
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
 	defer func() {
-		if err != nil && !contextCanceled(ctx) {
+		if err != nil && !contextCanceled(ctx) && !errors.Is(err, errFileNotFound) {
 			// Only log these errors if context is not yet canceled.
 			logger.LogIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				srcVolume, srcPath,

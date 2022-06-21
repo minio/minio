@@ -15,6 +15,8 @@ These metrics can be from any MinIO server once per collection.
 | `minio_bucket_usage_object_total`            | Total number of objects                                                                                             |
 | `minio_bucket_usage_total_bytes`             | Total bucket size in bytes                                                                                          |
 | `minio_bucket_quota_total_bytes`             | Total bucket quota size in bytes                                                                                    |
+| `minio_bucket_traffic_sent_bytes`            | Total s3 bytes sent per bucket                                                                                      |
+| `minio_bucket_traffic_received_bytes`        | Total s3 bytes received per bucket                                                                                  |
 | `minio_cache_hits_total`                     | Total number of disk cache hits                                                                                     |
 | `minio_cache_missed_total`                   | Total number of disk cache misses                                                                                   |
 | `minio_cache_sent_bytes`                     | Total number of bytes served from cache                                                                             |
@@ -52,7 +54,9 @@ These metrics can be from any MinIO server once per collection.
 | `minio_node_process_uptime_seconds`          | Uptime for MinIO process per node in seconds.                                                                       |
 | `minio_node_syscall_read_total`              | Total read SysCalls to the kernel. /proc/[pid]/io syscr                                                             |
 | `minio_node_syscall_write_total`             | Total write SysCalls to the kernel. /proc/[pid]/io syscw                                                            |
-| `minio_s3_requests_error_total`              | Total number S3 requests with errors                                                                                |
+| `minio_s3_requests_errors_total`             | Total number S3 requests with 4xx and 5xx errors                                                                    |
+| `minio_s3_requests_4xx_errors_total`         | Total number S3 requests with 4xx errors                                                                            |
+| `minio_s3_requests_5xx_errors_total`         | Total number S3 requests with 5xx errors                                                                            |
 | `minio_s3_requests_inflight_total`           | Total number of S3 requests currently in flight                                                                     |
 | `minio_s3_requests_total`                    | Total number S3 requests                                                                                            |
 | `minio_s3_time_ttfb_seconds_distribution`    | Distribution of the time to first byte across API calls.                                                            |

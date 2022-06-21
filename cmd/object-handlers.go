@@ -1041,7 +1041,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	srcOpts.VersionID = vid
 
 	// convert copy src encryption options for GET calls
-	getOpts := ObjectOptions{VersionID: srcOpts.VersionID, Versioned: srcOpts.Versioned}
+	getOpts := ObjectOptions{
+		VersionID:        srcOpts.VersionID,
+		Versioned:        srcOpts.Versioned,
+		VersionSuspended: srcOpts.VersionSuspended,
+	}
 	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
 	if getSSE != srcOpts.ServerSideEncryption {
 		getOpts.ServerSideEncryption = getSSE
@@ -3097,10 +3101,12 @@ func (w *whiteSpaceWriter) WriteHeader(statusCode int) {
 // we do background append as and when the parts arrive and completeMultiPartUpload
 // is quick. Only in a rare case where parts would be out of order will
 // FS:completeMultiPartUpload() take a longer time.
-func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
+func sendWhiteSpace(ctx context.Context, w http.ResponseWriter) <-chan bool {
 	doneCh := make(chan bool)
 	go func() {
+		defer close(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
 		headerWritten := false
 		for {
 			select {
@@ -3120,7 +3126,8 @@ func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
 				}
 				w.(http.Flusher).Flush()
 			case doneCh <- headerWritten:
-				ticker.Stop()
+				return
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -3294,7 +3301,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
-	completeDoneCh := sendWhiteSpace(w)
+	completeDoneCh := sendWhiteSpace(ctx, w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.

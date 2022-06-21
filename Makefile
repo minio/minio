@@ -58,6 +58,7 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 test-replication: install ## verify multi site replication
 	@echo "Running tests for replicating three sites"
 	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
+	@(env bash $(PWD)/docs/bucket/replication/setup_2site_existing_replication.sh)
 
 test-site-replication-ldap: install ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with LDAP)"

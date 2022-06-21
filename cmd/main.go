@@ -18,11 +18,14 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/words"
@@ -131,6 +134,7 @@ func newApp(name string) *cli.App {
 		Name:  "help, h",
 		Usage: "show help",
 	}
+	cli.VersionPrinter = printMinIOVersion
 
 	app := cli.NewApp()
 	app.Name = name
@@ -157,6 +161,13 @@ func newApp(name string) *cli.App {
 	}
 
 	return app
+}
+
+func printMinIOVersion(c *cli.Context) {
+	fmt.Fprintln(c.App.Writer, color.Greenf("%s version %s (commit-id=%s)", c.App.Name, c.App.Version, CommitID))
+	fmt.Fprintln(c.App.Writer, color.Greenf("Runtime: %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH))
+	fmt.Fprintln(c.App.Writer, color.Greenf("Copyright (c) 2015-%s MinIO, Inc.", CopyrightYear))
+	fmt.Fprintln(c.App.Writer, color.Red("Licence AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"))
 }
 
 // Main main for minio server.

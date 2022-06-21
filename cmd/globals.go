@@ -37,6 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
@@ -226,11 +227,11 @@ var (
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.
-	globalTrace = pubsub.New()
+	globalTrace = pubsub.New(8)
 
 	// global Listen system to send S3 API events to registered listeners
 	// Objects are expected to be event.Event
-	globalHTTPListen = pubsub.New()
+	globalHTTPListen = pubsub.New(0)
 
 	// global console system to send console logs to
 	// registered listeners
@@ -244,6 +245,9 @@ var (
 	// The global subnet config
 	globalSubnetConfig subnet.Config
 
+	// The global callhome config
+	globalCallhomeConfig callhome.Config
+
 	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
@@ -251,6 +255,9 @@ var (
 
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
+
+	// Global bucket network statistics
+	globalBucketConnStats = newBucketConnStats()
 
 	// Time when the server is started
 	globalBootTime = UTCNow()

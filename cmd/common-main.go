@@ -230,8 +230,8 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.APIKey != "" {
 		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
 	}
-	if globalSubnetConfig.Proxy != "" {
-		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.Proxy)
+	if globalSubnetConfig.ProxyURL != nil {
+		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
 	}
 }
 
@@ -526,9 +526,6 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 func minioEnvironFromFile(envConfigFile string) ([]envKV, error) {
 	f, err := os.Open(envConfigFile)
 	if err != nil {
-		if os.IsNotExist(err) { // ignore if file doesn't exist.
-			return nil, nil
-		}
 		return nil, err
 	}
 	defer f.Close()
@@ -624,7 +621,7 @@ func loadEnvVarsFromFiles() {
 
 	if env.IsSet(config.EnvConfigEnvFile) {
 		ekvs, err := minioEnvironFromFile(env.Get(config.EnvConfigEnvFile, ""))
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			logger.Fatal(err, "Unable to read the config environment file")
 		}
 		for _, ekv := range ekvs {
@@ -787,17 +784,22 @@ func handleCommonEnvVars() {
 		}
 		globalActiveCred = cred
 	}
+}
 
+// Initialize KMS global variable after valiadating and loading the configuration.
+// It depends on KMS env variables and global cli flags.
+func handleKMSConfig() {
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
-		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
+		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
+		GlobalKMS = KMS
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
 		var endpoints []string

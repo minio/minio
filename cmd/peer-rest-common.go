@@ -27,8 +27,6 @@ const (
 const (
 	peerRESTMethodHealth                      = "/health"
 	peerRESTMethodServerInfo                  = "/serverinfo"
-	peerRESTMethodDriveInfo                   = "/driveinfo"
-	peerRESTMethodNetInfo                     = "/netinfo"
 	peerRESTMethodCPUInfo                     = "/cpuinfo"
 	peerRESTMethodDiskHwInfo                  = "/diskhwinfo"
 	peerRESTMethodOsInfo                      = "/osinfo"
@@ -37,7 +35,6 @@ const (
 	peerRESTMethodSysErrors                   = "/syserrors"
 	peerRESTMethodSysServices                 = "/sysservices"
 	peerRESTMethodSysConfig                   = "/sysconfig"
-	peerRESTMethodDispatchNetInfo             = "/dispatchnetinfo"
 	peerRESTMethodDeleteBucketMetadata        = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
 	peerRESTMethodGetBucketStats              = "/getbucketstats"

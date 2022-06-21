@@ -476,16 +476,6 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 			}
 			rf, err := disks[index].ReadXL(ctx, bucket, object, readData)
 			if err != nil {
-				if !IsErr(err, []error{
-					errFileNotFound,
-					errVolumeNotFound,
-					errFileVersionNotFound,
-					errDiskNotFound,
-				}...) {
-					logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
-						disks[index], bucket, object, err),
-						disks[index].String())
-				}
 				return err
 			}
 
@@ -502,6 +492,22 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 	}
 
 	errs := g.Wait()
+	for index, err := range errs {
+		if err == nil {
+			continue
+		}
+		if !IsErr(err, []error{
+			errFileNotFound,
+			errVolumeNotFound,
+			errFileVersionNotFound,
+			errDiskNotFound,
+		}...) {
+			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+				disks[index], bucket, object, err),
+				disks[index].String())
+		}
+	}
+
 	for index := range metadataArray {
 		if metadataArray[index] != nil {
 			metadataShallowVersions[index] = metadataArray[index].versions
