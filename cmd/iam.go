@@ -1597,11 +1597,6 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			return false
 		}
 		if len(policies) == 0 {
-			// TODO (deprecated in Dec 2021): Only need to handle
-			// behavior for STS credentials created in older
-			// releases. Otherwise, reject such cases, once older
-			// behavior is deprecated.
-
 			// If there is no parent policy mapping, we fall back to
 			// using policy claim from JWT.
 			policySet, ok := args.GetPolicies(iamPolicyClaimNameOpenID())

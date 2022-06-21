@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,7 +100,6 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 	}
 
 	if err = DecryptETags(ctx, GlobalKMS, listObjectVersionsInfo.Objects); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -167,7 +165,6 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 	}
 
 	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -246,7 +243,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	if err = DecryptETags(ctx, GlobalKMS, listObjectsV2Info.Objects); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -347,7 +343,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	if err = DecryptETags(ctx, GlobalKMS, listObjectsInfo.Objects); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Failed to decrypt ETag: %v", err)) // TODO(aead): Remove once we are confident that decryption does not fail accidentially
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
