@@ -44,6 +44,34 @@ var (
 	insecure                                         bool
 )
 
+func buildS3Client(endpoint, accessKey, secretKey string, insecure bool) (*minio.Client, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	secure := strings.EqualFold(u.Scheme, "https")
+	transport, err := minio.DefaultTransport(secure)
+	if err != nil {
+		return nil, err
+	}
+	if insecure {
+		// skip TLS verification
+		transport.TLSClientConfig.InsecureSkipVerify = true
+	}
+
+	clnt, err := minio.New(u.Host, &minio.Options{
+		Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure:    secure,
+		Transport: transport,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return clnt, nil
+}
+
 func main() {
 	flag.StringVar(&sourceEndpoint, "source-endpoint", "https://play.min.io", "S3 endpoint URL")
 	flag.StringVar(&sourceAccessKey, "source-access-key", "Q3AM3UQ867SPQQA43P2F", "S3 Access Key")
@@ -93,35 +121,27 @@ func main() {
 		log.Fatalln("--target-prefix is specified without --target-bucket.")
 	}
 
-	u, err := url.Parse(sourceEndpoint)
+	srcU, err := url.Parse(sourceEndpoint)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	secure := strings.EqualFold(u.Scheme, "https")
-	transport, err := minio.DefaultTransport(secure)
+	ssecure := strings.EqualFold(srcU.Scheme, "https")
+	stransport, err := minio.DefaultTransport(ssecure)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if insecure {
 		// skip TLS verification
-		transport.TLSClientConfig.InsecureSkipVerify = true
+		stransport.TLSClientConfig.InsecureSkipVerify = true
 	}
 
-	sclnt, err := minio.New(u.Host, &minio.Options{
-		Creds:     credentials.NewStaticV4(sourceAccessKey, sourceSecretKey, ""),
-		Secure:    secure,
-		Transport: transport,
-	})
+	sclnt, err := buildS3Client(sourceEndpoint, sourceAccessKey, sourceSecretKey, insecure)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	tclnt, err := minio.New(u.Host, &minio.Options{
-		Creds:     credentials.NewStaticV4(targetAccessKey, targetSecretKey, ""),
-		Secure:    secure,
-		Transport: transport,
-	})
+	tclnt, err := buildS3Client(targetEndpoint, targetAccessKey, targetSecretKey, insecure)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -186,6 +206,12 @@ func main() {
 			continue
 		}
 
+		if srcCtnt.Key < tgtCtnt.Key {
+			fmt.Printf("only in source: %s\n", srcCtnt.Key)
+			srcCtnt, srcOk = <-srcCh
+			continue
+		}
+
 		if srcCtnt.Key == tgtCtnt.Key {
 			if verifyChecksum(sclnt, srcSha256, tgtSha256, srcCtnt, tgtCtnt) {
 				fmt.Printf("all readable source and target: %s -> %s\n", srcCtnt.Key, tgtCtnt.Key)
@@ -196,7 +222,7 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("only in target: %s (%s)\n", tgtCtnt.Key, tgtCtnt.VersionID)
+		fmt.Printf("only in target: %s\n", tgtCtnt.Key)
 		tgtCtnt, tgtOk = <-tgtCh
 	}
 }
