@@ -91,8 +91,11 @@ type allHealState struct {
 	sync.RWMutex
 
 	// map of heal path to heal sequence
-	healSeqMap     map[string]*healSequence  // Indexed by endpoint
-	healLocalDisks map[Endpoint]bool         // healing in progress
+	healSeqMap map[string]*healSequence // Indexed by endpoint
+	// keep track of the healing status of disks in the memory
+	//   false: the disk needs to be healed but no healing routine is started
+	//    true: the disk is currently healing
+	healLocalDisks map[Endpoint]bool
 	healStatus     map[string]healingTracker // Indexed by disk ID
 }
 
@@ -158,6 +161,8 @@ func (ahs *allHealState) getLocalHealingDisks() map[string]madmin.HealingDisk {
 	return dst
 }
 
+// getHealLocalDiskEndpoints() returns the list of disks that need
+// to be healed but there is no healing routine in progress on them.
 func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
 	ahs.RLock()
 	defer ahs.RUnlock()
