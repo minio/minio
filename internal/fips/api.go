@@ -134,13 +134,14 @@ func TLSCiphersBackwardCompatible() []uint16 {
 // TLSCurveIDs returns a list of supported elliptic curve IDs
 // in preference order.
 func TLSCurveIDs() []tls.CurveID {
-	// TODO(aead): Once MinIO switches to Go 1.18
-	// enable CurveP384 and CurveP512.
-	//
-	// See: https://go.dev/doc/go1.18 Changes to crypto/elliptic
-
-	if Enabled {
-		return []tls.CurveID{tls.CurveP256}
+	curves := []tls.CurveID{tls.CurveP256}
+	if go18 {
+		// With go1.18 enable P384, P521 newer constant time implementations.
+		curves = append(curves, []tls.CurveID{tls.CurveP384, tls.CurveP521}...)
 	}
-	return []tls.CurveID{tls.X25519, tls.CurveP256}
+	if !Enabled {
+		// No-FIPS we enable x25519 as well.
+		curves = append(curves, tls.X25519)
+	}
+	return curves
 }
