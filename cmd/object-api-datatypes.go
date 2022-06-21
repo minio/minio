@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"io"
 	"math"
 	"time"
@@ -176,6 +177,26 @@ type ObjectInfo struct {
 	NumVersions int
 	//  The modtime of the successor object version if any
 	SuccessorModTime time.Time
+}
+
+// ArchiveInfo returns any saved zip archive meta information
+func (o ObjectInfo) ArchiveInfo() []byte {
+	if len(o.UserDefined) == 0 {
+		return nil
+	}
+	z, ok := o.UserDefined[archiveInfoMetadataKey]
+	if !ok {
+		return nil
+	}
+	if len(z) > 0 && z[0] >= 32 {
+		// FS/gateway mode does base64 encoding on roundtrip.
+		// zipindex has version as first byte, which is below any base64 value.
+		zipInfo, _ := base64.StdEncoding.DecodeString(z)
+		if len(zipInfo) != 0 {
+			return zipInfo
+		}
+	}
+	return []byte(z)
 }
 
 // Clone - Returns a cloned copy of current objectInfo
