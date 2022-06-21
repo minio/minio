@@ -630,7 +630,6 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 		return err
 	}
 	if allAtEOF {
-		// TODO" Maybe, maybe not
 		return io.EOF
 	}
 	return nil
