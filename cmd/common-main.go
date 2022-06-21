@@ -490,6 +490,12 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 			Skip: true,
 		}, nil
 	}
+	if strings.HasPrefix(envEntry, "#") {
+		// Skip commented lines
+		return envKV{
+			Skip: true,
+		}, nil
+	}
 	const envSeparator = "="
 	envTokens := strings.SplitN(strings.TrimSpace(strings.TrimPrefix(envEntry, "export")), envSeparator, 2)
 	if len(envTokens) != 2 {
@@ -498,13 +504,6 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 
 	key := envTokens[0]
 	val := envTokens[1]
-
-	if strings.HasPrefix(key, "#") {
-		// Skip commented lines
-		return envKV{
-			Skip: true,
-		}, nil
-	}
 
 	// Remove quotes from the value if found
 	if len(val) >= 2 {
