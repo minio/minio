@@ -91,8 +91,11 @@ type allHealState struct {
 	sync.RWMutex
 
 	// map of heal path to heal sequence
-	healSeqMap     map[string]*healSequence // Indexed by endpoint
-	healLocalDisks map[Endpoint]struct{}
+	healSeqMap map[string]*healSequence // Indexed by endpoint
+	// keep track of the healing status of disks in the memory
+	//   false: the disk needs to be healed but no healing routine is started
+	//    true: the disk is currently healing
+	healLocalDisks map[Endpoint]bool
 	healStatus     map[string]healingTracker // Indexed by disk ID
 }
 
@@ -100,20 +103,13 @@ type allHealState struct {
 func newHealState(cleanup bool) *allHealState {
 	hstate := &allHealState{
 		healSeqMap:     make(map[string]*healSequence),
-		healLocalDisks: map[Endpoint]struct{}{},
+		healLocalDisks: make(map[Endpoint]bool),
 		healStatus:     make(map[string]healingTracker),
 	}
 	if cleanup {
 		go hstate.periodicHealSeqsClean(GlobalContext)
 	}
 	return hstate
-}
-
-func (ahs *allHealState) healDriveCount() int {
-	ahs.RLock()
-	defer ahs.RUnlock()
-
-	return len(ahs.healLocalDisks)
 }
 
 func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
@@ -165,15 +161,26 @@ func (ahs *allHealState) getLocalHealingDisks() map[string]madmin.HealingDisk {
 	return dst
 }
 
+// getHealLocalDiskEndpoints() returns the list of disks that need
+// to be healed but there is no healing routine in progress on them.
 func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
 	ahs.RLock()
 	defer ahs.RUnlock()
 
 	var endpoints Endpoints
-	for ep := range ahs.healLocalDisks {
-		endpoints = append(endpoints, ep)
+	for ep, healing := range ahs.healLocalDisks {
+		if !healing {
+			endpoints = append(endpoints, ep)
+		}
 	}
 	return endpoints
+}
+
+func (ahs *allHealState) markDiskForHealing(ep Endpoint) {
+	ahs.Lock()
+	defer ahs.Unlock()
+
+	ahs.healLocalDisks[ep] = true
 }
 
 func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
@@ -181,7 +188,7 @@ func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
 	defer ahs.Unlock()
 
 	for _, ep := range healLocalDisks {
-		ahs.healLocalDisks[ep] = struct{}{}
+		ahs.healLocalDisks[ep] = false
 	}
 }
 
@@ -802,16 +809,6 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 			return err
 		})
 	}
-}
-
-// healDiskFormat - heals format.json, return value indicates if a
-// failure error occurred.
-func (h *healSequence) healDiskFormat() error {
-	if h.isQuitting() {
-		return errHealStopSignalled
-	}
-
-	return h.queueHealTask(healSource{bucket: SlashSeparator}, madmin.HealItemMetadata)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
