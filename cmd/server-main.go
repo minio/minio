@@ -217,6 +217,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 		CurvePreferences:   fips.TLSCurveIDs(),
 		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, rest.DefaultTimeout)()
+	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another

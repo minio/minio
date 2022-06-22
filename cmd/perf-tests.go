@@ -68,7 +68,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	}
 
 	client, err := minio.New(globalLocalNodeName, &minio.Options{
-		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
+		Creds:     credentials.NewStaticV2(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
 		Secure:    globalIsTLS,
 		Transport: globalProxyTransport,
 		Region:    region,
