@@ -363,10 +363,14 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 	// Load bucket info.
 	cache, err = scanDataFolder(ctx, -1, -1, fs.fsPath, cache, func(item scannerItem) (sizeSummary, error) {
 		bucket, object := item.bucket, item.objectPath()
-		done := globalScannerMetrics.time(scannerMetricReadMetadata)
+		stopFn := globalScannerMetrics.log(scannerMetricScanObject, fs.fsPath, PathJoin(item.bucket, item.objectPath()))
+		defer stopFn()
+
+		var fsMetaBytes []byte
+		done := globalScannerMetrics.timeSize(scannerMetricReadMetadata)
 		defer func() {
 			if done != nil {
-				done()
+				done(len(fsMetaBytes))
 			}
 		}()
 		fsMetaBytes, err := xioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
@@ -397,7 +401,7 @@ func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUs
 			}
 			return sizeSummary{}, errSkipFile
 		}
-		done()
+		done(len(fsMetaBytes))
 		done = nil
 
 		// FS has no "all versions". Increment the counter, though

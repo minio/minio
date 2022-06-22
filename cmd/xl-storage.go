@@ -476,12 +476,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			// if no xl.meta/xl.json found, skip the file.
 			return sizeSummary{}, errSkipFile
 		}
-		stopFn := globalScannerMetrics.log(scannerMetricScanObject, s.diskPath, item.objectPath())
+		stopFn := globalScannerMetrics.log(scannerMetricScanObject, s.diskPath, PathJoin(item.bucket, item.objectPath()))
 		defer stopFn()
 
-		done := globalScannerMetrics.time(scannerMetricReadMetadata)
+		doneSz := globalScannerMetrics.timeSize(scannerMetricReadMetadata)
 		buf, err := s.readMetadata(ctx, item.Path)
-		done()
+		doneSz(len(buf))
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -506,7 +506,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.tiers = make(map[string]tierStats)
 		}
 
-		done = globalScannerMetrics.time(scannerMetricApplyAll)
+		done := globalScannerMetrics.time(scannerMetricApplyAll)
 		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
 		done()
 
@@ -535,7 +535,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			//    tracking deleted transitioned objects
 			switch {
 			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
-
 				continue
 			}
 			tier := minioHotTier

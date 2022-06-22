@@ -24,11 +24,14 @@ type scannerMetrics struct {
 	actions        [lifecycle.ActionCount]uint64
 	actionsLatency [lifecycle.ActionCount]lockedLastMinuteLatency
 
+	// sizes contains window for sizes for realtime operations.
+	sizes [scannerMetricLastRealtime]lockedLastMinuteLatency
+
 	// currentPaths contains (string,*currentPathTracker) for each disk processing.
 	// Alignment not required.
 	currentPaths sync.Map
 
-	cycleinfoMu sync.Mutex
+	cycleInfoMu sync.Mutex
 	cycleInfo   *currentScannerCycle
 }
 
@@ -37,8 +40,7 @@ var globalScannerMetrics scannerMetrics
 const (
 	// START Realtime metrics, that only to records
 	// last minute latencies and total operation count.
-	scannerMetricReadDir scannerMetric = iota
-	scannerMetricReadMetadata
+	scannerMetricReadMetadata scannerMetric = iota
 	scannerMetricCheckMissing
 	scannerMetricSaveUsage
 	scannerMetricApplyAll
@@ -49,21 +51,24 @@ const (
 	scannerMetricCheckReplication
 	scannerMetricYield
 
+	// START Trace metrics:
+	scannerMetricStartTrace
+	scannerMetricScanObject // Scan object. All operations included.
+
 	// END realtime metrics:
 	scannerMetricLastRealtime
 
-	// START Trace only metrics:
+	// Trace only metrics:
+	scannerMetricScanFolder     // Scan a folder on disk, recursively.
 	scannerMetricScanCycle      // Full cycle, cluster global
 	scannerMetricScanBucketDisk // Single bucket on one disk
-	scannerMetricScanFolder     // Scan a folder on disk, recursively.
-	scannerMetricScanObject     // Scan object. All operations included.
 
 	// Must be last:
 	scannerMetricLast
 )
 
 // log scanner action.
-// Use for s > scannerMetricLastRealtime
+// Use for s > scannerMetricStartTrace
 func (p *scannerMetrics) log(s scannerMetric, paths ...string) func() {
 	startTime := time.Now()
 	return func() {
@@ -74,7 +79,7 @@ func (p *scannerMetrics) log(s scannerMetric, paths ...string) func() {
 			p.latency[s].add(duration)
 		}
 
-		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
+		if s > scannerMetricStartTrace && globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
 			globalTrace.Publish(scannerTrace(s, startTime, duration, strings.Join(paths, " ")))
 		}
 	}
@@ -90,6 +95,21 @@ func (p *scannerMetrics) time(s scannerMetric) func() {
 		atomic.AddUint64(&p.operations[s], 1)
 		if s < scannerMetricLastRealtime {
 			p.latency[s].add(duration)
+		}
+	}
+}
+
+// timeSize add time and size of a scanner action.
+// Use for s < scannerMetricLastRealtime
+func (p *scannerMetrics) timeSize(s scannerMetric) func(sz int) {
+	startTime := time.Now()
+	return func(sz int) {
+		duration := time.Since(startTime)
+
+		atomic.AddUint64(&p.operations[s], 1)
+		if s < scannerMetricLastRealtime {
+			p.latency[s].add(duration)
+			p.sizes[s].add(time.Duration(sz))
 		}
 	}
 }
@@ -133,11 +153,10 @@ type currentPathTracker struct {
 // current objects for each disk.
 // Returns a function that can be used to update the current object
 // and a function to call to when processing finished.
-func (p *scannerMetrics) currentPathUpdater(disk string) (update func(path string), done func()) {
-	empty := ""
-	emptyPtr := unsafe.Pointer(&empty)
+func (p *scannerMetrics) currentPathUpdater(disk, initial string) (update func(path string), done func()) {
+	initialPtr := unsafe.Pointer(&initial)
 	tracker := &currentPathTracker{
-		name: &emptyPtr,
+		name: &initialPtr,
 	}
 
 	p.currentPaths.Store(disk, tracker)
@@ -151,6 +170,7 @@ func (p *scannerMetrics) currentPathUpdater(disk string) (update func(path strin
 // getCurrentPaths returns the paths currently being processed.
 func (p *scannerMetrics) getCurrentPaths() []string {
 	var res []string
+	prefix := globalMinioAddr + "/"
 	p.currentPaths.Range(func(key, value interface{}) bool {
 		// We are a bit paranoid, but better miss an entry than crash.
 		name, ok := key.(string)
@@ -163,7 +183,7 @@ func (p *scannerMetrics) getCurrentPaths() []string {
 		}
 		strptr := (*string)(atomic.LoadPointer(obj.name))
 		if strptr != nil {
-			res = append(res, name+"/"+*strptr)
+			res = append(res, prefix+name+"/"+*strptr)
 		}
 		return true
 	})
@@ -224,16 +244,16 @@ func (p *scannerMetrics) setCycle(c *currentScannerCycle) {
 		c2 := c.clone()
 		c = &c2
 	}
-	p.cycleinfoMu.Lock()
+	p.cycleInfoMu.Lock()
 	p.cycleInfo = c
-	p.cycleinfoMu.Unlock()
+	p.cycleInfoMu.Unlock()
 }
 
 // getCycle returns the current cycle metrics.
 // If not nil, the returned value can safely be modified.
 func (p *scannerMetrics) getCycle() *currentScannerCycle {
-	p.cycleinfoMu.Lock()
-	defer p.cycleinfoMu.Unlock()
+	p.cycleInfoMu.Lock()
+	defer p.cycleInfoMu.Unlock()
 	if p.cycleInfo == nil {
 		return nil
 	}
@@ -252,7 +272,7 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	m.CollectedAt = time.Now()
 	m.ActivePaths = p.getCurrentPaths()
 	m.LifeTimeOps = make(map[string]uint64, scannerMetricLast)
-	for i := scannerMetricReadDir; i < scannerMetricLast; i++ {
+	for i := scannerMetric(0); i < scannerMetricLast; i++ {
 		if n := atomic.LoadUint64(&p.operations[i]); n > 0 {
 			m.LifeTimeOps[i.String()] = n
 		}
@@ -262,10 +282,11 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	}
 
 	m.LastMinute.Actions = make(map[string]madmin.TimedAction, scannerMetricLastRealtime)
-	for i := scannerMetricReadDir; i < scannerMetricLastRealtime; i++ {
+	for i := scannerMetric(0); i < scannerMetricLastRealtime; i++ {
 		lm := p.lastMinute(i)
+		sz := p.sizes[i].total()
 		if lm.N > 0 {
-			m.LastMinute.Actions[i.String()] = madmin.TimedAction{Count: uint64(lm.N), AccTime: uint64(lm.Total)}
+			m.LastMinute.Actions[i.String()] = madmin.TimedAction{Count: uint64(lm.N), AccTime: uint64(lm.Total), Bytes: uint64(sz.Total)}
 		}
 	}
 	if len(m.LastMinute.Actions) == 0 {

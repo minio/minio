@@ -1253,7 +1253,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of directories scanned since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(globalScannerMetrics.lifetime(scannerMetricReadDir)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanFolder)),
 			},
 			{
 				Description: MetricDescription{

@@ -183,6 +183,10 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-scannerTimer.C:
+			// Reset the timer for next cycle.
+			// If scanner takes longer we start at once.
+			scannerTimer.Reset(scannerCycle.Load())
+
 			stopFn := globalScannerMetrics.log(scannerMetricScanCycle)
 			cycleInfo.current = cycleInfo.next
 			cycleInfo.started = time.Now()
@@ -214,7 +218,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				cycleInfo.current = 0
 				cycleInfo.cycleCompleted = append(cycleInfo.cycleCompleted, time.Now())
 				if len(cycleInfo.cycleCompleted) > dataUsageUpdateDirCycles {
-					cycleInfo.cycleCompleted = cycleInfo.cycleCompleted[:dataUsageUpdateDirCycles]
+					cycleInfo.cycleCompleted = cycleInfo.cycleCompleted[len(cycleInfo.cycleCompleted)-dataUsageUpdateDirCycles:]
 				}
 				globalScannerMetrics.setCycle(&cycleInfo)
 				tmp := make([]byte, 8, 8+cycleInfo.Msgsize())
@@ -224,8 +228,6 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
 				logger.LogIf(ctx, err)
 			}
-			// Reset the timer for next cycle.
-			scannerTimer.Reset(scannerCycle.Load())
 		}
 	}
 }
@@ -310,7 +312,7 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
 	}
-	updatePath, closeDisk := globalScannerMetrics.currentPathUpdater(basePath)
+	updatePath, closeDisk := globalScannerMetrics.currentPathUpdater(basePath, cache.Info.Name)
 	defer closeDisk()
 
 	s := folderScanner{

@@ -8,28 +8,28 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[scannerMetricReadDir-0]
-	_ = x[scannerMetricReadMetadata-1]
-	_ = x[scannerMetricCheckMissing-2]
-	_ = x[scannerMetricSaveUsage-3]
-	_ = x[scannerMetricApplyAll-4]
-	_ = x[scannerMetricApplyVersion-5]
-	_ = x[scannerMetricTierObjSweep-6]
-	_ = x[scannerMetricHealCheck-7]
-	_ = x[scannerMetricILM-8]
-	_ = x[scannerMetricCheckReplication-9]
-	_ = x[scannerMetricYield-10]
-	_ = x[scannerMetricLastRealtime-11]
-	_ = x[scannerMetricScanCycle-12]
-	_ = x[scannerMetricScanBucketDisk-13]
-	_ = x[scannerMetricScanFolder-14]
-	_ = x[scannerMetricScanObject-15]
+	_ = x[scannerMetricReadMetadata-0]
+	_ = x[scannerMetricCheckMissing-1]
+	_ = x[scannerMetricSaveUsage-2]
+	_ = x[scannerMetricApplyAll-3]
+	_ = x[scannerMetricApplyVersion-4]
+	_ = x[scannerMetricTierObjSweep-5]
+	_ = x[scannerMetricHealCheck-6]
+	_ = x[scannerMetricILM-7]
+	_ = x[scannerMetricCheckReplication-8]
+	_ = x[scannerMetricYield-9]
+	_ = x[scannerMetricStartTrace-10]
+	_ = x[scannerMetricScanObject-11]
+	_ = x[scannerMetricLastRealtime-12]
+	_ = x[scannerMetricScanFolder-13]
+	_ = x[scannerMetricScanCycle-14]
+	_ = x[scannerMetricScanBucketDisk-15]
 	_ = x[scannerMetricLast-16]
 }
 
-const _scannerMetric_name = "ReadDirReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldLastRealtimeScanCycleScanBucketDiskScanFolderScanObjectLast"
+const _scannerMetric_name = "ReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldStartTraceScanObjectLastRealtimeScanFolderScanCycleScanBucketDiskLast"
 
-var _scannerMetric_index = [...]uint8{0, 7, 19, 31, 40, 48, 60, 72, 81, 84, 100, 105, 117, 126, 140, 150, 160, 164}
+var _scannerMetric_index = [...]uint8{0, 12, 24, 33, 41, 53, 65, 74, 77, 93, 98, 108, 118, 130, 140, 149, 163, 167}
 
 func (i scannerMetric) String() string {
 	if i >= scannerMetric(len(_scannerMetric_index)-1) {

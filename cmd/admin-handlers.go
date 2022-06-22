@@ -392,20 +392,23 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 		var m madmin.RealtimeMetrics
 		mLocal := collectLocalMetrics(types, hostMap)
 		m.Merge(&mLocal)
-		mRemote := collectRemoteMetrics(ctx, types, hostMap)
+
+		// Allow half the interval for collecting remote...
+		cctx, cancel := context.WithTimeout(ctx, interval/2)
+		mRemote := collectRemoteMetrics(cctx, types, hostMap)
+		cancel()
 		m.Merge(&mRemote)
 		if !byhost {
 			m.ByHost = nil
 		}
 
-		m.Final = n == 0
+		m.Final = n <= 1
 		// Marshal API response
 		jsonBytes, err := json.Marshal(m)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		fmt.Println(string(jsonBytes))
 		_, err = w.Write(jsonBytes)
 		if err != nil {
 			n = 0

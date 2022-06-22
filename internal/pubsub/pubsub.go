@@ -33,10 +33,11 @@ type Sub struct {
 // PubSub holds publishers and subscribers
 type PubSub struct {
 	// atomics, keep at top:
+	types          uint64
 	numSubscribers int32
 	maxSubscribers int32
-	types          uint64
 
+	// not atomics:
 	subs []*Sub
 	sync.RWMutex
 }
@@ -95,13 +96,14 @@ func (ps *PubSub) Subscribe(mask Mask, subCh chan Maskable, doneCh <-chan struct
 	return nil
 }
 
-// NumSubscribers returns the number of current subscribers.
+// NumSubscribers returns the number of current subscribers,
 // If t is non-nil, the type is checked against the active subscribed types,
-// and 0 will be returned if nobody is subscribed for the type.
-func (ps *PubSub) NumSubscribers(t Maskable) int32 {
-	if t != nil {
+// and 0 will be returned if nobody is subscribed for the type,
+// otherwise the *total* number of subscribers is returned.
+func (ps *PubSub) NumSubscribers(m Maskable) int32 {
+	if m != nil {
 		types := Mask(atomic.LoadUint64(&ps.types))
-		if !types.Contains(Mask(t.Mask())) {
+		if !types.Overlaps(Mask(m.Mask())) {
 			return 0
 		}
 	}

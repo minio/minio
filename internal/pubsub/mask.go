@@ -13,20 +13,17 @@ const (
 	MaskAll Mask = math.MaxUint64
 )
 
-func MaskFromUint64(m uint64) Mask {
-	return Mask(m)
-}
-
+// MaskFromMaskable extracts mask from an interface.
 func MaskFromMaskable(m Maskable) Mask {
 	return Mask(m.Mask())
 }
 
-// Contains returns whether all flags in other is present in t.
+// Contains returns whether *all* flags in other is present in t.
 func (t Mask) Contains(other Mask) bool {
 	return t&other == other
 }
 
-// Overlaps returns whether any flags in t overlaps with other.
+// Overlaps returns whether *any* flags in t overlaps with other.
 func (t Mask) Overlaps(other Mask) bool {
 	return t&other != 0
 }
@@ -58,6 +55,7 @@ func (t *Mask) SetIf(b bool, other Mask) {
 	}
 }
 
+// Mask returns the mask as a uint64.
 func (t Mask) Mask() uint64 {
 	return uint64(t)
 }
