@@ -134,14 +134,14 @@ func TLSCiphersBackwardCompatible() []uint16 {
 // TLSCurveIDs returns a list of supported elliptic curve IDs
 // in preference order.
 func TLSCurveIDs() []tls.CurveID {
-	curves := []tls.CurveID{tls.CurveP256}
+	var curves []tls.CurveID
+	if !Enabled {
+		curves = append(curves, tls.X25519) // Only enable X25519 in non-FIPS mode
+	}
+	curves = append(curves, tls.CurveP256)
 	if go18 {
 		// With go1.18 enable P384, P521 newer constant time implementations.
-		curves = append(curves, []tls.CurveID{tls.CurveP384, tls.CurveP521}...)
-	}
-	if !Enabled {
-		// No-FIPS we enable x25519 as well.
-		curves = append(curves, tls.X25519)
+		curves = append(curves, tls.CurveP384, tls.CurveP521)
 	}
 	return curves
 }
