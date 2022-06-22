@@ -134,3 +134,17 @@ func performCallhome(ctx context.Context) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
 	}
 }
+
+const (
+	callhomeURL    = "https://subnet.min.io/api/callhome"
+	callhomeURLDev = "http://localhost:9000/api/callhome"
+)
+
+func sendCallhomeInfo(ch CallhomeInfo) error {
+	url := callhomeURL
+	if globalIsCICD {
+		url = callhomeURLDev
+	}
+	_, err := globalSubnetConfig.Post(url, ch)
+	return err
+}

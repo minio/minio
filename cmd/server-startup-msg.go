@@ -50,6 +50,11 @@ func printStartupMessage(apiEndpoints []string, err error) {
 		}
 	}
 
+	if len(globalSubnetConfig.APIKey) == 0 && err == nil {
+		logger.Info(color.Blue("\nLicense:") + " GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>")
+		logger.Info(color.Yellow("Detected a deployment not registered with SUBNET. Please register your deployment via 'mc support register ALIAS'\n"))
+	}
+
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
 	// If cache layer is enabled, print cache capacity.
 	cachedObjAPI := newCachedObjectLayerFn()
@@ -72,12 +77,6 @@ func printStartupMessage(apiEndpoints []string, err error) {
 
 	// Prints documentation message.
 	printObjectAPIMsg()
-
-	if globalMinioConsolePortAuto && globalBrowserEnabled {
-		msg := fmt.Sprintf("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
-			globalMinioConsolePort)
-		logger.Info(color.RedBold(msg))
-	}
 }
 
 // Returns true if input is IPv6
@@ -141,9 +140,13 @@ func printServerCommonMsg(apiEndpoints []string) {
 	}
 	printEventNotifiers()
 
+	if globalMinioConsolePortAuto && globalBrowserEnabled {
+		logger.Info(color.RedBold("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
+			globalMinioConsolePort))
+	}
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
-		logger.Info(color.Blue("\nConsole: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
+		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
 		if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
 			logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
 			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
