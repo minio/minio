@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -40,6 +41,7 @@ var (
 	sourceBucket, sourcePrefix                       string
 	targetEndpoint, targetAccessKey, targetSecretKey string
 	targetBucket, targetPrefix                       string
+	minimumObjectAge                                 string
 	debug                                            bool
 	insecure                                         bool
 )
@@ -85,6 +87,7 @@ func main() {
 	flag.StringVar(&targetBucket, "target-bucket", "", "Select a specific bucket")
 	flag.StringVar(&targetPrefix, "target-prefix", "", "Select a prefix")
 
+	flag.StringVar(&minimumObjectAge, "minimum-object-age", "0s", "Ignore objects younger than the specified age")
 	flag.BoolVar(&debug, "debug", false, "Prints HTTP network calls to S3 endpoint")
 	flag.BoolVar(&insecure, "insecure", false, "Disable TLS verification")
 	flag.Parse()
@@ -136,6 +139,26 @@ func main() {
 		stransport.TLSClientConfig.InsecureSkipVerify = true
 	}
 
+	ageDelta, err := time.ParseDuration(minimumObjectAge)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	maxObjectModTime := time.Now().Add(-ageDelta)
+
+	// Next object is used to ignore new objects in the source & target
+	nextObject := func(ch <-chan minio.ObjectInfo) (ctnt minio.ObjectInfo, ok bool) {
+		for {
+			ctnt, ok := <-ch
+			if !ok {
+				return minio.ObjectInfo{}, false
+			}
+			if ctnt.LastModified.Before(maxObjectModTime) {
+				return ctnt, ok
+			}
+		}
+	}
+
 	sclnt, err := buildS3Client(sourceEndpoint, sourceAccessKey, sourceSecretKey, insecure)
 	if err != nil {
 		log.Fatalln(err)
@@ -164,8 +187,8 @@ func main() {
 	srcCh := sclnt.ListObjects(context.Background(), sourceBucket, sopts)
 	tgtCh := tclnt.ListObjects(context.Background(), targetBucket, topts)
 
-	srcCtnt, srcOk := <-srcCh
-	tgtCtnt, tgtOk := <-tgtCh
+	srcCtnt, srcOk := nextObject(srcCh)
+	tgtCtnt, tgtOk := nextObject(tgtCh)
 
 	var srcEOF, tgtEOF bool
 
@@ -202,13 +225,13 @@ func main() {
 		// The same for target
 		if tgtEOF {
 			fmt.Printf("only in source: %s\n", srcCtnt.Key)
-			srcCtnt, srcOk = <-srcCh
+			srcCtnt, srcOk = nextObject(srcCh)
 			continue
 		}
 
 		if srcCtnt.Key < tgtCtnt.Key {
 			fmt.Printf("only in source: %s\n", srcCtnt.Key)
-			srcCtnt, srcOk = <-srcCh
+			srcCtnt, srcOk = nextObject(srcCh)
 			continue
 		}
 
@@ -217,13 +240,13 @@ func main() {
 				fmt.Printf("all readable source and target: %s -> %s\n", srcCtnt.Key, tgtCtnt.Key)
 			}
 
-			srcCtnt, srcOk = <-srcCh
-			tgtCtnt, tgtOk = <-tgtCh
+			srcCtnt, srcOk = nextObject(srcCh)
+			tgtCtnt, tgtOk = nextObject(tgtCh)
 			continue
 		}
 
 		fmt.Printf("only in target: %s\n", tgtCtnt.Key)
-		tgtCtnt, tgtOk = <-tgtCh
+		tgtCtnt, tgtOk = nextObject(tgtCh)
 	}
 }
 
