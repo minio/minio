@@ -144,36 +144,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
-			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
-				// Do do not retain the file, since it doesn't
-				// match the prefix.
-				entries[i] = ""
-				continue
-			}
-			if len(forward) > 0 && entry < forward {
-				// Do do not retain the file, since its
-				// lexially smaller than 'forward'
-				entries[i] = ""
-				continue
-			}
-			if strings.HasSuffix(entry, slashSeparator) {
-				if strings.HasSuffix(entry, globalDirSuffixWithSlash) {
-					// Add without extension so it is sorted correctly.
-					entry = strings.TrimSuffix(entry, globalDirSuffixWithSlash) + slashSeparator
-					dirObjects[entry] = struct{}{}
-					entries[i] = entry
-					continue
-				}
-				// Trim slash, since we don't know if this is folder or object.
-				entries[i] = entries[i][:len(entry)-1]
-				continue
-			}
-			// Do do not retain the file.
-			entries[i] = ""
-
 			if contextCanceled(ctx) {
 				return ctx.Err()
 			}
+
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
@@ -194,7 +168,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
 				meta.name = decodeDirObject(meta.name)
-				out <- meta
+				if forward == "" || meta.name >= forward {
+					out <- meta
+				}
 				return nil
 			}
 			// Check legacy.
@@ -213,10 +189,43 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
-				out <- meta
+				if forward == "" || meta.name >= forward {
+					out <- meta
+				}
 				return nil
 			}
-			// Skip all other files.
+
+			if !strings.HasSuffix(entry, slashSeparator) {
+				// Ignore if this is not directory, since
+				// we already processed xl.meta or xl.json
+				entries[i] = ""
+				continue
+			}
+
+			isMarkerDir := strings.HasSuffix(entry, globalDirSuffixWithSlash)
+			if isMarkerDir {
+				// Removed __XLDIR__ from the entry name
+				entry = strings.TrimSuffix(entry, globalDirSuffixWithSlash) + slashSeparator
+			}
+
+			// Filter the entry with prefix and forward parameters
+			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
+				entries[i] = ""
+				continue
+			}
+			if len(forward) > 0 && entry < forward {
+				entries[i] = ""
+				continue
+			}
+
+			if isMarkerDir {
+				dirObjects[entry] = struct{}{}
+			} else {
+				// Trim slash, since we don't know if this is folder or object.
+				entry = entry[:len(entry)-1]
+			}
+
+			entries[i] = entry
 		}
 
 		// Process in sort order.
@@ -248,11 +257,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				out <- metaCacheEntry{name: pop}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
-					forward = ""
-					if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
-						forward = strings.TrimPrefix(opts.ForwardTo, pop)
-					}
-
 					err := scanDir(pop)
 					if err != nil && !IsErrIgnored(err, context.Canceled) {
 						logger.LogIf(ctx, err)
