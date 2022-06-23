@@ -269,8 +269,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				return
 			}
 
+			// erasureObjects layer needs object names to be encoded
+			encodedEntryName := encodeDirObject(entry.name)
+
 			for _, version := range fivs.Versions {
-				if _, err := er.HealObject(ctx, bucket, version.Name,
+				if _, err := er.HealObject(ctx, bucket, encodedEntryName,
 					version.VersionID, madmin.HealOpts{
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
