@@ -105,6 +105,13 @@ func (e *lockedLastMinuteLatency) add(value time.Duration) {
 	e.lastMinuteLatency.add(value)
 }
 
+// addSize will add a duration and size.
+func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
+	e.Lock()
+	defer e.Unlock()
+	e.lastMinuteLatency.addSize(value, sz)
+}
+
 // avgLatency returns the average latency for all calls within the last minute.
 func (e *lockedLastMinuteLatency) avgLatency() time.Duration {
 	e.Lock()

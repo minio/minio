@@ -24,9 +24,6 @@ type scannerMetrics struct {
 	actions        [lifecycle.ActionCount]uint64
 	actionsLatency [lifecycle.ActionCount]lockedLastMinuteLatency
 
-	// sizes contains window for sizes for realtime operations.
-	sizes [scannerMetricLastRealtime]lockedLastMinuteLatency
-
 	// currentPaths contains (string,*currentPathTracker) for each disk processing.
 	// Alignment not required.
 	currentPaths sync.Map
@@ -108,8 +105,7 @@ func (p *scannerMetrics) timeSize(s scannerMetric) func(sz int) {
 
 		atomic.AddUint64(&p.operations[s], 1)
 		if s < scannerMetricLastRealtime {
-			p.latency[s].add(duration)
-			p.sizes[s].add(time.Duration(sz))
+			p.latency[s].addSize(duration, int64(sz))
 		}
 	}
 }
@@ -284,9 +280,8 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	m.LastMinute.Actions = make(map[string]madmin.TimedAction, scannerMetricLastRealtime)
 	for i := scannerMetric(0); i < scannerMetricLastRealtime; i++ {
 		lm := p.lastMinute(i)
-		sz := p.sizes[i].total()
 		if lm.N > 0 {
-			m.LastMinute.Actions[i.String()] = madmin.TimedAction{Count: uint64(lm.N), AccTime: uint64(lm.Total), Bytes: uint64(sz.Total)}
+			m.LastMinute.Actions[i.String()] = madmin.TimedAction{Count: uint64(lm.N), AccTime: uint64(lm.Total), Bytes: uint64(lm.Size)}
 		}
 	}
 	if len(m.LastMinute.Actions) == 0 {

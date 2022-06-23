@@ -26,7 +26,7 @@ import (
 // ReplicationLatency holds information of bucket operations latency, such us uploads
 type ReplicationLatency struct {
 	// Single & Multipart PUTs latency
-	UploadHistogram LastMinuteLatencies
+	UploadHistogram LastMinuteHistogram
 }
 
 // Merge two replication latency into a new one

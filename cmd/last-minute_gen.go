@@ -135,7 +135,7 @@ func (z AccElem) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
-func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *LastMinuteHistogram) DecodeMsg(dc *msgp.Reader) (err error) {
 	var zb0001 uint32
 	zb0001, err = dc.ReadArrayHeader()
 	if err != nil {
@@ -229,7 +229,7 @@ func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *LastMinuteHistogram) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteArrayHeader(uint32(sizeLastElemMarker))
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -285,7 +285,7 @@ func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *LastMinuteHistogram) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(sizeLastElemMarker))
 	for za0001 := range z {
@@ -310,7 +310,7 @@ func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *LastMinuteHistogram) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0001 uint32
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
@@ -405,7 +405,7 @@ func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LastMinuteLatencies) Msgsize() (s int) {
+func (z *LastMinuteHistogram) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize + (sizeLastElemMarker * (16 + (60 * (9 + msgp.Int64Size + msgp.Int64Size)) + msgp.Int64Size))
 	return
 }

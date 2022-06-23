@@ -75,6 +75,7 @@ func sizeTagToString(tag int) string {
 // AccElem holds information for calculating an average value
 type AccElem struct {
 	Total int64
+	Size  int64
 	N     int64
 }
 
@@ -87,10 +88,21 @@ func (a *AccElem) add(dur time.Duration) {
 	a.N++
 }
 
+// Add a duration to a single element.
+func (a *AccElem) addSize(dur time.Duration, sz int64) {
+	if dur < 0 {
+		dur = 0
+	}
+	a.Total += int64(dur)
+	a.Size += sz
+	a.N++
+}
+
 // Merge b into a.
 func (a *AccElem) merge(b AccElem) {
 	a.N += b.N
 	a.Total += b.Total
+	a.Size += b.Size
 }
 
 // Avg returns average time spent.
@@ -121,6 +133,7 @@ func (l lastMinuteLatency) merge(o lastMinuteLatency) (merged lastMinuteLatency)
 		merged.Totals[i] = AccElem{
 			Total: l.Totals[i].Total + o.Totals[i].Total,
 			N:     l.Totals[i].N + o.Totals[i].N,
+			Size:  l.Totals[i].Size + o.Totals[i].Size,
 		}
 	}
 	return merged
@@ -132,6 +145,15 @@ func (l *lastMinuteLatency) add(t time.Duration) {
 	l.forwardTo(sec)
 	winIdx := sec % 60
 	l.Totals[winIdx].add(t)
+	l.LastSec = sec
+}
+
+// Add  a new duration data
+func (l *lastMinuteLatency) addSize(t time.Duration, sz int64) {
+	sec := time.Now().Unix()
+	l.forwardTo(sec)
+	winIdx := sec % 60
+	l.Totals[winIdx].addSize(t, sz)
 	l.LastSec = sec
 }
 
@@ -163,11 +185,11 @@ func (l *lastMinuteLatency) forwardTo(t int64) {
 	}
 }
 
-// LastMinuteLatencies keeps track of last minute latencies.
-type LastMinuteLatencies [sizeLastElemMarker]lastMinuteLatency
+// LastMinuteHistogram keeps track of last minute sizes added.
+type LastMinuteHistogram [sizeLastElemMarker]lastMinuteLatency
 
-// Merge safely merges two LastMinuteLatencies structures into one
-func (l LastMinuteLatencies) Merge(o LastMinuteLatencies) (merged LastMinuteLatencies) {
+// Merge safely merges two LastMinuteHistogram structures into one
+func (l LastMinuteHistogram) Merge(o LastMinuteHistogram) (merged LastMinuteHistogram) {
 	for i := range l {
 		merged[i] = l[i].merge(o[i])
 	}
@@ -175,13 +197,13 @@ func (l LastMinuteLatencies) Merge(o LastMinuteLatencies) (merged LastMinuteLate
 }
 
 // Add latency t from object with the specified size.
-func (l *LastMinuteLatencies) Add(size int64, t time.Duration) {
+func (l *LastMinuteHistogram) Add(size int64, t time.Duration) {
 	l[sizeToTag(size)].add(t)
 }
 
 // GetAvgData will return the average for each bucket from the last time minute.
 // The number of objects is also included.
-func (l *LastMinuteLatencies) GetAvgData() [sizeLastElemMarker]AccElem {
+func (l *LastMinuteHistogram) GetAvgData() [sizeLastElemMarker]AccElem {
 	var res [sizeLastElemMarker]AccElem
 	for i, elem := range l[:] {
 		res[i] = elem.getTotal()
