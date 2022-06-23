@@ -68,7 +68,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 	}
 
 	client, err := minio.New(globalLocalNodeName, &minio.Options{
-		Creds:     credentials.NewStaticV2(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
+		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
 		Secure:    globalIsTLS,
 		Transport: globalProxyTransport,
 		Region:    region,
@@ -100,8 +100,9 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 				reader := newRandomReader(size)
 				tmpObjName := fmt.Sprintf("%s%d.%d", objNamePrefix, i, objCountPerThread[i])
 				info, err := client.PutObject(uploadsCtx, globalObjectPerfBucket, tmpObjName, reader, int64(size), minio.PutObjectOptions{
-					UserMetadata:     userMetadata,
-					DisableMultipart: true,
+					UserMetadata:         userMetadata,
+					DisableContentSha256: true,
+					DisableMultipart:     true,
 				}) // Bypass S3 API freeze
 				if err != nil {
 					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
