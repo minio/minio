@@ -240,11 +240,11 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 // CreateNewCredentialsWithMetadata - creates new credentials using the specified access & secret keys
 // and generate a session token if a secret token is provided.
 func CreateNewCredentialsWithMetadata(accessKey, secretKey string, m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
-	if len(accessKey) < accessKeyMinLen || len(accessKey) > accessKeyMaxLen {
+	if len(accessKey) < accessKeyMinLen {
 		return Credentials{}, ErrInvalidAccessKeyLength
 	}
 
-	if len(secretKey) < secretKeyMinLen || len(secretKey) > secretKeyMaxLen {
+	if len(secretKey) < secretKeyMinLen {
 		return Credentials{}, ErrInvalidSecretKeyLength
 	}
 
