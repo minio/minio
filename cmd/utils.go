@@ -950,13 +950,20 @@ type timedValue struct {
 // Get will return a cached value or fetch a new one.
 // If the Update function returns an error the value is forwarded as is and not cached.
 func (t *timedValue) Get() (interface{}, error) {
-	v := t.get()
+	v := t.get(t.ttl())
 	if v != nil {
 		return v, nil
 	}
 
 	v, err := t.Update()
 	if err != nil {
+		// if update fails, return current
+		// cached value along with error.
+		//
+		// Let the caller decide if they want
+		// to use the returned value based
+		// on error.
+		v = t.get(0)
 		return v, err
 	}
 
@@ -964,14 +971,21 @@ func (t *timedValue) Get() (interface{}, error) {
 	return v, nil
 }
 
-func (t *timedValue) get() (v interface{}) {
+func (t *timedValue) ttl() time.Duration {
 	ttl := t.TTL
 	if ttl <= 0 {
 		ttl = time.Second
 	}
+	return ttl
+}
+
+func (t *timedValue) get(ttl time.Duration) (v interface{}) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	v = t.value
+	if ttl <= 0 {
+		return v
+	}
 	if time.Since(t.lastUpdate) < ttl {
 		return v
 	}
