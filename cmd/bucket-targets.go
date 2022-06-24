@@ -24,7 +24,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -272,17 +272,20 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 	}
 	sys.Lock()
 	defer sys.Unlock()
-	if tgts == nil || tgts.Empty() {
-		// remove target and arn association
-		if tgts, ok := sys.targetsMap[bucket]; ok {
-			for _, t := range tgts {
-				if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
-					tgt.healthCancelFn()
-				}
-				delete(sys.arnRemotesMap, t.Arn)
+
+	// Remove existingtarget and arn association
+	if tgts, ok := sys.targetsMap[bucket]; ok {
+		for _, t := range tgts {
+			if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
+				tgt.healthCancelFn()
 			}
+			delete(sys.arnRemotesMap, t.Arn)
 		}
 		delete(sys.targetsMap, bucket)
+	}
+
+	// No need for more if not adding anything
+	if tgts == nil || tgts.Empty() {
 		sys.updateBandwidthLimit(bucket, 0)
 		return
 	}
