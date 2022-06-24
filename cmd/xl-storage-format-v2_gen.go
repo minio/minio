@@ -1774,6 +1774,12 @@ func (z *xlMetaV2Version) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "v":
+			z.WrittenByVersion, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "WrittenByVersion")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1788,8 +1794,8 @@ func (z *xlMetaV2Version) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.ObjectV1 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -1877,6 +1883,16 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.WrittenByVersion)
+	if err != nil {
+		err = msgp.WrapError(err, "WrittenByVersion")
+		return
+	}
 	return
 }
 
@@ -1884,8 +1900,8 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.ObjectV1 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -1945,6 +1961,9 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendUint64(o, z.WrittenByVersion)
 	return
 }
 
@@ -2027,6 +2046,12 @@ func (z *xlMetaV2Version) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "v":
+			z.WrittenByVersion, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "WrittenByVersion")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -2059,6 +2084,7 @@ func (z *xlMetaV2Version) Msgsize() (s int) {
 	} else {
 		s += z.DeleteMarker.Msgsize()
 	}
+	s += 2 + msgp.Uint64Size
 	return
 }
 

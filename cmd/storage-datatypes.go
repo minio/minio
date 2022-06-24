@@ -176,6 +176,10 @@ type FileInfo struct {
 	// File mode bits.
 	Mode uint32 `msg:"m"`
 
+	// WrittenByVersion is the unix time stamp of the MinIO
+	// version that created this version of the object.
+	WrittenByVersion uint64 `msg:"wv"`
+
 	// File metadata
 	Metadata map[string]string `msg:"meta"`
 
