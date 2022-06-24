@@ -223,7 +223,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				globalScannerMetrics.setCycle(&cycleInfo)
 				tmp := make([]byte, 8, 8+cycleInfo.Msgsize())
 				// Cycle for backward compat.
-				binary.LittleEndian.PutUint64(tmp[:], cycleInfo.next)
+				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
 				logger.LogIf(ctx, err)

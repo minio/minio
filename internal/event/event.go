@@ -86,6 +86,7 @@ type Event struct {
 	Type              madmin.TraceType  `json:"-"`
 }
 
+// Mask returns the type as mask.
 func (e Event) Mask() uint64 {
 	return e.EventName.Mask()
 }

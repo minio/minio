@@ -289,9 +289,12 @@ func (z *allTierStats) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *currentScannerCycle) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
+	// string "current"
+	o = append(o, 0x84, 0xa7, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74)
+	o = msgp.AppendUint64(o, z.current)
 	// string "next"
-	o = append(o, 0x83, 0xa4, 0x6e, 0x65, 0x78, 0x74)
+	o = append(o, 0xa4, 0x6e, 0x65, 0x78, 0x74)
 	o = msgp.AppendUint64(o, z.next)
 	// string "started"
 	o = append(o, 0xa7, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64)
@@ -323,6 +326,12 @@ func (z *currentScannerCycle) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "current":
+			z.current, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "current")
+				return
+			}
 		case "next":
 			z.next, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -368,7 +377,7 @@ func (z *currentScannerCycle) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *currentScannerCycle) Msgsize() (s int) {
-	s = 1 + 5 + msgp.Uint64Size + 8 + msgp.TimeSize + 15 + msgp.ArrayHeaderSize + (len(z.cycleCompleted) * (msgp.TimeSize))
+	s = 1 + 8 + msgp.Uint64Size + 5 + msgp.Uint64Size + 8 + msgp.TimeSize + 15 + msgp.ArrayHeaderSize + (len(z.cycleCompleted) * (msgp.TimeSize))
 	return
 }
 

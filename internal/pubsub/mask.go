@@ -40,18 +40,18 @@ func (t *Mask) FromUint64(m uint64) {
 
 // Merge will merge other into t.
 func (t *Mask) Merge(other Mask) {
-	*t = *t | other
+	*t |= other
 }
 
 // MergeMaskable will merge other into t.
 func (t *Mask) MergeMaskable(other Maskable) {
-	*t = *t | Mask(other.Mask())
+	*t |= Mask(other.Mask())
 }
 
 // SetIf will add other if b is true.
 func (t *Mask) SetIf(b bool, other Mask) {
 	if b {
-		*t = *t | other
+		*t |= other
 	}
 }
 

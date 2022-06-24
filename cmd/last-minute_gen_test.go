@@ -122,7 +122,7 @@ func BenchmarkDecodeAccElem(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalLastMinuteLatencies(t *testing.T) {
+func TestMarshalUnmarshalLastMinuteHistogram(t *testing.T) {
 	v := LastMinuteHistogram{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestMarshalUnmarshalLastMinuteLatencies(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgLastMinuteLatencies(b *testing.B) {
+func BenchmarkMarshalMsgLastMinuteHistogram(b *testing.B) {
 	v := LastMinuteHistogram{}
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -154,7 +154,7 @@ func BenchmarkMarshalMsgLastMinuteLatencies(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgLastMinuteLatencies(b *testing.B) {
+func BenchmarkAppendMsgLastMinuteHistogram(b *testing.B) {
 	v := LastMinuteHistogram{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
@@ -166,7 +166,7 @@ func BenchmarkAppendMsgLastMinuteLatencies(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalLastMinuteLatencies(b *testing.B) {
+func BenchmarkUnmarshalLastMinuteHistogram(b *testing.B) {
 	v := LastMinuteHistogram{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
@@ -180,14 +180,14 @@ func BenchmarkUnmarshalLastMinuteLatencies(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeLastMinuteLatencies(t *testing.T) {
+func TestEncodeDecodeLastMinuteHistogram(t *testing.T) {
 	v := LastMinuteHistogram{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeLastMinuteLatencies Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeLastMinuteHistogram Msgsize() is inaccurate")
 	}
 
 	vn := LastMinuteHistogram{}
@@ -204,7 +204,7 @@ func TestEncodeDecodeLastMinuteLatencies(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeLastMinuteLatencies(b *testing.B) {
+func BenchmarkEncodeLastMinuteHistogram(b *testing.B) {
 	v := LastMinuteHistogram{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
@@ -218,7 +218,7 @@ func BenchmarkEncodeLastMinuteLatencies(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeLastMinuteLatencies(b *testing.B) {
+func BenchmarkDecodeLastMinuteHistogram(b *testing.B) {
 	v := LastMinuteHistogram{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
