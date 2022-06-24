@@ -100,7 +100,7 @@ func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer
 		logger.Fatalf("metrics format error: %v", err)
 	}
 
-	meta.InitMetrics(registerer)
+	m.InitMetrics(registerer)
 	vfs.InitMetrics(registerer)
 	go metric.UpdateMetrics(m, registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(
@@ -235,9 +235,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 	}
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	}
 	if err != nil {
 		return nil, err

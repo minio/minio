@@ -39,7 +39,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.12
-	github.com/juicedata/juicefs v1.0.0-rc1
+	github.com/juicedata/juicefs v1.0.0-rc2
 	github.com/klauspost/compress v1.14.4
 	github.com/klauspost/cpuid/v2 v2.0.11
 	github.com/klauspost/pgzip v1.2.5
@@ -150,7 +150,6 @@ require (
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
-	github.com/emersion/go-webdav v0.3.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/frankban/quicktest v1.14.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
@@ -267,6 +266,7 @@ require (
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.34 // indirect
 	github.com/tidwall/gjson v1.12.1 // indirect

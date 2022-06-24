@@ -142,7 +142,7 @@ func (n *JfsObjects) Name() string {
 }
 
 func (n *JfsObjects) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
-	setup(n.ctx, 2)
+	setup(n.ctx, 1)
 	addr := n.ctx.Args().Get(0)
 	removePassword(addr)
 	m, store, conf := initForSvc(n.ctx, "s3gateway", addr)
