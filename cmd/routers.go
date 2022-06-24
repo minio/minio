@@ -40,6 +40,9 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []mux.MiddlewareFunc{
+	// The generic tracer needs to be the first handler
+	// to catch all requests returned early by any other handler
+	httpTracer,
 	// Auth handler verifies incoming authorization headers and
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
